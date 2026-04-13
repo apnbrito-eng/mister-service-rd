@@ -1,0 +1,129 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { useApp, AppProvider } from './context/AppContext';
+import Layout from './components/Layout';
+import LoadingSpinner from './components/LoadingSpinner';
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import Ordenes from './pages/Ordenes';
+import OrdenDetalle from './pages/OrdenDetalle';
+import Citas from './pages/Citas';
+import Calendario from './pages/Calendario';
+import Standby from './pages/Standby';
+import MapaRutas from './pages/MapaRutas';
+import Clientes from './pages/Clientes';
+import Cotizaciones from './pages/Cotizaciones';
+import Facturas from './pages/Facturas';
+import EquiposTaller from './pages/EquiposTaller';
+import Productos from './pages/Productos';
+import Rendimiento from './pages/Rendimiento';
+import Mantenimiento from './pages/Mantenimiento';
+import Gastos from './pages/Gastos';
+import PersonalPage from './pages/PersonalPage';
+import Configuracion from './pages/Configuracion';
+import TecnicoVista from './pages/TecnicoVista';
+import Calendarios from './pages/Calendarios';
+import CitaPublica from './pages/CitaPublica';
+import GestionUsuarios from './pages/GestionUsuarios';
+import TrackingCliente from './pages/TrackingCliente';
+import { useEffect } from 'react';
+import { seedDatabase } from './firebase/seedData';
+import { limpiarOrdenDuplicada } from './utils/cleanFirestore';
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { currentUser, loading } = useApp();
+  if (loading) return <LoadingSpinner fullPage text="Cargando..." />;
+  if (!currentUser) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+function TecnicoRoute({ children }: { children: React.ReactNode }) {
+  const { currentUser, userProfile, loading } = useApp();
+  if (loading) return <LoadingSpinner fullPage text="Cargando..." />;
+  if (!currentUser) return <Navigate to="/login" replace />;
+  if (userProfile?.rol === 'tecnico') return <Navigate to="/tecnico" replace />;
+  return <>{children}</>;
+}
+
+function AppRoutes() {
+  const { currentUser, userProfile, loading } = useApp();
+
+  useEffect(() => {
+    (window as unknown as { limpiarOrdenDuplicada: typeof limpiarOrdenDuplicada }).limpiarOrdenDuplicada = limpiarOrdenDuplicada;
+  }, []);
+
+  useEffect(() => {
+    if (currentUser) {
+      seedDatabase().catch(console.error);
+    }
+  }, [currentUser]);
+
+  if (loading) return <LoadingSpinner fullPage text="Iniciando..." />;
+
+  return (
+    <Routes>
+      {/* Public routes - no auth required */}
+      <Route path="/cita/:calendarId" element={<CitaPublica />} />
+      <Route path="/tracking/:token" element={<TrackingCliente />} />
+
+      <Route path="/login" element={
+        currentUser ? (
+          userProfile?.rol === 'tecnico'
+            ? <Navigate to="/tecnico" replace />
+            : <Navigate to="/dashboard" replace />
+        ) : <Login />
+      } />
+
+      <Route path="/tecnico" element={
+        <ProtectedRoute><TecnicoVista /></ProtectedRoute>
+      } />
+
+      <Route path="/" element={
+        <ProtectedRoute><TecnicoRoute><Layout /></TecnicoRoute></ProtectedRoute>
+      }>
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="ordenes" element={<Ordenes />} />
+        <Route path="ordenes/:id" element={<OrdenDetalle />} />
+        <Route path="citas" element={<Citas />} />
+        <Route path="calendario" element={<Calendario />} />
+        <Route path="calendarios" element={<Calendarios />} />
+        <Route path="standby" element={<Standby />} />
+        <Route path="mapa" element={<MapaRutas />} />
+        <Route path="clientes" element={<Clientes />} />
+        <Route path="cotizaciones" element={<Cotizaciones />} />
+        <Route path="facturas" element={<Facturas />} />
+        <Route path="taller" element={<EquiposTaller />} />
+        <Route path="productos" element={<Productos />} />
+        <Route path="rendimiento" element={<Rendimiento />} />
+        <Route path="mantenimiento" element={<Mantenimiento />} />
+        <Route path="gastos" element={<Gastos />} />
+        <Route path="personal" element={<PersonalPage />} />
+        <Route path="usuarios" element={<GestionUsuarios />} />
+        <Route path="configuracion" element={<Configuracion />} />
+        <Route path="configuracion/usuarios" element={<GestionUsuarios />} />
+      </Route>
+
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AppProvider>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 3000,
+            style: { borderRadius: '12px', padding: '12px 16px', fontSize: '14px' },
+            success: { iconTheme: { primary: '#22c55e', secondary: 'white' } },
+            error: { iconTheme: { primary: '#ef4444', secondary: 'white' } },
+          }}
+        />
+        <AppRoutes />
+      </AppProvider>
+    </BrowserRouter>
+  );
+}
