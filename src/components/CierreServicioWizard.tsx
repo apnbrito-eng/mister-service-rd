@@ -131,9 +131,14 @@ export default function CierreServicioWizard({
       toast.success('✅ Servicio cerrado exitosamente');
       onClosed();
       handleClose();
-    } catch (err) {
-      console.error(err);
-      toast.error('Error al cerrar el servicio');
+    } catch (err: unknown) {
+      console.error('Error cierre servicio:', err);
+      const errMsg = err instanceof Error ? err.message : 'Error desconocido';
+      if (errMsg.includes('storage') || errMsg.includes('403') || errMsg.includes('unauthorized')) {
+        toast.error('Error al subir la foto. Verifica tu conexión e intenta de nuevo.');
+      } else {
+        toast.error('Error al cerrar: ' + errMsg.substring(0, 80));
+      }
     } finally {
       setSaving(false);
     }

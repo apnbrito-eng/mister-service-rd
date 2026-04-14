@@ -729,6 +729,17 @@ export default function Ordenes() {
       >
         {selectedOrden && !showEditInDetail && (
           <div className="space-y-6">
+            {/* Editar Button (arriba a la derecha) */}
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={() => setShowEditInDetail(!showEditInDetail)}
+                className="flex items-center gap-2 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <Edit2 size={14} />
+                Editar
+              </button>
+            </div>
+
             {/* Client Info */}
             <div>
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Información del Cliente</h3>
@@ -808,6 +819,24 @@ export default function Ordenes() {
               </div>
             </div>
 
+            {/* Notas internas de operaciones */}
+            {selectedOrden.notas && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Notas Internas</h3>
+                <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 whitespace-pre-line">{selectedOrden.notas}</p>
+              </div>
+            )}
+
+            {/* Notas del técnico */}
+            {selectedOrden.notasTecnico && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Notas del Técnico</h3>
+                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
+                  <p className="text-sm text-blue-800 whitespace-pre-line">{selectedOrden.notasTecnico}</p>
+                </div>
+              </div>
+            )}
+
             {/* Created By */}
             <div>
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Creado por</h3>
@@ -816,17 +845,6 @@ export default function Ordenes() {
                 {' '}
                 <span className="text-gray-400">- {tiempoTranscurrido(selectedOrden.createdAt)}</span>
               </p>
-            </div>
-
-            {/* Editar Button */}
-            <div>
-              <button
-                onClick={() => setShowEditInDetail(!showEditInDetail)}
-                className="flex items-center gap-2 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                <Edit2 size={14} />
-                Editar
-              </button>
             </div>
 
             {/* Phase History Timeline */}

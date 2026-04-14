@@ -219,7 +219,7 @@ export default function TecnicoVista() {
     }
     setSaving(true);
     try {
-      const notasExistentes = (selectedOrden as unknown as { notasTecnico?: string }).notasTecnico || '';
+      const notasExistentes = selectedOrden.notasTecnico || '';
       const timestamp = format(new Date(), "dd/MM HH:mm");
       const nuevaNota = `[${timestamp} - ${userProfile?.nombre}] ${notaNueva}`;
       const notasActualizadas = notasExistentes ? `${notasExistentes}\n${nuevaNota}` : nuevaNota;
@@ -433,10 +433,10 @@ export default function TecnicoVista() {
                     )}
 
                     {/* Notas técnico previas */}
-                    {(orden as unknown as { notasTecnico?: string }).notasTecnico && (
+                    {orden.notasTecnico && (
                       <div className="mt-3 bg-blue-50 rounded-lg p-2 text-xs text-blue-800">
                         <StickyNote size={10} className="inline mr-1" />
-                        <span className="whitespace-pre-line">{(orden as unknown as { notasTecnico?: string }).notasTecnico}</span>
+                        <span className="whitespace-pre-line">{orden.notasTecnico}</span>
                       </div>
                     )}
 
