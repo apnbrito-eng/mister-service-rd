@@ -819,21 +819,31 @@ export default function Ordenes() {
               </div>
             </div>
 
-            {/* Notas internas de operaciones */}
+            {/* Notas internas de operaciones - solo visibles para operaciones, NO para técnicos */}
             {selectedOrden.notas && (
               <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Notas Internas</h3>
-                <p className="text-sm text-gray-700 bg-gray-50 rounded-lg p-3 whitespace-pre-line">{selectedOrden.notas}</p>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">📋 Notas Internas (Operaciones)</h3>
+                <p className="text-sm text-gray-700 bg-yellow-50 rounded-lg p-3 border border-yellow-100 whitespace-pre-line">{selectedOrden.notas}</p>
               </div>
             )}
 
-            {/* Notas del técnico */}
+            {/* Notas del técnico - visibles para todos */}
             {selectedOrden.notasTecnico && (
               <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Notas del Técnico</h3>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">🔧 Notas del Técnico</h3>
                 <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
                   <p className="text-sm text-blue-800 whitespace-pre-line">{selectedOrden.notasTecnico}</p>
                 </div>
+              </div>
+            )}
+
+            {/* Precio sugerido por el técnico */}
+            {selectedOrden.precioSugerido !== undefined && selectedOrden.precioSugerido !== null && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">💰 Precio Sugerido por el Técnico</h3>
+                <p className="text-lg font-bold text-green-700 bg-green-50 rounded-lg p-3 border border-green-200">
+                  RD$ {Number(selectedOrden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </p>
               </div>
             )}
 

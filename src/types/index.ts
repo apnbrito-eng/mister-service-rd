@@ -79,6 +79,7 @@ export interface OrdenServicio {
   reagendada?: boolean;
   notas?: string;
   notasTecnico?: string;
+  precioSugerido?: number;
   historialFases: HistorialFase[];
   creadoPor?: string;
   cierreServicio?: CierreServicio;

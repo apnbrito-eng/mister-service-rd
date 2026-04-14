@@ -401,10 +401,19 @@ export default function OrdenDetalle() {
 
           {orden.notasTecnico && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">Notas del Técnico</h3>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">🔧 Notas del Técnico</h3>
               <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
                 <p className="text-sm text-blue-800 whitespace-pre-line">{orden.notasTecnico}</p>
               </div>
+            </div>
+          )}
+
+          {orden.precioSugerido !== undefined && orden.precioSugerido !== null && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">💰 Precio Sugerido por el Técnico</h3>
+              <p className="text-2xl font-bold text-green-700">
+                RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+              </p>
             </div>
           )}
 

@@ -49,6 +49,7 @@ export default function TecnicoVista() {
   const [showNotaModal, setShowNotaModal] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [notaNueva, setNotaNueva] = useState('');
+  const [precioSugerido, setPrecioSugerido] = useState('');
   const [saving, setSaving] = useState(false);
   const [nuevaCitaBadge, setNuevaCitaBadge] = useState(false);
   const [previousCount, setPreviousCount] = useState<number | null>(null);
@@ -209,6 +210,7 @@ export default function TecnicoVista() {
   const openNota = (orden: OrdenServicio) => {
     setSelectedOrden(orden);
     setNotaNueva('');
+    setPrecioSugerido('');
     setShowNotaModal(true);
   };
 
@@ -223,13 +225,20 @@ export default function TecnicoVista() {
       const timestamp = format(new Date(), "dd/MM HH:mm");
       const nuevaNota = `[${timestamp} - ${userProfile?.nombre}] ${notaNueva}`;
       const notasActualizadas = notasExistentes ? `${notasExistentes}\n${nuevaNota}` : nuevaNota;
-      await updateDoc(doc(db, 'ordenes_servicio', selectedOrden.id), {
+
+      const updateData: Record<string, unknown> = {
         notasTecnico: notasActualizadas,
         updatedAt: Timestamp.now(),
-      });
+      };
+      if (precioSugerido && !isNaN(Number(precioSugerido))) {
+        updateData.precioSugerido = Number(precioSugerido);
+      }
+
+      await updateDoc(doc(db, 'ordenes_servicio', selectedOrden.id), updateData);
       toast.success('Nota agregada');
       setShowNotaModal(false);
       setSelectedOrden(null);
+      setPrecioSugerido('');
     } catch {
       toast.error('Error al agregar nota');
     } finally {
@@ -517,6 +526,17 @@ export default function TecnicoVista() {
             <textarea value={notaNueva} onChange={e => setNotaNueva(e.target.value)}
               rows={4} placeholder="Escribe tu nota técnica..."
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Precio sugerido (RD$)</label>
+            <input
+              type="number"
+              value={precioSugerido}
+              onChange={e => setPrecioSugerido(e.target.value)}
+              placeholder="Ej: 3500"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">Precio que sugieres para este trabajo (opcional)</p>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowNotaModal(false)}
