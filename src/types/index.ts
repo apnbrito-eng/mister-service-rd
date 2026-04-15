@@ -53,6 +53,18 @@ export interface HistorialFase {
   nota?: string;
 }
 
+export type AccionAuditoria = 'crear' | 'editar' | 'eliminar' | 'cambio_fase' | 'nota_tecnico' | 'precio_sugerido' | 'cierre';
+
+export interface RegistroAuditoria {
+  fecha: Date;
+  usuario: string;
+  accion: AccionAuditoria;
+  campo?: string;
+  valorAnterior?: string;
+  valorNuevo?: string;
+  detalle?: string;
+}
+
 export interface OrdenServicio {
   id: string;
   numero: string;
@@ -81,6 +93,7 @@ export interface OrdenServicio {
   notasTecnico?: string;
   precioSugerido?: number;
   historialFases: HistorialFase[];
+  auditoria?: RegistroAuditoria[];
   creadoPor?: string;
   cierreServicio?: CierreServicio;
   trackingGPS?: TrackingGPS;

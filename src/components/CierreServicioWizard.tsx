@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { doc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio } from '../types';
 import { subirFotoCierre, distanciaMetros } from '../services/storage.service';
+import { crearRegistroAuditoria } from '../utils';
 import Modal from './Modal';
 import {
   Camera, Check, X, Loader2, CheckCircle, AlertCircle,
@@ -75,6 +76,15 @@ export default function CierreServicioWizard({
     revisoConexiones !== null;
 
   const handleCerrarServicio = async () => {
+    console.log('Intentando cerrar:', {
+      ordenId: orden.id,
+      tecnicoId,
+      fotoBlob: !!fotoBlob,
+      equipoFunciona,
+      clienteSatisfecho,
+      revisoConexiones,
+    });
+
     if (!todoListo) {
       toast.error('Completa la foto y las 3 preguntas');
       return;
@@ -120,11 +130,20 @@ export default function CierreServicioWizard({
         },
       ];
 
+      const registroAuditoria = crearRegistroAuditoria(
+        tecnicoNombre,
+        'cierre',
+        `Cerró el servicio. Equipo funciona: ${equipoFunciona === 'si' ? 'Sí' : 'No'}, Cliente satisfecho: ${clienteSatisfecho === 'si' ? 'Sí' : 'No'}, Revisó conexiones: ${revisoConexiones === 'si' ? 'Sí' : 'No'}`
+      );
+
+      console.log('Payload cierre:', { fase: 'trabajo_realizado', cierrePayload });
+
       await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
         fase: 'trabajo_realizado',
         estadoSimple: 'completado',
         cierreServicio: cierrePayload,
         historialFases: nuevoHistorial,
+        auditoria: arrayUnion(registroAuditoria),
         updatedAt: Timestamp.now(),
       });
 

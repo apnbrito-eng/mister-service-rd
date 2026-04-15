@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, Cliente, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, FaseOrden } from '../types';
-import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel } from '../utils';
+import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria } from '../utils';
 import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
 import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -226,13 +226,28 @@ export default function TecnicoVista() {
       const nuevaNota = `[${timestamp} - ${userProfile?.nombre}] ${notaNueva}`;
       const notasActualizadas = notasExistentes ? `${notasExistentes}\n${nuevaNota}` : nuevaNota;
 
+      const usuario = userProfile?.nombre || 'Técnico';
+      const registros: Record<string, unknown>[] = [];
+      registros.push(crearRegistroAuditoria(
+        usuario, 'nota_tecnico', `Agregó nota técnica: "${notaNueva.slice(0, 60)}${notaNueva.length > 60 ? '...' : ''}"`
+      ));
+
       const updateData: Record<string, unknown> = {
         notasTecnico: notasActualizadas,
         updatedAt: Timestamp.now(),
       };
       if (precioSugerido && !isNaN(Number(precioSugerido))) {
+        const precioAnterior = selectedOrden.precioSugerido;
         updateData.precioSugerido = Number(precioSugerido);
+        registros.push(crearRegistroAuditoria(
+          usuario, 'precio_sugerido', `Sugirió precio: RD$ ${Number(precioSugerido).toLocaleString('es-DO')}`,
+          'precioSugerido',
+          precioAnterior !== undefined ? `RD$ ${precioAnterior.toLocaleString('es-DO')}` : '',
+          `RD$ ${Number(precioSugerido).toLocaleString('es-DO')}`
+        ));
       }
+
+      updateData.auditoria = arrayUnion(...registros);
 
       await updateDoc(doc(db, 'ordenes_servicio', selectedOrden.id), updateData);
       toast.success('Nota agregada');

@@ -1,6 +1,7 @@
 import { format, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem } from '../types';
+import { Timestamp } from 'firebase/firestore';
+import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria } from '../types';
 
 export function formatFecha(date: Date | undefined | null): string {
   if (!date) return 'Sin fecha';
@@ -409,7 +410,38 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
       usuario: (h.usuario as string) || 'Sistema',
       nota: (h.nota as string) || undefined,
     })),
+    auditoria: Array.isArray(raw.auditoria)
+      ? (raw.auditoria as Array<Record<string, unknown>>).map(a => ({
+          fecha: parseFirestoreDate(a.fecha) || new Date(),
+          usuario: (a.usuario as string) || 'Sistema',
+          accion: (a.accion as AccionAuditoria) || 'editar',
+          campo: (a.campo as string) || undefined,
+          valorAnterior: (a.valorAnterior as string) || undefined,
+          valorNuevo: (a.valorNuevo as string) || undefined,
+          detalle: (a.detalle as string) || undefined,
+        }))
+      : [],
     createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
     updatedAt: parseFirestoreDate(raw.updatedAt) || new Date(),
+  };
+}
+
+/** Helper para crear un registro de auditoría que se guarda en Firestore */
+export function crearRegistroAuditoria(
+  usuario: string,
+  accion: AccionAuditoria,
+  detalle: string,
+  campo?: string,
+  valorAnterior?: string,
+  valorNuevo?: string
+): Record<string, unknown> {
+  return {
+    fecha: Timestamp.now(),
+    usuario,
+    accion,
+    campo: campo || null,
+    valorAnterior: valorAnterior || null,
+    valorNuevo: valorNuevo || null,
+    detalle,
   };
 }

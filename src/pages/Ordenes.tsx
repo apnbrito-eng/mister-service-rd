@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   collection, onSnapshot, addDoc, doc, updateDoc,
-  Timestamp, getDocs, query, orderBy
+  Timestamp, getDocs, query, orderBy, arrayUnion
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { siguienteNumeroOrden } from '../services/contadores.service';
@@ -10,7 +10,8 @@ import {
   faseLabel, faseColor, formatFecha, formatHora, tiempoTranscurrido,
   TIPOS_EQUIPO, DURACIONES, HORARIOS, HORARIOS_LABEL,
   estadoSimpleLabel, estadoSimpleColor, estadoSimpleBorder,
-  formatTelefono, whatsappLink, googleMapsLink, parseOrden, formatMoneda
+  formatTelefono, whatsappLink, googleMapsLink, parseOrden, formatMoneda,
+  crearRegistroAuditoria
 } from '../utils';
 import Badge from '../components/Badge';
 import Modal from '../components/Modal';
@@ -287,7 +288,58 @@ export default function Ordenes() {
         fechaCitaTs = Timestamp.fromDate(new Date(`${editForm.fechaCita}T08:00:00`));
       }
 
-      await updateDoc(doc(db, 'ordenes_servicio', selectedOrden.id), {
+      // Construir registros de auditoría comparando valores antes/después
+      const usuario = userProfile?.nombre || 'Sistema';
+      const registros: Record<string, unknown>[] = [];
+
+      if (editForm.tecnicoNombre !== (selectedOrden.tecnicoNombre || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió técnico asignado', 'tecnicoNombre',
+          selectedOrden.tecnicoNombre || 'Sin asignar',
+          editForm.tecnicoNombre || 'Sin asignar'
+        ));
+      }
+      const fechaAnteriorStr = selectedOrden.fechaCita ? format(selectedOrden.fechaCita, 'yyyy-MM-dd') : '';
+      if (editForm.fechaCita !== fechaAnteriorStr) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió fecha de cita', 'fechaCita',
+          selectedOrden.fechaCita ? formatFecha(selectedOrden.fechaCita) : 'Sin fecha',
+          editForm.fechaCita
+        ));
+      }
+      const horaAnteriorStr = selectedOrden.fechaCita ? format(selectedOrden.fechaCita, 'HH:00') : '';
+      if (editForm.horaInicio && editForm.horaInicio !== horaAnteriorStr) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió hora de cita', 'horaInicio',
+          horaAnteriorStr, editForm.horaInicio
+        ));
+      }
+      if (editForm.descripcionFalla !== (selectedOrden.descripcionFalla || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Modificó descripción de falla', 'descripcionFalla',
+          (selectedOrden.descripcionFalla || '').slice(0, 50),
+          editForm.descripcionFalla.slice(0, 50)
+        ));
+      }
+      if (editForm.notas !== (selectedOrden.notas || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Modificó notas internas', 'notas'
+        ));
+      }
+      if (editForm.clienteTelefono !== (selectedOrden.clienteTelefono || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió teléfono del cliente', 'clienteTelefono',
+          selectedOrden.clienteTelefono || '',
+          editForm.clienteTelefono
+        ));
+      }
+      if (editForm.clienteDireccion !== (selectedOrden.clienteDireccion || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió dirección del cliente', 'clienteDireccion'
+        ));
+      }
+
+      const updateData: Record<string, unknown> = {
         tecnicoId: editForm.tecnicoId,
         tecnicoNombre: editForm.tecnicoNombre,
         fechaCita: fechaCitaTs,
@@ -299,7 +351,13 @@ export default function Ordenes() {
         descripcionFalla: editForm.descripcionFalla,
         notas: editForm.notas,
         updatedAt: Timestamp.now(),
-      });
+      };
+
+      if (registros.length > 0) {
+        updateData.auditoria = arrayUnion(...registros);
+      }
+
+      await updateDoc(doc(db, 'ordenes_servicio', selectedOrden.id), updateData);
       toast.success('Orden actualizada');
       setShowEditInDetail(false);
     } catch (err) {
@@ -357,6 +415,35 @@ export default function Ordenes() {
       return matchBusqueda && matchEstado && matchTecnico && matchMes;
     });
   }, [ordenes, busqueda, filtroEstado, filtroTecnico, filtroMes]);
+
+  // Horarios ocupados — formulario de EDICIÓN
+  const horariosOcupados = useMemo(() => {
+    if (!editForm.tecnicoId || !editForm.fechaCita) return [];
+    const fechaSeleccionada = new Date(editForm.fechaCita + 'T00:00:00');
+    return ordenes
+      .filter(o =>
+        o.id !== selectedOrden?.id &&
+        (o.tecnicoId === editForm.tecnicoId || o.tecnicoNombre === editForm.tecnicoNombre) &&
+        o.fechaCita &&
+        isSameDay(o.fechaCita, fechaSeleccionada) &&
+        o.estado !== 'cancelado'
+      )
+      .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
+  }, [editForm.tecnicoId, editForm.tecnicoNombre, editForm.fechaCita, ordenes, selectedOrden?.id]);
+
+  // Horarios ocupados — formulario de CREAR
+  const horariosOcupadosCreate = useMemo(() => {
+    if (!form.tecnicoId || !form.fechaCita) return [];
+    const fechaSeleccionada = new Date(form.fechaCita + 'T00:00:00');
+    return ordenes
+      .filter(o =>
+        (o.tecnicoId === form.tecnicoId || o.tecnicoNombre === form.tecnicoNombre) &&
+        o.fechaCita &&
+        isSameDay(o.fechaCita, fechaSeleccionada) &&
+        o.estado !== 'cancelado'
+      )
+      .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
+  }, [form.tecnicoId, form.tecnicoNombre, form.fechaCita, ordenes]);
 
   // Client search
   const clientesFiltrados = useMemo(() => {
@@ -857,6 +944,27 @@ export default function Ordenes() {
               </p>
             </div>
 
+            {/* Registro de Auditoría */}
+            {selectedOrden.auditoria && selectedOrden.auditoria.length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">📝 Registro de Cambios</h3>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {selectedOrden.auditoria.slice().reverse().map((reg, i) => (
+                    <div key={i} className="text-xs bg-gray-50 rounded-lg p-2 border border-gray-100">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-700">{reg.usuario}</span>
+                        <span className="text-gray-400">{formatFecha(reg.fecha)}</span>
+                      </div>
+                      <p className="text-gray-600 mt-0.5">{reg.detalle}</p>
+                      {reg.valorAnterior && reg.valorNuevo && (
+                        <p className="text-[10px] text-gray-400 mt-0.5">{reg.campo}: "{reg.valorAnterior}" → "{reg.valorNuevo}"</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Phase History Timeline */}
             {selectedOrden.historialFases.length > 0 && (
               <div>
@@ -920,21 +1028,31 @@ export default function Ordenes() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Hora de Inicio</label>
                 <div className="grid grid-cols-5 gap-1">
-                  {HORARIOS.map(h => (
-                    <button
-                      key={h}
-                      type="button"
-                      onClick={() => setEditForm(f => ({ ...f, horaInicio: h }))}
-                      className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        editForm.horaInicio === h
-                          ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                          : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
-                      }`}
-                    >
-                      {HORARIOS_LABEL[h]}
-                    </button>
-                  ))}
+                  {HORARIOS.map(h => {
+                    const ocupado = horariosOcupados.includes(h);
+                    return (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => !ocupado && setEditForm(f => ({ ...f, horaInicio: h }))}
+                        disabled={ocupado}
+                        className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                          ocupado
+                            ? 'bg-red-50 text-red-400 border-red-200 cursor-not-allowed line-through'
+                            : editForm.horaInicio === h
+                              ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
+                        }`}
+                        title={ocupado ? 'Horario ocupado' : ''}
+                      >
+                        {HORARIOS_LABEL[h]}{ocupado && ' ✗'}
+                      </button>
+                    );
+                  })}
                 </div>
+                {editForm.tecnicoId && editForm.fechaCita && horariosOcupados.length > 0 && (
+                  <p className="text-[10px] text-red-500 mt-1">⚠️ {horariosOcupados.length} horario(s) ocupado(s) ese día</p>
+                )}
               </div>
             </div>
 
@@ -1306,21 +1424,31 @@ export default function Ordenes() {
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Hora de Inicio</label>
                   <div className="grid grid-cols-5 gap-1">
-                    {HORARIOS.map(h => (
+                    {HORARIOS.map(h => {
+                      const ocupado = horariosOcupadosCreate.includes(h);
+                      return (
                       <button
                         key={h}
                         type="button"
-                        onClick={() => setForm(f => ({ ...f, horaInicio: h }))}
+                        onClick={() => !ocupado && setForm(f => ({ ...f, horaInicio: h }))}
+                        disabled={ocupado}
                         className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                          form.horaInicio === h
-                            ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
+                          ocupado
+                            ? 'bg-red-50 text-red-400 border-red-200 cursor-not-allowed line-through'
+                            : form.horaInicio === h
+                              ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
+                              : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
                         }`}
+                        title={ocupado ? 'Horario ocupado' : ''}
                       >
-                        {HORARIOS_LABEL[h]}
+                        {HORARIOS_LABEL[h]}{ocupado && ' ✗'}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
+                  {form.tecnicoId && form.fechaCita && horariosOcupadosCreate.length > 0 && (
+                    <p className="text-[10px] text-red-500 mt-1">⚠️ {horariosOcupadosCreate.length} horario(s) ocupado(s) ese día</p>
+                  )}
                 </div>
               </div>
             </div>

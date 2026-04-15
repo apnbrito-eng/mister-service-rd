@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, FaseOrden } from '../types';
-import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, googleMapsLink, estadoSimpleLabel, estadoSimpleColor, parseOrden } from '../utils';
+import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, googleMapsLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Badge from '../components/Badge';
 import { useApp } from '../context/AppContext';
@@ -59,11 +59,20 @@ export default function OrdenDetalle() {
           nota: notaFase || undefined,
         },
       ];
+      const registroAuditoria = crearRegistroAuditoria(
+        userProfile?.nombre || 'Sistema',
+        'cambio_fase',
+        `Cambió fase a "${faseLabel(nuevaFase)}"${notaFase ? ` (nota: ${notaFase})` : ''}`,
+        'fase',
+        faseLabel(orden.fase),
+        faseLabel(nuevaFase)
+      );
       await updateDoc(doc(db, 'ordenes_servicio', id), {
         fase: nuevaFase,
         estadoSimple: ['trabajo_realizado', 'cerrado'].includes(nuevaFase) ? 'completado' : nuevaFase === 'cancelado' ? 'cancelado' : ['en_diagnostico', 'en_cotizacion'].includes(nuevaFase) ? 'en_proceso' : 'pendiente',
         estado: nuevaFase === 'cancelado' ? 'cancelado' : nuevaFase === 'cerrado' ? 'cerrado' : 'activo',
         historialFases: nuevoHistorial,
+        auditoria: arrayUnion(registroAuditoria),
         updatedAt: Timestamp.now(),
       });
       toast.success(`Fase cambiada a "${faseLabel(nuevaFase)}"`);
@@ -414,6 +423,27 @@ export default function OrdenDetalle() {
               <p className="text-2xl font-bold text-green-700">
                 RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
               </p>
+            </div>
+          )}
+
+          {/* Registro de Auditoría */}
+          {orden.auditoria && orden.auditoria.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">📝 Registro de Cambios</h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {orden.auditoria.slice().reverse().map((reg, i) => (
+                  <div key={i} className="text-xs bg-gray-50 rounded-lg p-3 border border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-700">{reg.usuario}</span>
+                      <span className="text-gray-400">{formatFecha(reg.fecha)}</span>
+                    </div>
+                    <p className="text-gray-600 mt-0.5">{reg.detalle}</p>
+                    {reg.valorAnterior && reg.valorNuevo && (
+                      <p className="text-[10px] text-gray-400 mt-0.5">{reg.campo}: "{reg.valorAnterior}" → "{reg.valorNuevo}"</p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
