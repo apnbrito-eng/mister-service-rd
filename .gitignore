@@ -32,5 +32,8 @@ firebase-debug.log
 # Vercel
 .vercel
 
+# CORS config local para gsutil
+cors.json
+
 # Claude Code local settings
 .claude/

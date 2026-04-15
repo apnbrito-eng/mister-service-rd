@@ -121,8 +121,10 @@ export default function CierreServicioWizard({
 
       const nuevoHistorial = [
         ...orden.historialFases.map(h => ({
-          ...h,
+          fase: h.fase,
           timestamp: Timestamp.fromDate(h.timestamp instanceof Date ? h.timestamp : new Date()),
+          usuario: h.usuario || '',
+          ...(h.nota ? { nota: h.nota } : {}),
         })),
         {
           fase: 'trabajo_realizado',
