@@ -506,8 +506,10 @@ export default function Ordenes() {
         updatedAt: ahora,
         historialFases: [
           ...orden.historialFases.map(h => ({
-            ...h,
+            fase: h.fase,
             timestamp: Timestamp.fromDate(h.timestamp),
+            usuario: h.usuario || '',
+            ...(h.nota ? { nota: h.nota } : {}),
           })),
           {
             fase: nuevaFase,

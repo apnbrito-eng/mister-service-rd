@@ -49,14 +49,16 @@ export default function OrdenDetalle() {
     try {
       const nuevoHistorial = [
         ...orden.historialFases.map(h => ({
-          ...h,
+          fase: h.fase,
           timestamp: Timestamp.fromDate(h.timestamp instanceof Date ? h.timestamp : new Date()),
+          usuario: h.usuario || '',
+          ...(h.nota ? { nota: h.nota } : {}),
         })),
         {
           fase: nuevaFase,
           timestamp: Timestamp.now(),
           usuario: userProfile?.nombre || 'Sistema',
-          nota: notaFase || undefined,
+          ...(notaFase ? { nota: notaFase } : {}),
         },
       ];
       const registroAuditoria = crearRegistroAuditoria(
