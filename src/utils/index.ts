@@ -362,6 +362,11 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     notas: (raw.notas as string) || undefined,
     notasTecnico: (raw.notasTecnico as string) || undefined,
     precioSugerido: typeof raw.precioSugerido === 'number' ? raw.precioSugerido : undefined,
+    precioAprobado: typeof raw.precioAprobado === 'number' ? raw.precioAprobado : undefined,
+    precioFinal: typeof raw.precioFinal === 'number' ? raw.precioFinal : undefined,
+    estadoAprobacion: (raw.estadoAprobacion as 'pendiente' | 'aprobado') || undefined,
+    aprobadoPor: (raw.aprobadoPor as string) || undefined,
+    fechaAprobacion: parseFirestoreDate(raw.fechaAprobacion) || undefined,
     creadoPor: (raw.creadoPor as string) || undefined,
     trackingGPS: raw.trackingGPS ? (() => {
       const tg = raw.trackingGPS as Record<string, unknown>;

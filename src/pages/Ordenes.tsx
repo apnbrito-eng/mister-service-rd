@@ -114,6 +114,11 @@ export default function Ordenes() {
   });
   const [savingEdit, setSavingEdit] = useState(false);
   const [geoEditLoading, setGeoEditLoading] = useState(false);
+
+  // Aprobación de precio
+  const [precioAprobacion, setPrecioAprobacion] = useState('');
+  const [aprobandoPrecio, setAprobandoPrecio] = useState(false);
+
   const dirInputRef = useRef<HTMLInputElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const autocompleteRef = useRef<any>(null);
@@ -133,6 +138,51 @@ export default function Ordenes() {
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOrden?.id]);
+
+  // Pre-fill approval input when selecting an order with suggested price
+  useEffect(() => {
+    if (selectedOrden?.precioSugerido !== undefined && selectedOrden.estadoAprobacion !== 'aprobado') {
+      setPrecioAprobacion(String(selectedOrden.precioSugerido));
+    } else {
+      setPrecioAprobacion('');
+    }
+  }, [selectedOrden?.id, selectedOrden?.precioSugerido, selectedOrden?.estadoAprobacion]);
+
+  const handleAprobarPrecio = async () => {
+    if (!selectedOrden) return;
+    const precio = Number(precioAprobacion);
+    if (isNaN(precio) || precio <= 0) {
+      toast.error('Ingresa un precio válido');
+      return;
+    }
+    setAprobandoPrecio(true);
+    try {
+      const usuario = userProfile?.nombre || 'Admin';
+      const registroAuditoria = crearRegistroAuditoria(
+        usuario,
+        'precio_sugerido',
+        `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')}`,
+        'precioFinal',
+        selectedOrden.precioSugerido !== undefined ? `RD$ ${selectedOrden.precioSugerido.toLocaleString('es-DO')}` : '',
+        `RD$ ${precio.toLocaleString('es-DO')}`
+      );
+      await updateDoc(doc(db, 'ordenes_servicio', selectedOrden.id), {
+        precioAprobado: precio,
+        precioFinal: precio,
+        estadoAprobacion: 'aprobado',
+        aprobadoPor: usuario,
+        fechaAprobacion: Timestamp.now(),
+        auditoria: arrayUnion(registroAuditoria),
+        updatedAt: Timestamp.now(),
+      });
+      toast.success('✅ Precio aprobado');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al aprobar el precio');
+    } finally {
+      setAprobandoPrecio(false);
+    }
+  };
 
   // Populate edit form when opening edit mode
   useEffect(() => {
@@ -933,6 +983,60 @@ export default function Ordenes() {
                 <p className="text-lg font-bold text-green-700 bg-green-50 rounded-lg p-3 border border-green-200">
                   RD$ {Number(selectedOrden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
                 </p>
+              </div>
+            )}
+
+            {/* Aprobación de precio (solo admin/operaciones, solo si hay sugerido y no aprobado) */}
+            {selectedOrden.precioSugerido !== undefined &&
+             selectedOrden.estadoAprobacion !== 'aprobado' &&
+             (userProfile?.rol === 'administrador' || userProfile?.rol === 'operaria') && (
+              <div className="bg-yellow-50 rounded-xl p-4 border-2 border-yellow-200">
+                <h3 className="text-sm font-semibold text-yellow-800 uppercase tracking-wide mb-2 flex items-center gap-1">
+                  ⏳ Aprobar Precio
+                </h3>
+                <p className="text-xs text-yellow-700 mb-3">
+                  El técnico sugirió <strong>RD$ {Number(selectedOrden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong>.
+                  Puedes modificar el precio antes de aprobar.
+                </p>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-yellow-800 mb-1">Precio final (RD$)</label>
+                    <input
+                      type="number"
+                      value={precioAprobacion}
+                      onChange={e => setPrecioAprobacion(e.target.value)}
+                      className="w-full px-3 py-2 border border-yellow-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={handleAprobarPrecio}
+                      disabled={aprobandoPrecio}
+                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-bold disabled:opacity-60 whitespace-nowrap"
+                    >
+                      {aprobandoPrecio ? 'Aprobando...' : '✅ Aprobar Precio'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Precio Aprobado (cuando ya fue aprobado) */}
+            {selectedOrden.estadoAprobacion === 'aprobado' && selectedOrden.precioFinal !== undefined && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">✅ Precio Aprobado</h3>
+                <div className="bg-green-50 rounded-lg p-3 border-2 border-green-300">
+                  <p className="text-xl font-bold text-green-700">
+                    RD$ {Number(selectedOrden.precioFinal).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                  </p>
+                  {selectedOrden.aprobadoPor && (
+                    <p className="text-[11px] text-green-700 mt-1">
+                      Aprobado por <strong>{selectedOrden.aprobadoPor}</strong>
+                      {selectedOrden.fechaAprobacion && ` · ${formatFecha(selectedOrden.fechaAprobacion)}`}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 

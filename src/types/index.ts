@@ -92,6 +92,11 @@ export interface OrdenServicio {
   notas?: string;
   notasTecnico?: string;
   precioSugerido?: number;
+  precioAprobado?: number;
+  precioFinal?: number;
+  estadoAprobacion?: 'pendiente' | 'aprobado';
+  aprobadoPor?: string;
+  fechaAprobacion?: Date;
   historialFases: HistorialFase[];
   auditoria?: RegistroAuditoria[];
   creadoPor?: string;

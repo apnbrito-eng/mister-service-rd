@@ -31,6 +31,53 @@ export default function OrdenDetalle() {
   const [notaFase, setNotaFase] = useState('');
   const [saving, setSaving] = useState(false);
   const [gpsSaving, setGpsSaving] = useState(false);
+  const [precioAprobacion, setPrecioAprobacion] = useState('');
+  const [aprobandoPrecio, setAprobandoPrecio] = useState(false);
+
+  // Pre-fill approval input
+  useEffect(() => {
+    if (orden?.precioSugerido !== undefined && orden.estadoAprobacion !== 'aprobado') {
+      setPrecioAprobacion(String(orden.precioSugerido));
+    } else {
+      setPrecioAprobacion('');
+    }
+  }, [orden?.precioSugerido, orden?.estadoAprobacion]);
+
+  const handleAprobarPrecio = async () => {
+    if (!id || !orden) return;
+    const precio = Number(precioAprobacion);
+    if (isNaN(precio) || precio <= 0) {
+      toast.error('Ingresa un precio válido');
+      return;
+    }
+    setAprobandoPrecio(true);
+    try {
+      const usuario = userProfile?.nombre || 'Admin';
+      const registroAuditoria = crearRegistroAuditoria(
+        usuario,
+        'precio_sugerido',
+        `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')}`,
+        'precioFinal',
+        orden.precioSugerido !== undefined ? `RD$ ${orden.precioSugerido.toLocaleString('es-DO')}` : '',
+        `RD$ ${precio.toLocaleString('es-DO')}`
+      );
+      await updateDoc(doc(db, 'ordenes_servicio', id), {
+        precioAprobado: precio,
+        precioFinal: precio,
+        estadoAprobacion: 'aprobado',
+        aprobadoPor: usuario,
+        fechaAprobacion: Timestamp.now(),
+        auditoria: arrayUnion(registroAuditoria),
+        updatedAt: Timestamp.now(),
+      });
+      toast.success('✅ Precio aprobado');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al aprobar el precio');
+    } finally {
+      setAprobandoPrecio(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -425,6 +472,60 @@ export default function OrdenDetalle() {
               <p className="text-2xl font-bold text-green-700">
                 RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
               </p>
+            </div>
+          )}
+
+          {/* Aprobación de precio (solo admin/operaciones) */}
+          {orden.precioSugerido !== undefined &&
+           orden.estadoAprobacion !== 'aprobado' &&
+           (userProfile?.rol === 'administrador' || userProfile?.rol === 'operaria') && (
+            <div className="bg-yellow-50 rounded-2xl shadow-sm border-2 border-yellow-200 p-6">
+              <h3 className="text-sm font-semibold text-yellow-800 uppercase mb-3 flex items-center gap-1">
+                ⏳ Aprobar Precio
+              </h3>
+              <p className="text-xs text-yellow-700 mb-3">
+                El técnico sugirió <strong>RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong>.
+                Puedes modificar el precio antes de aprobar.
+              </p>
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-yellow-800 mb-1">Precio final (RD$)</label>
+                  <input
+                    type="number"
+                    value={precioAprobacion}
+                    onChange={e => setPrecioAprobacion(e.target.value)}
+                    className="w-full px-3 py-2 border border-yellow-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={handleAprobarPrecio}
+                    disabled={aprobandoPrecio}
+                    className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-bold disabled:opacity-60 whitespace-nowrap"
+                  >
+                    {aprobandoPrecio ? 'Aprobando...' : '✅ Aprobar Precio'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Precio aprobado (cuando ya fue aprobado) */}
+          {orden.estadoAprobacion === 'aprobado' && orden.precioFinal !== undefined && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">✅ Precio Aprobado</h3>
+              <div className="bg-green-50 rounded-lg p-3 border-2 border-green-300">
+                <p className="text-2xl font-bold text-green-700">
+                  RD$ {Number(orden.precioFinal).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </p>
+                {orden.aprobadoPor && (
+                  <p className="text-xs text-green-700 mt-1">
+                    Aprobado por <strong>{orden.aprobadoPor}</strong>
+                    {orden.fechaAprobacion && ` · ${formatFecha(orden.fechaAprobacion)}`}
+                  </p>
+                )}
+              </div>
             </div>
           )}
 

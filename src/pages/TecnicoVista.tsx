@@ -565,6 +565,20 @@ export default function TecnicoVista() {
                       </div>
                     )}
 
+                    {/* Estado de aprobación de precio */}
+                    {orden.precioSugerido !== undefined && (
+                      orden.estadoAprobacion === 'aprobado' && orden.precioFinal !== undefined ? (
+                        <div className="mt-1 bg-emerald-50 rounded-lg p-2 text-xs text-emerald-800 border border-emerald-200">
+                          ✅ <span className="font-medium">Precio aprobado:</span>{' '}
+                          <span className="font-bold">RD$ {Number(orden.precioFinal).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      ) : (
+                        <div className="mt-1 bg-yellow-50 rounded-lg p-2 text-xs text-yellow-800 border border-yellow-200">
+                          ⏳ <span className="font-medium">Precio pendiente de aprobación</span>
+                        </div>
+                      )
+                    )}
+
                     {/* Estado */}
                     <div className="mt-3 flex items-center gap-2">
                       <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${estadoSimpleColor(orden.estadoSimple)}`}>
@@ -575,12 +589,24 @@ export default function TecnicoVista() {
                     {/* Actions */}
                     {!completado && (
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {permisos.puedeMarcarCompletado && (
-                          <button onClick={() => openCompletar(orden)}
-                            className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium">
-                            <CheckCircle size={12} /> Marcar Realizado
-                          </button>
-                        )}
+                        {permisos.puedeMarcarCompletado && (() => {
+                          const necesitaAprobacion =
+                            orden.precioSugerido !== undefined &&
+                            orden.estadoAprobacion !== 'aprobado';
+                          if (necesitaAprobacion) {
+                            return (
+                              <div className="w-full bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs text-yellow-800 flex items-center gap-1">
+                                ⏳ Esperando aprobación del precio por operaciones
+                              </div>
+                            );
+                          }
+                          return (
+                            <button onClick={() => openCompletar(orden)}
+                              className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium">
+                              <CheckCircle size={12} /> Marcar Realizado
+                            </button>
+                          );
+                        })()}
                         {permisos.puedeAgregarNotas && (
                           <button onClick={() => openNota(orden)}
                             className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-medium">
