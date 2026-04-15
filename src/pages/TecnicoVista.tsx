@@ -21,7 +21,8 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { optimizarRuta } from '../utils/rutas';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -31,6 +32,23 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
+
+/** Pin SVG tipo gota numerado */
+function crearPinNumerado(numero: number, color: string = '#1a5fa8'): L.DivIcon {
+  return L.divIcon({
+    className: '',
+    html: `
+      <svg width="32" height="42" viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 0 C7.163 0 0 7.163 0 16 C0 28 16 42 16 42 S32 28 32 16 C32 7.163 24.837 0 16 0Z"
+              fill="${color}" stroke="white" stroke-width="2"/>
+        <text x="16" y="19" text-anchor="middle" dominant-baseline="middle"
+              fill="white" font-weight="bold" font-size="12" font-family="Arial">${numero}</text>
+      </svg>`,
+    iconSize: [32, 42],
+    iconAnchor: [16, 42],
+    popupAnchor: [0, -42],
+  });
+}
 
 type VistaTab = 'hoy' | 'semana' | 'mes' | 'rango';
 
@@ -195,12 +213,27 @@ export default function TecnicoVista() {
     return c?.lat && c?.lng ? { lat: c.lat, lng: c.lng, direccion: c.direccion || orden.clienteDireccion || '' } : null;
   };
 
-  const marcadoresMapa = citasHoy
-    .map(o => {
-      const ubi = getClienteUbicacion(o);
-      return ubi ? { ...o, ...ubi } : null;
-    })
-    .filter((m): m is OrdenServicio & { lat: number; lng: number; direccion: string } => m !== null);
+  const marcadoresMapaRaw = useMemo(() => {
+    return citasFiltradas
+      .map(o => {
+        const ubi = getClienteUbicacion(o);
+        return ubi ? { ...o, ...ubi } : null;
+      })
+      .filter((m): m is OrdenServicio & { lat: number; lng: number; direccion: string } => m !== null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [citasFiltradas, clientes]);
+
+  // Ruta optimizada (nearest neighbor)
+  const rutaOptimizada = useMemo(() => {
+    if (marcadoresMapaRaw.length < 2) {
+      return marcadoresMapaRaw.map((m, i) => ({ ...m, orden: i + 1 }));
+    }
+    const optimized = optimizarRuta(marcadoresMapaRaw);
+    return optimized.map((m, i) => ({ ...m, orden: i + 1 }));
+  }, [marcadoresMapaRaw]);
+
+  // Compatibility alias para código existente
+  const marcadoresMapa = rutaOptimizada;
 
   const openCompletar = (orden: OrdenServicio) => {
     setSelectedOrden(orden);
@@ -319,6 +352,16 @@ export default function TecnicoVista() {
             Buenos días, {nombreCorto} 👋
           </h1>
           <p className="text-xs text-gray-400 mt-0.5">{citasFiltradas.length} citas</p>
+          {permisos.verUbicacionGPS && marcadoresMapa.length > 0 && (
+            <button
+              onClick={() => setShowMap(!showMap)}
+              className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-xl text-xs font-medium transition-colors"
+            >
+              <Navigation size={14} />
+              {showMap ? 'Ocultar mapa' : '🗺️ Ver Ruta del Día'}
+              <span className="bg-white/20 px-1.5 py-0.5 rounded-full text-[10px]">{marcadoresMapa.length}</span>
+            </button>
+          )}
         </div>
 
         {/* Tabs selector */}
@@ -375,27 +418,77 @@ export default function TecnicoVista() {
           </div>
         )}
 
-        {/* Map */}
-        {showMap && permisos.verUbicacionGPS && marcadoresMapa.length > 0 && (
-          <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100" style={{ height: '280px' }}>
-            <MapContainer
-              center={[marcadoresMapa[0].lat, marcadoresMapa[0].lng]}
-              zoom={13}
-              style={{ height: '100%', width: '100%' }}
-            >
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              {marcadoresMapa.map(m => (
-                <Marker key={m.id} position={[m.lat, m.lng]}>
-                  <Popup>
-                    <div className="text-sm">
-                      <p className="font-semibold">{m.clienteNombre}</p>
-                      <p>{formatHora(m.fechaCita)}</p>
-                      <p>{m.direccion}</p>
+        {/* Mapa de Ruta del Día */}
+        {showMap && permisos.verUbicacionGPS && (
+          <div className="space-y-2">
+            {marcadoresMapa.length > 0 ? (
+              <>
+                <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100" style={{ height: '320px' }}>
+                  <MapContainer
+                    center={[marcadoresMapa[0].lat, marcadoresMapa[0].lng]}
+                    zoom={13}
+                    style={{ height: '100%', width: '100%' }}
+                  >
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    {marcadoresMapa.map(m => (
+                      <Marker key={m.id} position={[m.lat, m.lng]} icon={crearPinNumerado(m.orden)}>
+                        <Popup>
+                          <div className="text-sm">
+                            <p className="font-semibold">{m.orden}. {m.clienteNombre}</p>
+                            <p>🕐 {formatHora(m.fechaCita)}</p>
+                            <p className="text-xs text-gray-600">{m.direccion}</p>
+                          </div>
+                        </Popup>
+                      </Marker>
+                    ))}
+                    {marcadoresMapa.length >= 2 && (
+                      <Polyline
+                        positions={marcadoresMapa.map(m => [m.lat, m.lng] as [number, number])}
+                        pathOptions={{ color: '#1a5fa8', weight: 3, opacity: 0.8, dashArray: '10 5' }}
+                      />
+                    )}
+                  </MapContainer>
+                </div>
+
+                {/* Panel inferior compacto con paradas en orden */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                    <Navigation size={12} /> Ruta optimizada · {marcadoresMapa.length} paradas
+                  </p>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {marcadoresMapa.map(m => (
+                      <div key={m.id} className="flex items-center gap-2 text-xs">
+                        <div className="w-6 h-6 rounded-full bg-[#1a5fa8] text-white flex items-center justify-center font-bold flex-shrink-0">
+                          {m.orden}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-800 truncate">{m.clienteNombre}</p>
+                          <p className="text-[10px] text-gray-500">{formatHora(m.fechaCita)} · {m.equipoTipo}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Citas sin coordenadas */}
+                  {citasFiltradas.length > marcadoresMapa.length && (
+                    <div className="mt-2 pt-2 border-t border-gray-100">
+                      <p className="text-[10px] text-orange-600 mb-1">⚠️ Citas sin GPS (no aparecen en el mapa):</p>
+                      {citasFiltradas
+                        .filter(o => !getClienteUbicacion(o))
+                        .map(o => (
+                          <div key={o.id} className="text-[10px] text-gray-600 truncate">
+                            • {o.clienteNombre} — {formatHora(o.fechaCita)}
+                          </div>
+                        ))}
                     </div>
-                  </Popup>
-                </Marker>
-              ))}
-            </MapContainer>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
+                <MapPin size={32} className="mx-auto text-gray-300 mb-2" />
+                <p className="text-sm text-gray-500">Sin citas con ubicación GPS en este período</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -458,9 +551,17 @@ export default function TecnicoVista() {
 
                     {/* Notas técnico previas */}
                     {orden.notasTecnico && (
-                      <div className="mt-3 bg-blue-50 rounded-lg p-2 text-xs text-blue-800">
-                        <StickyNote size={10} className="inline mr-1" />
-                        <span className="whitespace-pre-line">{orden.notasTecnico}</span>
+                      <div className="mt-2 bg-blue-50 rounded-lg p-2 text-xs text-blue-800 border border-blue-100">
+                        <span className="font-medium">🔧 Mis notas:</span>
+                        <span className="ml-1 whitespace-pre-line">
+                          {orden.notasTecnico.length > 100 ? orden.notasTecnico.substring(0, 100) + '...' : orden.notasTecnico}
+                        </span>
+                      </div>
+                    )}
+                    {orden.precioSugerido !== undefined && orden.precioSugerido !== null && (
+                      <div className="mt-1 bg-green-50 rounded-lg p-2 text-xs text-green-800 border border-green-100">
+                        <span className="font-medium">💰 Mi precio:</span>
+                        <span className="ml-1 font-bold">RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
 
@@ -599,6 +700,27 @@ export default function TecnicoVista() {
                 )}
               </div>
             )}
+
+            {selectedOrden.notasTecnico && (
+              <div className="pt-2 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2 flex items-center gap-1">
+                  🔧 Mis Notas
+                </p>
+                <div className="bg-blue-50 rounded-lg p-2 border border-blue-100">
+                  <p className="text-xs text-blue-800 whitespace-pre-line">{selectedOrden.notasTecnico}</p>
+                </div>
+              </div>
+            )}
+
+            {selectedOrden.precioSugerido !== undefined && selectedOrden.precioSugerido !== null && (
+              <div className="pt-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">💰 Mi Precio Sugerido</p>
+                <p className="text-sm font-bold text-green-700 bg-green-50 rounded-lg p-2 border border-green-200">
+                  RD$ {Number(selectedOrden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            )}
+
             <div>
               <p className="text-xs text-gray-500">Estado</p>
               <Badge fase={selectedOrden.fase} />
