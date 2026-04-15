@@ -94,7 +94,9 @@ export default function CierreServicioWizard({
 
     try {
       // Subir foto a Firebase Storage
+      console.log('Subiendo foto...', { ordenId: orden.id, fileSize: fotoBlob.size, fileType: fotoBlob.type });
       const fotoUrl = await subirFotoCierre(orden.id, fotoBlob);
+      console.log('Foto subida OK:', fotoUrl);
 
       const distancia = gpsCoords && clienteLat && clienteLng
         ? distanciaMetros(gpsCoords.lat, gpsCoords.lng, clienteLat, clienteLng)
@@ -137,6 +139,7 @@ export default function CierreServicioWizard({
       );
 
       console.log('Payload cierre:', { fase: 'trabajo_realizado', cierrePayload });
+      console.log('Guardando cierre en Firestore...', { ordenId: orden.id });
 
       await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
         fase: 'trabajo_realizado',
@@ -146,6 +149,7 @@ export default function CierreServicioWizard({
         auditoria: arrayUnion(registroAuditoria),
         updatedAt: Timestamp.now(),
       });
+      console.log('Cierre guardado OK');
 
       toast.success('✅ Servicio cerrado exitosamente');
       onClosed();
@@ -153,10 +157,14 @@ export default function CierreServicioWizard({
     } catch (err: unknown) {
       console.error('Error cierre servicio:', err);
       const errMsg = err instanceof Error ? err.message : 'Error desconocido';
-      if (errMsg.includes('storage') || errMsg.includes('403') || errMsg.includes('unauthorized')) {
-        toast.error('Error al subir la foto. Verifica tu conexión e intenta de nuevo.');
+      if (errMsg.includes('Timeout')) {
+        toast.error('La foto tardó mucho en subir. Verifica tu conexión a internet e intenta de nuevo.');
+      } else if (errMsg.includes('storage') || errMsg.includes('403') || errMsg.includes('unauthorized') || errMsg.includes('does not have permission')) {
+        toast.error('Error de permisos al subir la foto. Contacta al administrador.');
+      } else if (errMsg.includes('firestore') || errMsg.includes('PERMISSION_DENIED')) {
+        toast.error('Error al guardar el cierre. Verifica tus permisos.');
       } else {
-        toast.error('Error al cerrar: ' + errMsg.substring(0, 80));
+        toast.error('Error al cerrar: ' + errMsg.substring(0, 100));
       }
     } finally {
       setSaving(false);

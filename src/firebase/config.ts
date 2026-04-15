@@ -3,14 +3,14 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// Reemplaza con tu configuración de Firebase
+// Configuración de Firebase con fallbacks al proyecto mister-service-app-cloude
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "demo-api-key",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "mister-service-rd.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "mister-service-rd",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "mister-service-rd.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "000000000000",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:000000000000:web:0000000000000000",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyAKjaZAWHi_OKoH9HAdvk64MN4dmvVYoRk",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "mister-service-app-cloude.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "mister-service-app-cloude",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "mister-service-app-cloude.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "342961599729",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:342961599729:web:aa7d3bdb531e530419a550",
 };
 
 const app = initializeApp(firebaseConfig);

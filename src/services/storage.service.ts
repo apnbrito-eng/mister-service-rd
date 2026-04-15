@@ -11,7 +11,14 @@ export async function subirFotoCierre(
   const fileName = `cierre-${timestamp}.jpg`;
   const path = `fotos-servicio/${ordenId}/${fileName}`;
   const ref = storageRef(storage, path);
-  await uploadBytes(ref, file);
+
+  // Timeout de 30 segundos para la subida
+  const uploadPromise = uploadBytes(ref, file);
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Timeout: la subida de la foto tardó más de 30 segundos')), 30000)
+  );
+
+  await Promise.race([uploadPromise, timeoutPromise]);
   return await getDownloadURL(ref);
 }
 
