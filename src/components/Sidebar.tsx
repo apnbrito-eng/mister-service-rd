@@ -3,7 +3,7 @@ import {
   LayoutDashboard, ClipboardList, Calendar, Map,
   Users, UserCog, FileText, Settings, LogOut, Wrench,
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight,
-  Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2,
+  Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -23,6 +23,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const navigate = useNavigate();
   const [standbyCount, setStandbyCount] = useState(0);
   const [citasCount, setCitasCount] = useState(0);
+  const [solicitudesCount, setSolicitudesCount] = useState(0);
 
   useEffect(() => {
     const q1 = query(collection(db, 'standby_piezas'), where('estado', '!=', 'llego'));
@@ -30,7 +31,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
     const unsub2 = onSnapshot(collection(db, 'citas_por_confirmar'), (snap) => setCitasCount(snap.size));
 
-    return () => { unsub1(); unsub2(); };
+    const q3 = query(collection(db, 'solicitudes_servicio'), where('estado', '==', 'pendiente'));
+    const unsub3 = onSnapshot(q3, (snap) => setSolicitudesCount(snap.size));
+
+    return () => { unsub1(); unsub2(); unsub3(); };
   }, []);
 
   const handleLogout = async () => {
@@ -63,6 +67,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { to: '/admin/web', icon: Globe, label: 'Página Web', show: isAdmin },
     { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: isAdmin },
     { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: isAdmin },
+    { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: isAdmin },
     { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: isAdmin },
   ];
 

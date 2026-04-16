@@ -25,6 +25,8 @@ import ConfiguracionWeb from './pages/ConfiguracionWeb';
 import EmpresasAliadas from './pages/EmpresasAliadas';
 import Formularios from './pages/Formularios';
 import FormularioEditor from './pages/FormularioEditor';
+import Solicitudes from './pages/Solicitudes';
+import FormularioPublico from './pages/public/FormularioPublico';
 import TecnicoVista from './pages/TecnicoVista';
 import Calendarios from './pages/Calendarios';
 import CitaPublica from './pages/CitaPublica';
@@ -86,6 +88,7 @@ function AppRoutes() {
       {/* Public standalone pages (no nav/footer — focused experience) */}
       <Route path="/cita/:calendarId" element={<CitaPublica />} />
       <Route path="/tracking/:token" element={<TrackingCliente />} />
+      <Route path="/f/:slug" element={<FormularioPublico />} />
 
       {/* ═══════════════════════════════════════════════
           ADMIN / INTERNAL SYSTEM
@@ -129,6 +132,7 @@ function AppRoutes() {
         <Route path="empresas-aliadas" element={<EmpresasAliadas />} />
         <Route path="formularios" element={<Formularios />} />
         <Route path="formularios/:id" element={<FormularioEditor />} />
+        <Route path="solicitudes" element={<Solicitudes />} />
         <Route path="configuracion" element={<Configuracion />} />
         <Route path="configuracion/usuarios" element={<GestionUsuarios />} />
       </Route>
