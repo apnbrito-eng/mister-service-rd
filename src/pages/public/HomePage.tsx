@@ -4,6 +4,7 @@ import {
   Thermometer, Waves, Wind, Flame, Refrigerator, Zap,
   MessageCircle, CheckCircle, ArrowRight, Users, MapPin, Calendar
 } from 'lucide-react';
+import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 
 const SERVICIOS_DESTACADOS = [
   {
@@ -65,12 +66,9 @@ const PASOS_SERVICIO = [
   },
 ];
 
-const MARCAS = [
-  'LG', 'Samsung', 'Whirlpool', 'Mabe', 'GE', 'Frigidaire',
-  'Electrolux', 'Bosch', 'Daewoo', 'Panasonic', 'Carrier', 'Midea',
-];
-
 export default function HomePage() {
+  const { config } = useConfigWeb();
+
   return (
     <div>
       {/* ══════════ HERO ══════════ */}
@@ -86,15 +84,14 @@ export default function HomePage() {
           <div className="grid md:grid-cols-2 gap-10 items-center">
             <div>
               <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full text-white/90 text-xs font-medium mb-6">
-                <Shield size={14} /> Servicio técnico certificado en RD
+                <Shield size={14} /> {config.hero.badge}
               </div>
               <h1 className="text-4xl md:text-5xl font-extrabold text-white leading-tight mb-5">
-                Reparamos sus electrodomésticos{' '}
-                <span className="text-blue-300">con garantía</span>
+                {config.hero.titulo}{' '}
+                <span className="text-blue-300">{config.hero.tituloDestacado}</span>
               </h1>
               <p className="text-blue-200 text-lg mb-8 leading-relaxed max-w-lg">
-                Técnicos profesionales a domicilio en Santo Domingo y todo el país.
-                Diagnóstico honesto, precios justos, seguimiento en tiempo real.
+                {config.hero.subtitulo}
               </p>
               <div className="flex flex-col sm:flex-row gap-3">
                 <Link
@@ -104,7 +101,7 @@ export default function HomePage() {
                   <Calendar size={18} /> Agendar Cita Online
                 </Link>
                 <a
-                  href="https://wa.me/18293897474?text=Hola%2C%20necesito%20un%20servicio"
+                  href={getWhatsAppUrl(config)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-center gap-2 bg-green-500 text-white px-6 py-3.5 rounded-xl font-bold text-sm hover:bg-green-600 transition-colors"
@@ -119,27 +116,27 @@ export default function HomePage() {
               <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20">
                 <div className="grid grid-cols-2 gap-6">
                   <div className="text-center">
-                    <div className="text-4xl font-extrabold text-white">10+</div>
-                    <div className="text-blue-200 text-sm mt-1">Años de experiencia</div>
+                    <div className="text-4xl font-extrabold text-white">{config.estadisticas.experiencia.valor}</div>
+                    <div className="text-blue-200 text-sm mt-1">{config.estadisticas.experiencia.etiqueta}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-4xl font-extrabold text-white">5K+</div>
-                    <div className="text-blue-200 text-sm mt-1">Servicios realizados</div>
+                    <div className="text-4xl font-extrabold text-white">{config.estadisticas.servicios.valor}</div>
+                    <div className="text-blue-200 text-sm mt-1">{config.estadisticas.servicios.etiqueta}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-4xl font-extrabold text-white">98%</div>
-                    <div className="text-blue-200 text-sm mt-1">Clientes satisfechos</div>
+                    <div className="text-4xl font-extrabold text-white">{config.estadisticas.satisfaccion.valor}</div>
+                    <div className="text-blue-200 text-sm mt-1">{config.estadisticas.satisfaccion.etiqueta}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-4xl font-extrabold text-white">24h</div>
-                    <div className="text-blue-200 text-sm mt-1">Tiempo de respuesta</div>
+                    <div className="text-4xl font-extrabold text-white">{config.estadisticas.respuesta.valor}</div>
+                    <div className="text-blue-200 text-sm mt-1">{config.estadisticas.respuesta.etiqueta}</div>
                   </div>
                 </div>
                 <div className="mt-6 pt-6 border-t border-white/20 flex items-center justify-center gap-1.5">
                   {[1, 2, 3, 4, 5].map(i => (
                     <Star key={i} size={18} className="text-yellow-400 fill-yellow-400" />
                   ))}
-                  <span className="text-white text-sm ml-2 font-medium">4.9 / 5.0</span>
+                  <span className="text-white text-sm ml-2 font-medium">{config.estadisticas.rating} / 5.0</span>
                 </div>
               </div>
             </div>
@@ -225,7 +222,7 @@ export default function HomePage() {
             <p className="text-gray-500 text-sm">Todas las marcas principales del mercado dominicano</p>
           </div>
           <div className="flex flex-wrap justify-center gap-3">
-            {MARCAS.map(marca => (
+            {config.marcas.map(marca => (
               <div
                 key={marca}
                 className="bg-gray-bg px-5 py-2.5 rounded-xl text-sm font-semibold text-gray-700 border border-gray-100 hover:border-primary/30 hover:text-primary transition-colors"
@@ -279,7 +276,7 @@ export default function HomePage() {
               <Calendar size={18} /> Agendar Cita Ahora
             </Link>
             <a
-              href="tel:+18293897474"
+              href={`tel:${config.contacto.telefono}`}
               className="flex items-center justify-center gap-2 bg-white/10 border border-white/30 text-white px-8 py-4 rounded-xl font-bold text-sm hover:bg-white/20 transition-colors"
             >
               <Phone size={18} /> Llamar Ahora

@@ -4,6 +4,7 @@ import {
   CheckCircle, Calendar, MessageCircle, Phone, ArrowRight,
   Home, Building, Repeat, Wrench, Shield, Clock
 } from 'lucide-react';
+import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 
 interface Servicio {
   icon: React.ElementType;
@@ -118,12 +119,6 @@ const SERVICIOS: Servicio[] = [
   },
 ];
 
-const MARCAS_POR_CATEGORIA = [
-  { categoria: 'Línea blanca', marcas: ['LG', 'Samsung', 'Whirlpool', 'Mabe', 'GE', 'Frigidaire', 'Electrolux'] },
-  { categoria: 'Aire acondicionado', marcas: ['Carrier', 'Midea', 'LG', 'Samsung', 'Daikin', 'Panasonic', 'Gree'] },
-  { categoria: 'Cocina', marcas: ['Mabe', 'Whirlpool', 'GE', 'Samsung', 'LG', 'Bosch', 'Frigidaire'] },
-];
-
 const TIPOS_SERVICIO = [
   {
     icon: Home,
@@ -143,6 +138,8 @@ const TIPOS_SERVICIO = [
 ];
 
 export default function ServiciosPage() {
+  const { config } = useConfigWeb();
+
   return (
     <div>
       {/* ══════════ HERO ══════════ */}
@@ -230,21 +227,14 @@ export default function ServiciosPage() {
             <h2 className="text-2xl font-extrabold text-gray-900 mb-2">Marcas que atendemos</h2>
             <p className="text-gray-500 text-sm">Técnicos capacitados en todas las marcas del mercado</p>
           </div>
-          <div className="space-y-6">
-            {MARCAS_POR_CATEGORIA.map(cat => (
-              <div key={cat.categoria}>
-                <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">{cat.categoria}</h3>
-                <div className="flex flex-wrap gap-2">
-                  {cat.marcas.map(m => (
-                    <span
-                      key={m}
-                      className="bg-gray-bg px-4 py-2 rounded-xl text-sm font-medium text-gray-700 border border-gray-100"
-                    >
-                      {m}
-                    </span>
-                  ))}
-                </div>
-              </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            {config.marcas.map(m => (
+              <span
+                key={m}
+                className="bg-gray-bg px-4 py-2 rounded-xl text-sm font-medium text-gray-700 border border-gray-100"
+              >
+                {m}
+              </span>
             ))}
           </div>
         </div>
@@ -301,7 +291,7 @@ export default function ServiciosPage() {
               <Calendar size={18} /> Agendar Cita Online
             </Link>
             <a
-              href="https://wa.me/18293897474?text=Hola%2C%20me%20interesa%20un%20servicio"
+              href={getWhatsAppUrl(config, 'Hola, me interesa un servicio')}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 bg-green-500 text-white px-8 py-4 rounded-xl font-bold text-sm hover:bg-green-600 transition-colors"

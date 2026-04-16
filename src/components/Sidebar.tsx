@@ -3,7 +3,7 @@ import {
   LayoutDashboard, ClipboardList, Calendar, Map,
   Users, UserCog, FileText, Settings, LogOut, Wrench,
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight,
-  Receipt, ShoppingBag, CalendarDays, Shield,
+  Receipt, ShoppingBag, CalendarDays, Shield, Globe,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -60,6 +60,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { to: '/admin/rendimiento', icon: TrendingUp, label: 'Rendimiento', show: isAdmin || isOperaria },
     { to: '/admin/personal', icon: UserCog, label: 'Personal', show: isAdmin },
     { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: isAdmin },
+    { to: '/admin/web', icon: Globe, label: 'Página Web', show: isAdmin },
     { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: isAdmin },
   ];
 

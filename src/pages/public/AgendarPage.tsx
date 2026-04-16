@@ -5,10 +5,12 @@ import { Calendario } from '../../types';
 import { Link } from 'react-router-dom';
 import { Calendar, User, Clock, ChevronRight, MessageCircle, AlertCircle } from 'lucide-react';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 
 export default function AgendarPage() {
   const [loading, setLoading] = useState(true);
   const [calendarios, setCalendarios] = useState<Calendario[]>([]);
+  const { config } = useConfigWeb();
 
   useEffect(() => {
     const fetchCalendarios = async () => {
@@ -69,7 +71,7 @@ export default function AgendarPage() {
                 Por favor contáctenos directamente.
               </p>
               <a
-                href="https://wa.me/18293897474?text=Hola%2C%20quiero%20agendar%20una%20cita"
+                href={getWhatsAppUrl(config, 'Hola, quiero agendar una cita')}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-green-600 transition-colors"
@@ -118,7 +120,7 @@ export default function AgendarPage() {
               <div className="text-center pt-6">
                 <p className="text-sm text-gray-500 mb-3">¿Prefiere contacto directo?</p>
                 <a
-                  href="https://wa.me/18293897474?text=Hola%2C%20quiero%20agendar%20una%20cita"
+                  href={getWhatsAppUrl(config, 'Hola, quiero agendar una cita')}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 bg-green-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-green-600 transition-colors"

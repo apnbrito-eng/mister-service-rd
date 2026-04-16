@@ -1,8 +1,10 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Wrench, Phone, Mail, MapPin, Clock, Menu, X, MessageCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
+import { ConfigWeb } from '../../services/configWeb.service';
 
-function PublicNav() {
+function PublicNav({ config }: { config: ConfigWeb }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
@@ -34,14 +36,14 @@ function PublicNav() {
         <div className="max-w-6xl mx-auto px-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
-              <Phone size={10} /> (829) 389-7474
+              <Phone size={10} /> {config.contacto.telefono}
             </span>
             <span className="flex items-center gap-1">
-              <Mail size={10} /> info@misterservicerd.com
+              <Mail size={10} /> {config.contacto.email}
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <Clock size={10} /> Lun - Sáb: 8:00 AM - 6:00 PM
+            <Clock size={10} /> {config.contacto.horario}
           </div>
         </div>
       </div>
@@ -74,7 +76,7 @@ function PublicNav() {
             </Link>
           ))}
           <a
-            href="https://wa.me/18293897474?text=Hola%2C%20necesito%20un%20servicio"
+            href={getWhatsAppUrl(config)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
@@ -109,7 +111,7 @@ function PublicNav() {
             </Link>
           ))}
           <a
-            href="https://wa.me/18293897474?text=Hola%2C%20necesito%20un%20servicio"
+            href={getWhatsAppUrl(config)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-3 rounded-xl text-sm font-semibold w-full"
@@ -122,7 +124,7 @@ function PublicNav() {
   );
 }
 
-function Footer() {
+function Footer({ config }: { config: ConfigWeb }) {
   return (
     <footer className="bg-primary text-white">
       <div className="max-w-6xl mx-auto px-4 py-12">
@@ -162,22 +164,22 @@ function Footer() {
               <div className="flex items-start gap-2 text-sm text-blue-200">
                 <Phone size={14} className="mt-0.5 shrink-0" />
                 <div>
-                  <span className="block">(829) 389-7474</span>
-                  <span className="block">(809) 280-9601</span>
-                  <span className="block">(829) 828-7880</span>
+                  {config.whatsapp.numeros.filter(n => n.activo).map((n, i) => (
+                    <span key={i} className="block">{n.numero}</span>
+                  ))}
                 </div>
               </div>
               <div className="flex items-start gap-2 text-sm text-blue-200">
                 <Mail size={14} className="mt-0.5 shrink-0" />
-                <span>info@misterservicerd.com</span>
+                <span>{config.contacto.email}</span>
               </div>
               <div className="flex items-start gap-2 text-sm text-blue-200">
                 <MapPin size={14} className="mt-0.5 shrink-0" />
-                <span>Santo Domingo, República Dominicana</span>
+                <span>{config.contacto.direccion}</span>
               </div>
               <div className="flex items-start gap-2 text-sm text-blue-200">
                 <Clock size={14} className="mt-0.5 shrink-0" />
-                <span>Lun - Sáb: 8:00 AM - 6:00 PM</span>
+                <span>{config.contacto.horario}</span>
               </div>
             </div>
           </div>
@@ -197,19 +199,21 @@ function Footer() {
 }
 
 export default function PublicLayout() {
+  const { config } = useConfigWeb();
+
   return (
     <div className="min-h-screen flex flex-col">
-      <PublicNav />
+      <PublicNav config={config} />
       {/* Spacer for fixed nav */}
       <div className="h-[60px] md:h-[88px]" />
       <main className="flex-1">
         <Outlet />
       </main>
-      <Footer />
+      <Footer config={config} />
 
       {/* Floating WhatsApp button (mobile) */}
       <a
-        href="https://wa.me/18293897474?text=Hola%2C%20necesito%20un%20servicio"
+        href={getWhatsAppUrl(config)}
         target="_blank"
         rel="noopener noreferrer"
         className="fixed bottom-6 right-6 z-50 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition-colors"
