@@ -1,6 +1,6 @@
 import { doc, getDoc, setDoc, Timestamp, collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { ConfigGPS, UbicacionVehiculo, ProveedorGPS } from '../types';
+import { ConfigGPS, UbicacionVehiculo } from '../types';
 
 const CONFIG_DOC = doc(db, 'config_gps', 'sistema');
 const UBICACIONES_COLLECTION = 'ubicaciones_vehiculos';
@@ -79,78 +79,47 @@ export function suscribirTodasUbicaciones(
   });
 }
 
-/** Obtiene ubicación desde la API externa configurada (cuando esté disponible) */
+/**
+ * Obtiene ubicación desde la API externa configurada, usando el proxy serverless
+ * en /api/gps/ubicacion para evitar CORS.
+ */
 export async function obtenerUbicacionAPI(vehiculoId: string): Promise<UbicacionVehiculo | null> {
   const config = await obtenerConfigGPS();
   if (!config?.activo || !config.apiKey || !config.apiUrl) return null;
+  if (config.proveedor === 'Dispositivo del técnico') return null; // No usa API externa
 
   try {
-    // Nota: por CORS, esto requeriría un proxy backend en producción.
-    // Se deja la estructura lista para cuando exista el proxy.
-    const response = await fetch(
-      `${config.apiUrl}/vehicles/${vehiculoId}/location`,
-      {
-        headers: {
-          'Authorization': `Bearer ${config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-    if (!response.ok) return null;
+    const response = await fetch('/api/gps/ubicacion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vehiculoId,
+        apiUrl: config.apiUrl,
+        apiKey: config.apiKey,
+        proveedor: config.proveedor,
+      }),
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+      console.error('GPS proxy error:', errData.error);
+      return null;
+    }
+
     const data = await response.json();
-    return normalizarRespuesta(data, config.proveedor, vehiculoId);
+    return {
+      vehiculoId: data.vehiculoId || vehiculoId,
+      tecnicoId: '',
+      lat: data.lat || 0,
+      lng: data.lng || 0,
+      velocidad: data.velocidad || 0,
+      rumbo: data.rumbo || 0,
+      timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
+      enMovimiento: data.enMovimiento || false,
+    };
   } catch (error) {
     console.error('GPS API error:', error);
     return null;
-  }
-}
-
-/** Normaliza respuesta según proveedor */
-function normalizarRespuesta(
-  data: Record<string, unknown>,
-  proveedor: ProveedorGPS,
-  vehiculoId: string
-): UbicacionVehiculo {
-  const d = data as Record<string, unknown>;
-  const pos = (d.pos || d.position) as Record<string, unknown> | undefined;
-  const location = d.location as Record<string, unknown> | undefined;
-
-  switch (proveedor) {
-    case 'Wialon':
-      return {
-        vehiculoId, tecnicoId: '',
-        lat: Number(pos?.y) || 0, lng: Number(pos?.x) || 0,
-        velocidad: Number(d.speed) || 0, rumbo: Number(d.course) || 0,
-        timestamp: d.time ? new Date(Number(d.time) * 1000) : new Date(),
-        enMovimiento: Number(d.speed) > 0,
-      };
-    case 'Samsara':
-      return {
-        vehiculoId, tecnicoId: '',
-        lat: Number(location?.latitude) || 0, lng: Number(location?.longitude) || 0,
-        velocidad: Number(d.speedMilesPerHour) * 1.60934 || 0,
-        rumbo: Number(d.heading) || 0,
-        timestamp: d.time ? new Date(String(d.time)) : new Date(),
-        enMovimiento: Number(d.speedMilesPerHour) > 0,
-      };
-    case 'Traccar':
-      return {
-        vehiculoId, tecnicoId: '',
-        lat: Number(d.latitude) || 0, lng: Number(d.longitude) || 0,
-        velocidad: Number(d.speed) * 1.852 || 0, // nudos → km/h
-        rumbo: Number(d.course) || 0,
-        timestamp: d.deviceTime ? new Date(String(d.deviceTime)) : new Date(),
-        enMovimiento: Number(d.speed) > 0,
-      };
-    default:
-      return {
-        vehiculoId, tecnicoId: '',
-        lat: Number(d.lat) || 0, lng: Number(d.lng) || 0,
-        velocidad: Number(d.speed || d.velocidad) || 0,
-        rumbo: Number(d.heading || d.rumbo) || 0,
-        timestamp: d.timestamp ? new Date(String(d.timestamp)) : new Date(),
-        enMovimiento: Number(d.speed || d.velocidad) > 0,
-      };
   }
 }
 
