@@ -35,6 +35,7 @@ import AgendarPage from './pages/public/AgendarPage';
 
 import { useEffect } from 'react';
 import { seedDatabase } from './firebase/seedData';
+import { seedWebConfig } from './services/seedWebConfig';
 import { limpiarOrdenDuplicada } from './utils/cleanFirestore';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -62,6 +63,7 @@ function AppRoutes() {
   useEffect(() => {
     if (currentUser) {
       seedDatabase().catch(console.error);
+      seedWebConfig().catch(console.error);
     }
   }, [currentUser]);
 
