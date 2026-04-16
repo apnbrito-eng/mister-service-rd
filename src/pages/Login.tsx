@@ -21,7 +21,7 @@ export default function Login() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      navigate('/dashboard');
+      navigate('/admin/dashboard');
     } catch (error: any) {
       const messages: Record<string, string> = {
         'auth/user-not-found': 'Usuario no encontrado',

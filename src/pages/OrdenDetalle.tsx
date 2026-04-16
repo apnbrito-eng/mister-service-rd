@@ -195,14 +195,14 @@ export default function OrdenDetalle() {
   if (!orden) return (
     <div className="p-6 text-center">
       <p className="text-gray-500">Orden no encontrada</p>
-      <button onClick={() => navigate('/ordenes')} className="text-[#1a5fa8] mt-2 text-sm">Volver a órdenes</button>
+      <button onClick={() => navigate('/admin/ordenes')} className="text-[#1a5fa8] mt-2 text-sm">Volver a órdenes</button>
     </div>
   );
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center gap-4">
-        <button onClick={() => navigate('/ordenes')} className="p-2 hover:bg-gray-100 rounded-lg">
+        <button onClick={() => navigate('/admin/ordenes')} className="p-2 hover:bg-gray-100 rounded-lg">
           <ArrowLeft size={20} />
         </button>
         <div className="flex-1">

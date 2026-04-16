@@ -305,7 +305,7 @@ export default function Dashboard() {
           subtitle={`${cotizacionesPendientes.length} pendiente${cotizacionesPendientes.length !== 1 ? 's' : ''}`}
           icon={<FileText size={22} />}
           color="bg-orange-500"
-          onClick={() => navigate('/cotizaciones')}
+          onClick={() => navigate('/admin/cotizaciones')}
         />
         <KpiCard
           title="Órdenes Activas"
@@ -313,7 +313,7 @@ export default function Dashboard() {
           subtitle="activas hoy"
           icon={<ClipboardList size={22} />}
           color="bg-blue-500"
-          onClick={() => navigate('/ordenes')}
+          onClick={() => navigate('/admin/ordenes')}
         />
         <KpiCard
           title="Facturas Emitidas"
@@ -321,7 +321,7 @@ export default function Dashboard() {
           subtitle={`${facturasEmitidas.length} factura${facturasEmitidas.length !== 1 ? 's' : ''}`}
           icon={<Receipt size={22} />}
           color="bg-purple-500"
-          onClick={() => navigate('/facturas')}
+          onClick={() => navigate('/admin/facturas')}
         />
         <KpiCard
           title="Ingresos del Mes"
@@ -329,7 +329,7 @@ export default function Dashboard() {
           subtitle={`${facturasPagadasMes.length} pagada${facturasPagadasMes.length !== 1 ? 's' : ''}`}
           icon={<DollarSign size={22} />}
           color="bg-green-500"
-          onClick={() => navigate('/facturas')}
+          onClick={() => navigate('/admin/facturas')}
         />
       </div>
 
@@ -358,7 +358,7 @@ export default function Dashboard() {
                 {ordenesAtrasadas.slice(0, 10).map(orden => (
                   <tr
                     key={orden.id}
-                    onClick={() => navigate(`/ordenes/${orden.id}`)}
+                    onClick={() => navigate(`/admin/ordenes/${orden.id}`)}
                     className="border-b border-gray-50 hover:bg-red-50 cursor-pointer transition-colors"
                   >
                     <td className="py-2.5 pr-4 font-mono font-medium text-[#0f3460]">
@@ -388,7 +388,7 @@ export default function Dashboard() {
             {FASES_EMBUDO.map((fase, index) => (
               <div key={fase} className="flex items-center">
                 <button
-                  onClick={() => navigate(`/ordenes?fase=${fase}`)}
+                  onClick={() => navigate(`/admin/ordenes?fase=${fase}`)}
                   className="relative px-4 py-3 rounded-xl text-white text-center cursor-pointer hover:opacity-90 hover:scale-105 transition-all min-w-[110px]"
                   style={{ backgroundColor: faseBgColor(fase) }}
                 >
@@ -432,7 +432,7 @@ export default function Dashboard() {
                   {alertasRojas.map(alerta => (
                     <div
                       key={alerta.id}
-                      onClick={() => alerta.ordenId && navigate(`/ordenes/${alerta.ordenId}`)}
+                      onClick={() => alerta.ordenId && navigate(`/admin/ordenes/${alerta.ordenId}`)}
                       className="flex items-start gap-3 p-3 rounded-xl cursor-pointer hover:opacity-90 transition-opacity bg-red-50 border border-red-100 mb-1.5"
                     >
                       <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-red-500 animate-pulse" />
@@ -448,7 +448,7 @@ export default function Dashboard() {
                   {alertasNaranjas.map(alerta => (
                     <div
                       key={alerta.id}
-                      onClick={() => alerta.ordenId && navigate(`/ordenes/${alerta.ordenId}`)}
+                      onClick={() => alerta.ordenId && navigate(`/admin/ordenes/${alerta.ordenId}`)}
                       className="flex items-start gap-3 p-3 rounded-xl cursor-pointer hover:opacity-90 transition-opacity bg-orange-50 border border-orange-100 mb-1.5"
                     >
                       <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-orange-500" />
@@ -716,7 +716,7 @@ export default function Dashboard() {
             {agendaHoy.map(orden => (
               <div
                 key={orden.id}
-                onClick={() => navigate(`/ordenes/${orden.id}`)}
+                onClick={() => navigate(`/admin/ordenes/${orden.id}`)}
                 className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 cursor-pointer border border-gray-100 transition-colors"
               >
                 <div className="text-center bg-[#0f3460]/10 rounded-lg px-2.5 py-1.5 min-w-[56px]">

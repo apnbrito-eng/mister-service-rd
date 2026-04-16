@@ -26,6 +26,13 @@ import Calendarios from './pages/Calendarios';
 import CitaPublica from './pages/CitaPublica';
 import GestionUsuarios from './pages/GestionUsuarios';
 import TrackingCliente from './pages/TrackingCliente';
+
+// Public website pages
+import PublicLayout from './components/public/PublicLayout';
+import HomePage from './pages/public/HomePage';
+import ServiciosPage from './pages/public/ServiciosPage';
+import AgendarPage from './pages/public/AgendarPage';
+
 import { useEffect } from 'react';
 import { seedDatabase } from './firebase/seedData';
 import { limpiarOrdenDuplicada } from './utils/cleanFirestore';
@@ -58,19 +65,31 @@ function AppRoutes() {
     }
   }, [currentUser]);
 
-  if (loading) return <LoadingSpinner fullPage text="Iniciando..." />;
-
   return (
     <Routes>
-      {/* Public routes - no auth required */}
+      {/* ═══════════════════════════════════════════════
+          PUBLIC WEBSITE — misterservicerd.com
+          No auth required. Visible to everyone.
+          ═══════════════════════════════════════════════ */}
+      <Route element={<PublicLayout />}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/servicios" element={<ServiciosPage />} />
+        <Route path="/agendar" element={<AgendarPage />} />
+      </Route>
+
+      {/* Public standalone pages (no nav/footer — focused experience) */}
       <Route path="/cita/:calendarId" element={<CitaPublica />} />
       <Route path="/tracking/:token" element={<TrackingCliente />} />
 
+      {/* ═══════════════════════════════════════════════
+          ADMIN / INTERNAL SYSTEM
+          Requires authentication.
+          ═══════════════════════════════════════════════ */}
       <Route path="/login" element={
         currentUser ? (
           userProfile?.rol === 'tecnico'
             ? <Navigate to="/tecnico" replace />
-            : <Navigate to="/dashboard" replace />
+            : <Navigate to="/admin" replace />
         ) : <Login />
       } />
 
@@ -78,10 +97,10 @@ function AppRoutes() {
         <ProtectedRoute><TecnicoVista /></ProtectedRoute>
       } />
 
-      <Route path="/" element={
+      <Route path="/admin" element={
         <ProtectedRoute><TecnicoRoute><Layout /></TecnicoRoute></ProtectedRoute>
       }>
-        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route index element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="ordenes" element={<Ordenes />} />
         <Route path="ordenes/:id" element={<OrdenDetalle />} />
@@ -104,7 +123,16 @@ function AppRoutes() {
         <Route path="configuracion/usuarios" element={<GestionUsuarios />} />
       </Route>
 
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* Legacy redirects — old /dashboard, /ordenes etc. now under /admin */}
+      <Route path="/dashboard" element={<Navigate to="/admin/dashboard" replace />} />
+      <Route path="/ordenes" element={<Navigate to="/admin/ordenes" replace />} />
+      <Route path="/citas" element={<Navigate to="/admin/citas" replace />} />
+      <Route path="/calendario" element={<Navigate to="/admin/calendario" replace />} />
+      <Route path="/clientes" element={<Navigate to="/admin/clientes" replace />} />
+      <Route path="/configuracion" element={<Navigate to="/admin/configuracion" replace />} />
+
+      {/* Fallback — send to public home */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

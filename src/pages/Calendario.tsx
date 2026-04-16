@@ -185,7 +185,7 @@ export default function Calendario() {
                       .map(e => (
                         <div
                           key={e.id}
-                          onClick={() => navigate(`/ordenes/${e.id}`)}
+                          onClick={() => navigate(`/admin/ordenes/${e.id}`)}
                           className="text-xs p-1.5 rounded-lg text-white cursor-pointer hover:opacity-90"
                           style={{ backgroundColor: getTecnicoColor(e.tecnicoNombre || '') }}
                         >
@@ -215,7 +215,7 @@ export default function Calendario() {
                   .map(e => (
                     <div
                       key={e.id}
-                      onClick={() => navigate(`/ordenes/${e.id}`)}
+                      onClick={() => navigate(`/admin/ordenes/${e.id}`)}
                       className="flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer hover:shadow-md transition-shadow"
                       style={{ borderColor: getTecnicoColor(e.tecnicoNombre || '') }}
                     >
