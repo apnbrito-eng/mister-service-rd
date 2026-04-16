@@ -156,7 +156,7 @@ export default function FormularioPublico() {
         }
       }
 
-      const solicitudId = await crearSolicitud({
+      const solicitudData: Parameters<typeof crearSolicitud>[0] = {
         formularioId: formulario.id,
         formularioNombre: formulario.nombre,
         empresaId: formulario.empresaId,
@@ -165,8 +165,11 @@ export default function FormularioPublico() {
         archivos,
         estado: 'pendiente',
         notas: '',
-        ubicacion: formData['ubicacion'] || undefined,
-      });
+      };
+      if (formData['ubicacion']) {
+        solicitudData.ubicacion = formData['ubicacion'] as any;
+      }
+      const solicitudId = await crearSolicitud(solicitudData);
 
       setSolicitudRef(solicitudId.slice(-8).toUpperCase());
       setSubmitted(true);

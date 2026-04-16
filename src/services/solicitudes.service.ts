@@ -32,8 +32,12 @@ function parseSolicitud(id: string, data: Record<string, unknown>): SolicitudSer
 export async function crearSolicitud(
   data: Omit<SolicitudServicio, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
+  // Firestore no acepta valores undefined — limpiarlos antes de guardar
+  const cleanData = Object.fromEntries(
+    Object.entries(data).filter(([, v]) => v !== undefined)
+  );
   const ref = await addDoc(collection(db, COL), {
-    ...data,
+    ...cleanData,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
