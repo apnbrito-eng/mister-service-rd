@@ -22,6 +22,9 @@ import Gastos from './pages/Gastos';
 import PersonalPage from './pages/PersonalPage';
 import Configuracion from './pages/Configuracion';
 import ConfiguracionWeb from './pages/ConfiguracionWeb';
+import EmpresasAliadas from './pages/EmpresasAliadas';
+import Formularios from './pages/Formularios';
+import FormularioEditor from './pages/FormularioEditor';
 import TecnicoVista from './pages/TecnicoVista';
 import Calendarios from './pages/Calendarios';
 import CitaPublica from './pages/CitaPublica';
@@ -123,6 +126,9 @@ function AppRoutes() {
         <Route path="personal" element={<PersonalPage />} />
         <Route path="usuarios" element={<GestionUsuarios />} />
         <Route path="web" element={<ConfiguracionWeb />} />
+        <Route path="empresas-aliadas" element={<EmpresasAliadas />} />
+        <Route path="formularios" element={<Formularios />} />
+        <Route path="formularios/:id" element={<FormularioEditor />} />
         <Route path="configuracion" element={<Configuracion />} />
         <Route path="configuracion/usuarios" element={<GestionUsuarios />} />
       </Route>
