@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc, getDocs, collection, query, where } from 'firebase/firestore';
+import { doc, onSnapshot, getDocs, collection, query, where } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { Usuario } from '../types';
 
@@ -25,53 +25,112 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [userProfile, setUserProfile] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Ref to hold the profile listener unsubscribe so we can clean it up
+  const profileUnsubRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
-      if (user) {
-        try {
-          const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
-          if (userDoc.exists()) {
-            setUserProfile({ id: userDoc.id, ...userDoc.data() } as Usuario);
-          } else {
-            // Try to find by email in personal collection
-            const q = query(collection(db, 'personal'), where('email', '==', user.email));
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-              const data = snap.docs[0].data();
-              setUserProfile({
-                id: snap.docs[0].id,
-                nombre: data.nombre,
-                email: data.email || user.email || '',
-                rol: data.rol,
-                telefono: data.telefono || '',
-                activo: data.activo,
-                createdAt: data.createdAt?.toDate() || new Date(),
-                permisos: data.permisos,
-                color: data.color,
-              });
-            } else {
-              // Default admin profile for demo
-              setUserProfile({
-                id: user.uid,
-                nombre: user.email?.split('@')[0] || 'Usuario',
-                email: user.email || '',
-                rol: 'administrador',
-                telefono: '',
-                activo: true,
-                createdAt: new Date(),
-              });
-            }
-          }
-        } catch (error) {
-          console.error('Error loading user profile:', error);
-        }
-      } else {
-        setUserProfile(null);
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      // Clean up any previous profile listener
+      if (profileUnsubRef.current) {
+        profileUnsubRef.current();
+        profileUnsubRef.current = null;
       }
-      setLoading(false);
+
+      setCurrentUser(user);
+
+      if (!user) {
+        setUserProfile(null);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Step 1: Try usuarios/{uid} with real-time listener
+        const userDocRef = doc(db, 'usuarios', user.uid);
+        let foundInUsuarios = false;
+
+        // Quick check if doc exists before setting up listener
+        const personalQuery = query(collection(db, 'personal'), where('email', '==', user.email));
+        const personalSnap = await getDocs(personalQuery);
+
+        if (personalSnap.empty) {
+          // Not in personal collection either — check usuarios collection
+          // If also not there, use the demo fallback (no listener needed)
+          const { getDoc } = await import('firebase/firestore');
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            foundInUsuarios = true;
+          }
+        }
+
+        if (foundInUsuarios) {
+          // Listen to usuarios/{uid} in real time
+          profileUnsubRef.current = onSnapshot(
+            userDocRef,
+            (snap) => {
+              if (snap.exists()) {
+                setUserProfile({ id: snap.id, ...snap.data() } as Usuario);
+              }
+              setLoading(false);
+            },
+            (err) => {
+              console.error('Error listening to user profile:', err);
+              setLoading(false);
+            }
+          );
+        } else if (!personalSnap.empty) {
+          // Listen to the personal document in real time
+          const personalDocRef = doc(db, 'personal', personalSnap.docs[0].id);
+          profileUnsubRef.current = onSnapshot(
+            personalDocRef,
+            (snap) => {
+              if (snap.exists()) {
+                const data = snap.data();
+                setUserProfile({
+                  id: snap.id,
+                  nombre: data.nombre,
+                  email: data.email || user.email || '',
+                  rol: data.rol,
+                  telefono: data.telefono || '',
+                  activo: data.activo,
+                  createdAt: data.createdAt?.toDate() || new Date(),
+                  permisos: data.permisos,
+                  color: data.color,
+                });
+              }
+              setLoading(false);
+            },
+            (err) => {
+              console.error('Error listening to personal profile:', err);
+              setLoading(false);
+            }
+          );
+        } else {
+          // Default admin profile for demo (no listener — static fallback)
+          setUserProfile({
+            id: user.uid,
+            nombre: user.email?.split('@')[0] || 'Usuario',
+            email: user.email || '',
+            rol: 'administrador',
+            telefono: '',
+            activo: true,
+            createdAt: new Date(),
+          });
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Error loading user profile:', error);
+        setLoading(false);
+      }
     });
-    return unsubscribe;
+
+    return () => {
+      unsubscribeAuth();
+      if (profileUnsubRef.current) {
+        profileUnsubRef.current();
+        profileUnsubRef.current = null;
+      }
+    };
   }, []);
 
   return (
