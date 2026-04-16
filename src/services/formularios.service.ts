@@ -80,12 +80,16 @@ export async function obtenerFormularioPorSlug(slug: string): Promise<Formulario
 }
 
 export async function listarFormularios(empresaId?: string): Promise<FormularioServicio[]> {
-  let q = query(collection(db, COL), orderBy('updatedAt', 'desc'));
-  if (empresaId) {
-    q = query(collection(db, COL), where('empresaId', '==', empresaId), orderBy('updatedAt', 'desc'));
-  }
+  let q = empresaId
+    ? query(collection(db, COL), where('empresaId', '==', empresaId))
+    : query(collection(db, COL));
   const snap = await getDocs(q);
-  return snap.docs.map(d => parseFormulario(d.id, d.data() as Record<string, unknown>));
+  const formularios = snap.docs.map(d => parseFormulario(d.id, d.data() as Record<string, unknown>));
+  return formularios.sort((a, b) => {
+    const ta = a.updatedAt?.toMillis?.() || 0;
+    const tb = b.updatedAt?.toMillis?.() || 0;
+    return tb - ta;
+  });
 }
 
 export async function toggleFormulario(id: string, activo: boolean): Promise<void> {

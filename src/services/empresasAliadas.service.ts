@@ -51,12 +51,12 @@ export async function obtenerEmpresa(id: string): Promise<EmpresaAliada | null> 
 }
 
 export async function listarEmpresas(soloActivas?: boolean): Promise<EmpresaAliada[]> {
-  let q = query(collection(db, COL), orderBy('nombre'));
-  if (soloActivas) {
-    q = query(collection(db, COL), where('activa', '==', true), orderBy('nombre'));
-  }
+  let q = soloActivas
+    ? query(collection(db, COL), where('activa', '==', true))
+    : query(collection(db, COL));
   const snap = await getDocs(q);
-  return snap.docs.map(d => parseEmpresa(d.id, d.data() as Record<string, unknown>));
+  const empresas = snap.docs.map(d => parseEmpresa(d.id, d.data() as Record<string, unknown>));
+  return empresas.sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 
 export async function eliminarEmpresa(id: string): Promise<void> {

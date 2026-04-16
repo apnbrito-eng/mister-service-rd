@@ -49,31 +49,21 @@ export async function obtenerSolicitud(id: string): Promise<SolicitudServicio | 
 export async function listarSolicitudes(
   filtros?: { estado?: EstadoSolicitud; empresaId?: string }
 ): Promise<SolicitudServicio[]> {
-  let q = query(collection(db, COL), orderBy('createdAt', 'desc'));
+  const constraints = [];
+  if (filtros?.estado) constraints.push(where('estado', '==', filtros.estado));
+  if (filtros?.empresaId) constraints.push(where('empresaId', '==', filtros.empresaId));
 
-  if (filtros?.estado && filtros?.empresaId) {
-    q = query(
-      collection(db, COL),
-      where('estado', '==', filtros.estado),
-      where('empresaId', '==', filtros.empresaId),
-      orderBy('createdAt', 'desc')
-    );
-  } else if (filtros?.estado) {
-    q = query(
-      collection(db, COL),
-      where('estado', '==', filtros.estado),
-      orderBy('createdAt', 'desc')
-    );
-  } else if (filtros?.empresaId) {
-    q = query(
-      collection(db, COL),
-      where('empresaId', '==', filtros.empresaId),
-      orderBy('createdAt', 'desc')
-    );
-  }
+  const q = constraints.length > 0
+    ? query(collection(db, COL), ...constraints)
+    : query(collection(db, COL));
 
   const snap = await getDocs(q);
-  return snap.docs.map(d => parseSolicitud(d.id, d.data() as Record<string, unknown>));
+  const solicitudes = snap.docs.map(d => parseSolicitud(d.id, d.data() as Record<string, unknown>));
+  return solicitudes.sort((a, b) => {
+    const ta = a.createdAt?.toMillis?.() || 0;
+    const tb = b.createdAt?.toMillis?.() || 0;
+    return tb - ta;
+  });
 }
 
 export async function actualizarEstadoSolicitud(
@@ -142,11 +132,16 @@ export async function subirArchivoSolicitud(
 export function onSolicitudesChange(
   callback: (solicitudes: SolicitudServicio[]) => void
 ): () => void {
-  const q = query(collection(db, COL), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, COL));
   return onSnapshot(q, (snap) => {
     const solicitudes = snap.docs.map(d =>
       parseSolicitud(d.id, d.data() as Record<string, unknown>)
     );
+    solicitudes.sort((a, b) => {
+      const ta = a.createdAt?.toMillis?.() || 0;
+      const tb = b.createdAt?.toMillis?.() || 0;
+      return tb - ta;
+    });
     callback(solicitudes);
   });
 }
