@@ -25,6 +25,14 @@ import toast from 'react-hot-toast';
 import { format, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+import OrdenFilters from '../components/ordenes/OrdenFilters';
+import OrdenCard from '../components/ordenes/OrdenCard';
+import OrdenDetailModal from '../components/ordenes/OrdenDetailModal';
+import OrdenEditForm from '../components/ordenes/OrdenEditForm';
+import type { EditFormState } from '../components/ordenes/OrdenEditForm';
+import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
+import type { CreateFormState } from '../components/ordenes/OrdenCreateModal';
+
 const ESTADOS_SIMPLE: EstadoOrdenSimple[] = ['pendiente', 'en_proceso', 'completado', 'cancelado'];
 
 function estadoSimpleToFase(estado: EstadoOrdenSimple): FaseOrden {
@@ -76,7 +84,7 @@ export default function Ordenes() {
   const [clienteBusqueda, setClienteBusqueda] = useState('');
   const [showClienteDropdown, setShowClienteDropdown] = useState(false);
   const [isNewCliente, setIsNewCliente] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<CreateFormState>({
     clienteId: '',
     clienteNombre: '',
     clienteTelefono: '',
@@ -99,7 +107,7 @@ export default function Ordenes() {
   const [geoLoading, setGeoLoading] = useState(false);
 
   // Edit form (dentro del modal de detalles)
-  const [editForm, setEditForm] = useState({
+  const [editForm, setEditForm] = useState<EditFormState>({
     tecnicoId: '',
     tecnicoNombre: '',
     fechaCita: '',
@@ -115,7 +123,7 @@ export default function Ordenes() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [geoEditLoading, setGeoEditLoading] = useState(false);
 
-  // Aprobación de precio
+  // Aprobacion de precio
   const [precioAprobacion, setPrecioAprobacion] = useState('');
   const [aprobandoPrecio, setAprobandoPrecio] = useState(false);
 
@@ -152,7 +160,7 @@ export default function Ordenes() {
     if (!selectedOrden) return;
     const precio = Number(precioAprobacion);
     if (isNaN(precio) || precio <= 0) {
-      toast.error('Ingresa un precio válido');
+      toast.error('Ingresa un precio valido');
       return;
     }
     setAprobandoPrecio(true);
@@ -161,7 +169,7 @@ export default function Ordenes() {
       const registroAuditoria = crearRegistroAuditoria(
         usuario,
         'precio_sugerido',
-        `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')}`,
+        `Aprobo precio: RD$ ${precio.toLocaleString('es-DO')}`,
         'precioFinal',
         selectedOrden.precioSugerido !== undefined ? `RD$ ${selectedOrden.precioSugerido.toLocaleString('es-DO')}` : '',
         `RD$ ${precio.toLocaleString('es-DO')}`
@@ -175,7 +183,7 @@ export default function Ordenes() {
         auditoria: arrayUnion(registroAuditoria),
         updatedAt: Timestamp.now(),
       });
-      toast.success('✅ Precio aprobado');
+      toast.success('\u{2705} Precio aprobado');
     } catch (err) {
       console.error(err);
       toast.error('Error al aprobar el precio');
@@ -204,7 +212,7 @@ export default function Ordenes() {
     }
   }, [showEditInDetail, selectedOrden]);
 
-  // Carga Google Places Autocomplete cuando se abre el formulario de edición
+  // Carga Google Places Autocomplete cuando se abre el formulario de edicion
   useEffect(() => {
     if (!showEditInDetail) return;
 
@@ -253,7 +261,7 @@ export default function Ordenes() {
 
   const handleUsarMiUbicacionEdit = () => {
     if (!navigator.geolocation) {
-      toast.error('Geolocalización no disponible en este navegador');
+      toast.error('Geolocalizacion no disponible en este navegador');
       return;
     }
     setGeoEditLoading(true);
@@ -267,7 +275,7 @@ export default function Ordenes() {
           const data = await res.json();
           const raw = (data?.display_name || '').toString();
           // Tomar solo los primeros 3 componentes (calle, barrio, ciudad)
-          // para evitar texto extra, URLs de Google Maps, o códigos postales largos
+          // para evitar texto extra, URLs de Google Maps, o codigos postales largos
           const direccion = raw
             ? raw.split(',').slice(0, 3).join(',').trim()
             : '';
@@ -277,7 +285,7 @@ export default function Ordenes() {
             clienteLat: latitude,
             clienteLng: longitude,
           }));
-          toast.success('Ubicación capturada');
+          toast.success('Ubicacion capturada');
         } catch {
           setEditForm(f => ({ ...f, clienteLat: latitude, clienteLng: longitude }));
           toast.success('Coordenadas capturadas');
@@ -287,41 +295,41 @@ export default function Ordenes() {
       },
       (err) => {
         setGeoEditLoading(false);
-        toast.error('No se pudo obtener la ubicación: ' + err.message);
+        toast.error('No se pudo obtener la ubicacion: ' + err.message);
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 
-  /** Maneja cambios en el campo dirección del form de EDICIÓN, detectando URLs de Maps */
+  /** Maneja cambios en el campo direccion del form de EDICION, detectando URLs de Maps */
   const handleEditDireccionChange = (texto: string) => {
     const coords = detectarCoordenadasURL(texto);
     if (coords) {
-      // Guardar la URL ORIGINAL tal como la pegó el usuario + coordenadas exactas
+      // Guardar la URL ORIGINAL tal como la pego el usuario + coordenadas exactas
       setEditForm(f => ({
         ...f,
         clienteDireccion: texto,
         clienteLat: coords.lat,
         clienteLng: coords.lng,
       }));
-      toast.success('📍 Coordenadas exactas guardadas');
+      toast.success('\u{1F4CD} Coordenadas exactas guardadas');
       return;
     }
     setEditForm(f => ({ ...f, clienteDireccion: texto }));
   };
 
-  /** Maneja cambios en el campo dirección del form de CREAR ORDEN, detectando URLs de Maps */
+  /** Maneja cambios en el campo direccion del form de CREAR ORDEN, detectando URLs de Maps */
   const handleCreateDireccionChange = (texto: string) => {
     const coords = detectarCoordenadasURL(texto);
     if (coords) {
-      // Guardar la URL ORIGINAL tal como la pegó el usuario + coordenadas exactas
+      // Guardar la URL ORIGINAL tal como la pego el usuario + coordenadas exactas
       setForm(f => ({
         ...f,
         clienteDireccion: texto,
         clienteLat: coords.lat,
         clienteLng: coords.lng,
       }));
-      toast.success('📍 Coordenadas exactas guardadas');
+      toast.success('\u{1F4CD} Coordenadas exactas guardadas');
       return;
     }
     setForm(f => ({ ...f, clienteDireccion: texto }));
@@ -338,13 +346,13 @@ export default function Ordenes() {
         fechaCitaTs = Timestamp.fromDate(new Date(`${editForm.fechaCita}T08:00:00`));
       }
 
-      // Construir registros de auditoría comparando valores antes/después
+      // Construir registros de auditoria comparando valores antes/despues
       const usuario = userProfile?.nombre || 'Sistema';
       const registros: Record<string, unknown>[] = [];
 
       if (editForm.tecnicoNombre !== (selectedOrden.tecnicoNombre || '')) {
         registros.push(crearRegistroAuditoria(
-          usuario, 'editar', 'Cambió técnico asignado', 'tecnicoNombre',
+          usuario, 'editar', 'Cambio tecnico asignado', 'tecnicoNombre',
           selectedOrden.tecnicoNombre || 'Sin asignar',
           editForm.tecnicoNombre || 'Sin asignar'
         ));
@@ -352,7 +360,7 @@ export default function Ordenes() {
       const fechaAnteriorStr = selectedOrden.fechaCita ? format(selectedOrden.fechaCita, 'yyyy-MM-dd') : '';
       if (editForm.fechaCita !== fechaAnteriorStr) {
         registros.push(crearRegistroAuditoria(
-          usuario, 'editar', 'Cambió fecha de cita', 'fechaCita',
+          usuario, 'editar', 'Cambio fecha de cita', 'fechaCita',
           selectedOrden.fechaCita ? formatFecha(selectedOrden.fechaCita) : 'Sin fecha',
           editForm.fechaCita
         ));
@@ -360,32 +368,32 @@ export default function Ordenes() {
       const horaAnteriorStr = selectedOrden.fechaCita ? format(selectedOrden.fechaCita, 'HH:00') : '';
       if (editForm.horaInicio && editForm.horaInicio !== horaAnteriorStr) {
         registros.push(crearRegistroAuditoria(
-          usuario, 'editar', 'Cambió hora de cita', 'horaInicio',
+          usuario, 'editar', 'Cambio hora de cita', 'horaInicio',
           horaAnteriorStr, editForm.horaInicio
         ));
       }
       if (editForm.descripcionFalla !== (selectedOrden.descripcionFalla || '')) {
         registros.push(crearRegistroAuditoria(
-          usuario, 'editar', 'Modificó descripción de falla', 'descripcionFalla',
+          usuario, 'editar', 'Modifico descripcion de falla', 'descripcionFalla',
           (selectedOrden.descripcionFalla || '').slice(0, 50),
           editForm.descripcionFalla.slice(0, 50)
         ));
       }
       if (editForm.notas !== (selectedOrden.notas || '')) {
         registros.push(crearRegistroAuditoria(
-          usuario, 'editar', 'Modificó notas internas', 'notas'
+          usuario, 'editar', 'Modifico notas internas', 'notas'
         ));
       }
       if (editForm.clienteTelefono !== (selectedOrden.clienteTelefono || '')) {
         registros.push(crearRegistroAuditoria(
-          usuario, 'editar', 'Cambió teléfono del cliente', 'clienteTelefono',
+          usuario, 'editar', 'Cambio telefono del cliente', 'clienteTelefono',
           selectedOrden.clienteTelefono || '',
           editForm.clienteTelefono
         ));
       }
       if (editForm.clienteDireccion !== (selectedOrden.clienteDireccion || '')) {
         registros.push(crearRegistroAuditoria(
-          usuario, 'editar', 'Cambió dirección del cliente', 'clienteDireccion'
+          usuario, 'editar', 'Cambio direccion del cliente', 'clienteDireccion'
         ));
       }
 
@@ -466,7 +474,7 @@ export default function Ordenes() {
     });
   }, [ordenes, busqueda, filtroEstado, filtroTecnico, filtroMes]);
 
-  // Horarios ocupados — formulario de EDICIÓN
+  // Horarios ocupados — formulario de EDICION
   const horariosOcupados = useMemo(() => {
     if (!editForm.tecnicoId || !editForm.fechaCita) return [];
     const fechaSeleccionada = new Date(editForm.fechaCita + 'T00:00:00');
@@ -523,7 +531,7 @@ export default function Ordenes() {
 
   const handleGetUbicacion = () => {
     if (!navigator.geolocation) {
-      toast.error('Geolocalización no disponible en este navegador');
+      toast.error('Geolocalizacion no disponible en este navegador');
       return;
     }
     setGeoLoading(true);
@@ -535,11 +543,11 @@ export default function Ordenes() {
           clienteLng: pos.coords.longitude,
         }));
         setGeoLoading(false);
-        toast.success('Ubicación obtenida');
+        toast.success('Ubicacion obtenida');
       },
       () => {
         setGeoLoading(false);
-        toast.error('No se pudo obtener la ubicación');
+        toast.error('No se pudo obtener la ubicacion');
       }
     );
   };
@@ -578,7 +586,7 @@ export default function Ordenes() {
   const handleSubmitOrden = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.clienteNombre || !form.equipoTipo || !form.descripcionFalla) {
-      toast.error('Completa los campos requeridos: cliente, equipo y descripción');
+      toast.error('Completa los campos requeridos: cliente, equipo y descripcion');
       return;
     }
     setSaving(true);
@@ -681,15 +689,15 @@ export default function Ordenes() {
   const fechaHoyTexto = format(hoy, "'Hoy,' EEEE dd 'de' MMMM yyyy", { locale: es });
   const fechaHoyCapitalizada = fechaHoyTexto.charAt(0).toUpperCase() + fechaHoyTexto.slice(1);
 
-  if (loading) return <LoadingSpinner fullPage text="Cargando órdenes..." />;
+  if (loading) return <LoadingSpinner fullPage text="Cargando ordenes..." />;
 
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Órdenes de Servicio</h1>
-          <p className="text-gray-500 text-sm">{ordenes.length} órdenes en total</p>
+          <h1 className="text-2xl font-bold text-[#0f3460]">Ordenes de Servicio</h1>
+          <p className="text-gray-500 text-sm">{ordenes.length} ordenes en total</p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -710,7 +718,7 @@ export default function Ordenes() {
         {ordenesHoy.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center text-gray-400 text-sm">
             <Calendar size={28} className="mx-auto mb-2 opacity-30" />
-            No hay órdenes agendadas para hoy
+            No hay ordenes agendadas para hoy
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -742,119 +750,34 @@ export default function Ordenes() {
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-2">
-          <label className="text-xs text-gray-500 font-medium">Mes:</label>
-          <input
-            type="month"
-            value={filtroMes}
-            onChange={e => setFiltroMes(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
-          />
-        </div>
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-          <input
-            type="text"
-            placeholder="Buscar nombre, #OS..."
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-          />
-        </div>
-        <select
-          value={filtroTecnico}
-          onChange={e => setFiltroTecnico(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
-        >
-          <option value="">Todos los técnicos</option>
-          {tecnicos.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
-        </select>
-        <select
-          value={filtroEstado}
-          onChange={e => setFiltroEstado(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
-        >
-          <option value="">Todos los estados</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="en_proceso">En Proceso</option>
-          <option value="completado">Completado</option>
-          <option value="cancelado">Cancelado</option>
-        </select>
-      </div>
+      <OrdenFilters
+        busqueda={busqueda}
+        setBusqueda={setBusqueda}
+        filtroMes={filtroMes}
+        setFiltroMes={setFiltroMes}
+        filtroTecnico={filtroTecnico}
+        setFiltroTecnico={setFiltroTecnico}
+        filtroEstado={filtroEstado}
+        setFiltroEstado={setFiltroEstado}
+        tecnicos={tecnicos}
+        ESTADOS_SIMPLE={ESTADOS_SIMPLE}
+      />
 
       {/* Orders List */}
       <div className="space-y-3">
         {ordenesFiltradas.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-400">
             <FileText size={32} className="mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Sin órdenes para mostrar</p>
+            <p className="text-sm">Sin ordenes para mostrar</p>
           </div>
         ) : (
           ordenesFiltradas.map(orden => (
-            <div
+            <OrdenCard
               key={orden.id}
-              className={`bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 ${estadoSimpleBorder(orden.estadoSimple)} p-4 hover:shadow-md transition-shadow`}
-            >
-              <div className="flex flex-col md:flex-row md:items-center gap-3">
-                {/* Main content - clickable */}
-                <div
-                  className="flex-1 cursor-pointer min-w-0"
-                  onClick={() => setSelectedOrden(orden)}
-                >
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="font-mono text-sm font-bold text-[#0f3460]">
-                      {orden.numero || '#--'}
-                    </span>
-                    {orden.reagendada && (
-                      <Badge label="Reagendada" color="bg-amber-100 text-amber-700" />
-                    )}
-                  </div>
-                  <p className="text-sm font-medium text-gray-900 truncate">
-                    {orden.equipoTipo} - {orden.clienteNombre}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-gray-500">
-                    {orden.fechaCita && (
-                      <span className="flex items-center gap-1">
-                        <Calendar size={11} />
-                        {formatFecha(orden.fechaCita)}
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <Clock size={11} />
-                      {tiempoTranscurrido(orden.createdAt)}
-                    </span>
-                    {orden.tecnicoNombre && (
-                      <span className="flex items-center gap-1">
-                        <Wrench size={11} />
-                        {orden.tecnicoNombre}
-                      </span>
-                    )}
-                    {orden.responsableNombre && (
-                      <span className="flex items-center gap-1">
-                        <User size={11} />
-                        {orden.responsableNombre}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Estado dropdown */}
-                <div className="flex items-center gap-2 shrink-0">
-                  <select
-                    value={orden.estadoSimple || 'pendiente'}
-                    onChange={(e) => handleEstadoChange(orden, e.target.value as EstadoOrdenSimple)}
-                    onClick={(e) => e.stopPropagation()}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border-0 focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] cursor-pointer ${estadoSimpleColor(orden.estadoSimple || 'pendiente')}`}
-                  >
-                    <option value="pendiente">Pendiente</option>
-                    <option value="en_proceso">En Proceso</option>
-                    <option value="completado">Completado</option>
-                    <option value="cancelado">Cancelado</option>
-                  </select>
-                </div>
-              </div>
-            </div>
+              orden={orden}
+              onSelect={setSelectedOrden}
+              onChangeEstado={handleEstadoChange}
+            />
           ))
         )}
       </div>
@@ -867,728 +790,61 @@ export default function Ordenes() {
         size="lg"
       >
         {selectedOrden && !showEditInDetail && (
-          <div className="space-y-6">
-            {/* Editar Button (arriba a la derecha) */}
-            <div className="flex justify-end mb-4">
-              <button
-                onClick={() => setShowEditInDetail(!showEditInDetail)}
-                className="flex items-center gap-2 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                <Edit2 size={14} />
-                Editar
-              </button>
-            </div>
-
-            {/* Client Info */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Información del Cliente</h3>
-              <div className="space-y-2">
-                <p className="text-base font-medium text-gray-900">{selectedOrden.clienteNombre}</p>
-                {selectedOrden.clienteTelefono && (
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-gray-700 flex items-center gap-1.5">
-                      <Phone size={14} className="text-gray-400" />
-                      {formatTelefono(selectedOrden.clienteTelefono)}
-                    </span>
-                    <a
-                      href={whatsappLink(selectedOrden.clienteTelefono)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition-colors"
-                    >
-                      <MessageCircle size={12} />
-                      WhatsApp
-                    </a>
-                  </div>
-                )}
-                {selectedOrden.clienteDireccion && (
-                  <a
-                    href={
-                      selectedOrden.clienteDireccion.startsWith('http')
-                        ? selectedOrden.clienteDireccion
-                        : selectedOrden.clienteLat && selectedOrden.clienteLng
-                          ? `https://maps.google.com/?q=${selectedOrden.clienteLat},${selectedOrden.clienteLng}`
-                          : `https://maps.google.com/?q=${encodeURIComponent(selectedOrden.clienteDireccion)}`
-                    }
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-[#1a5fa8] hover:underline flex items-center gap-1.5"
-                  >
-                    <MapPin size={14} />
-                    {selectedOrden.clienteDireccion.startsWith('http') && selectedOrden.clienteLat && selectedOrden.clienteLng
-                      ? `📍 ${selectedOrden.clienteLat.toFixed(6)}, ${selectedOrden.clienteLng.toFixed(6)}`
-                      : selectedOrden.clienteDireccion}
-                  </a>
-                )}
-              </div>
-            </div>
-
-            {/* Service Info */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Información del Servicio</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="text-gray-500 block text-xs">Fecha de Cita</span>
-                  <span className="text-gray-900">{selectedOrden.fechaCita ? formatFecha(selectedOrden.fechaCita) : 'Sin agendar'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block text-xs">Técnico</span>
-                  <span className="text-gray-900">{selectedOrden.tecnicoNombre || 'Sin asignar'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block text-xs">Tipo de Equipo</span>
-                  <span className="text-gray-900">{selectedOrden.equipoTipo}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block text-xs">Marca</span>
-                  <span className="text-gray-900">{selectedOrden.equipoMarca || '--'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block text-xs">Modelo</span>
-                  <span className="text-gray-900">{selectedOrden.equipoModelo || '--'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500 block text-xs">Estado</span>
-                  <Badge label={estadoSimpleLabel(selectedOrden.estadoSimple || 'pendiente')} color={estadoSimpleColor(selectedOrden.estadoSimple || 'pendiente')} />
-                </div>
-              </div>
-              <div className="mt-3">
-                <span className="text-gray-500 block text-xs mb-1">Descripción de la Falla</span>
-                <p className="text-sm text-gray-900 bg-gray-50 rounded-lg p-3">{selectedOrden.descripcionFalla}</p>
-              </div>
-            </div>
-
-            {/* Notas internas de operaciones - solo visibles para operaciones, NO para técnicos */}
-            {selectedOrden.notas && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">📋 Notas Internas (Operaciones)</h3>
-                <p className="text-sm text-gray-700 bg-yellow-50 rounded-lg p-3 border border-yellow-100 whitespace-pre-line">{selectedOrden.notas}</p>
-              </div>
-            )}
-
-            {/* Notas del técnico - visibles para todos */}
-            {selectedOrden.notasTecnico && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">🔧 Notas del Técnico</h3>
-                <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
-                  <p className="text-sm text-blue-800 whitespace-pre-line">{selectedOrden.notasTecnico}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Precio sugerido por el técnico */}
-            {selectedOrden.precioSugerido !== undefined && selectedOrden.precioSugerido !== null && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">💰 Precio Sugerido por el Técnico</h3>
-                <p className="text-lg font-bold text-green-700 bg-green-50 rounded-lg p-3 border border-green-200">
-                  RD$ {Number(selectedOrden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                </p>
-              </div>
-            )}
-
-            {/* Aprobación de precio (solo admin/operaciones, solo si hay sugerido y no aprobado) */}
-            {selectedOrden.precioSugerido !== undefined &&
-             selectedOrden.estadoAprobacion !== 'aprobado' &&
-             (userProfile?.rol === 'administrador' || userProfile?.rol === 'operaria') && (
-              <div className="bg-yellow-50 rounded-xl p-4 border-2 border-yellow-200">
-                <h3 className="text-sm font-semibold text-yellow-800 uppercase tracking-wide mb-2 flex items-center gap-1">
-                  ⏳ Aprobar Precio
-                </h3>
-                <p className="text-xs text-yellow-700 mb-3">
-                  El técnico sugirió <strong>RD$ {Number(selectedOrden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong>.
-                  Puedes modificar el precio antes de aprobar.
-                </p>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-yellow-800 mb-1">Precio final (RD$)</label>
-                    <input
-                      type="number"
-                      value={precioAprobacion}
-                      onChange={e => setPrecioAprobacion(e.target.value)}
-                      className="w-full px-3 py-2 border border-yellow-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
-                    />
-                  </div>
-                  <div className="flex items-end">
-                    <button
-                      type="button"
-                      onClick={handleAprobarPrecio}
-                      disabled={aprobandoPrecio}
-                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-bold disabled:opacity-60 whitespace-nowrap"
-                    >
-                      {aprobandoPrecio ? 'Aprobando...' : '✅ Aprobar Precio'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Precio Aprobado (cuando ya fue aprobado) */}
-            {selectedOrden.estadoAprobacion === 'aprobado' && selectedOrden.precioFinal !== undefined && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">✅ Precio Aprobado</h3>
-                <div className="bg-green-50 rounded-lg p-3 border-2 border-green-300">
-                  <p className="text-xl font-bold text-green-700">
-                    RD$ {Number(selectedOrden.precioFinal).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                  </p>
-                  {selectedOrden.aprobadoPor && (
-                    <p className="text-[11px] text-green-700 mt-1">
-                      Aprobado por <strong>{selectedOrden.aprobadoPor}</strong>
-                      {selectedOrden.fechaAprobacion && ` · ${formatFecha(selectedOrden.fechaAprobacion)}`}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Created By */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Creado por</h3>
-              <p className="text-sm text-gray-700">
-                {selectedOrden.creadoPor || selectedOrden.responsableNombre || 'Sistema'}
-                {' '}
-                <span className="text-gray-400">- {tiempoTranscurrido(selectedOrden.createdAt)}</span>
-              </p>
-            </div>
-
-            {/* Registro de Auditoría */}
-            {selectedOrden.auditoria && selectedOrden.auditoria.length > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">📝 Registro de Cambios</h3>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {selectedOrden.auditoria.slice().reverse().map((reg, i) => (
-                    <div key={i} className="text-xs bg-gray-50 rounded-lg p-2 border border-gray-100">
-                      <div className="flex items-center justify-between">
-                        <span className="font-medium text-gray-700">{reg.usuario}</span>
-                        <span className="text-gray-400">{formatFecha(reg.fecha)}</span>
-                      </div>
-                      <p className="text-gray-600 mt-0.5">{reg.detalle}</p>
-                      {reg.valorAnterior && reg.valorNuevo && (
-                        <p className="text-[10px] text-gray-400 mt-0.5">{reg.campo}: "{reg.valorAnterior}" → "{reg.valorNuevo}"</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Phase History Timeline */}
-            {selectedOrden.historialFases.length > 0 && (
-              <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Historial de Fases</h3>
-                <div className="relative pl-6 space-y-4">
-                  <div className="absolute left-2 top-1 bottom-1 w-0.5 bg-gray-200" />
-                  {selectedOrden.historialFases.map((h, i) => (
-                    <div key={i} className="relative">
-                      <div className={`absolute -left-4 top-1 w-3 h-3 rounded-full border-2 border-white ${i === selectedOrden.historialFases.length - 1 ? 'bg-[#1a5fa8]' : 'bg-gray-300'}`} />
-                      <div>
-                        <Badge fase={h.fase} />
-                        <p className="text-xs text-gray-500 mt-1">
-                          {formatFecha(h.timestamp)} - {h.usuario}
-                        </p>
-                        {h.nota && <p className="text-xs text-gray-600 mt-0.5">{h.nota}</p>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <OrdenDetailModal
+            orden={selectedOrden}
+            userProfile={userProfile}
+            onEdit={() => setShowEditInDetail(true)}
+            onAprobarPrecio={handleAprobarPrecio}
+            precioAprobacion={precioAprobacion}
+            setPrecioAprobacion={setPrecioAprobacion}
+            aprobandoPrecio={aprobandoPrecio}
+          />
         )}
 
         {/* Edit Form dentro del Detail Modal */}
         {selectedOrden && showEditInDetail && (
-          <div className="space-y-5">
-            <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
-              <p className="text-xs text-blue-500 font-medium">✏️ Editando orden {selectedOrden.numero}</p>
-              <p className="text-lg font-bold text-gray-900">{selectedOrden.clienteNombre}</p>
-              <p className="text-sm text-gray-500">{selectedOrden.equipoTipo}{selectedOrden.equipoMarca ? ` · ${selectedOrden.equipoMarca}` : ''}</p>
-            </div>
-
-            {/* Técnico */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Técnico</label>
-              <select
-                value={editForm.tecnicoId}
-                onChange={e => {
-                  const t = tecnicos.find(x => x.id === e.target.value);
-                  setEditForm(f => ({ ...f, tecnicoId: e.target.value, tecnicoNombre: t?.nombre || '' }));
-                }}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-              >
-                <option value="">Sin asignar</option>
-                {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-              </select>
-            </div>
-
-            {/* Fecha + Hora */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Fecha de Cita</label>
-                <input
-                  type="date"
-                  value={editForm.fechaCita}
-                  onChange={e => setEditForm(f => ({ ...f, fechaCita: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Hora de Inicio</label>
-                <div className="grid grid-cols-5 gap-1">
-                  {HORARIOS.map(h => {
-                    const ocupado = horariosOcupados.includes(h);
-                    return (
-                      <button
-                        key={h}
-                        type="button"
-                        onClick={() => !ocupado && setEditForm(f => ({ ...f, horaInicio: h }))}
-                        disabled={ocupado}
-                        className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                          ocupado
-                            ? 'bg-red-50 text-red-400 border-red-200 cursor-not-allowed line-through'
-                            : editForm.horaInicio === h
-                              ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                              : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
-                        }`}
-                        title={ocupado ? 'Horario ocupado' : ''}
-                      >
-                        {HORARIOS_LABEL[h]}{ocupado && ' ✗'}
-                      </button>
-                    );
-                  })}
-                </div>
-                {editForm.tecnicoId && editForm.fechaCita && horariosOcupados.length > 0 && (
-                  <p className="text-[10px] text-red-500 mt-1">⚠️ {horariosOcupados.length} horario(s) ocupado(s) ese día</p>
-                )}
-              </div>
-            </div>
-
-            {/* Teléfono de Contacto */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Teléfono de Contacto</label>
-              <input
-                type="tel"
-                value={editForm.clienteTelefono}
-                onChange={e => setEditForm(f => ({ ...f, clienteTelefono: e.target.value }))}
-                placeholder="Ej: 8095551234"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-              />
-              <p className="text-[11px] text-gray-400 mt-1">Puede ser diferente al teléfono principal del cliente</p>
-            </div>
-
-            {/* Dirección de la Cita (Google Places Autocomplete) */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Dirección de la Cita</label>
-              <div className="flex gap-2">
-                <input
-                  ref={dirInputRef}
-                  type="text"
-                  value={editForm.clienteDireccion}
-                  onChange={e => handleEditDireccionChange(e.target.value)}
-                  placeholder="Escribe o pega dirección, URL de Maps, o coordenadas..."
-                  className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                  autoComplete="off"
-                />
-                <button
-                  type="button"
-                  onClick={handleUsarMiUbicacionEdit}
-                  disabled={geoEditLoading}
-                  className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium whitespace-nowrap transition-colors disabled:opacity-60"
-                >
-                  <MapPin size={12} /> {geoEditLoading ? '...' : 'Usar mi ubicación actual'}
-                </button>
-              </div>
-              {editForm.clienteLat && editForm.clienteLng && (
-                <p className="text-[11px] text-green-600 mt-1 flex items-center gap-1">
-                  ✅ Coordenadas exactas guardadas ·
-                  <a
-                    href={`https://maps.google.com/?q=${editForm.clienteLat},${editForm.clienteLng}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-green-700 hover:underline font-medium"
-                  >
-                    Ver en Maps →
-                  </a>
-                </p>
-              )}
-            </div>
-
-            {/* Referencia de dirección */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Referencia de dirección</label>
-              <input
-                type="text"
-                value={editForm.clienteReferencia}
-                onChange={e => setEditForm(f => ({ ...f, clienteReferencia: e.target.value }))}
-                placeholder="Ej: Frente a Agora Mall, casa esquina, portón azul..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-              />
-            </div>
-
-            {/* Descripción de la Falla */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Descripción de la Falla</label>
-              <textarea
-                value={editForm.descripcionFalla}
-                onChange={e => setEditForm(f => ({ ...f, descripcionFalla: e.target.value }))}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-              />
-            </div>
-
-            {/* Notas */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Notas internas</label>
-              <textarea
-                value={editForm.notas}
-                onChange={e => setEditForm(f => ({ ...f, notas: e.target.value }))}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-              />
-            </div>
-
-            {/* Botones */}
-            <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setShowEditInDetail(false)}
-                disabled={savingEdit}
-                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-60"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleGuardarEdicion}
-                disabled={savingEdit}
-                className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
-              >
-                {savingEdit ? 'Guardando...' : 'Guardar cambios'}
-              </button>
-            </div>
-          </div>
+          <OrdenEditForm
+            editForm={editForm}
+            setEditForm={setEditForm}
+            selectedOrden={selectedOrden}
+            tecnicos={tecnicos}
+            horariosOcupados={horariosOcupados}
+            onSave={handleGuardarEdicion}
+            onCancel={() => setShowEditInDetail(false)}
+            savingEdit={savingEdit}
+            dirInputRef={dirInputRef}
+            handleEditDireccionChange={handleEditDireccionChange}
+            handleUsarMiUbicacionEdit={handleUsarMiUbicacionEdit}
+            geoEditLoading={geoEditLoading}
+          />
         )}
       </Modal>
 
       {/* Create Order Modal */}
-      <Modal
-        isOpen={showCreateModal}
-        onClose={() => { setShowCreateModal(false); resetForm(); }}
-        title="Crear Orden de Servicio"
-        size="xl"
-      >
-        <form onSubmit={handleSubmitOrden} className="space-y-6">
-          {/* Section: Cliente */}
-          <div>
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 flex items-center gap-2">
-              <User size={16} />
-              Cliente
-            </h3>
-            <div className="space-y-3">
-              <div className="relative">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Buscar cliente existente</label>
-                <input
-                  type="text"
-                  placeholder="Nombre o teléfono del cliente..."
-                  value={clienteBusqueda}
-                  onChange={e => {
-                    setClienteBusqueda(e.target.value);
-                    setShowClienteDropdown(true);
-                    if (form.clienteId) {
-                      setForm(f => ({ ...f, clienteId: '', clienteNombre: e.target.value }));
-                    } else {
-                      setForm(f => ({ ...f, clienteNombre: e.target.value }));
-                    }
-                  }}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                />
-                {showClienteDropdown && clienteBusqueda && clientesFiltrados.length > 0 && (
-                  <div className="absolute z-10 w-full border border-gray-200 rounded-lg mt-1 max-h-40 overflow-y-auto bg-white shadow-lg">
-                    {clientesFiltrados.map(c => (
-                      <button
-                        key={c.id}
-                        type="button"
-                        onClick={() => handleSelectCliente(c)}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-0"
-                      >
-                        <span className="font-medium">{c.nombre}</span>
-                        <span className="text-gray-500 ml-2">{formatTelefono(c.telefono)}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {clienteBusqueda && !form.clienteId && clientesFiltrados.length === 0 && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Cliente no encontrado.{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsNewCliente(true);
-                        setForm(f => ({ ...f, clienteNombre: clienteBusqueda }));
-                        setShowClienteDropdown(false);
-                      }}
-                      className="text-[#1a5fa8] font-medium hover:underline"
-                    >
-                      Crear nuevo cliente
-                    </button>
-                  </p>
-                )}
-              </div>
-
-              {/* New client fields */}
-              {(isNewCliente || form.clienteId) && (
-                <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                  {isNewCliente && (
-                    <p className="text-xs font-medium text-[#1a5fa8] mb-2">Nuevo cliente</p>
-                  )}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>
-                      <input
-                        type="text"
-                        value={form.clienteNombre}
-                        onChange={e => setForm(f => ({ ...f, clienteNombre: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Teléfono *</label>
-                      <input
-                        type="tel"
-                        value={form.clienteTelefono}
-                        onChange={e => setForm(f => ({ ...f, clienteTelefono: e.target.value }))}
-                        placeholder="8091234567"
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Email (opcional)</label>
-                      <input
-                        type="email"
-                        value={form.clienteEmail}
-                        onChange={e => setForm(f => ({ ...f, clienteEmail: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Dirección</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={form.clienteDireccion}
-                          onChange={e => handleCreateDireccionChange(e.target.value)}
-                          placeholder="Calle, sector, ciudad o URL de Google Maps"
-                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleGetUbicacion}
-                          disabled={geoLoading}
-                          className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 shrink-0 disabled:opacity-50"
-                        >
-                          <MapPin size={12} />
-                          {geoLoading ? 'Obteniendo...' : 'Mi ubicación'}
-                        </button>
-                      </div>
-                      {form.clienteLat && form.clienteLng && (
-                        <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                          ✅ Coordenadas exactas guardadas ·
-                          <a
-                            href={`https://maps.google.com/?q=${form.clienteLat},${form.clienteLng}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-green-700 hover:underline font-medium"
-                          >
-                            Ver en Maps →
-                          </a>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Referencia de dirección</label>
-                    <input
-                      type="text"
-                      value={form.clienteReferencia}
-                      onChange={e => setForm(f => ({ ...f, clienteReferencia: e.target.value }))}
-                      placeholder="Al lado del colmado, frente al parque..."
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Section: Servicio */}
-          <div>
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 flex items-center gap-2">
-              <Wrench size={16} />
-              Servicio
-            </h3>
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Tipo de Equipo *</label>
-                  <input
-                    type="text"
-                    list="tipos-equipo-list"
-                    value={form.equipoTipo}
-                    onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
-                    placeholder="Ej: Lavadora, Nevera..."
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                  />
-                  <datalist id="tipos-equipo-list">
-                    {TIPOS_EQUIPO.map(t => <option key={t} value={t} />)}
-                  </datalist>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Marca</label>
-                  <input
-                    type="text"
-                    value={form.equipoMarca}
-                    onChange={e => setForm(f => ({ ...f, equipoMarca: e.target.value }))}
-                    placeholder="LG, Samsung, Mabe..."
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Modelo</label>
-                  <input
-                    type="text"
-                    value={form.equipoModelo}
-                    onChange={e => setForm(f => ({ ...f, equipoModelo: e.target.value }))}
-                    placeholder="Modelo del equipo"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Descripción de la Falla *</label>
-                <textarea
-                  value={form.descripcionFalla}
-                  onChange={e => setForm(f => ({ ...f, descripcionFalla: e.target.value }))}
-                  rows={3}
-                  placeholder="Describe detalladamente el problema del equipo..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Section: Programación */}
-          <div>
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 flex items-center gap-2">
-              <Calendar size={16} />
-              Programación
-            </h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Asignar Técnico</label>
-                <select
-                  value={form.tecnicoId}
-                  onChange={e => {
-                    const t = personal.find(p => p.id === e.target.value);
-                    setForm(f => ({ ...f, tecnicoId: e.target.value, tecnicoNombre: t?.nombre || '' }));
-                  }}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
-                >
-                  <option value="">Sin asignar</option>
-                  {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-2">Duración</label>
-                <div className="flex flex-wrap gap-2">
-                  {DURACIONES.map(d => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setForm(f => ({ ...f, duracionMin: d }))}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        form.duracionMin === d
-                          ? 'bg-[#1a5fa8] text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {d} min
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Fecha de Cita</label>
-                  <input
-                    type="date"
-                    value={form.fechaCita}
-                    onChange={e => setForm(f => ({ ...f, fechaCita: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Hora de Inicio</label>
-                  <div className="grid grid-cols-5 gap-1">
-                    {HORARIOS.map(h => {
-                      const ocupado = horariosOcupadosCreate.includes(h);
-                      return (
-                      <button
-                        key={h}
-                        type="button"
-                        onClick={() => !ocupado && setForm(f => ({ ...f, horaInicio: h }))}
-                        disabled={ocupado}
-                        className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                          ocupado
-                            ? 'bg-red-50 text-red-400 border-red-200 cursor-not-allowed line-through'
-                            : form.horaInicio === h
-                              ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                              : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
-                        }`}
-                        title={ocupado ? 'Horario ocupado' : ''}
-                      >
-                        {HORARIOS_LABEL[h]}{ocupado && ' ✗'}
-                      </button>
-                      );
-                    })}
-                  </div>
-                  {form.tecnicoId && form.fechaCita && horariosOcupadosCreate.length > 0 && (
-                    <p className="text-[10px] text-red-500 mt-1">⚠️ {horariosOcupadosCreate.length} horario(s) ocupado(s) ese día</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Submit */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={() => { setShowCreateModal(false); resetForm(); }}
-              className="px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2.5 bg-[#1a5fa8] hover:bg-[#0f3460] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60 flex items-center gap-2"
-            >
-              {saving ? (
-                <>
-                  <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Guardando...
-                </>
-              ) : (
-                <>
-                  <Plus size={16} />
-                  Guardar Orden de Servicio
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </Modal>
+      {showCreateModal && (
+        <OrdenCreateModal
+          form={form}
+          setForm={setForm}
+          clienteBusqueda={clienteBusqueda}
+          setClienteBusqueda={setClienteBusqueda}
+          showClienteDropdown={showClienteDropdown}
+          setShowClienteDropdown={setShowClienteDropdown}
+          isNewCliente={isNewCliente}
+          setIsNewCliente={setIsNewCliente}
+          saving={saving}
+          geoLoading={geoLoading}
+          clientes={clientes}
+          clientesFiltrados={clientesFiltrados}
+          personal={personal}
+          tecnicos={tecnicos}
+          horariosOcupadosCreate={horariosOcupadosCreate}
+          onSubmit={handleSubmitOrden}
+          onClose={() => { setShowCreateModal(false); resetForm(); }}
+          handleGetUbicacion={handleGetUbicacion}
+          handleCreateDireccionChange={handleCreateDireccionChange}
+          handleSelectCliente={handleSelectCliente}
+        />
+      )}
     </div>
   );
 }
