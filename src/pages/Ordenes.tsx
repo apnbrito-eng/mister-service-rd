@@ -71,6 +71,7 @@ export default function Ordenes() {
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [ordenesActivasCliente, setOrdenesActivasCliente] = useState<OrdenServicio[]>([]);
   const [buscandoTelefono, setBuscandoTelefono] = useState(false);
+  const [showTelefonoDropdown, setShowTelefonoDropdown] = useState(false);
   const telefonoSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Modals
@@ -516,6 +517,17 @@ export default function Ordenes() {
     ).slice(0, 5);
   }, [clientes, clienteBusqueda]);
 
+  // Coincidencias por teléfono para el dropdown del campo "Teléfono" del nuevo cliente
+  const clientesFiltradosTelefono = useMemo(() => {
+    const tel = form.clienteTelefono.replace(/\D/g, '');
+    if (!tel || tel.length < 3) return [];
+    return clientes.filter(c => {
+      const cTel = (c.telefono || '').replace(/\D/g, '');
+      const cTelNorm = (c.telefonoNormalizado || '').replace(/\D/g, '');
+      return cTel.includes(tel) || cTelNorm.includes(tel);
+    }).slice(0, 5);
+  }, [clientes, form.clienteTelefono]);
+
   const handleSelectCliente = (c: Cliente) => {
     setForm(f => ({
       ...f,
@@ -547,6 +559,10 @@ export default function Ordenes() {
   const handleClienteTelefonoChange = (telefono: string) => {
     // Actualizar el campo del teléfono inmediatamente
     setForm(f => ({ ...f, clienteTelefono: telefono }));
+
+    // Mostrar dropdown de coincidencias mientras escribe (al menos 3 dígitos)
+    const digitos = telefono.replace(/\D/g, '');
+    setShowTelefonoDropdown(digitos.length >= 3);
 
     // Si el usuario ya tiene un cliente existente seleccionado y está editando el teléfono,
     // desactivar el modo existente para que pueda escribir libremente
@@ -586,6 +602,7 @@ export default function Ordenes() {
             clienteLng: existente.data.lng,
           }));
           setIsNewCliente(false);
+          setShowTelefonoDropdown(false);
           // Buscar órdenes activas de este cliente
           const activas = ordenes.filter(o =>
             o.clienteId === existente.id &&
@@ -785,6 +802,7 @@ export default function Ordenes() {
     });
     setClienteBusqueda('');
     setShowClienteDropdown(false);
+    setShowTelefonoDropdown(false);
     setIsNewCliente(false);
     setOrdenesActivasCliente([]);
     if (telefonoSearchTimeout.current) {
@@ -947,6 +965,9 @@ export default function Ordenes() {
           horariosOcupadosCreate={horariosOcupadosCreate}
           ordenesActivasCliente={ordenesActivasCliente}
           buscandoTelefono={buscandoTelefono}
+          showTelefonoDropdown={showTelefonoDropdown}
+          setShowTelefonoDropdown={setShowTelefonoDropdown}
+          clientesFiltradosTelefono={clientesFiltradosTelefono}
           onSubmit={handleSubmitOrden}
           onClose={() => { setShowCreateModal(false); resetForm(); }}
           handleGetUbicacion={handleGetUbicacion}

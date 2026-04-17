@@ -44,6 +44,9 @@ interface OrdenCreateModalProps {
   horariosOcupadosCreate: string[];
   ordenesActivasCliente: OrdenServicio[];
   buscandoTelefono: boolean;
+  showTelefonoDropdown: boolean;
+  setShowTelefonoDropdown: (v: boolean) => void;
+  clientesFiltradosTelefono: Cliente[];
   onSubmit: (e: React.FormEvent) => void;
   onClose: () => void;
   handleGetUbicacion: () => void;
@@ -68,6 +71,9 @@ export default function OrdenCreateModal({
   horariosOcupadosCreate,
   ordenesActivasCliente,
   buscandoTelefono,
+  showTelefonoDropdown,
+  setShowTelefonoDropdown,
+  clientesFiltradosTelefono,
   onSubmit,
   onClose,
   handleGetUbicacion,
@@ -217,7 +223,7 @@ export default function OrdenCreateModal({
                       className={esClienteExistente ? readonlyInputClass : editableInputClass}
                     />
                   </div>
-                  <div>
+                  <div className="relative">
                     <label className="block text-xs font-medium text-gray-600 mb-1">
                       Telefono *
                       {buscandoTelefono && (
@@ -231,10 +237,46 @@ export default function OrdenCreateModal({
                       type="tel"
                       value={form.clienteTelefono}
                       onChange={e => handleClienteTelefonoChange(e.target.value)}
+                      onFocus={() => {
+                        if ((form.clienteTelefono.replace(/\D/g, '').length >= 3) && !esClienteExistente) {
+                          setShowTelefonoDropdown(true);
+                        }
+                      }}
+                      onBlur={() => {
+                        // Pequeño delay para permitir click en dropdown
+                        setTimeout(() => setShowTelefonoDropdown(false), 200);
+                      }}
                       placeholder="8091234567"
                       className={editableInputClass}
+                      autoComplete="off"
                     />
-                    {!esClienteExistente && !buscandoTelefono && form.clienteTelefono && (
+                    {/* Dropdown de coincidencias por teléfono */}
+                    {showTelefonoDropdown && !esClienteExistente && clientesFiltradosTelefono.length > 0 && (
+                      <div className="absolute z-20 w-full border border-gray-200 rounded-lg mt-1 max-h-40 overflow-y-auto bg-white shadow-lg">
+                        <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-100">
+                          Clientes con ese teléfono
+                        </div>
+                        {clientesFiltradosTelefono.map(c => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleSelectCliente(c);
+                              setShowTelefonoDropdown(false);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0 flex items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-gray-900 truncate">{c.nombre}</p>
+                              <p className="text-xs text-gray-500">{formatTelefono(c.telefono)}</p>
+                            </div>
+                            <span className="text-[10px] text-blue-600 font-medium shrink-0">Ya registrado</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {!esClienteExistente && !buscandoTelefono && form.clienteTelefono && !showTelefonoDropdown && (
                       <p className="text-[10px] text-gray-500 mt-1">
                         Escribe el teléfono completo (10 dígitos) para detectar clientes existentes
                       </p>

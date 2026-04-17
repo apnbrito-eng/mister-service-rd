@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cliente, OrdenServicio } from '../types';
-import { formatFecha, formatFechaCorta, formatTelefono } from '../utils';
+import { formatFechaCorta, formatTelefono } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
-import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight } from 'lucide-react';
+import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Clientes() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
@@ -43,12 +45,15 @@ export default function Clientes() {
       collection(db, 'ordenes_servicio'),
       where('clienteId', '==', selectedCliente.id)
     )).then(snap => {
-      setHistorialOrdenes(snap.docs.map(d => ({
+      const ordenes = snap.docs.map(d => ({
         id: d.id, ...d.data(),
         createdAt: d.data().createdAt?.toDate?.() || new Date(),
         updatedAt: d.data().updatedAt?.toDate?.() || new Date(),
         fechaCita: d.data().fechaCita?.toDate?.() || null,
-      } as OrdenServicio)));
+      } as OrdenServicio));
+      // Ordenar client-side por fecha descendente (más recientes primero)
+      ordenes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      setHistorialOrdenes(ordenes);
     });
   }, [selectedCliente]);
 
@@ -204,13 +209,44 @@ export default function Clientes() {
                 ) : (
                   <div className="space-y-2">
                     {historialOrdenes.map(o => (
-                      <div key={o.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div>
-                          <p className="text-sm font-medium">{o.numero} · {o.equipoTipo}</p>
-                          <p className="text-xs text-gray-500">{o.descripcionFalla}</p>
+                      <button
+                        key={o.id}
+                        onClick={() => navigate(`/admin/ordenes/${o.id}`)}
+                        className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 hover:border-[#1a5fa8] border border-transparent rounded-lg transition-all group"
+                      >
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-sm font-semibold text-[#0f3460] group-hover:text-[#1a5fa8]">
+                                {o.numero}
+                              </span>
+                              <span className="text-sm text-gray-700">·</span>
+                              <span className="flex items-center gap-1 text-sm text-gray-700">
+                                <Wrench size={12} />
+                                {o.equipoTipo}{o.equipoMarca ? ` ${o.equipoMarca}` : ''}
+                              </span>
+                            </div>
+                            {o.descripcionFalla && (
+                              <p className="text-xs text-gray-500 mt-1 line-clamp-1">{o.descripcionFalla}</p>
+                            )}
+                            <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400 flex-wrap">
+                              {o.fechaCita && (
+                                <span className="flex items-center gap-1">
+                                  <Calendar size={10} />
+                                  {formatFechaCorta(o.fechaCita)}
+                                </span>
+                              )}
+                              {o.tecnicoNombre && (
+                                <span>Técnico: {o.tecnicoNombre}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge fase={o.fase} />
+                            <ChevronRight size={14} className="text-gray-300 group-hover:text-[#1a5fa8] transition-colors" />
+                          </div>
                         </div>
-                        <Badge fase={o.fase} />
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
