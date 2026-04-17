@@ -46,3 +46,28 @@ body {
 .leaflet-bottom {
   z-index: 2;
 }
+
+/* Google Places Autocomplete dropdown — sobre modales */
+.pac-container {
+  z-index: 9999 !important;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+  font-family: 'Inter', system-ui, sans-serif;
+  margin-top: 4px;
+}
+
+.pac-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.pac-item:hover {
+  background-color: #eff6ff;
+}
+
+.pac-item-query {
+  font-weight: 500;
+  color: #0f3460;
+}

@@ -135,6 +135,10 @@ export default function Ordenes() {
   const dirInputRef = useRef<HTMLInputElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const autocompleteRef = useRef<any>(null);
+  // Refs separados para el modal de CREAR orden (Google Places Autocomplete)
+  const dirInputRefCreate = useRef<HTMLInputElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const autocompleteRefCreate = useRef<any>(null);
 
   // Listen to real-time updates of the selected orden
   useEffect(() => {
@@ -263,6 +267,59 @@ export default function Ordenes() {
       return () => clearInterval(interval);
     }
   }, [showEditInDetail]);
+
+  // Carga Google Places Autocomplete cuando se abre el modal de CREAR orden
+  useEffect(() => {
+    if (!showCreateModal) return;
+
+    const initACCreate = () => {
+      if (!dirInputRefCreate.current || !window.google?.maps?.places) return;
+      autocompleteRefCreate.current = new window.google.maps.places.Autocomplete(dirInputRefCreate.current, {
+        componentRestrictions: { country: 'do' },
+        fields: ['formatted_address', 'geometry', 'name'],
+      });
+      autocompleteRefCreate.current.addListener('place_changed', () => {
+        const place = autocompleteRefCreate.current.getPlace();
+        if (!place.geometry) return;
+        // Si el lugar tiene nombre (ej. "Agora Mall"), anteponerlo a la dirección
+        const nombre = place.name || '';
+        const direccion = place.formatted_address || '';
+        const textoFinal = nombre && !direccion.startsWith(nombre)
+          ? `${nombre}, ${direccion}`
+          : direccion;
+        setForm(f => ({
+          ...f,
+          clienteDireccion: textoFinal,
+          clienteLat: place.geometry.location.lat(),
+          clienteLng: place.geometry.location.lng(),
+        }));
+        toast.success('\u{1F4CD} Ubicación de Google capturada');
+      });
+    };
+
+    if (window.google?.maps?.places) {
+      initACCreate();
+      return;
+    }
+
+    if (!document.getElementById('google-places-script')) {
+      const script = document.createElement('script');
+      script.id = 'google-places-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}&libraries=places&language=es`;
+      script.async = true;
+      script.defer = true;
+      script.onload = initACCreate;
+      document.head.appendChild(script);
+    } else {
+      const interval = setInterval(() => {
+        if (window.google?.maps?.places) {
+          clearInterval(interval);
+          initACCreate();
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [showCreateModal, isNewCliente]);
 
   const handleUsarMiUbicacionEdit = () => {
     if (!navigator.geolocation) {
@@ -991,6 +1048,7 @@ export default function Ordenes() {
           showTelefonoDropdown={showTelefonoDropdown}
           setShowTelefonoDropdown={setShowTelefonoDropdown}
           clientesFiltradosTelefono={clientesFiltradosTelefono}
+          dirInputRef={dirInputRefCreate}
           onSubmit={handleSubmitOrden}
           onClose={() => { setShowCreateModal(false); resetForm(); }}
           handleGetUbicacion={handleGetUbicacion}

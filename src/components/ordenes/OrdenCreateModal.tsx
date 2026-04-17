@@ -47,6 +47,7 @@ interface OrdenCreateModalProps {
   showTelefonoDropdown: boolean;
   setShowTelefonoDropdown: (v: boolean) => void;
   clientesFiltradosTelefono: Cliente[];
+  dirInputRef: React.RefObject<HTMLInputElement>;
   onSubmit: (e: React.FormEvent) => void;
   onClose: () => void;
   handleGetUbicacion: () => void;
@@ -74,6 +75,7 @@ export default function OrdenCreateModal({
   showTelefonoDropdown,
   setShowTelefonoDropdown,
   clientesFiltradosTelefono,
+  dirInputRef,
   onSubmit,
   onClose,
   handleGetUbicacion,
@@ -327,15 +329,24 @@ export default function OrdenCreateModal({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Direccion</label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Direccion
+                      {!esClienteExistente && (
+                        <span className="ml-2 text-[10px] text-gray-400 font-normal">
+                          (Busca en Google: Agora Mall, Plaza Central, etc.)
+                        </span>
+                      )}
+                    </label>
                     <div className="flex gap-2">
                       <input
+                        ref={dirInputRef}
                         type="text"
                         value={form.clienteDireccion}
                         onChange={e => handleCreateDireccionChange(e.target.value)}
-                        placeholder="Calle, sector, ciudad o URL de Google Maps"
+                        placeholder="Escribe un lugar, dirección o pega URL de Google Maps"
                         readOnly={esClienteExistente}
                         className={esClienteExistente ? `flex-1 ${readonlyInputClass}` : `flex-1 ${editableInputClass}`}
+                        autoComplete="off"
                       />
                       {!esClienteExistente && (
                         <button
