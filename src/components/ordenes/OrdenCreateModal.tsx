@@ -118,28 +118,53 @@ export default function OrdenCreateModal({
               )}
               {clienteBusqueda && !form.clienteId && clientesFiltrados.length === 0 && (
                 <p className="text-xs text-gray-500 mt-1">
-                  Cliente no encontrado.{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsNewCliente(true);
-                      setForm(f => ({ ...f, clienteNombre: clienteBusqueda }));
-                      setShowClienteDropdown(false);
-                    }}
-                    className="text-[#1a5fa8] font-medium hover:underline"
-                  >
-                    Crear nuevo cliente
-                  </button>
+                  Cliente no encontrado. Puedes crearlo abajo.
                 </p>
               )}
             </div>
 
+            {/* Botón para crear nuevo cliente — visible siempre que no haya cliente seleccionado ni esté creándose uno */}
+            {!form.clienteId && !isNewCliente && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsNewCliente(true);
+                  setForm(f => ({ ...f, clienteNombre: clienteBusqueda || '' }));
+                  setShowClienteDropdown(false);
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-[#1a5fa8] text-[#1a5fa8] hover:bg-[#1a5fa8]/5 rounded-lg text-sm font-medium transition-colors"
+              >
+                <Plus size={16} />
+                Crear nuevo cliente
+              </button>
+            )}
+
             {/* New client fields */}
             {(isNewCliente || form.clienteId) && (
               <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                {isNewCliente && (
-                  <p className="text-xs font-medium text-[#1a5fa8] mb-2">Nuevo cliente</p>
-                )}
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#1a5fa8]">
+                    {isNewCliente ? 'Datos del nuevo cliente' : 'Datos del cliente'}
+                  </p>
+                  {isNewCliente && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsNewCliente(false);
+                        setForm(f => ({
+                          ...f,
+                          clienteId: '', clienteNombre: '', clienteTelefono: '',
+                          clienteEmail: '', clienteDireccion: '', clienteReferencia: '',
+                          clienteLat: undefined, clienteLng: undefined,
+                        }));
+                        setClienteBusqueda('');
+                      }}
+                      className="text-xs text-gray-500 hover:text-gray-700 underline"
+                    >
+                      Cancelar y buscar otro
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>

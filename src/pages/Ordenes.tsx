@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  collection, onSnapshot, addDoc, doc, updateDoc,
+  collection, onSnapshot, addDoc, doc, updateDoc, setDoc,
   Timestamp, getDocs, query, orderBy, arrayUnion
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { siguienteNumeroOrden } from '../services/contadores.service';
+import { normalizarTelefono, buscarClientePorTelefono } from '../services/clientes.service';
 import { OrdenServicio, FaseOrden, EstadoOrdenSimple, Cliente, Personal } from '../types';
 import {
   faseLabel, faseColor, formatFecha, formatHora, tiempoTranscurrido,
@@ -594,31 +595,54 @@ export default function Ordenes() {
       // Get next number atomically (unified with seedData counter)
       const numero = await siguienteNumeroOrden();
 
-      // If new client, create in clientes collection
+      // If new client, crear en colección clientes — con normalización y detección de duplicados
       let clienteId = form.clienteId;
+      let clienteTelefonoFinal = form.clienteTelefono;
       if (isNewCliente && form.clienteNombre) {
-        const clienteDoc = await addDoc(collection(db, 'clientes'), {
-          nombre: form.clienteNombre,
-          telefono: form.clienteTelefono,
-          email: form.clienteEmail || null,
-          direccion: form.clienteDireccion,
-          referenciaDireccion: form.clienteReferencia || null,
-          lat: form.clienteLat || null,
-          lng: form.clienteLng || null,
-          createdAt: Timestamp.now(),
-        });
-        clienteId = clienteDoc.id;
-        setClientes(prev => [...prev, {
-          id: clienteId,
-          nombre: form.clienteNombre,
-          telefono: form.clienteTelefono,
-          email: form.clienteEmail,
-          direccion: form.clienteDireccion,
-          referenciaDireccion: form.clienteReferencia,
-          lat: form.clienteLat,
-          lng: form.clienteLng,
-          createdAt: new Date(),
-        }]);
+        const telNorm = normalizarTelefono(form.clienteTelefono);
+        if (telNorm.length < 7) {
+          toast.error('Teléfono inválido. Debe tener al menos 7 dígitos.');
+          setSaving(false);
+          return;
+        }
+
+        // Verificar si ya existe un cliente con ese teléfono normalizado
+        const existente = await buscarClientePorTelefono(form.clienteTelefono);
+        if (existente) {
+          // Reusar cliente existente
+          clienteId = existente.id;
+          clienteTelefonoFinal = existente.data.telefono || form.clienteTelefono;
+          toast.success(`Cliente ya existía: ${existente.data.nombre}. Usando registro existente.`);
+        } else {
+          // Crear cliente nuevo usando teléfono normalizado como ID (consistente con seedData)
+          const clienteData: Record<string, unknown> = {
+            nombre: form.clienteNombre,
+            telefono: form.clienteTelefono,
+            telefonoNormalizado: telNorm,
+            direccion: form.clienteDireccion || '',
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now(),
+          };
+          if (form.clienteEmail) clienteData.email = form.clienteEmail;
+          if (form.clienteReferencia) clienteData.referenciaDireccion = form.clienteReferencia;
+          if (form.clienteLat !== undefined) clienteData.lat = form.clienteLat;
+          if (form.clienteLng !== undefined) clienteData.lng = form.clienteLng;
+
+          await setDoc(doc(db, 'clientes', telNorm), clienteData);
+          clienteId = telNorm;
+          setClientes(prev => [...prev, {
+            id: telNorm,
+            nombre: form.clienteNombre,
+            telefono: form.clienteTelefono,
+            telefonoNormalizado: telNorm,
+            email: form.clienteEmail,
+            direccion: form.clienteDireccion,
+            referenciaDireccion: form.clienteReferencia,
+            lat: form.clienteLat,
+            lng: form.clienteLng,
+            createdAt: new Date(),
+          }]);
+        }
       }
 
       // Build fechaCita
@@ -633,11 +657,12 @@ export default function Ordenes() {
       const faseInicial: FaseOrden = 'agendado';
       const estadoInicial: EstadoOrdenSimple = 'pendiente';
 
-      await addDoc(collection(db, 'ordenes_servicio'), {
+      // Construir orden — omitir campos undefined para que Firestore no los rechace
+      const ordenData: Record<string, unknown> = {
         numero,
         clienteId,
         clienteNombre: form.clienteNombre,
-        clienteTelefono: form.clienteTelefono,
+        clienteTelefono: clienteTelefonoFinal,
         clienteDireccion: form.clienteDireccion,
         equipoTipo: form.equipoTipo,
         equipoMarca: form.equipoMarca,
@@ -662,7 +687,12 @@ export default function Ordenes() {
         }],
         createdAt: ahora,
         updatedAt: ahora,
-      });
+      };
+      if (form.clienteReferencia) ordenData.clienteReferencia = form.clienteReferencia;
+      if (form.clienteLat !== undefined) ordenData.clienteLat = form.clienteLat;
+      if (form.clienteLng !== undefined) ordenData.clienteLng = form.clienteLng;
+
+      await addDoc(collection(db, 'ordenes_servicio'), ordenData);
       toast.success(`Orden ${numero} creada exitosamente`);
       setShowCreateModal(false);
       resetForm();
