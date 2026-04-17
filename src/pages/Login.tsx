@@ -107,13 +107,6 @@ export default function Login() {
                 )}
               </button>
             </form>
-
-            {/* Demo credentials */}
-            <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100">
-              <p className="text-xs font-semibold text-blue-700 mb-2">Credenciales:</p>
-              <p className="text-xs text-blue-600">Email: misterservicerd@gmail.com</p>
-              <p className="text-xs text-blue-600">Contraseña: Angelica12</p>
-            </div>
           </div>
         </div>
 
