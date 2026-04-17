@@ -276,7 +276,41 @@ export default function OrdenCreateModal({
                         ))}
                       </div>
                     )}
-                    {!esClienteExistente && !buscandoTelefono && form.clienteTelefono && !showTelefonoDropdown && (
+                    {/* Aviso inline: este teléfono ya existe (coincidencia por dígitos) */}
+                    {!esClienteExistente && clientesFiltradosTelefono.length > 0 && form.clienteTelefono.replace(/\D/g, '').length >= 3 && (
+                      <div className="mt-1.5 p-2 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
+                        <AlertTriangle size={12} className="text-amber-600 mt-0.5 shrink-0" />
+                        <div className="text-[11px] text-amber-900 flex-1">
+                          {clientesFiltradosTelefono.length === 1 ? (
+                            <>
+                              Este teléfono ya pertenece a <span className="font-semibold">{clientesFiltradosTelefono[0].nombre}</span>.{' '}
+                              <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  handleSelectCliente(clientesFiltradosTelefono[0]);
+                                  setShowTelefonoDropdown(false);
+                                }}
+                                className="text-amber-900 underline font-semibold hover:text-amber-700"
+                              >
+                                Usar este cliente
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {clientesFiltradosTelefono.length} clientes con teléfonos similares.{' '}
+                              <span className="text-amber-700">Haz click en uno del listado para seleccionarlo.</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {!esClienteExistente && !buscandoTelefono && form.clienteTelefono && !showTelefonoDropdown && clientesFiltradosTelefono.length === 0 && form.clienteTelefono.replace(/\D/g, '').length >= 3 && (
+                      <p className="text-[10px] text-green-600 mt-1">
+                        ✓ Teléfono disponible (no existe en la base)
+                      </p>
+                    )}
+                    {!esClienteExistente && !buscandoTelefono && form.clienteTelefono && !showTelefonoDropdown && form.clienteTelefono.replace(/\D/g, '').length < 3 && (
                       <p className="text-[10px] text-gray-500 mt-1">
                         Escribe el teléfono completo (10 dígitos) para detectar clientes existentes
                       </p>

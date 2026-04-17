@@ -323,18 +323,34 @@ export default function Ordenes() {
     setEditForm(f => ({ ...f, clienteDireccion: texto }));
   };
 
-  /** Maneja cambios en el campo direccion del form de CREAR ORDEN, detectando URLs de Maps */
-  const handleCreateDireccionChange = (texto: string) => {
+  /** Maneja cambios en el campo direccion del form de CREAR ORDEN, detectando URLs de Maps
+   *  y haciendo reverse geocoding para mostrar dirección legible en vez de URL */
+  const handleCreateDireccionChange = async (texto: string) => {
     const coords = detectarCoordenadasURL(texto);
     if (coords) {
-      // Guardar la URL ORIGINAL tal como la pego el usuario + coordenadas exactas
+      // Paso 1: Guardar coordenadas inmediatamente, con placeholder en la dirección
       setForm(f => ({
         ...f,
-        clienteDireccion: texto,
+        clienteDireccion: 'Obteniendo dirección...',
         clienteLat: coords.lat,
         clienteLng: coords.lng,
       }));
       toast.success('\u{1F4CD} Coordenadas exactas guardadas');
+
+      // Paso 2: Reverse geocoding asíncrono para mostrar dirección legible
+      try {
+        const resp = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}&accept-language=es`,
+          { headers: { 'Accept-Language': 'es' } }
+        );
+        const data = await resp.json();
+        const direccionLegible = data.display_name
+          || `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
+        setForm(f => ({ ...f, clienteDireccion: direccionLegible }));
+      } catch {
+        // Si falla, al menos mostrar las coordenadas en formato limpio
+        setForm(f => ({ ...f, clienteDireccion: `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` }));
+      }
       return;
     }
     setForm(f => ({ ...f, clienteDireccion: texto }));
@@ -508,13 +524,20 @@ export default function Ordenes() {
       .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
   }, [form.tecnicoId, form.tecnicoNombre, form.fechaCita, ordenes]);
 
-  // Client search
+  // Client search — busca por nombre (case-insensitive) o por teléfono (normalizado o raw)
   const clientesFiltrados = useMemo(() => {
     if (!clienteBusqueda) return [];
-    return clientes.filter(c =>
-      c.nombre.toLowerCase().includes(clienteBusqueda.toLowerCase()) ||
-      c.telefono.includes(clienteBusqueda)
-    ).slice(0, 5);
+    const searchDigits = clienteBusqueda.replace(/\D/g, '');
+    const searchLower = clienteBusqueda.toLowerCase();
+    return clientes.filter(c => {
+      const cTelDigits = (c.telefono || '').replace(/\D/g, '');
+      const cTelNorm = (c.telefonoNormalizado || '').replace(/\D/g, '');
+      const matchNombre = c.nombre.toLowerCase().includes(searchLower);
+      const matchTelefono = searchDigits.length >= 3 && (
+        cTelDigits.includes(searchDigits) || cTelNorm.includes(searchDigits)
+      );
+      return matchNombre || matchTelefono;
+    }).slice(0, 5);
   }, [clientes, clienteBusqueda]);
 
   // Coincidencias por teléfono para el dropdown del campo "Teléfono" del nuevo cliente
