@@ -1,8 +1,8 @@
-import { Plus, User, Wrench, Calendar, MapPin } from 'lucide-react';
-import { Cliente, Personal } from '../../types';
+import { Plus, User, Wrench, Calendar, MapPin, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
+import { Cliente, Personal, OrdenServicio } from '../../types';
 import {
   TIPOS_EQUIPO, DURACIONES, HORARIOS, HORARIOS_LABEL,
-  formatTelefono,
+  formatTelefono, faseLabel,
 } from '../../utils';
 import Modal from '../Modal';
 
@@ -42,11 +42,14 @@ interface OrdenCreateModalProps {
   personal: Personal[];
   tecnicos: Personal[];
   horariosOcupadosCreate: string[];
+  ordenesActivasCliente: OrdenServicio[];
+  buscandoTelefono: boolean;
   onSubmit: (e: React.FormEvent) => void;
   onClose: () => void;
   handleGetUbicacion: () => void;
   handleCreateDireccionChange: (texto: string) => void;
   handleSelectCliente: (c: Cliente) => void;
+  handleClienteTelefonoChange: (telefono: string) => void;
 }
 
 export default function OrdenCreateModal({
@@ -63,12 +66,20 @@ export default function OrdenCreateModal({
   clientesFiltrados,
   tecnicos,
   horariosOcupadosCreate,
+  ordenesActivasCliente,
+  buscandoTelefono,
   onSubmit,
   onClose,
   handleGetUbicacion,
   handleCreateDireccionChange,
   handleSelectCliente,
+  handleClienteTelefonoChange,
 }: OrdenCreateModalProps) {
+  // Es cliente existente si clienteId está set y NO estamos en modo "nuevo cliente"
+  const esClienteExistente = !!form.clienteId && !isNewCliente;
+  // Estilo de input readonly (cliente existente: no editable, visual diferente)
+  const readonlyInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-blue-50/50 text-gray-700 cursor-not-allowed';
+  const editableInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]';
   return (
     <Modal
       isOpen={true}
@@ -141,12 +152,19 @@ export default function OrdenCreateModal({
 
             {/* New client fields */}
             {(isNewCliente || form.clienteId) && (
-              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+              <div className={`rounded-xl p-4 space-y-3 ${esClienteExistente ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-[#1a5fa8]">
-                    {isNewCliente ? 'Datos del nuevo cliente' : 'Datos del cliente'}
+                  <p className="text-xs font-semibold text-[#1a5fa8] flex items-center gap-2">
+                    {esClienteExistente ? (
+                      <>
+                        <CheckCircle size={14} className="text-green-600" />
+                        Cliente ya registrado: {form.clienteNombre}
+                      </>
+                    ) : (
+                      'Datos del nuevo cliente'
+                    )}
                   </p>
-                  {isNewCliente && (
+                  {(isNewCliente || esClienteExistente) && (
                     <button
                       type="button"
                       onClick={() => {
@@ -165,6 +183,29 @@ export default function OrdenCreateModal({
                     </button>
                   )}
                 </div>
+
+                {/* Banner advertencia órdenes activas */}
+                {esClienteExistente && ordenesActivasCliente.length > 0 && (
+                  <div className="rounded-lg p-3 bg-amber-50 border border-amber-300 flex items-start gap-2">
+                    <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
+                    <div className="text-xs text-amber-900 flex-1">
+                      <p className="font-semibold mb-1">
+                        Este cliente ya tiene {ordenesActivasCliente.length} orden{ordenesActivasCliente.length > 1 ? 'es' : ''} activa{ordenesActivasCliente.length > 1 ? 's' : ''}:
+                      </p>
+                      <ul className="space-y-0.5">
+                        {ordenesActivasCliente.slice(0, 3).map(o => (
+                          <li key={o.id} className="font-mono">
+                            {o.numero} · {o.equipoTipo} · {faseLabel(o.fase)}
+                          </li>
+                        ))}
+                        {ordenesActivasCliente.length > 3 && (
+                          <li className="italic">y {ordenesActivasCliente.length - 3} más...</li>
+                        )}
+                      </ul>
+                      <p className="mt-1.5 text-amber-700">Puedes crear una nueva orden si es un servicio distinto.</p>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>
@@ -172,18 +213,32 @@ export default function OrdenCreateModal({
                       type="text"
                       value={form.clienteNombre}
                       onChange={e => setForm(f => ({ ...f, clienteNombre: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      readOnly={esClienteExistente}
+                      className={esClienteExistente ? readonlyInputClass : editableInputClass}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Telefono *</label>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                      Telefono *
+                      {buscandoTelefono && (
+                        <span className="ml-2 text-[10px] text-blue-600 inline-flex items-center gap-1">
+                          <Loader2 size={10} className="animate-spin" />
+                          Buscando...
+                        </span>
+                      )}
+                    </label>
                     <input
                       type="tel"
                       value={form.clienteTelefono}
-                      onChange={e => setForm(f => ({ ...f, clienteTelefono: e.target.value }))}
+                      onChange={e => handleClienteTelefonoChange(e.target.value)}
                       placeholder="8091234567"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      className={editableInputClass}
                     />
+                    {!esClienteExistente && !buscandoTelefono && form.clienteTelefono && (
+                      <p className="text-[10px] text-gray-500 mt-1">
+                        Escribe el teléfono completo (10 dígitos) para detectar clientes existentes
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Email (opcional)</label>
@@ -191,7 +246,8 @@ export default function OrdenCreateModal({
                       type="email"
                       value={form.clienteEmail}
                       onChange={e => setForm(f => ({ ...f, clienteEmail: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      readOnly={esClienteExistente}
+                      className={esClienteExistente ? readonlyInputClass : editableInputClass}
                     />
                   </div>
                   <div>
@@ -202,17 +258,20 @@ export default function OrdenCreateModal({
                         value={form.clienteDireccion}
                         onChange={e => handleCreateDireccionChange(e.target.value)}
                         placeholder="Calle, sector, ciudad o URL de Google Maps"
-                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                        readOnly={esClienteExistente}
+                        className={esClienteExistente ? `flex-1 ${readonlyInputClass}` : `flex-1 ${editableInputClass}`}
                       />
-                      <button
-                        type="button"
-                        onClick={handleGetUbicacion}
-                        disabled={geoLoading}
-                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 shrink-0 disabled:opacity-50"
-                      >
-                        <MapPin size={12} />
-                        {geoLoading ? 'Obteniendo...' : 'Mi ubicacion'}
-                      </button>
+                      {!esClienteExistente && (
+                        <button
+                          type="button"
+                          onClick={handleGetUbicacion}
+                          disabled={geoLoading}
+                          className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 shrink-0 disabled:opacity-50"
+                        >
+                          <MapPin size={12} />
+                          {geoLoading ? 'Obteniendo...' : 'Mi ubicacion'}
+                        </button>
+                      )}
                     </div>
                     {form.clienteLat && form.clienteLng && (
                       <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
@@ -236,7 +295,8 @@ export default function OrdenCreateModal({
                     value={form.clienteReferencia}
                     onChange={e => setForm(f => ({ ...f, clienteReferencia: e.target.value }))}
                     placeholder="Al lado del colmado, frente al parque..."
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    readOnly={esClienteExistente}
+                    className={esClienteExistente ? readonlyInputClass : editableInputClass}
                   />
                 </div>
               </div>

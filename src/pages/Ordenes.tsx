@@ -69,6 +69,9 @@ export default function Ordenes() {
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
+  const [ordenesActivasCliente, setOrdenesActivasCliente] = useState<OrdenServicio[]>([]);
+  const [buscandoTelefono, setBuscandoTelefono] = useState(false);
+  const telefonoSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -528,6 +531,75 @@ export default function Ordenes() {
     setClienteBusqueda(c.nombre);
     setShowClienteDropdown(false);
     setIsNewCliente(false);
+    // Cargar órdenes activas de este cliente
+    const activas = ordenes.filter(o =>
+      o.clienteId === c.id &&
+      !['cerrado', 'cancelado'].includes(o.fase)
+    );
+    setOrdenesActivasCliente(activas);
+  };
+
+  /**
+   * Busca automáticamente cliente por teléfono cuando el usuario termina de escribir.
+   * Si encuentra uno existente: auto-llena los datos, marca como existente (no nuevo),
+   * y carga sus órdenes activas para mostrar advertencia.
+   */
+  const handleClienteTelefonoChange = (telefono: string) => {
+    // Actualizar el campo del teléfono inmediatamente
+    setForm(f => ({ ...f, clienteTelefono: telefono }));
+
+    // Si el usuario ya tiene un cliente existente seleccionado y está editando el teléfono,
+    // desactivar el modo existente para que pueda escribir libremente
+    if (form.clienteId) {
+      setForm(f => ({ ...f, clienteId: '' }));
+      setIsNewCliente(true);
+      setOrdenesActivasCliente([]);
+    }
+
+    // Cancelar búsqueda anterior si hay una pendiente
+    if (telefonoSearchTimeout.current) {
+      clearTimeout(telefonoSearchTimeout.current);
+    }
+
+    const telNorm = normalizarTelefono(telefono);
+    if (telNorm.length < 10) {
+      setOrdenesActivasCliente([]);
+      return;
+    }
+
+    // Debounce: esperar 400ms después de que pare de escribir
+    setBuscandoTelefono(true);
+    telefonoSearchTimeout.current = setTimeout(async () => {
+      try {
+        const existente = await buscarClientePorTelefono(telefono);
+        if (existente) {
+          // Auto-llenar con datos del cliente existente
+          setForm(f => ({
+            ...f,
+            clienteId: existente.id,
+            clienteNombre: existente.data.nombre,
+            clienteTelefono: existente.data.telefono,
+            clienteEmail: existente.data.email || '',
+            clienteDireccion: existente.data.direccion || '',
+            clienteReferencia: existente.data.referenciaDireccion || '',
+            clienteLat: existente.data.lat,
+            clienteLng: existente.data.lng,
+          }));
+          setIsNewCliente(false);
+          // Buscar órdenes activas de este cliente
+          const activas = ordenes.filter(o =>
+            o.clienteId === existente.id &&
+            !['cerrado', 'cancelado'].includes(o.fase)
+          );
+          setOrdenesActivasCliente(activas);
+          toast.success(`Cliente existente: ${existente.data.nombre}`);
+        }
+      } catch (err) {
+        console.error('Error buscando cliente por teléfono:', err);
+      } finally {
+        setBuscandoTelefono(false);
+      }
+    }, 400);
   };
 
   const handleGetUbicacion = () => {
@@ -714,6 +786,11 @@ export default function Ordenes() {
     setClienteBusqueda('');
     setShowClienteDropdown(false);
     setIsNewCliente(false);
+    setOrdenesActivasCliente([]);
+    if (telefonoSearchTimeout.current) {
+      clearTimeout(telefonoSearchTimeout.current);
+      telefonoSearchTimeout.current = null;
+    }
   };
 
   const fechaHoyTexto = format(hoy, "'Hoy,' EEEE dd 'de' MMMM yyyy", { locale: es });
@@ -868,11 +945,14 @@ export default function Ordenes() {
           personal={personal}
           tecnicos={tecnicos}
           horariosOcupadosCreate={horariosOcupadosCreate}
+          ordenesActivasCliente={ordenesActivasCliente}
+          buscandoTelefono={buscandoTelefono}
           onSubmit={handleSubmitOrden}
           onClose={() => { setShowCreateModal(false); resetForm(); }}
           handleGetUbicacion={handleGetUbicacion}
           handleCreateDireccionChange={handleCreateDireccionChange}
           handleSelectCliente={handleSelectCliente}
+          handleClienteTelefonoChange={handleClienteTelefonoChange}
         />
       )}
     </div>
