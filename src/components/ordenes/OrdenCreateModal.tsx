@@ -5,6 +5,7 @@ import {
   formatTelefono, faseLabel,
 } from '../../utils';
 import Modal from '../Modal';
+import MiniMapaCliente from './MiniMapaCliente';
 
 export interface CreateFormState {
   clienteId: string;
@@ -372,6 +373,13 @@ export default function OrdenCreateModal({
                           Ver en Maps {'\u{2192}'}
                         </a>
                       </p>
+                    )}
+                    {form.clienteLat !== undefined && form.clienteLng !== undefined && (
+                      <MiniMapaCliente
+                        lat={form.clienteLat}
+                        lng={form.clienteLng}
+                        direccion={form.clienteDireccion}
+                      />
                     )}
                   </div>
                 </div>

@@ -706,19 +706,37 @@ export default function Ordenes() {
     }
     setGeoLoading(true);
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm(f => ({
-          ...f,
-          clienteLat: pos.coords.latitude,
-          clienteLng: pos.coords.longitude,
-        }));
-        setGeoLoading(false);
-        toast.success('Ubicacion obtenida');
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=es`,
+            { headers: { 'Accept-Language': 'es' } }
+          );
+          const data = await res.json();
+          const raw = (data?.display_name || '').toString();
+          const direccion = raw
+            ? raw.split(',').slice(0, 3).join(',').trim()
+            : '';
+          setForm(f => ({
+            ...f,
+            clienteDireccion: direccion || f.clienteDireccion,
+            clienteLat: latitude,
+            clienteLng: longitude,
+          }));
+          toast.success('Ubicacion capturada');
+        } catch {
+          setForm(f => ({ ...f, clienteLat: latitude, clienteLng: longitude }));
+          toast.success('Coordenadas capturadas');
+        } finally {
+          setGeoLoading(false);
+        }
       },
-      () => {
+      (err) => {
         setGeoLoading(false);
-        toast.error('No se pudo obtener la ubicacion');
-      }
+        toast.error('No se pudo obtener la ubicacion: ' + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
   };
 

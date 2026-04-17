@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, collection, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Calendario, DiaSemana } from '../types';
 import Logo from '../components/Logo';
 import LoadingSpinner from '../components/LoadingSpinner';
+import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
 import { MapPin, Check, ChevronLeft, ChevronRight, Calendar as CalendarIcon, User, Phone, Mail, Wrench, AlertCircle } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths, subMonths, isSameMonth, isSameDay, isBefore, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -39,6 +40,64 @@ export default function CitaPublica() {
     equipoMarca: '',
     falla: '',
   });
+
+  const dirInputRefCita = useRef<HTMLInputElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const autocompleteRefCita = useRef<any>(null);
+
+  useEffect(() => {
+    if (loading || !calendario) return;
+
+    const initAC = () => {
+      if (!dirInputRefCita.current || !window.google?.maps?.places) return;
+      autocompleteRefCita.current = new window.google.maps.places.Autocomplete(
+        dirInputRefCita.current,
+        {
+          componentRestrictions: { country: 'do' },
+          fields: ['formatted_address', 'geometry', 'name'],
+        }
+      );
+      autocompleteRefCita.current.addListener('place_changed', () => {
+        const place = autocompleteRefCita.current.getPlace();
+        if (!place.geometry) return;
+        const nombre = place.name || '';
+        const direccion = place.formatted_address || '';
+        const textoFinal = nombre && !direccion.startsWith(nombre)
+          ? `${nombre}, ${direccion}`
+          : direccion;
+        setForm(f => ({
+          ...f,
+          direccion: textoFinal,
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng(),
+        }));
+        toast.success('\u{1F4CD} Ubicación capturada');
+      });
+    };
+
+    if (window.google?.maps?.places) {
+      initAC();
+      return;
+    }
+
+    if (!document.getElementById('google-places-script')) {
+      const script = document.createElement('script');
+      script.id = 'google-places-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}&libraries=places&language=es`;
+      script.async = true;
+      script.defer = true;
+      script.onload = initAC;
+      document.head.appendChild(script);
+    } else {
+      const interval = setInterval(() => {
+        if (window.google?.maps?.places) {
+          clearInterval(interval);
+          initAC();
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [loading, calendario]);
 
   useEffect(() => {
     if (!calendarId) return;
@@ -264,11 +323,20 @@ export default function CitaPublica() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Dirección del Servicio</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Dirección del Servicio
+                  <span className="ml-2 text-[10px] text-gray-400 font-normal">
+                    (Busca en Google: Agora Mall, Plaza Central, etc.)
+                  </span>
+                </label>
                 <div className="flex gap-2">
-                  <input type="text" value={form.direccion}
+                  <input
+                    ref={dirInputRefCita}
+                    type="text"
+                    value={form.direccion}
                     onChange={e => setForm(f => ({ ...f, direccion: e.target.value }))}
-                    placeholder="Av. Winston Churchill, Santo Domingo"
+                    placeholder="Escribe un lugar, dirección o usa GPS"
+                    autoComplete="off"
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
                   <button type="button" onClick={handleUbicacion} disabled={geocoding}
                     className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs transition-colors disabled:opacity-60">
@@ -277,6 +345,9 @@ export default function CitaPublica() {
                 </div>
                 {form.lat !== 0 && (
                   <p className="text-xs text-green-600 mt-1">✓ Coordenadas capturadas</p>
+                )}
+                {form.lat !== 0 && form.lng !== 0 && (
+                  <MiniMapaCliente lat={form.lat} lng={form.lng} direccion={form.direccion} />
                 )}
               </div>
             </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -7,6 +7,7 @@ import { formatFechaCorta, formatTelefono } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
+import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
 import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -24,6 +25,64 @@ export default function Clientes() {
   const [form, setForm] = useState({
     nombre: '', telefono: '', email: '', direccion: '', lat: 0, lng: 0,
   });
+
+  const dirInputRefCliente = useRef<HTMLInputElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const autocompleteRefCliente = useRef<any>(null);
+
+  useEffect(() => {
+    if (!showModal) return;
+
+    const initAC = () => {
+      if (!dirInputRefCliente.current || !window.google?.maps?.places) return;
+      autocompleteRefCliente.current = new window.google.maps.places.Autocomplete(
+        dirInputRefCliente.current,
+        {
+          componentRestrictions: { country: 'do' },
+          fields: ['formatted_address', 'geometry', 'name'],
+        }
+      );
+      autocompleteRefCliente.current.addListener('place_changed', () => {
+        const place = autocompleteRefCliente.current.getPlace();
+        if (!place.geometry) return;
+        const nombre = place.name || '';
+        const direccion = place.formatted_address || '';
+        const textoFinal = nombre && !direccion.startsWith(nombre)
+          ? `${nombre}, ${direccion}`
+          : direccion;
+        setForm(f => ({
+          ...f,
+          direccion: textoFinal,
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng(),
+        }));
+        toast.success('\u{1F4CD} Ubicación de Google capturada');
+      });
+    };
+
+    if (window.google?.maps?.places) {
+      initAC();
+      return;
+    }
+
+    if (!document.getElementById('google-places-script')) {
+      const script = document.createElement('script');
+      script.id = 'google-places-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}&libraries=places&language=es`;
+      script.async = true;
+      script.defer = true;
+      script.onload = initAC;
+      document.head.appendChild(script);
+    } else {
+      const interval = setInterval(() => {
+        if (window.google?.maps?.places) {
+          clearInterval(interval);
+          initAC();
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [showModal]);
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -82,6 +141,47 @@ export default function Clientes() {
     } finally {
       setGeocoding(false);
     }
+  };
+
+  const handleUsarMiUbicacion = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocalización no disponible');
+      return;
+    }
+    setGeocoding(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=es`,
+            { headers: { 'Accept-Language': 'es' } }
+          );
+          const data = await res.json();
+          const raw = (data?.display_name || '').toString();
+          const direccion = raw
+            ? raw.split(',').slice(0, 3).join(',').trim()
+            : '';
+          setForm(f => ({
+            ...f,
+            direccion: direccion || f.direccion,
+            lat: latitude,
+            lng: longitude,
+          }));
+          toast.success('Ubicación capturada');
+        } catch {
+          setForm(f => ({ ...f, lat: latitude, lng: longitude }));
+          toast.success('Coordenadas capturadas');
+        } finally {
+          setGeocoding(false);
+        }
+      },
+      (err) => {
+        setGeocoding(false);
+        toast.error('No se pudo obtener la ubicación: ' + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -282,18 +382,32 @@ export default function Clientes() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Dirección
+              <span className="ml-2 text-[10px] text-gray-400 font-normal">
+                (Busca en Google: Agora Mall, Plaza Central, etc.)
+              </span>
+            </label>
             <div className="flex gap-2">
-              <input type="text" value={form.direccion} onChange={e => setForm(f => ({ ...f, direccion: e.target.value }))}
-                placeholder="Av. Winston Churchill, Santo Domingo"
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-              <button type="button" onClick={() => geocodeDireccion(form.direccion)} disabled={geocoding}
+              <input
+                ref={dirInputRefCliente}
+                type="text"
+                value={form.direccion}
+                onChange={e => setForm(f => ({ ...f, direccion: e.target.value }))}
+                placeholder="Escribe un lugar, dirección o usa GPS"
+                autoComplete="off"
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+              <button type="button" onClick={handleUsarMiUbicacion} disabled={geocoding}
                 className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors flex items-center gap-1 disabled:opacity-50">
                 <MapPin size={14} /> {geocoding ? '...' : 'GPS'}
               </button>
             </div>
             {form.lat !== 0 && (
               <p className="text-xs text-green-600 mt-1">Coordenadas: {form.lat.toFixed(4)}, {form.lng.toFixed(4)}</p>
+            )}
+            {form.lat !== 0 && form.lng !== 0 && (
+              <MiniMapaCliente lat={form.lat} lng={form.lng} direccion={form.direccion} />
             )}
           </div>
           <div className="flex justify-end gap-3 pt-2">

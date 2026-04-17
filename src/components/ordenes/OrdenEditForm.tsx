@@ -1,6 +1,7 @@
 import { MapPin } from 'lucide-react';
 import { OrdenServicio, Personal } from '../../types';
 import { HORARIOS, HORARIOS_LABEL } from '../../utils';
+import MiniMapaCliente from './MiniMapaCliente';
 
 export interface EditFormState {
   tecnicoId: string;
@@ -158,6 +159,13 @@ export default function OrdenEditForm({
               Ver en Maps {'\u{2192}'}
             </a>
           </p>
+        )}
+        {editForm.clienteLat !== undefined && editForm.clienteLng !== undefined && (
+          <MiniMapaCliente
+            lat={editForm.clienteLat}
+            lng={editForm.clienteLng}
+            direccion={editForm.clienteDireccion}
+          />
         )}
       </div>
 

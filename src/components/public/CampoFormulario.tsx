@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { CampoFormulario as CampoType } from '../../types/formularios';
 import { MapPin } from 'lucide-react';
+import MiniMapaCliente from '../ordenes/MiniMapaCliente';
 
 interface Props {
   campo: CampoType;
@@ -19,9 +20,69 @@ export default function CampoFormulario({ campo, value, onChange, error }: Props
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
 
+  // -- Address coords (local only — not sent via onChange to preserve schema) --
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const dirInputRef = useRef<HTMLInputElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const autocompleteRef = useRef<any>(null);
+
   // -- Firma (signature) state --
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawingRef = useRef(false);
+
+  // Google Places Autocomplete for 'direccion' field
+  useEffect(() => {
+    if (campo.tipo !== 'direccion') return;
+
+    const initAC = () => {
+      if (!dirInputRef.current || !window.google?.maps?.places) return;
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(
+        dirInputRef.current,
+        {
+          componentRestrictions: { country: 'do' },
+          fields: ['formatted_address', 'geometry', 'name'],
+        }
+      );
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current.getPlace();
+        if (!place.geometry) return;
+        const nombre = place.name || '';
+        const direccion = place.formatted_address || '';
+        const textoFinal = nombre && !direccion.startsWith(nombre)
+          ? `${nombre}, ${direccion}`
+          : direccion;
+        onChange(textoFinal);
+        setCoords({
+          lat: place.geometry.location.lat(),
+          lng: place.geometry.location.lng(),
+        });
+      });
+    };
+
+    if (window.google?.maps?.places) {
+      initAC();
+      return;
+    }
+
+    if (!document.getElementById('google-places-script')) {
+      const script = document.createElement('script');
+      script.id = 'google-places-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}&libraries=places&language=es`;
+      script.async = true;
+      script.defer = true;
+      script.onload = initAC;
+      document.head.appendChild(script);
+    } else {
+      const interval = setInterval(() => {
+        if (window.google?.maps?.places) {
+          clearInterval(interval);
+          initAC();
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campo.tipo]);
 
   // Setup canvas white background once
   useEffect(() => {
@@ -117,15 +178,17 @@ export default function CampoFormulario({ campo, value, onChange, error }: Props
     setGeoLoading(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setCoords({ lat: latitude, lng: longitude });
         try {
-          const { latitude, longitude } = pos.coords;
           const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=es`,
+            { headers: { 'Accept-Language': 'es' } },
           );
           const data = await res.json();
           onChange(data.display_name || `${latitude}, ${longitude}`);
         } catch {
-          onChange(`${pos.coords.latitude}, ${pos.coords.longitude}`);
+          onChange(`${latitude}, ${longitude}`);
         } finally {
           setGeoLoading(false);
         }
@@ -314,12 +377,14 @@ export default function CampoFormulario({ campo, value, onChange, error }: Props
       case 'direccion':
         return (
           <div className="space-y-2">
-            <textarea
-              rows={2}
+            <input
+              ref={dirInputRef}
+              type="text"
               className={inputClasses}
-              placeholder={campo.placeholder || 'Dirección completa'}
+              placeholder={campo.placeholder || 'Escribe un lugar, dirección o usa GPS'}
               value={value || ''}
               onChange={(e) => onChange(e.target.value)}
+              autoComplete="off"
             />
             <button
               type="button"
@@ -336,6 +401,9 @@ export default function CampoFormulario({ campo, value, onChange, error }: Props
                 </>
               )}
             </button>
+            {coords && (
+              <MiniMapaCliente lat={coords.lat} lng={coords.lng} direccion={value || ''} />
+            )}
           </div>
         );
 
@@ -419,9 +487,12 @@ export default function CampoFormulario({ campo, value, onChange, error }: Props
               )}
             </button>
             {value && value.lat != null && value.lng != null && (
-              <p className="text-xs text-gray-500">
-                Lat: {value.lat.toFixed(6)}, Lng: {value.lng.toFixed(6)}
-              </p>
+              <>
+                <p className="text-xs text-gray-500">
+                  Lat: {value.lat.toFixed(6)}, Lng: {value.lng.toFixed(6)}
+                </p>
+                <MiniMapaCliente lat={value.lat} lng={value.lng} />
+              </>
             )}
           </div>
         );
