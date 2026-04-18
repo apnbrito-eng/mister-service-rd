@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, Timestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { CitaPorConfirmar, Personal } from '../types';
-import { tiempoTranscurrido, TIPOS_EQUIPO, whatsappLink, formatTelefono, HORARIOS, HORARIOS_LABEL } from '../utils';
+import { CitaPorConfirmar, Personal, OrdenServicio } from '../types';
+import { tiempoTranscurrido, TIPOS_EQUIPO, whatsappLink, formatTelefono, HORARIOS, HORARIOS_LABEL, parseOrden } from '../utils';
 import { siguienteNumeroOrden } from '../services/contadores.service';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Phone, Clock, MessageCircle, Check, X, Plus, AlertTriangle } from 'lucide-react';
-import { differenceInMinutes } from 'date-fns';
+import { differenceInMinutes, isSameDay, format } from 'date-fns';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 
@@ -19,6 +19,7 @@ export default function Citas() {
   const [showAgendarModal, setShowAgendarModal] = useState(false);
   const [selectedCita, setSelectedCita] = useState<CitaPorConfirmar | null>(null);
   const [personal, setPersonal] = useState<Personal[]>([]);
+  const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
 
   const [form, setForm] = useState({
     clienteNombre: '', telefono: '', servicio: '', falla: '',
@@ -49,8 +50,32 @@ export default function Citas() {
       setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
     });
 
-    return () => unsub();
+    // Listener de órdenes para validar disponibilidad del técnico al agendar
+    const unsubOrdenes = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
+      const data = snap.docs.map(d => parseOrden(d.id, d.data() as Record<string, unknown>));
+      setOrdenes(data);
+    });
+
+    return () => {
+      unsub();
+      unsubOrdenes();
+    };
   }, []);
+
+  // Horarios ya tomados por el técnico seleccionado en la fecha de la cita
+  const horariosOcupadosAgendar = useMemo(() => {
+    if (!agendarForm.tecnicoId || !agendarForm.fechaCita) return [];
+    const fechaSeleccionada = new Date(agendarForm.fechaCita + 'T00:00:00');
+    return ordenes
+      .filter(o =>
+        (o.tecnicoId === agendarForm.tecnicoId || o.tecnicoNombre === agendarForm.tecnicoNombre) &&
+        o.fechaCita &&
+        isSameDay(o.fechaCita, fechaSeleccionada) &&
+        o.estado !== 'cancelado' &&
+        o.estado !== 'cerrado'
+      )
+      .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
+  }, [agendarForm.tecnicoId, agendarForm.tecnicoNombre, agendarForm.fechaCita, ordenes]);
 
   const handleRegistrar = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +107,11 @@ export default function Citas() {
     }
     if (!agendarForm.horaInicio) {
       toast.error('Selecciona una hora');
+      return;
+    }
+    // Validación defensiva: el horario puede haberse ocupado entre que se abrió el modal y este submit
+    if (horariosOcupadosAgendar.includes(agendarForm.horaInicio)) {
+      toast.error('Ese horario ya está ocupado por el técnico seleccionado');
       return;
     }
     setSaving(true);
@@ -332,21 +362,33 @@ export default function Citas() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Hora de Inicio *</label>
               <div className="grid grid-cols-5 gap-1">
-                {HORARIOS.map(h => (
-                  <button
-                    key={h}
-                    type="button"
-                    onClick={() => setAgendarForm(f => ({ ...f, horaInicio: h }))}
-                    className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                      agendarForm.horaInicio === h
-                        ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
-                    }`}
-                  >
-                    {HORARIOS_LABEL[h]}
-                  </button>
-                ))}
+                {HORARIOS.map(h => {
+                  const ocupado = horariosOcupadosAgendar.includes(h);
+                  return (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => !ocupado && setAgendarForm(f => ({ ...f, horaInicio: h }))}
+                      disabled={ocupado}
+                      title={ocupado ? 'Horario ocupado' : ''}
+                      className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                        ocupado
+                          ? 'bg-red-50 text-red-400 border-red-200 cursor-not-allowed line-through'
+                          : agendarForm.horaInicio === h
+                            ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
+                      }`}
+                    >
+                      {HORARIOS_LABEL[h]}
+                    </button>
+                  );
+                })}
               </div>
+              {agendarForm.tecnicoId && agendarForm.fechaCita && horariosOcupadosAgendar.length > 0 && (
+                <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
+                  <AlertTriangle size={10} /> {horariosOcupadosAgendar.length} horario(s) ocupado(s) ese día
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
