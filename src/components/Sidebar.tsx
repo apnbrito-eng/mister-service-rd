@@ -8,6 +8,7 @@ import {
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useApp } from '../context/AppContext';
+import { puede, type AccionPermiso } from '../utils/permisos';
 import Logo from './Logo';
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
@@ -47,30 +48,32 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const isAdmin = esAdminOCoord;
   const isOperaria = userProfile?.rol === 'operaria' || isAdmin;
   const isSecretaria = userProfile?.rol === 'secretaria' || isAdmin;
+  // Permisos granulares
+  const p = (acc: AccionPermiso) => puede(userProfile, acc);
 
   const navItems = [
     { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', show: true },
-    { to: '/admin/ordenes', icon: ClipboardList, label: 'Órdenes', show: true },
-    { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: true },
-    { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: true },
+    { to: '/admin/ordenes', icon: ClipboardList, label: 'Órdenes', show: p('ordenesVer') },
+    { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
+    { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
     { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios', show: isAdmin || isOperaria || isSecretaria },
-    { to: '/admin/standby', icon: Clock, label: 'Stand-by / Piezas', badge: standbyCount, show: true },
-    { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: true },
-    { to: '/admin/clientes', icon: Users, label: 'Clientes', show: true },
-    { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: isOperaria || isSecretaria },
-    { to: '/admin/facturas', icon: Receipt, label: 'Facturas', show: isAdmin || isOperaria },
-    { to: '/admin/taller', icon: Wrench, label: 'Equipos Taller', show: true },
-    { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: true },
-    { to: '/admin/mantenimiento', icon: Calendar, label: 'Mantenimiento', show: true },
-    { to: '/admin/gastos', icon: DollarSign, label: 'Gastos e Ingresos', show: isAdmin },
-    { to: '/admin/rendimiento', icon: TrendingUp, label: 'Rendimiento', show: isAdmin || isOperaria },
-    { to: '/admin/personal', icon: UserCog, label: 'Personal', show: isAdmin },
-    { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: isAdmin },
+    { to: '/admin/standby', icon: Clock, label: 'Stand-by / Piezas', badge: standbyCount, show: p('ordenesVer') },
+    { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
+    { to: '/admin/clientes', icon: Users, label: 'Clientes', show: p('clientesVer') },
+    { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: p('cotizacionesVer') },
+    { to: '/admin/facturas', icon: Receipt, label: 'Facturas', show: p('facturasVer') },
+    { to: '/admin/taller', icon: Wrench, label: 'Equipos Taller', show: p('ordenesVer') },
+    { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: p('ordenesVer') },
+    { to: '/admin/mantenimiento', icon: Calendar, label: 'Mantenimiento', show: p('ordenesVer') },
+    { to: '/admin/gastos', icon: DollarSign, label: 'Gastos e Ingresos', show: p('gastosVer') },
+    { to: '/admin/rendimiento', icon: TrendingUp, label: 'Rendimiento', show: p('rendimientoVer') },
+    { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
+    { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: p('personalModificar') },
     { to: '/admin/web', icon: Globe, label: 'Página Web', show: isAdmin },
     { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: isAdmin },
     { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: isAdmin },
     { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: isAdmin },
-    { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: isAdmin },
+    { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: p('configuracionVer') },
   ];
 
   return (

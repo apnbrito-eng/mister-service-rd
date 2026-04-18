@@ -95,6 +95,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   activo: data.activo,
                   createdAt: data.createdAt?.toDate() || new Date(),
                   permisos: data.permisos,
+                  permisosSistema: data.permisosSistema,
+                  permisosPersonalizados: data.permisosPersonalizados,
                   color: data.color,
                 });
               }

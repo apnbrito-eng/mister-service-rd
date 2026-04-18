@@ -431,6 +431,16 @@ export default function MapaRutas() {
 
   const handleGuardarEditDesdeMapa = async () => {
     if (!editingOrden) return;
+    // Aviso cuando una operaria modifica orden fuera de su grupo
+    if (
+      userProfile?.rol === 'operaria' &&
+      editingOrden.operariaId &&
+      editingOrden.operariaId !== userProfile.id
+    ) {
+      const otra = editingOrden.operariaNombre || 'otra operaria';
+      const ok = window.confirm(`Esta orden pertenece al grupo de ${otra}. ¿Confirmar el cambio?`);
+      if (!ok) return;
+    }
     // Validación defensiva de horario ocupado
     if (editForm.tecnicoId && editForm.fechaCita && editForm.horaInicio &&
         horariosOcupadosEdit.includes(editForm.horaInicio)) {

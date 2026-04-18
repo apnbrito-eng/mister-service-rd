@@ -19,6 +19,7 @@ import Badge from '../components/Badge';
 import Modal from '../components/Modal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useApp } from '../context/AppContext';
+import { puede } from '../utils/permisos';
 import {
   Plus, Search, Clock, Calendar, MapPin, Phone, MessageCircle,
   Wrench, User, FileText, Edit2, CalendarDays, RefreshCw, Eye
@@ -71,6 +72,13 @@ export default function Ordenes() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [verTodasOperarias, setVerTodasOperarias] = useState(false);
+  const [verEliminadas, setVerEliminadas] = useState(false);
+
+  // Soft delete state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<OrdenServicio | null>(null);
+  const [deleteMotivo, setDeleteMotivo] = useState('');
+  const [deletingOrden, setDeletingOrden] = useState(false);
   const [ordenesActivasCliente, setOrdenesActivasCliente] = useState<OrdenServicio[]>([]);
   const [buscandoTelefono, setBuscandoTelefono] = useState(false);
   const [showTelefonoDropdown, setShowTelefonoDropdown] = useState(false);
@@ -434,6 +442,16 @@ export default function Ordenes() {
 
   const handleGuardarEdicion = async () => {
     if (!selectedOrden) return;
+    // Aviso cuando una operaria modifica orden fuera de su grupo
+    if (
+      userProfile?.rol === 'operaria' &&
+      selectedOrden.operariaId &&
+      selectedOrden.operariaId !== userProfile.id
+    ) {
+      const otra = selectedOrden.operariaNombre || 'otra operaria';
+      const ok = window.confirm(`Esta orden pertenece al grupo de ${otra}. ¿Confirmar el cambio?`);
+      if (!ok) return;
+    }
     // Validación defensiva: evitar double-booking entre apertura del modal y guardado
     if (editForm.tecnicoId && editForm.fechaCita && editForm.horaInicio) {
       const fechaSeleccionada = new Date(editForm.fechaCita + 'T00:00:00');
@@ -610,6 +628,57 @@ export default function Ordenes() {
     }
   };
 
+  const abrirEliminarOrden = (o: OrdenServicio) => {
+    if (!puede(userProfile, 'ordenesEliminar')) {
+      toast.error('No tienes permiso para eliminar órdenes');
+      return;
+    }
+    setDeleteTarget(o);
+    setDeleteMotivo('');
+    setShowDeleteModal(true);
+  };
+
+  const cerrarEliminar = () => {
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
+    setDeleteMotivo('');
+    setDeletingOrden(false);
+  };
+
+  const handleConfirmarEliminarOrden = async () => {
+    if (!deleteTarget) return;
+    if (deleteMotivo.trim().length < 10) {
+      toast.error('Motivo debe tener al menos 10 caracteres');
+      return;
+    }
+    setDeletingOrden(true);
+    try {
+      const usuario = userProfile?.nombre || 'Sistema';
+      const ahora = Timestamp.now();
+      const registro = crearRegistroAuditoria(
+        usuario, 'eliminar', `Eliminó orden — Motivo: ${deleteMotivo.trim()}`,
+        'eliminada', 'false', 'true'
+      );
+      await updateDoc(doc(db, 'ordenes_servicio', deleteTarget.id), {
+        eliminada: true,
+        motivoEliminacion: deleteMotivo.trim(),
+        eliminadaPor: usuario,
+        eliminadaPorId: userProfile?.id || '',
+        fechaEliminacion: ahora,
+        updatedAt: ahora,
+        auditoria: arrayUnion(registro),
+      });
+      toast.success('Orden eliminada');
+      cerrarEliminar();
+      setSelectedOrden(null);
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al eliminar la orden');
+    } finally {
+      setDeletingOrden(false);
+    }
+  };
+
   // Load data
   useEffect(() => {
     const unsub = onSnapshot(
@@ -637,10 +706,20 @@ export default function Ordenes() {
   // Filtro por grupo de operaria (auto para rol operaria, toggle desactiva el filtro)
   const esOperaria = userProfile?.rol === 'operaria';
   const filtroOperariaActivo = esOperaria && !verTodasOperarias;
+  // Permiso para ver eliminadas
+  const puedeVerEliminadas = puede(userProfile, 'ordenesVerEliminadas');
+  const verEliminadasFinal = puedeVerEliminadas && verEliminadas;
   const ordenesVisibles = useMemo(() => {
-    if (!filtroOperariaActivo) return ordenes;
-    return ordenes.filter(o => o.operariaId === userProfile?.id);
-  }, [ordenes, filtroOperariaActivo, userProfile?.id]);
+    let lista = ordenes;
+    // Filtrar eliminadas a menos que el toggle esté activo
+    if (!verEliminadasFinal) {
+      lista = lista.filter(o => !o.eliminada);
+    }
+    if (filtroOperariaActivo) {
+      lista = lista.filter(o => o.operariaId === userProfile?.id);
+    }
+    return lista;
+  }, [ordenes, filtroOperariaActivo, userProfile?.id, verEliminadasFinal]);
 
   // Today's orders
   const hoy = new Date();
@@ -1084,13 +1163,29 @@ export default function Ordenes() {
               {filtroOperariaActivo ? 'Ver todas las operarias' : 'Ver solo mi grupo'}
             </button>
           )}
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 bg-[#1a5fa8] hover:bg-[#0f3460] text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors"
-          >
-            <Plus size={18} />
-            Crear Orden de Servicio
-          </button>
+          {puedeVerEliminadas && (
+            <button
+              type="button"
+              onClick={() => setVerEliminadas(v => !v)}
+              className={`inline-flex items-center gap-2 px-3 py-2.5 text-xs font-medium rounded-xl border transition-colors ${
+                verEliminadas
+                  ? 'bg-red-50 border-red-200 text-red-700 hover:bg-red-100'
+                  : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Eye size={14} />
+              {verEliminadas ? 'Ocultar eliminadas' : 'Ver eliminadas'}
+            </button>
+          )}
+          {puede(userProfile, 'ordenesCrear') && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 bg-[#1a5fa8] hover:bg-[#0f3460] text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors"
+            >
+              <Plus size={18} />
+              Crear Orden de Servicio
+            </button>
+          )}
         </div>
       </div>
 
@@ -1180,6 +1275,7 @@ export default function Ordenes() {
             orden={selectedOrden}
             userProfile={userProfile}
             onEdit={() => setShowEditInDetail(true)}
+            onEliminar={() => abrirEliminarOrden(selectedOrden)}
             onAprobarPrecio={handleAprobarPrecio}
             precioAprobacion={precioAprobacion}
             setPrecioAprobacion={setPrecioAprobacion}
@@ -1241,6 +1337,53 @@ export default function Ordenes() {
           handleClienteTelefonoChange={handleClienteTelefonoChange}
         />
       )}
+
+      {/* Modal Eliminar Orden (soft delete con motivo) */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={cerrarEliminar}
+        title={deleteTarget ? `Eliminar orden ${deleteTarget.numero || ''}` : 'Eliminar orden'}
+      >
+        {deleteTarget && (
+          <div className="space-y-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-800">
+              Esta orden se marcará como eliminada (soft delete). Sus datos se conservan
+              y pueden recuperarse desde el filtro "Ver eliminadas".
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Motivo de eliminación *</label>
+              <textarea
+                rows={4}
+                value={deleteMotivo}
+                onChange={e => setDeleteMotivo(e.target.value)}
+                placeholder="Mínimo 10 caracteres explicando por qué se elimina"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+              />
+              <p className={`text-[11px] mt-1 ${deleteMotivo.trim().length >= 10 ? 'text-gray-500' : 'text-red-500'}`}>
+                {deleteMotivo.trim().length}/10 caracteres mínimos
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={cerrarEliminar}
+                disabled={deletingOrden}
+                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarEliminarOrden}
+                disabled={deletingOrden || deleteMotivo.trim().length < 10}
+                className="px-5 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              >
+                {deletingOrden ? 'Eliminando...' : 'Confirmar eliminación'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

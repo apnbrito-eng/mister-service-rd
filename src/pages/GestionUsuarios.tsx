@@ -4,7 +4,8 @@ import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
-import { Personal, Rol, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO } from '../types';
+import { Personal, Rol, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, PermisosSistema } from '../types';
+import { permisosDefaultDeRol } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Plus, Edit, Key, Power, User, Shield, Eye, EyeOff, Check, X, KeyRound, ExternalLink } from 'lucide-react';
@@ -37,6 +38,8 @@ interface FormState {
   rol: Rol;
   color: string;
   permisos: TecnicoPermisos;
+  permisosPersonalizados: boolean;
+  permisosSistema: PermisosSistema;
 }
 
 const initialForm: FormState = {
@@ -47,6 +50,8 @@ const initialForm: FormState = {
   rol: 'tecnico',
   color: '#3b82f6',
   permisos: { ...PERMISOS_DEFAULT_TECNICO },
+  permisosPersonalizados: false,
+  permisosSistema: permisosDefaultDeRol('tecnico'),
 };
 
 const COLORES_TECNICO = ['#3b82f6', '#f97316', '#14b8a6', '#a855f7', '#22c55e', '#ef4444', '#f59e0b', '#0f3460'];
@@ -98,9 +103,26 @@ export default function GestionUsuarios() {
       rol: u.rol,
       color: u.color || '#3b82f6',
       permisos: u.permisos || { ...PERMISOS_DEFAULT_TECNICO },
+      permisosPersonalizados: !!u.permisosPersonalizados,
+      permisosSistema: u.permisosSistema || permisosDefaultDeRol(u.rol),
     });
     setEditingId(u.id);
     setShowModal(true);
+  };
+
+  const togglePermisoSistema = (key: keyof PermisosSistema) => {
+    setForm(f => ({
+      ...f,
+      permisosSistema: { ...f.permisosSistema, [key]: !f.permisosSistema[key] } as PermisosSistema,
+    }));
+  };
+
+  const restaurarDefaultsRol = () => {
+    setForm(f => ({
+      ...f,
+      permisosSistema: permisosDefaultDeRol(f.rol),
+      permisosPersonalizados: false,
+    }));
   };
 
   const togglePermiso = (key: keyof TecnicoPermisos) => {
@@ -138,6 +160,11 @@ export default function GestionUsuarios() {
 
       if (form.rol === 'tecnico') {
         data.permisos = form.permisos;
+      }
+      // Permisos granulares (Fase 3B)
+      data.permisosPersonalizados = form.permisosPersonalizados;
+      if (form.permisosPersonalizados) {
+        data.permisosSistema = form.permisosSistema;
       }
 
       if (editingId) {
@@ -552,6 +579,71 @@ export default function GestionUsuarios() {
               </div>
             </div>
           )}
+
+          {/* Permisos granulares del sistema (Fase 3B) */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wide">Permisos granulares</h3>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.permisosPersonalizados}
+                    onChange={() => setForm(f => ({
+                      ...f,
+                      permisosPersonalizados: !f.permisosPersonalizados,
+                      permisosSistema: !f.permisosPersonalizados ? f.permisosSistema : permisosDefaultDeRol(f.rol),
+                    }))}
+                    className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+                  />
+                  Personalizar (sobrescribir defaults del rol)
+                </label>
+                <button
+                  type="button"
+                  onClick={restaurarDefaultsRol}
+                  className="text-xs px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-600"
+                >
+                  Restaurar defaults
+                </button>
+              </div>
+            </div>
+
+            {!form.permisosPersonalizados ? (
+              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                Usando los permisos por defecto del rol <span className="font-semibold">{ROL_LABELS[form.rol]}</span>.
+                Marca "Personalizar" para editar permisos individuales.
+              </p>
+            ) : (
+              <div className="space-y-3 bg-blue-50/40 border border-blue-100 rounded-xl p-4">
+                {[
+                  { titulo: 'Órdenes', keys: ['ordenesVer', 'ordenesCrear', 'ordenesModificar', 'ordenesModificarFueraGrupo', 'ordenesEliminar', 'ordenesVerEliminadas'] },
+                  { titulo: 'Cotizaciones', keys: ['cotizacionesVer', 'cotizacionesCrear', 'cotizacionesModificar', 'cotizacionesAprobarPrecio'] },
+                  { titulo: 'Facturas', keys: ['facturasVer', 'facturasCrear', 'facturasModificar', 'facturasEliminar'] },
+                  { titulo: 'Clientes', keys: ['clientesVer', 'clientesCrear', 'clientesModificar', 'clientesEliminar'] },
+                  { titulo: 'Personal', keys: ['personalVer', 'personalCrear', 'personalModificar', 'personalEliminar'] },
+                  { titulo: 'Gastos', keys: ['gastosVer', 'gastosCrear', 'gastosEliminar'] },
+                  { titulo: 'Otros', keys: ['rendimientoVer', 'configuracionVer', 'configuracionModificar', 'cierreDiaEjecutar'] },
+                ].map(g => (
+                  <div key={g.titulo}>
+                    <p className="text-xs font-semibold text-gray-700 mb-1.5">{g.titulo}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {g.keys.map(k => (
+                        <label key={k} className="flex items-center gap-2 text-xs cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!form.permisosSistema[k as keyof PermisosSistema]}
+                            onChange={() => togglePermisoSistema(k as keyof PermisosSistema)}
+                            className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+                          />
+                          <span className="text-gray-700">{k}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Botones */}
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

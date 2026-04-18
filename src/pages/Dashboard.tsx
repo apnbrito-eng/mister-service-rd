@@ -136,8 +136,12 @@ export default function Dashboard() {
   const filtroOperariaActivo = esOperaria && !verTodasOperarias;
 
   const ordenes = useMemo(() => {
-    if (!filtroOperariaActivo) return ordenesRaw;
-    return ordenesRaw.filter(o => o.operariaId === userProfile?.id);
+    // Excluir órdenes eliminadas (soft delete) en todas las métricas del dashboard
+    let lista = ordenesRaw.filter(o => !o.eliminada);
+    if (filtroOperariaActivo) {
+      lista = lista.filter(o => o.operariaId === userProfile?.id);
+    }
+    return lista;
   }, [ordenesRaw, filtroOperariaActivo, userProfile?.id]);
 
   // ---- derived data ----

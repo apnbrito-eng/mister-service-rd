@@ -29,7 +29,14 @@ export interface Usuario {
   telefono: string;
   activo: boolean;
   createdAt: Date;
+  /** Permisos granulares legacy (sólo técnico) — retrocompat */
   permisos?: TecnicoPermisos;
+  /** Permisos del nuevo sistema granular (Fase 3B). Si está, se prefiere
+   *  sobre `permisos` legacy y los defaults por rol cuando
+   *  `permisosPersonalizados === true`. */
+  permisosSistema?: PermisosSistema;
+  /** Cuando true, usar `permisosSistema` en vez del default por rol */
+  permisosPersonalizados?: boolean;
   color?: string;
 }
 
@@ -116,6 +123,12 @@ export interface OrdenServicio {
   soloChequeo?: boolean;
   precioChequeo?: number;
   motivoChequeo?: string;
+  // Soft delete (Fase 3B)
+  eliminada?: boolean;
+  motivoEliminacion?: string;
+  eliminadaPor?: string;
+  eliminadaPorId?: string;
+  fechaEliminacion?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -249,6 +262,138 @@ export const PERMISOS_DEFAULT_TECNICO: TecnicoPermisos = {
   recibeNotificacionNuevaCita: true,
 };
 
+/**
+ * Sistema de permisos granulares por usuario (Fase 3B).
+ * Reemplaza/complementa al rol como mecanismo principal de gating.
+ * El admin puede sobrescribir por usuario individual; si no, se usan
+ * los defaults por rol vía `obtenerPermisos`.
+ */
+export interface PermisosSistema {
+  // Órdenes
+  ordenesVer: boolean;
+  ordenesCrear: boolean;
+  ordenesModificar: boolean;
+  ordenesModificarFueraGrupo: boolean;
+  ordenesEliminar: boolean;
+  ordenesVerEliminadas: boolean;
+  // Cotizaciones
+  cotizacionesVer: boolean;
+  cotizacionesCrear: boolean;
+  cotizacionesModificar: boolean;
+  cotizacionesAprobarPrecio: boolean;
+  // Facturas
+  facturasVer: boolean;
+  facturasCrear: boolean;
+  facturasModificar: boolean;
+  facturasEliminar: boolean;
+  // Clientes
+  clientesVer: boolean;
+  clientesCrear: boolean;
+  clientesModificar: boolean;
+  clientesEliminar: boolean;
+  // Personal
+  personalVer: boolean;
+  personalCrear: boolean;
+  personalModificar: boolean;
+  personalEliminar: boolean;
+  // Gastos
+  gastosVer: boolean;
+  gastosCrear: boolean;
+  gastosEliminar: boolean;
+  // Rendimiento
+  rendimientoVer: boolean;
+  // Configuración
+  configuracionVer: boolean;
+  configuracionModificar: boolean;
+  // Cierre del día
+  cierreDiaEjecutar: boolean;
+  // Técnico (opcional, solo para rol técnico)
+  tecnicoVistaAgenda?: 'dia' | 'semana' | 'mes';
+  tecnicoSoloPropiasCitas?: boolean;
+  tecnicoVerTelefonoCliente?: boolean;
+  tecnicoVerEmailCliente?: boolean;
+  tecnicoVerDireccionCliente?: boolean;
+  tecnicoVerUbicacionGPS?: boolean;
+  tecnicoPuedeMarcarCompletado?: boolean;
+  tecnicoPuedeAgregarNotas?: boolean;
+  tecnicoPuedeVerHistorial?: boolean;
+  tecnicoPuedeContactarCliente?: boolean;
+  tecnicoPuedeVerCotizaciones?: boolean;
+  tecnicoRecibeNotificacionNuevaCita?: boolean;
+}
+
+const TODO_FALSE: PermisosSistema = {
+  ordenesVer: false, ordenesCrear: false, ordenesModificar: false,
+  ordenesModificarFueraGrupo: false, ordenesEliminar: false, ordenesVerEliminadas: false,
+  cotizacionesVer: false, cotizacionesCrear: false, cotizacionesModificar: false, cotizacionesAprobarPrecio: false,
+  facturasVer: false, facturasCrear: false, facturasModificar: false, facturasEliminar: false,
+  clientesVer: false, clientesCrear: false, clientesModificar: false, clientesEliminar: false,
+  personalVer: false, personalCrear: false, personalModificar: false, personalEliminar: false,
+  gastosVer: false, gastosCrear: false, gastosEliminar: false,
+  rendimientoVer: false,
+  configuracionVer: false, configuracionModificar: false,
+  cierreDiaEjecutar: false,
+};
+
+const TODO_TRUE: PermisosSistema = {
+  ordenesVer: true, ordenesCrear: true, ordenesModificar: true,
+  ordenesModificarFueraGrupo: true, ordenesEliminar: true, ordenesVerEliminadas: true,
+  cotizacionesVer: true, cotizacionesCrear: true, cotizacionesModificar: true, cotizacionesAprobarPrecio: true,
+  facturasVer: true, facturasCrear: true, facturasModificar: true, facturasEliminar: true,
+  clientesVer: true, clientesCrear: true, clientesModificar: true, clientesEliminar: true,
+  personalVer: true, personalCrear: true, personalModificar: true, personalEliminar: true,
+  gastosVer: true, gastosCrear: true, gastosEliminar: true,
+  rendimientoVer: true,
+  configuracionVer: true, configuracionModificar: true,
+  cierreDiaEjecutar: true,
+};
+
+export const PERMISOS_TODO_FALSE: PermisosSistema = { ...TODO_FALSE };
+
+export const PERMISOS_DEFAULT_ADMINISTRADOR: PermisosSistema = { ...TODO_TRUE };
+
+export const PERMISOS_DEFAULT_COORDINADORA: PermisosSistema = {
+  ...TODO_TRUE,
+  configuracionModificar: false,
+  personalEliminar: false,
+};
+
+export const PERMISOS_DEFAULT_OPERARIA: PermisosSistema = {
+  ...TODO_FALSE,
+  ordenesVer: true, ordenesCrear: true, ordenesModificar: true, ordenesModificarFueraGrupo: true,
+  cotizacionesVer: true, cotizacionesCrear: true, cotizacionesModificar: true, cotizacionesAprobarPrecio: true,
+  clientesVer: true, clientesCrear: true, clientesModificar: true,
+  personalVer: true,
+  rendimientoVer: true,
+};
+
+export const PERMISOS_DEFAULT_SECRETARIA: PermisosSistema = {
+  ...TODO_FALSE,
+  ordenesVer: true, ordenesCrear: true, ordenesModificar: true,
+  clientesVer: true, clientesCrear: true, clientesModificar: true,
+  personalVer: true,
+};
+
+export const PERMISOS_DEFAULT_TECNICO_SISTEMA: PermisosSistema = {
+  ...TODO_FALSE,
+  ordenesVer: true,
+  // Permisos granulares de técnico (mismo default que el legacy TecnicoPermisos)
+  tecnicoVistaAgenda: 'dia',
+  tecnicoSoloPropiasCitas: true,
+  tecnicoVerTelefonoCliente: false,
+  tecnicoVerEmailCliente: false,
+  tecnicoVerDireccionCliente: true,
+  tecnicoVerUbicacionGPS: true,
+  tecnicoPuedeMarcarCompletado: true,
+  tecnicoPuedeAgregarNotas: true,
+  tecnicoPuedeVerHistorial: false,
+  tecnicoPuedeContactarCliente: false,
+  tecnicoPuedeVerCotizaciones: false,
+  tecnicoRecibeNotificacionNuevaCita: true,
+};
+
+export const PERMISOS_DEFAULT_AYUDANTE: PermisosSistema = { ...TODO_FALSE };
+
 export interface Personal {
   id: string;
   nombre: string;
@@ -263,6 +408,8 @@ export interface Personal {
   disponibilidad: boolean;
   activo: boolean;
   permisos?: TecnicoPermisos;
+  permisosSistema?: PermisosSistema;
+  permisosPersonalizados?: boolean;
   nivel?: 'junior' | 'senior';
   comisionPorcentaje?: number;
   sueldoBase?: number;

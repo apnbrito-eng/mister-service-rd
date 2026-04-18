@@ -1,15 +1,17 @@
-import { Phone, MessageCircle, MapPin, Edit2 } from 'lucide-react';
+import { Phone, MessageCircle, MapPin, Edit2, Trash2, AlertTriangle } from 'lucide-react';
 import { OrdenServicio, Usuario } from '../../types';
 import {
   formatFecha, formatTelefono, whatsappLink,
   estadoSimpleLabel, estadoSimpleColor, tiempoTranscurrido,
 } from '../../utils';
+import { puede } from '../../utils/permisos';
 import Badge from '../Badge';
 
 interface OrdenDetailModalProps {
   orden: OrdenServicio;
   userProfile: Usuario | null;
   onEdit: () => void;
+  onEliminar?: () => void;
   onAprobarPrecio: () => void;
   precioAprobacion: string;
   setPrecioAprobacion: (v: string) => void;
@@ -20,22 +22,52 @@ export default function OrdenDetailModal({
   orden,
   userProfile,
   onEdit,
+  onEliminar,
   onAprobarPrecio,
   precioAprobacion,
   setPrecioAprobacion,
   aprobandoPrecio,
 }: OrdenDetailModalProps) {
+  const puedeModificar = puede(userProfile, 'ordenesModificar');
+  const puedeEliminar = puede(userProfile, 'ordenesEliminar');
   return (
     <div className="space-y-6">
-      {/* Editar Button (arriba a la derecha) */}
-      <div className="flex justify-end mb-4">
-        <button
-          onClick={onEdit}
-          className="flex items-center gap-2 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors"
-        >
-          <Edit2 size={14} />
-          Editar
-        </button>
+      {/* Banner si está eliminada */}
+      {orden.eliminada && (
+        <div className="bg-red-50 border-2 border-red-300 rounded-xl p-3 flex items-start gap-2 text-sm text-red-900">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold">Orden eliminada</p>
+            {orden.motivoEliminacion && <p className="text-xs mt-0.5">Motivo: {orden.motivoEliminacion}</p>}
+            {orden.eliminadaPor && (
+              <p className="text-xs text-red-700 mt-0.5">
+                Por {orden.eliminadaPor}{orden.fechaEliminacion ? ` · ${formatFecha(orden.fechaEliminacion)}` : ''}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Editar / Eliminar */}
+      <div className="flex justify-end gap-2 mb-4">
+        {puedeModificar && !orden.eliminada && (
+          <button
+            onClick={onEdit}
+            className="flex items-center gap-2 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Edit2 size={14} />
+            Editar
+          </button>
+        )}
+        {puedeEliminar && !orden.eliminada && onEliminar && (
+          <button
+            onClick={onEliminar}
+            className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <Trash2 size={14} />
+            Eliminar
+          </button>
+        )}
       </div>
 
       {/* Client Info */}

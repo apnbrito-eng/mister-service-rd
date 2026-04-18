@@ -30,6 +30,9 @@ export default function OrdenCard({ orden, onSelect, onChangeEstado }: OrdenCard
             {orden.soloChequeo && (
               <Badge label="Solo chequeo" color="bg-yellow-100 text-yellow-800" />
             )}
+            {orden.eliminada && (
+              <Badge label="Eliminada" color="bg-red-100 text-red-700" />
+            )}
           </div>
           <p className="text-sm font-medium text-gray-900 truncate">
             {orden.equipoTipo} - {orden.clienteNombre}

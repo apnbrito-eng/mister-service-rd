@@ -158,6 +158,7 @@ export function getAlertasFromOrdenes(ordenes: OrdenServicio[]): AlertaItem[] {
   for (const orden of ordenes) {
     if (idsUsados.has(orden.id)) continue;
     if (orden.soloChequeo) continue;
+    if (orden.eliminada) continue;
     const createdAt = orden.createdAt;
     const updatedAt = orden.updatedAt;
     if (!createdAt) continue;
@@ -419,6 +420,11 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     soloChequeo: (raw.soloChequeo as boolean) || undefined,
     precioChequeo: typeof raw.precioChequeo === 'number' ? raw.precioChequeo : undefined,
     motivoChequeo: (raw.motivoChequeo as string) || undefined,
+    eliminada: (raw.eliminada as boolean) || undefined,
+    motivoEliminacion: (raw.motivoEliminacion as string) || undefined,
+    eliminadaPor: (raw.eliminadaPor as string) || undefined,
+    eliminadaPorId: (raw.eliminadaPorId as string) || undefined,
+    fechaEliminacion: parseFirestoreDate(raw.fechaEliminacion) || undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden) || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),
