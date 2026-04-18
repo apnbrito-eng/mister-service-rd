@@ -133,7 +133,10 @@ export default function Dashboard() {
 
   // ---- operaria filter ----
   const esOperaria = userProfile?.rol === 'operaria';
+  const esCoordinadora = userProfile?.rol === 'coordinadora';
   const filtroOperariaActivo = esOperaria && !verTodasOperarias;
+  // Coordinadora puede filtrar por una operaria específica (default: ver todas)
+  const [filtroOperariaCoord, setFiltroOperariaCoord] = useState<string>('');
 
   const ordenes = useMemo(() => {
     // Excluir órdenes eliminadas (soft delete) en todas las métricas del dashboard
@@ -141,8 +144,16 @@ export default function Dashboard() {
     if (filtroOperariaActivo) {
       lista = lista.filter(o => o.operariaId === userProfile?.id);
     }
+    // Filtro por operaria seleccionada (coordinadora)
+    if (esCoordinadora && filtroOperariaCoord) {
+      if (filtroOperariaCoord === '__sin_asignar__') {
+        lista = lista.filter(o => !o.operariaId);
+      } else {
+        lista = lista.filter(o => o.operariaId === filtroOperariaCoord);
+      }
+    }
     return lista;
-  }, [ordenesRaw, filtroOperariaActivo, userProfile?.id]);
+  }, [ordenesRaw, filtroOperariaActivo, userProfile?.id, esCoordinadora, filtroOperariaCoord]);
 
   // ---- derived data ----
   const now = new Date();
@@ -334,6 +345,23 @@ export default function Dashboard() {
             <Eye size={14} />
             {filtroOperariaActivo ? 'Ver todas las operarias' : 'Ver solo mi grupo'}
           </button>
+        )}
+        {esCoordinadora && (
+          <select
+            value={filtroOperariaCoord}
+            onChange={e => setFiltroOperariaCoord(e.target.value)}
+            className="px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          >
+            <option value="">Ver todas las operarias</option>
+            <option value="__sin_asignar__">Sin operaria asignada</option>
+            {personal
+              .filter(p => p.activo && (p.rol === 'operaria' || p.rol === 'coordinadora'))
+              .map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.nombre}{p.id === userProfile?.id ? ' (mi grupo)' : ''}
+                </option>
+              ))}
+          </select>
         )}
       </div>
 

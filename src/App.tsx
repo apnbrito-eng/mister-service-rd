@@ -21,6 +21,7 @@ import Mantenimiento from './pages/Mantenimiento';
 import Gastos from './pages/Gastos';
 import PersonalPage from './pages/PersonalPage';
 import Configuracion from './pages/Configuracion';
+import CierreDia from './pages/CierreDia';
 import ConfiguracionWeb from './pages/ConfiguracionWeb';
 import EmpresasAliadas from './pages/EmpresasAliadas';
 import Formularios from './pages/Formularios';
@@ -134,6 +135,7 @@ function AppRoutes() {
         <Route path="formularios/:id" element={<FormularioEditor />} />
         <Route path="solicitudes" element={<Solicitudes />} />
         <Route path="configuracion" element={<Configuracion />} />
+        <Route path="cierre-dia" element={<CierreDia />} />
         <Route path="configuracion/usuarios" element={<GestionUsuarios />} />
       </Route>
 

@@ -129,8 +129,26 @@ export interface OrdenServicio {
   eliminadaPor?: string;
   eliminadaPorId?: string;
   fechaEliminacion?: Date;
+  // Cierre del día (Fase 3C)
+  efectivoEntregado?: boolean;
+  efectivoEntregadoPor?: string;
+  efectivoEntregadoEn?: Date;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface CierreDia {
+  id: string;
+  fecha: Date;                     // Día cerrado (00:00 del día)
+  cerradoPor: string;
+  cerradoPorId: string;
+  fechaCierre: Date;               // Timestamp del cierre
+  totalOrdenesCerradas: number;
+  totalChequeos: number;
+  totalIngresos: number;
+  efectivoTotal: number;
+  transferenciasTotal: Record<string, number>;  // banco -> monto
+  ordenesActivasAlCierre: string[];             // IDs
 }
 
 export interface CitaPorConfirmar {
@@ -190,6 +208,8 @@ export interface Cotizacion {
   estado: EstadoCotizacion;
   notas?: string;
   ordenId?: string;
+  convertida?: boolean;
+  facturaId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -210,6 +230,7 @@ export interface Factura {
   notas?: string;
   metodoPago?: MetodoPago;
   bancoDestino?: string;
+  cotizacionId?: string;
   createdAt: Date;
 }
 

@@ -425,6 +425,9 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     eliminadaPor: (raw.eliminadaPor as string) || undefined,
     eliminadaPorId: (raw.eliminadaPorId as string) || undefined,
     fechaEliminacion: parseFirestoreDate(raw.fechaEliminacion) || undefined,
+    efectivoEntregado: (raw.efectivoEntregado as boolean) || undefined,
+    efectivoEntregadoPor: (raw.efectivoEntregadoPor as string) || undefined,
+    efectivoEntregadoEn: parseFirestoreDate(raw.efectivoEntregadoEn) || undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden) || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),

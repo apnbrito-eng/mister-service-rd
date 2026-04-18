@@ -680,6 +680,43 @@ export default function OrdenDetalle() {
             </div>
           )}
 
+          {/* Historial de precios (cambios sobre precio_sugerido) */}
+          {orden.auditoria && orden.auditoria.some(a => a.accion === 'precio_sugerido') && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-4">Historial de precios</h3>
+              <div className="space-y-3">
+                {orden.auditoria
+                  .filter(a => a.accion === 'precio_sugerido')
+                  .slice()
+                  .reverse()
+                  .map((reg, i, arr) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <div className="flex flex-col items-center">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500 flex-shrink-0" />
+                        {i < arr.length - 1 && <div className="w-0.5 h-10 bg-gray-200 mt-1" />}
+                      </div>
+                      <div className="flex-1 pb-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-gray-900">{reg.usuario}</span>
+                          <span className="text-xs text-gray-400" title={reg.fecha.toISOString()}>{tiempoTranscurrido(reg.fecha)} · {formatFecha(reg.fecha)}</span>
+                        </div>
+                        {reg.valorAnterior && reg.valorNuevo && (
+                          <p className="text-xs text-gray-700 mt-1">
+                            {reg.valorAnterior ? <span className="text-gray-500">{reg.valorAnterior}</span> : <span className="text-gray-400 italic">sin precio</span>}
+                            <span className="mx-2 text-gray-400">→</span>
+                            <span className="font-semibold text-emerald-700">{reg.valorNuevo}</span>
+                          </p>
+                        )}
+                        {reg.detalle && (
+                          <p className="text-xs text-gray-500 italic mt-0.5">{reg.detalle}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
           {/* Historial */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-sm font-semibold text-gray-500 uppercase mb-4">Historial de Fases</h3>

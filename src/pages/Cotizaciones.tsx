@@ -3,9 +3,12 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, g
 import { db } from '../firebase/config';
 import { Cotizacion, ItemCotizacion, EstadoCotizacion } from '../types';
 import { formatMoneda, formatFechaCorta, generateNumeroCotizacion } from '../utils';
+import { siguienteNumeroFactura } from '../services/contadores.service';
+import { useApp } from '../context/AppContext';
+import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, FileText, Trash2, Edit, Check, MessageCircle, Printer, X, Copy } from 'lucide-react';
+import { Plus, FileText, Trash2, Edit, Check, Printer, X, Copy, Receipt } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const ESTADO_COLORS: Record<EstadoCotizacion, string> = {
@@ -23,6 +26,50 @@ const ESTADO_LABELS: Record<EstadoCotizacion, string> = {
 };
 
 export default function Cotizaciones() {
+  const { userProfile } = useApp();
+  const puedeFacturar = puede(userProfile, 'facturasCrear');
+  const [convirtiendoId, setConvirtiendoId] = useState<string | null>(null);
+
+  const handleConvertirAFactura = async (cot: Cotizacion) => {
+    if (!puedeFacturar) {
+      toast.error('No tienes permiso para crear facturas');
+      return;
+    }
+    if (cot.convertida) {
+      toast('Esta cotización ya fue convertida en factura', { icon: 'i' });
+      return;
+    }
+    setConvirtiendoId(cot.id);
+    try {
+      const numero = await siguienteNumeroFactura();
+      const facturaData: Record<string, unknown> = {
+        numero,
+        clienteNombre: cot.clienteNombre,
+        items: cot.items,
+        total: cot.total,
+        estado: 'emitida',
+        fechaEmision: Timestamp.now(),
+        cotizacionId: cot.id,
+        createdAt: Timestamp.now(),
+      };
+      if (cot.clienteId) facturaData.clienteId = cot.clienteId;
+      if (cot.ordenId) facturaData.ordenId = cot.ordenId;
+      // ordenNumero opcional — Cotizacion no lo declara, pero algunos usos pueden incluirlo
+      const facturaRef = await addDoc(collection(db, 'facturas'), facturaData);
+      await updateDoc(doc(db, 'cotizaciones', cot.id), {
+        convertida: true,
+        facturaId: facturaRef.id,
+        updatedAt: Timestamp.now(),
+      });
+      toast.success(`Factura ${numero} creada a partir de cotización ${cot.numero}`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al convertir cotización en factura');
+    } finally {
+      setConvirtiendoId(null);
+    }
+  };
+
   const [loading, setLoading] = useState(true);
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -235,11 +282,26 @@ export default function Cotizaciones() {
                 {cot.items.length > 3 && <p className="text-xs text-gray-400 mt-1">+{cot.items.length - 3} más</p>}
               </div>
               {/* Actions */}
-              <div className="flex gap-2 mt-3 flex-wrap">
+              <div className="flex gap-2 mt-3 flex-wrap items-center">
+                {cot.convertida && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-medium border border-emerald-200">
+                    <Check size={11} /> Facturada
+                  </span>
+                )}
                 {cot.estado !== 'aceptada' && (
                   <button onClick={() => handleChangeEstado(cot.id, 'aceptada')}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-medium hover:bg-green-100">
                     <Check size={12} /> Aprobar
+                  </button>
+                )}
+                {cot.estado === 'aceptada' && !cot.convertida && puedeFacturar && (
+                  <button
+                    onClick={() => handleConvertirAFactura(cot)}
+                    disabled={convirtiendoId === cot.id}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-medium disabled:opacity-60"
+                  >
+                    <Receipt size={12} />
+                    {convirtiendoId === cot.id ? 'Creando...' : 'Convertir a Factura'}
                   </button>
                 )}
                 <button onClick={() => handlePrint(cot)}

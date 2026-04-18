@@ -705,21 +705,29 @@ export default function Ordenes() {
 
   // Filtro por grupo de operaria (auto para rol operaria, toggle desactiva el filtro)
   const esOperaria = userProfile?.rol === 'operaria';
+  const esCoordinadora = userProfile?.rol === 'coordinadora';
   const filtroOperariaActivo = esOperaria && !verTodasOperarias;
+  const [filtroOperariaCoord, setFiltroOperariaCoord] = useState<string>('');
   // Permiso para ver eliminadas
   const puedeVerEliminadas = puede(userProfile, 'ordenesVerEliminadas');
   const verEliminadasFinal = puedeVerEliminadas && verEliminadas;
   const ordenesVisibles = useMemo(() => {
     let lista = ordenes;
-    // Filtrar eliminadas a menos que el toggle esté activo
     if (!verEliminadasFinal) {
       lista = lista.filter(o => !o.eliminada);
     }
     if (filtroOperariaActivo) {
       lista = lista.filter(o => o.operariaId === userProfile?.id);
     }
+    if (esCoordinadora && filtroOperariaCoord) {
+      if (filtroOperariaCoord === '__sin_asignar__') {
+        lista = lista.filter(o => !o.operariaId);
+      } else {
+        lista = lista.filter(o => o.operariaId === filtroOperariaCoord);
+      }
+    }
     return lista;
-  }, [ordenes, filtroOperariaActivo, userProfile?.id, verEliminadasFinal]);
+  }, [ordenes, filtroOperariaActivo, userProfile?.id, verEliminadasFinal, esCoordinadora, filtroOperariaCoord]);
 
   // Today's orders
   const hoy = new Date();
@@ -1176,6 +1184,23 @@ export default function Ordenes() {
               <Eye size={14} />
               {verEliminadas ? 'Ocultar eliminadas' : 'Ver eliminadas'}
             </button>
+          )}
+          {esCoordinadora && (
+            <select
+              value={filtroOperariaCoord}
+              onChange={e => setFiltroOperariaCoord(e.target.value)}
+              className="px-3 py-2.5 text-xs font-medium border border-gray-200 rounded-xl bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            >
+              <option value="">Ver todas las operarias</option>
+              <option value="__sin_asignar__">Sin operaria asignada</option>
+              {personal
+                .filter(p => p.activo && (p.rol === 'operaria' || p.rol === 'coordinadora'))
+                .map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}{p.id === userProfile?.id ? ' (mi grupo)' : ''}
+                  </option>
+                ))}
+            </select>
           )}
           {puede(userProfile, 'ordenesCrear') && (
             <button
