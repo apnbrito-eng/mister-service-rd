@@ -53,7 +53,9 @@ export interface HistorialFase {
   nota?: string;
 }
 
-export type AccionAuditoria = 'crear' | 'editar' | 'eliminar' | 'cambio_fase' | 'nota_tecnico' | 'precio_sugerido' | 'cierre';
+export type AccionAuditoria = 'crear' | 'editar' | 'eliminar' | 'cambio_fase' | 'nota_tecnico' | 'precio_sugerido' | 'cierre' | 'marcar_chequeo';
+
+export type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'link' | 'otro';
 
 export interface RegistroAuditoria {
   fecha: Date;
@@ -102,6 +104,11 @@ export interface OrdenServicio {
   creadoPor?: string;
   cierreServicio?: CierreServicio;
   trackingGPS?: TrackingGPS;
+  metodoPagoCierre?: MetodoPago;
+  bancoDestinoCierre?: string;
+  soloChequeo?: boolean;
+  precioChequeo?: number;
+  motivoChequeo?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -115,6 +122,7 @@ export interface CitaPorConfirmar {
   horarioSolicitado?: string;
   origen?: string;
   ordenNumero?: string;
+  fotoEquipoUrl?: string;
   createdAt: Date;
 }
 
@@ -168,6 +176,8 @@ export interface Factura {
   fechaVencimiento?: Date;
   fechaPago?: Date;
   notas?: string;
+  metodoPago?: MetodoPago;
+  bancoDestino?: string;
   createdAt: Date;
 }
 
@@ -234,6 +244,9 @@ export interface Personal {
   disponibilidad: boolean;
   activo: boolean;
   permisos?: TecnicoPermisos;
+  nivel?: 'junior' | 'senior';
+  comisionPorcentaje?: number;
+  sueldoBase?: number;
 }
 
 export interface Producto {

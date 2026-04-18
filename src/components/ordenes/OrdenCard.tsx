@@ -27,6 +27,9 @@ export default function OrdenCard({ orden, onSelect, onChangeEstado }: OrdenCard
             {orden.reagendada && (
               <Badge label="Reagendada" color="bg-amber-100 text-amber-700" />
             )}
+            {orden.soloChequeo && (
+              <Badge label="Solo chequeo" color="bg-yellow-100 text-yellow-800" />
+            )}
           </div>
           <p className="text-sm font-medium text-gray-900 truncate">
             {orden.equipoTipo} - {orden.clienteNombre}

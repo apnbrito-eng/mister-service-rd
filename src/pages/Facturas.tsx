@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, Timestamp, query, orderBy, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Factura, EstadoFactura, ItemCotizacion } from '../types';
+import { Factura, EstadoFactura, ItemCotizacion, MetodoPago } from '../types';
 import { formatMoneda, formatFechaCorta, generateNumeroFactura } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
@@ -22,6 +22,22 @@ const ESTADO_LABELS: Record<EstadoFactura, string> = {
   pagada: 'Pagada',
   vencida: 'Vencida',
   anulada: 'Anulada',
+};
+
+const METODO_PAGO_LABELS: Record<MetodoPago, string> = {
+  efectivo: 'Efectivo',
+  transferencia: 'Transferencia',
+  tarjeta: 'Tarjeta',
+  link: 'Link',
+  otro: 'Otro',
+};
+
+const METODO_PAGO_COLORS: Record<MetodoPago, string> = {
+  efectivo: 'bg-green-100 text-green-700',
+  transferencia: 'bg-blue-100 text-blue-700',
+  tarjeta: 'bg-purple-100 text-purple-700',
+  link: 'bg-indigo-100 text-indigo-700',
+  otro: 'bg-gray-100 text-gray-700',
 };
 
 const FILTROS: { label: string; value: EstadoFactura | 'todas' }[] = [
@@ -45,6 +61,8 @@ export default function Facturas() {
     clienteNombre: '',
     ordenNumero: '',
     notas: '',
+    metodoPago: '' as MetodoPago | '',
+    bancoDestino: '',
     items: [{ descripcion: '', cantidad: 1, precio: 0 }] as ItemCotizacion[],
   });
 
@@ -132,6 +150,7 @@ export default function Facturas() {
 
   const resetForm = () => setForm({
     clienteNombre: '', ordenNumero: '', notas: '',
+    metodoPago: '', bancoDestino: '',
     items: [{ descripcion: '', cantidad: 1, precio: 0 }],
   });
 
@@ -162,7 +181,7 @@ export default function Facturas() {
     setSaving(true);
     try {
       const numero = await getNextNumero();
-      await addDoc(collection(db, 'facturas'), {
+      const docData: Record<string, unknown> = {
         numero,
         clienteNombre: form.clienteNombre.trim(),
         ordenNumero: form.ordenNumero.trim() || null,
@@ -172,7 +191,12 @@ export default function Facturas() {
         fechaEmision: Timestamp.now(),
         notas: form.notas.trim() || null,
         createdAt: Timestamp.now(),
-      });
+      };
+      if (form.metodoPago) docData.metodoPago = form.metodoPago;
+      if (form.metodoPago === 'transferencia' && form.bancoDestino.trim()) {
+        docData.bancoDestino = form.bancoDestino.trim();
+      }
+      await addDoc(collection(db, 'facturas'), docData);
       toast.success(`Factura ${numero} creada`);
       setShowModal(false);
       resetForm();
@@ -452,7 +476,15 @@ export default function Facturas() {
                       <span className="font-mono text-sm font-bold text-[#0f3460]">{factura.numero}</span>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="font-medium text-gray-900">{factura.clienteNombre}</span>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-medium text-gray-900">{factura.clienteNombre}</span>
+                        {factura.metodoPago && (
+                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full w-fit ${METODO_PAGO_COLORS[factura.metodoPago]}`}>
+                            {METODO_PAGO_LABELS[factura.metodoPago]}
+                            {factura.metodoPago === 'transferencia' && factura.bancoDestino ? ` · ${factura.bancoDestino}` : ''}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3.5">
                       {factura.ordenNumero ? (
@@ -591,6 +623,35 @@ export default function Facturas() {
             <div className="text-right mt-3 pt-3 border-t border-gray-100">
               <span className="text-lg font-bold text-[#0f3460]">Total: {formatMoneda(total)}</span>
             </div>
+          </div>
+
+          {/* Método de pago */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Método de pago</label>
+              <select
+                value={form.metodoPago}
+                onChange={e => setForm(f => ({ ...f, metodoPago: e.target.value as MetodoPago | '' }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              >
+                <option value="">Sin especificar</option>
+                {(Object.keys(METODO_PAGO_LABELS) as MetodoPago[]).map(m => (
+                  <option key={m} value={m}>{METODO_PAGO_LABELS[m]}</option>
+                ))}
+              </select>
+            </div>
+            {form.metodoPago === 'transferencia' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Banco destino</label>
+                <input
+                  type="text"
+                  value={form.bancoDestino}
+                  onChange={e => setForm(f => ({ ...f, bancoDestino: e.target.value }))}
+                  placeholder="Ej: Banreservas, BHD, Popular..."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                />
+              </div>
+            )}
           </div>
 
           {/* Notas */}

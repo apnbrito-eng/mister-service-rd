@@ -22,15 +22,24 @@ const ROL_COLORS: Record<Rol, string> = {
   tecnico: 'bg-orange-100 text-orange-700',
 };
 
+const ROLES_CON_COMISION: Rol[] = ['tecnico', 'operaria', 'secretaria'];
+
+function comisionDefaultPorNivel(nivel: 'junior' | 'senior'): number {
+  return nivel === 'senior' ? 10 : 8;
+}
+
 export default function PersonalPage() {
   const [loading, setLoading] = useState(true);
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Marca si el usuario ya tocó el input de comisión manualmente — evita sobrescribir al cambiar nivel
+  const [comisionTocada, setComisionTocada] = useState(false);
 
   const [form, setForm] = useState<Omit<Personal, 'id'>>({
     nombre: '', rol: 'tecnico', telefono: '', email: '', especialidad: '', zona: '', horario: '', color: '#3b82f6', disponibilidad: true, activo: true,
+    nivel: 'senior', comisionPorcentaje: 10, sueldoBase: 0,
   });
 
   useEffect(() => {
@@ -49,7 +58,27 @@ export default function PersonalPage() {
     if (!form.nombre || !form.rol) { toast.error('Nombre y rol son requeridos'); return; }
     setSaving(true);
     try {
-      const data = { ...form };
+      // Omitir campos undefined para que Firestore no los rechace
+      const aplicaComision = ROLES_CON_COMISION.includes(form.rol);
+      const data: Record<string, unknown> = {
+        nombre: form.nombre,
+        rol: form.rol,
+        telefono: form.telefono || '',
+        email: form.email || '',
+        especialidad: form.especialidad || '',
+        zona: form.zona || '',
+        horario: form.horario || '',
+        color: form.color || '#3b82f6',
+        disponibilidad: form.disponibilidad,
+        activo: form.activo,
+      };
+      if (aplicaComision) {
+        data.nivel = form.nivel || 'senior';
+        data.comisionPorcentaje = typeof form.comisionPorcentaje === 'number'
+          ? form.comisionPorcentaje
+          : comisionDefaultPorNivel(form.nivel || 'senior');
+        data.sueldoBase = typeof form.sueldoBase === 'number' ? form.sueldoBase : 0;
+      }
       if (editingId) {
         await updateDoc(doc(db, 'personal', editingId), data);
         toast.success('Personal actualizado');
@@ -67,12 +96,53 @@ export default function PersonalPage() {
     }
   };
 
-  const resetForm = () => setForm({ nombre: '', rol: 'tecnico', telefono: '', email: '', especialidad: '', zona: '', horario: '', color: '#3b82f6', disponibilidad: true, activo: true });
+  const resetForm = () => {
+    setForm({
+      nombre: '', rol: 'tecnico', telefono: '', email: '', especialidad: '', zona: '', horario: '', color: '#3b82f6', disponibilidad: true, activo: true,
+      nivel: 'senior', comisionPorcentaje: 10, sueldoBase: 0,
+    });
+    setComisionTocada(false);
+  };
 
   const handleEdit = (p: Personal) => {
-    setForm({ nombre: p.nombre, rol: p.rol, telefono: p.telefono || '', email: p.email || '', especialidad: p.especialidad || '', zona: p.zona || '', horario: p.horario || '', color: p.color || '#3b82f6', disponibilidad: p.disponibilidad, activo: p.activo });
+    setForm({
+      nombre: p.nombre, rol: p.rol, telefono: p.telefono || '', email: p.email || '', especialidad: p.especialidad || '', zona: p.zona || '', horario: p.horario || '', color: p.color || '#3b82f6', disponibilidad: p.disponibilidad, activo: p.activo,
+      nivel: p.nivel || 'senior',
+      comisionPorcentaje: typeof p.comisionPorcentaje === 'number' ? p.comisionPorcentaje : comisionDefaultPorNivel(p.nivel || 'senior'),
+      sueldoBase: typeof p.sueldoBase === 'number' ? p.sueldoBase : 0,
+    });
+    // Al editar, considerar el valor actual como "tocado" para no pisarlo al cambiar nivel
+    setComisionTocada(true);
     setEditingId(p.id);
     setShowModal(true);
+  };
+
+  const handleNivelChange = (nivel: 'junior' | 'senior') => {
+    setForm(f => {
+      const nuevaComision = comisionTocada
+        ? f.comisionPorcentaje
+        : comisionDefaultPorNivel(nivel);
+      return { ...f, nivel, comisionPorcentaje: nuevaComision };
+    });
+  };
+
+  const handleRolChange = (rol: Rol) => {
+    setForm(f => {
+      const aplicaComision = ROLES_CON_COMISION.includes(rol);
+      if (!aplicaComision) {
+        return { ...f, rol };
+      }
+      // Si pasa a un rol con comisión y no hay valor, aplicar default
+      return {
+        ...f,
+        rol,
+        nivel: f.nivel || 'senior',
+        comisionPorcentaje: typeof f.comisionPorcentaje === 'number'
+          ? f.comisionPorcentaje
+          : comisionDefaultPorNivel(f.nivel || 'senior'),
+        sueldoBase: typeof f.sueldoBase === 'number' ? f.sueldoBase : 0,
+      };
+    });
   };
 
   const toggleActivo = async (p: Personal) => {
@@ -121,9 +191,16 @@ export default function PersonalPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ROL_COLORS[p.rol]}`}>
-                      {ROL_LABELS[p.rol]}
-                    </span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit ${ROL_COLORS[p.rol]}`}>
+                        {ROL_LABELS[p.rol]}
+                      </span>
+                      {ROLES_CON_COMISION.includes(p.rol) && p.nivel && (
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 w-fit">
+                          {p.nivel === 'senior' ? 'Senior' : 'Junior'} · {typeof p.comisionPorcentaje === 'number' ? p.comisionPorcentaje : comisionDefaultPorNivel(p.nivel)}%
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.telefono ? formatTelefono(p.telefono) : '—'}</td>
                   <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.email || '—'}</td>
@@ -160,11 +237,59 @@ export default function PersonalPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Rol *</label>
-            <select value={form.rol} onChange={e => setForm(f => ({ ...f, rol: e.target.value as Rol }))}
+            <select value={form.rol} onChange={e => handleRolChange(e.target.value as Rol)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
               {(Object.keys(ROL_LABELS) as Rol[]).map(r => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}
             </select>
           </div>
+
+          {ROLES_CON_COMISION.includes(form.rol) && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-indigo-50/40 border border-indigo-100 rounded-lg p-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Nivel</label>
+                <select
+                  value={form.nivel || 'senior'}
+                  onChange={e => handleNivelChange(e.target.value as 'junior' | 'senior')}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                >
+                  <option value="senior">Senior</option>
+                  <option value="junior">Junior</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Comisión (%)</label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={form.comisionPorcentaje ?? ''}
+                  onChange={e => {
+                    setComisionTocada(true);
+                    const val = e.target.value === '' ? undefined : Number(e.target.value);
+                    setForm(f => ({ ...f, comisionPorcentaje: val }));
+                  }}
+                  placeholder="10"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Sueldo base (RD$)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step={100}
+                  value={form.sueldoBase ?? ''}
+                  onChange={e => {
+                    const val = e.target.value === '' ? 0 : Number(e.target.value);
+                    setForm(f => ({ ...f, sueldoBase: val }));
+                  }}
+                  placeholder="25000"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                />
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>

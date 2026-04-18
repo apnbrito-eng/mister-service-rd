@@ -2,19 +2,28 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, FaseOrden } from '../types';
-import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, googleMapsLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria } from '../utils';
+import { OrdenServicio, FaseOrden, MetodoPago } from '../types';
+import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, googleMapsLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
+import Modal from '../components/Modal';
 import Badge from '../components/Badge';
 import { useApp } from '../context/AppContext';
 import {
   ArrowLeft, Phone, Wrench, User, Calendar,
   Clock, MessageSquare, Save, MapPin, ExternalLink, MessageCircle,
-  Satellite, Copy, Power
+  Satellite, Copy, Power, ClipboardCheck, AlertTriangle
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { generarTrackingToken } from '../services/gps.service';
 import { whatsappUrl } from '../utils/whatsapp';
+
+const METODO_PAGO_LABELS: Record<MetodoPago, string> = {
+  efectivo: 'Efectivo',
+  transferencia: 'Transferencia',
+  tarjeta: 'Tarjeta',
+  link: 'Link',
+  otro: 'Otro',
+};
 
 const FASES: FaseOrden[] = [
   'nuevo_lead', 'en_gestion', 'en_diagnostico', 'en_cotizacion',
@@ -191,6 +200,95 @@ export default function OrdenDetalle() {
     }
   };
 
+  // Solo chequeo — modal state
+  const [showChequeoModal, setShowChequeoModal] = useState(false);
+  const [chequeoForm, setChequeoForm] = useState<{
+    precio: string;
+    metodoPago: MetodoPago | '';
+    bancoDestino: string;
+    motivo: string;
+  }>({ precio: '500', metodoPago: '', bancoDestino: '', motivo: '' });
+  const [savingChequeo, setSavingChequeo] = useState(false);
+
+  const resetChequeoForm = () => {
+    setChequeoForm({ precio: '500', metodoPago: '', bancoDestino: '', motivo: '' });
+  };
+
+  const puedeMarcarChequeo = (): boolean => {
+    if (!orden || !userProfile) return false;
+    if (orden.soloChequeo) return false;
+    if (!['en_cotizacion', 'aprobado'].includes(orden.fase)) return false;
+    if (userProfile.rol === 'administrador' || userProfile.rol === 'operaria') return true;
+    if (userProfile.rol === 'tecnico' && orden.tecnicoId === userProfile.id) return true;
+    return false;
+  };
+
+  const handleConfirmarChequeo = async () => {
+    if (!id || !orden) return;
+    const precio = Number(chequeoForm.precio);
+    if (isNaN(precio) || precio <= 0) {
+      toast.error('Ingresa un precio de chequeo válido');
+      return;
+    }
+    if (!chequeoForm.motivo.trim()) {
+      toast.error('Escribe el motivo por el que no procedió el servicio');
+      return;
+    }
+    setSavingChequeo(true);
+    try {
+      const ahora = Timestamp.now();
+      const usuario = userProfile?.nombre || 'Sistema';
+      const nuevoHistorial = [
+        ...orden.historialFases.map(h => ({
+          fase: h.fase,
+          timestamp: Timestamp.fromDate(h.timestamp instanceof Date ? h.timestamp : new Date()),
+          usuario: h.usuario || '',
+          ...(h.nota ? { nota: h.nota } : {}),
+        })),
+        {
+          fase: 'cerrado' as FaseOrden,
+          timestamp: ahora,
+          usuario,
+          nota: `Solo chequeo — ${chequeoForm.motivo.trim()}`,
+        },
+      ];
+      const registroAuditoria = crearRegistroAuditoria(
+        usuario,
+        'marcar_chequeo',
+        `Marcó orden como solo chequeo (RD$ ${precio.toLocaleString('es-DO')}) — ${chequeoForm.motivo.trim()}`,
+        'soloChequeo',
+        'false',
+        'true'
+      );
+      const updateData: Record<string, unknown> = {
+        soloChequeo: true,
+        precioChequeo: precio,
+        motivoChequeo: chequeoForm.motivo.trim(),
+        fase: 'cerrado',
+        estadoSimple: 'completado',
+        estado: 'cerrado',
+        historialFases: nuevoHistorial,
+        auditoria: arrayUnion(registroAuditoria),
+        updatedAt: ahora,
+      };
+      if (chequeoForm.metodoPago) {
+        updateData.metodoPagoCierre = chequeoForm.metodoPago;
+      }
+      if (chequeoForm.metodoPago === 'transferencia' && chequeoForm.bancoDestino.trim()) {
+        updateData.bancoDestinoCierre = chequeoForm.bancoDestino.trim();
+      }
+      await updateDoc(doc(db, 'ordenes_servicio', id), updateData);
+      toast.success('Orden marcada como solo chequeo');
+      setShowChequeoModal(false);
+      resetChequeoForm();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al marcar como solo chequeo');
+    } finally {
+      setSavingChequeo(false);
+    }
+  };
+
   if (loading) return <LoadingSpinner fullPage text="Cargando orden..." />;
   if (!orden) return (
     <div className="p-6 text-center">
@@ -216,6 +314,27 @@ export default function OrdenDetalle() {
           <p className="text-gray-500 text-sm">Creada {tiempoTranscurrido(orden.createdAt)}</p>
         </div>
       </div>
+
+      {/* Banner solo chequeo */}
+      {orden.soloChequeo && (
+        <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 flex items-start gap-3">
+          <AlertTriangle size={20} className="text-yellow-700 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-yellow-900">
+              Solo chequeo — cobrado {formatMoneda(orden.precioChequeo || 0)}
+            </p>
+            {orden.motivoChequeo && (
+              <p className="text-xs text-yellow-800 mt-1">Motivo: {orden.motivoChequeo}</p>
+            )}
+            {orden.metodoPagoCierre && (
+              <p className="text-xs text-yellow-800 mt-0.5">
+                Pago: {METODO_PAGO_LABELS[orden.metodoPagoCierre]}
+                {orden.bancoDestinoCierre ? ` · ${orden.bancoDestinoCierre}` : ''}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
@@ -437,6 +556,17 @@ export default function OrdenDetalle() {
                     </div>
                   </div>
                 )}
+
+                {/* Método de pago del cierre (si registrado) */}
+                {orden.metodoPagoCierre && !orden.soloChequeo && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Método de pago</p>
+                    <p className="text-sm text-gray-800">
+                      {METODO_PAGO_LABELS[orden.metodoPagoCierre]}
+                      {orden.bancoDestinoCierre ? ` · ${orden.bancoDestinoCierre}` : ''}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -603,6 +733,23 @@ export default function OrdenDetalle() {
             )}
           </div>
 
+          {/* Marcar solo chequeo */}
+          {puedeMarcarChequeo() && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Cliente no procede</h3>
+              <p className="text-xs text-gray-500 mb-3">
+                Si el cliente decidió no reparar, registra solo el costo del chequeo y cierra la orden.
+              </p>
+              <button
+                type="button"
+                onClick={() => { resetChequeoForm(); setShowChequeoModal(true); }}
+                className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                <ClipboardCheck size={14} /> Marcar solo chequeo
+              </button>
+            </div>
+          )}
+
           {/* Cambiar fase */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">Cambiar Fase</h3>
@@ -687,6 +834,89 @@ export default function OrdenDetalle() {
           )}
         </div>
       </div>
+
+      {/* Modal solo chequeo */}
+      <Modal
+        isOpen={showChequeoModal}
+        onClose={() => { setShowChequeoModal(false); resetChequeoForm(); }}
+        title="Marcar como solo chequeo"
+      >
+        <div className="space-y-4">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+            El cliente no procedió con la reparación. Registra el costo del chequeo y cómo se cobró; la orden se cerrará.
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Precio del chequeo (RD$) *</label>
+            <input
+              type="number"
+              min={0}
+              step={50}
+              value={chequeoForm.precio}
+              onChange={e => setChequeoForm(f => ({ ...f, precio: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Método de pago</label>
+              <select
+                value={chequeoForm.metodoPago}
+                onChange={e => setChequeoForm(f => ({ ...f, metodoPago: e.target.value as MetodoPago | '' }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              >
+                <option value="">Sin especificar</option>
+                {(Object.keys(METODO_PAGO_LABELS) as MetodoPago[]).map(m => (
+                  <option key={m} value={m}>{METODO_PAGO_LABELS[m]}</option>
+                ))}
+              </select>
+            </div>
+            {chequeoForm.metodoPago === 'transferencia' && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Banco destino</label>
+                <input
+                  type="text"
+                  value={chequeoForm.bancoDestino}
+                  onChange={e => setChequeoForm(f => ({ ...f, bancoDestino: e.target.value }))}
+                  placeholder="Ej: Banreservas, BHD..."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                />
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Motivo *</label>
+            <textarea
+              rows={3}
+              value={chequeoForm.motivo}
+              onChange={e => setChequeoForm(f => ({ ...f, motivo: e.target.value }))}
+              placeholder="Ej: El cliente consideró muy costosa la reparación..."
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => { setShowChequeoModal(false); resetChequeoForm(); }}
+              disabled={savingChequeo}
+              className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmarChequeo}
+              disabled={savingChequeo}
+              className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+            >
+              {savingChequeo ? 'Guardando...' : 'Confirmar chequeo'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

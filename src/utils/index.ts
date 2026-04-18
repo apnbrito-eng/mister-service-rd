@@ -157,6 +157,7 @@ export function getAlertasFromOrdenes(ordenes: OrdenServicio[]): AlertaItem[] {
 
   for (const orden of ordenes) {
     if (idsUsados.has(orden.id)) continue;
+    if (orden.soloChequeo) continue;
     const createdAt = orden.createdAt;
     const updatedAt = orden.updatedAt;
     if (!createdAt) continue;
@@ -409,6 +410,11 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
         satisfaccionCliente: typeof cs.satisfaccionCliente === 'number' ? (cs.satisfaccionCliente as number) : undefined,
       };
     })() : undefined,
+    metodoPagoCierre: (raw.metodoPagoCierre as import('../types').MetodoPago) || undefined,
+    bancoDestinoCierre: (raw.bancoDestinoCierre as string) || undefined,
+    soloChequeo: (raw.soloChequeo as boolean) || undefined,
+    precioChequeo: typeof raw.precioChequeo === 'number' ? raw.precioChequeo : undefined,
+    motivoChequeo: (raw.motivoChequeo as string) || undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden) || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),

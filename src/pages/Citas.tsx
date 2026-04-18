@@ -196,6 +196,13 @@ export default function Citas() {
                     {cita.horarioSolicitado && (
                       <p className="text-xs text-gray-500">Horario: {cita.horarioSolicitado}</p>
                     )}
+                    {cita.fotoEquipoUrl && (
+                      <a href={cita.fotoEquipoUrl} target="_blank" rel="noreferrer"
+                        className="mt-2 inline-block">
+                        <img src={cita.fotoEquipoUrl} alt="Foto del equipo"
+                          className="w-24 h-24 object-cover rounded-lg border border-gray-200 hover:border-[#1a5fa8] transition-colors" />
+                      </a>
+                    )}
                     <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                       <Clock size={10} /> {tiempoTranscurrido(cita.createdAt)}
                     </p>

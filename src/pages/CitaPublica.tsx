@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { doc, getDoc, collection, addDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase/config';
 import { Calendario, DiaSemana } from '../types';
 import Logo from '../components/Logo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
-import { MapPin, Check, ChevronLeft, ChevronRight, Calendar as CalendarIcon, User, Phone, Mail, Wrench, AlertCircle } from 'lucide-react';
+import { MapPin, Check, ChevronLeft, ChevronRight, Calendar as CalendarIcon, User, Phone, Mail, Wrench, AlertCircle, Camera, X as XIcon } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths, subMonths, isSameMonth, isSameDay, isBefore, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -44,6 +45,33 @@ export default function CitaPublica() {
   const dirInputRefCita = useRef<HTMLInputElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const autocompleteRefCita = useRef<any>(null);
+
+  const [fotoEquipo, setFotoEquipo] = useState<File | null>(null);
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (fotoPreview) URL.revokeObjectURL(fotoPreview);
+    };
+  }, [fotoPreview]);
+
+  const handleFotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (fotoPreview) URL.revokeObjectURL(fotoPreview);
+    if (file) {
+      setFotoEquipo(file);
+      setFotoPreview(URL.createObjectURL(file));
+    } else {
+      setFotoEquipo(null);
+      setFotoPreview(null);
+    }
+  };
+
+  const handleQuitarFoto = () => {
+    if (fotoPreview) URL.revokeObjectURL(fotoPreview);
+    setFotoEquipo(null);
+    setFotoPreview(null);
+  };
 
   useEffect(() => {
     if (loading || !calendario) return;
@@ -191,7 +219,23 @@ export default function CitaPublica() {
     setSubmitting(true);
     try {
       const horario = `${format(selectedDate, "EEEE dd 'de' MMMM", { locale: es })} a las ${selectedHora}`;
-      await addDoc(collection(db, 'citas_por_confirmar'), {
+
+      // Intentar subir foto del equipo si existe; si falla, continuar sin foto
+      let fotoEquipoUrl: string | undefined;
+      if (fotoEquipo) {
+        try {
+          const ts = Date.now();
+          const slugNombre = form.nombre.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40) || 'cliente';
+          const path = `citas_publicas/${ts}_${slugNombre}.jpg`;
+          const ref = storageRef(storage, path);
+          await uploadBytes(ref, fotoEquipo);
+          fotoEquipoUrl = await getDownloadURL(ref);
+        } catch (err) {
+          console.error('Error subiendo foto del equipo:', err);
+        }
+      }
+
+      const docData: Record<string, unknown> = {
         clienteNombre: form.nombre.trim(),
         telefono: form.telefono,
         clienteEmail: form.email,
@@ -210,7 +254,10 @@ export default function CitaPublica() {
         origen: 'formulario_publico',
         estado: 'pendiente',
         createdAt: Timestamp.now(),
-      });
+      };
+      if (fotoEquipoUrl) docData.fotoEquipoUrl = fotoEquipoUrl;
+
+      await addDoc(collection(db, 'citas_por_confirmar'), docData);
       setSubmitted(true);
       toast.success('¡Solicitud enviada!');
     } catch (err) {
@@ -387,6 +434,29 @@ export default function CitaPublica() {
                   rows={3}
                   placeholder="Ej: La lavadora no centrifuga al finalizar el ciclo..."
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Foto del equipo (opcional)
+                </label>
+                {fotoPreview ? (
+                  <div className="space-y-2">
+                    <img src={fotoPreview} alt="Vista previa del equipo"
+                      className="w-full max-w-xs rounded-lg border border-gray-200 object-cover" />
+                    <button type="button" onClick={handleQuitarFoto}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors">
+                      <XIcon size={12} /> Quitar foto
+                    </button>
+                  </div>
+                ) : (
+                  <label className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg cursor-pointer transition-colors">
+                    <Camera size={14} />
+                    Tomar o subir foto
+                    <input type="file" accept="image/*" capture="environment"
+                      onChange={handleFotoChange} className="hidden" />
+                  </label>
+                )}
               </div>
             </div>
           </div>
