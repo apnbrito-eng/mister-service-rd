@@ -133,6 +133,8 @@ export interface OrdenServicio {
   efectivoEntregado?: boolean;
   efectivoEntregadoPor?: string;
   efectivoEntregadoEn?: Date;
+  // Cotización vinculada (Fase 4B)
+  cotizacionId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -237,6 +239,14 @@ export interface ItemCotizacion {
   descripcion: string;
   cantidad: number;
   precio: number;
+  /** Origen del item: catálogo de servicios, pieza del inventario, o entrada manual */
+  tipoItem?: 'servicio' | 'pieza' | 'manual';
+  /** Referencia al doc de precios_servicios si vino del catálogo */
+  servicioPrecioId?: string;
+  /** Referencia al doc de piezas_inventario si vino del inventario */
+  piezaInventarioId?: string;
+  /** Costo de compra capturado al agregar (para análisis de margen) */
+  costoCompra?: number;
 }
 
 export interface Cotizacion {

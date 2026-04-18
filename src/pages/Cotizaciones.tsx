@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, getDocs, query, orderBy } from 'firebase/firestore';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, Timestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cotizacion, ItemCotizacion, EstadoCotizacion } from '../types';
 import { formatMoneda, formatFechaCorta, generateNumeroCotizacion } from '../utils';
@@ -8,7 +9,8 @@ import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, FileText, Trash2, Edit, Check, Printer, X, Copy, Receipt } from 'lucide-react';
+import CatalogoSelectorModal, { type SeleccionCatalogo } from '../components/CatalogoSelectorModal';
+import { Plus, FileText, Trash2, Edit, Check, Printer, X, Copy, Receipt, Search, Boxes, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const ESTADO_COLORS: Record<EstadoCotizacion, string> = {
@@ -56,12 +58,49 @@ export default function Cotizaciones() {
       if (cot.ordenId) facturaData.ordenId = cot.ordenId;
       // ordenNumero opcional — Cotizacion no lo declara, pero algunos usos pueden incluirlo
       const facturaRef = await addDoc(collection(db, 'facturas'), facturaData);
+
+      // Descontar inventario por items con tipoItem === 'pieza'
+      const itemsPieza = cot.items.filter(i => i.tipoItem === 'pieza' && i.piezaInventarioId);
+      let piezasDescontadas = 0;
+      const usuario = userProfile?.nombre || 'Sistema';
+      const ahora = Timestamp.now();
+      for (const item of itemsPieza) {
+        try {
+          const piezaRef = doc(db, 'piezas_inventario', item.piezaInventarioId!);
+          const piezaSnap = await getDoc(piezaRef);
+          if (!piezaSnap.exists()) continue;
+          const stockActual: number = (piezaSnap.data().stockActual as number) || 0;
+          const nuevoStock = stockActual - item.cantidad;
+          await updateDoc(piezaRef, { stockActual: nuevoStock, updatedAt: ahora });
+          const movData: Record<string, unknown> = {
+            piezaId: item.piezaInventarioId!,
+            piezaNombre: piezaSnap.data().nombre || item.descripcion,
+            tipo: 'salida',
+            cantidad: item.cantidad,
+            motivo: 'venta_orden',
+            usuario,
+            fecha: ahora,
+          };
+          if (cot.ordenId) movData.ordenId = cot.ordenId;
+          if (numero) movData.ordenNumero = numero;
+          if (nuevoStock < 0) movData.notas = 'Venta con stock negativo — verificar reposición';
+          await addDoc(collection(db, 'movimientos_inventario'), movData);
+          piezasDescontadas++;
+        } catch (err) {
+          // No revertir la factura: el admin debe conciliar manualmente
+          console.error('Error descontando pieza', item.piezaInventarioId, err);
+        }
+      }
+
       await updateDoc(doc(db, 'cotizaciones', cot.id), {
         convertida: true,
         facturaId: facturaRef.id,
         updatedAt: Timestamp.now(),
       });
-      toast.success(`Factura ${numero} creada a partir de cotización ${cot.numero}`);
+      const sufijoInv = piezasDescontadas > 0
+        ? ` · ${piezasDescontadas} pieza(s) descontadas del inventario`
+        : '';
+      toast.success(`Factura ${numero} creada a partir de cotización ${cot.numero}${sufijoInv}`);
     } catch (err) {
       console.error(err);
       toast.error('Error al convertir cotización en factura');
@@ -78,10 +117,28 @@ export default function Cotizaciones() {
 
   const [filtroEstado, setFiltroEstado] = useState('');
   const [busqueda, setBusqueda] = useState('');
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    clienteNombre: string;
+    tecnicoNombre: string;
+    notas: string;
+    items: ItemCotizacion[];
+    clienteId?: string;
+    ordenId?: string;
+    ordenNumero?: string;
+  }>({
     clienteNombre: '', tecnicoNombre: '', notas: '',
-    items: [{ descripcion: '', cantidad: 1, precio: 0 }] as ItemCotizacion[],
+    items: [{ descripcion: '', cantidad: 1, precio: 0, tipoItem: 'manual' }],
   });
+
+  // Catalog selector state
+  const [showCatalogo, setShowCatalogo] = useState(false);
+  const [catalogoFiltroMarca, setCatalogoFiltroMarca] = useState<string | undefined>(undefined);
+  const [catalogoFiltroEquipo, setCatalogoFiltroEquipo] = useState<string | undefined>(undefined);
+  const [catalogoTab, setCatalogoTab] = useState<'servicios' | 'piezas'>('servicios');
+
+  // Recibir orden desde OrdenDetalle (Cambio 4)
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -98,9 +155,74 @@ export default function Cotizaciones() {
     return () => unsub();
   }, []);
 
+  // Detectar navegación con estado desde OrdenDetalle ("Generar cotización desde orden")
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fromOrden = (location.state as any)?.fromOrden as
+      { id: string; numero: string; clienteId?: string; clienteNombre: string; equipoMarca?: string; equipoTipo?: string; tecnicoNombre?: string }
+      | undefined;
+    if (fromOrden) {
+      setForm({
+        clienteNombre: fromOrden.clienteNombre,
+        clienteId: fromOrden.clienteId,
+        tecnicoNombre: fromOrden.tecnicoNombre || '',
+        notas: '',
+        items: [],
+        ordenId: fromOrden.id,
+        ordenNumero: fromOrden.numero,
+      });
+      setCatalogoFiltroMarca(fromOrden.equipoMarca);
+      setCatalogoFiltroEquipo(fromOrden.equipoTipo);
+      setEditingId(null);
+      setShowModal(true);
+      setShowCatalogo(true);
+      // Limpiar el state para que F5 no relance el flujo
+      navigate(location.pathname, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const total = form.items.reduce((sum, item) => sum + item.cantidad * item.precio, 0);
 
-  const addItem = () => setForm(f => ({ ...f, items: [...f.items, { descripcion: '', cantidad: 1, precio: 0 }] }));
+  const addItem = () => setForm(f => ({ ...f, items: [...f.items, { descripcion: '', cantidad: 1, precio: 0, tipoItem: 'manual' }] }));
+
+  const handleSeleccionCatalogo = (sel: SeleccionCatalogo) => {
+    if (sel.tipo === 'servicio') {
+      const s = sel.servicio;
+      setForm(f => ({
+        ...f,
+        items: [...f.items, {
+          descripcion: `${s.nombre} (${s.marca} · ${s.equipoTipo})`,
+          cantidad: 1,
+          precio: s.precio,
+          tipoItem: 'servicio',
+          servicioPrecioId: s.id,
+        }],
+      }));
+      toast.success(`${s.nombre} agregado`);
+    } else {
+      const p = sel.pieza;
+      const item: ItemCotizacion = {
+        descripcion: p.codigo ? `${p.nombre} (${p.codigo})` : p.nombre,
+        cantidad: 1,
+        precio: p.precioVenta,
+        tipoItem: 'pieza',
+        piezaInventarioId: p.id,
+      };
+      if (typeof p.precioCompra === 'number') item.costoCompra = p.precioCompra;
+      setForm(f => ({ ...f, items: [...f.items, item] }));
+      if (p.stockActual <= 0) {
+        toast(`${p.nombre} agregado (sin stock — verificar antes de facturar)`, {
+          duration: 4000,
+          style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
+        });
+      } else {
+        toast.success(`${p.nombre} agregado (stock: ${p.stockActual})`);
+      }
+    }
+    setShowCatalogo(false);
+  };
+
   const removeItem = (i: number) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
   const updateItem = (i: number, field: keyof ItemCotizacion, value: any) => {
     setForm(f => ({
@@ -112,22 +234,26 @@ export default function Cotizaciones() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.clienteNombre) { toast.error('Cliente es requerido'); return; }
+    if (form.items.length === 0) { toast.error('Agrega al menos un item'); return; }
     if (form.items.some(i => !i.descripcion)) { toast.error('Completa la descripción de todos los items'); return; }
     setSaving(true);
     try {
       if (editingId) {
-        await updateDoc(doc(db, 'cotizaciones', editingId), {
+        const upd: Record<string, unknown> = {
           clienteNombre: form.clienteNombre,
           tecnicoNombre: form.tecnicoNombre,
           items: form.items,
           total,
           notas: form.notas,
           updatedAt: Timestamp.now(),
-        });
+        };
+        if (form.ordenId) upd.ordenId = form.ordenId;
+        if (form.clienteId) upd.clienteId = form.clienteId;
+        await updateDoc(doc(db, 'cotizaciones', editingId), upd);
         toast.success('Cotización actualizada');
       } else {
         const numero = generateNumeroCotizacion(cotizaciones.length);
-        await addDoc(collection(db, 'cotizaciones'), {
+        const data: Record<string, unknown> = {
           numero,
           clienteNombre: form.clienteNombre,
           tecnicoNombre: form.tecnicoNombre,
@@ -137,8 +263,22 @@ export default function Cotizaciones() {
           notas: form.notas,
           createdAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
-        });
-        toast.success(`Cotización ${numero} creada`);
+        };
+        if (form.ordenId) data.ordenId = form.ordenId;
+        if (form.clienteId) data.clienteId = form.clienteId;
+        const ref = await addDoc(collection(db, 'cotizaciones'), data);
+        // Si vino desde una orden, vincular en el doc de orden también
+        if (form.ordenId) {
+          try {
+            await updateDoc(doc(db, 'ordenes_servicio', form.ordenId), {
+              cotizacionId: ref.id,
+              updatedAt: Timestamp.now(),
+            });
+          } catch (err) {
+            console.warn('No se pudo vincular cotización a la orden:', err);
+          }
+        }
+        toast.success(`Cotización ${numero} creada · ${formatMoneda(total)}`);
       }
       setShowModal(false);
       setEditingId(null);
@@ -150,7 +290,10 @@ export default function Cotizaciones() {
     }
   };
 
-  const resetForm = () => setForm({ clienteNombre: '', tecnicoNombre: '', notas: '', items: [{ descripcion: '', cantidad: 1, precio: 0 }] });
+  const resetForm = () => setForm({
+    clienteNombre: '', tecnicoNombre: '', notas: '',
+    items: [{ descripcion: '', cantidad: 1, precio: 0, tipoItem: 'manual' }],
+  });
 
   const handleEdit = (cot: Cotizacion) => {
     setForm({
@@ -345,27 +488,59 @@ export default function Cotizaciones() {
 
           {/* Items */}
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
               <label className="block text-sm font-medium text-gray-700">Items</label>
-              <button type="button" onClick={addItem} className="text-xs text-[#1a5fa8] hover:underline">+ Agregar item</button>
+              <div className="flex items-center gap-2">
+                <button type="button"
+                  onClick={() => { setCatalogoTab('servicios'); setShowCatalogo(true); }}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+                  <Search size={12} /> Buscar en catálogo
+                </button>
+                <button type="button"
+                  onClick={() => { setCatalogoTab('piezas'); setShowCatalogo(true); }}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
+                  <Boxes size={12} /> Agregar pieza
+                </button>
+                <button type="button" onClick={addItem}
+                  className="inline-flex items-center gap-1 text-xs text-[#1a5fa8] hover:underline">
+                  <Plus size={12} /> Item manual
+                </button>
+              </div>
             </div>
-            <div className="space-y-2">
-              {form.items.map((item, i) => (
-                <div key={i} className="flex gap-2 items-center">
-                  <input type="text" value={item.descripcion} onChange={e => updateItem(i, 'descripcion', e.target.value)}
-                    placeholder="Descripción" className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-                  <input type="number" value={item.cantidad} onChange={e => updateItem(i, 'cantidad', parseInt(e.target.value) || 0)} min={1}
-                    className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-                  <input type="number" value={item.precio} onChange={e => updateItem(i, 'precio', parseFloat(e.target.value) || 0)}
-                    placeholder="RD$" className="w-28 px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-                  {form.items.length > 1 && (
-                    <button type="button" onClick={() => removeItem(i)} className="p-2 hover:bg-red-50 rounded-lg text-red-500">
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+            {form.items.length === 0 ? (
+              <div className="bg-gray-50 border border-dashed border-gray-200 rounded-lg p-6 text-center text-sm text-gray-500">
+                Sin items. Usa "Buscar en catálogo" o "Agregar pieza" para empezar.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {form.items.map((item, i) => {
+                  const tipo = item.tipoItem || 'manual';
+                  const colorBadge = tipo === 'servicio'
+                    ? 'bg-blue-100 text-blue-700'
+                    : tipo === 'pieza'
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : 'bg-gray-100 text-gray-600';
+                  const IconBadge = tipo === 'servicio' ? Tag : tipo === 'pieza' ? Boxes : Edit;
+                  const labelTipo = tipo === 'servicio' ? 'Servicio' : tipo === 'pieza' ? 'Pieza' : 'Manual';
+                  return (
+                    <div key={i} className="flex gap-2 items-center flex-wrap">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium ${colorBadge} shrink-0`}>
+                        <IconBadge size={10} /> {labelTipo}
+                      </span>
+                      <input type="text" value={item.descripcion} onChange={e => updateItem(i, 'descripcion', e.target.value)}
+                        placeholder="Descripción" className="flex-1 min-w-[180px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                      <input type="number" value={item.cantidad} onChange={e => updateItem(i, 'cantidad', parseInt(e.target.value) || 0)} min={1}
+                        className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                      <input type="number" value={item.precio} onChange={e => updateItem(i, 'precio', parseFloat(e.target.value) || 0)}
+                        placeholder="RD$" className="w-28 px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                      <button type="button" onClick={() => removeItem(i)} className="p-2 hover:bg-red-50 rounded-lg text-red-500">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <div className="text-right mt-3">
               <span className="text-lg font-bold text-[#0f3460]">Total: {formatMoneda(total)}</span>
             </div>
@@ -387,6 +562,16 @@ export default function Cotizaciones() {
           </div>
         </form>
       </Modal>
+
+      {/* Selector de catálogo (servicios + piezas) */}
+      <CatalogoSelectorModal
+        isOpen={showCatalogo}
+        onClose={() => setShowCatalogo(false)}
+        onSelect={handleSeleccionCatalogo}
+        filtroMarcaSugerida={catalogoFiltroMarca}
+        filtroEquipoSugerido={catalogoFiltroEquipo}
+        tabInicial={catalogoTab}
+      />
     </div>
   );
 }

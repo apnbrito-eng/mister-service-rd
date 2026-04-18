@@ -10,8 +10,11 @@ import {
 import { differenceInDays, startOfDay, endOfDay, startOfWeek, startOfMonth, startOfYear } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
-  OrdenServicio, StandbyPieza, Factura, Cotizacion, Personal, Gasto, FaseOrden
+  OrdenServicio, StandbyPieza, Factura, Cotizacion, Personal, Gasto, FaseOrden, PiezaInventario
 } from '../types';
+import { puede } from '../utils/permisos';
+import { Link } from 'react-router-dom';
+import { Boxes } from 'lucide-react';
 import {
   faseLabel, faseBgColor, faseColor, formatMoneda, formatHora,
   getAlertasFromOrdenes, getStandbyAlertas, tiempoTranscurrido,
@@ -50,6 +53,7 @@ export default function Dashboard() {
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
+  const [piezasInventario, setPiezasInventario] = useState<PiezaInventario[]>([]);
   const [periodoVentas, setPeriodoVentas] = useState<PeriodoVentas>('mes');
 
   // ---- real-time listeners ----
@@ -125,9 +129,27 @@ export default function Dashboard() {
       checkLoaded();
     });
 
+    // Inventario (no contamos para checkLoaded para no bloquear el dashboard)
+    const unsubPiezas = onSnapshot(collection(db, 'piezas_inventario'), (snap) => {
+      setPiezasInventario(snap.docs.map(d => {
+        const raw = d.data();
+        return {
+          id: d.id,
+          nombre: raw.nombre || '',
+          codigo: raw.codigo,
+          precioCompra: raw.precioCompra,
+          precioVenta: raw.precioVenta || 0,
+          stockActual: typeof raw.stockActual === 'number' ? raw.stockActual : 0,
+          stockMinimo: raw.stockMinimo,
+          activo: raw.activo !== false,
+          createdAt: raw.createdAt?.toDate?.() || new Date(),
+        } as PiezaInventario;
+      }));
+    });
+
     return () => {
       unsubOrdenes(); unsubStandby(); unsubFacturas();
-      unsubCotizaciones(); unsubGastos(); unsubPersonal();
+      unsubCotizaciones(); unsubGastos(); unsubPersonal(); unsubPiezas();
     };
   }, []);
 
@@ -223,6 +245,17 @@ export default function Dashboard() {
   const alertasOrdenes = useMemo(() => getAlertasFromOrdenes(ordenes), [ordenes]);
   const alertasStandby = useMemo(() => getStandbyAlertas(standbyItems), [standbyItems]);
   const todasAlertas = useMemo(() => [...alertasOrdenes, ...alertasStandby], [alertasOrdenes, alertasStandby]);
+
+  // Alertas de inventario bajo (Fase 4B)
+  const alertasInventario = useMemo(() => {
+    return piezasInventario
+      .filter(p => p.activo && (p.stockActual === 0 || (p.stockMinimo !== undefined && p.stockMinimo > 0 && p.stockActual <= p.stockMinimo)))
+      .sort((a, b) => a.stockActual - b.stockActual)
+      .slice(0, 5);
+  }, [piezasInventario]);
+  const puedeVerInventario = puede(userProfile, 'configuracionVer') ||
+    userProfile?.rol === 'administrador' ||
+    userProfile?.rol === 'coordinadora';
 
   const alertasRojas = todasAlertas.filter(a => a.tipo === 'roja');
   const alertasNaranjas = todasAlertas.filter(a => a.tipo === 'naranja');
@@ -728,6 +761,40 @@ export default function Dashboard() {
             </div>
           )}
         </div>
+
+        {/* Alertas de Inventario (Fase 4B) */}
+        {puedeVerInventario && alertasInventario.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-amber-200 p-6">
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Boxes size={20} className="text-amber-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Alertas de Inventario</h2>
+              </div>
+              <Link to="/admin/inventario" className="text-xs text-[#1a5fa8] hover:underline font-medium">
+                Ver inventario completo →
+              </Link>
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              Top piezas con stock bajo o agotado. Considera reponer.
+            </p>
+            <div className="space-y-1.5">
+              {alertasInventario.map(p => {
+                const sinStock = p.stockActual === 0;
+                return (
+                  <div key={p.id} className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-sm ${sinStock ? 'bg-red-50' : 'bg-amber-50'}`}>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{p.nombre}</p>
+                      {p.codigo && <p className="text-[11px] text-gray-500">{p.codigo}</p>}
+                    </div>
+                    <span className={`font-bold ${sinStock ? 'text-red-700' : 'text-amber-700'}`}>
+                      {p.stockActual}{p.stockMinimo ? ` / ${p.stockMinimo}` : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* 9. Reparaciones por tipo de equipo */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">

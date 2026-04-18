@@ -302,6 +302,15 @@ export const TIPOS_EQUIPO = ['Lavadora', 'Secadora', 'Nevera', 'Estufa', 'Aire A
 
 export const DURACIONES = [15, 30, 45, 60, 90, 120];
 
+/**
+ * Heurística para detectar si una orden es de mantenimiento por su descripción.
+ * Usado para preaprobar precios automáticamente desde el catálogo (Fase 4B).
+ */
+export function esOrdenMantenimiento(descripcionFalla?: string): boolean {
+  const t = (descripcionFalla || '').toLowerCase();
+  return t.includes('mantenimiento');
+}
+
 export const HORARIOS = [
   '09:00', '10:00', '11:00', '12:00', '13:00',
   '14:00', '15:00', '16:00', '17:00', '18:00'
@@ -428,6 +437,7 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     efectivoEntregado: (raw.efectivoEntregado as boolean) || undefined,
     efectivoEntregadoPor: (raw.efectivoEntregadoPor as string) || undefined,
     efectivoEntregadoEn: parseFirestoreDate(raw.efectivoEntregadoEn) || undefined,
+    cotizacionId: (raw.cotizacionId as string) || undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden) || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),

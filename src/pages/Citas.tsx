@@ -3,7 +3,8 @@ import { collection, onSnapshot, addDoc, deleteDoc, doc, Timestamp, getDocs, que
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 import { CitaPorConfirmar, Personal, OrdenServicio } from '../types';
-import { tiempoTranscurrido, TIPOS_EQUIPO, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta } from '../utils';
+import { tiempoTranscurrido, TIPOS_EQUIPO, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, esOrdenMantenimiento, formatMoneda, crearRegistroAuditoria } from '../utils';
+import { buscarPrecioMantenimiento } from '../services/precios.service';
 import { siguienteNumeroOrden } from '../services/contadores.service';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
@@ -394,7 +395,37 @@ export default function Citas() {
       if (!ordenData.equipoMarca && selectedCita.equipoMarca) ordenData.equipoMarca = selectedCita.equipoMarca;
       if (selectedCita.equipoModelo) ordenData.equipoModelo = selectedCita.equipoModelo;
       if (selectedCita.fotoEquipoUrl) ordenData.fotoEquipoUrl = selectedCita.fotoEquipoUrl;
+      // Auto-aprobar precio si es mantenimiento (Fase 4B)
+      const descripcion = (selectedCita.falla || selectedCita.servicio || '');
+      let precioMantPreaprobado: number | null = null;
+      if (esOrdenMantenimiento(descripcion)) {
+        const servicioMant = await buscarPrecioMantenimiento(agendarForm.equipoMarca, agendarForm.equipoTipo);
+        if (servicioMant) {
+          precioMantPreaprobado = servicioMant.precio;
+          ordenData.precioSugerido = servicioMant.precio;
+          ordenData.precioAprobado = servicioMant.precio;
+          ordenData.precioFinal = servicioMant.precio;
+          ordenData.estadoAprobacion = 'aprobado';
+          ordenData.aprobadoPor = 'Sistema (catálogo de precios)';
+          ordenData.fechaAprobacion = ahora;
+          const reg = crearRegistroAuditoria(
+            userProfile?.nombre || 'Sistema',
+            'precio_sugerido',
+            `Precio preaprobado automáticamente por ser mantenimiento (catálogo: ${servicioMant.nombre})`,
+            'precioFinal', '', `RD$ ${servicioMant.precio.toLocaleString('es-DO')}`
+          );
+          // Insertar registro al inicio de la auditoría manteniendo historial
+          ordenData.auditoria = [reg];
+        }
+      }
+
       await addDoc(collection(db, 'ordenes_servicio'), ordenData);
+      if (precioMantPreaprobado !== null) {
+        toast(`Mantenimiento detectado: precio preaprobado ${formatMoneda(precioMantPreaprobado)} según catálogo.`, {
+          duration: 6000,
+          style: { borderLeft: '4px solid #1a5fa8', background: '#eff6ff', color: '#0f3460' },
+        });
+      }
       await deleteDoc(doc(db, 'citas_por_confirmar', selectedCita.id));
       if (typeof selectedCita.clienteLat !== 'number' || typeof selectedCita.clienteLng !== 'number') {
         toast('Esta orden no tiene ubicación GPS. El técnico no podrá verla en el mapa. Puedes agregarla después desde la orden.', {

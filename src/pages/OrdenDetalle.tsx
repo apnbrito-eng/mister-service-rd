@@ -11,9 +11,10 @@ import { useApp } from '../context/AppContext';
 import {
   ArrowLeft, Phone, Wrench, User, Calendar,
   Clock, MessageSquare, Save, MapPin, ExternalLink, MessageCircle,
-  Satellite, Copy, Power, ClipboardCheck, AlertTriangle
+  Satellite, Copy, Power, ClipboardCheck, AlertTriangle, FileText
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { puede } from '../utils/permisos';
 import { generarTrackingToken } from '../services/gps.service';
 import { whatsappUrl } from '../utils/whatsapp';
 
@@ -769,6 +770,50 @@ export default function OrdenDetalle() {
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">Reagendada</span>
             )}
           </div>
+
+          {/* Generar cotización desde la orden */}
+          {(['en_cotizacion', 'aprobado'].includes(orden.fase)) &&
+            puede(userProfile, 'cotizacionesCrear') &&
+            !orden.cotizacionId && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Cotización</h3>
+              <p className="text-xs text-gray-500 mb-3">
+                Generar cotización con servicios filtrados por equipo y marca de esta orden.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  navigate('/admin/cotizaciones', {
+                    state: {
+                      fromOrden: {
+                        id: orden.id,
+                        numero: orden.numero,
+                        clienteId: orden.clienteId,
+                        clienteNombre: orden.clienteNombre,
+                        equipoMarca: orden.equipoMarca,
+                        equipoTipo: orden.equipoTipo,
+                        tecnicoNombre: orden.tecnicoNombre,
+                      },
+                    },
+                  });
+                }}
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                <FileText size={14} /> Generar cotización
+              </button>
+            </div>
+          )}
+          {orden.cotizacionId && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-xs text-emerald-800 flex items-center gap-2">
+              <FileText size={12} />
+              <span>Cotización vinculada a esta orden.</span>
+              <button
+                type="button"
+                onClick={() => navigate('/admin/cotizaciones')}
+                className="ml-auto underline font-medium"
+              >Abrir</button>
+            </div>
+          )}
 
           {/* Marcar solo chequeo */}
           {puedeMarcarChequeo() && (

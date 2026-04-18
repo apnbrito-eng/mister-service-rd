@@ -20,6 +20,8 @@ import Modal from '../components/Modal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
+import { esOrdenMantenimiento } from '../utils';
+import { buscarPrecioMantenimiento } from '../services/precios.service';
 import {
   Plus, Search, Clock, Calendar, MapPin, Phone, MessageCircle,
   Wrench, User, FileText, Edit2, CalendarDays, RefreshCw, Eye
@@ -1104,7 +1106,35 @@ export default function Ordenes() {
       if (operariaIdDerivada) ordenData.operariaId = operariaIdDerivada;
       if (operariaNombreDerivada) ordenData.operariaNombre = operariaNombreDerivada;
 
+      // Auto-aprobar precio si es mantenimiento (Fase 4B)
+      let precioMantenimientoEncontrado: number | null = null;
+      if (esOrdenMantenimiento(form.descripcionFalla)) {
+        const servicioMant = await buscarPrecioMantenimiento(form.equipoMarca, form.equipoTipo);
+        if (servicioMant) {
+          precioMantenimientoEncontrado = servicioMant.precio;
+          ordenData.precioSugerido = servicioMant.precio;
+          ordenData.precioAprobado = servicioMant.precio;
+          ordenData.precioFinal = servicioMant.precio;
+          ordenData.estadoAprobacion = 'aprobado';
+          ordenData.aprobadoPor = 'Sistema (catálogo de precios)';
+          ordenData.fechaAprobacion = ahora;
+          const registroPreapr = crearRegistroAuditoria(
+            userProfile?.nombre || 'Sistema',
+            'precio_sugerido',
+            `Precio preaprobado automáticamente por ser mantenimiento (catálogo: ${servicioMant.nombre})`,
+            'precioFinal', '', `RD$ ${servicioMant.precio.toLocaleString('es-DO')}`
+          );
+          ordenData.auditoria = [registroPreapr];
+        }
+      }
+
       await addDoc(collection(db, 'ordenes_servicio'), ordenData);
+      if (precioMantenimientoEncontrado !== null) {
+        toast(`Mantenimiento detectado: precio preaprobado ${formatMoneda(precioMantenimientoEncontrado)} según catálogo. Puedes modificarlo si el técnico detecta otra cosa en sitio.`, {
+          duration: 6000,
+          style: { borderLeft: '4px solid #1a5fa8', background: '#eff6ff', color: '#0f3460' },
+        });
+      }
       if (form.clienteLat === undefined || form.clienteLng === undefined) {
         toast('Esta orden no tiene ubicación GPS. El técnico no podrá verla en el mapa. Puedes agregarla después desde la orden.', {
           duration: 4000,
