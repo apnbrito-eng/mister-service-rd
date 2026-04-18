@@ -127,8 +127,12 @@ export interface CitaPorConfirmar {
   fotoEquipoUrl?: string;
   clienteEmail?: string;
   clienteDireccion?: string;
+  clienteReferencia?: string;
   clienteLat?: number;
   clienteLng?: number;
+  equipoTipo?: string;
+  equipoMarca?: string;
+  equipoModelo?: string;
   calendarioId?: string;
   calendarioNombre?: string;
   fechaSolicitada?: Date;
