@@ -160,6 +160,49 @@ export interface ComisionRegistro {
   createdAt: Date;
 }
 
+export interface LiquidacionEmpleado {
+  personalId: string;
+  personalNombre: string;
+  rol: Rol;
+  sueldoBase: number;
+  // Técnico
+  comisionesIds: string[];
+  totalComisiones: number;
+  cantidadOrdenesConComision: number;
+  // Operaria/Coordinadora
+  desempenoPorcentaje?: number;
+  ordenesCompletadas?: number;
+  ordenesAtendidas?: number;
+  ordenesChequeo?: number;
+  bono?: number;
+  // Totales
+  totalDevengado: number;
+  notas?: string;
+  // Pago
+  metodoPago?: 'efectivo' | 'transferencia' | 'cheque';
+  bancoDestino?: string;
+  fechaPagoEfectivo?: Date;
+  pagadoPor?: string;
+  pagado: boolean;
+}
+
+export interface LiquidacionNomina {
+  id: string;
+  quincena: string;
+  periodoInicio: Date;
+  periodoFin: Date;
+  generadaPor: string;
+  generadaPorId: string;
+  fechaGeneracion: Date;
+  estado: 'abierta' | 'cerrada';
+  totalNomina: number;
+  empleados: LiquidacionEmpleado[];
+  notas?: string;
+  cerradaPor?: string;
+  cerradaPorId?: string;
+  fechaCierre?: Date;
+}
+
 export interface DesempenoOperaria {
   operariaId: string;
   operariaNombre: string;

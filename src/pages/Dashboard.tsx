@@ -14,7 +14,8 @@ import {
 } from '../types';
 import { puede } from '../utils/permisos';
 import { Link } from 'react-router-dom';
-import { Boxes } from 'lucide-react';
+import { Boxes, Wallet } from 'lucide-react';
+import { calcularQuincenaActual } from '../utils/comisiones';
 import {
   faseLabel, faseBgColor, faseColor, formatMoneda, formatHora,
   getAlertasFromOrdenes, getStandbyAlertas, tiempoTranscurrido,
@@ -54,6 +55,8 @@ export default function Dashboard() {
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [piezasInventario, setPiezasInventario] = useState<PiezaInventario[]>([]);
+  // Comisiones pendientes para widget de nómina próxima (Fase 6)
+  const [comisionesPendientes, setComisionesPendientes] = useState<{ tecnicoId: string; comisionMonto: number; quincenaAsignada?: string }[]>([]);
   const [periodoVentas, setPeriodoVentas] = useState<PeriodoVentas>('mes');
 
   // ---- real-time listeners ----
@@ -129,6 +132,19 @@ export default function Dashboard() {
       checkLoaded();
     });
 
+    // Comisiones pendientes (Fase 6) — para widget nómina próxima
+    const unsubComisiones = onSnapshot(collection(db, 'comisiones'), (snap) => {
+      setComisionesPendientes(snap.docs.map(d => {
+        const raw = d.data();
+        return {
+          tecnicoId: raw.tecnicoId || '',
+          comisionMonto: raw.comisionMonto || 0,
+          quincenaAsignada: raw.quincenaAsignada,
+          estadoLiquidacion: raw.estadoLiquidacion,
+        };
+      }).filter(c => (c as { estadoLiquidacion?: string }).estadoLiquidacion === 'pendiente'));
+    });
+
     // Inventario (no contamos para checkLoaded para no bloquear el dashboard)
     const unsubPiezas = onSnapshot(collection(db, 'piezas_inventario'), (snap) => {
       setPiezasInventario(snap.docs.map(d => {
@@ -149,7 +165,7 @@ export default function Dashboard() {
 
     return () => {
       unsubOrdenes(); unsubStandby(); unsubFacturas();
-      unsubCotizaciones(); unsubGastos(); unsubPersonal(); unsubPiezas();
+      unsubCotizaciones(); unsubGastos(); unsubPersonal(); unsubPiezas(); unsubComisiones();
     };
   }, []);
 
@@ -256,6 +272,40 @@ export default function Dashboard() {
   const puedeVerInventario = puede(userProfile, 'configuracionVer') ||
     userProfile?.rol === 'administrador' ||
     userProfile?.rol === 'coordinadora';
+
+  // Nómina próxima (Fase 6)
+  const puedeVerNomina = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  const nominaProxima = useMemo(() => {
+    const quincenaActual = calcularQuincenaActual(new Date());
+    const totalComisiones = comisionesPendientes
+      .filter(c => c.quincenaAsignada === quincenaActual)
+      .reduce((s, c) => s + c.comisionMonto, 0);
+    const totalSueldos = personal
+      .filter(p => p.activo && p.rol !== 'ayudante' && typeof p.sueldoBase === 'number')
+      .reduce((s, p) => s + (p.sueldoBase || 0), 0);
+    // Día de pago próximo
+    const hoy = new Date();
+    const diaActual = hoy.getDate();
+    let diaPago: Date;
+    if (diaActual <= 14) {
+      diaPago = new Date(hoy.getFullYear(), hoy.getMonth(), 15);
+    } else if (diaActual <= 29) {
+      diaPago = new Date(hoy.getFullYear(), hoy.getMonth(), 30);
+    } else {
+      // 30 o 31 → próximo pago el 15 del mes siguiente
+      diaPago = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 15);
+    }
+    const msPorDia = 1000 * 60 * 60 * 24;
+    const diasFaltantes = Math.max(0, Math.ceil((diaPago.getTime() - hoy.getTime()) / msPorDia));
+    return {
+      quincenaActual,
+      totalComisiones,
+      totalSueldos,
+      totalEstimado: totalComisiones + totalSueldos,
+      diasFaltantes,
+      diaPagoLabel: diaPago.getDate().toString(),
+    };
+  }, [comisionesPendientes, personal]);
 
   const alertasRojas = todasAlertas.filter(a => a.tipo === 'roja');
   const alertasNaranjas = todasAlertas.filter(a => a.tipo === 'naranja');
@@ -792,6 +842,39 @@ export default function Dashboard() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Próxima nómina (Fase 6) */}
+        {puedeVerNomina && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Wallet size={20} className="text-[#1a5fa8]" />
+                <h2 className="text-lg font-semibold text-gray-900">Próxima nómina</h2>
+              </div>
+              <Link to="/admin/nomina" className="text-xs text-[#1a5fa8] hover:underline font-medium">
+                Ver nómina completa →
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-blue-50 rounded-lg p-3">
+                <p className="text-[10px] uppercase font-medium text-blue-700">Quincena</p>
+                <p className="text-sm font-bold text-blue-900">{nominaProxima.quincenaActual}</p>
+                <p className="text-[11px] text-blue-700 mt-1">
+                  Pago día {nominaProxima.diaPagoLabel} ({nominaProxima.diasFaltantes} día{nominaProxima.diasFaltantes !== 1 ? 's' : ''})
+                </p>
+              </div>
+              <div className="bg-emerald-50 rounded-lg p-3">
+                <p className="text-[10px] uppercase font-medium text-emerald-700">Comisiones acumuladas</p>
+                <p className="text-base font-bold text-emerald-900">{formatMoneda(nominaProxima.totalComisiones)}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-[10px] uppercase font-medium text-gray-700">Total estimado</p>
+                <p className="text-base font-bold text-gray-900">{formatMoneda(nominaProxima.totalEstimado)}</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">+ sueldos base + bonos</p>
+              </div>
             </div>
           </div>
         )}
