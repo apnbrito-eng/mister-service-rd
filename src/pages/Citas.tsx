@@ -151,6 +151,13 @@ export default function Citas() {
       if (tecnicoElegido?.operariaNombre) ordenData.operariaNombre = tecnicoElegido.operariaNombre;
       await addDoc(collection(db, 'ordenes_servicio'), ordenData);
       await deleteDoc(doc(db, 'citas_por_confirmar', selectedCita.id));
+      const selectedCitaConGps = selectedCita as unknown as { clienteLat?: number; clienteLng?: number };
+      if (selectedCitaConGps.clienteLat === undefined || selectedCitaConGps.clienteLng === undefined) {
+        toast('Esta orden no tiene ubicación GPS. El técnico no podrá verla en el mapa. Puedes agregarla después desde la orden.', {
+          duration: 4000,
+          style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
+        });
+      }
       toast.success(`Orden ${numero} creada y agendada`);
       setShowAgendarModal(false);
       setSelectedCita(null);

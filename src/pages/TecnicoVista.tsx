@@ -307,6 +307,49 @@ export default function TecnicoVista() {
     navigate('/login');
   };
 
+  const [capturandoGpsOrdenId, setCapturandoGpsOrdenId] = useState<string | null>(null);
+
+  const handleCapturarGpsOrden = (orden: OrdenServicio) => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocalización no disponible en este dispositivo');
+      return;
+    }
+    setCapturandoGpsOrdenId(orden.id);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const { latitude, longitude } = pos.coords;
+          const usuario = userProfile?.nombre || 'Técnico';
+          const registro = crearRegistroAuditoria(
+            usuario,
+            'editar',
+            'Capturó ubicación GPS desde el dispositivo del técnico',
+            'clienteLat/Lng',
+            '',
+            `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
+          );
+          await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+            clienteLat: latitude,
+            clienteLng: longitude,
+            updatedAt: Timestamp.now(),
+            auditoria: arrayUnion(registro),
+          });
+          toast.success('Ubicación guardada');
+        } catch (err) {
+          console.error(err);
+          toast.error('Error al guardar la ubicación');
+        } finally {
+          setCapturandoGpsOrdenId(null);
+        }
+      },
+      (err) => {
+        setCapturandoGpsOrdenId(null);
+        toast.error('No se pudo obtener la ubicación: ' + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
+
   const getTelefonoMostrado = (tel: string | undefined): string => {
     if (!tel) return '';
     if (permisos.verTelefonoCliente) return formatTelefono(tel);
@@ -633,6 +676,16 @@ export default function TecnicoVista() {
                             className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-medium">
                             <Navigation size={12} /> Ver en Maps
                           </a>
+                        )}
+                        {permisos.verUbicacionGPS && !orden.clienteLat && (
+                          <button
+                            onClick={() => handleCapturarGpsOrden(orden)}
+                            disabled={capturandoGpsOrdenId === orden.id}
+                            className="flex items-center gap-1 bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-60"
+                          >
+                            <MapPin size={12} />
+                            {capturandoGpsOrdenId === orden.id ? 'Capturando...' : 'Capturar GPS'}
+                          </button>
                         )}
                         {permisos.puedeContactarCliente && orden.clienteTelefono && (
                           <a href={whatsappUrl(orden.clienteTelefono, mensajesWhatsApp.recordatorioCita(orden.clienteNombre, format(orden.fechaCita || new Date(), "dd/MM/yyyy"), formatHora(orden.fechaCita)))}

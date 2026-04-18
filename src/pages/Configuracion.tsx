@@ -1,12 +1,100 @@
-import { useState, useEffect } from 'react';
-import { Settings, Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Settings, Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff, MapPin, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ConfigGPS, ProveedorGPS, Personal } from '../types';
+import { ConfigGPS, ProveedorGPS, Personal, OrdenServicio } from '../types';
 import { obtenerConfigGPS, guardarConfigGPS } from '../services/gps.service';
-import { collection, getDocs } from 'firebase/firestore';
+import { geocodificarDireccion } from '../services/geocoding.service';
+import { collection, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { parseOrden } from '../utils';
+import { useApp } from '../context/AppContext';
 
 export default function Configuracion() {
+  const { userProfile } = useApp();
+  const esAdmin = userProfile?.rol === 'administrador';
+
+  // Geocoding batch state
+  const [geocodingRunning, setGeocodingRunning] = useState(false);
+  const [geocodingProgress, setGeocodingProgress] = useState({ done: 0, total: 0, exitosas: 0, falladas: 0 });
+  const [geocodingResumen, setGeocodingResumen] = useState<string>('');
+  const abortRef = useRef<AbortController | null>(null);
+  const cancelarRef = useRef(false);
+
+  const handleGeocodingBatch = async () => {
+    if (!esAdmin) return;
+    setGeocodingRunning(true);
+    setGeocodingResumen('');
+    cancelarRef.current = false;
+    abortRef.current = new AbortController();
+
+    try {
+      const snap = await getDocs(collection(db, 'ordenes_servicio'));
+      const todas = snap.docs.map(d => parseOrden(d.id, d.data() as Record<string, unknown>) as OrdenServicio);
+
+      const pendientes = todas.filter(o => {
+        const sinGps = o.clienteLat === undefined || o.clienteLat === null || o.clienteLat === 0;
+        const conDireccion = !!(o.clienteDireccion && o.clienteDireccion.trim());
+        const direccionEsUrl = (o.clienteDireccion || '').startsWith('http');
+        return sinGps && conDireccion && !direccionEsUrl && o.fase !== 'cancelado';
+      });
+
+      setGeocodingProgress({ done: 0, total: pendientes.length, exitosas: 0, falladas: 0 });
+
+      if (pendientes.length === 0) {
+        toast.success('No hay órdenes pendientes de geocodificación');
+        setGeocodingRunning(false);
+        return;
+      }
+
+      let exitosas = 0;
+      let falladas = 0;
+
+      for (let i = 0; i < pendientes.length; i++) {
+        if (cancelarRef.current) break;
+        const orden = pendientes[i];
+        try {
+          const coords = await geocodificarDireccion(orden.clienteDireccion || '', abortRef.current?.signal);
+          if (coords) {
+            await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+              clienteLat: coords.lat,
+              clienteLng: coords.lng,
+              updatedAt: Timestamp.now(),
+            });
+            exitosas++;
+          } else {
+            falladas++;
+          }
+        } catch (err) {
+          console.error('Error geocodificando orden', orden.id, err);
+          falladas++;
+        }
+        setGeocodingProgress({ done: i + 1, total: pendientes.length, exitosas, falladas });
+        // Respetar rate limit de Nominatim (1 req/s)
+        if (i < pendientes.length - 1 && !cancelarRef.current) {
+          await new Promise(r => setTimeout(r, 1200));
+        }
+      }
+
+      const totalProcesadas = exitosas + falladas;
+      const mensaje = cancelarRef.current
+        ? `Cancelado. Procesadas ${totalProcesadas}/${pendientes.length}: ${exitosas} exitosas, ${falladas} sin resultado.`
+        : `${totalProcesadas} órdenes procesadas: ${exitosas} exitosas, ${falladas} sin resultado.`;
+      setGeocodingResumen(mensaje);
+      if (!cancelarRef.current) toast.success('Geocodificación finalizada');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error en el proceso de geocodificación');
+    } finally {
+      setGeocodingRunning(false);
+      abortRef.current = null;
+    }
+  };
+
+  const handleCancelarGeocoding = () => {
+    cancelarRef.current = true;
+    abortRef.current?.abort();
+  };
+
   const [empresa, setEmpresa] = useState({
     nombre: 'Mister Service RD',
     rnc: '000-000000-0',
@@ -295,6 +383,65 @@ export default function Configuracion() {
           </div>
         </div>
       </div>
+
+      {/* Mantenimiento de datos (solo admin) */}
+      {esAdmin && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <MapPin size={20} className="text-[#1a5fa8]" />
+            <h2 className="text-lg font-semibold text-gray-900">Mantenimiento de datos</h2>
+          </div>
+          <div className="space-y-4">
+            <div className="border border-gray-200 rounded-xl p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-1">Geocodificar órdenes sin GPS</h3>
+              <p className="text-xs text-gray-600 mb-3">
+                Procesa todas las órdenes con dirección pero sin coordenadas GPS y las actualiza con la ubicación
+                aproximada usando OpenStreetMap. Tarda ~1 segundo por orden.
+              </p>
+              {geocodingRunning ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-[#1a5fa8]">
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>
+                      Procesando {geocodingProgress.done} de {geocodingProgress.total} órdenes...
+                    </span>
+                  </div>
+                  <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                    <div
+                      className="h-full bg-[#1a5fa8] transition-all"
+                      style={{ width: `${geocodingProgress.total > 0 ? (geocodingProgress.done / geocodingProgress.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-gray-500">
+                    <span>Exitosas: <span className="font-semibold text-green-600">{geocodingProgress.exitosas}</span></span>
+                    <span>Sin resultado: <span className="font-semibold text-amber-600">{geocodingProgress.falladas}</span></span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCancelarGeocoding}
+                    className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleGeocodingBatch}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors"
+                >
+                  <MapPin size={14} /> Geocodificar órdenes sin GPS
+                </button>
+              )}
+              {geocodingResumen && (
+                <p className="text-xs text-gray-600 mt-3 bg-gray-50 rounded-lg p-3 border border-gray-100">
+                  {geocodingResumen}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Info sistema */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">

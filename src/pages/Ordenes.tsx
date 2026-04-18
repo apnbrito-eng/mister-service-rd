@@ -520,6 +520,12 @@ export default function Ordenes() {
       }
 
       await updateDoc(doc(db, 'ordenes_servicio', selectedOrden.id), updateData);
+      if (editForm.clienteLat === undefined || editForm.clienteLng === undefined) {
+        toast('Esta orden no tiene ubicación GPS. El técnico no podrá verla en el mapa. Puedes agregarla después desde la orden.', {
+          duration: 4000,
+          style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
+        });
+      }
       toast.success('Orden actualizada');
       setShowEditInDetail(false);
     } catch (err) {
@@ -938,6 +944,12 @@ export default function Ordenes() {
       if (operariaNombreDerivada) ordenData.operariaNombre = operariaNombreDerivada;
 
       await addDoc(collection(db, 'ordenes_servicio'), ordenData);
+      if (form.clienteLat === undefined || form.clienteLng === undefined) {
+        toast('Esta orden no tiene ubicación GPS. El técnico no podrá verla en el mapa. Puedes agregarla después desde la orden.', {
+          duration: 4000,
+          style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
+        });
+      }
       toast.success(`Orden ${numero} creada exitosamente`);
       setShowCreateModal(false);
       resetForm();
