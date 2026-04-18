@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Personal, Rol } from '../types';
-import { formatTelefono } from '../utils';
+import { Personal, Rol, OrdenServicio } from '../types';
+import { formatTelefono, parseOrden } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, Edit, UserCog, Check, X, Users } from 'lucide-react';
+import { Plus, Edit, Check, X, Users, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 
@@ -34,11 +34,20 @@ export default function PersonalPage() {
   const esAdmin = userProfile?.rol === 'administrador';
   const [loading, setLoading] = useState(true);
   const [personal, setPersonal] = useState<Personal[]>([]);
+  const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Marca si el usuario ya tocó el input de comisión manualmente — evita sobrescribir al cambiar nivel
   const [comisionTocada, setComisionTocada] = useState(false);
+
+  // Estado de acciones (desactivar/eliminar) y colapso de inactivos
+  const [showDesactivarModal, setShowDesactivarModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [personalAccion, setPersonalAccion] = useState<Personal | null>(null);
+  const [transferDestinoId, setTransferDestinoId] = useState('');
+  const [processingAccion, setProcessingAccion] = useState(false);
+  const [mostrarInactivos, setMostrarInactivos] = useState(false);
 
   const [form, setForm] = useState<Omit<Personal, 'id'>>({
     nombre: '', rol: 'tecnico', telefono: '', email: '', especialidad: '', zona: '', horario: '', color: '#3b82f6', disponibilidad: true, activo: true,
@@ -59,7 +68,14 @@ export default function PersonalPage() {
         setLoading(false);
       }
     );
-    return () => unsub();
+    // Listener de órdenes para calcular dependencias al eliminar/desactivar
+    const unsubOrdenes = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
+      setOrdenes(snap.docs.map(d => parseOrden(d.id, d.data() as Record<string, unknown>)));
+    });
+    return () => {
+      unsub();
+      unsubOrdenes();
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -162,11 +178,176 @@ export default function PersonalPage() {
     });
   };
 
-  const toggleActivo = async (p: Personal) => {
+  // ───── Dependencias por rol ─────
+  const getOrdenesActivasDeTecnico = (p: Personal): OrdenServicio[] =>
+    ordenes.filter(o =>
+      (o.tecnicoId === p.id || o.responsableId === p.id) &&
+      !['cerrado', 'cancelado'].includes(o.fase)
+    );
+
+  const getTecnicosDeOperaria = (p: Personal): Personal[] =>
+    personal.filter(t => t.operariaId === p.id && t.activo);
+
+  const getOrdenesActivasDeOperaria = (p: Personal): OrdenServicio[] =>
+    ordenes.filter(o =>
+      o.operariaId === p.id &&
+      !['cerrado', 'cancelado'].includes(o.fase)
+    );
+
+  // Destinos válidos para transferir dependencias al eliminar
+  const destinosTransferencia = (p: Personal): Personal[] => {
+    if (p.rol === 'tecnico') {
+      return personal.filter(t => t.rol === 'tecnico' && t.activo && t.id !== p.id);
+    }
+    if (p.rol === 'operaria') {
+      return personal.filter(o => o.rol === 'operaria' && o.activo && o.id !== p.id);
+    }
+    return [];
+  };
+
+  // ───── Acciones ─────
+  const abrirModalDesactivar = (p: Personal) => {
+    setPersonalAccion(p);
+    setShowDesactivarModal(true);
+  };
+
+  const abrirModalEliminar = (p: Personal) => {
+    setPersonalAccion(p);
+    setTransferDestinoId('');
+    setShowDeleteModal(true);
+  };
+
+  const cerrarAcciones = () => {
+    setShowDesactivarModal(false);
+    setShowDeleteModal(false);
+    setPersonalAccion(null);
+    setTransferDestinoId('');
+    setProcessingAccion(false);
+  };
+
+  const handleReactivar = async (p: Personal) => {
     try {
-      await updateDoc(doc(db, 'personal', p.id), { activo: !p.activo });
-      toast.success(p.activo ? 'Desactivado' : 'Activado');
-    } catch { toast.error('Error'); }
+      await updateDoc(doc(db, 'personal', p.id), { activo: true });
+      toast.success(`${p.nombre} reactivado`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al reactivar');
+    }
+  };
+
+  const handleConfirmarDesactivar = async () => {
+    if (!personalAccion) return;
+    setProcessingAccion(true);
+    try {
+      await updateDoc(doc(db, 'personal', personalAccion.id), { activo: false });
+      toast.success('Personal desactivado');
+      cerrarAcciones();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al desactivar');
+      setProcessingAccion(false);
+    }
+  };
+
+  const handleConfirmarEliminar = async () => {
+    if (!personalAccion) return;
+    const p = personalAccion;
+    setProcessingAccion(true);
+    try {
+      if (p.rol === 'tecnico') {
+        const deps = getOrdenesActivasDeTecnico(p);
+        if (deps.length > 0) {
+          const destino = personal.find(t => t.id === transferDestinoId);
+          if (!destino) {
+            toast.error('Selecciona un técnico destino');
+            setProcessingAccion(false);
+            return;
+          }
+          const tareas = deps.map(async (o) => {
+            const updateData: Record<string, unknown> = { updatedAt: Timestamp.now() };
+            if (o.tecnicoId === p.id) {
+              updateData.tecnicoId = destino.id;
+              updateData.tecnicoNombre = destino.nombre;
+              updateData.operariaId = destino.operariaId || null;
+              updateData.operariaNombre = destino.operariaNombre || null;
+            }
+            if (o.responsableId === p.id) {
+              updateData.responsableId = destino.id;
+              updateData.responsableNombre = destino.nombre;
+            }
+            try {
+              await updateDoc(doc(db, 'ordenes_servicio', o.id), updateData);
+            } catch (err) {
+              console.error('Error transfiriendo orden', o.id, err);
+            }
+          });
+          await Promise.all(tareas);
+          await deleteDoc(doc(db, 'personal', p.id));
+          toast.success(`Técnico eliminado. ${deps.length} orden(es) transferida(s) a ${destino.nombre}`);
+        } else {
+          await deleteDoc(doc(db, 'personal', p.id));
+          toast.success('Técnico eliminado');
+        }
+      } else if (p.rol === 'operaria') {
+        const tecs = getTecnicosDeOperaria(p);
+        const ords = getOrdenesActivasDeOperaria(p);
+        if (tecs.length > 0 || ords.length > 0) {
+          const destino = personal.find(o => o.id === transferDestinoId);
+          if (!destino) {
+            toast.error('Selecciona una operaria destino');
+            setProcessingAccion(false);
+            return;
+          }
+          const tareasTecs = tecs.map(async (t) => {
+            try {
+              await updateDoc(doc(db, 'personal', t.id), {
+                operariaId: destino.id,
+                operariaNombre: destino.nombre,
+              });
+            } catch (err) {
+              console.error('Error transfiriendo técnico', t.id, err);
+            }
+          });
+          const tareasOrds = ords.map(async (o) => {
+            try {
+              await updateDoc(doc(db, 'ordenes_servicio', o.id), {
+                operariaId: destino.id,
+                operariaNombre: destino.nombre,
+                updatedAt: Timestamp.now(),
+              });
+            } catch (err) {
+              console.error('Error transfiriendo orden', o.id, err);
+            }
+          });
+          await Promise.all([...tareasTecs, ...tareasOrds]);
+          await deleteDoc(doc(db, 'personal', p.id));
+          toast.success(`Operaria eliminada. ${tecs.length} técnico(s) y ${ords.length} orden(es) transferidos a ${destino.nombre}`);
+        } else {
+          await deleteDoc(doc(db, 'personal', p.id));
+          toast.success('Operaria eliminada');
+        }
+      } else if (p.rol === 'administrador') {
+        const adminsActivosSinEste = personal.filter(
+          x => x.rol === 'administrador' && x.activo && x.id !== p.id
+        );
+        if (p.activo && adminsActivosSinEste.length === 0) {
+          toast.error('No puedes eliminar el último administrador del sistema');
+          setProcessingAccion(false);
+          return;
+        }
+        await deleteDoc(doc(db, 'personal', p.id));
+        toast.success('Administrador eliminado');
+      } else {
+        // secretaria
+        await deleteDoc(doc(db, 'personal', p.id));
+        toast.success('Secretaria eliminada');
+      }
+      cerrarAcciones();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al eliminar');
+      setProcessingAccion(false);
+    }
   };
 
   if (loading) return <LoadingSpinner fullPage text="Cargando personal..." />;
@@ -275,8 +456,8 @@ export default function PersonalPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {personal.map(p => (
-                <tr key={p.id} className={`hover:bg-gray-50 ${!p.activo ? 'opacity-50' : ''}`}>
+              {personal.filter(p => p.activo).map(p => (
+                <tr key={p.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: p.color || '#0f3460' }}>
@@ -302,18 +483,25 @@ export default function PersonalPage() {
                   <td className="px-4 py-3 text-xs text-gray-600 hidden lg:table-cell">{p.especialidad || '—'}</td>
                   <td className="px-4 py-3 text-xs text-gray-600 hidden lg:table-cell">{p.zona || '—'}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => toggleActivo(p)}
-                      className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${
-                        p.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                      }`}>
-                      {p.activo ? <><Check size={10} /> Activo</> : <><X size={10} /> Inactivo</>}
-                    </button>
+                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">
+                      <Check size={10} /> Activo
+                    </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button onClick={() => handleEdit(p)}
-                      className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
-                      <Edit size={14} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button onClick={() => handleEdit(p)} title="Editar"
+                        className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
+                        <Edit size={14} />
+                      </button>
+                      <button onClick={() => abrirModalDesactivar(p)} title="Desactivar"
+                        className="p-2 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors">
+                        <Power size={14} />
+                      </button>
+                      <button onClick={() => abrirModalEliminar(p)} title="Eliminar"
+                        className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -321,6 +509,74 @@ export default function PersonalPage() {
           </table>
         </div>
       </div>
+
+      {/* Sección Personal inactivo */}
+      {(() => {
+        const inactivos = personal.filter(p => !p.activo);
+        if (inactivos.length === 0) return null;
+        return (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setMostrarInactivos(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                {mostrarInactivos ? <ChevronDown size={16} className="text-gray-500" /> : <ChevronRight size={16} className="text-gray-500" />}
+                <span className="text-sm font-semibold text-gray-700">Personal inactivo ({inactivos.length})</span>
+              </div>
+            </button>
+            {mostrarInactivos && (
+              <div className="overflow-x-auto border-t border-gray-100">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Nombre</th>
+                      <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Rol</th>
+                      <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 hidden md:table-cell">Teléfono</th>
+                      <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 hidden md:table-cell">Email</th>
+                      <th className="px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {inactivos.map(p => (
+                      <tr key={p.id} className="opacity-60 hover:bg-gray-50 hover:opacity-80 transition-opacity">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: p.color || '#0f3460' }}>
+                              {p.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">{p.nombre}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ROL_COLORS[p.rol]}`}>
+                            {ROL_LABELS[p.rol]}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.telefono ? formatTelefono(p.telefono) : '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.email || '—'}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => handleReactivar(p)} title="Reactivar"
+                              className="p-2 hover:bg-green-50 rounded-lg text-green-600 transition-colors">
+                              <RotateCcw size={14} />
+                            </button>
+                            <button onClick={() => abrirModalEliminar(p)} title="Eliminar"
+                              className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditingId(null); resetForm(); }}
         title={editingId ? 'Editar Personal' : 'Agregar Personal'}>
@@ -473,6 +729,207 @@ export default function PersonalPage() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal Desactivar */}
+      <Modal
+        isOpen={showDesactivarModal}
+        onClose={cerrarAcciones}
+        title={personalAccion ? `Desactivar ${personalAccion.nombre}` : 'Desactivar'}
+      >
+        {personalAccion && (() => {
+          const p = personalAccion;
+          const ordenesActivas =
+            p.rol === 'tecnico' ? getOrdenesActivasDeTecnico(p) :
+            p.rol === 'operaria' ? getOrdenesActivasDeOperaria(p) : [];
+          return (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-700">
+                El personal desactivado no aparecerá en dropdowns de asignación. Sus órdenes
+                históricas se conservan. Puedes reactivarlo cuando quieras.
+              </p>
+              {ordenesActivas.length > 0 && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-amber-800">
+                    Tiene {ordenesActivas.length} orden(es) activa(s). Considera eliminarlo
+                    en vez de desactivarlo si quieres transferir sus órdenes a otra persona.
+                  </p>
+                </div>
+              )}
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={cerrarAcciones} disabled={processingAccion}
+                  className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60">
+                  Cancelar
+                </button>
+                <button type="button" onClick={handleConfirmarDesactivar} disabled={processingAccion}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-60">
+                  {processingAccion ? 'Desactivando...' : 'Confirmar desactivación'}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
+
+      {/* Modal Eliminar con transferencia */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={cerrarAcciones}
+        title={personalAccion ? `Eliminar ${ROL_LABELS[personalAccion.rol].toLowerCase()}: ${personalAccion.nombre}` : 'Eliminar'}
+      >
+        {personalAccion && (() => {
+          const p = personalAccion;
+          const destinos = destinosTransferencia(p);
+
+          if (p.rol === 'tecnico') {
+            const deps = getOrdenesActivasDeTecnico(p);
+            const sinDestino = deps.length > 0 && destinos.length === 0;
+            const sinSeleccion = deps.length > 0 && !transferDestinoId;
+
+            return (
+              <div className="space-y-4">
+                {deps.length === 0 ? (
+                  <p className="text-sm text-gray-700">
+                    Sin órdenes activas asignadas. La eliminación es segura.
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
+                      <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" />
+                      <p className="text-xs text-red-800">
+                        Este técnico tiene {deps.length} orden(es) activa(s). Debes transferirlas a otro técnico.
+                      </p>
+                    </div>
+                    {sinDestino ? (
+                      <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        Crea otro técnico activo primero antes de eliminar a {p.nombre}.
+                      </p>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Transferir a:</label>
+                        <select
+                          value={transferDestinoId}
+                          onChange={e => setTransferDestinoId(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                        >
+                          <option value="">Seleccionar técnico...</option>
+                          {destinos.map(d => (
+                            <option key={d.id} value={d.id}>
+                              {d.nombre}{d.operariaNombre ? ` (grupo ${d.operariaNombre})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </>
+                )}
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={cerrarAcciones} disabled={processingAccion}
+                    className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60">
+                    Cancelar
+                  </button>
+                  <button type="button" onClick={handleConfirmarEliminar}
+                    disabled={processingAccion || sinDestino || sinSeleccion}
+                    className="px-5 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-60">
+                    {processingAccion ? 'Eliminando...' : 'Confirmar eliminación'}
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          if (p.rol === 'operaria') {
+            const tecs = getTecnicosDeOperaria(p);
+            const ords = getOrdenesActivasDeOperaria(p);
+            const tieneDeps = tecs.length > 0 || ords.length > 0;
+            const sinDestino = tieneDeps && destinos.length === 0;
+            const sinSeleccion = tieneDeps && !transferDestinoId;
+
+            return (
+              <div className="space-y-4">
+                {!tieneDeps ? (
+                  <p className="text-sm text-gray-700">Sin técnicos ni órdenes asignadas. La eliminación es segura.</p>
+                ) : (
+                  <>
+                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
+                      <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" />
+                      <p className="text-xs text-red-800">
+                        {tecs.length} técnico(s) y {ords.length} orden(es) asignada(s). Debes transferirlos a otra operaria.
+                      </p>
+                    </div>
+                    {sinDestino ? (
+                      <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        Crea otra operaria activa primero antes de eliminar a {p.nombre}.
+                      </p>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Transferir a:</label>
+                        <select
+                          value={transferDestinoId}
+                          onChange={e => setTransferDestinoId(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                        >
+                          <option value="">Seleccionar operaria...</option>
+                          {destinos.map(d => (
+                            <option key={d.id} value={d.id}>{d.nombre}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </>
+                )}
+                <div className="flex justify-end gap-3 pt-2">
+                  <button type="button" onClick={cerrarAcciones} disabled={processingAccion}
+                    className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60">
+                    Cancelar
+                  </button>
+                  <button type="button" onClick={handleConfirmarEliminar}
+                    disabled={processingAccion || sinDestino || sinSeleccion}
+                    className="px-5 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-60">
+                    {processingAccion ? 'Eliminando...' : 'Confirmar eliminación'}
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          // administrador / secretaria
+          const esUltimoAdmin =
+            p.rol === 'administrador' &&
+            p.activo &&
+            personal.filter(x => x.rol === 'administrador' && x.activo && x.id !== p.id).length === 0;
+
+          return (
+            <div className="space-y-4">
+              {esUltimoAdmin ? (
+                <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
+                  <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-red-800">
+                    No puedes eliminar el último administrador del sistema. Crea otro admin activo primero.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-700">
+                  {p.rol === 'administrador'
+                    ? 'Este administrador no tiene dependencias operativas directas. Su historial se conserva.'
+                    : 'Las secretarias no son dueñas de órdenes operativas. Su historial se conserva.'}
+                </p>
+              )}
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={cerrarAcciones} disabled={processingAccion}
+                  className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60">
+                  Cancelar
+                </button>
+                <button type="button" onClick={handleConfirmarEliminar}
+                  disabled={processingAccion || esUltimoAdmin}
+                  className="px-5 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium disabled:opacity-60">
+                  {processingAccion ? 'Eliminando...' : 'Confirmar eliminación'}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
     </div>
   );
