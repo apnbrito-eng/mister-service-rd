@@ -125,6 +125,14 @@ export interface CitaPorConfirmar {
   origen?: string;
   ordenNumero?: string;
   fotoEquipoUrl?: string;
+  clienteEmail?: string;
+  clienteDireccion?: string;
+  clienteLat?: number;
+  clienteLng?: number;
+  calendarioId?: string;
+  calendarioNombre?: string;
+  fechaSolicitada?: Date;
+  horaSolicitada?: string;
   createdAt: Date;
 }
 

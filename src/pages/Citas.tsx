@@ -37,11 +37,29 @@ export default function Citas() {
     const unsub = onSnapshot(
       query(collection(db, 'citas_por_confirmar'), orderBy('createdAt', 'asc')),
       (snap) => {
-        setCitas(snap.docs.map(d => ({
-          id: d.id,
-          ...d.data(),
-          createdAt: d.data().createdAt?.toDate?.() || new Date(),
-        } as CitaPorConfirmar)));
+        setCitas(snap.docs.map(d => {
+          const raw = d.data();
+          return {
+            id: d.id,
+            clienteNombre: raw.clienteNombre || '',
+            telefono: raw.telefono || '',
+            servicio: raw.servicio || '',
+            falla: raw.falla,
+            horarioSolicitado: raw.horarioSolicitado,
+            origen: raw.origen,
+            ordenNumero: raw.ordenNumero,
+            fotoEquipoUrl: raw.fotoEquipoUrl,
+            clienteEmail: raw.clienteEmail,
+            clienteDireccion: raw.clienteDireccion,
+            clienteLat: typeof raw.clienteLat === 'number' ? raw.clienteLat : undefined,
+            clienteLng: typeof raw.clienteLng === 'number' ? raw.clienteLng : undefined,
+            calendarioId: raw.calendarioId,
+            calendarioNombre: raw.calendarioNombre,
+            fechaSolicitada: raw.fechaSolicitada?.toDate?.() || undefined,
+            horaSolicitada: raw.horaSolicitada,
+            createdAt: raw.createdAt?.toDate?.() || new Date(),
+          } as CitaPorConfirmar;
+        }));
         setLoading(false);
       }
     );
@@ -149,10 +167,14 @@ export default function Citas() {
       };
       if (tecnicoElegido?.operariaId) ordenData.operariaId = tecnicoElegido.operariaId;
       if (tecnicoElegido?.operariaNombre) ordenData.operariaNombre = tecnicoElegido.operariaNombre;
+      // Copiar datos del cliente capturados en el formulario público (strip undefined)
+      if (selectedCita.clienteEmail) ordenData.clienteEmail = selectedCita.clienteEmail;
+      if (selectedCita.clienteDireccion) ordenData.clienteDireccion = selectedCita.clienteDireccion;
+      if (typeof selectedCita.clienteLat === 'number') ordenData.clienteLat = selectedCita.clienteLat;
+      if (typeof selectedCita.clienteLng === 'number') ordenData.clienteLng = selectedCita.clienteLng;
       await addDoc(collection(db, 'ordenes_servicio'), ordenData);
       await deleteDoc(doc(db, 'citas_por_confirmar', selectedCita.id));
-      const selectedCitaConGps = selectedCita as unknown as { clienteLat?: number; clienteLng?: number };
-      if (selectedCitaConGps.clienteLat === undefined || selectedCitaConGps.clienteLng === undefined) {
+      if (typeof selectedCita.clienteLat !== 'number' || typeof selectedCita.clienteLng !== 'number') {
         toast('Esta orden no tiene ubicación GPS. El técnico no podrá verla en el mapa. Puedes agregarla después desde la orden.', {
           duration: 4000,
           style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
