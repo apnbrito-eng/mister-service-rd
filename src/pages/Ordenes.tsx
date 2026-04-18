@@ -415,6 +415,24 @@ export default function Ordenes() {
 
   const handleGuardarEdicion = async () => {
     if (!selectedOrden) return;
+    // Validación defensiva: evitar double-booking entre apertura del modal y guardado
+    if (editForm.tecnicoId && editForm.fechaCita && editForm.horaInicio) {
+      const fechaSeleccionada = new Date(editForm.fechaCita + 'T00:00:00');
+      const ocupados = ordenes
+        .filter(o =>
+          o.id !== selectedOrden.id &&
+          (o.tecnicoId === editForm.tecnicoId || o.tecnicoNombre === editForm.tecnicoNombre) &&
+          o.fechaCita &&
+          isSameDay(o.fechaCita, fechaSeleccionada) &&
+          o.fase !== 'cerrado' &&
+          o.fase !== 'cancelado'
+        )
+        .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
+      if (ocupados.includes(editForm.horaInicio)) {
+        toast.error('Ese horario ya está ocupado por el técnico seleccionado');
+        return;
+      }
+    }
     setSavingEdit(true);
     try {
       let fechaCitaTs: Timestamp | null = null;
@@ -776,6 +794,23 @@ export default function Ordenes() {
     if (!form.clienteNombre || !form.equipoTipo || !form.descripcionFalla) {
       toast.error('Completa los campos requeridos: cliente, equipo y descripcion');
       return;
+    }
+    // Validación defensiva: evitar double-booking entre apertura del modal y guardado
+    if (form.tecnicoId && form.fechaCita && form.horaInicio) {
+      const fechaSeleccionada = new Date(form.fechaCita + 'T00:00:00');
+      const ocupados = ordenes
+        .filter(o =>
+          (o.tecnicoId === form.tecnicoId || o.tecnicoNombre === form.tecnicoNombre) &&
+          o.fechaCita &&
+          isSameDay(o.fechaCita, fechaSeleccionada) &&
+          o.fase !== 'cerrado' &&
+          o.fase !== 'cancelado'
+        )
+        .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
+      if (ocupados.includes(form.horaInicio)) {
+        toast.error('Ese horario ya está ocupado por el técnico seleccionado');
+        return;
+      }
     }
     setSaving(true);
     try {
