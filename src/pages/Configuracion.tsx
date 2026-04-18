@@ -11,7 +11,7 @@ import { useApp } from '../context/AppContext';
 
 export default function Configuracion() {
   const { userProfile } = useApp();
-  const esAdmin = userProfile?.rol === 'administrador';
+  const esAdmin = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
 
   // Geocoding batch state
   const [geocodingRunning, setGeocodingRunning] = useState(false);

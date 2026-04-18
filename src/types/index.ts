@@ -1,4 +1,7 @@
-export type Rol = 'administrador' | 'secretaria' | 'operaria' | 'tecnico';
+export type Rol = 'administrador' | 'coordinadora' | 'operaria' | 'secretaria' | 'tecnico' | 'ayudante';
+
+/** Roles que pueden iniciar sesión en el sistema (tienen cuenta en Firebase Auth) */
+export const ROLES_CON_ACCESO: Rol[] = ['administrador', 'coordinadora', 'operaria', 'secretaria', 'tecnico'];
 
 export type FaseOrden =
   | 'nuevo_lead'

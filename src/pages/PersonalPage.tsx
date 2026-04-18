@@ -1,29 +1,38 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
-import { db } from '../firebase/config';
-import { Personal, Rol, OrdenServicio } from '../types';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { db, auth } from '../firebase/config';
+import { Personal, Rol, OrdenServicio, ROLES_CON_ACCESO, PERMISOS_DEFAULT_TECNICO } from '../types';
 import { formatTelefono, parseOrden } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, Edit, Check, X, Users, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Plus, Edit, Check, X, Users, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Key, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 
 const ROL_LABELS: Record<Rol, string> = {
   administrador: 'Administrador',
+  coordinadora: 'Coordinadora',
   secretaria: 'Secretaria',
   operaria: 'Operaria',
   tecnico: 'Técnico',
+  ayudante: 'Ayudante',
 };
 
 const ROL_COLORS: Record<Rol, string> = {
   administrador: 'bg-purple-100 text-purple-700',
+  coordinadora: 'bg-violet-100 text-violet-700',
   secretaria: 'bg-blue-100 text-blue-700',
   operaria: 'bg-teal-100 text-teal-700',
   tecnico: 'bg-orange-100 text-orange-700',
+  ayudante: 'bg-slate-100 text-slate-700',
 };
 
-const ROLES_CON_COMISION: Rol[] = ['tecnico', 'operaria', 'secretaria'];
+const ROLES_CON_COMISION: Rol[] = ['tecnico', 'operaria', 'secretaria', 'coordinadora'];
+// Orden del select de rol en el formulario
+const ROL_SELECT_ORDEN: Rol[] = ['administrador', 'coordinadora', 'operaria', 'secretaria', 'tecnico', 'ayudante'];
 
 function comisionDefaultPorNivel(nivel: 'junior' | 'senior'): number {
   return nivel === 'senior' ? 10 : 8;
@@ -31,7 +40,7 @@ function comisionDefaultPorNivel(nivel: 'junior' | 'senior'): number {
 
 export default function PersonalPage() {
   const { userProfile } = useApp();
-  const esAdmin = userProfile?.rol === 'administrador';
+  const esAdmin = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
   const [loading, setLoading] = useState(true);
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
@@ -55,9 +64,20 @@ export default function PersonalPage() {
     operariaId: '', operariaNombre: '',
   });
 
-  // Operarias/Admins activos disponibles como supervisoras de técnicos
+  // Credenciales de acceso al sistema (separadas del form principal)
+  const [emailAcceso, setEmailAcceso] = useState('');
+  const [passwordAcceso, setPasswordAcceso] = useState('');
+  const [showPasswordAcceso, setShowPasswordAcceso] = useState(false);
+
+  // Modal de reset de contraseña (al editar personal con acceso)
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetTarget, setResetTarget] = useState<Personal | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetSaving, setResetSaving] = useState(false);
+
+  // Operarias/Coordinadoras/Admins activos disponibles como supervisoras de técnicos
   const operariasDisponibles = personal.filter(
-    p => p.activo && (p.rol === 'operaria' || p.rol === 'administrador')
+    p => p.activo && (p.rol === 'operaria' || p.rol === 'coordinadora' || p.rol === 'administrador')
   );
 
   useEffect(() => {
@@ -81,9 +101,23 @@ export default function PersonalPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nombre || !form.rol) { toast.error('Nombre y rol son requeridos'); return; }
+
+    const necesitaAcceso = ROLES_CON_ACCESO.includes(form.rol);
+
+    // Validación al CREAR: si aplica acceso, email + password requeridos
+    if (!editingId && necesitaAcceso) {
+      if (!emailAcceso.trim()) {
+        toast.error('Email de acceso al sistema es requerido');
+        return;
+      }
+      if (passwordAcceso.length < 8) {
+        toast.error('La contraseña inicial debe tener al menos 8 caracteres');
+        return;
+      }
+    }
+
     setSaving(true);
     try {
-      // Omitir campos undefined para que Firestore no los rechace
       const aplicaComision = ROLES_CON_COMISION.includes(form.rol);
       const data: Record<string, unknown> = {
         nombre: form.nombre,
@@ -109,17 +143,109 @@ export default function PersonalPage() {
         data.operariaId = form.operariaId;
         data.operariaNombre = form.operariaNombre || '';
       }
+
       if (editingId) {
+        // EDITAR: actualizar personal; si pasó a ayudante, desvincular uid
+        const personalActual = personal.find(p => p.id === editingId);
+        if (personalActual && personalActual.rol !== 'ayudante' && form.rol === 'ayudante' && personalActual.uid) {
+          // Cambio de rol con acceso → ayudante: desvincular uid (no borramos la cuenta Auth)
+          data.uid = null;
+        }
         await updateDoc(doc(db, 'personal', editingId), data);
+        // Si tiene uid y rol con acceso, mantener sincronizado usuarios/{uid}
+        if (personalActual?.uid && necesitaAcceso) {
+          const usuarioData: Record<string, unknown> = {
+            nombre: form.nombre,
+            rol: form.rol,
+            telefono: form.telefono || '',
+            color: form.color || '#3b82f6',
+            activo: form.activo,
+          };
+          if (form.rol === 'tecnico') {
+            usuarioData.permisos = personalActual.permisos || PERMISOS_DEFAULT_TECNICO;
+          }
+          try {
+            await setDoc(doc(db, 'usuarios', personalActual.uid), usuarioData, { merge: true });
+          } catch (err) {
+            console.warn('No se pudo sincronizar usuarios/{uid}:', err);
+          }
+        }
         toast.success('Personal actualizado');
       } else {
-        await addDoc(collection(db, 'personal'), { ...data, createdAt: Timestamp.now() });
-        toast.success('Personal creado');
+        // CREAR: si necesita acceso, crear auth + usuarios doc + personal doc con uid
+        let createdUid: string | null = null;
+        if (necesitaAcceso) {
+          try {
+            const secondaryApp = initializeApp(auth.app.options, 'PersonalSecondary');
+            const secondaryAuth = getAuth(secondaryApp);
+            const cred = await createUserWithEmailAndPassword(
+              secondaryAuth,
+              emailAcceso.trim().toLowerCase(),
+              passwordAcceso
+            );
+            createdUid = cred.user.uid;
+            await deleteApp(secondaryApp);
+          } catch (authErr: unknown) {
+            const errCode = (authErr as { code?: string })?.code;
+            if (errCode === 'auth/email-already-in-use') {
+              toast.error('El email ya está registrado en Firebase Auth. Usa otro email o edita al usuario existente.');
+              setSaving(false);
+              return;
+            }
+            if (errCode === 'auth/weak-password') {
+              toast.error('Contraseña demasiado débil');
+              setSaving(false);
+              return;
+            }
+            if (errCode === 'auth/invalid-email') {
+              toast.error('Email de acceso inválido');
+              setSaving(false);
+              return;
+            }
+            console.error('Error creando cuenta Auth:', authErr);
+            toast.error('Error al crear la cuenta de acceso');
+            setSaving(false);
+            return;
+          }
+        }
+
+        // Crear doc en usuarios/{uid} (perfil de login)
+        if (createdUid) {
+          const usuarioData: Record<string, unknown> = {
+            nombre: form.nombre,
+            email: emailAcceso.trim().toLowerCase(),
+            rol: form.rol,
+            telefono: form.telefono || '',
+            color: form.color || '#3b82f6',
+            activo: true,
+            createdAt: Timestamp.now(),
+          };
+          if (form.rol === 'tecnico') {
+            usuarioData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
+          }
+          try {
+            await setDoc(doc(db, 'usuarios', createdUid), usuarioData);
+          } catch (err) {
+            console.warn('No se pudo crear usuarios/{uid}:', err);
+          }
+        }
+
+        const personalData: Record<string, unknown> = { ...data, createdAt: Timestamp.now() };
+        if (createdUid) personalData.uid = createdUid;
+        if (form.rol === 'tecnico') personalData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
+
+        await addDoc(collection(db, 'personal'), personalData);
+        if (necesitaAcceso) {
+          toast.success(`Personal creado. Puede iniciar sesión con ${emailAcceso.trim()}`);
+        } else {
+          toast.success('Ayudante creado');
+        }
       }
       setShowModal(false);
       setEditingId(null);
       resetForm();
-    } catch {
+    } catch (err) {
+      console.error(err);
       toast.error('Error al guardar');
     } finally {
       setSaving(false);
@@ -132,6 +258,9 @@ export default function PersonalPage() {
       nivel: 'senior', comisionPorcentaje: 10, sueldoBase: 0,
       operariaId: '', operariaNombre: '',
     });
+    setEmailAcceso('');
+    setPasswordAcceso('');
+    setShowPasswordAcceso(false);
     setComisionTocada(false);
   };
 
@@ -144,10 +273,51 @@ export default function PersonalPage() {
       operariaId: p.operariaId || '',
       operariaNombre: p.operariaNombre || '',
     });
+    setEmailAcceso('');
+    setPasswordAcceso('');
     // Al editar, considerar el valor actual como "tocado" para no pisarlo al cambiar nivel
     setComisionTocada(true);
     setEditingId(p.id);
     setShowModal(true);
+  };
+
+  const abrirResetPassword = (p: Personal) => {
+    setResetTarget(p);
+    setResetPassword('');
+    setShowResetModal(true);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetTarget) return;
+    const emailReset = resetTarget.email;
+    if (!emailReset) {
+      toast.error('Este usuario no tiene email configurado');
+      return;
+    }
+    if (resetPassword && resetPassword.length < 8) {
+      toast.error('La contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+    setResetSaving(true);
+    try {
+      if (resetPassword) {
+        // Sin Admin SDK no podemos cambiar password de otro usuario desde cliente.
+        // Enviar email de reset como alternativa segura.
+        await sendPasswordResetEmail(auth, emailReset);
+        toast.success('Se envió un email de restablecimiento a ' + emailReset);
+      } else {
+        await sendPasswordResetEmail(auth, emailReset);
+        toast.success('Email de restablecimiento enviado a ' + emailReset);
+      }
+      setShowResetModal(false);
+      setResetTarget(null);
+      setResetPassword('');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al enviar email de restablecimiento');
+    } finally {
+      setResetSaving(false);
+    }
   };
 
   const handleNivelChange = (nivel: 'junior' | 'senior') => {
@@ -362,9 +532,26 @@ export default function PersonalPage() {
         </button>
       </div>
 
+      {/* Banner de migración: personal con rol de acceso pero sin uid vinculado */}
+      {(() => {
+        const sinAcceso = personal.filter(
+          p => p.activo && p.rol !== 'ayudante' && ROLES_CON_ACCESO.includes(p.rol) && !p.uid
+        );
+        if (sinAcceso.length === 0) return null;
+        return (
+          <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-start gap-2 text-sm text-amber-900">
+            <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+            <span>
+              {sinAcceso.length} miembro(s) del personal con rol de acceso no tienen cuenta de login.
+              Edítalos para crear su cuenta.
+            </span>
+          </div>
+        );
+      })()}
+
       {esAdmin && (() => {
         const tecnicos = personal.filter(p => p.rol === 'tecnico' && p.activo);
-        const operarias = personal.filter(p => (p.rol === 'operaria' || p.rol === 'administrador') && p.activo);
+        const operarias = personal.filter(p => (p.rol === 'operaria' || p.rol === 'coordinadora' || p.rol === 'administrador') && p.activo);
         const operariasConTecnicos = operarias
           .map(op => ({
             operaria: op,
@@ -590,9 +777,82 @@ export default function PersonalPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Rol *</label>
             <select value={form.rol} onChange={e => handleRolChange(e.target.value as Rol)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
-              {(Object.keys(ROL_LABELS) as Rol[]).map(r => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}
+              {ROL_SELECT_ORDEN.map(r => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}
             </select>
+            <p className="text-[11px] text-gray-400 mt-1">
+              {form.rol === 'ayudante'
+                ? 'Los ayudantes NO tienen cuenta de acceso al sistema.'
+                : 'Este rol tiene acceso al sistema — se creará una cuenta de login.'}
+            </p>
           </div>
+
+          {/* Sección Acceso al sistema — solo para roles con login */}
+          {ROLES_CON_ACCESO.includes(form.rol) && (
+            <div className="bg-blue-50/40 border border-blue-100 rounded-lg p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <Key size={14} className="text-[#1a5fa8]" />
+                <h3 className="text-xs font-semibold text-[#0f3460] uppercase tracking-wide">Acceso al sistema</h3>
+              </div>
+              {editingId ? (
+                (() => {
+                  const personalActual = personal.find(p => p.id === editingId);
+                  const tieneAcceso = !!personalActual?.uid;
+                  return tieneAcceso ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-600">
+                        Email de login: <span className="font-medium">{personalActual?.email || '—'}</span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => personalActual && abrirResetPassword(personalActual)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
+                      >
+                        <Key size={12} /> Restablecer contraseña
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-800">
+                      Este personal aún no tiene cuenta de login. Crea una desde la página de <span className="font-semibold">Usuarios</span> o edita para crear.
+                    </p>
+                  );
+                })()
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Email de acceso al sistema *</label>
+                    <input
+                      type="email"
+                      value={emailAcceso}
+                      onChange={e => setEmailAcceso(e.target.value)}
+                      placeholder="usuario@misterservicerd.com"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">Este email es distinto al email de contacto. Se usará para iniciar sesión.</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Contraseña inicial *</label>
+                    <div className="relative">
+                      <input
+                        type={showPasswordAcceso ? 'text' : 'password'}
+                        value={passwordAcceso}
+                        onChange={e => setPasswordAcceso(e.target.value)}
+                        placeholder="Mínimo 8 caracteres"
+                        minLength={8}
+                        className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPasswordAcceso(v => !v)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPasswordAcceso ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {form.rol === 'tecnico' && (
             <div>
@@ -930,6 +1190,44 @@ export default function PersonalPage() {
             </div>
           );
         })()}
+      </Modal>
+
+      {/* Modal Reset Password */}
+      <Modal
+        isOpen={showResetModal}
+        onClose={() => { setShowResetModal(false); setResetTarget(null); setResetPassword(''); }}
+        title={resetTarget ? `Restablecer contraseña de ${resetTarget.nombre}` : 'Restablecer contraseña'}
+      >
+        {resetTarget && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-700">
+              Se enviará un email de restablecimiento a <span className="font-medium">{resetTarget.email}</span>.
+              El usuario debe seguir el enlace en el email para elegir una nueva contraseña.
+            </p>
+            <p className="text-[11px] text-gray-500">
+              El cambio directo de contraseña desde el panel requiere un backend con Admin SDK.
+              Por ahora, se usa el flujo seguro de "email de restablecimiento" de Firebase.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => { setShowResetModal(false); setResetTarget(null); setResetPassword(''); }}
+                disabled={resetSaving}
+                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleResetPassword}
+                disabled={resetSaving}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              >
+                {resetSaving ? 'Enviando...' : 'Enviar email de restablecimiento'}
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

@@ -7,21 +7,26 @@ import { db, auth } from '../firebase/config';
 import { Personal, Rol, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, Edit, Key, Power, User, Shield, Eye, EyeOff, Check, X, KeyRound } from 'lucide-react';
+import { Plus, Edit, Key, Power, User, Shield, Eye, EyeOff, Check, X, KeyRound, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
 const ROL_LABELS: Record<Rol, string> = {
   administrador: 'Administrador',
+  coordinadora: 'Coordinadora',
   secretaria: 'Secretaria',
   operaria: 'Operaria',
   tecnico: 'Técnico',
+  ayudante: 'Ayudante',
 };
 
 const ROL_COLORS: Record<Rol, string> = {
   administrador: 'bg-purple-100 text-purple-700',
+  coordinadora: 'bg-violet-100 text-violet-700',
   secretaria: 'bg-blue-100 text-blue-700',
   operaria: 'bg-teal-100 text-teal-700',
   tecnico: 'bg-orange-100 text-orange-700',
+  ayudante: 'bg-slate-100 text-slate-700',
 };
 
 interface FormState {
@@ -255,13 +260,20 @@ export default function GestionUsuarios() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Usuarios del Sistema</h1>
-          <p className="text-gray-500 text-sm">Gestión de accesos y permisos</p>
+          <h1 className="text-2xl font-bold text-[#0f3460]">Gestión de Accesos</h1>
+          <p className="text-gray-500 text-sm">Contraseñas, activación y permisos granulares</p>
         </div>
-        <button onClick={openCreate}
-          className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
-          <Plus size={18} /> Crear Usuario
-        </button>
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 text-sm text-blue-900">
+        <User size={14} className="mt-0.5 shrink-0" />
+        <div className="flex-1">
+          Para crear nuevos usuarios del sistema, ve a{' '}
+          <Link to="/admin/personal" className="font-semibold underline hover:text-blue-700 inline-flex items-center gap-1">
+            Personal <ExternalLink size={11} />
+          </Link>
+          . Al crear un miembro del personal con rol distinto de "ayudante", se genera automáticamente su cuenta de acceso.
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

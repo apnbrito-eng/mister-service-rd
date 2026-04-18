@@ -42,7 +42,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     navigate('/login');
   };
 
-  const isAdmin = userProfile?.rol === 'administrador';
+  const esAdminOCoord = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  // Alias mantenido: ahora coordinadora también cuenta como "admin" en visibilidad
+  const isAdmin = esAdminOCoord;
   const isOperaria = userProfile?.rol === 'operaria' || isAdmin;
   const isSecretaria = userProfile?.rol === 'secretaria' || isAdmin;
 

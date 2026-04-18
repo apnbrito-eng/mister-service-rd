@@ -218,7 +218,7 @@ export default function OrdenDetalle() {
     if (!orden || !userProfile) return false;
     if (orden.soloChequeo) return false;
     if (!['en_cotizacion', 'aprobado'].includes(orden.fase)) return false;
-    if (userProfile.rol === 'administrador' || userProfile.rol === 'operaria') return true;
+    if (userProfile.rol === 'administrador' || userProfile.rol === 'coordinadora' || userProfile.rol === 'operaria') return true;
     if (userProfile.rol === 'tecnico' && orden.tecnicoId === userProfile.id) return true;
     return false;
   };
@@ -608,7 +608,7 @@ export default function OrdenDetalle() {
           {/* Aprobación de precio (solo admin/operaciones) */}
           {orden.precioSugerido !== undefined &&
            orden.estadoAprobacion !== 'aprobado' &&
-           (userProfile?.rol === 'administrador' || userProfile?.rol === 'operaria') && (
+           (userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora' || userProfile?.rol === 'operaria') && (
             <div className="bg-yellow-50 rounded-2xl shadow-sm border-2 border-yellow-200 p-6">
               <h3 className="text-sm font-semibold text-yellow-800 uppercase mb-3 flex items-center gap-1">
                 ⏳ Aprobar Precio

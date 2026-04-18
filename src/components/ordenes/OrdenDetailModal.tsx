@@ -148,7 +148,7 @@ export default function OrdenDetailModal({
       {/* Aprobacion de precio (solo admin/operaciones, solo si hay sugerido y no aprobado) */}
       {orden.precioSugerido !== undefined &&
        orden.estadoAprobacion !== 'aprobado' &&
-       (userProfile?.rol === 'administrador' || userProfile?.rol === 'operaria') && (
+       (userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora' || userProfile?.rol === 'operaria') && (
         <div className="bg-yellow-50 rounded-xl p-4 border-2 border-yellow-200">
           <h3 className="text-sm font-semibold text-yellow-800 uppercase tracking-wide mb-2 flex items-center gap-1">
             {'\u{23F3}'} Aprobar Precio
