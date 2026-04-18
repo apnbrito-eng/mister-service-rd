@@ -5,8 +5,9 @@ import { Personal, Rol } from '../types';
 import { formatTelefono } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, Edit, UserCog, Check, X } from 'lucide-react';
+import { Plus, Edit, UserCog, Check, X, Users } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useApp } from '../context/AppContext';
 
 const ROL_LABELS: Record<Rol, string> = {
   administrador: 'Administrador',
@@ -29,6 +30,8 @@ function comisionDefaultPorNivel(nivel: 'junior' | 'senior'): number {
 }
 
 export default function PersonalPage() {
+  const { userProfile } = useApp();
+  const esAdmin = userProfile?.rol === 'administrador';
   const [loading, setLoading] = useState(true);
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -40,7 +43,13 @@ export default function PersonalPage() {
   const [form, setForm] = useState<Omit<Personal, 'id'>>({
     nombre: '', rol: 'tecnico', telefono: '', email: '', especialidad: '', zona: '', horario: '', color: '#3b82f6', disponibilidad: true, activo: true,
     nivel: 'senior', comisionPorcentaje: 10, sueldoBase: 0,
+    operariaId: '', operariaNombre: '',
   });
+
+  // Operarias/Admins activos disponibles como supervisoras de técnicos
+  const operariasDisponibles = personal.filter(
+    p => p.activo && (p.rol === 'operaria' || p.rol === 'administrador')
+  );
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -79,6 +88,11 @@ export default function PersonalPage() {
           : comisionDefaultPorNivel(form.nivel || 'senior');
         data.sueldoBase = typeof form.sueldoBase === 'number' ? form.sueldoBase : 0;
       }
+      // Solo técnicos tienen operaria a cargo
+      if (form.rol === 'tecnico' && form.operariaId) {
+        data.operariaId = form.operariaId;
+        data.operariaNombre = form.operariaNombre || '';
+      }
       if (editingId) {
         await updateDoc(doc(db, 'personal', editingId), data);
         toast.success('Personal actualizado');
@@ -100,6 +114,7 @@ export default function PersonalPage() {
     setForm({
       nombre: '', rol: 'tecnico', telefono: '', email: '', especialidad: '', zona: '', horario: '', color: '#3b82f6', disponibilidad: true, activo: true,
       nivel: 'senior', comisionPorcentaje: 10, sueldoBase: 0,
+      operariaId: '', operariaNombre: '',
     });
     setComisionTocada(false);
   };
@@ -110,6 +125,8 @@ export default function PersonalPage() {
       nivel: p.nivel || 'senior',
       comisionPorcentaje: typeof p.comisionPorcentaje === 'number' ? p.comisionPorcentaje : comisionDefaultPorNivel(p.nivel || 'senior'),
       sueldoBase: typeof p.sueldoBase === 'number' ? p.sueldoBase : 0,
+      operariaId: p.operariaId || '',
+      operariaNombre: p.operariaNombre || '',
     });
     // Al editar, considerar el valor actual como "tocado" para no pisarlo al cambiar nivel
     setComisionTocada(true);
@@ -163,6 +180,84 @@ export default function PersonalPage() {
           <Plus size={18} /> Agregar
         </button>
       </div>
+
+      {esAdmin && (() => {
+        const tecnicos = personal.filter(p => p.rol === 'tecnico' && p.activo);
+        const operarias = personal.filter(p => (p.rol === 'operaria' || p.rol === 'administrador') && p.activo);
+        const operariasConTecnicos = operarias
+          .map(op => ({
+            operaria: op,
+            tecnicos: tecnicos.filter(t => t.operariaId === op.id),
+          }))
+          .filter(g => g.tecnicos.length > 0);
+        const tecnicosSinAsignar = tecnicos.filter(t => !t.operariaId);
+        const hayGrupos = operariasConTecnicos.length > 0 || tecnicosSinAsignar.length > 0;
+
+        if (!hayGrupos) return null;
+
+        return (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Users size={18} className="text-[#1a5fa8]" />
+              <h2 className="text-lg font-semibold text-[#0f3460]">Grupos operaria-técnico</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {operariasConTecnicos.map(({ operaria, tecnicos: tecs }) => (
+                <div key={operaria.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                      style={{ backgroundColor: operaria.color || '#0f3460' }}
+                    >
+                      {operaria.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{operaria.nombre}</p>
+                      <p className="text-[10px] text-gray-500">{ROL_LABELS[operaria.rol]} · {tecs.length} técnico{tecs.length !== 1 ? 's' : ''}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tecs.map(t => (
+                      <span
+                        key={t.id}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium"
+                        style={{
+                          backgroundColor: `${t.color || '#3b82f6'}22`,
+                          color: t.color || '#3b82f6',
+                        }}
+                      >
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color || '#3b82f6' }} />
+                        {t.nombre}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {tecnicosSinAsignar.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm border-2 border-dashed border-amber-200 p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 text-xs font-bold">?</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-amber-900">Sin asignar</p>
+                      <p className="text-[10px] text-amber-700">{tecnicosSinAsignar.length} técnico{tecnicosSinAsignar.length !== 1 ? 's' : ''} sin operaria</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tecnicosSinAsignar.map(t => (
+                      <span
+                        key={t.id}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700"
+                      >
+                        {t.nombre}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
@@ -242,6 +337,34 @@ export default function PersonalPage() {
               {(Object.keys(ROL_LABELS) as Rol[]).map(r => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}
             </select>
           </div>
+
+          {form.rol === 'tecnico' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Operaria a cargo</label>
+              <select
+                value={form.operariaId || ''}
+                onChange={e => {
+                  const op = operariasDisponibles.find(o => o.id === e.target.value);
+                  setForm(f => ({
+                    ...f,
+                    operariaId: e.target.value,
+                    operariaNombre: op?.nombre || '',
+                  }));
+                }}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              >
+                <option value="">Sin asignar</option>
+                {operariasDisponibles.map(op => (
+                  <option key={op.id} value={op.id}>
+                    {op.nombre} ({ROL_LABELS[op.rol]})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-gray-400 mt-1">
+                La operaria de las órdenes se asignará automáticamente según este técnico.
+              </p>
+            </div>
+          )}
 
           {ROLES_CON_COMISION.includes(form.rol) && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-indigo-50/40 border border-indigo-100 rounded-lg p-3">

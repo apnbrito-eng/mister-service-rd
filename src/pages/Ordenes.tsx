@@ -20,7 +20,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { useApp } from '../context/AppContext';
 import {
   Plus, Search, Clock, Calendar, MapPin, Phone, MessageCircle,
-  Wrench, User, FileText, Edit2, CalendarDays, RefreshCw
+  Wrench, User, FileText, Edit2, CalendarDays, RefreshCw, Eye
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format, isSameDay } from 'date-fns';
@@ -69,6 +69,7 @@ export default function Ordenes() {
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
+  const [verTodasOperarias, setVerTodasOperarias] = useState(false);
   const [ordenesActivasCliente, setOrdenesActivasCliente] = useState<OrdenServicio[]>([]);
   const [buscandoTelefono, setBuscandoTelefono] = useState(false);
   const [showTelefonoDropdown, setShowTelefonoDropdown] = useState(false);
@@ -493,9 +494,16 @@ export default function Ordenes() {
         ));
       }
 
+      // Re-derivar operaria a partir del técnico actualmente elegido
+      const tecnicoElegido = personal.find(p => p.id === editForm.tecnicoId);
+      const operariaIdDerivada = tecnicoElegido?.operariaId || null;
+      const operariaNombreDerivada = tecnicoElegido?.operariaNombre || null;
+
       const updateData: Record<string, unknown> = {
         tecnicoId: editForm.tecnicoId,
         tecnicoNombre: editForm.tecnicoNombre,
+        operariaId: operariaIdDerivada,
+        operariaNombre: operariaNombreDerivada,
         fechaCita: fechaCitaTs,
         clienteTelefono: editForm.clienteTelefono,
         clienteDireccion: editForm.clienteDireccion,
@@ -546,20 +554,28 @@ export default function Ordenes() {
 
   const tecnicos = useMemo(() => personal.filter(p => p.rol === 'tecnico' && p.activo), [personal]);
 
+  // Filtro por grupo de operaria (auto para rol operaria, toggle desactiva el filtro)
+  const esOperaria = userProfile?.rol === 'operaria';
+  const filtroOperariaActivo = esOperaria && !verTodasOperarias;
+  const ordenesVisibles = useMemo(() => {
+    if (!filtroOperariaActivo) return ordenes;
+    return ordenes.filter(o => o.operariaId === userProfile?.id);
+  }, [ordenes, filtroOperariaActivo, userProfile?.id]);
+
   // Today's orders
   const hoy = new Date();
   const ordenesHoy = useMemo(() => {
-    return ordenes
+    return ordenesVisibles
       .filter(o => o.fechaCita && isSameDay(o.fechaCita, hoy))
       .sort((a, b) => {
         if (!a.fechaCita || !b.fechaCita) return 0;
         return a.fechaCita.getTime() - b.fechaCita.getTime();
       });
-  }, [ordenes]);
+  }, [ordenesVisibles]);
 
   // Filtered orders
   const ordenesFiltradas = useMemo(() => {
-    return ordenes.filter(o => {
+    return ordenesVisibles.filter(o => {
       const matchBusqueda = !busqueda ||
         o.clienteNombre.toLowerCase().includes(busqueda.toLowerCase()) ||
         o.numero?.toLowerCase().includes(busqueda.toLowerCase());
@@ -568,7 +584,7 @@ export default function Ordenes() {
       const matchMes = !filtroMes || (o.fechaCita && format(o.fechaCita, 'yyyy-MM') === filtroMes);
       return matchBusqueda && matchEstado && matchTecnico && matchMes;
     });
-  }, [ordenes, busqueda, filtroEstado, filtroTecnico, filtroMes]);
+  }, [ordenesVisibles, busqueda, filtroEstado, filtroTecnico, filtroMes]);
 
   // Horarios ocupados — formulario de EDICION
   const horariosOcupados = useMemo(() => {
@@ -875,6 +891,11 @@ export default function Ordenes() {
         fechaCita = Timestamp.fromDate(new Date(`${form.fechaCita}T08:00:00`));
       }
 
+      // Resolver operaria a partir del técnico asignado
+      const tecnicoElegido = personal.find(p => p.id === form.tecnicoId);
+      const operariaIdDerivada = tecnicoElegido?.operariaId;
+      const operariaNombreDerivada = tecnicoElegido?.operariaNombre;
+
       const ahora = Timestamp.now();
       const faseInicial: FaseOrden = 'agendado';
       const estadoInicial: EstadoOrdenSimple = 'pendiente';
@@ -913,6 +934,8 @@ export default function Ordenes() {
       if (form.clienteReferencia) ordenData.clienteReferencia = form.clienteReferencia;
       if (form.clienteLat !== undefined) ordenData.clienteLat = form.clienteLat;
       if (form.clienteLng !== undefined) ordenData.clienteLng = form.clienteLng;
+      if (operariaIdDerivada) ordenData.operariaId = operariaIdDerivada;
+      if (operariaNombreDerivada) ordenData.operariaNombre = operariaNombreDerivada;
 
       await addDoc(collection(db, 'ordenes_servicio'), ordenData);
       toast.success(`Orden ${numero} creada exitosamente`);
@@ -952,18 +975,37 @@ export default function Ordenes() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-[#0f3460]">Ordenes de Servicio</h1>
-          <p className="text-gray-500 text-sm">{ordenes.length} ordenes en total</p>
+          <p className="text-gray-500 text-sm">
+            {ordenesVisibles.length} ordenes {filtroOperariaActivo ? 'en tu grupo' : 'en total'}
+          </p>
+          {esOperaria && (
+            <p className="text-xs text-[#1a5fa8] mt-0.5">
+              {filtroOperariaActivo ? 'Viendo solo tu grupo' : 'Viendo todas las operarias (modo apoyo)'}
+            </p>
+          )}
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-2 bg-[#1a5fa8] hover:bg-[#0f3460] text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors"
-        >
-          <Plus size={18} />
-          Crear Orden de Servicio
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {esOperaria && (
+            <button
+              type="button"
+              onClick={() => setVerTodasOperarias(v => !v)}
+              className="inline-flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[#1a5fa8] bg-white border border-[#1a5fa8]/30 rounded-xl hover:bg-[#1a5fa8]/5 transition-colors"
+            >
+              <Eye size={14} />
+              {filtroOperariaActivo ? 'Ver todas las operarias' : 'Ver solo mi grupo'}
+            </button>
+          )}
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 bg-[#1a5fa8] hover:bg-[#0f3460] text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors"
+          >
+            <Plus size={18} />
+            Crear Orden de Servicio
+          </button>
+        </div>
       </div>
 
       {/* Agenda de Hoy */}

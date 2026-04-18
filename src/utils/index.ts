@@ -352,6 +352,8 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     descripcionFalla: (raw.descripcionFalla as string) || '',
     tecnicoId: (raw.tecnicoId as string) || undefined,
     tecnicoNombre: (raw.tecnicoNombre as string) || undefined,
+    operariaId: (raw.operariaId as string) || undefined,
+    operariaNombre: (raw.operariaNombre as string) || undefined,
     responsableId: (raw.responsableId as string) || undefined,
     responsableNombre: (raw.responsableNombre as string) || undefined,
     fase: (raw.fase as FaseOrden) || 'nuevo_lead',

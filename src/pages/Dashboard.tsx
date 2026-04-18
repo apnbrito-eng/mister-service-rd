@@ -19,6 +19,8 @@ import {
 } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Badge from '../components/Badge';
+import { useApp } from '../context/AppContext';
+import { Eye } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -37,10 +39,12 @@ type PeriodoVentas = 'hoy' | 'semana' | 'mes' | 'año';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { userProfile } = useApp();
 
   // ---- state ----
   const [loading, setLoading] = useState(true);
-  const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
+  const [ordenesRaw, setOrdenesRaw] = useState<OrdenServicio[]>([]);
+  const [verTodasOperarias, setVerTodasOperarias] = useState(false);
   const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
@@ -56,7 +60,7 @@ export default function Dashboard() {
 
     const unsubOrdenes = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
       const data = snap.docs.map(d => parseOrden(d.id, d.data()) as OrdenServicio);
-      setOrdenes(data);
+      setOrdenesRaw(data);
       checkLoaded();
     });
 
@@ -126,6 +130,15 @@ export default function Dashboard() {
       unsubCotizaciones(); unsubGastos(); unsubPersonal();
     };
   }, []);
+
+  // ---- operaria filter ----
+  const esOperaria = userProfile?.rol === 'operaria';
+  const filtroOperariaActivo = esOperaria && !verTodasOperarias;
+
+  const ordenes = useMemo(() => {
+    if (!filtroOperariaActivo) return ordenesRaw;
+    return ordenesRaw.filter(o => o.operariaId === userProfile?.id);
+  }, [ordenesRaw, filtroOperariaActivo, userProfile?.id]);
 
   // ---- derived data ----
   const now = new Date();
@@ -232,8 +245,12 @@ export default function Dashboard() {
     return facturasPendientes.filter(f => differenceInDays(now, f.fechaEmision) >= 30);
   }, [facturasPendientes]);
 
-  // Tecnicos activos
-  const tecnicos = useMemo(() => personal.filter(p => p.rol === 'tecnico' && p.activo), [personal]);
+  // Tecnicos activos (filtrados por grupo de operaria si aplica)
+  const tecnicos = useMemo(() => {
+    const base = personal.filter(p => p.rol === 'tecnico' && p.activo);
+    if (!filtroOperariaActivo) return base;
+    return base.filter(t => t.operariaId === userProfile?.id);
+  }, [personal, filtroOperariaActivo, userProfile?.id]);
 
   // Estado de casos por tecnico
   const casosPorTecnico = useMemo(() => {
@@ -290,11 +307,30 @@ export default function Dashboard() {
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-[#0f3460]">Dashboard</h1>
-        <p className="text-gray-500 text-sm">
-          {now.toLocaleDateString('es-DO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-[#0f3460]">Dashboard</h1>
+          <p className="text-gray-500 text-sm">
+            {now.toLocaleDateString('es-DO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          </p>
+          {esOperaria && (
+            <p className="text-xs text-[#1a5fa8] mt-1">
+              {filtroOperariaActivo
+                ? `Viendo solo tu grupo · ${tecnicos.length} técnico${tecnicos.length !== 1 ? 's' : ''}`
+                : 'Viendo todas las operarias (modo apoyo)'}
+            </p>
+          )}
+        </div>
+        {esOperaria && (
+          <button
+            type="button"
+            onClick={() => setVerTodasOperarias(v => !v)}
+            className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-[#1a5fa8] bg-white border border-[#1a5fa8]/30 rounded-lg hover:bg-[#1a5fa8]/5 transition-colors"
+          >
+            <Eye size={14} />
+            {filtroOperariaActivo ? 'Ver todas las operarias' : 'Ver solo mi grupo'}
+          </button>
+        )}
       </div>
 
       {/* ======== 1. KPI CARDS ======== */}

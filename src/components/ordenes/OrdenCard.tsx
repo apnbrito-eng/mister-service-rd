@@ -57,6 +57,11 @@ export default function OrdenCard({ orden, onSelect, onChangeEstado }: OrdenCard
                 {orden.responsableNombre}
               </span>
             )}
+            {orden.operariaNombre && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-purple-50 text-purple-700">
+                Op: {orden.operariaNombre.split(' ')[0]}
+              </span>
+            )}
           </div>
         </div>
 

@@ -46,6 +46,13 @@ export default function OrdenEditForm({
   handleUsarMiUbicacionEdit,
   geoEditLoading,
 }: OrdenEditFormProps) {
+  // Derivar operaria del técnico actualmente elegido para mostrar info de grupo
+  const tecnicoElegido = tecnicos.find(t => t.id === editForm.tecnicoId);
+  const operariaNuevaNombre = tecnicoElegido?.operariaNombre;
+  const operariaPrevNombre = selectedOrden.operariaNombre;
+  const cambiaDeGrupo = !!editForm.tecnicoId &&
+    (operariaNuevaNombre || '') !== (operariaPrevNombre || '');
+
   return (
     <div className="space-y-5">
       <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
@@ -68,6 +75,18 @@ export default function OrdenEditForm({
           <option value="">Sin asignar</option>
           {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
         </select>
+        {editForm.tecnicoId && operariaNuevaNombre && (
+          <p className={`text-[11px] mt-1 ${cambiaDeGrupo ? 'text-purple-700' : 'text-gray-500'}`}>
+            {cambiaDeGrupo
+              ? `Esta orden pasará al grupo de ${operariaNuevaNombre}.`
+              : `Grupo: ${operariaNuevaNombre}.`}
+          </p>
+        )}
+        {editForm.tecnicoId && !operariaNuevaNombre && (
+          <p className="text-[11px] text-amber-600 mt-1">
+            Este técnico no tiene operaria asignada.
+          </p>
+        )}
       </div>
 
       {/* Fecha + Hora */}

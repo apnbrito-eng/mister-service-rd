@@ -83,6 +83,8 @@ export interface OrdenServicio {
   descripcionFalla: string;
   tecnicoId?: string;
   tecnicoNombre?: string;
+  operariaId?: string;
+  operariaNombre?: string;
   responsableId?: string;
   responsableNombre?: string;
   fase: FaseOrden;
@@ -247,6 +249,8 @@ export interface Personal {
   nivel?: 'junior' | 'senior';
   comisionPorcentaje?: number;
   sueldoBase?: number;
+  operariaId?: string;
+  operariaNombre?: string;
 }
 
 export interface Producto {

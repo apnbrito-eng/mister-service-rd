@@ -121,7 +121,9 @@ export default function Citas() {
       const fechaCitaTs = Timestamp.fromDate(
         new Date(`${agendarForm.fechaCita}T${agendarForm.horaInicio}:00`)
       );
-      await addDoc(collection(db, 'ordenes_servicio'), {
+      // Resolver operaria a partir del técnico escogido
+      const tecnicoElegido = personal.find(p => p.id === agendarForm.tecnicoId);
+      const ordenData: Record<string, unknown> = {
         numero,
         clienteId: '',
         clienteNombre: selectedCita.clienteNombre,
@@ -144,7 +146,10 @@ export default function Citas() {
         ],
         createdAt: Timestamp.fromDate(selectedCita.createdAt),
         updatedAt: ahora,
-      });
+      };
+      if (tecnicoElegido?.operariaId) ordenData.operariaId = tecnicoElegido.operariaId;
+      if (tecnicoElegido?.operariaNombre) ordenData.operariaNombre = tecnicoElegido.operariaNombre;
+      await addDoc(collection(db, 'ordenes_servicio'), ordenData);
       await deleteDoc(doc(db, 'citas_por_confirmar', selectedCita.id));
       toast.success(`Orden ${numero} creada y agendada`);
       setShowAgendarModal(false);
