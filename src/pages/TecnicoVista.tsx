@@ -166,12 +166,16 @@ export default function TecnicoVista() {
 
   const esOrdenMia = (orden: OrdenServicio): boolean => {
     if (!userProfile) return false;
-    // Matching by name or id
-    return (
-      orden.tecnicoId === userProfile.id ||
-      orden.tecnicoNombre === userProfile.nombre ||
-      orden.tecnicoNombre?.includes(userProfile.nombre.split(' ')[0]) === true
-    );
+    // Matching por id exacto
+    if (orden.tecnicoId && orden.tecnicoId === userProfile.id) return true;
+    // Matching por nombre completo (case-insensitive + trim)
+    const nombreOrden = orden.tecnicoNombre?.toLowerCase().trim();
+    const nombreProfile = userProfile.nombre?.toLowerCase().trim();
+    if (nombreOrden && nombreProfile && nombreOrden === nombreProfile) return true;
+    // Matching fuzzy por primer nombre (tolera "Jorge" vs "Jorge Brito")
+    const primerNombre = nombreProfile?.split(' ')[0];
+    if (primerNombre && nombreOrden && nombreOrden.includes(primerNombre)) return true;
+    return false;
   };
 
   const getRangoFechas = (v: VistaTab): { start: Date; end: Date } => {
@@ -203,13 +207,15 @@ export default function TecnicoVista() {
     return ordenes
       .filter(o => {
         if (permisos.soloPropiasCitas && !esOrdenMia(o)) return false;
-        if (o.estado === 'cancelado') return false;
+        // Excluir explícitamente cerrado/cancelado tanto por estado como por fase
+        if (o.estado === 'cancelado' || o.estado === 'cerrado') return false;
+        if (o.fase === 'cancelado' || o.fase === 'cerrado') return false;
         if (!o.fechaCita) return false;
         return o.fechaCita >= start && o.fechaCita <= end;
       })
       .sort((a, b) => (a.fechaCita?.getTime() || 0) - (b.fechaCita?.getTime() || 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ordenes, vista, permisos.soloPropiasCitas, userProfile?.id, rangoAplicado]);
+  }, [ordenes, vista, permisos.soloPropiasCitas, userProfile?.id, userProfile?.nombre, rangoAplicado]);
 
   const citasHoy = useMemo(() => {
     return ordenes.filter(o => o.fechaCita && isSameDay(o.fechaCita, new Date()) && o.estado !== 'cancelado' && (!permisos.soloPropiasCitas || esOrdenMia(o)));
@@ -217,8 +223,39 @@ export default function TecnicoVista() {
   }, [ordenes, permisos.soloPropiasCitas, userProfile?.id]);
 
   const getClienteUbicacion = (orden: OrdenServicio) => {
+    // 1) Preferir coordenadas guardadas en la propia orden (más frescas/precisas)
+    if (
+      typeof orden.clienteLat === 'number' &&
+      typeof orden.clienteLng === 'number' &&
+      !isNaN(orden.clienteLat) &&
+      !isNaN(orden.clienteLng) &&
+      orden.clienteLat !== 0 &&
+      orden.clienteLng !== 0
+    ) {
+      return {
+        lat: orden.clienteLat,
+        lng: orden.clienteLng,
+        direccion: orden.clienteDireccion || '',
+      };
+    }
+    // 2) Fallback: coordenadas del registro del cliente
     const c = clientes.find(cl => cl.id === orden.clienteId);
-    return c?.lat && c?.lng ? { lat: c.lat, lng: c.lng, direccion: c.direccion || orden.clienteDireccion || '' } : null;
+    if (
+      c &&
+      typeof c.lat === 'number' &&
+      typeof c.lng === 'number' &&
+      !isNaN(c.lat) &&
+      !isNaN(c.lng) &&
+      c.lat !== 0 &&
+      c.lng !== 0
+    ) {
+      return {
+        lat: c.lat,
+        lng: c.lng,
+        direccion: c.direccion || orden.clienteDireccion || '',
+      };
+    }
+    return null;
   };
 
   const marcadoresMapaRaw = useMemo(() => {
