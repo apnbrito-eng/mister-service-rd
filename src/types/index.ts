@@ -76,6 +76,7 @@ export interface OrdenServicio {
   clienteId: string;
   clienteNombre: string;
   clienteTelefono?: string;
+  clienteEmail?: string;
   clienteDireccion?: string;
   clienteReferencia?: string;
   clienteLat?: number;
@@ -84,6 +85,7 @@ export interface OrdenServicio {
   equipoMarca: string;
   equipoModelo?: string;
   descripcionFalla: string;
+  fotoEquipoUrl?: string;
   tecnicoId?: string;
   tecnicoNombre?: string;
   operariaId?: string;

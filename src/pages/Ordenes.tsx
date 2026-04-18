@@ -3,7 +3,8 @@ import {
   collection, onSnapshot, addDoc, doc, updateDoc, setDoc,
   Timestamp, getDocs, query, orderBy, arrayUnion
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase/config';
 import { siguienteNumeroOrden } from '../services/contadores.service';
 import { normalizarTelefono, buscarClientePorTelefono } from '../services/clientes.service';
 import { OrdenServicio, FaseOrden, EstadoOrdenSimple, Cliente, Personal } from '../types';
@@ -114,20 +115,28 @@ export default function Ordenes() {
 
   // Edit form (dentro del modal de detalles)
   const [editForm, setEditForm] = useState<EditFormState>({
-    tecnicoId: '',
-    tecnicoNombre: '',
-    fechaCita: '',
-    horaInicio: '',
+    clienteNombre: '',
+    clienteEmail: '',
     clienteTelefono: '',
     clienteDireccion: '',
     clienteReferencia: '',
     clienteLat: undefined as number | undefined,
     clienteLng: undefined as number | undefined,
+    equipoTipo: '',
+    equipoMarca: '',
+    equipoModelo: '',
     descripcionFalla: '',
+    fotoEquipoUrl: '',
+    tecnicoId: '',
+    tecnicoNombre: '',
+    duracionMin: 60,
+    fechaCita: '',
+    horaInicio: '',
     notas: '',
   });
   const [savingEdit, setSavingEdit] = useState(false);
   const [geoEditLoading, setGeoEditLoading] = useState(false);
+  const [editFotoFile, setEditFotoFile] = useState<File | null>(null);
 
   // Aprobacion de precio
   const [precioAprobacion, setPrecioAprobacion] = useState('');
@@ -206,19 +215,28 @@ export default function Ordenes() {
   useEffect(() => {
     if (showEditInDetail && selectedOrden) {
       const fc = selectedOrden.fechaCita;
+      const fotoUrl = selectedOrden.fotoEquipoUrl;
       setEditForm({
-        tecnicoId: selectedOrden.tecnicoId || '',
-        tecnicoNombre: selectedOrden.tecnicoNombre || '',
-        fechaCita: fc ? format(fc, 'yyyy-MM-dd') : '',
-        horaInicio: fc ? format(fc, 'HH:00') : '',
+        clienteNombre: selectedOrden.clienteNombre || '',
+        clienteEmail: selectedOrden.clienteEmail || '',
         clienteTelefono: selectedOrden.clienteTelefono || '',
         clienteDireccion: selectedOrden.clienteDireccion || '',
         clienteReferencia: selectedOrden.clienteReferencia || '',
         clienteLat: selectedOrden.clienteLat,
         clienteLng: selectedOrden.clienteLng,
+        equipoTipo: selectedOrden.equipoTipo || '',
+        equipoMarca: selectedOrden.equipoMarca || '',
+        equipoModelo: selectedOrden.equipoModelo || '',
         descripcionFalla: selectedOrden.descripcionFalla || '',
+        fotoEquipoUrl: fotoUrl || '',
+        tecnicoId: selectedOrden.tecnicoId || '',
+        tecnicoNombre: selectedOrden.tecnicoNombre || '',
+        duracionMin: selectedOrden.duracionMin || 60,
+        fechaCita: fc ? format(fc, 'yyyy-MM-dd') : '',
+        horaInicio: fc ? format(fc, 'HH:00') : '',
         notas: selectedOrden.notas || '',
       });
+      setEditFotoFile(null);
     }
   }, [showEditInDetail, selectedOrden]);
 
@@ -447,6 +465,36 @@ export default function Ordenes() {
       const usuario = userProfile?.nombre || 'Sistema';
       const registros: Record<string, unknown>[] = [];
 
+      if (editForm.clienteNombre !== (selectedOrden.clienteNombre || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió nombre del cliente', 'clienteNombre',
+          selectedOrden.clienteNombre || '', editForm.clienteNombre
+        ));
+      }
+      if (editForm.equipoTipo !== (selectedOrden.equipoTipo || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió tipo de equipo', 'equipoTipo',
+          selectedOrden.equipoTipo || '', editForm.equipoTipo
+        ));
+      }
+      if (editForm.equipoMarca !== (selectedOrden.equipoMarca || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió marca del equipo', 'equipoMarca',
+          selectedOrden.equipoMarca || '', editForm.equipoMarca
+        ));
+      }
+      if (editForm.equipoModelo !== (selectedOrden.equipoModelo || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió modelo del equipo', 'equipoModelo',
+          selectedOrden.equipoModelo || '', editForm.equipoModelo
+        ));
+      }
+      if (editForm.duracionMin !== (selectedOrden.duracionMin || 60)) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió duración estimada', 'duracionMin',
+          String(selectedOrden.duracionMin || 60), String(editForm.duracionMin)
+        ));
+      }
       if (editForm.tecnicoNombre !== (selectedOrden.tecnicoNombre || '')) {
         registros.push(crearRegistroAuditoria(
           usuario, 'editar', 'Cambio tecnico asignado', 'tecnicoNombre',
@@ -499,21 +547,47 @@ export default function Ordenes() {
       const operariaIdDerivada = tecnicoElegido?.operariaId || null;
       const operariaNombreDerivada = tecnicoElegido?.operariaNombre || null;
 
+      // Subir foto nueva si existe; si falla, continuar con lo que estaba
+      const fotoPrevUrl = selectedOrden.fotoEquipoUrl;
+      let fotoUrlFinal: string | null = editForm.fotoEquipoUrl || null;
+      if (editFotoFile) {
+        try {
+          const ts = Date.now();
+          const path = `fotos-equipo/${selectedOrden.id}/${ts}.jpg`;
+          const ref = storageRef(storage, path);
+          await uploadBytes(ref, editFotoFile);
+          fotoUrlFinal = await getDownloadURL(ref);
+        } catch (err) {
+          console.error('Error subiendo foto del equipo:', err);
+          fotoUrlFinal = fotoPrevUrl || null;
+        }
+      }
+      if (fotoUrlFinal !== (fotoPrevUrl || null)) {
+        registros.push(crearRegistroAuditoria(usuario, 'editar', 'Cambió foto del equipo', 'fotoEquipoUrl'));
+      }
+
       const updateData: Record<string, unknown> = {
-        tecnicoId: editForm.tecnicoId,
-        tecnicoNombre: editForm.tecnicoNombre,
-        operariaId: operariaIdDerivada,
-        operariaNombre: operariaNombreDerivada,
-        fechaCita: fechaCitaTs,
+        clienteNombre: editForm.clienteNombre,
         clienteTelefono: editForm.clienteTelefono,
         clienteDireccion: editForm.clienteDireccion,
         clienteReferencia: editForm.clienteReferencia,
         clienteLat: editForm.clienteLat ?? null,
         clienteLng: editForm.clienteLng ?? null,
+        equipoTipo: editForm.equipoTipo,
+        equipoMarca: editForm.equipoMarca,
+        equipoModelo: editForm.equipoModelo,
         descripcionFalla: editForm.descripcionFalla,
+        fotoEquipoUrl: fotoUrlFinal,
+        tecnicoId: editForm.tecnicoId,
+        tecnicoNombre: editForm.tecnicoNombre,
+        operariaId: operariaIdDerivada,
+        operariaNombre: operariaNombreDerivada,
+        duracionMin: editForm.duracionMin,
+        fechaCita: fechaCitaTs,
         notas: editForm.notas,
         updatedAt: Timestamp.now(),
       };
+      if (editForm.clienteEmail) updateData.clienteEmail = editForm.clienteEmail;
 
       if (registros.length > 0) {
         updateData.auditoria = arrayUnion(...registros);
@@ -1122,12 +1196,15 @@ export default function Ordenes() {
             tecnicos={tecnicos}
             horariosOcupados={horariosOcupados}
             onSave={handleGuardarEdicion}
-            onCancel={() => setShowEditInDetail(false)}
+            onCancel={() => { setShowEditInDetail(false); setEditFotoFile(null); }}
             savingEdit={savingEdit}
             dirInputRef={dirInputRef}
             handleEditDireccionChange={handleEditDireccionChange}
             handleUsarMiUbicacionEdit={handleUsarMiUbicacionEdit}
             geoEditLoading={geoEditLoading}
+            fotoFile={editFotoFile}
+            onPickFoto={(file) => setEditFotoFile(file)}
+            onQuitarFoto={() => { setEditFotoFile(null); setEditForm(f => ({ ...f, fotoEquipoUrl: '' })); }}
           />
         )}
       </Modal>

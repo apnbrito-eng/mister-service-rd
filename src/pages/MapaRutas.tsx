@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, getDocs, doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../firebase/config';
 import { OrdenServicio, Personal, Cliente, FaseOrden } from '../types';
 import { getTecnicoColor, formatHora, faseLabel, formatFecha, formatTelefono, parseOrden, crearRegistroAuditoria } from '../utils';
 import { optimizarRuta, distanciaTotalRuta } from '../utils/rutas';
@@ -88,14 +89,19 @@ export default function MapaRutas() {
   // Edición desde pin (reusa OrdenEditForm)
   const [editingOrden, setEditingOrden] = useState<OrdenServicio | null>(null);
   const [editForm, setEditForm] = useState<EditFormState>({
-    tecnicoId: '', tecnicoNombre: '',
-    fechaCita: '', horaInicio: '',
+    clienteNombre: '', clienteEmail: '',
     clienteTelefono: '', clienteDireccion: '', clienteReferencia: '',
     clienteLat: undefined, clienteLng: undefined,
-    descripcionFalla: '', notas: '',
+    equipoTipo: '', equipoMarca: '', equipoModelo: '',
+    descripcionFalla: '', fotoEquipoUrl: '',
+    tecnicoId: '', tecnicoNombre: '',
+    duracionMin: 60,
+    fechaCita: '', horaInicio: '',
+    notas: '',
   });
   const [savingEdit, setSavingEdit] = useState(false);
   const [geoEditLoading, setGeoEditLoading] = useState(false);
+  const [editFotoFile, setEditFotoFile] = useState<File | null>(null);
 
   const dirInputRef = useRef<HTMLInputElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -286,30 +292,44 @@ export default function MapaRutas() {
     const o = ordenes.find(x => x.id === ordenId);
     if (!o) return;
     setEditingOrden(o);
+    const fotoUrl = o.fotoEquipoUrl;
     setEditForm({
-      tecnicoId: o.tecnicoId || '',
-      tecnicoNombre: o.tecnicoNombre || '',
-      fechaCita: o.fechaCita ? format(o.fechaCita, 'yyyy-MM-dd') : '',
-      horaInicio: o.fechaCita ? format(o.fechaCita, 'HH:00') : '',
+      clienteNombre: o.clienteNombre || '',
+      clienteEmail: o.clienteEmail || '',
       clienteTelefono: o.clienteTelefono || '',
       clienteDireccion: o.clienteDireccion || '',
       clienteReferencia: o.clienteReferencia || '',
       clienteLat: o.clienteLat,
       clienteLng: o.clienteLng,
+      equipoTipo: o.equipoTipo || '',
+      equipoMarca: o.equipoMarca || '',
+      equipoModelo: o.equipoModelo || '',
       descripcionFalla: o.descripcionFalla || '',
+      fotoEquipoUrl: fotoUrl || '',
+      tecnicoId: o.tecnicoId || '',
+      tecnicoNombre: o.tecnicoNombre || '',
+      duracionMin: o.duracionMin || 60,
+      fechaCita: o.fechaCita ? format(o.fechaCita, 'yyyy-MM-dd') : '',
+      horaInicio: o.fechaCita ? format(o.fechaCita, 'HH:00') : '',
       notas: o.notas || '',
     });
+    setEditFotoFile(null);
   };
 
   const cerrarEdit = () => {
     setEditingOrden(null);
     setEditForm({
-      tecnicoId: '', tecnicoNombre: '',
-      fechaCita: '', horaInicio: '',
+      clienteNombre: '', clienteEmail: '',
       clienteTelefono: '', clienteDireccion: '', clienteReferencia: '',
       clienteLat: undefined, clienteLng: undefined,
-      descripcionFalla: '', notas: '',
+      equipoTipo: '', equipoMarca: '', equipoModelo: '',
+      descripcionFalla: '', fotoEquipoUrl: '',
+      tecnicoId: '', tecnicoNombre: '',
+      duracionMin: 60,
+      fechaCita: '', horaInicio: '',
+      notas: '',
     });
+    setEditFotoFile(null);
     setSavingEdit(false);
   };
 
@@ -464,21 +484,77 @@ export default function MapaRutas() {
         registros.push(crearRegistroAuditoria(usuario, 'editar', 'Modificó notas desde mapa', 'notas'));
       }
 
+      // Subir foto nueva si existe
+      const fotoPrevUrl = editingOrden.fotoEquipoUrl;
+      let fotoUrlFinal: string | null = editForm.fotoEquipoUrl || null;
+      if (editFotoFile) {
+        try {
+          const ts = Date.now();
+          const path = `fotos-equipo/${editingOrden.id}/${ts}.jpg`;
+          const ref = storageRef(storage, path);
+          await uploadBytes(ref, editFotoFile);
+          fotoUrlFinal = await getDownloadURL(ref);
+        } catch (err) {
+          console.error('Error subiendo foto del equipo:', err);
+          fotoUrlFinal = fotoPrevUrl || null;
+        }
+      }
+      if (fotoUrlFinal !== (fotoPrevUrl || null)) {
+        registros.push(crearRegistroAuditoria(usuario, 'editar', 'Cambió foto del equipo desde mapa', 'fotoEquipoUrl'));
+      }
+      if (editForm.clienteNombre !== (editingOrden.clienteNombre || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió nombre del cliente desde mapa', 'clienteNombre',
+          editingOrden.clienteNombre || '', editForm.clienteNombre
+        ));
+      }
+      if (editForm.equipoTipo !== (editingOrden.equipoTipo || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió tipo de equipo desde mapa', 'equipoTipo',
+          editingOrden.equipoTipo || '', editForm.equipoTipo
+        ));
+      }
+      if (editForm.equipoMarca !== (editingOrden.equipoMarca || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió marca del equipo desde mapa', 'equipoMarca',
+          editingOrden.equipoMarca || '', editForm.equipoMarca
+        ));
+      }
+      if (editForm.equipoModelo !== (editingOrden.equipoModelo || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió modelo del equipo desde mapa', 'equipoModelo',
+          editingOrden.equipoModelo || '', editForm.equipoModelo
+        ));
+      }
+      if (editForm.duracionMin !== (editingOrden.duracionMin || 60)) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió duración estimada desde mapa', 'duracionMin',
+          String(editingOrden.duracionMin || 60), String(editForm.duracionMin)
+        ));
+      }
+
       const updateData: Record<string, unknown> = {
-        tecnicoId: editForm.tecnicoId,
-        tecnicoNombre: editForm.tecnicoNombre,
-        operariaId: tecnicoElegido?.operariaId || null,
-        operariaNombre: tecnicoElegido?.operariaNombre || null,
-        fechaCita: fechaCitaTs,
+        clienteNombre: editForm.clienteNombre,
         clienteTelefono: editForm.clienteTelefono,
         clienteDireccion: editForm.clienteDireccion,
         clienteReferencia: editForm.clienteReferencia,
         clienteLat: editForm.clienteLat ?? null,
         clienteLng: editForm.clienteLng ?? null,
+        equipoTipo: editForm.equipoTipo,
+        equipoMarca: editForm.equipoMarca,
+        equipoModelo: editForm.equipoModelo,
         descripcionFalla: editForm.descripcionFalla,
+        fotoEquipoUrl: fotoUrlFinal,
+        tecnicoId: editForm.tecnicoId,
+        tecnicoNombre: editForm.tecnicoNombre,
+        operariaId: tecnicoElegido?.operariaId || null,
+        operariaNombre: tecnicoElegido?.operariaNombre || null,
+        duracionMin: editForm.duracionMin,
+        fechaCita: fechaCitaTs,
         notas: editForm.notas || '',
         updatedAt: Timestamp.now(),
       };
+      if (editForm.clienteEmail) updateData.clienteEmail = editForm.clienteEmail;
       if (registros.length > 0) updateData.auditoria = arrayUnion(...registros);
       await updateDoc(doc(db, 'ordenes_servicio', editingOrden.id), updateData);
       toast.success('Orden actualizada');
@@ -826,6 +902,9 @@ export default function MapaRutas() {
             handleEditDireccionChange={handleEditDireccionChange}
             handleUsarMiUbicacionEdit={handleUsarMiUbicacionEdit}
             geoEditLoading={geoEditLoading}
+            fotoFile={editFotoFile}
+            onPickFoto={(file) => setEditFotoFile(file)}
+            onQuitarFoto={() => { setEditFotoFile(null); setEditForm(f => ({ ...f, fotoEquipoUrl: '' })); }}
           />
         )}
       </Modal>
