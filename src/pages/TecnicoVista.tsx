@@ -21,7 +21,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import { optimizarRuta } from '../utils/rutas';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -32,6 +32,14 @@ L.Icon.Default.mergeOptions({
   iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
 });
+
+function RecenterMap({ lat, lng, zoom }: { lat: number; lng: number; zoom: number }) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView([lat, lng], zoom);
+  }, [lat, lng, zoom, map]);
+  return null;
+}
 
 /** Pin SVG tipo gota numerado */
 function crearPinNumerado(numero: number, color: string = '#1a5fa8'): L.DivIcon {
@@ -329,7 +337,7 @@ export default function TecnicoVista() {
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
               </button>
             )}
-            {permisos.verUbicacionGPS && marcadoresMapa.length > 0 && (
+            {permisos.verUbicacionGPS && (
               <button onClick={() => setShowMap(!showMap)}
                 className="bg-white/20 p-2 rounded-lg text-white hover:bg-white/30" title="Mapa">
                 <Navigation size={18} />
@@ -352,14 +360,16 @@ export default function TecnicoVista() {
             Buenos días, {nombreCorto} 👋
           </h1>
           <p className="text-xs text-gray-400 mt-0.5">{citasFiltradas.length} citas</p>
-          {permisos.verUbicacionGPS && marcadoresMapa.length > 0 && (
+          {permisos.verUbicacionGPS && (
             <button
               onClick={() => setShowMap(!showMap)}
               className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-xl text-xs font-medium transition-colors"
             >
               <Navigation size={14} />
-              {showMap ? 'Ocultar mapa' : '🗺️ Ver Ruta del Día'}
-              <span className="bg-white/20 px-1.5 py-0.5 rounded-full text-[10px]">{marcadoresMapa.length}</span>
+              {showMap ? 'Ocultar mapa' : (marcadoresMapa.length > 0 ? '🗺️ Ver Ruta del Día' : '🗺️ Ver Mapa')}
+              {marcadoresMapa.length > 0 && (
+                <span className="bg-white/20 px-1.5 py-0.5 rounded-full text-[10px]">{marcadoresMapa.length}</span>
+              )}
             </button>
           )}
         </div>
@@ -419,38 +429,49 @@ export default function TecnicoVista() {
         )}
 
         {/* Mapa de Ruta del Día */}
-        {showMap && permisos.verUbicacionGPS && (
-          <div className="space-y-2">
-            {marcadoresMapa.length > 0 ? (
-              <>
-                <div className="rounded-2xl overflow-hidden shadow-sm border border-gray-100" style={{ height: '320px' }}>
-                  <MapContainer
-                    center={[marcadoresMapa[0].lat, marcadoresMapa[0].lng]}
-                    zoom={13}
-                    style={{ height: '100%', width: '100%' }}
-                  >
-                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                    {marcadoresMapa.map(m => (
-                      <Marker key={m.id} position={[m.lat, m.lng]} icon={crearPinNumerado(m.orden)}>
-                        <Popup>
-                          <div className="text-sm">
-                            <p className="font-semibold">{m.orden}. {m.clienteNombre}</p>
-                            <p>🕐 {formatHora(m.fechaCita)}</p>
-                            <p className="text-xs text-gray-600">{m.direccion}</p>
-                          </div>
-                        </Popup>
-                      </Marker>
-                    ))}
-                    {marcadoresMapa.length >= 2 && (
-                      <Polyline
-                        positions={marcadoresMapa.map(m => [m.lat, m.lng] as [number, number])}
-                        pathOptions={{ color: '#1a5fa8', weight: 3, opacity: 0.8, dashArray: '10 5' }}
-                      />
-                    )}
-                  </MapContainer>
-                </div>
+        {showMap && permisos.verUbicacionGPS && (() => {
+          const hayMarcadores = marcadoresMapa.length > 0;
+          const mapLat = hayMarcadores ? marcadoresMapa[0].lat : 18.48;
+          const mapLng = hayMarcadores ? marcadoresMapa[0].lng : -69.93;
+          const mapZoom = hayMarcadores ? 13 : 12;
+          return (
+            <div className="space-y-2">
+              <div className="relative rounded-2xl overflow-hidden shadow-sm border border-gray-100" style={{ height: '320px' }}>
+                <MapContainer
+                  center={[mapLat, mapLng]}
+                  zoom={mapZoom}
+                  style={{ height: '100%', width: '100%' }}
+                >
+                  <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                  <RecenterMap lat={mapLat} lng={mapLng} zoom={mapZoom} />
+                  {marcadoresMapa.map(m => (
+                    <Marker key={m.id} position={[m.lat, m.lng]} icon={crearPinNumerado(m.orden)}>
+                      <Popup>
+                        <div className="text-sm">
+                          <p className="font-semibold">{m.orden}. {m.clienteNombre}</p>
+                          <p>🕐 {formatHora(m.fechaCita)}</p>
+                          <p className="text-xs text-gray-600">{m.direccion}</p>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  ))}
+                  {marcadoresMapa.length >= 2 && (
+                    <Polyline
+                      positions={marcadoresMapa.map(m => [m.lat, m.lng] as [number, number])}
+                      pathOptions={{ color: '#1a5fa8', weight: 3, opacity: 0.8, dashArray: '10 5' }}
+                    />
+                  )}
+                </MapContainer>
+                {!hayMarcadores && (
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[400] bg-white/95 backdrop-blur px-4 py-2 rounded-full shadow-md text-xs text-gray-600 flex items-center gap-2">
+                    <MapPin size={12} />
+                    Sin citas programadas con ubicación GPS en este período
+                  </div>
+                )}
+              </div>
 
-                {/* Panel inferior compacto con paradas en orden */}
+              {/* Panel inferior compacto con paradas en orden (solo si hay marcadores) */}
+              {hayMarcadores && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3">
                   <p className="text-xs font-semibold text-gray-500 uppercase mb-2 flex items-center gap-1">
                     <Navigation size={12} /> Ruta optimizada · {marcadoresMapa.length} paradas
@@ -468,7 +489,6 @@ export default function TecnicoVista() {
                       </div>
                     ))}
                   </div>
-                  {/* Citas sin coordenadas */}
                   {citasFiltradas.length > marcadoresMapa.length && (
                     <div className="mt-2 pt-2 border-t border-gray-100">
                       <p className="text-[10px] text-orange-600 mb-1">⚠️ Citas sin GPS (no aparecen en el mapa):</p>
@@ -482,15 +502,10 @@ export default function TecnicoVista() {
                     </div>
                   )}
                 </div>
-              </>
-            ) : (
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 text-center">
-                <MapPin size={32} className="mx-auto text-gray-300 mb-2" />
-                <p className="text-sm text-gray-500">Sin citas con ubicación GPS en este período</p>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          );
+        })()}
 
         {/* Lista citas */}
         {citasFiltradas.length === 0 ? (
