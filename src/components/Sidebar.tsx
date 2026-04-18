@@ -3,7 +3,7 @@ import {
   LayoutDashboard, ClipboardList, Calendar, Map,
   Users, UserCog, FileText, Settings, LogOut, Wrench,
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight,
-  Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck,
+  Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -68,6 +68,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { to: '/admin/gastos', icon: DollarSign, label: 'Gastos e Ingresos', show: p('gastosVer') },
     { to: '/admin/rendimiento', icon: TrendingUp, label: 'Rendimiento', show: p('rendimientoVer') },
     { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
+    { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: isAdmin || p('configuracionModificar') },
+    { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionModificar') || userProfile?.rol === 'operaria' || isAdmin },
     { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
     { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: p('personalModificar') },
     { to: '/admin/web', icon: Globe, label: 'Página Web', show: isAdmin },

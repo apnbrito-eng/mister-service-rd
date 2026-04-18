@@ -22,6 +22,8 @@ import Gastos from './pages/Gastos';
 import PersonalPage from './pages/PersonalPage';
 import Configuracion from './pages/Configuracion';
 import CierreDia from './pages/CierreDia';
+import PreciosServicios from './pages/PreciosServicios';
+import Inventario from './pages/Inventario';
 import ConfiguracionWeb from './pages/ConfiguracionWeb';
 import EmpresasAliadas from './pages/EmpresasAliadas';
 import Formularios from './pages/Formularios';
@@ -43,6 +45,7 @@ import AgendarPage from './pages/public/AgendarPage';
 import { useEffect } from 'react';
 import { seedDatabase } from './firebase/seedData';
 import { seedWebConfig } from './services/seedWebConfig';
+import { seedPrecios } from './firebase/seedPrecios';
 import { limpiarOrdenDuplicada } from './utils/cleanFirestore';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -71,6 +74,7 @@ function AppRoutes() {
     if (currentUser) {
       seedDatabase().catch(console.error);
       seedWebConfig().catch(console.error);
+      seedPrecios().catch(console.error);
     }
   }, [currentUser]);
 
@@ -136,6 +140,8 @@ function AppRoutes() {
         <Route path="solicitudes" element={<Solicitudes />} />
         <Route path="configuracion" element={<Configuracion />} />
         <Route path="cierre-dia" element={<CierreDia />} />
+        <Route path="precios" element={<PreciosServicios />} />
+        <Route path="inventario" element={<Inventario />} />
         <Route path="configuracion/usuarios" element={<GestionUsuarios />} />
       </Route>
 

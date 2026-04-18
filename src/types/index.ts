@@ -137,6 +137,49 @@ export interface OrdenServicio {
   updatedAt: Date;
 }
 
+export interface ServicioPrecio {
+  id: string;
+  marca: string;
+  categoria: string;
+  equipoTipo: string;
+  nombre: string;
+  precio: number;
+  activo: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
+  notas?: string;
+}
+
+export interface PiezaInventario {
+  id: string;
+  nombre: string;
+  codigo?: string;
+  descripcion?: string;
+  precioCompra?: number;
+  precioVenta: number;
+  stockActual: number;
+  stockMinimo?: number;
+  proveedorSugerido?: string;
+  categoria?: string;
+  activo: boolean;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+export interface MovimientoInventario {
+  id: string;
+  piezaId: string;
+  piezaNombre: string;
+  tipo: 'entrada' | 'salida' | 'ajuste';
+  cantidad: number;
+  motivo: string;
+  ordenId?: string;
+  ordenNumero?: string;
+  usuario: string;
+  fecha: Date;
+  notas?: string;
+}
+
 export interface CierreDia {
   id: string;
   fecha: Date;                     // Día cerrado (00:00 del día)
