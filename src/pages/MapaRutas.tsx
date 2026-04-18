@@ -1,13 +1,15 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, getDocs, doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, Personal, Cliente, FaseOrden } from '../types';
-import { getTecnicoColor, formatHora, faseLabel, formatFecha, formatTelefono, parseOrden, HORARIOS, HORARIOS_LABEL, crearRegistroAuditoria } from '../utils';
+import { getTecnicoColor, formatHora, faseLabel, formatFecha, formatTelefono, parseOrden, crearRegistroAuditoria } from '../utils';
 import { optimizarRuta, distanciaTotalRuta } from '../utils/rutas';
 import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { MapPin, Navigation, Route, Clock, Phone, MessageCircle, Satellite, Truck, WifiOff, Edit2, AlertTriangle, Save, User } from 'lucide-react';
+import OrdenEditForm from '../components/ordenes/OrdenEditForm';
+import type { EditFormState } from '../components/ordenes/OrdenEditForm';
+import { MapPin, Navigation, Route, Clock, Phone, MessageCircle, Satellite, Truck, WifiOff, Edit2, AlertTriangle } from 'lucide-react';
 import { suscribirTodasUbicaciones } from '../services/gps.service';
 import { UbicacionVehiculo } from '../types';
 import { formatDistanceToNow, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, isSameDay } from 'date-fns';
@@ -18,6 +20,17 @@ import { es } from 'date-fns/locale';
 import 'leaflet/dist/leaflet.css';
 import { useApp } from '../context/AppContext';
 import toast from 'react-hot-toast';
+
+/** Detecta coordenadas en URLs de Google Maps o texto pegado (mismo helper que Ordenes.tsx) */
+function detectarCoordenadasURL(texto: string): { lat: number; lng: number } | null {
+  const match1 = texto.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (match1) return { lat: parseFloat(match1[1]), lng: parseFloat(match1[2]) };
+  const match2 = texto.match(/maps\/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (match2) return { lat: parseFloat(match2[1]), lng: parseFloat(match2[2]) };
+  const match3 = texto.match(/^(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)$/);
+  if (match3) return { lat: parseFloat(match3[1]), lng: parseFloat(match3[2]) };
+  return null;
+}
 
 /** Pin SVG tipo gota con número */
 function crearPinSVG(color: string, numero: number): L.DivIcon {
@@ -72,16 +85,21 @@ export default function MapaRutas() {
   const [tab, setTab] = useState<'rutas' | 'gps_vivo'>('rutas');
   const [ubicacionesLive, setUbicacionesLive] = useState<UbicacionVehiculo[]>([]);
 
-  // Edición desde pin
+  // Edición desde pin (reusa OrdenEditForm)
   const [editingOrden, setEditingOrden] = useState<OrdenServicio | null>(null);
-  const [editForm, setEditForm] = useState({
-    tecnicoId: '',
-    tecnicoNombre: '',
-    fechaCita: '',
-    horaInicio: '',
-    notas: '',
+  const [editForm, setEditForm] = useState<EditFormState>({
+    tecnicoId: '', tecnicoNombre: '',
+    fechaCita: '', horaInicio: '',
+    clienteTelefono: '', clienteDireccion: '', clienteReferencia: '',
+    clienteLat: undefined, clienteLng: undefined,
+    descripcionFalla: '', notas: '',
   });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [geoEditLoading, setGeoEditLoading] = useState(false);
+
+  const dirInputRef = useRef<HTMLInputElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const autocompleteRef = useRef<any>(null);
 
   useEffect(() => {
     if (tab !== 'gps_vivo') return;
@@ -273,14 +291,122 @@ export default function MapaRutas() {
       tecnicoNombre: o.tecnicoNombre || '',
       fechaCita: o.fechaCita ? format(o.fechaCita, 'yyyy-MM-dd') : '',
       horaInicio: o.fechaCita ? format(o.fechaCita, 'HH:00') : '',
+      clienteTelefono: o.clienteTelefono || '',
+      clienteDireccion: o.clienteDireccion || '',
+      clienteReferencia: o.clienteReferencia || '',
+      clienteLat: o.clienteLat,
+      clienteLng: o.clienteLng,
+      descripcionFalla: o.descripcionFalla || '',
       notas: o.notas || '',
     });
   };
 
   const cerrarEdit = () => {
     setEditingOrden(null);
-    setEditForm({ tecnicoId: '', tecnicoNombre: '', fechaCita: '', horaInicio: '', notas: '' });
+    setEditForm({
+      tecnicoId: '', tecnicoNombre: '',
+      fechaCita: '', horaInicio: '',
+      clienteTelefono: '', clienteDireccion: '', clienteReferencia: '',
+      clienteLat: undefined, clienteLng: undefined,
+      descripcionFalla: '', notas: '',
+    });
     setSavingEdit(false);
+  };
+
+  // Carga Google Places Autocomplete cuando se abre el modal de edición
+  useEffect(() => {
+    if (!editingOrden) return;
+
+    const initAC = () => {
+      if (!dirInputRef.current || !window.google?.maps?.places) return;
+      autocompleteRef.current = new window.google.maps.places.Autocomplete(dirInputRef.current, {
+        componentRestrictions: { country: 'do' },
+        fields: ['formatted_address', 'geometry'],
+      });
+      autocompleteRef.current.addListener('place_changed', () => {
+        const place = autocompleteRef.current.getPlace();
+        if (!place.geometry) return;
+        setEditForm(f => ({
+          ...f,
+          clienteDireccion: place.formatted_address || '',
+          clienteLat: place.geometry.location.lat(),
+          clienteLng: place.geometry.location.lng(),
+        }));
+      });
+    };
+
+    if (window.google?.maps?.places) {
+      initAC();
+      return;
+    }
+    if (!document.getElementById('google-places-script')) {
+      const script = document.createElement('script');
+      script.id = 'google-places-script';
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}&libraries=places&language=es`;
+      script.async = true;
+      script.defer = true;
+      script.onload = initAC;
+      document.head.appendChild(script);
+    } else {
+      const interval = setInterval(() => {
+        if (window.google?.maps?.places) { clearInterval(interval); initAC(); }
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [editingOrden]);
+
+  const handleEditDireccionChange = (texto: string) => {
+    const coords = detectarCoordenadasURL(texto);
+    if (coords) {
+      setEditForm(f => ({
+        ...f,
+        clienteDireccion: texto,
+        clienteLat: coords.lat,
+        clienteLng: coords.lng,
+      }));
+      toast.success('\u{1F4CD} Coordenadas exactas guardadas');
+      return;
+    }
+    setEditForm(f => ({ ...f, clienteDireccion: texto }));
+  };
+
+  const handleUsarMiUbicacionEdit = () => {
+    if (!navigator.geolocation) {
+      toast.error('Geolocalización no disponible en este navegador');
+      return;
+    }
+    setGeoEditLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=es`,
+            { headers: { 'Accept-Language': 'es' } }
+          );
+          const data = await res.json();
+          const raw = (data?.display_name || '').toString();
+          const direccion = raw ? raw.split(',').slice(0, 3).join(',').trim() : '';
+          setEditForm(f => ({
+            ...f,
+            clienteDireccion: direccion || f.clienteDireccion,
+            clienteLat: latitude,
+            clienteLng: longitude,
+          }));
+          toast.success('Ubicación capturada');
+        } catch {
+          setEditForm(f => ({ ...f, clienteLat: latitude, clienteLng: longitude }));
+          toast.success('Coordenadas capturadas');
+        } finally {
+          setGeoEditLoading(false);
+        }
+      },
+      (err) => {
+        setGeoEditLoading(false);
+        toast.error('No se pudo obtener la ubicación: ' + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
   };
 
   const handleGuardarEditDesdeMapa = async () => {
@@ -318,15 +444,38 @@ export default function MapaRutas() {
           fechaAnterior, fechaNueva
         ));
       }
+      if (editForm.clienteTelefono !== (editingOrden.clienteTelefono || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió teléfono del cliente desde mapa', 'clienteTelefono',
+          editingOrden.clienteTelefono || '', editForm.clienteTelefono
+        ));
+      }
+      if (editForm.clienteDireccion !== (editingOrden.clienteDireccion || '')) {
+        registros.push(crearRegistroAuditoria(usuario, 'editar', 'Cambió dirección del cliente desde mapa', 'clienteDireccion'));
+      }
+      if (editForm.descripcionFalla !== (editingOrden.descripcionFalla || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Modificó descripción de falla desde mapa', 'descripcionFalla',
+          (editingOrden.descripcionFalla || '').slice(0, 50),
+          editForm.descripcionFalla.slice(0, 50)
+        ));
+      }
       if ((editForm.notas || '') !== (editingOrden.notas || '')) {
         registros.push(crearRegistroAuditoria(usuario, 'editar', 'Modificó notas desde mapa', 'notas'));
       }
+
       const updateData: Record<string, unknown> = {
         tecnicoId: editForm.tecnicoId,
         tecnicoNombre: editForm.tecnicoNombre,
         operariaId: tecnicoElegido?.operariaId || null,
         operariaNombre: tecnicoElegido?.operariaNombre || null,
         fechaCita: fechaCitaTs,
+        clienteTelefono: editForm.clienteTelefono,
+        clienteDireccion: editForm.clienteDireccion,
+        clienteReferencia: editForm.clienteReferencia,
+        clienteLat: editForm.clienteLat ?? null,
+        clienteLng: editForm.clienteLng ?? null,
+        descripcionFalla: editForm.descripcionFalla,
         notas: editForm.notas || '',
         updatedAt: Timestamp.now(),
       };
@@ -656,115 +805,28 @@ export default function MapaRutas() {
       </div>
       )}
 
-      {/* Modal edición desde pin */}
+      {/* Modal edición desde pin — reusa OrdenEditForm */}
       <Modal
         isOpen={!!editingOrden}
         onClose={cerrarEdit}
         title={editingOrden ? `Editar ${editingOrden.numero || 'orden'}` : 'Editar orden'}
-        size="md"
+        size="lg"
       >
         {editingOrden && (
-          <div className="space-y-4">
-            <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
-              <p className="text-sm font-bold text-gray-900">{editingOrden.clienteNombre}</p>
-              <p className="text-xs text-gray-600">
-                {editingOrden.equipoTipo}
-                {editingOrden.equipoMarca ? ` · ${editingOrden.equipoMarca}` : ''}
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Técnico</label>
-              <select
-                value={editForm.tecnicoId}
-                onChange={e => {
-                  const t = tecnicos.find(x => x.id === e.target.value);
-                  setEditForm(f => ({ ...f, tecnicoId: e.target.value, tecnicoNombre: t?.nombre || '' }));
-                }}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-              >
-                <option value="">Sin asignar</option>
-                {tecnicos.map(t => (
-                  <option key={t.id} value={t.id}>
-                    {t.nombre}{t.operariaNombre ? ` (grupo ${t.operariaNombre})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Fecha de cita</label>
-                <input
-                  type="date"
-                  value={editForm.fechaCita}
-                  onChange={e => setEditForm(f => ({ ...f, fechaCita: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Hora de inicio</label>
-                <div className="grid grid-cols-5 gap-1">
-                  {HORARIOS.map(h => {
-                    const ocupado = horariosOcupadosEdit.includes(h);
-                    return (
-                      <button
-                        key={h}
-                        type="button"
-                        onClick={() => !ocupado && setEditForm(f => ({ ...f, horaInicio: h }))}
-                        disabled={ocupado}
-                        title={ocupado ? 'Horario ocupado' : ''}
-                        className={`px-1.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${
-                          ocupado
-                            ? 'bg-red-50 text-red-400 border-red-200 cursor-not-allowed line-through'
-                            : editForm.horaInicio === h
-                              ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                              : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
-                        }`}
-                      >
-                        {HORARIOS_LABEL[h]}
-                      </button>
-                    );
-                  })}
-                </div>
-                {editForm.tecnicoId && editForm.fechaCita && horariosOcupadosEdit.length > 0 && (
-                  <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
-                    <AlertTriangle size={10} /> {horariosOcupadosEdit.length} horario(s) ocupado(s) ese día
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Notas</label>
-              <textarea
-                rows={3}
-                value={editForm.notas}
-                onChange={e => setEditForm(f => ({ ...f, notas: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={cerrarEdit}
-                disabled={savingEdit}
-                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleGuardarEditDesdeMapa}
-                disabled={savingEdit}
-                className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60 inline-flex items-center gap-2"
-              >
-                <Save size={14} />
-                {savingEdit ? 'Guardando...' : 'Guardar cambios'}
-              </button>
-            </div>
-          </div>
+          <OrdenEditForm
+            editForm={editForm}
+            setEditForm={setEditForm}
+            selectedOrden={editingOrden}
+            tecnicos={tecnicos}
+            horariosOcupados={horariosOcupadosEdit}
+            onSave={handleGuardarEditDesdeMapa}
+            onCancel={cerrarEdit}
+            savingEdit={savingEdit}
+            dirInputRef={dirInputRef}
+            handleEditDireccionChange={handleEditDireccionChange}
+            handleUsarMiUbicacionEdit={handleUsarMiUbicacionEdit}
+            geoEditLoading={geoEditLoading}
+          />
         )}
       </Modal>
     </div>
