@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, Timestamp, query, orderBy } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
@@ -8,7 +8,7 @@ import { Personal, Rol, OrdenServicio, ROLES_CON_ACCESO, PERMISOS_DEFAULT_TECNIC
 import { formatTelefono, parseOrden } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, Edit, Check, X, Users, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Key, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Check, X, Users, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Key, Eye, EyeOff, Link2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 
@@ -74,6 +74,19 @@ export default function PersonalPage() {
   const [resetTarget, setResetTarget] = useState<Personal | null>(null);
   const [resetPassword, setResetPassword] = useState('');
   const [resetSaving, setResetSaving] = useState(false);
+
+  // Modal de vincular cuenta Auth existente (tanto desde fila como desde form cuando email ya existe)
+  const [showVincularModal, setShowVincularModal] = useState(false);
+  const [vincularTarget, setVincularTarget] = useState<Personal | null>(null);
+  const [vincularEmail, setVincularEmail] = useState('');
+  const [vincularPassword, setVincularPassword] = useState('');
+  const [vincularSaving, setVincularSaving] = useState(false);
+  // Pending data cuando la vinculación se dispara desde el form (no desde un row button)
+  const [vincularPending, setVincularPending] = useState<{
+    personalId: string | null; // null = crear nuevo personal; string = editar existente
+    personalData: Record<string, unknown>;
+    usuarioData: Record<string, unknown>;
+  } | null>(null);
 
   // Operarias/Coordinadoras/Admins activos disponibles como supervisoras de técnicos
   const operariasDisponibles = personal.filter(
@@ -145,35 +158,122 @@ export default function PersonalPage() {
       }
 
       if (editingId) {
-        // EDITAR: actualizar personal; si pasó a ayudante, desvincular uid
+        // EDITAR: detectar transición ayudante → rol con acceso
         const personalActual = personal.find(p => p.id === editingId);
-        if (personalActual && personalActual.rol !== 'ayudante' && form.rol === 'ayudante' && personalActual.uid) {
-          // Cambio de rol con acceso → ayudante: desvincular uid (no borramos la cuenta Auth)
-          data.uid = null;
-        }
-        await updateDoc(doc(db, 'personal', editingId), data);
-        // Si tiene uid y rol con acceso, mantener sincronizado usuarios/{uid}
-        if (personalActual?.uid && necesitaAcceso) {
+        const esTransicionAyudanteAAcceso =
+          personalActual?.rol === 'ayudante' &&
+          necesitaAcceso &&
+          !personalActual.uid;
+
+        if (esTransicionAyudanteAAcceso) {
+          if (!emailAcceso.trim() || passwordAcceso.length < 8) {
+            toast.error('Debes asignar email y contraseña para crear la cuenta de acceso');
+            setSaving(false);
+            return;
+          }
+          // Intentar crear la cuenta Auth; si el email ya existe, ofrecer vincular
           const usuarioData: Record<string, unknown> = {
             nombre: form.nombre,
+            email: emailAcceso.trim().toLowerCase(),
             rol: form.rol,
             telefono: form.telefono || '',
             color: form.color || '#3b82f6',
-            activo: form.activo,
+            activo: true,
+            createdAt: Timestamp.now(),
           };
-          if (form.rol === 'tecnico') {
-            usuarioData.permisos = personalActual.permisos || PERMISOS_DEFAULT_TECNICO;
+          if (form.rol === 'tecnico') usuarioData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
+          data.email = emailAcceso.trim().toLowerCase();
+          if (form.rol === 'tecnico' && !personalActual?.permisos) {
+            data.permisos = { ...PERMISOS_DEFAULT_TECNICO };
           }
+
+          let createdUid: string | null = null;
           try {
-            await setDoc(doc(db, 'usuarios', personalActual.uid), usuarioData, { merge: true });
-          } catch (err) {
-            console.warn('No se pudo sincronizar usuarios/{uid}:', err);
+            const secondaryApp = initializeApp(auth.app.options, 'PersonalSecondary');
+            const secondaryAuth = getAuth(secondaryApp);
+            const cred = await createUserWithEmailAndPassword(
+              secondaryAuth,
+              emailAcceso.trim().toLowerCase(),
+              passwordAcceso
+            );
+            createdUid = cred.user.uid;
+            await deleteApp(secondaryApp);
+          } catch (authErr: unknown) {
+            const errCode = (authErr as { code?: string })?.code;
+            if (errCode === 'auth/email-already-in-use') {
+              // Abrir flujo de vinculación y preservar datos pendientes
+              setVincularPending({
+                personalId: editingId,
+                personalData: data,
+                usuarioData,
+              });
+              setVincularTarget(personalActual || null);
+              setVincularEmail(emailAcceso.trim().toLowerCase());
+              setVincularPassword(passwordAcceso);
+              setShowVincularModal(true);
+              setSaving(false);
+              return;
+            }
+            if (errCode === 'auth/weak-password') { toast.error('Contraseña demasiado débil'); setSaving(false); return; }
+            if (errCode === 'auth/invalid-email') { toast.error('Email de acceso inválido'); setSaving(false); return; }
+            console.error('Error creando cuenta Auth:', authErr);
+            toast.error('Error al crear la cuenta de acceso');
+            setSaving(false);
+            return;
           }
+          if (createdUid) {
+            try {
+              await setDoc(doc(db, 'usuarios', createdUid), usuarioData);
+            } catch (err) { console.warn('No se pudo crear usuarios/{uid}:', err); }
+            data.uid = createdUid;
+          }
+          await updateDoc(doc(db, 'personal', editingId), data);
+          toast.success(`Acceso creado. Puede iniciar sesión con ${emailAcceso.trim()}`);
+        } else {
+          // EDIT normal
+          if (personalActual && personalActual.rol !== 'ayudante' && form.rol === 'ayudante' && personalActual.uid) {
+            // rol con acceso → ayudante: desvincular uid (no borramos Auth)
+            data.uid = null;
+          }
+          await updateDoc(doc(db, 'personal', editingId), data);
+          if (personalActual?.uid && necesitaAcceso) {
+            const usuarioData: Record<string, unknown> = {
+              nombre: form.nombre,
+              rol: form.rol,
+              telefono: form.telefono || '',
+              color: form.color || '#3b82f6',
+              activo: form.activo,
+            };
+            if (form.rol === 'tecnico') {
+              usuarioData.permisos = personalActual.permisos || PERMISOS_DEFAULT_TECNICO;
+            }
+            try {
+              await setDoc(doc(db, 'usuarios', personalActual.uid), usuarioData, { merge: true });
+            } catch (err) {
+              console.warn('No se pudo sincronizar usuarios/{uid}:', err);
+            }
+          }
+          toast.success('Personal actualizado');
         }
-        toast.success('Personal actualizado');
       } else {
         // CREAR: si necesita acceso, crear auth + usuarios doc + personal doc con uid
         let createdUid: string | null = null;
+        const personalData: Record<string, unknown> = { ...data, createdAt: Timestamp.now() };
+        if (form.rol === 'tecnico') personalData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
+        // Retrocompat: guardar email de acceso también en personal.email
+        if (necesitaAcceso) personalData.email = emailAcceso.trim().toLowerCase();
+
+        const usuarioData: Record<string, unknown> = {
+          nombre: form.nombre,
+          email: necesitaAcceso ? emailAcceso.trim().toLowerCase() : '',
+          rol: form.rol,
+          telefono: form.telefono || '',
+          color: form.color || '#3b82f6',
+          activo: true,
+          createdAt: Timestamp.now(),
+        };
+        if (form.rol === 'tecnico') usuarioData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
+
         if (necesitaAcceso) {
           try {
             const secondaryApp = initializeApp(auth.app.options, 'PersonalSecondary');
@@ -188,20 +288,21 @@ export default function PersonalPage() {
           } catch (authErr: unknown) {
             const errCode = (authErr as { code?: string })?.code;
             if (errCode === 'auth/email-already-in-use') {
-              toast.error('El email ya está registrado en Firebase Auth. Usa otro email o edita al usuario existente.');
+              // Disparar flujo de vinculación con cuenta existente
+              setVincularPending({
+                personalId: null,
+                personalData,
+                usuarioData,
+              });
+              setVincularTarget(null);
+              setVincularEmail(emailAcceso.trim().toLowerCase());
+              setVincularPassword(passwordAcceso);
+              setShowVincularModal(true);
               setSaving(false);
               return;
             }
-            if (errCode === 'auth/weak-password') {
-              toast.error('Contraseña demasiado débil');
-              setSaving(false);
-              return;
-            }
-            if (errCode === 'auth/invalid-email') {
-              toast.error('Email de acceso inválido');
-              setSaving(false);
-              return;
-            }
+            if (errCode === 'auth/weak-password') { toast.error('Contraseña demasiado débil'); setSaving(false); return; }
+            if (errCode === 'auth/invalid-email') { toast.error('Email de acceso inválido'); setSaving(false); return; }
             console.error('Error creando cuenta Auth:', authErr);
             toast.error('Error al crear la cuenta de acceso');
             setSaving(false);
@@ -209,30 +310,12 @@ export default function PersonalPage() {
           }
         }
 
-        // Crear doc en usuarios/{uid} (perfil de login)
         if (createdUid) {
-          const usuarioData: Record<string, unknown> = {
-            nombre: form.nombre,
-            email: emailAcceso.trim().toLowerCase(),
-            rol: form.rol,
-            telefono: form.telefono || '',
-            color: form.color || '#3b82f6',
-            activo: true,
-            createdAt: Timestamp.now(),
-          };
-          if (form.rol === 'tecnico') {
-            usuarioData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
-          }
           try {
             await setDoc(doc(db, 'usuarios', createdUid), usuarioData);
-          } catch (err) {
-            console.warn('No se pudo crear usuarios/{uid}:', err);
-          }
+          } catch (err) { console.warn('No se pudo crear usuarios/{uid}:', err); }
+          personalData.uid = createdUid;
         }
-
-        const personalData: Record<string, unknown> = { ...data, createdAt: Timestamp.now() };
-        if (createdUid) personalData.uid = createdUid;
-        if (form.rol === 'tecnico') personalData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
 
         await addDoc(collection(db, 'personal'), personalData);
         if (necesitaAcceso) {
@@ -285,6 +368,128 @@ export default function PersonalPage() {
     setResetTarget(p);
     setResetPassword('');
     setShowResetModal(true);
+  };
+
+  // Vincula un personal con una cuenta Auth ya existente usando email+password del dueño.
+  // Devuelve true si vinculó correctamente, false si no (ya mostró toast de error).
+  const ejecutarVinculacion = async (
+    email: string,
+    password: string,
+    personalId: string | null,
+    personalPatch: Record<string, unknown>,
+    usuarioData: Record<string, unknown>,
+  ): Promise<boolean> => {
+    let secondaryAppRef: ReturnType<typeof initializeApp> | null = null;
+    try {
+      secondaryAppRef = initializeApp(auth.app.options, 'PersonalLink');
+      const secondaryAuth = getAuth(secondaryAppRef);
+      const cred = await signInWithEmailAndPassword(secondaryAuth, email, password);
+      const uid = cred.user.uid;
+      await deleteApp(secondaryAppRef);
+      secondaryAppRef = null;
+
+      // Crear/mergear usuarios/{uid}
+      try {
+        await setDoc(doc(db, 'usuarios', uid), usuarioData, { merge: true });
+      } catch (err) {
+        console.warn('No se pudo sincronizar usuarios/{uid}:', err);
+      }
+
+      // Actualizar personal (update si personalId, addDoc si no)
+      if (personalId) {
+        await updateDoc(doc(db, 'personal', personalId), { ...personalPatch, uid });
+      } else {
+        await addDoc(collection(db, 'personal'), { ...personalPatch, uid });
+      }
+      return true;
+    } catch (err: unknown) {
+      if (secondaryAppRef) {
+        try { await deleteApp(secondaryAppRef); } catch { /* noop */ }
+      }
+      const code = (err as { code?: string })?.code;
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        toast.error('La contraseña no coincide con la cuenta existente. Pídela al dueño o usa /admin/usuarios → Restablecer contraseña.');
+      } else if (code === 'auth/user-not-found') {
+        toast.error('No se encontró esa cuenta en Firebase Auth.');
+      } else if (code === 'auth/invalid-email') {
+        toast.error('Email inválido');
+      } else {
+        console.error(err);
+        toast.error('Error al vincular cuenta');
+      }
+      return false;
+    }
+  };
+
+  // Abre el modal de vincular para un personal existente (row-level button)
+  const abrirVincularExistente = (p: Personal) => {
+    setVincularTarget(p);
+    setVincularEmail(p.email || '');
+    setVincularPassword('');
+    setVincularPending(null); // modo row-level, no hay datos pendientes
+    setShowVincularModal(true);
+  };
+
+  const cerrarVincularModal = () => {
+    setShowVincularModal(false);
+    setVincularTarget(null);
+    setVincularEmail('');
+    setVincularPassword('');
+    setVincularPending(null);
+    setVincularSaving(false);
+  };
+
+  const handleConfirmarVincular = async () => {
+    if (!vincularEmail.trim()) { toast.error('Email requerido'); return; }
+    if (!vincularPassword) { toast.error('Contraseña requerida'); return; }
+    setVincularSaving(true);
+    try {
+      if (vincularPending) {
+        // Flujo disparado desde el form (create o edit-transición)
+        const ok = await ejecutarVinculacion(
+          vincularEmail.trim().toLowerCase(),
+          vincularPassword,
+          vincularPending.personalId,
+          vincularPending.personalData,
+          vincularPending.usuarioData,
+        );
+        if (ok) {
+          toast.success(`Cuenta vinculada. ${vincularTarget?.nombre || 'Personal'} ya puede iniciar sesión.`);
+          cerrarVincularModal();
+          setShowModal(false);
+          setEditingId(null);
+          resetForm();
+        }
+      } else if (vincularTarget) {
+        // Flujo row-level: solo vincular a personal existente, sin cambios de rol
+        const personalActual = vincularTarget;
+        const usuarioData: Record<string, unknown> = {
+          nombre: personalActual.nombre,
+          email: vincularEmail.trim().toLowerCase(),
+          rol: personalActual.rol,
+          telefono: personalActual.telefono || '',
+          color: personalActual.color || '#3b82f6',
+          activo: personalActual.activo,
+          createdAt: Timestamp.now(),
+        };
+        if (personalActual.rol === 'tecnico') {
+          usuarioData.permisos = personalActual.permisos || PERMISOS_DEFAULT_TECNICO;
+        }
+        const ok = await ejecutarVinculacion(
+          vincularEmail.trim().toLowerCase(),
+          vincularPassword,
+          personalActual.id,
+          { email: vincularEmail.trim().toLowerCase() },
+          usuarioData,
+        );
+        if (ok) {
+          toast.success(`Cuenta vinculada a ${personalActual.nombre}`);
+          cerrarVincularModal();
+        }
+      }
+    } finally {
+      setVincularSaving(false);
+    }
   };
 
   const handleResetPassword = async () => {
@@ -680,6 +885,12 @@ export default function PersonalPage() {
                         className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
                         <Edit size={14} />
                       </button>
+                      {p.rol !== 'ayudante' && ROLES_CON_ACCESO.includes(p.rol) && !p.uid && p.email && (
+                        <button onClick={() => abrirVincularExistente(p)} title="Vincular cuenta existente"
+                          className="p-2 hover:bg-indigo-50 rounded-lg text-indigo-600 transition-colors">
+                          <Link2 size={14} />
+                        </button>
+                      )}
                       <button onClick={() => abrirModalDesactivar(p)} title="Desactivar"
                         className="p-2 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors">
                         <Power size={14} />
@@ -793,64 +1004,93 @@ export default function PersonalPage() {
                 <Key size={14} className="text-[#1a5fa8]" />
                 <h3 className="text-xs font-semibold text-[#0f3460] uppercase tracking-wide">Acceso al sistema</h3>
               </div>
-              {editingId ? (
-                (() => {
-                  const personalActual = personal.find(p => p.id === editingId);
-                  const tieneAcceso = !!personalActual?.uid;
-                  return tieneAcceso ? (
+              {(() => {
+                const personalActual = editingId ? personal.find(p => p.id === editingId) : null;
+                const tieneAcceso = !!personalActual?.uid;
+                const esTransicionAyudante =
+                  !!personalActual &&
+                  personalActual.rol === 'ayudante' &&
+                  ROLES_CON_ACCESO.includes(form.rol);
+                const pedirCredenciales = !editingId || esTransicionAyudante;
+
+                if (tieneAcceso && personalActual) {
+                  return (
                     <div className="space-y-2">
                       <p className="text-xs text-gray-600">
-                        Email de login: <span className="font-medium">{personalActual?.email || '—'}</span>
+                        Email de login: <span className="font-medium">{personalActual.email || '—'}</span>
                       </p>
                       <button
                         type="button"
-                        onClick={() => personalActual && abrirResetPassword(personalActual)}
+                        onClick={() => abrirResetPassword(personalActual)}
                         className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
                       >
                         <Key size={12} /> Restablecer contraseña
                       </button>
                     </div>
-                  ) : (
-                    <p className="text-xs text-amber-800">
-                      Este personal aún no tiene cuenta de login. Crea una desde la página de <span className="font-semibold">Usuarios</span> o edita para crear.
-                    </p>
                   );
-                })()
-              ) : (
-                <>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Email de acceso al sistema *</label>
-                    <input
-                      type="email"
-                      value={emailAcceso}
-                      onChange={e => setEmailAcceso(e.target.value)}
-                      placeholder="usuario@misterservicerd.com"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                    />
-                    <p className="text-[11px] text-gray-400 mt-1">Este email es distinto al email de contacto. Se usará para iniciar sesión.</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Contraseña inicial *</label>
-                    <div className="relative">
-                      <input
-                        type={showPasswordAcceso ? 'text' : 'password'}
-                        value={passwordAcceso}
-                        onChange={e => setPasswordAcceso(e.target.value)}
-                        placeholder="Mínimo 8 caracteres"
-                        minLength={8}
-                        className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPasswordAcceso(v => !v)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPasswordAcceso ? <EyeOff size={14} /> : <Eye size={14} />}
-                      </button>
+                }
+
+                if (editingId && !pedirCredenciales) {
+                  return (
+                    <div className="space-y-2">
+                      <p className="text-xs text-amber-800">
+                        Este personal aún no tiene cuenta de login.
+                      </p>
+                      {personalActual && (
+                        <button
+                          type="button"
+                          onClick={() => abrirVincularExistente(personalActual)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
+                        >
+                          <Link2 size={12} /> Vincular cuenta existente
+                        </button>
+                      )}
                     </div>
-                  </div>
-                </>
-              )}
+                  );
+                }
+
+                // pedirCredenciales === true (create, o transición ayudante → acceso)
+                return (
+                  <>
+                    {esTransicionAyudante && (
+                      <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                        Cambio de rol detectado: ayudante → {ROL_LABELS[form.rol]}. Debes asignar email y contraseña para crear la cuenta de acceso.
+                      </p>
+                    )}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Email de acceso al sistema *</label>
+                      <input
+                        type="email"
+                        value={emailAcceso}
+                        onChange={e => setEmailAcceso(e.target.value)}
+                        placeholder="usuario@misterservicerd.com"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      />
+                      <p className="text-[11px] text-gray-400 mt-1">Este email es distinto al email de contacto. Se usará para iniciar sesión.</p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Contraseña inicial *</label>
+                      <div className="relative">
+                        <input
+                          type={showPasswordAcceso ? 'text' : 'password'}
+                          value={passwordAcceso}
+                          onChange={e => setPasswordAcceso(e.target.value)}
+                          placeholder="Mínimo 8 caracteres"
+                          minLength={8}
+                          className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswordAcceso(v => !v)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                        >
+                          {showPasswordAcceso ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
 
@@ -1228,6 +1468,56 @@ export default function PersonalPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Modal Vincular cuenta Auth existente */}
+      <Modal
+        isOpen={showVincularModal}
+        onClose={cerrarVincularModal}
+        title={vincularTarget ? `Vincular ${vincularTarget.nombre} a su cuenta de Firebase Auth` : 'Vincular cuenta existente'}
+      >
+        <div className="space-y-4">
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 text-xs text-indigo-900">
+            {vincularPending
+              ? 'El email ingresado ya tiene cuenta en Firebase Auth. Confirma la contraseña para vincular este personal a esa cuenta existente. La contraseña que escribiste NO se reemplazará — se usará la que ya tiene la cuenta.'
+              : 'Ingresa el email y la contraseña actual de la cuenta de Firebase Auth existente para vincularla a este personal.'}
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Email de la cuenta</label>
+            <input
+              type="email"
+              value={vincularEmail}
+              onChange={e => setVincularEmail(e.target.value)}
+              placeholder="usuario@misterservicerd.com"
+              disabled={!!vincularPending}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Contraseña actual de esa cuenta</label>
+            <input
+              type="password"
+              value={vincularPassword}
+              onChange={e => setVincularPassword(e.target.value)}
+              placeholder="Contraseña que ya tiene la cuenta"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">
+              Si no la sabes, ve a Gestión de Accesos y envía un email de restablecimiento al dueño.
+            </p>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={cerrarVincularModal} disabled={vincularSaving}
+              className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60">
+              Cancelar
+            </button>
+            <button type="button" onClick={handleConfirmarVincular} disabled={vincularSaving}
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium disabled:opacity-60 inline-flex items-center gap-2">
+              <Link2 size={14} />
+              {vincularSaving ? 'Vinculando...' : 'Vincular cuenta'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </div>
   );
