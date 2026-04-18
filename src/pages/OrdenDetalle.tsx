@@ -207,11 +207,11 @@ export default function OrdenDetalle() {
     metodoPago: MetodoPago | '';
     bancoDestino: string;
     motivo: string;
-  }>({ precio: '500', metodoPago: '', bancoDestino: '', motivo: '' });
+  }>({ precio: '2000', metodoPago: '', bancoDestino: '', motivo: '' });
   const [savingChequeo, setSavingChequeo] = useState(false);
 
   const resetChequeoForm = () => {
-    setChequeoForm({ precio: '500', metodoPago: '', bancoDestino: '', motivo: '' });
+    setChequeoForm({ precio: '2000', metodoPago: '', bancoDestino: '', motivo: '' });
   };
 
   const puedeMarcarChequeo = (): boolean => {
