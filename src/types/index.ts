@@ -139,6 +139,40 @@ export interface OrdenServicio {
   updatedAt: Date;
 }
 
+export interface ComisionRegistro {
+  id: string;
+  tecnicoId: string;
+  tecnicoNombre: string;
+  ordenId: string;
+  ordenNumero: string;
+  clienteNombre: string;
+  fechaCobro: Date;
+  precioFinal: number;
+  costoPiezas: number;
+  basePendienteComision: number;
+  comisionPorcentaje: number;
+  comisionMonto: number;
+  estadoLiquidacion: 'pendiente' | 'liquidada';
+  quincenaAsignada?: string;
+  liquidadaEn?: Date;
+  liquidadaPor?: string;
+  notas?: string;
+  createdAt: Date;
+}
+
+export interface DesempenoOperaria {
+  operariaId: string;
+  operariaNombre: string;
+  periodoInicio: Date;
+  periodoFin: Date;
+  ordenesAtendidas: number;
+  ordenesCompletadas: number;
+  ordenesChequeo: number;
+  porcentajeDesempeno: number;
+  bonoCalculado: number;
+  bonoPagado: boolean;
+}
+
 export interface ServicioPrecio {
   id: string;
   marca: string;

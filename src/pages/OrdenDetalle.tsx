@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { puede } from '../utils/permisos';
+import { registrarComisionPorOrden } from '../utils/comisiones';
 import { generarTrackingToken } from '../services/gps.service';
 import { whatsappUrl } from '../utils/whatsapp';
 
@@ -137,6 +138,19 @@ export default function OrdenDetalle() {
       toast.success(`Fase cambiada a "${faseLabel(nuevaFase)}"`);
       setNuevaFase('');
       setNotaFase('');
+
+      // Disparar registro de comisión cuando la orden se marca como cerrada (Fase 5)
+      if (nuevaFase === 'cerrado') {
+        try {
+          const ordenAct = { ...orden, fase: 'cerrado' as FaseOrden };
+          const res = await registrarComisionPorOrden(ordenAct, userProfile);
+          if (res.creada) {
+            toast.success(`Comisión registrada: RD$ ${(res.comisionMonto || 0).toLocaleString('es-DO')}`);
+          }
+        } catch (err) {
+          console.error('Error registrando comisión:', err);
+        }
+      }
     } catch {
       toast.error('Error al cambiar fase');
     } finally {

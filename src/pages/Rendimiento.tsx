@@ -4,7 +4,9 @@ import { db } from '../firebase/config';
 import { OrdenServicio, Personal, Factura } from '../types';
 import { formatMoneda, parseOrden } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { TrendingUp, Users, CheckCircle, XCircle, Clock, BarChart3, Calendar, RefreshCw, UserPlus } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle, XCircle, Clock, BarChart3, Calendar, RefreshCw, UserPlus, Award } from 'lucide-react';
+import { useApp } from '../context/AppContext';
+import { calcularQuincenaActual, listarUltimasQuincenas, rangoQuincena } from '../utils/comisiones';
 import { differenceInMinutes, startOfWeek, startOfMonth, startOfDay, isWithinInterval, format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -270,6 +272,87 @@ export default function Rendimiento() {
             );
           })}
         </div>
+      </div>
+
+      <DesempenoOperariasSection ordenes={ordenes} personal={personal} />
+    </div>
+  );
+}
+
+const UMBRAL_BONO = 0.70;
+const BONO_MONTO = 5000;
+
+function DesempenoOperariasSection({ ordenes, personal }: { ordenes: OrdenServicio[]; personal: Personal[] }) {
+  const { userProfile } = useApp();
+  const esAdminOCoord = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  const [quincena, setQuincena] = useState<string>(calcularQuincenaActual(new Date()));
+  const quincenas = useMemo(() => listarUltimasQuincenas(12), []);
+  const operarias = useMemo(() => personal.filter(p => p.activo && (p.rol === 'operaria' || p.rol === 'coordinadora')), [personal]);
+
+  const datos = useMemo(() => {
+    const { inicio, fin } = rangoQuincena(quincena);
+    return operarias.map(op => {
+      const ordenesEnRango = ordenes.filter(o =>
+        o.operariaId === op.id &&
+        !o.eliminada &&
+        ((o.fase === 'cerrado') || o.soloChequeo) &&
+        o.updatedAt >= inicio && o.updatedAt <= fin
+      );
+      const chequeos = ordenesEnRango.filter(o => o.soloChequeo).length;
+      const completadas = ordenesEnRango.filter(o => o.fase === 'cerrado' && !o.soloChequeo).length;
+      const atendidas = chequeos + completadas;
+      const pct = atendidas > 0 ? completadas / atendidas : 0;
+      const bono = pct >= UMBRAL_BONO ? BONO_MONTO : 0;
+      return { operaria: op, atendidas, completadas, chequeos, pct, bono };
+    }).sort((a, b) => b.pct - a.pct);
+  }, [operarias, ordenes, quincena]);
+
+  if (!esAdminOCoord) return null;
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Award size={20} className="text-[#1a5fa8]" />
+          <h2 className="text-lg font-semibold text-gray-900">Desempeño de Operarias</h2>
+        </div>
+        <select value={quincena} onChange={e => setQuincena(e.target.value)}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+          {quincenas.map(q => <option key={q} value={q}>{q}</option>)}
+        </select>
+      </div>
+      <p className="text-xs text-gray-500">
+        Bono fijo de RD$ {BONO_MONTO.toLocaleString('es-DO')} si desempeño ≥ {(UMBRAL_BONO * 100).toFixed(0)}%
+        (órdenes completadas / órdenes atendidas; los chequeos cuentan como atendidas).
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {datos.length === 0 ? (
+          <p className="text-sm text-gray-400 col-span-full text-center py-6">Sin operarias activas</p>
+        ) : datos.map(d => (
+          <div key={d.operaria.id} className="border border-gray-100 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                style={{ backgroundColor: d.operaria.color || '#0f3460' }}>
+                {d.operaria.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
+              </div>
+              <p className="text-sm font-semibold text-gray-900">{d.operaria.nombre}</p>
+            </div>
+            <div className="space-y-1 text-xs">
+              <div className="flex justify-between"><span className="text-gray-500">Atendidas</span><span className="font-semibold">{d.atendidas}</span></div>
+              <div className="flex justify-between"><span className="text-green-700">Completadas</span><span className="font-semibold text-green-700">{d.completadas}</span></div>
+              <div className="flex justify-between"><span className="text-amber-700">Solo chequeo</span><span className="font-semibold text-amber-700">{d.chequeos}</span></div>
+              <div className="flex justify-between border-t border-gray-100 pt-1 mt-1">
+                <span className="text-gray-700 font-medium">% desempeño</span>
+                <span className={`font-bold ${d.pct >= UMBRAL_BONO ? 'text-emerald-700' : 'text-gray-700'}`}>
+                  {(d.pct * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div className={`mt-2 px-2 py-1.5 rounded-lg text-center text-sm font-bold ${d.bono > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-400'}`}>
+                Bono: RD$ {d.bono.toLocaleString('es-DO')}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

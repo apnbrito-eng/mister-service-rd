@@ -24,6 +24,7 @@ import Configuracion from './pages/Configuracion';
 import CierreDia from './pages/CierreDia';
 import PreciosServicios from './pages/PreciosServicios';
 import Inventario from './pages/Inventario';
+import Comisiones from './pages/Comisiones';
 import ConfiguracionWeb from './pages/ConfiguracionWeb';
 import EmpresasAliadas from './pages/EmpresasAliadas';
 import Formularios from './pages/Formularios';
@@ -142,6 +143,7 @@ function AppRoutes() {
         <Route path="cierre-dia" element={<CierreDia />} />
         <Route path="precios" element={<PreciosServicios />} />
         <Route path="inventario" element={<Inventario />} />
+        <Route path="comisiones" element={<Comisiones />} />
         <Route path="configuracion/usuarios" element={<GestionUsuarios />} />
       </Route>
 

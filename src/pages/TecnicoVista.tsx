@@ -2,7 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, Cliente, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, FaseOrden } from '../types';
-import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria } from '../utils';
+import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria, formatMoneda } from '../utils';
+import { calcularQuincenaActual } from '../utils/comisiones';
+import { ComisionRegistro } from '../types';
 import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
 import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -80,6 +82,7 @@ export default function TecnicoVista() {
   const [nuevaCitaBadge, setNuevaCitaBadge] = useState(false);
   const [previousCount, setPreviousCount] = useState<number | null>(null);
   const [compartiendoGPS, setCompartiendoGPS] = useState(false);
+  const [comisionesQuincena, setComisionesQuincena] = useState<ComisionRegistro[]>([]);
 
   // Permisos del técnico (con fallback seguro)
   const permisos: TecnicoPermisos = userProfile?.permisos || PERMISOS_DEFAULT_TECNICO;
@@ -105,7 +108,38 @@ export default function TecnicoVista() {
       setClientes(snap.docs.map(d => ({ id: d.id, ...d.data() } as Cliente)));
     });
 
-    return () => unsub();
+    // Comisiones de la quincena actual (Fase 5)
+    let unsubComisiones = () => {};
+    if (userProfile?.id) {
+      const quincena = calcularQuincenaActual(new Date());
+      unsubComisiones = onSnapshot(collection(db, 'comisiones'), (snap) => {
+        const items = snap.docs
+          .map(d => {
+            const raw = d.data();
+            return {
+              id: d.id,
+              tecnicoId: raw.tecnicoId || '',
+              tecnicoNombre: raw.tecnicoNombre || '',
+              ordenId: raw.ordenId || '',
+              ordenNumero: raw.ordenNumero || '',
+              clienteNombre: raw.clienteNombre || '',
+              fechaCobro: raw.fechaCobro?.toDate?.() || new Date(),
+              precioFinal: raw.precioFinal || 0,
+              costoPiezas: raw.costoPiezas || 0,
+              basePendienteComision: raw.basePendienteComision || 0,
+              comisionPorcentaje: raw.comisionPorcentaje || 0,
+              comisionMonto: raw.comisionMonto || 0,
+              estadoLiquidacion: raw.estadoLiquidacion || 'pendiente',
+              quincenaAsignada: raw.quincenaAsignada,
+              createdAt: raw.createdAt?.toDate?.() || new Date(),
+            } as ComisionRegistro;
+          })
+          .filter(c => c.tecnicoId === userProfile.id && c.quincenaAsignada === quincena);
+        setComisionesQuincena(items);
+      });
+    }
+
+    return () => { unsub(); unsubComisiones(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile?.id]);
 
@@ -431,6 +465,23 @@ export default function TecnicoVista() {
       </div>
 
       <div className="max-w-4xl mx-auto p-4 space-y-4">
+        {/* Comisión acumulada de la quincena (Fase 5) */}
+        {comisionesQuincena.length > 0 && (() => {
+          const total = comisionesQuincena.reduce((s, c) => s + c.comisionMonto, 0);
+          const quincena = calcularQuincenaActual(new Date());
+          const proximoPago = quincena.endsWith('Q1') ? '15' : '30';
+          return (
+            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl shadow-sm p-4 text-white">
+              <p className="text-[11px] uppercase tracking-wide opacity-90">Tu comisión acumulada — quincena {quincena}</p>
+              <p className="text-2xl font-bold mt-1">{formatMoneda(total)}</p>
+              <div className="flex items-center justify-between mt-2 text-xs opacity-90">
+                <span>{comisionesQuincena.length} orden{comisionesQuincena.length !== 1 ? 'es' : ''}</span>
+                <span>Próximo pago: día {proximoPago}</span>
+              </div>
+            </div>
+          );
+        })()}
+
         {/* Greeting */}
         <div className="text-center">
           <p className="text-xs text-gray-500 capitalize">
