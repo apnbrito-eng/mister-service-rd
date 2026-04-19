@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { puede } from '../utils/permisos';
-import { registrarComisionPorOrden } from '../utils/comisiones';
 import CancelarOrdenModal from '../components/ordenes/CancelarOrdenModal';
 import FaseStepper from '../components/ordenes/FaseStepper';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
@@ -31,20 +30,12 @@ const METODO_PAGO_LABELS: Record<MetodoPago, string> = {
   otro: 'Otro',
 };
 
-const FASES: FaseOrden[] = [
-  'nuevo_lead', 'en_gestion', 'en_diagnostico', 'en_cotizacion',
-  'aprobado', 'agendado', 'trabajo_realizado', 'cerrado', 'cancelado'
-];
-
 export default function OrdenDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { userProfile } = useApp();
   const [orden, setOrden] = useState<OrdenServicio | null>(null);
   const [loading, setLoading] = useState(true);
-  const [nuevaFase, setNuevaFase] = useState<FaseOrden | ''>('');
-  const [notaFase, setNotaFase] = useState('');
-  const [saving, setSaving] = useState(false);
   const [gpsSaving, setGpsSaving] = useState(false);
   const [precioAprobacion, setPrecioAprobacion] = useState('');
   const [aprobandoPrecio, setAprobandoPrecio] = useState(false);
@@ -117,69 +108,6 @@ export default function OrdenDetalle() {
   const ordenTieneStandby = orden ? tieneStandby(orden, standbyItems) : false;
 
   const [showCancelModal, setShowCancelModal] = useState(false);
-
-  const handleCambiarFase = async () => {
-    if (!id || !nuevaFase || !orden) return;
-    // Interceptar cancelado: abrir modal de motivo en vez de update directo
-    if (nuevaFase === 'cancelado') {
-      setShowCancelModal(true);
-      return;
-    }
-    setSaving(true);
-    try {
-      const nuevoHistorial = [
-        ...orden.historialFases.map(h => ({
-          fase: h.fase,
-          timestamp: Timestamp.fromDate(h.timestamp instanceof Date ? h.timestamp : new Date()),
-          usuario: h.usuario || '',
-          ...(h.nota ? { nota: h.nota } : {}),
-        })),
-        {
-          fase: nuevaFase,
-          timestamp: Timestamp.now(),
-          usuario: userProfile?.nombre || 'Sistema',
-          ...(notaFase ? { nota: notaFase } : {}),
-        },
-      ];
-      const registroAuditoria = crearRegistroAuditoria(
-        userProfile?.nombre || 'Sistema',
-        'cambio_fase',
-        `Cambió fase a "${faseLabel(nuevaFase)}"${notaFase ? ` (nota: ${notaFase})` : ''}`,
-        'fase',
-        faseLabel(orden.fase),
-        faseLabel(nuevaFase)
-      );
-      // 'cancelado' se intercepta antes vía modal; acá nuevaFase no puede ser 'cancelado'
-      await updateDoc(doc(db, 'ordenes_servicio', id), {
-        fase: nuevaFase,
-        estadoSimple: ['trabajo_realizado', 'cerrado'].includes(nuevaFase) ? 'completado' : ['en_diagnostico', 'en_cotizacion'].includes(nuevaFase) ? 'en_proceso' : 'pendiente',
-        estado: nuevaFase === 'cerrado' ? 'cerrado' : 'activo',
-        historialFases: nuevoHistorial,
-        auditoria: arrayUnion(registroAuditoria),
-        updatedAt: Timestamp.now(),
-      });
-      toast.success(`Fase cambiada a "${faseLabel(nuevaFase)}"`);
-      setNuevaFase('');
-      setNotaFase('');
-
-      // Disparar registro de comisión cuando la orden se marca como cerrada (Fase 5)
-      if (nuevaFase === 'cerrado') {
-        try {
-          const ordenAct = { ...orden, fase: 'cerrado' as FaseOrden };
-          const res = await registrarComisionPorOrden(ordenAct, userProfile);
-          if (res.creada) {
-            toast.success(`Comisión registrada: RD$ ${(res.comisionMonto || 0).toLocaleString('es-DO')}`);
-          }
-        } catch (err) {
-          console.error('Error registrando comisión:', err);
-        }
-      }
-    } catch {
-      toast.error('Error al cambiar fase');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleActivarGPS = async () => {
     if (!id || !orden) return;
@@ -1072,7 +1000,6 @@ export default function OrdenDetalle() {
         onClose={() => setShowCancelModal(false)}
         orden={orden}
         userProfile={userProfile}
-        onCancelled={() => { setNuevaFase(''); setNotaFase(''); }}
       />
     </div>
   );

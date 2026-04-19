@@ -11,7 +11,7 @@ import { OrdenServicio, FaseOrden, EstadoOrdenSimple, Cliente, Personal } from '
 import {
   faseLabel, faseColor, formatFecha, formatHora, tiempoTranscurrido,
   TIPOS_EQUIPO, DURACIONES, HORARIOS, HORARIOS_LABEL,
-  estadoSimpleLabel, estadoSimpleColor, estadoSimpleBorder,
+  estadoSimpleBorder,
   formatTelefono, whatsappLink, googleMapsLink, parseOrden, formatMoneda,
   crearRegistroAuditoria
 } from '../utils';
@@ -38,18 +38,8 @@ import OrdenEditForm from '../components/ordenes/OrdenEditForm';
 import type { EditFormState } from '../components/ordenes/OrdenEditForm';
 import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
 import type { CreateFormState } from '../components/ordenes/OrdenCreateModal';
-import CancelarOrdenModal from '../components/ordenes/CancelarOrdenModal';
 
 const ESTADOS_SIMPLE: EstadoOrdenSimple[] = ['pendiente', 'en_proceso', 'completado', 'cancelado'];
-
-function estadoSimpleToFase(estado: EstadoOrdenSimple): FaseOrden {
-  switch (estado) {
-    case 'pendiente': return 'agendado';
-    case 'en_proceso': return 'en_diagnostico';
-    case 'completado': return 'trabajo_realizado';
-    case 'cancelado': return 'cancelado';
-  }
-}
 
 /** Detecta coordenadas en URLs de Google Maps o texto pegado */
 function detectarCoordenadasURL(texto: string): { lat: number; lng: number } | null {
@@ -85,9 +75,6 @@ export default function Ordenes() {
   const [deleteMotivo, setDeleteMotivo] = useState('');
   const [deletingOrden, setDeletingOrden] = useState(false);
 
-  // Cancelación con motivo
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelTarget, setCancelTarget] = useState<OrdenServicio | null>(null);
   const [ordenesActivasCliente, setOrdenesActivasCliente] = useState<OrdenServicio[]>([]);
   const [buscandoTelefono, setBuscandoTelefono] = useState(false);
   const [showTelefonoDropdown, setShowTelefonoDropdown] = useState(false);
@@ -959,43 +946,6 @@ export default function Ordenes() {
     );
   };
 
-  const handleEstadoChange = async (orden: OrdenServicio, nuevoEstado: EstadoOrdenSimple) => {
-    if (nuevoEstado === orden.estadoSimple) return;
-    // Interceptar cancelado: pedir motivo en modal
-    if (nuevoEstado === 'cancelado') {
-      setCancelTarget(orden);
-      setShowCancelModal(true);
-      return;
-    }
-    try {
-      const nuevaFase = estadoSimpleToFase(nuevoEstado);
-      const ahora = Timestamp.now();
-      const ref = doc(db, 'ordenes_servicio', orden.id);
-      await updateDoc(ref, {
-        estadoSimple: nuevoEstado,
-        fase: nuevaFase,
-        updatedAt: ahora,
-        historialFases: [
-          ...orden.historialFases.map(h => ({
-            fase: h.fase,
-            timestamp: Timestamp.fromDate(h.timestamp),
-            usuario: h.usuario || '',
-            ...(h.nota ? { nota: h.nota } : {}),
-          })),
-          {
-            fase: nuevaFase,
-            timestamp: ahora,
-            usuario: userProfile?.nombre || 'Sistema',
-          },
-        ],
-      });
-      toast.success(`Orden ${orden.numero} actualizada a ${estadoSimpleLabel(nuevoEstado)}`);
-    } catch (err) {
-      console.error(err);
-      toast.error('Error al actualizar el estado');
-    }
-  };
-
   const handleSubmitOrden = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.clienteNombre || !form.equipoTipo || !form.descripcionFalla) {
@@ -1334,7 +1284,6 @@ export default function Ordenes() {
               key={orden.id}
               orden={orden}
               onSelect={setSelectedOrden}
-              onChangeEstado={handleEstadoChange}
               standbyItems={standbyItems}
             />
           ))
@@ -1416,14 +1365,6 @@ export default function Ordenes() {
           handleClienteTelefonoChange={handleClienteTelefonoChange}
         />
       )}
-
-      {/* Modal Cancelar Orden (motivo obligatorio) */}
-      <CancelarOrdenModal
-        isOpen={showCancelModal}
-        onClose={() => { setShowCancelModal(false); setCancelTarget(null); }}
-        orden={cancelTarget}
-        userProfile={userProfile}
-      />
 
       {/* Modal Eliminar Orden (soft delete con motivo) */}
       <Modal

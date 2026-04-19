@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Calendar, Clock, Wrench, User, XCircle } from 'lucide-react';
-import { OrdenServicio, EstadoOrdenSimple, StandbyPieza } from '../../types';
+import { OrdenServicio, StandbyPieza } from '../../types';
 import { estadoSimpleBorder, formatFecha, tiempoTranscurrido, tieneStandby } from '../../utils';
 import Badge from '../Badge';
 import EliminarOrdenButton from './EliminarOrdenButton';
@@ -12,7 +12,6 @@ import { puede } from '../../utils/permisos';
 interface OrdenCardProps {
   orden: OrdenServicio;
   onSelect: (orden: OrdenServicio) => void;
-  onChangeEstado: (orden: OrdenServicio, nuevoEstado: EstadoOrdenSimple) => void;
   standbyItems?: StandbyPieza[];
 }
 

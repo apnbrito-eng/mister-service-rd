@@ -5,6 +5,7 @@ import { OrdenServicio, FaseOrden, EstadoOrdenSimple } from '../../types';
 import { crearRegistroAuditoria, faseLabel, faseColor } from '../../utils';
 import { useApp } from '../../context/AppContext';
 import { puede } from '../../utils/permisos';
+import { registrarComisionPorOrden } from '../../utils/comisiones';
 import Modal from '../Modal';
 import { Check, Package, AlertTriangle, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -107,6 +108,20 @@ export default function FaseStepper({
       auditoria: arrayUnion(registro),
       updatedAt: ahora,
     });
+
+    // Al cerrar, intentar registrar comisión (idempotente; si ya existe o no aplica, noop)
+    if (nuevaFase === 'cerrado') {
+      try {
+        const ordenAct = { ...orden, fase: 'cerrado' as FaseOrden };
+        const res = await registrarComisionPorOrden(ordenAct, userProfile);
+        if (res.creada) {
+          toast.success(`Comisión registrada: RD$ ${(res.comisionMonto || 0).toLocaleString('es-DO')}`);
+        }
+      } catch (err) {
+        console.error('Error registrando comisión:', err);
+        toast.error('Orden cerrada, pero la comisión no se registró. Revisa logs.');
+      }
+    }
   };
 
   const handleClickFase = async (fase: FaseOrden, e: React.MouseEvent) => {
