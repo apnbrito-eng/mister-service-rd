@@ -22,6 +22,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import 'leaflet/dist/leaflet.css';
 import { useApp } from '../context/AppContext';
+import { puede } from '../utils/permisos';
 import toast from 'react-hot-toast';
 
 /** Detecta coordenadas en URLs de Google Maps o texto pegado (mismo helper que Ordenes.tsx) */
@@ -89,6 +90,17 @@ export default function MapaRutas() {
   const [rutaOptimizada, setRutaOptimizada] = useState(true);
   const [tab, setTab] = useState<'rutas' | 'gps_vivo'>('rutas');
   const [ubicacionesLive, setUbicacionesLive] = useState<UbicacionVehiculo[]>([]);
+
+  const puedeReasignar = puede(userProfile, 'ordenesModificar');
+
+  // Drag & drop de pines para reasignar técnico
+  const [draggingOrdenId, setDraggingOrdenId] = useState<string | null>(null);
+  const [confirmacionReasignar, setConfirmacionReasignar] = useState<{
+    orden: OrdenServicio;
+    tecnicoDestinoId: string;
+  } | null>(null);
+  const [motivoReasignar, setMotivoReasignar] = useState('');
+  const [savingReasignar, setSavingReasignar] = useState(false);
 
   // Edición desde pin (reusa OrdenEditForm)
   const [editingOrden, setEditingOrden] = useState<OrdenServicio | null>(null);
@@ -472,6 +484,98 @@ export default function MapaRutas() {
     );
   };
 
+  const handlePinDragStart = (ordenId: string) => {
+    if (!puedeReasignar) return;
+    setDraggingOrdenId(ordenId);
+    document.body.classList.add('cursor-grabbing');
+  };
+
+  const handlePinDragEnd = (orden: OrdenServicio, origLat: number, origLng: number) => (e: L.LeafletEvent) => {
+    document.body.classList.remove('cursor-grabbing');
+    const dragEvent = e as L.DragEndEvent & { target: L.Marker };
+    const originalEvent = (dragEvent as unknown as { originalEvent?: MouseEvent }).originalEvent;
+    // Snap back visualmente a la coord original (el pin no se mueve geográficamente)
+    dragEvent.target.setLatLng([origLat, origLng]);
+
+    if (!puedeReasignar) {
+      setDraggingOrdenId(null);
+      return;
+    }
+
+    let tecnicoIdDestino: string | null = null;
+    if (originalEvent) {
+      const el = document.elementFromPoint(originalEvent.clientX, originalEvent.clientY);
+      const tecnicoCard = el?.closest<HTMLElement>('[data-tecnico-id]');
+      tecnicoIdDestino = tecnicoCard?.getAttribute('data-tecnico-id') || null;
+    }
+
+    setDraggingOrdenId(null);
+
+    if (!tecnicoIdDestino) return;
+    if (tecnicoIdDestino === orden.tecnicoId) return;
+
+    setMotivoReasignar('');
+    setConfirmacionReasignar({ orden, tecnicoDestinoId: tecnicoIdDestino });
+  };
+
+  const detectarConflictoHorario = (tecnicoId: string, orden: OrdenServicio): OrdenServicio | null => {
+    if (!orden.fechaCita) return null;
+    return ordenes.find(o =>
+      o.id !== orden.id &&
+      !o.eliminada &&
+      o.tecnicoId === tecnicoId &&
+      o.fechaCita &&
+      o.fechaCita.getTime() === orden.fechaCita!.getTime() &&
+      !['cerrado', 'cancelado'].includes(o.fase)
+    ) || null;
+  };
+
+  const handleConfirmarReasignar = async () => {
+    if (!confirmacionReasignar) return;
+    const { orden, tecnicoDestinoId } = confirmacionReasignar;
+    const destino = personal.find(p => p.id === tecnicoDestinoId);
+    if (!destino) {
+      toast.error('Técnico destino no encontrado');
+      return;
+    }
+    setSavingReasignar(true);
+    try {
+      const usuario = userProfile?.nombre || 'Sistema';
+      const ahora = Timestamp.now();
+      const registro = crearRegistroAuditoria(
+        usuario, 'editar',
+        motivoReasignar.trim()
+          ? `Reasignación desde mapa — ${motivoReasignar.trim()}`
+          : 'Reasignación desde mapa',
+        'tecnico',
+        orden.tecnicoNombre || '',
+        destino.nombre,
+      );
+      const payload: Record<string, unknown> = {
+        tecnicoId: destino.id,
+        tecnicoNombre: destino.nombre,
+        auditoria: arrayUnion(registro),
+        updatedAt: ahora,
+      };
+      if (destino.operariaId) {
+        payload.operariaId = destino.operariaId;
+        payload.operariaNombre = destino.operariaNombre || null;
+      } else {
+        payload.operariaId = null;
+        payload.operariaNombre = null;
+      }
+      await updateDoc(doc(db, 'ordenes_servicio', orden.id), payload);
+      toast.success(`Orden reasignada a ${destino.nombre}`);
+      setConfirmacionReasignar(null);
+      setMotivoReasignar('');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al reasignar la orden');
+    } finally {
+      setSavingReasignar(false);
+    }
+  };
+
   const handleGuardarEditDesdeMapa = async () => {
     if (!editingOrden) return;
     // Aviso cuando una operaria modifica orden fuera de su grupo
@@ -806,11 +910,24 @@ export default function MapaRutas() {
             {marcadores.map(m => {
               const color = personal.find(p => p.id === m.tecnicoId)?.color || getTecnicoColor(m.tecnicoNombre);
               const fechaTexto = m.fechaCita ? format(m.fechaCita, 'yyyy-MM-dd') : '';
+              const ordenCompleta = ordenes.find(o => o.id === m.id);
+              const draggableMarker =
+                puedeReasignar &&
+                typeof window !== 'undefined' &&
+                window.innerWidth >= 768 &&
+                !!ordenCompleta;
+              const eventHandlers = draggableMarker && ordenCompleta ? {
+                dragstart: () => handlePinDragStart(m.id),
+                dragend: handlePinDragEnd(ordenCompleta, m.lat, m.lng),
+              } : undefined;
               return (
                 <Marker
                   key={m.id}
                   position={[m.lat, m.lng]}
                   icon={crearPinSVG(color, m.orden)}
+                  draggable={draggableMarker}
+                  eventHandlers={eventHandlers}
+                  opacity={draggingOrdenId && draggingOrdenId !== m.id ? 0.4 : 1}
                 >
                   <Popup>
                     <div className="text-sm min-w-[220px]">
@@ -926,14 +1043,33 @@ export default function MapaRutas() {
             )}
           </div>
 
-          {/* Legend con conteo por técnico en el rango */}
+          {/* Legend con conteo por técnico en el rango (drop zones para reasignar) */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Técnicos</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase">Técnicos</p>
+              {draggingOrdenId && (
+                <span className="text-[10px] font-medium text-[#1a5fa8] animate-pulse">
+                  Suelta sobre un técnico
+                </span>
+              )}
+            </div>
             <div className="space-y-1">
               {tecnicos.map(t => {
                 const count = cantidadPorTecnico[t.nombre] || 0;
+                const ordenArrastrada = draggingOrdenId
+                  ? ordenes.find(o => o.id === draggingOrdenId)
+                  : null;
+                const esDestinoValido = !!draggingOrdenId && ordenArrastrada?.tecnicoId !== t.id;
                 return (
-                  <div key={t.id} className="flex items-center justify-between gap-2 text-xs text-gray-600">
+                  <div
+                    key={t.id}
+                    data-tecnico-id={t.id}
+                    className={`flex items-center justify-between gap-2 text-xs text-gray-600 rounded-lg px-2 py-1 transition-all ${
+                      esDestinoValido
+                        ? 'ring-2 ring-blue-400 bg-blue-50/50 hover:ring-4 hover:ring-blue-600'
+                        : ''
+                    }`}
+                  >
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.color || getTecnicoColor(t.nombre) }} />
                       <span className="truncate">{t.nombre}{t.zona ? ` · ${t.zona}` : ''}</span>
@@ -1022,6 +1158,88 @@ export default function MapaRutas() {
           />
         )}
       </Modal>
+
+      {/* Modal confirmación de reasignación por drag */}
+      <Modal
+        isOpen={!!confirmacionReasignar}
+        onClose={() => { setConfirmacionReasignar(null); setMotivoReasignar(''); }}
+        title={confirmacionReasignar ? `Reasignar orden ${confirmacionReasignar.orden.numero || ''}` : 'Reasignar orden'}
+      >
+        {confirmacionReasignar && (() => {
+          const destino = personal.find(p => p.id === confirmacionReasignar.tecnicoDestinoId);
+          const conflicto = destino ? detectarConflictoHorario(destino.id, confirmacionReasignar.orden) : null;
+          return (
+            <div className="space-y-4">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm space-y-1">
+                <p><span className="font-semibold">Cliente:</span> {confirmacionReasignar.orden.clienteNombre}</p>
+                <p>
+                  <span className="font-semibold">Técnico actual:</span>{' '}
+                  {confirmacionReasignar.orden.tecnicoNombre || 'Sin asignar'}
+                </p>
+                <p>
+                  <span className="font-semibold">Técnico destino:</span>{' '}
+                  {destino?.nombre || '—'}
+                </p>
+                {confirmacionReasignar.orden.fechaCita && (
+                  <p className="text-xs text-gray-500">
+                    Cita: {formatFecha(confirmacionReasignar.orden.fechaCita)}
+                  </p>
+                )}
+              </div>
+
+              {conflicto && (
+                <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 text-sm text-amber-900 flex items-start gap-2">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+                  <div>
+                    <p className="font-semibold">Conflicto de horario</p>
+                    <p className="text-xs mt-0.5">
+                      {destino?.nombre} ya tiene {conflicto.numero} ({conflicto.clienteNombre})
+                      {conflicto.fechaCita ? ` el ${formatFecha(conflicto.fechaCita)}` : ''}. ¿Continuar igual?
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Motivo del cambio (opcional)</label>
+                <textarea
+                  rows={2}
+                  value={motivoReasignar}
+                  onChange={e => setMotivoReasignar(e.target.value)}
+                  placeholder="Ej: balanceo de carga, zona del nuevo técnico, etc."
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setConfirmacionReasignar(null); setMotivoReasignar(''); }}
+                  disabled={savingReasignar}
+                  className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmarReasignar}
+                  disabled={savingReasignar}
+                  className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                >
+                  {savingReasignar ? 'Guardando...' : 'Confirmar reasignación'}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </Modal>
+
+      {/* Overlay informativo mientras se arrastra */}
+      {draggingOrdenId && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[9999] bg-[#0f3460] text-white px-4 py-2 rounded-full shadow-lg text-xs font-medium pointer-events-none">
+          Arrastra el pin sobre un técnico para reasignar
+        </div>
+      )}
     </div>
   );
 }
