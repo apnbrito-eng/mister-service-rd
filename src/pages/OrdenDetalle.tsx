@@ -838,9 +838,9 @@ export default function OrdenDetalle() {
                 <button
                   type="button"
                   onClick={() => setShowCancelModal(true)}
-                  className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
+                  className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 hover:border-red-300 transition-colors"
                 >
-                  <XCircle size={13} /> Cancelar orden
+                  <XCircle size={13} /> Cancelar
                 </button>
               )}
               <EliminarOrdenButton orden={orden} variant="button" />

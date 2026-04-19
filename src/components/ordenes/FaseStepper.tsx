@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, FaseOrden, EstadoOrdenSimple } from '../../types';
-import { crearRegistroAuditoria, faseLabel, faseColor } from '../../utils';
+import { crearRegistroAuditoria, faseLabel } from '../../utils';
 import { useApp } from '../../context/AppContext';
 import { puede } from '../../utils/permisos';
 import { registrarComisionPorOrden } from '../../utils/comisiones';
@@ -10,24 +10,10 @@ import Modal from '../Modal';
 import { Check, Package, AlertTriangle, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-/** Fases visibles en el stepper (excluye 'cancelado' que se maneja aparte) */
 const FASES_STEPPER: FaseOrden[] = [
   'nuevo_lead', 'en_gestion', 'en_diagnostico', 'en_cotizacion',
   'aprobado', 'agendado', 'trabajo_realizado', 'cerrado',
 ];
-
-/** Etiqueta corta por fase para pills compactas */
-const FASE_LABEL_CORTO: Record<FaseOrden, string> = {
-  nuevo_lead: 'Nuevo',
-  en_gestion: 'Gestión',
-  en_diagnostico: 'Diag',
-  en_cotizacion: 'Cot',
-  aprobado: 'Aprob',
-  agendado: 'Agenda',
-  trabajo_realizado: 'Realizado',
-  cerrado: 'Cerrado',
-  cancelado: 'Cancel',
-};
 
 function mapearEstadoSimple(fase: FaseOrden): EstadoOrdenSimple {
   if (['trabajo_realizado', 'cerrado'].includes(fase)) return 'completado';
@@ -42,6 +28,7 @@ interface Props {
   tienestandby?: boolean;
   onCambioFase?: (nuevaFase: FaseOrden, nota?: string) => Promise<void>;
   size?: 'sm' | 'md';
+  mostrarNumeros?: boolean;
   className?: string;
 }
 
@@ -51,6 +38,7 @@ export default function FaseStepper({
   tienestandby = false,
   onCambioFase,
   size = 'md',
+  mostrarNumeros = false,
   className = '',
 }: Props) {
   const { userProfile } = useApp();
@@ -63,19 +51,15 @@ export default function FaseStepper({
   const esAnulada = orden.eliminada || orden.fase === 'cancelado';
   const interactivo = size === 'md' && !readonly && !esAnulada && puedeModificar;
 
-  // Modal de retroceso
   const [showRetrocesoModal, setShowRetrocesoModal] = useState(false);
   const [faseDestinoRetro, setFaseDestinoRetro] = useState<FaseOrden | null>(null);
   const [motivoRetro, setMotivoRetro] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Fases ya pasadas: cualquier fase cuyo índice sea <= índice actual
   const faseActualIdx = FASES_STEPPER.indexOf(orden.fase);
-  // Si la fase actual es 'cancelado', ninguna está "activa" — mostrar todas grises
   const effectiveIdx = orden.fase === 'cancelado' ? -1 : faseActualIdx;
 
   const ejecutarCambio = async (nuevaFase: FaseOrden, nota?: string) => {
-    // Si el caller provee handler, delegar
     if (onCambioFase) {
       return onCambioFase(nuevaFase, nota);
     }
@@ -109,7 +93,6 @@ export default function FaseStepper({
       updatedAt: ahora,
     });
 
-    // Al cerrar, intentar registrar comisión (idempotente; si ya existe o no aplica, noop)
     if (nuevaFase === 'cerrado') {
       try {
         const ordenAct = { ...orden, fase: 'cerrado' as FaseOrden };
@@ -141,7 +124,6 @@ export default function FaseStepper({
       setShowRetrocesoModal(true);
       return;
     }
-    // Avance: confirm nativo rápido
     if (!window.confirm(`¿Avanzar la orden a "${faseLabel(fase)}"?`)) return;
     setSaving(true);
     try {
@@ -176,35 +158,51 @@ export default function FaseStepper({
     }
   };
 
-  // Clases compartidas
-  const pillBase = size === 'sm'
-    ? 'flex items-center justify-center rounded-full text-[9px] font-semibold transition-all'
-    : 'flex items-center gap-1 rounded-full text-xs font-semibold transition-all border';
-  const pillSize = size === 'sm' ? 'w-6 h-6' : 'px-3 py-1.5';
+  // Píldora oval con texto completo
+  const sizeClasses = size === 'sm'
+    ? 'px-2.5 py-1 text-[10.5px] sm:px-3 sm:py-1.5'
+    : 'px-3 py-1.5 sm:px-4 sm:py-2 text-[11.5px] sm:text-[12.5px]';
+  const chevronSize = size === 'sm' ? 10 : 14;
+  const gapClass = size === 'sm' ? 'gap-1' : 'gap-2';
 
   const pillClass = (idx: number) => {
     const isPast = idx < effectiveIdx;
     const isCurrent = idx === effectiveIdx;
-    if (esAnulada) return `${pillBase} ${pillSize} bg-gray-100 text-gray-400 ${size === 'md' ? 'border-gray-200' : ''}`;
+    const base = `inline-flex items-center gap-1.5 rounded-full border font-bold whitespace-nowrap transition-all ${sizeClasses}`;
+    if (esAnulada) {
+      return `${base} bg-gray-100 text-gray-400 border-gray-200`;
+    }
     if (isCurrent) {
-      return `${pillBase} ${pillSize} ${faseColor(FASES_STEPPER[idx])} ${size === 'md' ? 'border-transparent ring-2 ring-offset-1 ring-[#1a5fa8]' : ''} shadow-sm`;
+      return `${base} bg-[#0f3460] text-white border-[#0f3460] shadow-md ring-4 ring-blue-200`;
     }
     if (isPast) {
-      return `${pillBase} ${pillSize} bg-green-50 text-green-700 ${size === 'md' ? 'border-green-200' : ''}`;
+      return `${base} bg-green-50 text-green-800 border-green-200`;
     }
-    return `${pillBase} ${pillSize} bg-gray-50 text-gray-400 ${size === 'md' ? 'border-gray-200' : ''}`;
+    return `${base} bg-gray-50 text-gray-400 border-gray-200`;
+  };
+
+  const numeroCircle = (idx: number, isCurrent: boolean, isPast: boolean) => {
+    if (!mostrarNumeros) return null;
+    const bg = isCurrent
+      ? 'bg-white text-[#0f3460]'
+      : isPast
+        ? 'bg-green-200 text-green-900'
+        : 'bg-gray-200 text-gray-500';
+    return (
+      <span className={`inline-flex items-center justify-center rounded-full w-4 h-4 text-[9px] font-bold ${bg}`}>
+        {idx + 1}
+      </span>
+    );
   };
 
   return (
     <div className={`space-y-2 ${className}`}>
-      {/* Badge de Stand-by */}
       {tienestandby && !esAnulada && (
         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-800 text-[11px] font-medium">
           <Package size={11} /> En Stand-by — piezas pendientes
         </div>
       )}
 
-      {/* Banner anulación (sobre el stepper) */}
       {orden.eliminada && (
         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-100 text-red-800 text-[11px] font-medium">
           <AlertTriangle size={11} /> Orden eliminada
@@ -216,30 +214,31 @@ export default function FaseStepper({
         </div>
       )}
 
-      {/* Stepper horizontal */}
-      <div className={`flex items-center gap-1 ${size === 'md' ? 'overflow-x-auto pb-1' : 'flex-wrap'}`}>
+      <div className={`flex flex-wrap items-center ${gapClass}`}>
         {FASES_STEPPER.map((fase, idx) => {
           const isPast = idx < effectiveIdx;
           const isCurrent = idx === effectiveIdx;
-          const content = size === 'sm' ? (
-            isPast ? <Check size={10} /> : <span>{idx + 1}</span>
-          ) : (
+          const title = faseLabel(fase) + (isCurrent ? ' (actual)' : isPast ? ' (pasada)' : '');
+          const content = (
             <>
-              {isPast && <Check size={11} />}
-              <span>{FASE_LABEL_CORTO[fase]}</span>
+              {numeroCircle(idx, isCurrent, isPast)}
+              {isPast && !mostrarNumeros && <Check size={size === 'sm' ? 10 : 12} />}
+              <span>{faseLabel(fase)}</span>
             </>
           );
-          const title = faseLabel(fase) + (isCurrent ? ' (actual)' : isPast ? ' (pasada)' : '');
+          const hoverClass = isCurrent
+            ? 'hover:brightness-110'
+            : 'hover:scale-105 hover:shadow-sm';
 
           return (
-            <div key={fase} className="flex items-center">
+            <div key={fase} className={`flex items-center ${gapClass}`}>
               {interactivo ? (
                 <button
                   type="button"
                   onClick={(e) => handleClickFase(fase, e)}
                   disabled={saving}
                   title={title}
-                  className={`${pillClass(idx)} hover:opacity-80 disabled:opacity-60 cursor-pointer`}
+                  className={`${pillClass(idx)} ${hoverClass} disabled:opacity-60 ${isCurrent ? 'cursor-default' : 'cursor-pointer'}`}
                 >
                   {content}
                 </button>
@@ -249,14 +248,13 @@ export default function FaseStepper({
                 </div>
               )}
               {idx < FASES_STEPPER.length - 1 && (
-                <ChevronRight size={size === 'sm' ? 10 : 12} className="text-gray-300 shrink-0" />
+                <ChevronRight size={chevronSize} className="text-gray-300 shrink-0" />
               )}
             </div>
           );
         })}
       </div>
 
-      {/* Modal retroceso con motivo */}
       <Modal
         isOpen={showRetrocesoModal}
         onClose={() => { setShowRetrocesoModal(false); setFaseDestinoRetro(null); setMotivoRetro(''); }}

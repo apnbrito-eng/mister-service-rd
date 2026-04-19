@@ -94,9 +94,9 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
               type="button"
               onClick={(e) => { e.stopPropagation(); setShowCancelModal(true); }}
               title="Cancelar orden"
-              className="p-1.5 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors"
+              className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-600 hover:bg-red-100 hover:border-red-300 transition-colors"
             >
-              <XCircle size={13} />
+              <XCircle size={11} /> Cancelar
             </button>
           )}
           <EliminarOrdenButton orden={orden} variant="icon" size="sm" />
