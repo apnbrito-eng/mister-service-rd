@@ -24,7 +24,8 @@ import { esOrdenMantenimiento } from '../utils';
 import { buscarPrecioMantenimiento } from '../services/precios.service';
 import {
   Plus, Search, Clock, Calendar, MapPin, Phone, MessageCircle,
-  Wrench, User, FileText, Edit2, CalendarDays, RefreshCw, Eye
+  Wrench, User, FileText, Edit2, CalendarDays, RefreshCw, Eye,
+  List, LayoutGrid
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { format, isSameDay } from 'date-fns';
@@ -38,6 +39,7 @@ import OrdenEditForm from '../components/ordenes/OrdenEditForm';
 import type { EditFormState } from '../components/ordenes/OrdenEditForm';
 import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
 import type { CreateFormState } from '../components/ordenes/OrdenCreateModal';
+import OrdenesTablero from '../components/ordenes/OrdenesTablero';
 
 const ESTADOS_SIMPLE: EstadoOrdenSimple[] = ['pendiente', 'en_proceso', 'completado', 'cancelado'];
 
@@ -90,6 +92,9 @@ export default function Ordenes() {
   const [filtroMes, setFiltroMes] = useState('');
   const [filtroTecnico, setFiltroTecnico] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
+
+  // Vista: lista | tablero
+  const [vista, setVista] = useState<'lista' | 'tablero'>('lista');
 
   // Create form
   const [clienteBusqueda, setClienteBusqueda] = useState('');
@@ -1257,38 +1262,77 @@ export default function Ordenes() {
         )}
       </div>
 
-      {/* Filters Bar */}
-      <OrdenFilters
-        busqueda={busqueda}
-        setBusqueda={setBusqueda}
-        filtroMes={filtroMes}
-        setFiltroMes={setFiltroMes}
-        filtroTecnico={filtroTecnico}
-        setFiltroTecnico={setFiltroTecnico}
-        filtroEstado={filtroEstado}
-        setFiltroEstado={setFiltroEstado}
-        tecnicos={tecnicos}
-        ESTADOS_SIMPLE={ESTADOS_SIMPLE}
-      />
-
-      {/* Orders List */}
-      <div className="space-y-3">
-        {ordenesFiltradas.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-400">
-            <FileText size={32} className="mx-auto mb-2 opacity-30" />
-            <p className="text-sm">Sin ordenes para mostrar</p>
+      {/* Filters Bar + Toggle Vista */}
+      <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <OrdenFilters
+            busqueda={busqueda}
+            setBusqueda={setBusqueda}
+            filtroMes={filtroMes}
+            setFiltroMes={setFiltroMes}
+            filtroTecnico={filtroTecnico}
+            setFiltroTecnico={setFiltroTecnico}
+            filtroEstado={filtroEstado}
+            setFiltroEstado={setFiltroEstado}
+            tecnicos={tecnicos}
+            ESTADOS_SIMPLE={ESTADOS_SIMPLE}
+          />
+        </div>
+        {puede(userProfile, 'ordenesVer') && userProfile?.rol !== 'tecnico' && (
+          <div className="hidden md:inline-flex items-center rounded-full border border-gray-200 bg-white p-0.5 shadow-sm shrink-0">
+            <button
+              type="button"
+              onClick={() => setVista('lista')}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                vista === 'lista'
+                  ? 'bg-[#0f3460] text-white'
+                  : 'text-gray-600 hover:text-[#0f3460]'
+              }`}
+            >
+              <List size={13} /> Lista
+            </button>
+            <button
+              type="button"
+              onClick={() => setVista('tablero')}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                vista === 'tablero'
+                  ? 'bg-[#0f3460] text-white'
+                  : 'text-gray-600 hover:text-[#0f3460]'
+              }`}
+            >
+              <LayoutGrid size={13} /> Tablero
+            </button>
           </div>
-        ) : (
-          ordenesFiltradas.map(orden => (
-            <OrdenCard
-              key={orden.id}
-              orden={orden}
-              onSelect={setSelectedOrden}
-              standbyItems={standbyItems}
-            />
-          ))
         )}
       </div>
+
+      {/* Orders: Lista o Tablero */}
+      {vista === 'lista' ? (
+        <div className="space-y-3">
+          {ordenesFiltradas.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-400">
+              <FileText size={32} className="mx-auto mb-2 opacity-30" />
+              <p className="text-sm">Sin ordenes para mostrar</p>
+            </div>
+          ) : (
+            ordenesFiltradas.map(orden => (
+              <OrdenCard
+                key={orden.id}
+                orden={orden}
+                onSelect={setSelectedOrden}
+                standbyItems={standbyItems}
+              />
+            ))
+          )}
+        </div>
+      ) : (
+        <OrdenesTablero
+          ordenes={ordenesFiltradas}
+          personal={personal}
+          standbyItems={standbyItems}
+          onSelect={setSelectedOrden}
+        />
+      )}
 
       {/* Detail Modal */}
       <Modal
