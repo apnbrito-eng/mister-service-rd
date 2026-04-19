@@ -4,6 +4,7 @@ import {
   Users, UserCog, FileText, Settings, LogOut, Wrench,
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight,
   Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
+  CalendarCheck,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -53,6 +54,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   const navItems = [
     { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', show: true },
+    { to: '/admin/agenda-dia', icon: CalendarCheck, label: 'Agenda del Día', show: p('ordenesVer') },
     { to: '/admin/ordenes', icon: ClipboardList, label: 'Órdenes', show: p('ordenesVer') },
     { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
     { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },

@@ -1037,13 +1037,21 @@ export default function Dashboard() {
 
       {/* ======== 10. AGENDA DEL DIA ======== */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center gap-2 mb-4">
+        <button
+          type="button"
+          onClick={() => navigate('/admin/agenda-dia')}
+          className="w-full flex items-center gap-2 mb-4 group cursor-pointer"
+          title="Ver agenda completa por técnico"
+        >
           <Calendar size={20} className="text-[#1a5fa8]" />
-          <h2 className="text-lg font-semibold text-gray-900">Agenda del Día</h2>
+          <h2 className="text-lg font-semibold text-gray-900 group-hover:text-[#1a5fa8] transition-colors">
+            Agenda del Día
+          </h2>
           <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full">
             {agendaHoy.length}
           </span>
-        </div>
+          <ChevronRight size={16} className="ml-auto text-gray-400 group-hover:text-[#1a5fa8] transition-colors" />
+        </button>
 
         {agendaHoy.length === 0 ? (
           <div className="text-center py-8 text-gray-400">

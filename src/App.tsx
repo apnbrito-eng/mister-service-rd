@@ -38,6 +38,7 @@ import Calendarios from './pages/Calendarios';
 import CitaPublica from './pages/CitaPublica';
 import GestionUsuarios from './pages/GestionUsuarios';
 import TrackingCliente from './pages/TrackingCliente';
+import AgendaDia from './pages/AgendaDia';
 
 // Public website pages
 import PublicLayout from './components/public/PublicLayout';
@@ -145,6 +146,7 @@ function AppRoutes() {
         <Route path="ordenes/:id" element={<OrdenDetalle />} />
         <Route path="citas" element={<Citas />} />
         <Route path="calendario" element={<Calendario />} />
+        <Route path="agenda-dia" element={<PermisoRoute permiso="ordenesVer"><AgendaDia /></PermisoRoute>} />
         <Route path="calendarios" element={<Calendarios />} />
         <Route path="standby" element={<Standby />} />
         <Route path="mapa" element={<MapaRutas />} />
