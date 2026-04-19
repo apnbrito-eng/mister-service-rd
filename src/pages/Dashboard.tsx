@@ -7,7 +7,7 @@ import {
   ChevronRight, Calendar, User, TrendingUp, Wrench,
   FileText, Receipt, BarChart3, Users, Timer, Package
 } from 'lucide-react';
-import { differenceInDays, startOfDay, endOfDay, startOfWeek, startOfMonth, startOfYear } from 'date-fns';
+import { differenceInDays, startOfDay, endOfDay, startOfWeek, startOfMonth, startOfYear, format as formatDate } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   OrdenServicio, StandbyPieza, Factura, Cotizacion, Personal, Gasto, FaseOrden, PiezaInventario
@@ -28,6 +28,11 @@ import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import { useApp } from '../context/AppContext';
 import { Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
+import RecordatorioBanner from '../components/recordatorios/RecordatorioBanner';
+import {
+  obtenerRecordatoriosDelDia, marcarNotificadoAAdmin,
+} from '../services/recordatorios.service';
+import { crearNotificacion } from '../services/notificaciones.service';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -54,6 +59,13 @@ export default function Dashboard() {
       window.history.replaceState({}, '');
     }
   }, [location.state]);
+
+  // Tick cada 60s para que los banners de recordatorio re-evalúen la ventana
+  const [recordatoriosTick, setRecordatoriosTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setRecordatoriosTick(t => t + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   // ---- state ----
   const [loading, setLoading] = useState(true);
@@ -178,6 +190,57 @@ export default function Dashboard() {
       unsubCotizaciones(); unsubGastos(); unsubPersonal(); unsubPiezas(); unsubComisiones();
     };
   }, []);
+
+  // Auto-notificar a admin/coord cuando una operaria no completa su recordatorio
+  // después de que la ventana cerró. Corre en múltiplos de 5 del tick (~5 min).
+  useEffect(() => {
+    const rol = userProfile?.rol;
+    if (rol !== 'administrador' && rol !== 'coordinadora') return;
+    if (recordatoriosTick === 0 || recordatoriosTick % 5 !== 0) return;
+
+    const ahora = new Date();
+    if (ahora.getDay() === 0) return;
+    const hora = ahora.getHours();
+    const min = ahora.getMinutes();
+    const pasoVentanaRuta = hora > 10 || (hora === 10 && min > 0);
+    const pasoVentanaAvisos = hora > 12 || (hora === 12 && min > 0);
+    if (!pasoVentanaRuta && !pasoVentanaAvisos) return;
+
+    const hoyStr = formatDate(ahora, 'yyyy-MM-dd');
+    (async () => {
+      try {
+        const recs = await obtenerRecordatoriosDelDia(hoyStr);
+        const operariasActivas = personal.filter(p => p.rol === 'operaria' && p.activo);
+        const adminsYCoord = personal.filter(
+          p => (p.rol === 'administrador' || p.rol === 'coordinadora') && p.activo,
+        );
+        if (adminsYCoord.length === 0) return;
+        for (const op of operariasActivas) {
+          for (const tipo of ['ruta_manana', 'horarios_clientes'] as const) {
+            if (tipo === 'ruta_manana' && !pasoVentanaRuta) continue;
+            if (tipo === 'horarios_clientes' && !pasoVentanaAvisos) continue;
+            const rec = recs.find(r => r.operariaId === op.id && r.tipo === tipo);
+            if (!rec) continue;
+            if (rec.completado) continue;
+            if (rec.notificadoAAdmin) continue;
+            const tipoLabel = tipo === 'ruta_manana' ? 'organización de ruta' : 'avisos a clientes';
+            for (const admin of adminsYCoord) {
+              await crearNotificacion({
+                destinatarioId: admin.id,
+                destinatarioNombre: admin.nombre,
+                tipo: 'recordatorio',
+                titulo: 'Recordatorio vencido',
+                mensaje: `La operaria ${op.nombre} no completó el recordatorio de ${tipoLabel} del día.`,
+              }).catch(console.error);
+            }
+            await marcarNotificadoAAdmin(rec.id).catch(console.error);
+          }
+        }
+      } catch (err) {
+        console.error('Error revisando recordatorios vencidos:', err);
+      }
+    })();
+  }, [recordatoriosTick, userProfile?.rol, personal]);
 
   // ---- operaria filter ----
   const esOperaria = userProfile?.rol === 'operaria';
@@ -465,6 +528,12 @@ export default function Dashboard() {
               ))}
           </select>
         )}
+      </div>
+
+      {/* ======== RECORDATORIOS DIARIOS ======== */}
+      <div className="space-y-3">
+        <RecordatorioBanner tipo="ruta_manana" tickSeed={recordatoriosTick} />
+        <RecordatorioBanner tipo="horarios_clientes" tickSeed={recordatoriosTick} />
       </div>
 
       {/* ======== 1. KPI CARDS ======== */}

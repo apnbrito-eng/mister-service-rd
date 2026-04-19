@@ -768,3 +768,28 @@ export interface Notificacion {
   createdAt: Date;
   leidaEn?: Date;
 }
+
+export type TipoRecordatorio = 'ruta_manana' | 'horarios_clientes';
+
+export interface ItemAviso {
+  ordenId: string;
+  ordenNumero: string;
+  clienteNombre: string;
+  clienteTelefono?: string;
+  horaEstimada?: string;
+  avisado: boolean;
+  avisadoEn?: Date;
+}
+
+export interface RecordatorioDiario {
+  id: string;
+  fecha: string; // 'YYYY-MM-DD'
+  operariaId: string;
+  operariaNombre: string;
+  tipo: TipoRecordatorio;
+  completado: boolean;
+  completadoEn?: Date;
+  items?: ItemAviso[];
+  notificadoAAdmin?: boolean;
+  createdAt: Date;
+}
