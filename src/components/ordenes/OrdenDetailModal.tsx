@@ -48,6 +48,22 @@ export default function OrdenDetailModal({
         </div>
       )}
 
+      {/* Banner si está cancelada (independiente del banner de eliminada) */}
+      {orden.fase === 'cancelado' && !orden.eliminada && orden.motivoCancelacion && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-3 flex items-start gap-2 text-sm text-amber-900">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold">Orden cancelada</p>
+            <p className="text-xs mt-0.5">Motivo: {orden.motivoCancelacion}</p>
+            {orden.canceladaPor && (
+              <p className="text-xs text-amber-700 mt-0.5">
+                Por {orden.canceladaPor}{orden.fechaCancelacion ? ` · ${formatFecha(orden.fechaCancelacion)}` : ''}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Editar / Eliminar */}
       <div className="flex justify-end gap-2 mb-4">
         {puedeModificar && !orden.eliminada && (

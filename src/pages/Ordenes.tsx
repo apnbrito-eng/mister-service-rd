@@ -37,6 +37,7 @@ import OrdenEditForm from '../components/ordenes/OrdenEditForm';
 import type { EditFormState } from '../components/ordenes/OrdenEditForm';
 import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
 import type { CreateFormState } from '../components/ordenes/OrdenCreateModal';
+import CancelarOrdenModal from '../components/ordenes/CancelarOrdenModal';
 
 const ESTADOS_SIMPLE: EstadoOrdenSimple[] = ['pendiente', 'en_proceso', 'completado', 'cancelado'];
 
@@ -81,6 +82,10 @@ export default function Ordenes() {
   const [deleteTarget, setDeleteTarget] = useState<OrdenServicio | null>(null);
   const [deleteMotivo, setDeleteMotivo] = useState('');
   const [deletingOrden, setDeletingOrden] = useState(false);
+
+  // Cancelación con motivo
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<OrdenServicio | null>(null);
   const [ordenesActivasCliente, setOrdenesActivasCliente] = useState<OrdenServicio[]>([]);
   const [buscandoTelefono, setBuscandoTelefono] = useState(false);
   const [showTelefonoDropdown, setShowTelefonoDropdown] = useState(false);
@@ -945,6 +950,12 @@ export default function Ordenes() {
 
   const handleEstadoChange = async (orden: OrdenServicio, nuevoEstado: EstadoOrdenSimple) => {
     if (nuevoEstado === orden.estadoSimple) return;
+    // Interceptar cancelado: pedir motivo en modal
+    if (nuevoEstado === 'cancelado') {
+      setCancelTarget(orden);
+      setShowCancelModal(true);
+      return;
+    }
     try {
       const nuevaFase = estadoSimpleToFase(nuevoEstado);
       const ahora = Timestamp.now();
@@ -1392,6 +1403,14 @@ export default function Ordenes() {
           handleClienteTelefonoChange={handleClienteTelefonoChange}
         />
       )}
+
+      {/* Modal Cancelar Orden (motivo obligatorio) */}
+      <CancelarOrdenModal
+        isOpen={showCancelModal}
+        onClose={() => { setShowCancelModal(false); setCancelTarget(null); }}
+        orden={cancelTarget}
+        userProfile={userProfile}
+      />
 
       {/* Modal Eliminar Orden (soft delete con motivo) */}
       <Modal

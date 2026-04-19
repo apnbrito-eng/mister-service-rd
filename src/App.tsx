@@ -26,6 +26,7 @@ import PreciosServicios from './pages/PreciosServicios';
 import Inventario from './pages/Inventario';
 import Comisiones from './pages/Comisiones';
 import Nomina from './pages/Nomina';
+import HistorialAnuladas from './pages/HistorialAnuladas';
 import ConfiguracionWeb from './pages/ConfiguracionWeb';
 import EmpresasAliadas from './pages/EmpresasAliadas';
 import Formularios from './pages/Formularios';
@@ -146,6 +147,7 @@ function AppRoutes() {
         <Route path="inventario" element={<Inventario />} />
         <Route path="comisiones" element={<Comisiones />} />
         <Route path="nomina" element={<Nomina />} />
+        <Route path="historial-anuladas" element={<HistorialAnuladas />} />
         <Route path="configuracion/usuarios" element={<GestionUsuarios />} />
       </Route>
 

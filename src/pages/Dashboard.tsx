@@ -14,7 +14,7 @@ import {
 } from '../types';
 import { puede } from '../utils/permisos';
 import { Link } from 'react-router-dom';
-import { Boxes, Wallet } from 'lucide-react';
+import { Boxes, Wallet, XCircle } from 'lucide-react';
 import { calcularQuincenaActual } from '../utils/comisiones';
 import {
   faseLabel, faseBgColor, faseColor, formatMoneda, formatHora,
@@ -273,6 +273,15 @@ export default function Dashboard() {
   const puedeVerInventario = puede(userProfile, 'configuracionVer') ||
     userProfile?.rol === 'administrador' ||
     userProfile?.rol === 'coordinadora';
+
+  // Órdenes anuladas esta semana (widget informativo)
+  const puedeVerAnuladas = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  const anuladasSemana = useMemo(() => {
+    const haceSieteDias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const eliminadas = ordenesRaw.filter(o => o.eliminada && o.fechaEliminacion && o.fechaEliminacion >= haceSieteDias).length;
+    const canceladas = ordenesRaw.filter(o => !o.eliminada && o.fase === 'cancelado' && o.fechaCancelacion && o.fechaCancelacion >= haceSieteDias).length;
+    return { eliminadas, canceladas, total: eliminadas + canceladas };
+  }, [ordenesRaw]);
 
   // Nómina próxima (Fase 6)
   const puedeVerNomina = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
@@ -847,6 +856,35 @@ export default function Dashboard() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Órdenes anuladas esta semana */}
+        {puedeVerAnuladas && anuladasSemana.total > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <XCircle size={20} className="text-red-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Órdenes anuladas esta semana</h2>
+              </div>
+              <Link to="/admin/historial-anuladas" className="text-xs text-[#1a5fa8] hover:underline font-medium">
+                Ver historial completo →
+              </Link>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-red-50 rounded-lg p-3">
+                <p className="text-[10px] uppercase font-medium text-red-700">Eliminadas</p>
+                <p className="text-2xl font-bold text-red-900">{anuladasSemana.eliminadas}</p>
+              </div>
+              <div className="bg-amber-50 rounded-lg p-3">
+                <p className="text-[10px] uppercase font-medium text-amber-700">Canceladas</p>
+                <p className="text-2xl font-bold text-amber-900">{anuladasSemana.canceladas}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-[10px] uppercase font-medium text-gray-700">Total</p>
+                <p className="text-2xl font-bold text-gray-900">{anuladasSemana.total}</p>
+              </div>
             </div>
           </div>
         )}

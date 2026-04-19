@@ -16,6 +16,7 @@ import {
 import toast from 'react-hot-toast';
 import { puede } from '../utils/permisos';
 import { registrarComisionPorOrden } from '../utils/comisiones';
+import CancelarOrdenModal from '../components/ordenes/CancelarOrdenModal';
 import { generarTrackingToken } from '../services/gps.service';
 import { whatsappUrl } from '../utils/whatsapp';
 
@@ -101,8 +102,15 @@ export default function OrdenDetalle() {
     return () => unsub();
   }, [id]);
 
+  const [showCancelModal, setShowCancelModal] = useState(false);
+
   const handleCambiarFase = async () => {
     if (!id || !nuevaFase || !orden) return;
+    // Interceptar cancelado: abrir modal de motivo en vez de update directo
+    if (nuevaFase === 'cancelado') {
+      setShowCancelModal(true);
+      return;
+    }
     setSaving(true);
     try {
       const nuevoHistorial = [
@@ -127,10 +135,11 @@ export default function OrdenDetalle() {
         faseLabel(orden.fase),
         faseLabel(nuevaFase)
       );
+      // 'cancelado' se intercepta antes vía modal; acá nuevaFase no puede ser 'cancelado'
       await updateDoc(doc(db, 'ordenes_servicio', id), {
         fase: nuevaFase,
-        estadoSimple: ['trabajo_realizado', 'cerrado'].includes(nuevaFase) ? 'completado' : nuevaFase === 'cancelado' ? 'cancelado' : ['en_diagnostico', 'en_cotizacion'].includes(nuevaFase) ? 'en_proceso' : 'pendiente',
-        estado: nuevaFase === 'cancelado' ? 'cancelado' : nuevaFase === 'cerrado' ? 'cerrado' : 'activo',
+        estadoSimple: ['trabajo_realizado', 'cerrado'].includes(nuevaFase) ? 'completado' : ['en_diagnostico', 'en_cotizacion'].includes(nuevaFase) ? 'en_proceso' : 'pendiente',
+        estado: nuevaFase === 'cerrado' ? 'cerrado' : 'activo',
         historialFases: nuevoHistorial,
         auditoria: arrayUnion(registroAuditoria),
         updatedAt: Timestamp.now(),
@@ -329,6 +338,38 @@ export default function OrdenDetalle() {
           <p className="text-gray-500 text-sm">Creada {tiempoTranscurrido(orden.createdAt)}</p>
         </div>
       </div>
+
+      {/* Banner cancelada */}
+      {orden.fase === 'cancelado' && orden.motivoCancelacion && !orden.eliminada && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex items-start gap-3">
+          <AlertTriangle size={20} className="text-amber-700 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-900">Orden cancelada</p>
+            <p className="text-xs text-amber-800 mt-1">Motivo: {orden.motivoCancelacion}</p>
+            {orden.canceladaPor && (
+              <p className="text-xs text-amber-700 mt-0.5">
+                Por {orden.canceladaPor}{orden.fechaCancelacion ? ` · ${formatFecha(orden.fechaCancelacion)}` : ''}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Banner eliminada */}
+      {orden.eliminada && (
+        <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-4 flex items-start gap-3">
+          <AlertTriangle size={20} className="text-red-700 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-red-900">Orden eliminada</p>
+            {orden.motivoEliminacion && <p className="text-xs text-red-800 mt-1">Motivo: {orden.motivoEliminacion}</p>}
+            {orden.eliminadaPor && (
+              <p className="text-xs text-red-700 mt-0.5">
+                Por {orden.eliminadaPor}{orden.fechaEliminacion ? ` · ${formatFecha(orden.fechaEliminacion)}` : ''}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Banner solo chequeo */}
       {orden.soloChequeo && (
@@ -1013,6 +1054,15 @@ export default function OrdenDetalle() {
           </div>
         </div>
       </Modal>
+
+      {/* Modal cancelar con motivo obligatorio */}
+      <CancelarOrdenModal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        orden={orden}
+        userProfile={userProfile}
+        onCancelled={() => { setNuevaFase(''); setNotaFase(''); }}
+      />
     </div>
   );
 }

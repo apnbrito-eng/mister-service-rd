@@ -129,6 +129,11 @@ export interface OrdenServicio {
   eliminadaPor?: string;
   eliminadaPorId?: string;
   fechaEliminacion?: Date;
+  // Cancelación con motivo obligatorio
+  motivoCancelacion?: string;
+  canceladaPor?: string;
+  canceladaPorId?: string;
+  fechaCancelacion?: Date;
   // Cierre del día (Fase 3C)
   efectivoEntregado?: boolean;
   efectivoEntregadoPor?: string;

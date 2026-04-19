@@ -34,6 +34,14 @@ export default function OrdenCard({ orden, onSelect, onChangeEstado }: OrdenCard
             {orden.eliminada && (
               <Badge label="Eliminada" color="bg-red-100 text-red-700" />
             )}
+            {orden.fase === 'cancelado' && orden.motivoCancelacion && !orden.eliminada && (
+              <span
+                title={`Motivo: ${orden.motivoCancelacion}${orden.canceladaPor ? ` — ${orden.canceladaPor}` : ''}`}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-700 cursor-help"
+              >
+                Cancelada
+              </span>
+            )}
           </div>
           <p className="text-sm font-medium text-gray-900 truncate">
             {orden.equipoTipo} - {orden.clienteNombre}
