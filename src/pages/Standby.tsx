@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, getDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { StandbyPieza, EstadoStandby, MovimientoPieza } from '../types';
-import { formatFechaCorta, formatFecha } from '../utils';
+import { StandbyPieza, EstadoStandby, MovimientoPieza, OrdenServicio } from '../types';
+import { formatFechaCorta, formatFecha, parseOrden } from '../utils';
+import { crearNotificacion } from '../services/notificaciones.service';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { differenceInDays } from 'date-fns';
@@ -99,10 +100,35 @@ export default function Standby() {
     }
   };
 
+  const notificarTecnicoPiezaLlego = async (item: StandbyPieza) => {
+    if (!item.ordenId) return;
+    try {
+      const snap = await getDoc(doc(db, 'ordenes_servicio', item.ordenId));
+      if (!snap.exists()) return;
+      const orden = parseOrden(snap.id, snap.data() as Record<string, unknown>) as OrdenServicio;
+      if (!orden.tecnicoId) return;
+      await crearNotificacion({
+        destinatarioId: orden.tecnicoId,
+        destinatarioNombre: orden.tecnicoNombre,
+        tipo: 'pieza_llego',
+        titulo: 'Pieza lista — puedes proceder',
+        mensaje: `La pieza "${item.piezaFaltante}" para OS-${orden.numero} llegó al taller. Cliente: ${orden.clienteNombre}.`,
+        ordenId: orden.id,
+        ordenNumero: orden.numero,
+      });
+      toast.success('Técnico notificado');
+    } catch (err) {
+      console.error('Error notificando técnico:', err);
+    }
+  };
+
   const handlePiezaLlego = async (item: StandbyPieza) => {
     try {
       await updateDoc(doc(db, 'standby_piezas', item.id), { estado: 'llego' });
       toast.success(`Pieza "${item.piezaFaltante}" marcada como llegada`);
+      if (item.estado !== 'llego') {
+        await notificarTecnicoPiezaLlego(item);
+      }
     } catch {
       toast.error('Error al actualizar');
     }
@@ -112,6 +138,9 @@ export default function Standby() {
     try {
       await updateDoc(doc(db, 'standby_piezas', item.id), { estado: nuevoEstado });
       toast.success(`Estado cambiado a "${ESTADO_LABELS[nuevoEstado]}"`);
+      if (nuevoEstado === 'llego' && item.estado !== 'llego') {
+        await notificarTecnicoPiezaLlego(item);
+      }
     } catch {
       toast.error('Error al actualizar');
     }

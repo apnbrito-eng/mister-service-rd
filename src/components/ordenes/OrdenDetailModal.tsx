@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Phone, MessageCircle, MapPin, Edit2, AlertTriangle, XCircle } from 'lucide-react';
+import { Phone, MessageCircle, MapPin, Edit2, AlertTriangle, XCircle, Package } from 'lucide-react';
 import { OrdenServicio, Usuario, StandbyPieza } from '../../types';
 import {
   formatFecha, formatTelefono, whatsappLink,
@@ -10,6 +10,7 @@ import Badge from '../Badge';
 import EliminarOrdenButton from './EliminarOrdenButton';
 import FaseStepper from './FaseStepper';
 import CancelarOrdenModal from './CancelarOrdenModal';
+import ReagendarModal from './ReagendarModal';
 
 interface OrdenDetailModalProps {
   orden: OrdenServicio;
@@ -36,7 +37,10 @@ export default function OrdenDetailModal({
 }: OrdenDetailModalProps) {
   const puedeModificar = puede(userProfile, 'ordenesModificar');
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showReagendarModal, setShowReagendarModal] = useState(false);
   const conStandby = tieneStandby(orden, standbyItems);
+  const tienePiezaPendiente = standbyItems.some(s => s.ordenId === orden.id && s.estado !== 'llego');
+  const mostrarBannerReagendar = orden.fase === 'aprobado' && tienePiezaPendiente && !orden.eliminada;
   return (
     <div className="space-y-6">
       {/* Banner si está eliminada */}
@@ -68,6 +72,28 @@ export default function OrdenDetailModal({
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Banner pieza pendiente — sugiere reagendar */}
+      {mostrarBannerReagendar && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-start gap-3">
+          <Package size={18} className="text-amber-600 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-amber-900 text-sm">Pieza pendiente de llegada</p>
+            <p className="text-xs text-amber-800">
+              Esta orden está aprobada pero tiene piezas en stand-by. Puedes reagendar para cuando llegue la pieza.
+            </p>
+          </div>
+          {puedeModificar && (
+            <button
+              type="button"
+              onClick={() => setShowReagendarModal(true)}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg font-medium text-xs shrink-0"
+            >
+              Reagendar
+            </button>
+          )}
         </div>
       )}
 
@@ -105,6 +131,11 @@ export default function OrdenDetailModal({
         onClose={() => setShowCancelModal(false)}
         orden={orden}
         userProfile={userProfile}
+      />
+      <ReagendarModal
+        isOpen={showReagendarModal}
+        onClose={() => setShowReagendarModal(false)}
+        orden={orden}
       />
 
       {/* Client Info */}

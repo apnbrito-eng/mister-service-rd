@@ -11,13 +11,14 @@ import { useApp } from '../context/AppContext';
 import {
   ArrowLeft, Phone, Wrench, User, Calendar,
   Clock, MessageSquare, Save, MapPin, ExternalLink, MessageCircle,
-  Satellite, Copy, Power, ClipboardCheck, AlertTriangle, FileText
+  Satellite, Copy, Power, ClipboardCheck, AlertTriangle, FileText, Package
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { puede } from '../utils/permisos';
 import CancelarOrdenModal from '../components/ordenes/CancelarOrdenModal';
 import FaseStepper from '../components/ordenes/FaseStepper';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
+import ReagendarModal from '../components/ordenes/ReagendarModal';
 import { XCircle } from 'lucide-react';
 import { generarTrackingToken } from '../services/gps.service';
 import { whatsappUrl } from '../utils/whatsapp';
@@ -106,8 +107,13 @@ export default function OrdenDetalle() {
   }, [id]);
 
   const ordenTieneStandby = orden ? tieneStandby(orden, standbyItems) : false;
+  const tienePiezaPendiente = orden
+    ? standbyItems.some(s => s.ordenId === orden.id && s.estado !== 'llego')
+    : false;
+  const mostrarBannerReagendar = !!orden && orden.fase === 'aprobado' && tienePiezaPendiente && !orden.eliminada;
 
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showReagendarModal, setShowReagendarModal] = useState(false);
 
   const handleActivarGPS = async () => {
     if (!id || !orden) return;
@@ -310,6 +316,28 @@ export default function OrdenDetalle() {
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Banner pieza pendiente — sugiere reagendar */}
+      {mostrarBannerReagendar && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
+          <Package size={20} className="text-amber-600 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-amber-900">Pieza pendiente de llegada</p>
+            <p className="text-sm text-amber-800">
+              Esta orden está aprobada pero tiene piezas en stand-by. Puedes reagendar el servicio para cuando llegue la pieza.
+            </p>
+          </div>
+          {puede(userProfile, 'ordenesModificar') && (
+            <button
+              type="button"
+              onClick={() => setShowReagendarModal(true)}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-medium text-sm shrink-0"
+            >
+              Reagendar
+            </button>
+          )}
         </div>
       )}
 
@@ -1001,6 +1029,15 @@ export default function OrdenDetalle() {
         orden={orden}
         userProfile={userProfile}
       />
+
+      {/* Modal reagendar por pieza pendiente */}
+      {orden && (
+        <ReagendarModal
+          isOpen={showReagendarModal}
+          onClose={() => setShowReagendarModal(false)}
+          orden={orden}
+        />
+      )}
     </div>
   );
 }
