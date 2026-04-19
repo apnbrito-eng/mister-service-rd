@@ -9,6 +9,8 @@ import { Plus, DollarSign, Trash2, TrendingUp, TrendingDown } from 'lucide-react
 import { startOfMonth, startOfWeek, endOfWeek, addDays, isSameWeek, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
+import { useApp } from '../context/AppContext';
+import { puede } from '../utils/permisos';
 
 const CATEGORIAS = ['repuestos', 'transporte', 'herramientas', 'servicios', 'otros'] as const;
 const CATEGORIA_LABELS: Record<string, string> = {
@@ -22,6 +24,9 @@ const CATEGORIA_COLORS: Record<string, string> = {
 };
 
 export default function Gastos() {
+  const { userProfile } = useApp();
+  const puedeCrear = puede(userProfile, 'gastosCrear');
+  const puedeEliminar = puede(userProfile, 'gastosEliminar');
   const [loading, setLoading] = useState(true);
   const [gastos, setGastos] = useState<Gasto[]>([]);
   const [ordenes, setOrdenes] = useState<any[]>([]);
@@ -106,6 +111,10 @@ export default function Gastos() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!puedeEliminar) {
+      toast.error('No tienes permiso para eliminar gastos');
+      return;
+    }
     if (!confirm('¿Eliminar este gasto?')) return;
     await deleteDoc(doc(db, 'gastos', id));
     toast.success('Eliminado');
@@ -119,10 +128,12 @@ export default function Gastos() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-[#0f3460]">Gastos e Ingresos</h1>
-        <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
-          <Plus size={18} /> Registrar Gasto
-        </button>
+        {puedeCrear && (
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            <Plus size={18} /> Registrar Gasto
+          </button>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -231,9 +242,11 @@ export default function Gastos() {
                   <td className="px-4 py-3 text-sm text-gray-500 capitalize">{g.metodoPago}</td>
                   <td className="px-4 py-3 text-sm font-medium text-right text-red-600">{formatMoneda(g.monto)}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => handleDelete(g.id)} className="p-1 hover:bg-red-50 rounded text-red-400">
-                      <Trash2 size={14} />
-                    </button>
+                    {puedeEliminar && (
+                      <button onClick={() => handleDelete(g.id)} className="p-1 hover:bg-red-50 rounded text-red-400">
+                        <Trash2 size={14} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -50,6 +50,8 @@ import { seedDatabase } from './firebase/seedData';
 import { seedWebConfig } from './services/seedWebConfig';
 import { seedPrecios } from './firebase/seedPrecios';
 import { limpiarOrdenDuplicada } from './utils/cleanFirestore';
+import { puede, AccionPermiso } from './utils/permisos';
+import { Rol } from './types';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { currentUser, loading } = useApp();
@@ -63,6 +65,26 @@ function TecnicoRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <LoadingSpinner fullPage text="Cargando..." />;
   if (!currentUser) return <Navigate to="/login" replace />;
   if (userProfile?.rol === 'tecnico') return <Navigate to="/tecnico" replace />;
+  return <>{children}</>;
+}
+
+function PermisoRoute({ permiso, children }: { permiso: AccionPermiso; children: React.ReactNode }) {
+  const { userProfile, loading } = useApp();
+  if (loading) return <LoadingSpinner fullPage text="Cargando..." />;
+  if (!userProfile) return <Navigate to="/login" replace />;
+  if (!puede(userProfile, permiso)) {
+    return <Navigate to="/admin/dashboard" replace state={{ permisoDenegado: permiso }} />;
+  }
+  return <>{children}</>;
+}
+
+function RolRoute({ roles, children }: { roles: Rol[]; children: React.ReactNode }) {
+  const { userProfile, loading } = useApp();
+  if (loading) return <LoadingSpinner fullPage text="Cargando..." />;
+  if (!userProfile) return <Navigate to="/login" replace />;
+  if (!roles.includes(userProfile.rol)) {
+    return <Navigate to="/admin/dashboard" replace state={{ permisoDenegado: roles.join('/') }} />;
+  }
   return <>{children}</>;
 }
 
@@ -127,28 +149,28 @@ function AppRoutes() {
         <Route path="standby" element={<Standby />} />
         <Route path="mapa" element={<MapaRutas />} />
         <Route path="clientes" element={<Clientes />} />
-        <Route path="cotizaciones" element={<Cotizaciones />} />
-        <Route path="facturas" element={<Facturas />} />
+        <Route path="cotizaciones" element={<PermisoRoute permiso="cotizacionesVer"><Cotizaciones /></PermisoRoute>} />
+        <Route path="facturas" element={<PermisoRoute permiso="facturasVer"><Facturas /></PermisoRoute>} />
         <Route path="taller" element={<EquiposTaller />} />
         <Route path="productos" element={<Productos />} />
-        <Route path="rendimiento" element={<Rendimiento />} />
+        <Route path="rendimiento" element={<PermisoRoute permiso="rendimientoVer"><Rendimiento /></PermisoRoute>} />
         <Route path="mantenimiento" element={<Mantenimiento />} />
-        <Route path="gastos" element={<Gastos />} />
-        <Route path="personal" element={<PersonalPage />} />
-        <Route path="usuarios" element={<GestionUsuarios />} />
-        <Route path="web" element={<ConfiguracionWeb />} />
-        <Route path="empresas-aliadas" element={<EmpresasAliadas />} />
-        <Route path="formularios" element={<Formularios />} />
-        <Route path="formularios/:id" element={<FormularioEditor />} />
-        <Route path="solicitudes" element={<Solicitudes />} />
-        <Route path="configuracion" element={<Configuracion />} />
-        <Route path="cierre-dia" element={<CierreDia />} />
-        <Route path="precios" element={<PreciosServicios />} />
-        <Route path="inventario" element={<Inventario />} />
-        <Route path="comisiones" element={<Comisiones />} />
-        <Route path="nomina" element={<Nomina />} />
-        <Route path="historial-anuladas" element={<HistorialAnuladas />} />
-        <Route path="configuracion/usuarios" element={<GestionUsuarios />} />
+        <Route path="gastos" element={<PermisoRoute permiso="gastosVer"><Gastos /></PermisoRoute>} />
+        <Route path="personal" element={<PermisoRoute permiso="personalVer"><PersonalPage /></PermisoRoute>} />
+        <Route path="usuarios" element={<RolRoute roles={['administrador', 'coordinadora']}><GestionUsuarios /></RolRoute>} />
+        <Route path="web" element={<RolRoute roles={['administrador']}><ConfiguracionWeb /></RolRoute>} />
+        <Route path="empresas-aliadas" element={<RolRoute roles={['administrador']}><EmpresasAliadas /></RolRoute>} />
+        <Route path="formularios" element={<RolRoute roles={['administrador']}><Formularios /></RolRoute>} />
+        <Route path="formularios/:id" element={<RolRoute roles={['administrador']}><FormularioEditor /></RolRoute>} />
+        <Route path="solicitudes" element={<RolRoute roles={['administrador']}><Solicitudes /></RolRoute>} />
+        <Route path="configuracion" element={<PermisoRoute permiso="configuracionVer"><Configuracion /></PermisoRoute>} />
+        <Route path="cierre-dia" element={<PermisoRoute permiso="cierreDiaEjecutar"><CierreDia /></PermisoRoute>} />
+        <Route path="precios" element={<PermisoRoute permiso="configuracionVer"><PreciosServicios /></PermisoRoute>} />
+        <Route path="inventario" element={<PermisoRoute permiso="configuracionVer"><Inventario /></PermisoRoute>} />
+        <Route path="comisiones" element={<RolRoute roles={['administrador', 'coordinadora']}><Comisiones /></RolRoute>} />
+        <Route path="nomina" element={<RolRoute roles={['administrador', 'coordinadora']}><Nomina /></RolRoute>} />
+        <Route path="historial-anuladas" element={<PermisoRoute permiso="ordenesVerEliminadas"><HistorialAnuladas /></PermisoRoute>} />
+        <Route path="configuracion/usuarios" element={<RolRoute roles={['administrador', 'coordinadora']}><GestionUsuarios /></RolRoute>} />
       </Route>
 
       {/* Legacy redirects — old /dashboard, /ordenes etc. now under /admin */}

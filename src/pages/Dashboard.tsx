@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ClipboardList, Bell, Clock, DollarSign, AlertTriangle,
   ChevronRight, Calendar, User, TrendingUp, Wrench,
@@ -27,6 +27,7 @@ import Badge from '../components/Badge';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import { useApp } from '../context/AppContext';
 import { Eye } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -42,7 +43,17 @@ type PeriodoVentas = 'hoy' | 'semana' | 'mes' | 'año';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { userProfile } = useApp();
+
+  // Toast cuando el usuario es redirigido aquí por falta de permisos
+  useEffect(() => {
+    const state = location.state as { permisoDenegado?: string } | null;
+    if (state?.permisoDenegado) {
+      toast.error(`No tienes permiso para acceder a "${state.permisoDenegado}"`);
+      window.history.replaceState({}, '');
+    }
+  }, [location.state]);
 
   // ---- state ----
   const [loading, setLoading] = useState(true);

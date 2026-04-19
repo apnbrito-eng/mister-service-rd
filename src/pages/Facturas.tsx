@@ -10,6 +10,8 @@ import { Plus, FileText, Trash2, Check, Printer, Search, Filter, DollarSign, Cal
 import { startOfMonth, startOfDay, endOfDay, startOfYear, endOfYear, isWithinInterval, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
+import { useApp } from '../context/AppContext';
+import { puede } from '../utils/permisos';
 
 const ESTADO_COLORS: Record<EstadoFactura, string> = {
   emitida: 'bg-blue-100 text-blue-700',
@@ -50,6 +52,10 @@ const FILTROS: { label: string; value: EstadoFactura | 'todas' }[] = [
 ];
 
 export default function Facturas() {
+  const { userProfile } = useApp();
+  const puedeCrear = puede(userProfile, 'facturasCrear');
+  const puedeModificar = puede(userProfile, 'facturasModificar');
+  const puedeEliminar = puede(userProfile, 'facturasEliminar');
   const [loading, setLoading] = useState(true);
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [ordenesVinculadas, setOrdenesVinculadas] = useState<Record<string, OrdenServicio>>({});
@@ -246,6 +252,10 @@ export default function Facturas() {
 
   // Delete
   const handleDelete = async (factura: Factura) => {
+    if (!puedeEliminar) {
+      toast.error('No tienes permiso para eliminar facturas');
+      return;
+    }
     if (!confirm(`¿Eliminar la factura ${factura.numero}? Esta acción no se puede deshacer.`)) return;
     try {
       await deleteDoc(doc(db, 'facturas', factura.id));
@@ -359,12 +369,14 @@ export default function Facturas() {
           <h1 className="text-2xl font-bold text-[#0f3460]">Facturas</h1>
           <p className="text-gray-500 text-sm">{facturas.length} facturas</p>
         </div>
+        {puedeCrear && (
         <button
           onClick={() => { resetForm(); setShowModal(true); }}
           className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
         >
           <Plus size={18} /> Nueva Factura
         </button>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -519,7 +531,7 @@ export default function Facturas() {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-end gap-1.5">
-                        {factura.estado === 'emitida' && (
+                        {factura.estado === 'emitida' && puedeModificar && (
                           <button
                             onClick={() => handleMarcarPagada(factura)}
                             title="Marcar como pagada"
@@ -535,13 +547,15 @@ export default function Facturas() {
                         >
                           <Printer size={13} />
                         </button>
-                        <button
-                          onClick={() => handleDelete(factura)}
-                          title="Eliminar factura"
-                          className="flex items-center gap-1 px-2 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-medium hover:bg-red-100 transition-colors"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {puedeEliminar && (
+                          <button
+                            onClick={() => handleDelete(factura)}
+                            title="Eliminar factura"
+                            className="flex items-center gap-1 px-2 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-medium hover:bg-red-100 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                         {factura.ordenId && ordenesVinculadas[factura.ordenId] && (
                           <EliminarOrdenButton
                             orden={ordenesVinculadas[factura.ordenId]}

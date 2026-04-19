@@ -8,10 +8,12 @@ import { collection, getDocs, updateDoc, doc, Timestamp } from 'firebase/firesto
 import { db } from '../firebase/config';
 import { parseOrden } from '../utils';
 import { useApp } from '../context/AppContext';
+import { puede } from '../utils/permisos';
 
 export default function Configuracion() {
   const { userProfile } = useApp();
   const esAdmin = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  const puedeModificar = puede(userProfile, 'configuracionModificar');
 
   // Geocoding batch state
   const [geocodingRunning, setGeocodingRunning] = useState(false);
@@ -234,10 +236,12 @@ export default function Configuracion() {
             <input type="email" value={empresa.email} onChange={e => setEmpresa(f => ({ ...f, email: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
           </div>
-          <button onClick={handleSaveEmpresa}
-            className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors">
-            Guardar Cambios
-          </button>
+          {puedeModificar && (
+            <button onClick={handleSaveEmpresa}
+              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors">
+              Guardar Cambios
+            </button>
+          )}
         </div>
       </div>
 
@@ -376,10 +380,12 @@ export default function Configuracion() {
                 Probar conexión
               </button>
             )}
-            <button onClick={handleSaveGPS}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium">
-              Guardar
-            </button>
+            {puedeModificar && (
+              <button onClick={handleSaveGPS}
+                className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium">
+                Guardar
+              </button>
+            )}
           </div>
         </div>
       </div>

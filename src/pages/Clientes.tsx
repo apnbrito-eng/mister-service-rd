@@ -5,6 +5,8 @@ import { db } from '../firebase/config';
 import { Cliente, OrdenServicio, ZONAS_RD } from '../types';
 import { formatFechaCorta, formatTelefono } from '../utils';
 import { inferirZona, zonaColor } from '../utils/zonas';
+import { useApp } from '../context/AppContext';
+import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
@@ -15,6 +17,9 @@ import toast from 'react-hot-toast';
 
 export default function Clientes() {
   const navigate = useNavigate();
+  const { userProfile } = useApp();
+  const puedeCrear = puede(userProfile, 'clientesCrear');
+  const puedeModificar = puede(userProfile, 'clientesModificar');
   const [loading, setLoading] = useState(true);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
@@ -265,10 +270,12 @@ export default function Clientes() {
             className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <Download size={16} /> CSV
           </button>
-          <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
-            <Plus size={18} /> Nuevo Cliente
-          </button>
+          {puedeCrear && (
+            <button onClick={() => setShowModal(true)}
+              className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+              <Plus size={18} /> Nuevo Cliente
+            </button>
+          )}
         </div>
       </div>
 
@@ -336,16 +343,18 @@ export default function Clientes() {
                     <span className={`font-medium ${zonaColor(selectedCliente.zona)}`}>
                       {selectedCliente.zona || 'No definida'}
                     </span>
-                    <select
-                      value={selectedCliente.zona || '__auto__'}
-                      onChange={e => handleCambiarZonaCliente(selectedCliente, e.target.value)}
-                      className="ml-auto px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                    >
-                      <option value="__auto__">Detectar automáticamente</option>
-                      {ZONAS_RD.map(z => (
-                        <option key={z} value={z}>{z}</option>
-                      ))}
-                    </select>
+                    {puedeModificar && (
+                      <select
+                        value={selectedCliente.zona || '__auto__'}
+                        onChange={e => handleCambiarZonaCliente(selectedCliente, e.target.value)}
+                        className="ml-auto px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      >
+                        <option value="__auto__">Detectar automáticamente</option>
+                        {ZONAS_RD.map(z => (
+                          <option key={z} value={z}>{z}</option>
+                        ))}
+                      </select>
+                    )}
                   </div>
                 </div>
                 <p className="text-xs text-gray-400 mt-4">Cliente desde {formatFechaCorta(selectedCliente.createdAt)}</p>

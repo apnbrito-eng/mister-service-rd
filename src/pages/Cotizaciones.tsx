@@ -31,6 +31,9 @@ const ESTADO_LABELS: Record<EstadoCotizacion, string> = {
 export default function Cotizaciones() {
   const { userProfile } = useApp();
   const puedeFacturar = puede(userProfile, 'facturasCrear');
+  const puedeCrear = puede(userProfile, 'cotizacionesCrear');
+  const puedeModificar = puede(userProfile, 'cotizacionesModificar');
+  const puedeAprobar = puede(userProfile, 'cotizacionesAprobarPrecio');
   const [convirtiendoId, setConvirtiendoId] = useState<string | null>(null);
 
   const handleConvertirAFactura = async (cot: Cotizacion) => {
@@ -329,6 +332,10 @@ export default function Cotizaciones() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!puedeModificar) {
+      toast.error('No tienes permiso para eliminar cotizaciones');
+      return;
+    }
     if (!confirm('¿Eliminar esta cotización?')) return;
     try {
       await deleteDoc(doc(db, 'cotizaciones', id));
@@ -380,10 +387,12 @@ export default function Cotizaciones() {
           <h1 className="text-2xl font-bold text-[#0f3460]">Cotizaciones</h1>
           <p className="text-gray-500 text-sm">{cotizaciones.length} cotizaciones</p>
         </div>
-        <button onClick={() => { resetForm(); setEditingId(null); setShowModal(true); }}
-          className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
-          <Plus size={18} /> Nueva Cotización
-        </button>
+        {puedeCrear && (
+          <button onClick={() => { resetForm(); setEditingId(null); setShowModal(true); }}
+            className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            <Plus size={18} /> Nueva Cotización
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -444,7 +453,7 @@ export default function Cotizaciones() {
                     <Check size={11} /> Facturada
                   </span>
                 )}
-                {cot.estado !== 'aceptada' && (
+                {cot.estado !== 'aceptada' && puedeAprobar && (
                   <button onClick={() => handleChangeEstado(cot.id, 'aceptada')}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-medium hover:bg-green-100">
                     <Check size={12} /> Aprobar
@@ -468,14 +477,18 @@ export default function Cotizaciones() {
                   className="flex items-center gap-1 px-2.5 py-1.5 bg-gray-50 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-100">
                   <Copy size={12} /> Copiar
                 </button>
-                <button onClick={() => handleEdit(cot)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-100">
-                  <Edit size={12} /> Editar
-                </button>
-                <button onClick={() => handleDelete(cot.id)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-700 rounded-lg text-xs font-medium hover:bg-red-100">
-                  <Trash2 size={12} /> Eliminar
-                </button>
+                {puedeModificar && (
+                  <button onClick={() => handleEdit(cot)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-100">
+                    <Edit size={12} /> Editar
+                  </button>
+                )}
+                {puedeModificar && (
+                  <button onClick={() => handleDelete(cot.id)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-700 rounded-lg text-xs font-medium hover:bg-red-100">
+                    <Trash2 size={12} /> Eliminar
+                  </button>
+                )}
                 {cot.ordenId && ordenesVinculadas[cot.ordenId] && (
                   <EliminarOrdenButton
                     orden={ordenesVinculadas[cot.ordenId]}

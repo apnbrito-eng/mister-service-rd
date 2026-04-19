@@ -11,6 +11,7 @@ import Modal from '../components/Modal';
 import { Plus, Edit, Check, X, Users, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Key, Eye, EyeOff, Link2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
+import { puede } from '../utils/permisos';
 
 const ROL_LABELS: Record<Rol, string> = {
   administrador: 'Administrador',
@@ -41,6 +42,9 @@ function comisionDefaultPorNivel(nivel: 'junior' | 'senior'): number {
 export default function PersonalPage() {
   const { userProfile } = useApp();
   const esAdmin = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  const puedeCrearPersonal = puede(userProfile, 'personalCrear');
+  const puedeModificarPersonal = puede(userProfile, 'personalModificar');
+  const puedeEliminarPersonal = puede(userProfile, 'personalEliminar');
   const [loading, setLoading] = useState(true);
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
@@ -731,10 +735,12 @@ export default function PersonalPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-[#0f3460]">Personal</h1>
-        <button onClick={() => { resetForm(); setEditingId(null); setShowModal(true); }}
-          className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
-          <Plus size={18} /> Agregar
-        </button>
+        {puedeCrearPersonal && (
+          <button onClick={() => { resetForm(); setEditingId(null); setShowModal(true); }}
+            className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            <Plus size={18} /> Agregar
+          </button>
+        )}
       </div>
 
       {/* Banner de migración: personal con rol de acceso pero sin uid vinculado */}
@@ -881,24 +887,30 @@ export default function PersonalPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => handleEdit(p)} title="Editar"
-                        className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
-                        <Edit size={14} />
-                      </button>
-                      {p.rol !== 'ayudante' && ROLES_CON_ACCESO.includes(p.rol) && !p.uid && p.email && (
+                      {puedeModificarPersonal && (
+                        <button onClick={() => handleEdit(p)} title="Editar"
+                          className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
+                          <Edit size={14} />
+                        </button>
+                      )}
+                      {puedeModificarPersonal && p.rol !== 'ayudante' && ROLES_CON_ACCESO.includes(p.rol) && !p.uid && p.email && (
                         <button onClick={() => abrirVincularExistente(p)} title="Vincular cuenta existente"
                           className="p-2 hover:bg-indigo-50 rounded-lg text-indigo-600 transition-colors">
                           <Link2 size={14} />
                         </button>
                       )}
-                      <button onClick={() => abrirModalDesactivar(p)} title="Desactivar"
-                        className="p-2 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors">
-                        <Power size={14} />
-                      </button>
-                      <button onClick={() => abrirModalEliminar(p)} title="Eliminar"
-                        className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
-                        <Trash2 size={14} />
-                      </button>
+                      {puedeEliminarPersonal && (
+                        <button onClick={() => abrirModalDesactivar(p)} title="Desactivar"
+                          className="p-2 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors">
+                          <Power size={14} />
+                        </button>
+                      )}
+                      {puedeEliminarPersonal && (
+                        <button onClick={() => abrirModalEliminar(p)} title="Eliminar"
+                          className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -956,14 +968,18 @@ export default function PersonalPage() {
                         <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.email || '—'}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => handleReactivar(p)} title="Reactivar"
-                              className="p-2 hover:bg-green-50 rounded-lg text-green-600 transition-colors">
-                              <RotateCcw size={14} />
-                            </button>
-                            <button onClick={() => abrirModalEliminar(p)} title="Eliminar"
-                              className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
-                              <Trash2 size={14} />
-                            </button>
+                            {puedeModificarPersonal && (
+                              <button onClick={() => handleReactivar(p)} title="Reactivar"
+                                className="p-2 hover:bg-green-50 rounded-lg text-green-600 transition-colors">
+                                <RotateCcw size={14} />
+                              </button>
+                            )}
+                            {puedeEliminarPersonal && (
+                              <button onClick={() => abrirModalEliminar(p)} title="Eliminar"
+                                className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
