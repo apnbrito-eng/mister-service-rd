@@ -50,11 +50,25 @@ export interface Cliente {
   referenciaDireccion?: string;
   sector?: string;
   ciudad?: string;
+  zona?: string;
   lat?: number;
   lng?: number;
   createdAt: Date;
   updatedAt?: Date;
 }
+
+export const ZONAS_RD = [
+  'Distrito Nacional',
+  'Santo Domingo Norte',
+  'Santo Domingo Este',
+  'Santo Domingo Oeste',
+  'Santiago',
+  'La Vega',
+  'Puerto Plata',
+  'Punta Cana',
+  'Otro',
+] as const;
+export type ZonaRD = typeof ZONAS_RD[number];
 
 export interface HistorialFase {
   fase: FaseOrden;

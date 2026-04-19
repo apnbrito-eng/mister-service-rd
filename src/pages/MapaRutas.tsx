@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, getDocs, doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
-import { OrdenServicio, Personal, Cliente, FaseOrden } from '../types';
+import { OrdenServicio, Personal, Cliente, FaseOrden, ZONAS_RD } from '../types';
 import { getTecnicoColor, formatHora, faseLabel, formatFecha, formatTelefono, parseOrden, crearRegistroAuditoria } from '../utils';
+import { zonaDeOrden, zonaColor } from '../utils/zonas';
 import { optimizarRuta, distanciaTotalRuta } from '../utils/rutas';
 import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -66,6 +67,7 @@ interface MarcadorConRuta {
   tecnicoNombre: string;
   fase: FaseOrden;
   fechaCita: Date | null;
+  zona?: string | null;
   orden: number; // position in optimized route
 }
 
@@ -83,6 +85,7 @@ export default function MapaRutas() {
   const [fechaInicio, setFechaInicio] = useState<string>(format(startOfDay(new Date()), 'yyyy-MM-dd'));
   const [fechaFin, setFechaFin] = useState<string>(format(startOfDay(new Date()), 'yyyy-MM-dd'));
   const [filtroTecnico, setFiltroTecnico] = useState('');
+  const [filtroZona, setFiltroZona] = useState('');
   const [rutaOptimizada, setRutaOptimizada] = useState(true);
   const [tab, setTab] = useState<'rutas' | 'gps_vivo'>('rutas');
   const [ubicacionesLive, setUbicacionesLive] = useState<UbicacionVehiculo[]>([]);
@@ -150,7 +153,13 @@ export default function MapaRutas() {
     return null;
   };
 
-  // Filtro robusto: rango de fechas, fase activa, técnico (por id o nombre case-insensitive)
+  const clienteMap = useMemo(() => {
+    const m: Record<string, Cliente> = {};
+    clientes.forEach(c => { m[c.id] = c; });
+    return m;
+  }, [clientes]);
+
+  // Filtro robusto: rango de fechas, fase activa, técnico (por id o nombre case-insensitive), zona
   const ordenesFiltradas = useMemo(() => {
     const inicio = fechaInicio ? startOfDay(new Date(fechaInicio + 'T00:00:00')) : null;
     const fin = fechaFin ? endOfDay(new Date(fechaFin + 'T00:00:00')) : null;
@@ -171,9 +180,13 @@ export default function MapaRutas() {
         const matchNombre = nombreFiltro !== '' && nombreOrden === nombreFiltro;
         if (!matchId && !matchNombre) return false;
       }
+      if (filtroZona) {
+        const zona = zonaDeOrden(o, clienteMap[o.clienteId]);
+        if (zona !== filtroZona) return false;
+      }
       return true;
     });
-  }, [ordenes, fechaInicio, fechaFin, filtroTecnico, personal]);
+  }, [ordenes, fechaInicio, fechaFin, filtroTecnico, filtroZona, personal, clienteMap]);
 
   // Construye marcadores usando coords de la orden o fallback al cliente
   const marcadoresRaw = useMemo(() => {
@@ -196,6 +209,7 @@ export default function MapaRutas() {
           tecnicoNombre: o.tecnicoNombre || 'Sin asignar',
           fase: o.fase,
           fechaCita: o.fechaCita || null,
+          zona: zonaDeOrden(o, clienteMap[o.clienteId]),
           orden: 0,
         } as MarcadorConRuta;
       })
@@ -248,6 +262,33 @@ export default function MapaRutas() {
     });
     return conteo;
   }, [ordenesFiltradas]);
+
+  // Conteo por zona — aplica sobre ordenesFiltradas pero ignorando el propio filtroZona
+  // para que la leyenda muestre siempre todas las zonas del rango/técnico activos.
+  const cantidadPorZona = useMemo(() => {
+    const inicio = fechaInicio ? startOfDay(new Date(fechaInicio + 'T00:00:00')) : null;
+    const fin = fechaFin ? endOfDay(new Date(fechaFin + 'T00:00:00')) : null;
+    const nombreFiltro = filtroTecnico
+      ? (personal.find(p => p.id === filtroTecnico)?.nombre?.toLowerCase().trim() || '')
+      : '';
+    const conteo: Record<string, number> = {};
+    ordenes.forEach(o => {
+      if (o.eliminada) return;
+      if (['cerrado', 'cancelado'].includes(o.fase)) return;
+      if (!o.fechaCita) return;
+      if (inicio && o.fechaCita < inicio) return;
+      if (fin && o.fechaCita > fin) return;
+      if (filtroTecnico) {
+        const matchId = o.tecnicoId === filtroTecnico;
+        const nombreOrden = o.tecnicoNombre?.toLowerCase().trim() || '';
+        const matchNombre = nombreFiltro !== '' && nombreOrden === nombreFiltro;
+        if (!matchId && !matchNombre) return;
+      }
+      const zona = zonaDeOrden(o, clienteMap[o.clienteId]) || 'Sin zona';
+      conteo[zona] = (conteo[zona] || 0) + 1;
+    });
+    return conteo;
+  }, [ordenes, fechaInicio, fechaFin, filtroTecnico, personal, clienteMap]);
 
   // Quick-range helpers
   const setRangoHoy = () => {
@@ -608,6 +649,11 @@ export default function MapaRutas() {
             <option value="">Todos los técnicos</option>
             {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
           </select>
+          <select value={filtroZona} onChange={e => setFiltroZona(e.target.value)}
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+            <option value="">Todas las zonas</option>
+            {ZONAS_RD.map(z => <option key={z} value={z}>{z}</option>)}
+          </select>
           <button onClick={() => setRutaOptimizada(!rutaOptimizada)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
               rutaOptimizada ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600'
@@ -777,6 +823,9 @@ export default function MapaRutas() {
                       </p>
                       <p className="text-gray-600 text-xs">Fase: {faseLabel(m.fase)}</p>
                       <p className="text-gray-600 text-xs">Técnico: {m.tecnicoNombre}</p>
+                      <p className={`text-xs ${zonaColor(m.zona)}`}>
+                        Zona: {m.zona || 'No definida'}
+                      </p>
                       <div className="flex items-center gap-1 text-gray-600 text-xs">
                         <Clock size={11} /> {m.fechaCita ? formatFecha(m.fechaCita) : '—'}
                       </div>
@@ -895,6 +944,51 @@ export default function MapaRutas() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Legend con conteo por zona */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase">Zonas</p>
+              {filtroZona && (
+                <button
+                  type="button"
+                  onClick={() => setFiltroZona('')}
+                  className="text-[10px] text-[#1a5fa8] hover:underline"
+                >
+                  Limpiar filtro
+                </button>
+              )}
+            </div>
+            <div className="space-y-1">
+              {ZONAS_RD.map(z => {
+                const count = cantidadPorZona[z] || 0;
+                const activa = filtroZona === z;
+                return (
+                  <button
+                    key={z}
+                    type="button"
+                    onClick={() => setFiltroZona(activa ? '' : z)}
+                    className={`w-full flex items-center justify-between gap-2 text-xs px-2 py-1 rounded-lg transition-colors ${
+                      activa ? 'bg-[#1a5fa8]/10 text-[#1a5fa8]' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className={`truncate ${activa ? 'font-semibold' : zonaColor(z)}`}>{z}</span>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${count > 0 ? 'bg-[#1a5fa8]/10 text-[#1a5fa8]' : 'bg-gray-100 text-gray-400'}`}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+              {cantidadPorZona['Sin zona'] ? (
+                <div className="flex items-center justify-between gap-2 text-xs text-gray-500 px-2 py-1">
+                  <span className="italic">Sin zona</span>
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400 shrink-0">
+                    {cantidadPorZona['Sin zona']}
+                  </span>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

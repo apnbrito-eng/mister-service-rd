@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Cliente, OrdenServicio } from '../types';
+import { Cliente, OrdenServicio, ZONAS_RD } from '../types';
 import { formatFechaCorta, formatTelefono } from '../utils';
+import { inferirZona, zonaColor } from '../utils/zonas';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
@@ -25,6 +26,7 @@ export default function Clientes() {
 
   const [form, setForm] = useState({
     nombre: '', telefono: '', email: '', direccion: '', lat: 0, lng: 0,
+    zona: '__auto__' as string,
   });
 
   const dirInputRefCliente = useRef<HTMLInputElement>(null);
@@ -193,19 +195,49 @@ export default function Clientes() {
     }
     setSaving(true);
     try {
-      await addDoc(collection(db, 'clientes'), {
-        ...form,
+      const zonaFinal = form.zona === '__auto__'
+        ? (inferirZona(form.lat || undefined, form.lng || undefined) || undefined)
+        : (form.zona || undefined);
+      const payload: Record<string, unknown> = {
+        nombre: form.nombre,
+        telefono: form.telefono,
+        email: form.email,
+        direccion: form.direccion,
         lat: form.lat || null,
         lng: form.lng || null,
         createdAt: Timestamp.now(),
-      });
+      };
+      if (zonaFinal) payload.zona = zonaFinal;
+      await addDoc(collection(db, 'clientes'), payload);
       toast.success('Cliente creado');
       setShowModal(false);
-      setForm({ nombre: '', telefono: '', email: '', direccion: '', lat: 0, lng: 0 });
+      setForm({ nombre: '', telefono: '', email: '', direccion: '', lat: 0, lng: 0, zona: '__auto__' });
     } catch {
       toast.error('Error al crear cliente');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCambiarZonaCliente = async (cliente: Cliente, nuevaZona: string) => {
+    try {
+      const payload: Record<string, unknown> = {
+        updatedAt: Timestamp.now(),
+      };
+      if (nuevaZona === '__auto__') {
+        const inf = inferirZona(cliente.lat, cliente.lng);
+        if (inf) payload.zona = inf;
+      } else if (nuevaZona) {
+        payload.zona = nuevaZona;
+      }
+      await updateDoc(doc(db, 'clientes', cliente.id), payload);
+      setSelectedCliente(c => c && c.id === cliente.id
+        ? { ...c, zona: typeof payload.zona === 'string' ? payload.zona : c.zona }
+        : c);
+      toast.success('Zona actualizada');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al actualizar la zona');
     }
   };
 
@@ -260,7 +292,12 @@ export default function Clientes() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{c.nombre}</p>
-                  <p className="text-xs text-gray-500">{formatTelefono(c.telefono)}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {formatTelefono(c.telefono)}
+                    {c.zona && (
+                      <span className={`hidden md:inline ml-2 ${zonaColor(c.zona)}`}>· {c.zona}</span>
+                    )}
+                  </p>
                 </div>
                 <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
               </button>
@@ -294,6 +331,22 @@ export default function Clientes() {
                       )}
                     </div>
                   )}
+                  <div className="col-span-full flex items-center gap-2 text-sm">
+                    <span className="text-gray-600">Zona:</span>
+                    <span className={`font-medium ${zonaColor(selectedCliente.zona)}`}>
+                      {selectedCliente.zona || 'No definida'}
+                    </span>
+                    <select
+                      value={selectedCliente.zona || '__auto__'}
+                      onChange={e => handleCambiarZonaCliente(selectedCliente, e.target.value)}
+                      className="ml-auto px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    >
+                      <option value="__auto__">Detectar automáticamente</option>
+                      {ZONAS_RD.map(z => (
+                        <option key={z} value={z}>{z}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <p className="text-xs text-gray-400 mt-4">Cliente desde {formatFechaCorta(selectedCliente.createdAt)}</p>
               </div>
@@ -410,6 +463,24 @@ export default function Clientes() {
             )}
             {form.lat !== 0 && form.lng !== 0 && (
               <MiniMapaCliente lat={form.lat} lng={form.lng} direccion={form.direccion} />
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Zona</label>
+            <select
+              value={form.zona}
+              onChange={e => setForm(f => ({ ...f, zona: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            >
+              <option value="__auto__">Detectar automáticamente</option>
+              {ZONAS_RD.map(z => (
+                <option key={z} value={z}>{z}</option>
+              ))}
+            </select>
+            {form.zona === '__auto__' && form.lat !== 0 && form.lng !== 0 && (
+              <p className="text-[11px] text-gray-500 mt-1">
+                Zona detectada: {inferirZona(form.lat, form.lng) || 'No se pudo inferir'}
+              </p>
             )}
           </div>
           <div className="flex justify-end gap-3 pt-2">
