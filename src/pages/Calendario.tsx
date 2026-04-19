@@ -42,7 +42,7 @@ export default function Calendario() {
   }, []);
 
   const ordenesConCita = useMemo(() => {
-    return ordenes.filter(o => o.fechaCita && o.estado !== 'cancelado')
+    return ordenes.filter(o => o.fechaCita && o.estado !== 'cancelado' && !o.eliminada)
       .filter(o => !filtroTecnico || o.tecnicoNombre === filtroTecnico);
   }, [ordenes, filtroTecnico]);
 

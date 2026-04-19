@@ -23,6 +23,7 @@ import {
 } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Badge from '../components/Badge';
+import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import { useApp } from '../context/AppContext';
 import { Eye } from 'lucide-react';
 
@@ -503,6 +504,7 @@ export default function Dashboard() {
                   <th className="pb-2 pr-4 font-medium">Fase</th>
                   <th className="pb-2 pr-4 font-medium">Técnico</th>
                   <th className="pb-2 font-medium text-right">Días de Atraso</th>
+                  <th className="pb-2 font-medium text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -522,6 +524,9 @@ export default function Dashboard() {
                       <span className={`font-bold ${orden.diasAtraso >= 3 ? 'text-red-600' : 'text-orange-600'}`}>
                         {orden.diasAtraso} día{orden.diasAtraso !== 1 ? 's' : ''}
                       </span>
+                    </td>
+                    <td className="py-2.5 text-right">
+                      <EliminarOrdenButton orden={orden} variant="icon" size="sm" />
                     </td>
                   </tr>
                 ))}

@@ -8,6 +8,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
+import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -110,9 +111,9 @@ export default function Clientes() {
         updatedAt: d.data().updatedAt?.toDate?.() || new Date(),
         fechaCita: d.data().fechaCita?.toDate?.() || null,
       } as OrdenServicio));
-      // Ordenar client-side por fecha descendente (más recientes primero)
+      // Ordenar client-side por fecha descendente (más recientes primero) + excluir eliminadas
       ordenes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      setHistorialOrdenes(ordenes);
+      setHistorialOrdenes(ordenes.filter(o => !o.eliminada));
     });
   }, [selectedCliente]);
 
@@ -343,6 +344,7 @@ export default function Clientes() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge fase={o.fase} />
+                            <EliminarOrdenButton orden={o} variant="icon" size="sm" />
                             <ChevronRight size={14} className="text-gray-300 group-hover:text-[#1a5fa8] transition-colors" />
                           </div>
                         </div>

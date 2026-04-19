@@ -10,6 +10,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import OrdenEditForm from '../components/ordenes/OrdenEditForm';
 import type { EditFormState } from '../components/ordenes/OrdenEditForm';
+import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import { MapPin, Navigation, Route, Clock, Phone, MessageCircle, Satellite, Truck, WifiOff, Edit2, AlertTriangle } from 'lucide-react';
 import { suscribirTodasUbicaciones } from '../services/gps.service';
 import { UbicacionVehiculo } from '../types';
@@ -158,7 +159,8 @@ export default function MapaRutas() {
       : '';
 
     return ordenes.filter(o => {
-      // Excluir cerrado/cancelado
+      // Excluir eliminadas y cerrado/cancelado
+      if (o.eliminada) return false;
       if (['cerrado', 'cancelado'].includes(o.fase)) return false;
       if (!o.fechaCita) return false;
       if (inicio && o.fechaCita < inicio) return false;
@@ -799,6 +801,14 @@ export default function MapaRutas() {
                           <Edit2 size={11} /> Editar orden
                         </button>
                       )}
+                      {(() => {
+                        const ordenCompleta = ordenes.find(o => o.id === m.id);
+                        return ordenCompleta ? (
+                          <div className="mt-2 text-right">
+                            <EliminarOrdenButton orden={ordenCompleta} variant="text" />
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                   </Popup>
                 </Marker>

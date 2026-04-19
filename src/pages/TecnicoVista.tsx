@@ -240,6 +240,7 @@ export default function TecnicoVista() {
     const { start, end } = getRangoFechas(vista);
     return ordenes
       .filter(o => {
+        if (o.eliminada) return false;
         if (permisos.soloPropiasCitas && !esOrdenMia(o)) return false;
         // Excluir explícitamente cerrado/cancelado tanto por estado como por fase
         if (o.estado === 'cancelado' || o.estado === 'cerrado') return false;

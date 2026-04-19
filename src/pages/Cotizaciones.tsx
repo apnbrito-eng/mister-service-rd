@@ -2,14 +2,15 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, Timestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Cotizacion, ItemCotizacion, EstadoCotizacion } from '../types';
-import { formatMoneda, formatFechaCorta, generateNumeroCotizacion } from '../utils';
+import { Cotizacion, ItemCotizacion, EstadoCotizacion, OrdenServicio } from '../types';
+import { formatMoneda, formatFechaCorta, generateNumeroCotizacion, parseOrden } from '../utils';
 import { siguienteNumeroFactura } from '../services/contadores.service';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import CatalogoSelectorModal, { type SeleccionCatalogo } from '../components/CatalogoSelectorModal';
+import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import { Plus, FileText, Trash2, Edit, Check, Printer, X, Copy, Receipt, Search, Boxes, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -130,6 +131,9 @@ export default function Cotizaciones() {
     items: [{ descripcion: '', cantidad: 1, precio: 0, tipoItem: 'manual' }],
   });
 
+  // Cache de órdenes vinculadas (para botón eliminar)
+  const [ordenesVinculadas, setOrdenesVinculadas] = useState<Record<string, OrdenServicio>>({});
+
   // Catalog selector state
   const [showCatalogo, setShowCatalogo] = useState(false);
   const [catalogoFiltroMarca, setCatalogoFiltroMarca] = useState<string | undefined>(undefined);
@@ -152,7 +156,16 @@ export default function Cotizaciones() {
         setLoading(false);
       }
     );
-    return () => unsub();
+    // Precargar órdenes vinculadas a cualquier cotización para el botón Eliminar
+    const unsubOrdenes = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
+      const map: Record<string, OrdenServicio> = {};
+      snap.docs.forEach(d => {
+        const o = parseOrden(d.id, d.data() as Record<string, unknown>);
+        map[d.id] = o;
+      });
+      setOrdenesVinculadas(map);
+    });
+    return () => { unsub(); unsubOrdenes(); };
   }, []);
 
   // Detectar navegación con estado desde OrdenDetalle ("Generar cotización desde orden")
@@ -463,6 +476,13 @@ export default function Cotizaciones() {
                   className="flex items-center gap-1 px-2.5 py-1.5 bg-red-50 text-red-700 rounded-lg text-xs font-medium hover:bg-red-100">
                   <Trash2 size={12} /> Eliminar
                 </button>
+                {cot.ordenId && ordenesVinculadas[cot.ordenId] && (
+                  <EliminarOrdenButton
+                    orden={ordenesVinculadas[cot.ordenId]}
+                    variant="text"
+                    className="ml-2"
+                  />
+                )}
               </div>
             </div>
           ))}

@@ -2,6 +2,7 @@ import { Calendar, Clock, Wrench, User } from 'lucide-react';
 import { OrdenServicio, EstadoOrdenSimple } from '../../types';
 import { estadoSimpleBorder, estadoSimpleColor, formatFecha, tiempoTranscurrido } from '../../utils';
 import Badge from '../Badge';
+import EliminarOrdenButton from './EliminarOrdenButton';
 
 interface OrdenCardProps {
   orden: OrdenServicio;
@@ -68,7 +69,7 @@ export default function OrdenCard({ orden, onSelect, onChangeEstado }: OrdenCard
           </div>
         </div>
 
-        {/* Estado dropdown */}
+        {/* Estado dropdown + eliminar */}
         <div className="flex items-center gap-2 shrink-0">
           <select
             value={orden.estadoSimple || 'pendiente'}
@@ -81,6 +82,7 @@ export default function OrdenCard({ orden, onSelect, onChangeEstado }: OrdenCard
             <option value="completado">Completado</option>
             <option value="cancelado">Cancelado</option>
           </select>
+          <EliminarOrdenButton orden={orden} variant="icon" size="sm" />
         </div>
       </div>
     </div>

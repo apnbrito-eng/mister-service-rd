@@ -1,4 +1,4 @@
-import { Phone, MessageCircle, MapPin, Edit2, Trash2, AlertTriangle } from 'lucide-react';
+import { Phone, MessageCircle, MapPin, Edit2, AlertTriangle } from 'lucide-react';
 import { OrdenServicio, Usuario } from '../../types';
 import {
   formatFecha, formatTelefono, whatsappLink,
@@ -6,6 +6,7 @@ import {
 } from '../../utils';
 import { puede } from '../../utils/permisos';
 import Badge from '../Badge';
+import EliminarOrdenButton from './EliminarOrdenButton';
 
 interface OrdenDetailModalProps {
   orden: OrdenServicio;
@@ -29,7 +30,6 @@ export default function OrdenDetailModal({
   aprobandoPrecio,
 }: OrdenDetailModalProps) {
   const puedeModificar = puede(userProfile, 'ordenesModificar');
-  const puedeEliminar = puede(userProfile, 'ordenesEliminar');
   return (
     <div className="space-y-6">
       {/* Banner si está eliminada */}
@@ -59,15 +59,7 @@ export default function OrdenDetailModal({
             Editar
           </button>
         )}
-        {puedeEliminar && !orden.eliminada && onEliminar && (
-          <button
-            onClick={onEliminar}
-            className="flex items-center gap-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors"
-          >
-            <Trash2 size={14} />
-            Eliminar
-          </button>
-        )}
+        <EliminarOrdenButton orden={orden} variant="button" onDeleted={onEliminar} />
       </div>
 
       {/* Client Info */}

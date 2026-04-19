@@ -116,6 +116,7 @@ export default function Citas() {
     const fechaSeleccionada = new Date(agendarForm.fechaCita + 'T00:00:00');
     return ordenes
       .filter(o =>
+        !o.eliminada &&
         (o.tecnicoId === agendarForm.tecnicoId || o.tecnicoNombre === agendarForm.tecnicoNombre) &&
         o.fechaCita &&
         isSameDay(o.fechaCita, fechaSeleccionada) &&

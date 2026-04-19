@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, Timestamp, query, orderBy, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Factura, EstadoFactura, ItemCotizacion, MetodoPago } from '../types';
-import { formatMoneda, formatFechaCorta, generateNumeroFactura } from '../utils';
+import { Factura, EstadoFactura, ItemCotizacion, MetodoPago, OrdenServicio } from '../types';
+import { formatMoneda, formatFechaCorta, generateNumeroFactura, parseOrden } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
+import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import { Plus, FileText, Trash2, Check, Printer, Search, Filter, DollarSign, CalendarDays, TrendingUp, X, ChevronDown } from 'lucide-react';
 import { startOfMonth, startOfDay, endOfDay, startOfYear, endOfYear, isWithinInterval, format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -51,6 +52,7 @@ const FILTROS: { label: string; value: EstadoFactura | 'todas' }[] = [
 export default function Facturas() {
   const [loading, setLoading] = useState(true);
   const [facturas, setFacturas] = useState<Factura[]>([]);
+  const [ordenesVinculadas, setOrdenesVinculadas] = useState<Record<string, OrdenServicio>>({});
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filtro, setFiltro] = useState<EstadoFactura | 'todas'>('todas');
@@ -85,7 +87,15 @@ export default function Facturas() {
         setLoading(false);
       }
     );
-    return () => unsub();
+    // Precargar órdenes vinculadas para el botón Eliminar
+    const unsubOrdenes = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
+      const map: Record<string, OrdenServicio> = {};
+      snap.docs.forEach(d => {
+        map[d.id] = parseOrden(d.id, d.data() as Record<string, unknown>);
+      });
+      setOrdenesVinculadas(map);
+    });
+    return () => { unsub(); unsubOrdenes(); };
   }, []);
 
   // Summary stats
@@ -527,11 +537,19 @@ export default function Facturas() {
                         </button>
                         <button
                           onClick={() => handleDelete(factura)}
-                          title="Eliminar"
+                          title="Eliminar factura"
                           className="flex items-center gap-1 px-2 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-medium hover:bg-red-100 transition-colors"
                         >
                           <Trash2 size={13} />
                         </button>
+                        {factura.ordenId && ordenesVinculadas[factura.ordenId] && (
+                          <EliminarOrdenButton
+                            orden={ordenesVinculadas[factura.ordenId]}
+                            variant="icon"
+                            size="sm"
+                            className="bg-amber-50 text-amber-600 hover:bg-amber-100"
+                          />
+                        )}
                       </div>
                     </td>
                   </tr>

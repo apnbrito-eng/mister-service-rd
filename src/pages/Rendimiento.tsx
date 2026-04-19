@@ -52,6 +52,7 @@ export default function Rendimiento() {
 
   const ordenesFiltradas = useMemo(() => {
     return ordenes.filter(o => {
+      if (o.eliminada) return false;
       const inRange = o.createdAt >= dateRange.start && o.createdAt <= dateRange.end;
       const matchCoord = !filtroCoord || o.creadoPor === filtroCoord || o.responsableNombre === filtroCoord;
       return inRange && matchCoord;
