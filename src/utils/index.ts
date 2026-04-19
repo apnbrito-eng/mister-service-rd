@@ -3,6 +3,18 @@ import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
 import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria } from '../types';
 
+/** Orden visual del ciclo de fases (agendado va antes de diagnostico) */
+export const FASES_ORDENADAS: FaseOrden[] = [
+  'nuevo_lead',
+  'en_gestion',
+  'agendado',
+  'en_diagnostico',
+  'en_cotizacion',
+  'aprobado',
+  'trabajo_realizado',
+  'cerrado',
+];
+
 export function formatFecha(date: Date | undefined | null): string {
   if (!date) return 'Sin fecha';
   try {

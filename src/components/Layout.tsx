@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useApp } from '../context/AppContext';
 import { Menu } from 'lucide-react';
+import NotificacionesPanel from './NotificacionesPanel';
 
 export default function Layout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -40,8 +41,13 @@ export default function Layout() {
           <button onClick={() => setMobileSidebarOpen(true)}>
             <Menu size={24} />
           </button>
-          <span className="font-semibold text-sm">{userProfile?.nombre || 'Mister Service RD'}</span>
-          <div className="w-6" />
+          <span className="font-semibold text-sm truncate">{userProfile?.nombre || 'Mister Service RD'}</span>
+          <NotificacionesPanel theme="dark" />
+        </div>
+
+        {/* Top bar - desktop */}
+        <div className="hidden lg:flex items-center justify-end px-6 py-2 bg-white border-b border-gray-100">
+          <NotificacionesPanel theme="light" />
         </div>
 
         {/* Page content */}

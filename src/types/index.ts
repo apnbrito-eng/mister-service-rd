@@ -732,3 +732,25 @@ export interface AlertaItem {
   ordenId?: string;
   createdAt: Date;
 }
+
+export type TipoNotificacion =
+  | 'precio_aprobado'
+  | 'nueva_cita'
+  | 'recordatorio'
+  | 'pieza_llego'
+  | 'orden_asignada'
+  | 'otro';
+
+export interface Notificacion {
+  id: string;
+  destinatarioId: string;
+  destinatarioNombre?: string;
+  tipo: TipoNotificacion;
+  titulo: string;
+  mensaje: string;
+  ordenId?: string;
+  ordenNumero?: string;
+  leida: boolean;
+  createdAt: Date;
+  leidaEn?: Date;
+}

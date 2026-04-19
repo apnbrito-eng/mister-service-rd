@@ -19,7 +19,8 @@ import { calcularQuincenaActual } from '../utils/comisiones';
 import {
   faseLabel, faseBgColor, faseColor, formatMoneda, formatHora,
   getAlertasFromOrdenes, getStandbyAlertas, tiempoTranscurrido,
-  estadoSimpleLabel, parseOrden, getTecnicoColor, TIPOS_EQUIPO
+  estadoSimpleLabel, parseOrden, getTecnicoColor, TIPOS_EQUIPO,
+  FASES_ORDENADAS
 } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Badge from '../components/Badge';
@@ -31,10 +32,7 @@ import { Eye } from 'lucide-react';
 // Constants
 // ---------------------------------------------------------------------------
 
-const FASES_EMBUDO: FaseOrden[] = [
-  'nuevo_lead', 'en_gestion', 'en_diagnostico', 'en_cotizacion',
-  'aprobado', 'agendado', 'trabajo_realizado', 'cerrado', 'cancelado',
-];
+const FASES_EMBUDO: FaseOrden[] = [...FASES_ORDENADAS, 'cancelado'];
 
 type PeriodoVentas = 'hoy' | 'semana' | 'mes' | 'año';
 

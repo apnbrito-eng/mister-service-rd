@@ -13,6 +13,7 @@ import Modal from '../components/Modal';
 import Logo from '../components/Logo';
 import CierreServicioWizard from '../components/CierreServicioWizard';
 import FaseStepper from '../components/ordenes/FaseStepper';
+import NotificacionesPanel from '../components/NotificacionesPanel';
 import { guardarUbicacionVehiculo } from '../services/gps.service';
 import {
   MapPin, Clock, Phone, MessageSquare, CheckCircle, LogOut, Navigation,
@@ -458,11 +459,12 @@ export default function TecnicoVista() {
               </div>
             )}
             {nuevaCitaBadge && permisos.recibeNotificacionNuevaCita && (
-              <button onClick={() => setNuevaCitaBadge(false)} className="relative p-2 text-white">
+              <button onClick={() => setNuevaCitaBadge(false)} className="relative p-2 text-white" title="Nueva cita asignada">
                 <Bell size={18} />
                 <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
               </button>
             )}
+            <NotificacionesPanel theme="dark" />
             {permisos.verUbicacionGPS && (
               <button onClick={() => setShowMap(!showMap)}
                 className="bg-white/20 p-2 rounded-lg text-white hover:bg-white/30" title="Mapa">

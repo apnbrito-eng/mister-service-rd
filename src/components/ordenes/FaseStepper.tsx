@@ -2,18 +2,16 @@ import { useState } from 'react';
 import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, FaseOrden, EstadoOrdenSimple } from '../../types';
-import { crearRegistroAuditoria, faseLabel } from '../../utils';
+import { crearRegistroAuditoria, faseLabel, FASES_ORDENADAS } from '../../utils';
 import { useApp } from '../../context/AppContext';
 import { puede } from '../../utils/permisos';
 import { registrarComisionPorOrden } from '../../utils/comisiones';
+import { crearNotificacion } from '../../services/notificaciones.service';
 import Modal from '../Modal';
 import { Check, Package, AlertTriangle, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const FASES_STEPPER: FaseOrden[] = [
-  'nuevo_lead', 'en_gestion', 'en_diagnostico', 'en_cotizacion',
-  'aprobado', 'agendado', 'trabajo_realizado', 'cerrado',
-];
+const FASES_STEPPER = FASES_ORDENADAS;
 
 function mapearEstadoSimple(fase: FaseOrden): EstadoOrdenSimple {
   if (['trabajo_realizado', 'cerrado'].includes(fase)) return 'completado';
@@ -103,6 +101,23 @@ export default function FaseStepper({
       } catch (err) {
         console.error('Error registrando comisión:', err);
         toast.error('Orden cerrada, pero la comisión no se registró. Revisa logs.');
+      }
+    }
+
+    if (nuevaFase === 'aprobado' && orden.tecnicoId) {
+      try {
+        const total = orden.precioFinal || orden.precioAprobado || 0;
+        await crearNotificacion({
+          destinatarioId: orden.tecnicoId,
+          destinatarioNombre: orden.tecnicoNombre,
+          tipo: 'precio_aprobado',
+          titulo: 'Precio aprobado · Puedes comenzar',
+          mensaje: `Orden ${orden.numero} aprobada. Cliente: ${orden.clienteNombre}. Total: RD$${total.toLocaleString('es-DO')}.`,
+          ordenId: orden.id,
+          ordenNumero: orden.numero,
+        });
+      } catch (err) {
+        console.error('Error creando notificación:', err);
       }
     }
   };
