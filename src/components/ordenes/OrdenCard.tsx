@@ -1,16 +1,26 @@
-import { Calendar, Clock, Wrench, User } from 'lucide-react';
-import { OrdenServicio, EstadoOrdenSimple } from '../../types';
-import { estadoSimpleBorder, estadoSimpleColor, formatFecha, tiempoTranscurrido } from '../../utils';
+import { useState } from 'react';
+import { Calendar, Clock, Wrench, User, XCircle } from 'lucide-react';
+import { OrdenServicio, EstadoOrdenSimple, StandbyPieza } from '../../types';
+import { estadoSimpleBorder, formatFecha, tiempoTranscurrido, tieneStandby } from '../../utils';
 import Badge from '../Badge';
 import EliminarOrdenButton from './EliminarOrdenButton';
+import FaseStepper from './FaseStepper';
+import CancelarOrdenModal from './CancelarOrdenModal';
+import { useApp } from '../../context/AppContext';
+import { puede } from '../../utils/permisos';
 
 interface OrdenCardProps {
   orden: OrdenServicio;
   onSelect: (orden: OrdenServicio) => void;
   onChangeEstado: (orden: OrdenServicio, nuevoEstado: EstadoOrdenSimple) => void;
+  standbyItems?: StandbyPieza[];
 }
 
-export default function OrdenCard({ orden, onSelect, onChangeEstado }: OrdenCardProps) {
+export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenCardProps) {
+  const { userProfile } = useApp();
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const puedeCancelar = puede(userProfile, 'ordenesModificar');
+  const conStandby = tieneStandby(orden, standbyItems);
   return (
     <div
       className={`bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 ${estadoSimpleBorder(orden.estadoSimple)} p-4 hover:shadow-md transition-shadow`}
@@ -77,22 +87,28 @@ export default function OrdenCard({ orden, onSelect, onChangeEstado }: OrdenCard
           </div>
         </div>
 
-        {/* Estado dropdown + eliminar */}
-        <div className="flex items-center gap-2 shrink-0">
-          <select
-            value={orden.estadoSimple || 'pendiente'}
-            onChange={(e) => onChangeEstado(orden, e.target.value as EstadoOrdenSimple)}
-            onClick={(e) => e.stopPropagation()}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium border-0 focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] cursor-pointer ${estadoSimpleColor(orden.estadoSimple || 'pendiente')}`}
-          >
-            <option value="pendiente">Pendiente</option>
-            <option value="en_proceso">En Proceso</option>
-            <option value="completado">Completado</option>
-            <option value="cancelado">Cancelado</option>
-          </select>
+        {/* Stepper compacto + cancelar + eliminar */}
+        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <FaseStepper orden={orden} size="sm" tienestandby={conStandby} />
+          {puedeCancelar && !orden.eliminada && orden.fase !== 'cancelado' && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setShowCancelModal(true); }}
+              title="Cancelar orden"
+              className="p-1.5 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors"
+            >
+              <XCircle size={13} />
+            </button>
+          )}
           <EliminarOrdenButton orden={orden} variant="icon" size="sm" />
         </div>
       </div>
+      <CancelarOrdenModal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        orden={orden}
+        userProfile={userProfile}
+      />
     </div>
   );
 }

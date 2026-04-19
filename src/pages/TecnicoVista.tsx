@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, Cliente, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, FaseOrden } from '../types';
-import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria, formatMoneda } from '../utils';
+import { OrdenServicio, Cliente, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, FaseOrden, StandbyPieza } from '../types';
+import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria, formatMoneda, tieneStandby } from '../utils';
 import { calcularQuincenaActual } from '../utils/comisiones';
 import { ComisionRegistro } from '../types';
 import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
@@ -12,6 +12,7 @@ import Badge from '../components/Badge';
 import Modal from '../components/Modal';
 import Logo from '../components/Logo';
 import CierreServicioWizard from '../components/CierreServicioWizard';
+import FaseStepper from '../components/ordenes/FaseStepper';
 import { guardarUbicacionVehiculo } from '../services/gps.service';
 import {
   MapPin, Clock, Phone, MessageSquare, CheckCircle, LogOut, Navigation,
@@ -83,6 +84,7 @@ export default function TecnicoVista() {
   const [previousCount, setPreviousCount] = useState<number | null>(null);
   const [compartiendoGPS, setCompartiendoGPS] = useState(false);
   const [comisionesQuincena, setComisionesQuincena] = useState<ComisionRegistro[]>([]);
+  const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
 
   // Permisos del técnico (con fallback seguro)
   const permisos: TecnicoPermisos = userProfile?.permisos || PERMISOS_DEFAULT_TECNICO;
@@ -106,6 +108,15 @@ export default function TecnicoVista() {
 
     getDocs(collection(db, 'clientes')).then(snap => {
       setClientes(snap.docs.map(d => ({ id: d.id, ...d.data() } as Cliente)));
+    });
+
+    const unsubStandby = onSnapshot(collection(db, 'standby_piezas'), (snap) => {
+      setStandbyItems(snap.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        fechaInicio: d.data().fechaInicio?.toDate?.() || new Date(),
+        createdAt: d.data().createdAt?.toDate?.() || new Date(),
+      } as StandbyPieza)));
     });
 
     // Comisiones de la quincena actual (Fase 5)
@@ -139,7 +150,7 @@ export default function TecnicoVista() {
       });
     }
 
-    return () => { unsub(); unsubComisiones(); };
+    return () => { unsub(); unsubComisiones(); unsubStandby(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile?.id]);
 
@@ -662,6 +673,9 @@ export default function TecnicoVista() {
                       <span className="ml-auto">
                         <Badge fase={orden.fase} />
                       </span>
+                    </div>
+                    <div className="mb-3">
+                      <FaseStepper orden={orden} size="sm" readonly={true} tienestandby={tieneStandby(orden, standbyItems)} />
                     </div>
 
                     {/* Equipo */}

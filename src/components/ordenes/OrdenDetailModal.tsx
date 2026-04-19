@@ -1,12 +1,15 @@
-import { Phone, MessageCircle, MapPin, Edit2, AlertTriangle } from 'lucide-react';
-import { OrdenServicio, Usuario } from '../../types';
+import { useState } from 'react';
+import { Phone, MessageCircle, MapPin, Edit2, AlertTriangle, XCircle } from 'lucide-react';
+import { OrdenServicio, Usuario, StandbyPieza } from '../../types';
 import {
   formatFecha, formatTelefono, whatsappLink,
-  estadoSimpleLabel, estadoSimpleColor, tiempoTranscurrido,
+  estadoSimpleLabel, estadoSimpleColor, tiempoTranscurrido, tieneStandby,
 } from '../../utils';
 import { puede } from '../../utils/permisos';
 import Badge from '../Badge';
 import EliminarOrdenButton from './EliminarOrdenButton';
+import FaseStepper from './FaseStepper';
+import CancelarOrdenModal from './CancelarOrdenModal';
 
 interface OrdenDetailModalProps {
   orden: OrdenServicio;
@@ -17,6 +20,7 @@ interface OrdenDetailModalProps {
   precioAprobacion: string;
   setPrecioAprobacion: (v: string) => void;
   aprobandoPrecio: boolean;
+  standbyItems?: StandbyPieza[];
 }
 
 export default function OrdenDetailModal({
@@ -28,8 +32,11 @@ export default function OrdenDetailModal({
   precioAprobacion,
   setPrecioAprobacion,
   aprobandoPrecio,
+  standbyItems = [],
 }: OrdenDetailModalProps) {
   const puedeModificar = puede(userProfile, 'ordenesModificar');
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const conStandby = tieneStandby(orden, standbyItems);
   return (
     <div className="space-y-6">
       {/* Banner si está eliminada */}
@@ -77,6 +84,28 @@ export default function OrdenDetailModal({
         )}
         <EliminarOrdenButton orden={orden} variant="button" onDeleted={onEliminar} />
       </div>
+
+      {/* Stepper de fases */}
+      <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 space-y-3">
+        <FaseStepper orden={orden} size="md" tienestandby={conStandby} />
+        {puedeModificar && !orden.eliminada && orden.fase !== 'cancelado' && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowCancelModal(true)}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
+            >
+              <XCircle size={13} /> Cancelar orden
+            </button>
+          </div>
+        )}
+      </div>
+      <CancelarOrdenModal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        orden={orden}
+        userProfile={userProfile}
+      />
 
       {/* Client Info */}
       <div>

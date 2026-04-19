@@ -32,6 +32,7 @@ import { es } from 'date-fns/locale';
 
 import OrdenFilters from '../components/ordenes/OrdenFilters';
 import OrdenCard from '../components/ordenes/OrdenCard';
+import { StandbyPieza } from '../types';
 import OrdenDetailModal from '../components/ordenes/OrdenDetailModal';
 import OrdenEditForm from '../components/ordenes/OrdenEditForm';
 import type { EditFormState } from '../components/ordenes/OrdenEditForm';
@@ -74,6 +75,7 @@ export default function Ordenes() {
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
+  const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
   const [verTodasOperarias, setVerTodasOperarias] = useState(false);
   const [verEliminadas, setVerEliminadas] = useState(false);
 
@@ -705,7 +707,16 @@ export default function Ordenes() {
       setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
     });
 
-    return () => unsub();
+    const unsubStandby = onSnapshot(collection(db, 'standby_piezas'), (snap) => {
+      setStandbyItems(snap.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        fechaInicio: d.data().fechaInicio?.toDate?.() || new Date(),
+        createdAt: d.data().createdAt?.toDate?.() || new Date(),
+      } as StandbyPieza)));
+    });
+
+    return () => { unsub(); unsubStandby(); };
   }, []);
 
   const tecnicos = useMemo(() => personal.filter(p => p.rol === 'tecnico' && p.activo), [personal]);
@@ -1324,6 +1335,7 @@ export default function Ordenes() {
               orden={orden}
               onSelect={setSelectedOrden}
               onChangeEstado={handleEstadoChange}
+              standbyItems={standbyItems}
             />
           ))
         )}
@@ -1346,6 +1358,7 @@ export default function Ordenes() {
             precioAprobacion={precioAprobacion}
             setPrecioAprobacion={setPrecioAprobacion}
             aprobandoPrecio={aprobandoPrecio}
+            standbyItems={standbyItems}
           />
         )}
 

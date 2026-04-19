@@ -303,6 +303,14 @@ export const TIPOS_EQUIPO = ['Lavadora', 'Secadora', 'Nevera', 'Estufa', 'Aire A
 export const DURACIONES = [15, 30, 45, 60, 90, 120];
 
 /**
+ * Detecta si una orden tiene piezas en stand-by pendientes (no llegadas aún).
+ * Recibe el array de StandbyPieza ya cargado en memoria.
+ */
+export function tieneStandby(orden: { id: string }, standbyItems: import('../types').StandbyPieza[]): boolean {
+  return standbyItems.some(s => s.ordenId === orden.id && s.estado !== 'llego');
+}
+
+/**
  * Heurística para detectar si una orden es de mantenimiento por su descripción.
  * Usado para preaprobar precios automáticamente desde el catálogo (Fase 4B).
  */

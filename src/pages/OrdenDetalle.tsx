@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, FaseOrden, MetodoPago } from '../types';
-import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, googleMapsLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda } from '../utils';
+import { OrdenServicio, FaseOrden, MetodoPago, StandbyPieza } from '../types';
+import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, googleMapsLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
@@ -17,6 +17,9 @@ import toast from 'react-hot-toast';
 import { puede } from '../utils/permisos';
 import { registrarComisionPorOrden } from '../utils/comisiones';
 import CancelarOrdenModal from '../components/ordenes/CancelarOrdenModal';
+import FaseStepper from '../components/ordenes/FaseStepper';
+import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
+import { XCircle } from 'lucide-react';
 import { generarTrackingToken } from '../services/gps.service';
 import { whatsappUrl } from '../utils/whatsapp';
 
@@ -45,6 +48,7 @@ export default function OrdenDetalle() {
   const [gpsSaving, setGpsSaving] = useState(false);
   const [precioAprobacion, setPrecioAprobacion] = useState('');
   const [aprobandoPrecio, setAprobandoPrecio] = useState(false);
+  const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
 
   // Pre-fill approval input
   useEffect(() => {
@@ -99,8 +103,18 @@ export default function OrdenDetalle() {
       }
       setLoading(false);
     });
-    return () => unsub();
+    const unsubStandby = onSnapshot(collection(db, 'standby_piezas'), (snap) => {
+      setStandbyItems(snap.docs.map(d => ({
+        id: d.id,
+        ...d.data(),
+        fechaInicio: d.data().fechaInicio?.toDate?.() || new Date(),
+        createdAt: d.data().createdAt?.toDate?.() || new Date(),
+      } as StandbyPieza)));
+    });
+    return () => { unsub(); unsubStandby(); };
   }, [id]);
+
+  const ordenTieneStandby = orden ? tieneStandby(orden, standbyItems) : false;
 
   const [showCancelModal, setShowCancelModal] = useState(false);
 
@@ -887,25 +901,22 @@ export default function OrdenDetalle() {
             </div>
           )}
 
-          {/* Cambiar fase */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">Cambiar Fase</h3>
-            <select value={nuevaFase} onChange={e => setNuevaFase(e.target.value as FaseOrden)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white mb-2">
-              <option value="">Seleccionar nueva fase...</option>
-              {FASES.filter(f => f !== orden.fase).map(f => <option key={f} value={f}>{faseLabel(f)}</option>)}
-            </select>
-            {nuevaFase && (
-              <>
-                <textarea value={notaFase} onChange={e => setNotaFase(e.target.value)}
-                  placeholder="Nota (opcional)..." rows={2}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-2" />
-                <button onClick={handleCambiarFase} disabled={saving}
-                  className="w-full flex items-center justify-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-                  <Save size={14} /> {saving ? 'Guardando...' : `Mover a ${faseLabel(nuevaFase)}`}
+          {/* Stepper de fases + acciones (cancelar / eliminar) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-3">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase">Flujo de la orden</h3>
+            <FaseStepper orden={orden} size="md" tienestandby={ordenTieneStandby} />
+            <div className="flex flex-wrap gap-2 justify-end pt-2">
+              {puede(userProfile, 'ordenesModificar') && !orden.eliminada && orden.fase !== 'cancelado' && (
+                <button
+                  type="button"
+                  onClick={() => setShowCancelModal(true)}
+                  className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors"
+                >
+                  <XCircle size={13} /> Cancelar orden
                 </button>
-              </>
-            )}
+              )}
+              <EliminarOrdenButton orden={orden} variant="button" />
+            </div>
           </div>
 
           {/* GPS Tracking */}
