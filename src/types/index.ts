@@ -69,6 +69,10 @@ export interface Cliente {
   lng?: number;
   /** Direcciones alternativas (familiares, oficina, etc.) */
   direcciones?: DireccionCliente[];
+  /** RNC (empresa) — para reporte 607 DGII */
+  rnc?: string;
+  /** Cédula (persona física) — para reporte 607 DGII */
+  cedula?: string;
   createdAt: Date;
   updatedAt?: Date;
 }
