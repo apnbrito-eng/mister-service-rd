@@ -1,11 +1,13 @@
-import { Plus, User, Wrench, Calendar, MapPin, AlertTriangle, CheckCircle, Loader2 } from 'lucide-react';
-import { Cliente, Personal, OrdenServicio } from '../../types';
+import { useMemo, useState } from 'react';
+import { Plus, User, Wrench, Calendar, MapPin, AlertTriangle, CheckCircle, Loader2, Edit2, Home, ChevronDown } from 'lucide-react';
+import { Cliente, Personal, OrdenServicio, DireccionCliente } from '../../types';
 import {
   TIPOS_EQUIPO, DURACIONES, HORARIOS, HORARIOS_LABEL,
   formatTelefono, faseLabel,
 } from '../../utils';
 import Modal from '../Modal';
 import MiniMapaCliente from './MiniMapaCliente';
+import EditarClienteModal from '../clientes/EditarClienteModal';
 
 export interface CreateFormState {
   clienteId: string;
@@ -38,7 +40,7 @@ interface OrdenCreateModalProps {
   setIsNewCliente: (v: boolean) => void;
   saving: boolean;
   geoLoading: boolean;
-  clientes: Cliente[];
+  clientes?: Cliente[];
   clientesFiltrados: Cliente[];
   personal: Personal[];
   tecnicos: Personal[];
@@ -83,12 +85,55 @@ export default function OrdenCreateModal({
   handleCreateDireccionChange,
   handleSelectCliente,
   handleClienteTelefonoChange,
+  clientes = [],
 }: OrdenCreateModalProps) {
   // Es cliente existente si clienteId está set y NO estamos en modo "nuevo cliente"
   const esClienteExistente = !!form.clienteId && !isNewCliente;
   // Estilo de input readonly (cliente existente: no editable, visual diferente)
   const readonlyInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-blue-50/50 text-gray-700 cursor-not-allowed';
   const editableInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]';
+
+  // Cliente seleccionado (documento completo) para acceder a direcciones alternativas
+  const clienteSeleccionado = useMemo<Cliente | undefined>(
+    () => (form.clienteId ? clientes.find(c => c.id === form.clienteId) : undefined),
+    [form.clienteId, clientes],
+  );
+  const direccionesAlternativas = clienteSeleccionado?.direcciones || [];
+  const tieneAlternativas = direccionesAlternativas.length > 0;
+
+  const [showEditarCliente, setShowEditarCliente] = useState(false);
+  const [showSelectorDir, setShowSelectorDir] = useState(false);
+
+  /** Determina qué dirección está seleccionada actualmente. */
+  const direccionSeleccionada = useMemo(() => {
+    if (!clienteSeleccionado) return null;
+    // Si la dirección del form coincide con una alternativa
+    const alt = direccionesAlternativas.find(d => d.direccion === form.clienteDireccion);
+    if (alt) return { tipo: 'alternativa' as const, etiqueta: alt.etiqueta, direccion: alt.direccion };
+    // Por defecto: principal
+    return { tipo: 'principal' as const, etiqueta: 'Principal', direccion: clienteSeleccionado.direccion };
+  }, [clienteSeleccionado, direccionesAlternativas, form.clienteDireccion]);
+
+  const aplicarDireccion = (d: DireccionCliente | { principal: true; cliente: Cliente }) => {
+    if ('principal' in d) {
+      setForm(f => ({
+        ...f,
+        clienteDireccion: d.cliente.direccion,
+        clienteReferencia: d.cliente.referenciaDireccion || '',
+        clienteLat: d.cliente.lat,
+        clienteLng: d.cliente.lng,
+      }));
+    } else {
+      setForm(f => ({
+        ...f,
+        clienteDireccion: d.direccion,
+        clienteReferencia: d.referencia || '',
+        clienteLat: d.lat,
+        clienteLng: d.lng,
+      }));
+    }
+    setShowSelectorDir(false);
+  };
   return (
     <Modal
       isOpen={true}
@@ -162,7 +207,7 @@ export default function OrdenCreateModal({
             {/* New client fields */}
             {(isNewCliente || form.clienteId) && (
               <div className={`rounded-xl p-4 space-y-3 ${esClienteExistente ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className="text-xs font-semibold text-[#1a5fa8] flex items-center gap-2">
                     {esClienteExistente ? (
                       <>
@@ -173,24 +218,35 @@ export default function OrdenCreateModal({
                       'Datos del nuevo cliente'
                     )}
                   </p>
-                  {(isNewCliente || esClienteExistente) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsNewCliente(false);
-                        setForm(f => ({
-                          ...f,
-                          clienteId: '', clienteNombre: '', clienteTelefono: '',
-                          clienteEmail: '', clienteDireccion: '', clienteReferencia: '',
-                          clienteLat: undefined, clienteLng: undefined,
-                        }));
-                        setClienteBusqueda('');
-                      }}
-                      className="text-xs text-gray-500 hover:text-gray-700 underline"
-                    >
-                      Cancelar y buscar otro
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {esClienteExistente && (
+                      <button
+                        type="button"
+                        onClick={() => setShowEditarCliente(true)}
+                        className="inline-flex items-center gap-1 text-xs text-[#1a5fa8] hover:text-[#0f3460] font-medium"
+                      >
+                        <Edit2 size={11} /> Editar datos del cliente
+                      </button>
+                    )}
+                    {(isNewCliente || esClienteExistente) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsNewCliente(false);
+                          setForm(f => ({
+                            ...f,
+                            clienteId: '', clienteNombre: '', clienteTelefono: '',
+                            clienteEmail: '', clienteDireccion: '', clienteReferencia: '',
+                            clienteLat: undefined, clienteLng: undefined,
+                          }));
+                          setClienteBusqueda('');
+                        }}
+                        className="text-xs text-gray-500 hover:text-gray-700 underline"
+                      >
+                        Cancelar y buscar otro
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Banner advertencia órdenes activas */}
@@ -338,6 +394,73 @@ export default function OrdenCreateModal({
                         </span>
                       )}
                     </label>
+
+                    {/* Selector de dirección — solo cliente existente con alternativas */}
+                    {esClienteExistente && tieneAlternativas && (
+                      <div className="relative mb-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowSelectorDir(v => !v)}
+                          className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-white border border-blue-300 rounded-lg text-sm hover:bg-blue-50"
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            <Home size={14} className="text-[#0f3460] shrink-0" />
+                            <span className="font-semibold text-[#0f3460]">
+                              {direccionSeleccionada?.etiqueta}:
+                            </span>
+                            <span className="text-gray-700 truncate">
+                              {direccionSeleccionada?.direccion}
+                            </span>
+                          </span>
+                          <ChevronDown size={14} className="text-gray-400 shrink-0" />
+                        </button>
+                        {showSelectorDir && clienteSeleccionado && (
+                          <div className="absolute z-30 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => aplicarDireccion({ principal: true, cliente: clienteSeleccionado })}
+                              className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100"
+                            >
+                              <div className="font-semibold text-[#0f3460]">Principal</div>
+                              <div className="text-xs text-gray-600 truncate">{clienteSeleccionado.direccion || '(sin dirección)'}</div>
+                            </button>
+                            {direccionesAlternativas.map(d => (
+                              <button
+                                key={d.id}
+                                type="button"
+                                onClick={() => aplicarDireccion(d)}
+                                className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0"
+                              >
+                                <div className="font-semibold text-[#0f3460]">{d.etiqueta}</div>
+                                <div className="text-xs text-gray-600 truncate">{d.direccion}</div>
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowSelectorDir(false);
+                                setShowEditarCliente(true);
+                              }}
+                              className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-blue-50 text-sm flex items-center gap-1 text-[#1a5fa8] font-medium border-t border-gray-200"
+                            >
+                              <Plus size={12} /> Agregar / editar direcciones
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Botón Agregar dirección — cliente existente sin alternativas */}
+                    {esClienteExistente && !tieneAlternativas && (
+                      <button
+                        type="button"
+                        onClick={() => setShowEditarCliente(true)}
+                        className="mb-2 inline-flex items-center gap-1 text-xs text-[#1a5fa8] hover:text-[#0f3460] font-medium"
+                      >
+                        <Plus size={11} /> Agregar otra dirección (mamá, oficina, etc.)
+                      </button>
+                    )}
+
                     <div className="flex gap-2">
                       <input
                         ref={dirInputRef}
@@ -568,6 +691,31 @@ export default function OrdenCreateModal({
           </button>
         </div>
       </form>
+
+      {/* Modal para editar el cliente seleccionado y gestionar sus direcciones */}
+      {form.clienteId && (
+        <EditarClienteModal
+          isOpen={showEditarCliente}
+          onClose={() => setShowEditarCliente(false)}
+          clienteId={form.clienteId}
+          onUpdated={c => {
+            // Refrescar el form con los datos actualizados del cliente
+            setForm(f => ({
+              ...f,
+              clienteNombre: c.nombre,
+              clienteEmail: c.email || '',
+              // Solo actualizar dirección si la principal está seleccionada actualmente
+              ...(direccionSeleccionada?.tipo === 'principal'
+                ? {
+                    clienteDireccion: c.direccion,
+                    clienteLat: c.lat,
+                    clienteLng: c.lng,
+                  }
+                : {}),
+            }));
+          }}
+        />
+      )}
     </Modal>
   );
 }

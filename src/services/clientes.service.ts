@@ -1,6 +1,6 @@
-import { collection, query, where, getDocs, doc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, updateDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Cliente } from '../types';
+import { Cliente, DireccionCliente } from '../types';
 
 /** Normaliza teléfono a 10 dígitos locales de RD */
 export function normalizarTelefono(tel: string): string {
@@ -95,4 +95,89 @@ export async function validarClienteUnico(
   const existente = await buscarClientePorTelefono(telefono);
   if (!existente) return true;
   return existente.id === clienteIdActual;
+}
+
+/**
+ * Actualiza datos básicos del cliente (ficha global). Strip de undefined para Firestore.
+ */
+export async function actualizarCliente(
+  clienteId: string,
+  cambios: Partial<Pick<Cliente, 'nombre' | 'email' | 'direccion' | 'referenciaDireccion' | 'lat' | 'lng' | 'sector' | 'ciudad' | 'zona'>>,
+): Promise<void> {
+  const updates: Record<string, unknown> = { updatedAt: Timestamp.now() };
+  Object.entries(cambios).forEach(([k, v]) => {
+    if (v === undefined) return;
+    updates[k] = typeof v === 'string' ? v.trim() : v;
+  });
+  await updateDoc(doc(db, 'clientes', clienteId), updates);
+}
+
+function genDireccionId(): string {
+  return `dir_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+}
+
+/** Agrega una dirección alternativa al cliente. Retorna el id de la nueva dirección. */
+export async function agregarDireccionCliente(
+  clienteId: string,
+  data: Omit<DireccionCliente, 'id'>,
+): Promise<string> {
+  const ref = doc(db, 'clientes', clienteId);
+  const snap = await getDoc(ref);
+  const cliente = snap.data() as Partial<Cliente> | undefined;
+  const direcciones: DireccionCliente[] = Array.isArray(cliente?.direcciones)
+    ? (cliente!.direcciones as DireccionCliente[])
+    : [];
+  const nueva: DireccionCliente = { id: genDireccionId(), ...data };
+  // Strip undefined
+  const nuevaLimpia = Object.fromEntries(Object.entries(nueva).filter(([, v]) => v !== undefined)) as DireccionCliente;
+  await updateDoc(ref, {
+    direcciones: [...direcciones, nuevaLimpia],
+    updatedAt: Timestamp.now(),
+  });
+  return nueva.id;
+}
+
+/** Actualiza una dirección alternativa del cliente. */
+export async function actualizarDireccionCliente(
+  clienteId: string,
+  direccionId: string,
+  cambios: Partial<Omit<DireccionCliente, 'id'>>,
+): Promise<void> {
+  const ref = doc(db, 'clientes', clienteId);
+  const snap = await getDoc(ref);
+  const cliente = snap.data() as Partial<Cliente> | undefined;
+  const direcciones: DireccionCliente[] = Array.isArray(cliente?.direcciones)
+    ? (cliente!.direcciones as DireccionCliente[])
+    : [];
+  const actualizadas = direcciones.map(d => {
+    if (d.id !== direccionId) return d;
+    const merged: Record<string, unknown> = { ...d };
+    Object.entries(cambios).forEach(([k, v]) => {
+      if (v === undefined) return;
+      merged[k] = typeof v === 'string' ? v.trim() : v;
+    });
+    return merged as unknown as DireccionCliente;
+  });
+  await updateDoc(ref, {
+    direcciones: actualizadas,
+    updatedAt: Timestamp.now(),
+  });
+}
+
+/** Elimina una dirección alternativa del cliente. */
+export async function eliminarDireccionCliente(
+  clienteId: string,
+  direccionId: string,
+): Promise<void> {
+  const ref = doc(db, 'clientes', clienteId);
+  const snap = await getDoc(ref);
+  const cliente = snap.data() as Partial<Cliente> | undefined;
+  const direcciones: DireccionCliente[] = Array.isArray(cliente?.direcciones)
+    ? (cliente!.direcciones as DireccionCliente[])
+    : [];
+  const filtradas = direcciones.filter(d => d.id !== direccionId);
+  await updateDoc(ref, {
+    direcciones: filtradas,
+    updatedAt: Timestamp.now(),
+  });
 }

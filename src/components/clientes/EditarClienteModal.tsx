@@ -1,0 +1,335 @@
+import { useEffect, useState } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../../firebase/config';
+import Modal from '../Modal';
+import { Cliente, DireccionCliente } from '../../types';
+import {
+  actualizarCliente,
+  actualizarDireccionCliente,
+  eliminarDireccionCliente,
+} from '../../services/clientes.service';
+import AgregarDireccionModal from './AgregarDireccionModal';
+import { Home, Edit2, Trash2, Plus, MapPin } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+interface Props {
+  isOpen: boolean;
+  onClose: () => void;
+  clienteId: string;
+  /** Callback opcional cuando el cliente se actualizó (recibe el doc actualizado) */
+  onUpdated?: (cliente: Cliente) => void;
+}
+
+export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdated }: Props) {
+  const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [nombre, setNombre] = useState('');
+  const [email, setEmail] = useState('');
+  const [direccion, setDireccion] = useState('');
+  const [referenciaDireccion, setReferenciaDireccion] = useState('');
+  const [sector, setSector] = useState('');
+  const [lat, setLat] = useState<number | undefined>();
+  const [lng, setLng] = useState<number | undefined>();
+  const [capturandoGps, setCapturandoGps] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showAgregarDir, setShowAgregarDir] = useState(false);
+  const [editandoDir, setEditandoDir] = useState<DireccionCliente | null>(null);
+
+  // Cargar cliente en tiempo real mientras el modal esté abierto
+  useEffect(() => {
+    if (!isOpen || !clienteId) return;
+    const ref = doc(db, 'clientes', clienteId);
+    const unsub = onSnapshot(ref, snap => {
+      if (!snap.exists()) return;
+      const raw = snap.data();
+      const c: Cliente = {
+        id: snap.id,
+        nombre: (raw.nombre as string) || '',
+        telefono: (raw.telefono as string) || '',
+        telefonoNormalizado: (raw.telefonoNormalizado as string) || undefined,
+        email: (raw.email as string) || '',
+        direccion: (raw.direccion as string) || '',
+        referenciaDireccion: (raw.referenciaDireccion as string) || '',
+        sector: (raw.sector as string) || undefined,
+        ciudad: (raw.ciudad as string) || undefined,
+        zona: (raw.zona as string) || undefined,
+        lat: typeof raw.lat === 'number' ? raw.lat : undefined,
+        lng: typeof raw.lng === 'number' ? raw.lng : undefined,
+        direcciones: Array.isArray(raw.direcciones) ? (raw.direcciones as DireccionCliente[]) : [],
+        createdAt: raw.createdAt?.toDate?.() || new Date(),
+        updatedAt: raw.updatedAt?.toDate?.() || undefined,
+      };
+      setCliente(c);
+      // Sincronizar form solo al abrir (primera vez)
+      setNombre(n => n || c.nombre);
+      setEmail(e => e || c.email || '');
+      setDireccion(d => d || c.direccion);
+      setReferenciaDireccion(r => r || c.referenciaDireccion || '');
+      setSector(s => s || c.sector || '');
+      setLat(l => (l !== undefined ? l : c.lat));
+      setLng(l => (l !== undefined ? l : c.lng));
+    });
+    return () => unsub();
+  }, [isOpen, clienteId]);
+
+  // Reset al cerrar
+  useEffect(() => {
+    if (!isOpen) {
+      setCliente(null);
+      setNombre('');
+      setEmail('');
+      setDireccion('');
+      setReferenciaDireccion('');
+      setSector('');
+      setLat(undefined);
+      setLng(undefined);
+    }
+  }, [isOpen]);
+
+  const handleUbicacionActual = () => {
+    if (!navigator.geolocation) {
+      toast.error('Tu navegador no soporta geolocalización');
+      return;
+    }
+    setCapturandoGps(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLat(pos.coords.latitude);
+        setLng(pos.coords.longitude);
+        setCapturandoGps(false);
+        toast.success('Ubicación capturada');
+      },
+      err => {
+        setCapturandoGps(false);
+        toast.error('No se pudo obtener la ubicación: ' + err.message);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+    );
+  };
+
+  const guardarDatosBasicos = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nombre.trim()) {
+      toast.error('El nombre es obligatorio');
+      return;
+    }
+    setSaving(true);
+    try {
+      await actualizarCliente(clienteId, {
+        nombre: nombre.trim(),
+        email: email.trim() || undefined,
+        direccion: direccion.trim(),
+        referenciaDireccion: referenciaDireccion.trim() || undefined,
+        sector: sector.trim() || undefined,
+        lat,
+        lng,
+      });
+      toast.success('Cliente actualizado');
+      if (cliente) onUpdated?.({ ...cliente, nombre: nombre.trim(), email: email.trim(), direccion: direccion.trim(), lat, lng });
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al actualizar cliente');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleEditarEtiqueta = async (d: DireccionCliente) => {
+    const nuevaEtiqueta = prompt('Nueva etiqueta:', d.etiqueta);
+    if (nuevaEtiqueta === null) return;
+    const etiquetaTrim = nuevaEtiqueta.trim();
+    if (!etiquetaTrim) {
+      toast.error('La etiqueta no puede estar vacía');
+      return;
+    }
+    try {
+      await actualizarDireccionCliente(clienteId, d.id, { etiqueta: etiquetaTrim });
+      toast.success('Etiqueta actualizada');
+    } catch {
+      toast.error('Error al actualizar');
+    }
+    setEditandoDir(null);
+  };
+
+  const handleEliminarDir = async (d: DireccionCliente) => {
+    if (!confirm(`¿Eliminar dirección "${d.etiqueta}"?`)) return;
+    try {
+      await eliminarDireccionCliente(clienteId, d.id);
+      toast.success('Dirección eliminada');
+    } catch {
+      toast.error('Error al eliminar');
+    }
+  };
+
+  if (!cliente) {
+    return (
+      <Modal isOpen={isOpen} onClose={onClose} title="Editar cliente" size="md">
+        <p className="text-sm text-gray-500">Cargando datos...</p>
+      </Modal>
+    );
+  }
+
+  return (
+    <>
+      <Modal
+        isOpen={isOpen}
+        onClose={onClose}
+        title={`Editar cliente · ${cliente.nombre}`}
+        size="md"
+      >
+        <div className="space-y-5">
+          {/* Datos básicos */}
+          <form onSubmit={guardarDatosBasicos} className="space-y-3">
+            <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Datos del cliente</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Nombre *</label>
+                <input
+                  type="text"
+                  value={nombre}
+                  onChange={e => setNombre(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Teléfono <span className="text-gray-400">(no editable)</span>
+                </label>
+                <input
+                  type="tel"
+                  value={cliente.telefono}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-gray-50 text-gray-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Dirección principal</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={direccion}
+                    onChange={e => setDireccion(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleUbicacionActual}
+                    disabled={capturandoGps}
+                    className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium disabled:opacity-60"
+                  >
+                    <MapPin size={12} />
+                    {capturandoGps ? '...' : 'GPS'}
+                  </button>
+                </div>
+                {lat !== undefined && lng !== undefined && (
+                  <p className="text-[11px] text-green-700 mt-1">
+                    ✓ {lat.toFixed(4)}, {lng.toFixed(4)}
+                  </p>
+                )}
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Referencia</label>
+                <input
+                  type="text"
+                  value={referenciaDireccion}
+                  onChange={e => setReferenciaDireccion(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              >
+                {saving ? 'Guardando...' : 'Guardar cambios'}
+              </button>
+            </div>
+          </form>
+
+          {/* Direcciones alternativas */}
+          <div className="border-t border-gray-100 pt-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                Direcciones alternativas
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAgregarDir(true)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 rounded-lg text-xs font-medium"
+              >
+                <Plus size={12} /> Agregar
+              </button>
+            </div>
+
+            {(!cliente.direcciones || cliente.direcciones.length === 0) ? (
+              <p className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg p-3">
+                Este cliente aún no tiene direcciones alternativas. Agrega una si las órdenes son para un familiar u otra ubicación.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {cliente.direcciones.map(d => (
+                  <div key={d.id} className="flex items-start gap-2 bg-gray-50 rounded-lg p-3 text-sm">
+                    <Home size={14} className="text-[#0f3460] mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900">{d.etiqueta}</div>
+                      <div className="text-xs text-gray-600 truncate">{d.direccion}</div>
+                      {d.referencia && (
+                        <div className="text-[11px] text-gray-500 italic">{d.referencia}</div>
+                      )}
+                      {typeof d.lat === 'number' && typeof d.lng === 'number' && (
+                        <div className="text-[11px] text-green-700">
+                          ✓ {d.lat.toFixed(4)}, {d.lng.toFixed(4)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditandoDir(d);
+                          handleEditarEtiqueta(d);
+                        }}
+                        title="Editar etiqueta"
+                        className="p-1.5 text-blue-500 hover:bg-blue-50 rounded"
+                      >
+                        <Edit2 size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEliminarDir(d)}
+                        title="Eliminar"
+                        className="p-1.5 text-red-500 hover:bg-red-50 rounded"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      <AgregarDireccionModal
+        isOpen={showAgregarDir}
+        onClose={() => setShowAgregarDir(false)}
+        clienteId={clienteId}
+        clienteNombre={cliente.nombre}
+      />
+
+      {/* Ref usado solo para evitar warning — limpiado al cerrar */}
+      {editandoDir && <span className="hidden">{editandoDir.id}</span>}
+    </>
+  );
+}

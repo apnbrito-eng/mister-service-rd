@@ -40,6 +40,20 @@ export interface Usuario {
   color?: string;
 }
 
+/**
+ * Dirección alternativa de un cliente (mamá, oficina, casa de hermana, etc.)
+ * El cliente sigue teniendo `direccion` + `lat`/`lng` como dirección principal;
+ * `direcciones[]` son las alternativas adicionales.
+ */
+export interface DireccionCliente {
+  id: string;
+  etiqueta: string;        // Obligatoria — ej: "Mamá", "Oficina", "Casa hermana en Naco"
+  direccion: string;
+  lat?: number;
+  lng?: number;
+  referencia?: string;
+}
+
 export interface Cliente {
   id: string;
   nombre: string;
@@ -53,6 +67,8 @@ export interface Cliente {
   zona?: string;
   lat?: number;
   lng?: number;
+  /** Direcciones alternativas (familiares, oficina, etc.) */
+  direcciones?: DireccionCliente[];
   createdAt: Date;
   updatedAt?: Date;
 }
