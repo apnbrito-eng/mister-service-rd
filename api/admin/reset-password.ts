@@ -8,16 +8,6 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
  * Solo usuarios con rol "administrador" pueden ejecutar esta acción.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Carga diferida de firebase-admin para que cualquier error de init
-  // se devuelva como JSON en vez de crashear el módulo (FUNCTION_INVOCATION_FAILED)
-  let admin: typeof import('firebase-admin');
-  try {
-    admin = await import('firebase-admin');
-  } catch (err) {
-    const m = err instanceof Error ? err.message : 'Error desconocido';
-    return res.status(500).json({ error: `No se pudo cargar firebase-admin: ${m}` });
-  }
-
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -34,27 +24,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 8 caracteres' });
   }
 
+  // Carga modular de firebase-admin v12 (subpath imports = compatibles con ESM)
+  let initializeApp: typeof import('firebase-admin/app').initializeApp;
+  let getApps: typeof import('firebase-admin/app').getApps;
+  let cert: typeof import('firebase-admin/app').cert;
+  let getAuth: typeof import('firebase-admin/auth').getAuth;
+  let getFirestore: typeof import('firebase-admin/firestore').getFirestore;
+  try {
+    const appMod = await import('firebase-admin/app');
+    const authMod = await import('firebase-admin/auth');
+    const fsMod = await import('firebase-admin/firestore');
+    initializeApp = appMod.initializeApp;
+    getApps = appMod.getApps;
+    cert = appMod.cert;
+    getAuth = authMod.getAuth;
+    getFirestore = fsMod.getFirestore;
+  } catch (err) {
+    const m = err instanceof Error ? err.message : 'Error desconocido';
+    return res.status(500).json({ error: `No se pudo cargar firebase-admin: ${m}` });
+  }
+
   // Inicializar app si no existe
   try {
-    if (!admin.apps.length) {
+    if (getApps().length === 0) {
       const projectId = process.env.FIREBASE_PROJECT_ID;
       const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
       const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
 
       if (!projectId || !clientEmail || !privateKeyRaw) {
         return res.status(500).json({
-          error: 'Faltan variables de entorno: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY',
+          error: 'Faltan variables de entorno',
           debug: {
             hasProjectId: !!projectId,
             hasClientEmail: !!clientEmail,
             hasPrivateKey: !!privateKeyRaw,
+            projectIdValue: projectId || null,
+            clientEmailValue: clientEmail || null,
+            privateKeyLength: privateKeyRaw ? privateKeyRaw.length : 0,
           },
         });
       }
 
       const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
-      admin.initializeApp({
-        credential: admin.credential.cert({
+      initializeApp({
+        credential: cert({
           projectId,
           clientEmail,
           privateKey,
@@ -68,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const auth = admin.auth();
+    const auth = getAuth();
 
     // 1. Verificar el ID token del caller
     const decoded = await auth.verifyIdToken(idToken);
@@ -81,7 +94,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       (decoded as Record<string, unknown>).admin === true;
 
     if (!isAdmin) {
-      const db = admin.firestore();
+      const db = getFirestore();
 
       const byUid = await db.collection('personal').where('uid', '==', callerUid).limit(1).get();
       if (!byUid.empty) {
