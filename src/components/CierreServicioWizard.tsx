@@ -36,15 +36,15 @@ export default function CierreServicioWizard({
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Capturar GPS automáticamente al abrir, sin mostrarle nada al técnico
+  // Capturar GPS automáticamente al abrir (en background).
+  // Usa el helper con fallback a baja precisión — evita quedarse colgado en interiores.
   useEffect(() => {
     if (!isOpen) return;
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => { /* fallar silenciosamente */ },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+    let cancelado = false;
+    obtenerUbicacionGPS().then(coords => {
+      if (!cancelado && coords) setGpsCoords(coords);
+    });
+    return () => { cancelado = true; };
   }, [isOpen]);
 
   const reset = () => {
@@ -102,8 +102,8 @@ export default function CierreServicioWizard({
       }
       if (!coords) {
         toast.error(
-          'No se pudo obtener la ubicación. Activa el GPS y permite el acceso a la ubicación para cerrar el servicio.',
-          { duration: 6000 },
+          'No se pudo obtener tu ubicación. Activa el GPS del móvil, permite el acceso a la ubicación en el navegador y vuelve a intentar.',
+          { duration: 7000 },
         );
         setSaving(false);
         return;
