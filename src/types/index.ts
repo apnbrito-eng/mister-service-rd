@@ -236,6 +236,10 @@ export interface LiquidacionEmpleado {
   citasCompletadasMes?: number;
   // Totales
   totalDevengado: number;
+  // Avances descontados (Fase 8)
+  avancesIds?: string[];
+  totalAvances?: number;
+  totalNeto?: number;              // totalDevengado - totalAvances
   notas?: string;
   // Pago
   metodoPago?: 'efectivo' | 'transferencia' | 'cheque';
@@ -260,6 +264,31 @@ export interface LiquidacionNomina {
   cerradaPor?: string;
   cerradaPorId?: string;
   fechaCierre?: Date;
+}
+
+/**
+ * Adelanto / préstamo otorgado a un empleado. Se descuenta automáticamente
+ * de la siguiente liquidación de nómina para la quincena correspondiente.
+ */
+export interface AvanceEmpleado {
+  id: string;
+  personalId: string;
+  personalNombre: string;
+  personalRol?: Rol;
+  monto: number;
+  fecha: Date;
+  motivo: string;
+  metodoPago?: 'efectivo' | 'transferencia' | 'tarjeta';
+  bancoDestino?: string;
+  quincenaAsignada: string;      // Quincena en la que se descontará
+  descontado: boolean;            // true cuando ya se aplicó a una liquidación
+  liquidacionId?: string;         // id de la LiquidacionNomina donde se descontó
+  liquidacionFechaDescuento?: Date;
+  creadoPorId: string;
+  creadoPorNombre: string;
+  notas?: string;
+  createdAt: Date;
+  updatedAt?: Date;
 }
 
 export interface DesempenoOperaria {
@@ -534,6 +563,8 @@ export interface PermisosSistema {
   ordenesEnviarAFacturacion: boolean;
   facturasCerrar: boolean;
   bancosGestionar: boolean;
+  // Avances a empleados (Fase 8)
+  avancesGestionar: boolean;
   // Técnico (opcional, solo para rol técnico)
   tecnicoVistaAgenda?: 'dia' | 'semana' | 'mes';
   tecnicoSoloPropiasCitas?: boolean;
@@ -562,6 +593,7 @@ const TODO_FALSE: PermisosSistema = {
   cierreDiaEjecutar: false,
   pagosRegistrar: false, ordenesEnviarAFacturacion: false,
   facturasCerrar: false, bancosGestionar: false,
+  avancesGestionar: false,
 };
 
 const TODO_TRUE: PermisosSistema = {
@@ -577,6 +609,7 @@ const TODO_TRUE: PermisosSistema = {
   cierreDiaEjecutar: true,
   pagosRegistrar: true, ordenesEnviarAFacturacion: true,
   facturasCerrar: true, bancosGestionar: true,
+  avancesGestionar: true,
 };
 
 export const PERMISOS_TODO_FALSE: PermisosSistema = { ...TODO_FALSE };

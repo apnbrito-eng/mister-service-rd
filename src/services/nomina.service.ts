@@ -7,6 +7,7 @@ import {
 } from '../types';
 import { rangoQuincena } from '../utils/comisiones';
 import { parseOrden } from '../utils';
+import { obtenerAvancesPendientesDeQuincena, marcarAvanceDescontado } from './avances.service';
 
 const UMBRAL_BONO = 0.70;
 const BONO_MONTO = 5000;
@@ -108,6 +109,9 @@ export async function generarLiquidacion(
   const ordenesSnap = await getDocs(collection(db, 'ordenes_servicio'));
   const ordenes = ordenesSnap.docs.map(d => parseOrden(d.id, d.data() as Record<string, unknown>) as OrdenServicio);
 
+  // Avances pendientes asignados a esta quincena
+  const avancesQuincena = await obtenerAvancesPendientesDeQuincena(quincena);
+
   const esQ2 = quincena.endsWith('-Q2');
   const rangoMes = rangoMesCalendario(quincena);
 
@@ -162,6 +166,12 @@ export async function generarLiquidacion(
 
     const totalDevengado = sueldoBase + totalComisiones + bono;
 
+    // Avances pendientes a descontar de esta quincena para este empleado
+    const avancesEmp = avancesQuincena.filter(a => a.personalId === p.id);
+    const avancesIds = avancesEmp.map(a => a.id);
+    const totalAvances = avancesEmp.reduce((s, a) => s + a.monto, 0);
+    const totalNeto = Math.max(0, totalDevengado - totalAvances);
+
     const emp: LiquidacionEmpleado = {
       personalId: p.id,
       personalNombre: p.nombre,
@@ -180,9 +190,16 @@ export async function generarLiquidacion(
     if (citasAgendadasMes !== undefined) emp.citasAgendadasMes = citasAgendadasMes;
     if (citasCompletadasMes !== undefined) emp.citasCompletadasMes = citasCompletadasMes;
     if (bono > 0) emp.bono = bono;
+    if (avancesIds.length > 0) {
+      emp.avancesIds = avancesIds;
+      emp.totalAvances = totalAvances;
+      emp.totalNeto = totalNeto;
+    }
     return emp;
   });
 
+  // Total nómina = suma de totalDevengado (antes de avances)
+  // Total a pagar = suma de (totalDevengado - totalAvances)
   const totalNomina = empleados.reduce((s, e) => s + e.totalDevengado, 0);
 
   const data: Record<string, unknown> = {
@@ -233,9 +250,12 @@ export async function cerrarLiquidacion(
 
   // Marcar comisiones como liquidadas (en paralelo, errores individuales loggeados)
   const comisionesIds: string[] = [];
+  const avancesIds: string[] = [];
   empleados.forEach(e => {
-    const ids = (e.comisionesIds as string[]) || [];
-    ids.forEach(id => comisionesIds.push(id));
+    const cids = (e.comisionesIds as string[]) || [];
+    cids.forEach(id => comisionesIds.push(id));
+    const aids = (e.avancesIds as string[]) || [];
+    aids.forEach(id => avancesIds.push(id));
   });
   await Promise.all(comisionesIds.map(id =>
     updateDoc(doc(db, 'comisiones', id), {
@@ -244,6 +264,11 @@ export async function cerrarLiquidacion(
       liquidadaEn: ahora,
       liquidadaPor: cerradaPor.nombre,
     }).catch(err => console.error('Error liquidando comisión', id, err))
+  ));
+  // Marcar avances como descontados
+  await Promise.all(avancesIds.map(id =>
+    marcarAvanceDescontado(id, liquidacionId)
+      .catch(err => console.error('Error descontando avance', id, err))
   ));
 
   await updateDoc(ref, {
@@ -307,6 +332,9 @@ function serializarEmpleados(emps: LiquidacionEmpleado[]): Record<string, unknow
     if (e.citasAgendadasMes !== undefined) out.citasAgendadasMes = e.citasAgendadasMes;
     if (e.citasCompletadasMes !== undefined) out.citasCompletadasMes = e.citasCompletadasMes;
     if (e.bono !== undefined) out.bono = e.bono;
+    if (e.avancesIds && e.avancesIds.length > 0) out.avancesIds = e.avancesIds;
+    if (e.totalAvances !== undefined) out.totalAvances = e.totalAvances;
+    if (e.totalNeto !== undefined) out.totalNeto = e.totalNeto;
     if (e.notas) out.notas = e.notas;
     if (e.metodoPago) out.metodoPago = e.metodoPago;
     if (e.bancoDestino) out.bancoDestino = e.bancoDestino;
@@ -347,6 +375,9 @@ export function parseLiquidacion(id: string, raw: Record<string, unknown>): Liqu
       citasCompletadasMes: e.citasCompletadasMes as number | undefined,
       bono: e.bono as number | undefined,
       totalDevengado: (e.totalDevengado as number) || 0,
+      avancesIds: (e.avancesIds as string[]) || undefined,
+      totalAvances: e.totalAvances as number | undefined,
+      totalNeto: e.totalNeto as number | undefined,
       notas: e.notas as string | undefined,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       metodoPago: e.metodoPago as any,

@@ -42,6 +42,7 @@ import AgendaDia from './pages/AgendaDia';
 import MetricasMensuales from './pages/MetricasMensuales';
 import Bancos from './pages/Bancos';
 import FacturacionPendiente from './pages/FacturacionPendiente';
+import Avances from './pages/Avances';
 
 // Public website pages
 import PublicLayout from './components/public/PublicLayout';
@@ -178,6 +179,7 @@ function AppRoutes() {
         <Route path="historial-anuladas" element={<PermisoRoute permiso="ordenesVerEliminadas"><HistorialAnuladas /></PermisoRoute>} />
         <Route path="bancos" element={<PermisoRoute permiso="bancosGestionar"><Bancos /></PermisoRoute>} />
         <Route path="facturacion-pendiente" element={<RolRoute roles={['administrador', 'coordinadora']}><FacturacionPendiente /></RolRoute>} />
+        <Route path="avances" element={<PermisoRoute permiso="avancesGestionar"><Avances /></PermisoRoute>} />
         <Route path="configuracion/usuarios" element={<RolRoute roles={['administrador', 'coordinadora']}><GestionUsuarios /></RolRoute>} />
       </Route>
 

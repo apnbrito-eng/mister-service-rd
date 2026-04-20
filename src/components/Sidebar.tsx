@@ -84,6 +84,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
     { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: isAdmin || p('configuracionVer') },
     { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: isAdmin || userProfile?.rol === 'coordinadora' },
+    { to: '/admin/avances', icon: Wallet, label: 'Avances a Empleados', show: p('avancesGestionar') },
     { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: isAdmin || userProfile?.rol === 'coordinadora' || p('ordenesVerEliminadas') },
     { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: isAdmin || p('configuracionModificar') },
     { to: '/admin/bancos', icon: Building2, label: 'Bancos', show: p('bancosGestionar') },
