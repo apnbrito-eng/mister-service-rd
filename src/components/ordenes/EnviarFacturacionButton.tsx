@@ -24,16 +24,9 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
   const [saving, setSaving] = useState(false);
 
   const yaEnviada = !!orden.enviadaAFacturacion;
-  // Tiene "precio para facturar" si cualquiera de estos existe con valor > 0
-  // o si hay una cotización vinculada
-  const tienePrecio =
-    Number(orden.precioFinal || 0) > 0 ||
-    Number(orden.precioAprobado || 0) > 0 ||
-    Number(orden.precioSugerido || 0) > 0 ||
-    !!orden.cotizacionId ||
-    orden.estadoAprobacion === 'aprobado';
+  // Solo requerimos al menos un pago registrado. El precio se infiere del pago si no existe explícito.
   const tienePago = Number(orden.montoPagado || 0) > 0;
-  const habilitado = tienePrecio && tienePago && !yaEnviada && !orden.facturada;
+  const habilitado = tienePago && !yaEnviada && !orden.facturada;
 
   const handleClick = async () => {
     if (!habilitado) return;
@@ -116,11 +109,9 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
       onClick={handleClick}
       disabled={!habilitado || saving}
       title={
-        !tienePrecio
-          ? 'La orden necesita un precio definido (sugerido, aprobado o cotización)'
-          : !tienePago
-            ? 'Requiere al menos un pago registrado'
-            : 'Enviar a facturación'
+        !tienePago
+          ? 'Requiere al menos un pago registrado'
+          : 'Enviar a facturación'
       }
       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#0f3460] hover:bg-[#1a5fa8] text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
     >

@@ -475,6 +475,35 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
         gpsVerificado: typeof ic.gpsVerificado === 'boolean' ? ic.gpsVerificado : undefined,
       };
     })() : undefined,
+    // Pagos y facturación (Fase 7)
+    pagos: Array.isArray(raw.pagos)
+      ? (raw.pagos as Array<Record<string, unknown>>).map(p => ({
+          id: (p.id as string) || `pago_${Math.random().toString(36).slice(2)}`,
+          metodo: (p.metodo as 'efectivo' | 'transferencia' | 'tarjeta') || 'efectivo',
+          monto: Number(p.monto) || 0,
+          fecha: parseFirestoreDate(p.fecha) || new Date(),
+          recibidoPorId: (p.recibidoPorId as string) || undefined,
+          recibidoPorNombre: (p.recibidoPorNombre as string) || undefined,
+          bancoId: (p.bancoId as string) || undefined,
+          bancoNombre: (p.bancoNombre as string) || undefined,
+          referencia: (p.referencia as string) || undefined,
+          notas: (p.notas as string) || undefined,
+          registradoPorId: (p.registradoPorId as string) || '',
+          registradoPorNombre: (p.registradoPorNombre as string) || '',
+        }))
+      : undefined,
+    montoPagado: typeof raw.montoPagado === 'number' ? raw.montoPagado : undefined,
+    estadoPago: (raw.estadoPago as 'pendiente' | 'parcial' | 'completo') || undefined,
+    enviadaAFacturacion: (raw.enviadaAFacturacion as boolean) || undefined,
+    enviadaAFacturacionAt: parseFirestoreDate(raw.enviadaAFacturacionAt) || undefined,
+    enviadaAFacturacionPorId: (raw.enviadaAFacturacionPorId as string) || undefined,
+    enviadaAFacturacionPorNombre: (raw.enviadaAFacturacionPorNombre as string) || undefined,
+    facturada: (raw.facturada as boolean) || undefined,
+    facturaId: (raw.facturaId as string) || undefined,
+    facturaNumero: (raw.facturaNumero as string) || undefined,
+    facturadaAt: parseFirestoreDate(raw.facturadaAt) || undefined,
+    facturadaPorId: (raw.facturadaPorId as string) || undefined,
+    facturadaPorNombre: (raw.facturadaPorNombre as string) || undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden) || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),
