@@ -12,7 +12,8 @@ import Modal from '../components/Modal';
 import Badge from '../components/Badge';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
-import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench } from 'lucide-react';
+import EditarClienteModal from '../components/clientes/EditarClienteModal';
+import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench, Edit2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Clientes() {
@@ -26,6 +27,7 @@ export default function Clientes() {
   const [historialOrdenes, setHistorialOrdenes] = useState<OrdenServicio[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
 
@@ -320,7 +322,18 @@ export default function Clientes() {
           {selectedCliente ? (
             <div className="space-y-4">
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">{selectedCliente.nombre}</h2>
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
+                  <h2 className="text-xl font-bold text-gray-900">{selectedCliente.nombre}</h2>
+                  {puedeModificar && (
+                    <button
+                      type="button"
+                      onClick={() => setShowEditModal(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0f3460] hover:bg-[#1a5fa8] text-white"
+                    >
+                      <Edit2 size={13} /> Editar cliente
+                    </button>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Phone size={14} /> {formatTelefono(selectedCliente.telefono)}
@@ -328,6 +341,12 @@ export default function Clientes() {
                   {selectedCliente.email && (
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Mail size={14} /> {selectedCliente.email}
+                    </div>
+                  )}
+                  {(selectedCliente.rnc || selectedCliente.cedula) && (
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <span className="font-medium">{selectedCliente.rnc ? 'RNC:' : 'Cédula:'}</span>
+                      {selectedCliente.rnc || selectedCliente.cedula}
                     </div>
                   )}
                   {selectedCliente.direccion && (
@@ -502,6 +521,19 @@ export default function Clientes() {
           </div>
         </form>
       </Modal>
+
+      {/* Modal editar cliente — reutiliza el componente con soporte de direcciones, RNC, cédula */}
+      {selectedCliente && (
+        <EditarClienteModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          clienteId={selectedCliente.id}
+          onUpdated={(c) => {
+            // Actualizar el cliente seleccionado con los nuevos datos
+            setSelectedCliente({ ...selectedCliente, ...c });
+          }}
+        />
+      )}
     </div>
   );
 }
