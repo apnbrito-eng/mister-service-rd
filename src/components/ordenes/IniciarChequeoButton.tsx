@@ -51,7 +51,9 @@ export default function IniciarChequeoButton({
 }: Props) {
   const [procesando, setProcesando] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const gpsRef = useRef<{ lat: number; lng: number } | null>(null);
+  // Promise del GPS en curso (se inicia AL MISMO TIEMPO que abrimos la cámara,
+  // en paralelo, para no romper el user-gesture que iOS Safari requiere)
+  const gpsPromiseRef = useRef<Promise<{ lat: number; lng: number } | null> | null>(null);
 
   // Reglas de visibilidad
   const yaIniciado = !!orden.inicioChequeo;
@@ -69,47 +71,30 @@ export default function IniciarChequeoButton({
   if (!ordenActiva || !esDiaCita) return null;
 
   /**
-   * Al tocar el botón: PRIMERO capturamos GPS (obligatorio), LUEGO abrimos la cámara.
-   * Si el GPS falla, nunca abrimos la cámara — así no se pierde la foto.
+   * Al tocar el botón:
+   * 1) Iniciamos GPS en paralelo (promise guardada en ref).
+   * 2) Inmediatamente abrimos la cámara — esto REQUIERE user-gesture directo en iOS.
+   * 3) Cuando el técnico tome la foto, handleArchivo espera la promesa de GPS.
+   *
+   * Este orden es crítico: si hacemos `await` antes de `input.click()`, iOS Safari
+   * pierde el gesto y la cámara no abre. Por eso inicio el GPS SIN await.
    */
-  const dispararCamara = async () => {
+  const dispararCamara = () => {
     if (procesando) return;
     setProcesando(true);
 
-    // Race entre GPS y timeout de 12s
+    // 1) Iniciar GPS en paralelo (race con timeout de 12s) SIN await
     const MAX_MS = 12000;
-    toast.loading(`Verificando GPS (hasta ${MAX_MS / 1000}s)...`, { id: 'chequeo' });
-    try {
-      const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), MAX_MS));
-      const gps = await Promise.race([obtenerUbicacionGPS(), timeoutPromise]);
-      toast.dismiss('chequeo');
+    gpsPromiseRef.current = Promise.race([
+      obtenerUbicacionGPS(),
+      new Promise<null>(resolve => setTimeout(() => resolve(null), MAX_MS)),
+    ]);
 
-      if (!gps) {
-        // No enganchó — dar opción al técnico de continuar sin GPS
-        const continuar = confirm(
-          'No pudimos obtener tu ubicación GPS.\n\n' +
-          '¿Deseas iniciar el chequeo SIN verificación de ubicación?\n\n' +
-          'Se registrará la foto pero el chequeo quedará marcado como "GPS no verificado".',
-        );
-        if (!continuar) {
-          setProcesando(false);
-          return;
-        }
-        gpsRef.current = null; // marca que no hay GPS
-      } else {
-        gpsRef.current = gps;
-      }
-
-      if (inputRef.current) {
-        inputRef.current.value = '';
-        inputRef.current.click();
-      } else {
-        setProcesando(false);
-      }
-    } catch (err) {
-      toast.dismiss('chequeo');
-      console.error(err);
-      toast.error('Error obteniendo ubicación');
+    // 2) Abrir cámara inmediatamente — user gesture preservado
+    if (inputRef.current) {
+      inputRef.current.value = '';
+      inputRef.current.click();
+    } else {
       setProcesando(false);
     }
   };
@@ -119,19 +104,36 @@ export default function IniciarChequeoButton({
       setProcesando(false);
       return;
     }
-    // gpsRef puede ser null si el técnico eligió continuar sin GPS
-    const gps = gpsRef.current;
     try {
+      // Esperar a que el GPS (que empezó al abrir la cámara) termine.
+      // Si el técnico se tarda tomando la foto, el GPS ya debería estar listo.
+      toast.loading('Procesando ubicación...', { id: 'chequeo' });
+      const gps = await (gpsPromiseRef.current || Promise.resolve(null));
+
+      // Si GPS falló, preguntar al técnico si quiere continuar sin verificación
+      if (!gps) {
+        toast.dismiss('chequeo');
+        const continuar = confirm(
+          'No pudimos obtener tu ubicación GPS.\n\n' +
+          '¿Deseas iniciar el chequeo SIN verificación de ubicación?\n\n' +
+          'La foto se registrará pero el chequeo quedará marcado como "GPS no verificado".',
+        );
+        if (!continuar) {
+          setProcesando(false);
+          return;
+        }
+      }
+
       // Validar distancia solo si tenemos ambas coords
       let distancia: number | undefined;
       if (gps && typeof orden.clienteLat === 'number' && typeof orden.clienteLng === 'number') {
         distancia = distanciaMetros(gps.lat, gps.lng, orden.clienteLat, orden.clienteLng);
         if (distancia > UMBRAL_LEJOS_METROS) {
+          toast.dismiss('chequeo');
           const ok = confirm(
             `Estás a ${distancia} m del cliente (más de ${UMBRAL_LEJOS_METROS} m). ¿Confirmar inicio de chequeo de todas formas?`,
           );
           if (!ok) {
-            gpsRef.current = null;
             setProcesando(false);
             return;
           }
@@ -259,7 +261,7 @@ export default function IniciarChequeoButton({
       console.error(err);
       toast.error('Error al iniciar el chequeo', { id: 'chequeo' });
     } finally {
-      gpsRef.current = null;
+      gpsPromiseRef.current = null;
       setProcesando(false);
     }
   };
@@ -283,7 +285,7 @@ export default function IniciarChequeoButton({
             handleArchivo(f);
           } else {
             // Usuario canceló la cámara sin tomar foto
-            gpsRef.current = null;
+            gpsPromiseRef.current = null;
             setProcesando(false);
           }
         }}
