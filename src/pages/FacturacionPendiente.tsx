@@ -18,6 +18,7 @@ import { puede } from '../utils/permisos';
 import { crearRegistroAuditoria, formatFecha, parseOrden } from '../utils';
 import { siguienteNumeroFactura } from '../services/contadores.service';
 import { registrarComisionPorFactura, desglosarTotalConITBIS, calcularCostoPiezasDeItems } from '../utils/comisiones';
+import { obtenerConfigFiscal } from '../services/configFiscal.service';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Inbox, Receipt, ArrowRight, Banknote, ArrowRightLeft, CreditCard, Trash2, Plus, Check } from 'lucide-react';
@@ -278,8 +279,12 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
         return obj;
       });
 
+      // Leer tasa ITBIS actual (configurable)
+      const configFiscal = await obtenerConfigFiscal();
+      const itbisPct = configFiscal.itbisPorcentaje;
+
       // Desglose fiscal (el total cobrado ya incluye ITBIS → desglosar)
-      const desglose = desglosarTotalConITBIS(totalItems);
+      const desglose = desglosarTotalConITBIS(totalItems, itbisPct);
       const costoPiezas = calcularCostoPiezasDeItems(itemsLimpios as unknown as import('../types').ItemCotizacion[]);
       const gananciaNeta = Math.max(0, Math.round((desglose.subtotal - costoPiezas) * 100) / 100);
 
@@ -324,6 +329,7 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
           totalFactura: totalItems,
           items: itemsLimpios as unknown as import('../types').ItemCotizacion[],
           userProfile,
+          itbisPorcentaje: itbisPct,
         });
         // Denormalizar los datos de comisión en el doc de factura
         if (comisionInfo && comisionInfo.comisionId && comisionInfo.tecnicoId) {

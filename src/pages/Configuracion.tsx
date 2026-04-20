@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff, MapPin, Loader2 } from 'lucide-react';
+import { Settings, Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff, MapPin, Loader2, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfigGPS, ProveedorGPS, Personal, OrdenServicio } from '../types';
 import { obtenerConfigGPS, guardarConfigGPS } from '../services/gps.service';
 import { geocodificarDireccion } from '../services/geocoding.service';
+import { suscribirConfigFiscal, actualizarConfigFiscal, ConfigFiscal } from '../services/configFiscal.service';
 import { collection, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { parseOrden } from '../utils';
@@ -21,6 +22,45 @@ export default function Configuracion() {
   const [geocodingResumen, setGeocodingResumen] = useState<string>('');
   const abortRef = useRef<AbortController | null>(null);
   const cancelarRef = useRef(false);
+
+  // Config fiscal (ITBIS + datos empresa fiscales)
+  const [configFiscal, setConfigFiscalState] = useState<ConfigFiscal>({
+    itbisPorcentaje: 18,
+    rncEmpresa: '133-118191',
+    razonSocial: 'Fixman SRL',
+  });
+  const [fiscalSaving, setFiscalSaving] = useState(false);
+
+  useEffect(() => {
+    const unsub = suscribirConfigFiscal(cfg => setConfigFiscalState(cfg));
+    return () => unsub();
+  }, []);
+
+  const handleSaveFiscal = async () => {
+    if (!puedeModificar) return;
+    if (configFiscal.itbisPorcentaje < 0 || configFiscal.itbisPorcentaje > 100) {
+      toast.error('El porcentaje de ITBIS debe estar entre 0 y 100');
+      return;
+    }
+    setFiscalSaving(true);
+    try {
+      await actualizarConfigFiscal(
+        {
+          itbisPorcentaje: Number(configFiscal.itbisPorcentaje),
+          rncEmpresa: configFiscal.rncEmpresa?.trim() || undefined,
+          razonSocial: configFiscal.razonSocial?.trim() || undefined,
+          direccionFiscal: configFiscal.direccionFiscal?.trim() || undefined,
+        },
+        userProfile?.nombre,
+      );
+      toast.success('Configuración fiscal guardada');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar');
+    } finally {
+      setFiscalSaving(false);
+    }
+  };
 
   const handleGeocodingBatch = async () => {
     if (!esAdmin) return;
@@ -241,6 +281,119 @@ export default function Configuracion() {
               className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors">
               Guardar Cambios
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* Configuración Fiscal (ITBIS, RNC, Razón Social) */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <FileText size={20} className="text-[#1a5fa8]" />
+          <h2 className="text-lg font-semibold text-gray-900">Configuración Fiscal</h2>
+        </div>
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-900 mb-4">
+          Estos datos se usan al generar facturas. El porcentaje de ITBIS se aplica al desglose de cada factura y afecta la ganancia neta sobre la que se calculan las comisiones.
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Porcentaje de ITBIS <span className="text-red-500">*</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={configFiscal.itbisPorcentaje}
+                onChange={e => setConfigFiscalState(f => ({ ...f, itbisPorcentaje: Number(e.target.value) }))}
+                disabled={!puedeModificar}
+                className="w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+              />
+              <span className="text-sm text-gray-500">%</span>
+              <span className="text-xs text-gray-400 ml-2">Estándar RD: 18%</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Razón Social</label>
+              <input
+                type="text"
+                value={configFiscal.razonSocial || ''}
+                onChange={e => setConfigFiscalState(f => ({ ...f, razonSocial: e.target.value }))}
+                disabled={!puedeModificar}
+                placeholder="Fixman SRL"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">RNC de la empresa</label>
+              <input
+                type="text"
+                value={configFiscal.rncEmpresa || ''}
+                onChange={e => setConfigFiscalState(f => ({ ...f, rncEmpresa: e.target.value }))}
+                disabled={!puedeModificar}
+                placeholder="133-118191"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Dirección fiscal</label>
+            <input
+              type="text"
+              value={configFiscal.direccionFiscal || ''}
+              onChange={e => setConfigFiscalState(f => ({ ...f, direccionFiscal: e.target.value }))}
+              disabled={!puedeModificar}
+              placeholder="Dirección que aparecerá en las facturas"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+            />
+          </div>
+
+          {/* Preview del desglose */}
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 text-xs">
+            <div className="font-semibold text-gray-700 mb-1">Vista previa del desglose para una factura de RD$ 10,000:</div>
+            {(() => {
+              const total = 10000;
+              const pct = Number(configFiscal.itbisPorcentaje) || 0;
+              const sub = total / (1 + pct / 100);
+              const itbis = total - sub;
+              return (
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  <div className="bg-white rounded p-2">
+                    <div className="text-[10px] text-gray-500">Subtotal</div>
+                    <div className="font-semibold text-gray-900">RD${sub.toFixed(2)}</div>
+                  </div>
+                  <div className="bg-white rounded p-2">
+                    <div className="text-[10px] text-gray-500">ITBIS ({pct}%)</div>
+                    <div className="font-semibold text-orange-600">RD${itbis.toFixed(2)}</div>
+                  </div>
+                  <div className="bg-white rounded p-2">
+                    <div className="text-[10px] text-gray-500">Total</div>
+                    <div className="font-semibold text-[#0f3460]">RD${total.toFixed(2)}</div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
+          {puedeModificar && (
+            <button
+              onClick={handleSaveFiscal}
+              disabled={fiscalSaving}
+              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+            >
+              {fiscalSaving ? 'Guardando...' : 'Guardar Configuración Fiscal'}
+            </button>
+          )}
+
+          {configFiscal.updatedAt && (
+            <p className="text-[11px] text-gray-400">
+              Última actualización: {configFiscal.updatedAt.toLocaleString('es-DO')}
+              {configFiscal.updatedPor ? ` · por ${configFiscal.updatedPor}` : ''}
+            </p>
           )}
         </div>
       </div>

@@ -5,23 +5,28 @@ import { db } from '../firebase/config';
 import { OrdenServicio, Personal, Usuario, ItemCotizacion } from '../types';
 import { crearRegistroAuditoria } from './index';
 
-/** ITBIS (impuesto al valor agregado) estándar de RD. */
+/** ITBIS (impuesto al valor agregado) estándar de RD. Fallback cuando no hay config. */
 export const ITBIS_PORCENTAJE = 18;
 
 /**
  * Desglosa un total que YA incluye ITBIS:
- *   subtotal = total / 1.18
+ *   subtotal = total / (1 + porcentaje/100)
  *   itbis = total - subtotal
+ * El porcentaje es configurable; si no se pasa, usa el default (18%).
  */
-export function desglosarTotalConITBIS(total: number): {
+export function desglosarTotalConITBIS(
+  total: number,
+  itbisPorcentaje: number = ITBIS_PORCENTAJE,
+): {
   subtotal: number;
   itbis: number;
   total: number;
   itbisPorcentaje: number;
 } {
-  const subtotal = Math.round((total / (1 + ITBIS_PORCENTAJE / 100)) * 100) / 100;
+  const pct = typeof itbisPorcentaje === 'number' && itbisPorcentaje >= 0 ? itbisPorcentaje : ITBIS_PORCENTAJE;
+  const subtotal = Math.round((total / (1 + pct / 100)) * 100) / 100;
   const itbis = Math.round((total - subtotal) * 100) / 100;
-  return { subtotal, itbis, total, itbisPorcentaje: ITBIS_PORCENTAJE };
+  return { subtotal, itbis, total, itbisPorcentaje: pct };
 }
 
 /**
@@ -35,6 +40,7 @@ export function calcularDesgloseFactura(args: {
   total: number;
   items?: ItemCotizacion[];
   porcentajeTecnico: number;
+  itbisPorcentaje?: number;
 }): {
   subtotal: number;
   itbis: number;
@@ -44,7 +50,7 @@ export function calcularDesgloseFactura(args: {
   comisionMonto: number;
   comisionPorcentaje: number;
 } {
-  const { subtotal, itbis, itbisPorcentaje } = desglosarTotalConITBIS(args.total);
+  const { subtotal, itbis, itbisPorcentaje } = desglosarTotalConITBIS(args.total, args.itbisPorcentaje);
   const costoPiezas = calcularCostoPiezasDeItems(args.items);
   const gananciaNeta = Math.max(0, Math.round((subtotal - costoPiezas) * 100) / 100);
   const comisionMonto = Math.round(gananciaNeta * (args.porcentajeTecnico / 100) * 100) / 100;
@@ -214,8 +220,10 @@ export async function registrarComisionPorFactura(args: {
   totalFactura: number;
   items?: ItemCotizacion[];
   userProfile: Usuario | null;
+  /** Si no se pasa, usa el default 18% */
+  itbisPorcentaje?: number;
 }): Promise<{ comisionId: string | null; comisionMonto: number; gananciaNeta: number; subtotal: number; itbis: number; costoPiezas: number; porcentaje: number; tecnicoId: string; tecnicoNombre: string }> {
-  const { orden, facturaId, facturaNumero, totalFactura, items, userProfile } = args;
+  const { orden, facturaId, facturaNumero, totalFactura, items, userProfile, itbisPorcentaje } = args;
   const usuario = userProfile?.nombre || 'Sistema';
 
   if (!orden.tecnicoId) {
@@ -234,7 +242,7 @@ export async function registrarComisionPorFactura(args: {
   const { personal, porcentaje } = await obtenerTecnicoParaComision(orden.tecnicoId);
   const tecnicoNombre = orden.tecnicoNombre || personal?.nombre || 'Técnico';
 
-  const desglose = calcularDesgloseFactura({ total: totalFactura, items, porcentajeTecnico: porcentaje });
+  const desglose = calcularDesgloseFactura({ total: totalFactura, items, porcentajeTecnico: porcentaje, itbisPorcentaje });
 
   const fechaCobro = new Date();
   const quincena = calcularQuincenaActual(fechaCobro);
