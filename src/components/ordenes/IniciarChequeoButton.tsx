@@ -51,6 +51,7 @@ export default function IniciarChequeoButton({
 }: Props) {
   const [procesando, setProcesando] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const gpsRef = useRef<{ lat: number; lng: number } | null>(null);
 
   // Reglas de visibilidad
   const yaIniciado = !!orden.inicioChequeo;
@@ -67,46 +68,70 @@ export default function IniciarChequeoButton({
   }
   if (!ordenActiva || !esDiaCita) return null;
 
-  const dispararCamara = () => {
-    if (inputRef.current) {
-      inputRef.current.value = '';
-      inputRef.current.click();
-    }
-  };
-
-  const handleArchivo = async (file: File) => {
-    if (!file) return;
+  /**
+   * Al tocar el botón: PRIMERO capturamos GPS (obligatorio), LUEGO abrimos la cámara.
+   * Si el GPS falla, nunca abrimos la cámara — así no se pierde la foto.
+   */
+  const dispararCamara = async () => {
+    if (procesando) return;
     setProcesando(true);
+    toast.loading('Verificando GPS...', { id: 'chequeo' });
     try {
-      // 1. Capturar GPS — obligatorio. Si falla, abortar.
-      toast.loading('Obteniendo ubicación...', { id: 'chequeo' });
       const gps = await obtenerUbicacionGPS();
+      toast.dismiss('chequeo');
       if (!gps) {
         toast.error(
-          'No se pudo obtener la ubicación. Activa el GPS y permite el acceso a la ubicación en tu navegador para continuar.',
-          { id: 'chequeo', duration: 6000 },
+          'No se pudo obtener tu ubicación. Activa el GPS, permite acceso a la ubicación y vuelve a intentar.',
+          { duration: 6000 },
         );
         setProcesando(false);
         return;
       }
+      // Guardamos el GPS en ref para usarlo después de tomar la foto
+      gpsRef.current = gps;
 
-      // 2. Si tenemos coords del cliente, comparar distancia
+      if (inputRef.current) {
+        inputRef.current.value = '';
+        inputRef.current.click();
+      } else {
+        setProcesando(false);
+      }
+    } catch (err) {
+      toast.dismiss('chequeo');
+      console.error(err);
+      toast.error('Error obteniendo ubicación');
+      setProcesando(false);
+    }
+  };
+
+  const handleArchivo = async (file: File) => {
+    const gps = gpsRef.current;
+    if (!file || !gps) {
+      // Si no hay GPS (caso raro), abortar limpio
+      setProcesando(false);
+      if (!gps) {
+        toast.error('Se perdió la ubicación. Intenta de nuevo.');
+      }
+      return;
+    }
+    try {
+      // Validar distancia si tenemos coords del cliente
       let distancia: number | undefined;
       if (typeof orden.clienteLat === 'number' && typeof orden.clienteLng === 'number') {
         distancia = distanciaMetros(gps.lat, gps.lng, orden.clienteLat, orden.clienteLng);
         if (distancia > UMBRAL_LEJOS_METROS) {
-          toast.dismiss('chequeo');
           const ok = confirm(
             `Estás a ${distancia} m del cliente (más de ${UMBRAL_LEJOS_METROS} m). ¿Confirmar inicio de chequeo de todas formas?`,
           );
           if (!ok) {
+            gpsRef.current = null;
             setProcesando(false);
             return;
           }
         }
       }
 
-      // 3. Subir foto
+      // Subir foto
       toast.loading('Subiendo foto...', { id: 'chequeo' });
       const fotoUrl = await subirFotoInicioChequeo(orden.id, file);
 
@@ -222,6 +247,7 @@ export default function IniciarChequeoButton({
       console.error(err);
       toast.error('Error al iniciar el chequeo', { id: 'chequeo' });
     } finally {
+      gpsRef.current = null;
       setProcesando(false);
     }
   };
@@ -241,7 +267,13 @@ export default function IniciarChequeoButton({
         className="hidden"
         onChange={e => {
           const f = e.target.files?.[0];
-          if (f) handleArchivo(f);
+          if (f) {
+            handleArchivo(f);
+          } else {
+            // Usuario canceló la cámara sin tomar foto
+            gpsRef.current = null;
+            setProcesando(false);
+          }
         }}
       />
       <button

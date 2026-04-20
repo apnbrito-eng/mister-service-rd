@@ -41,18 +41,31 @@ export async function subirFotoInicioChequeo(
   return await getDownloadURL(ref);
 }
 
-/** Obtiene posición GPS del dispositivo */
+/**
+ * Obtiene posición GPS del dispositivo con estrategia de 2 pasos:
+ *  1) Intenta alta precisión (GPS físico) con timeout 15s.
+ *  2) Si falla, reintenta con baja precisión (WiFi/celular) con timeout 10s.
+ *  3) Si ambos fallan, devuelve null.
+ *
+ * Motivo del fallback: en Android en interiores, el GPS físico puede tardar 30+ segundos.
+ * La baja precisión usa red WiFi/celular y responde en 1-3s con ~100m de exactitud.
+ */
 export function obtenerUbicacionGPS(): Promise<{ lat: number; lng: number } | null> {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      resolve(null);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(null),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+  if (!navigator.geolocation) return Promise.resolve(null);
+
+  const intentar = (enableHighAccuracy: boolean, timeout: number) =>
+    new Promise<{ lat: number; lng: number } | null>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => resolve(null),
+        { enableHighAccuracy, timeout, maximumAge: 0 },
+      );
+    });
+
+  return intentar(true, 15000).then((alta) => {
+    if (alta) return alta;
+    // Fallback rápido cuando el GPS físico no responde
+    return intentar(false, 10000);
   });
 }
 
