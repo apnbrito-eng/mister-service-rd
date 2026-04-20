@@ -632,21 +632,74 @@ export interface Banco {
   nombre: string;
   activo: boolean;
   orden?: number;
+  /** Número de cuenta */
+  numeroCuenta?: string;
+  /** Tipo de cuenta */
+  tipoCuenta?: 'ahorro' | 'corriente';
+  /** Titular de la cuenta */
+  titular?: string;
+  /** RNC (cuando el titular es una empresa) */
+  rnc?: string;
+  /** Cédula (cuando el titular es persona física) */
+  cedula?: string;
+  /** Email para comprobantes (opcional) */
+  emailComprobante?: string;
   createdAt: Date;
   updatedAt?: Date;
 }
 
-export const BANCOS_RD_SEED: string[] = [
-  'Banco Popular Dominicano',
-  'Banreservas',
-  'BHD',
-  'Scotiabank',
-  'Banco Santa Cruz',
-  'Banesco',
-  'APAP',
-  'Banco Caribe',
-  'Promerica',
-  'Banco Ademi',
+/** Datos de seed para los bancos reales de Mister Service RD. */
+export interface BancoSeed {
+  nombre: string;
+  numeroCuenta: string;
+  tipoCuenta: 'ahorro' | 'corriente';
+  titular: string;
+  rnc?: string;
+  cedula?: string;
+  emailComprobante?: string;
+}
+
+export const BANCOS_RD_SEED: BancoSeed[] = [
+  {
+    nombre: 'Banco Popular',
+    numeroCuenta: '843776782',
+    tipoCuenta: 'corriente',
+    titular: 'Fixman SRL',
+    rnc: '133-118191',
+    emailComprobante: 'misterservicerd@gmail.com',
+  },
+  {
+    nombre: 'BHD',
+    numeroCuenta: '27792170018',
+    tipoCuenta: 'ahorro',
+    titular: 'Jorge L. Brito',
+    cedula: '229-0015616-1',
+    emailComprobante: 'misterservicerd@gmail.com',
+  },
+  {
+    nombre: 'Banreservas',
+    numeroCuenta: '9600374955',
+    tipoCuenta: 'ahorro',
+    titular: 'Jorge L. Brito',
+    cedula: '229-0015616-1',
+    emailComprobante: 'misterservicerd@gmail.com',
+  },
+  {
+    nombre: 'Banco Santa Cruz',
+    numeroCuenta: '11342010005405',
+    tipoCuenta: 'ahorro',
+    titular: 'Jorge L. Brito',
+    cedula: '229-0015616-1',
+    emailComprobante: 'misterservicerd@gmail.com',
+  },
+  {
+    nombre: 'Scotiabank',
+    numeroCuenta: '86209610981',
+    tipoCuenta: 'ahorro',
+    titular: 'Jorge L. Brito',
+    cedula: '229-0015616-1',
+    emailComprobante: 'misterservicerd@gmail.com',
+  },
 ];
 
 /**

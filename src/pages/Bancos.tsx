@@ -7,12 +7,34 @@ import {
   crearBanco,
   actualizarBanco,
   eliminarBanco,
-  seedBancosSiVacio,
+  migrarBancosGenericosAReales,
 } from '../services/bancos.service';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
+
+interface FormState {
+  nombre: string;
+  numeroCuenta: string;
+  tipoCuenta: 'ahorro' | 'corriente';
+  titular: string;
+  rnc: string;
+  cedula: string;
+  emailComprobante: string;
+  orden: number | '';
+}
+
+const initialForm: FormState = {
+  nombre: '',
+  numeroCuenta: '',
+  tipoCuenta: 'ahorro',
+  titular: '',
+  rnc: '',
+  cedula: '',
+  emailComprobante: '',
+  orden: '',
+};
 
 export default function Bancos() {
   const { userProfile } = useApp();
@@ -20,15 +42,19 @@ export default function Bancos() {
   const [bancos, setBancos] = useState<Banco[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Banco | null>(null);
-  const [nombre, setNombre] = useState('');
-  const [orden, setOrden] = useState<number | ''>('');
+  const [form, setForm] = useState<FormState>(initialForm);
   const [saving, setSaving] = useState(false);
 
   const puedeGestionar = puede(userProfile, 'bancosGestionar');
 
   useEffect(() => {
-    // Seed inicial si está vacío
-    seedBancosSiVacio().catch(err => console.warn('seed bancos:', err));
+    // Migración: si los bancos son los genéricos viejos, reemplazarlos por los reales
+    migrarBancosGenericosAReales()
+      .then(n => {
+        if (n > 0) toast.success(`Bancos actualizados (${n})`);
+      })
+      .catch(err => console.warn('migración bancos:', err));
+
     const unsub = suscribirBancos(list => {
       setBancos(list);
       setLoading(false);
@@ -38,41 +64,58 @@ export default function Bancos() {
 
   const abrirNuevo = () => {
     setEditing(null);
-    setNombre('');
-    setOrden('');
+    setForm(initialForm);
     setShowModal(true);
   };
 
   const abrirEditar = (b: Banco) => {
     setEditing(b);
-    setNombre(b.nombre);
-    setOrden(typeof b.orden === 'number' ? b.orden : '');
+    setForm({
+      nombre: b.nombre,
+      numeroCuenta: b.numeroCuenta || '',
+      tipoCuenta: b.tipoCuenta || 'ahorro',
+      titular: b.titular || '',
+      rnc: b.rnc || '',
+      cedula: b.cedula || '',
+      emailComprobante: b.emailComprobante || '',
+      orden: typeof b.orden === 'number' ? b.orden : '',
+    });
     setShowModal(true);
   };
 
   const cerrar = () => {
     setShowModal(false);
     setEditing(null);
-    setNombre('');
-    setOrden('');
+    setForm(initialForm);
+  };
+
+  const setF = <K extends keyof FormState>(k: K, v: FormState[K]) => {
+    setForm(f => ({ ...f, [k]: v }));
   };
 
   const guardar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nombre.trim()) {
+    if (!form.nombre.trim()) {
       toast.error('El nombre es obligatorio');
       return;
     }
     setSaving(true);
     try {
+      const payload = {
+        nombre: form.nombre.trim(),
+        numeroCuenta: form.numeroCuenta.trim() || undefined,
+        tipoCuenta: form.tipoCuenta,
+        titular: form.titular.trim() || undefined,
+        rnc: form.rnc.trim() || undefined,
+        cedula: form.cedula.trim() || undefined,
+        emailComprobante: form.emailComprobante.trim() || undefined,
+        orden: typeof form.orden === 'number' ? form.orden : undefined,
+      };
       if (editing) {
-        await actualizarBanco(editing.id, {
-          nombre: nombre.trim(),
-          orden: typeof orden === 'number' ? orden : undefined,
-        });
+        await actualizarBanco(editing.id, payload);
         toast.success('Banco actualizado');
       } else {
-        await crearBanco(nombre.trim(), typeof orden === 'number' ? orden : undefined);
+        await crearBanco({ ...payload, nombre: payload.nombre });
         toast.success('Banco creado');
       }
       cerrar();
@@ -115,7 +158,7 @@ export default function Bancos() {
           <div>
             <h1 className="text-2xl font-bold text-[#0f3460]">Bancos</h1>
             <p className="text-gray-500 text-sm">
-              Destinos de transferencias que las operarias pueden seleccionar al registrar un pago.
+              Cuentas para que los clientes hagan transferencias. Las operarias las verán al registrar un pago.
             </p>
           </div>
         </div>
@@ -134,8 +177,10 @@ export default function Bancos() {
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 w-16">Orden</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 w-16">#</th>
                 <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Banco</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Cuenta</th>
+                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Titular</th>
                 <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Estado</th>
                 <th className="text-right text-xs font-semibold text-gray-500 px-4 py-3">Acciones</th>
               </tr>
@@ -143,8 +188,8 @@ export default function Bancos() {
             <tbody className="divide-y divide-gray-100">
               {bancos.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-10 text-center text-sm text-gray-400">
-                    Aún no hay bancos registrados. Agrega el primero con el botón "Nuevo banco".
+                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">
+                    Aún no hay bancos. Agrega el primero con "Nuevo banco".
                   </td>
                 </tr>
               )}
@@ -152,7 +197,21 @@ export default function Bancos() {
                 <tr key={b.id} className={`hover:bg-gray-50 ${!b.activo ? 'opacity-60' : ''}`}>
                   <td className="px-4 py-3 text-sm text-gray-600">{b.orden ?? '—'}</td>
                   <td className="px-4 py-3">
-                    <span className="text-sm font-medium text-gray-900">{b.nombre}</span>
+                    <div className="text-sm font-medium text-gray-900">{b.nombre}</div>
+                    {b.tipoCuenta && (
+                      <div className="text-[11px] text-gray-500 capitalize">Cuenta de {b.tipoCuenta}</div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-700 font-mono">
+                    {b.numeroCuenta || <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="text-sm text-gray-900">{b.titular || <span className="text-gray-400">—</span>}</div>
+                    {(b.rnc || b.cedula) && (
+                      <div className="text-[11px] text-gray-500">
+                        {b.rnc ? `RNC ${b.rnc}` : `Cédula ${b.cedula}`}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -203,34 +262,111 @@ export default function Bancos() {
       <Modal
         isOpen={showModal}
         onClose={cerrar}
-        title={editing ? 'Editar banco' : 'Nuevo banco'}
-        size="sm"
+        title={editing ? `Editar banco — ${editing.nombre}` : 'Nuevo banco'}
+        size="md"
       >
         <form onSubmit={guardar} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
-            <input
-              type="text"
-              value={nombre}
-              onChange={e => setNombre(e.target.value)}
-              placeholder="Ej: Banco Popular Dominicano"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-              autoFocus
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Nombre del banco *</label>
+              <input
+                type="text"
+                value={form.nombre}
+                onChange={e => setF('nombre', e.target.value)}
+                placeholder="Ej: BHD"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Número de cuenta</label>
+              <input
+                type="text"
+                value={form.numeroCuenta}
+                onChange={e => setF('numeroCuenta', e.target.value)}
+                placeholder="27792170018"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Tipo de cuenta</label>
+              <select
+                value={form.tipoCuenta}
+                onChange={e => setF('tipoCuenta', e.target.value as 'ahorro' | 'corriente')}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              >
+                <option value="ahorro">Ahorro</option>
+                <option value="corriente">Corriente</option>
+              </select>
+            </div>
+
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-700 mb-1">Titular de la cuenta</label>
+              <input
+                type="text"
+                value={form.titular}
+                onChange={e => setF('titular', e.target.value)}
+                placeholder="Jorge L. Brito  /  Fixman SRL"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                RNC <span className="text-gray-400">(empresas)</span>
+              </label>
+              <input
+                type="text"
+                value={form.rnc}
+                onChange={e => setF('rnc', e.target.value)}
+                placeholder="133-118191"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Cédula <span className="text-gray-400">(personas)</span>
+              </label>
+              <input
+                type="text"
+                value={form.cedula}
+                onChange={e => setF('cedula', e.target.value)}
+                placeholder="229-0015616-1"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Email comprobantes <span className="text-gray-400">(opcional)</span>
+              </label>
+              <input
+                type="email"
+                value={form.emailComprobante}
+                onChange={e => setF('emailComprobante', e.target.value)}
+                placeholder="misterservicerd@gmail.com"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Orden <span className="text-gray-400">(opcional)</span>
+              </label>
+              <input
+                type="number"
+                value={form.orden}
+                onChange={e => setF('orden', e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder="1, 2, 3..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Orden <span className="text-xs text-gray-400">(opcional, menor = primero)</span>
-            </label>
-            <input
-              type="number"
-              value={orden}
-              onChange={e => setOrden(e.target.value === '' ? '' : Number(e.target.value))}
-              placeholder="1, 2, 3..."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-            />
-          </div>
-          <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
+
+          <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
             <button
               type="button"
               onClick={cerrar}

@@ -4,9 +4,10 @@ import { db } from '../../firebase/config';
 import { OrdenServicio, Usuario, Banco, PagoOrden, EstadoPagoOrden } from '../../types';
 import { suscribirBancos } from '../../services/bancos.service';
 import { crearRegistroAuditoria } from '../../utils';
+import { mensajeDatosCuentaBancaria, whatsappUrl } from '../../utils/whatsapp';
 import Modal from '../Modal';
 import toast from 'react-hot-toast';
-import { Banknote, ArrowRightLeft, CreditCard, Trash2 } from 'lucide-react';
+import { Banknote, ArrowRightLeft, CreditCard, Trash2, MessageCircle, Copy } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -323,16 +324,80 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
               <div className="mb-3">
                 <label className="block text-xs font-medium text-gray-700 mb-1">Banco destino *</label>
                 {hayBancos ? (
-                  <select
-                    value={bancoId}
-                    onChange={e => setBancoId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                  >
-                    <option value="">— Selecciona un banco —</option>
-                    {bancos.map(b => (
-                      <option key={b.id} value={b.id}>{b.nombre}</option>
-                    ))}
-                  </select>
+                  <>
+                    <select
+                      value={bancoId}
+                      onChange={e => setBancoId(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    >
+                      <option value="">— Selecciona un banco —</option>
+                      {bancos.map(b => (
+                        <option key={b.id} value={b.id}>{b.nombre}</option>
+                      ))}
+                    </select>
+
+                    {/* Datos del banco seleccionado + acciones */}
+                    {(() => {
+                      const banco = bancos.find(b => b.id === bancoId);
+                      if (!banco || !banco.numeroCuenta) return null;
+                      const mensaje = mensajeDatosCuentaBancaria({
+                        clienteNombre: orden?.clienteNombre,
+                        banco: banco.nombre,
+                        numeroCuenta: banco.numeroCuenta,
+                        tipoCuenta: banco.tipoCuenta,
+                        titular: banco.titular,
+                        rnc: banco.rnc,
+                        cedula: banco.cedula,
+                        emailComprobante: banco.emailComprobante,
+                        monto: Number(monto) || undefined,
+                      });
+                      const tel = orden?.clienteTelefono || '';
+                      const wa = tel ? whatsappUrl(tel, mensaje) : '';
+                      const handleCopiar = async () => {
+                        try {
+                          await navigator.clipboard.writeText(mensaje);
+                          toast.success('Mensaje copiado');
+                        } catch {
+                          toast.error('No se pudo copiar');
+                        }
+                      };
+                      return (
+                        <div className="mt-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-gray-800 space-y-1">
+                          <div className="font-semibold text-[#0f3460]">
+                            {banco.nombre}{banco.tipoCuenta ? ` — ${banco.tipoCuenta}` : ''}
+                          </div>
+                          <div className="font-mono text-sm">{banco.numeroCuenta}</div>
+                          {banco.titular && <div>A nombre de <strong>{banco.titular}</strong></div>}
+                          {banco.rnc && <div>RNC {banco.rnc}</div>}
+                          {banco.cedula && <div>Cédula {banco.cedula}</div>}
+                          <div className="flex flex-wrap gap-2 pt-2">
+                            {wa && (
+                              <a
+                                href={wa}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-semibold"
+                              >
+                                <MessageCircle size={12} /> Compartir por WhatsApp
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={handleCopiar}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg text-xs font-semibold"
+                            >
+                              <Copy size={12} /> Copiar mensaje
+                            </button>
+                          </div>
+                          {!tel && (
+                            <p className="text-[11px] text-amber-700 mt-1">
+                              El cliente no tiene teléfono registrado. Usa "Copiar mensaje".
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </>
                 ) : (
                   <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-2">
                     No hay bancos configurados. Un administrador debe agregarlos desde <strong>Bancos</strong>.

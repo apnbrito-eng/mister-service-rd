@@ -53,3 +53,56 @@ export const mensajesWhatsApp = {
   mantenimientoProgramado: (nombre: string, equipo: string, fecha: string): string =>
     `Hola ${nombre}, le recordamos que tiene un mantenimiento programado de su ${equipo} para el *${fecha}*. ¿Desea confirmar? — Mister Service RD`,
 };
+
+/**
+ * Arma el mensaje de WhatsApp con los datos de una cuenta bancaria para que el cliente
+ * haga una transferencia. Incluye la política de pago de Mister Service RD.
+ */
+export function mensajeDatosCuentaBancaria(args: {
+  clienteNombre?: string;
+  banco: string;
+  numeroCuenta?: string;
+  tipoCuenta?: 'ahorro' | 'corriente';
+  titular?: string;
+  rnc?: string;
+  cedula?: string;
+  emailComprobante?: string;
+  monto?: number;
+}): string {
+  const {
+    clienteNombre = '',
+    banco,
+    numeroCuenta,
+    tipoCuenta,
+    titular,
+    rnc,
+    cedula,
+    emailComprobante,
+    monto,
+  } = args;
+
+  const saludo = clienteNombre ? `Hola ${clienteNombre}, ` : 'Hola, ';
+  const lineas: string[] = [];
+  lineas.push(`${saludo}estos son los datos para la transferencia:`);
+  lineas.push('');
+  lineas.push(`🏦 *${banco}*${tipoCuenta ? ` — Cuenta de ${tipoCuenta}` : ''}`);
+  if (numeroCuenta) lineas.push(`N°: ${numeroCuenta}`);
+  if (titular) lineas.push(`A nombre de: ${titular}`);
+  if (rnc) lineas.push(`RNC: ${rnc}`);
+  if (cedula) lineas.push(`Cédula: ${cedula}`);
+  if (typeof monto === 'number' && monto > 0) {
+    lineas.push('');
+    lineas.push(
+      `Monto: RD$${monto.toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
+    );
+  }
+  lineas.push('');
+  lineas.push('⚠️ La transferencia debe realizarse después de que el técnico culmine el servicio y *antes* de que se retire de la residencia (política de empresa).');
+  lineas.push('');
+  lineas.push('Por favor envíe foto del comprobante.');
+  if (emailComprobante) lineas.push(`También puede enviarlo al correo ${emailComprobante}.`);
+  lineas.push('');
+  lineas.push('Gracias de antemano — Mister Service RD');
+
+  return lineas.join('\n');
+}
