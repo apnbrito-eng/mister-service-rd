@@ -1169,7 +1169,7 @@ export default function PersonalPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Sueldo base (RD$)</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Sueldo base mensual (RD$)</label>
                 <input
                   type="number"
                   min={0}
@@ -1179,9 +1179,12 @@ export default function PersonalPage() {
                     const val = e.target.value === '' ? 0 : Number(e.target.value);
                     setForm(f => ({ ...f, sueldoBase: val }));
                   }}
-                  placeholder="25000"
+                  placeholder="50000"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
                 />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Sueldo mensual completo. El sistema lo divide automáticamente en 2 para cada quincena.
+                </p>
               </div>
             </div>
           )}

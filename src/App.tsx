@@ -39,6 +39,7 @@ import CitaPublica from './pages/CitaPublica';
 import GestionUsuarios from './pages/GestionUsuarios';
 import TrackingCliente from './pages/TrackingCliente';
 import AgendaDia from './pages/AgendaDia';
+import MetricasMensuales from './pages/MetricasMensuales';
 
 // Public website pages
 import PublicLayout from './components/public/PublicLayout';
@@ -156,6 +157,7 @@ function AppRoutes() {
         <Route path="taller" element={<EquiposTaller />} />
         <Route path="productos" element={<Productos />} />
         <Route path="rendimiento" element={<PermisoRoute permiso="rendimientoVer"><Rendimiento /></PermisoRoute>} />
+        <Route path="metricas-mensuales" element={<PermisoRoute permiso="rendimientoVer"><MetricasMensuales /></PermisoRoute>} />
         <Route path="mantenimiento" element={<Mantenimiento />} />
         <Route path="gastos" element={<PermisoRoute permiso="gastosVer"><Gastos /></PermisoRoute>} />
         <Route path="personal" element={<PermisoRoute permiso="personalVer"><PersonalPage /></PermisoRoute>} />

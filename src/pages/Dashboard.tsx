@@ -389,6 +389,40 @@ export default function Dashboard() {
     };
   }, [comisionesPendientes, personal]);
 
+  // Proyección de nómina del mes (link a /admin/metricas-mensuales)
+  const proyeccionNomina = useMemo(() => {
+    const ahora = new Date();
+    const inicio = new Date(ahora.getFullYear(), ahora.getMonth(), 1, 0, 0, 0, 0);
+    const fin = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59, 999);
+    const activos = personal.filter(p => p.activo && p.rol !== 'ayudante');
+    const sueldos = activos.reduce((s, p) => s + (p.sueldoBase || 0), 0);
+    const comisiones = comisionesPendientes.reduce((s, c) => s + c.comisionMonto, 0);
+
+    // Bonos proyectados: operarias con desempeño >= 70% + secretarias por tiers
+    let bonos = 0;
+    for (const op of activos.filter(p => p.rol === 'operaria' || p.rol === 'coordinadora')) {
+      const ordsMes = ordenesRaw.filter(o =>
+        o.operariaId === op.id && !o.eliminada &&
+        ((o.fase === 'cerrado') || o.soloChequeo) &&
+        o.updatedAt >= inicio && o.updatedAt <= fin,
+      );
+      const completadas = ordsMes.filter(o => o.fase === 'cerrado' && !o.soloChequeo).length;
+      const atendidas = ordsMes.length;
+      if (atendidas > 0 && (completadas / atendidas) >= 0.70) bonos += 5000;
+    }
+    const TIERS = [{ min: 400, b: 5000 }, { min: 300, b: 3500 }, { min: 200, b: 2000 }];
+    for (const s of activos.filter(p => p.rol === 'secretaria')) {
+      const agendadas = ordenesRaw.filter(o =>
+        !o.eliminada && o.creadoPor === s.nombre &&
+        o.createdAt >= inicio && o.createdAt <= fin,
+      );
+      const completadas = agendadas.filter(o => o.fase !== 'cancelado').length;
+      const tier = TIERS.find(t => completadas >= t.min);
+      if (tier) bonos += tier.b;
+    }
+    return { sueldos, comisiones, bonos, total: sueldos + comisiones + bonos };
+  }, [personal, comisionesPendientes, ordenesRaw]);
+
   const alertasRojas = todasAlertas.filter(a => a.tipo === 'roja');
   const alertasNaranjas = todasAlertas.filter(a => a.tipo === 'naranja');
 
@@ -998,6 +1032,44 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Nómina proyectada del mes (link a métricas mensuales) */}
+        {puedeVerNomina && (
+          <button
+            type="button"
+            onClick={() => navigate('/admin/metricas-mensuales')}
+            className="w-full text-left bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md hover:border-[#1a5fa8]/30 transition-all group"
+          >
+            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Wallet size={20} className="text-[#0f3460]" />
+                <h2 className="text-lg font-semibold text-gray-900 group-hover:text-[#1a5fa8] transition-colors">
+                  Nómina proyectada del mes
+                </h2>
+              </div>
+              <span className="text-xs text-[#1a5fa8] group-hover:underline font-medium">
+                Ver detalle →
+              </span>
+            </div>
+            <p className="text-2xl font-bold text-[#0f3460]">
+              {formatMoneda(proyeccionNomina.total)}
+            </p>
+            <div className="grid grid-cols-3 gap-2 mt-3 text-[11px] text-gray-600">
+              <div>
+                <p className="text-[9px] uppercase text-gray-400">Sueldos</p>
+                <p className="font-semibold">{formatMoneda(proyeccionNomina.sueldos)}</p>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase text-gray-400">Comisiones</p>
+                <p className="font-semibold">{formatMoneda(proyeccionNomina.comisiones)}</p>
+              </div>
+              <div>
+                <p className="text-[9px] uppercase text-gray-400">Bonos</p>
+                <p className="font-semibold">{formatMoneda(proyeccionNomina.bonos)}</p>
+              </div>
+            </div>
+          </button>
         )}
 
         {/* 9. Reparaciones por tipo de equipo */}

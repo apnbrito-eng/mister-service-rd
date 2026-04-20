@@ -194,6 +194,9 @@ export interface LiquidacionEmpleado {
   ordenesAtendidas?: number;
   ordenesChequeo?: number;
   bono?: number;
+  // Secretaria (bono mensual por citas agendadas)
+  citasAgendadasMes?: number;
+  citasCompletadasMes?: number;
   // Totales
   totalDevengado: number;
   notas?: string;

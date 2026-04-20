@@ -11,6 +11,29 @@ import { parseOrden } from '../utils';
 const UMBRAL_BONO = 0.70;
 const BONO_MONTO = 5000;
 
+/** Tiers del bono mensual para secretaria, ordenados desc por umbral. */
+export const TIERS_BONO_SECRETARIA = [
+  { min: 400, bono: 5000 },
+  { min: 300, bono: 3500 },
+  { min: 200, bono: 2000 },
+  { min: 0, bono: 0 },
+] as const;
+
+export function calcularBonoSecretaria(citasCompletadas: number): number {
+  for (const tier of TIERS_BONO_SECRETARIA) {
+    if (citasCompletadas >= tier.min) return tier.bono;
+  }
+  return 0;
+}
+
+/** Devuelve el rango del mes calendario de una quincena 'YYYY-MM-QX'. */
+export function rangoMesCalendario(quincena: string): { inicio: Date; fin: Date } {
+  const [y, m] = quincena.split('-').slice(0, 2).map(Number);
+  const inicio = new Date(y, m - 1, 1, 0, 0, 0, 0);
+  const fin = new Date(y, m, 0, 23, 59, 59, 999);
+  return { inicio, fin };
+}
+
 /**
  * Genera una nueva liquidación quincenal:
  * - Toma todo el personal activo con rol en ROLES_CON_ACCESO (excluye ayudantes).
@@ -81,12 +104,17 @@ export async function generarLiquidacion(
       c.fechaCobro <= fin
     );
 
-  // Órdenes para desempeño operaria
+  // Órdenes para desempeño operaria y secretaria
   const ordenesSnap = await getDocs(collection(db, 'ordenes_servicio'));
   const ordenes = ordenesSnap.docs.map(d => parseOrden(d.id, d.data() as Record<string, unknown>) as OrdenServicio);
 
+  const esQ2 = quincena.endsWith('-Q2');
+  const rangoMes = rangoMesCalendario(quincena);
+
   const empleados: LiquidacionEmpleado[] = personal.map(p => {
-    const sueldoBase = typeof p.sueldoBase === 'number' ? p.sueldoBase : 0;
+    // Sueldo base del personal se carga como MENSUAL; se divide entre 2 para cada quincena.
+    const sueldoMensual = typeof p.sueldoBase === 'number' ? p.sueldoBase : 0;
+    const sueldoBase = sueldoMensual / 2;
     let totalComisiones = 0;
     let cantidadOrdenesConComision = 0;
     let comisionesIds: string[] = [];
@@ -95,6 +123,8 @@ export async function generarLiquidacion(
     let completadas: number | undefined;
     let chequeos: number | undefined;
     let atendidas: number | undefined;
+    let citasAgendadasMes: number | undefined;
+    let citasCompletadasMes: number | undefined;
 
     if (p.rol === 'tecnico') {
       const comisionesT = comisionesEnRango.filter(c => c.tecnicoId === p.id);
@@ -102,17 +132,32 @@ export async function generarLiquidacion(
       totalComisiones = comisionesT.reduce((s, c) => s + c.comisionMonto, 0);
       cantidadOrdenesConComision = comisionesT.length;
     } else if (p.rol === 'operaria' || p.rol === 'coordinadora') {
-      const ordsOperaria = ordenes.filter(o =>
-        o.operariaId === p.id &&
-        !o.eliminada &&
-        ((o.fase === 'cerrado') || o.soloChequeo) &&
-        o.updatedAt >= inicio && o.updatedAt <= fin
-      );
-      chequeos = ordsOperaria.filter(o => o.soloChequeo).length;
-      completadas = ordsOperaria.filter(o => o.fase === 'cerrado' && !o.soloChequeo).length;
-      atendidas = chequeos + completadas;
-      pct = atendidas > 0 ? completadas / atendidas : 0;
-      bono = pct >= UMBRAL_BONO ? BONO_MONTO : 0;
+      // Bono operaria es MENSUAL: solo se paga en Q2, medido sobre todo el mes calendario.
+      if (esQ2) {
+        const ordsMes = ordenes.filter(o =>
+          o.operariaId === p.id &&
+          !o.eliminada &&
+          ((o.fase === 'cerrado') || o.soloChequeo) &&
+          o.updatedAt >= rangoMes.inicio && o.updatedAt <= rangoMes.fin
+        );
+        chequeos = ordsMes.filter(o => o.soloChequeo).length;
+        completadas = ordsMes.filter(o => o.fase === 'cerrado' && !o.soloChequeo).length;
+        atendidas = chequeos + completadas;
+        pct = atendidas > 0 ? completadas / atendidas : 0;
+        bono = pct >= UMBRAL_BONO ? BONO_MONTO : 0;
+      }
+    } else if (p.rol === 'secretaria') {
+      // Bono secretaria es MENSUAL: citas creadas por ella que se completaron.
+      if (esQ2) {
+        const agendadas = ordenes.filter(o =>
+          !o.eliminada &&
+          o.creadoPor === p.nombre &&
+          o.createdAt >= rangoMes.inicio && o.createdAt <= rangoMes.fin
+        );
+        citasAgendadasMes = agendadas.length;
+        citasCompletadasMes = agendadas.filter(o => o.fase !== 'cancelado').length;
+        bono = calcularBonoSecretaria(citasCompletadasMes);
+      }
     }
 
     const totalDevengado = sueldoBase + totalComisiones + bono;
@@ -132,6 +177,8 @@ export async function generarLiquidacion(
     if (completadas !== undefined) emp.ordenesCompletadas = completadas;
     if (atendidas !== undefined) emp.ordenesAtendidas = atendidas;
     if (chequeos !== undefined) emp.ordenesChequeo = chequeos;
+    if (citasAgendadasMes !== undefined) emp.citasAgendadasMes = citasAgendadasMes;
+    if (citasCompletadasMes !== undefined) emp.citasCompletadasMes = citasCompletadasMes;
     if (bono > 0) emp.bono = bono;
     return emp;
   });
@@ -257,6 +304,8 @@ function serializarEmpleados(emps: LiquidacionEmpleado[]): Record<string, unknow
     if (e.ordenesCompletadas !== undefined) out.ordenesCompletadas = e.ordenesCompletadas;
     if (e.ordenesAtendidas !== undefined) out.ordenesAtendidas = e.ordenesAtendidas;
     if (e.ordenesChequeo !== undefined) out.ordenesChequeo = e.ordenesChequeo;
+    if (e.citasAgendadasMes !== undefined) out.citasAgendadasMes = e.citasAgendadasMes;
+    if (e.citasCompletadasMes !== undefined) out.citasCompletadasMes = e.citasCompletadasMes;
     if (e.bono !== undefined) out.bono = e.bono;
     if (e.notas) out.notas = e.notas;
     if (e.metodoPago) out.metodoPago = e.metodoPago;
@@ -294,6 +343,8 @@ export function parseLiquidacion(id: string, raw: Record<string, unknown>): Liqu
       ordenesCompletadas: e.ordenesCompletadas as number | undefined,
       ordenesAtendidas: e.ordenesAtendidas as number | undefined,
       ordenesChequeo: e.ordenesChequeo as number | undefined,
+      citasAgendadasMes: e.citasAgendadasMes as number | undefined,
+      citasCompletadasMes: e.citasCompletadasMes as number | undefined,
       bono: e.bono as number | undefined,
       totalDevengado: (e.totalDevengado as number) || 0,
       notas: e.notas as string | undefined,

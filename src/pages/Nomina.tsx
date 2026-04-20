@@ -268,7 +268,13 @@ export default function Nomina() {
                             </button>
                           </td>
                           <td className="px-3 py-3 text-xs text-gray-500 capitalize">{emp.rol}</td>
-                          <td className="px-3 py-3 text-right text-gray-700">{formatMoneda(emp.sueldoBase)}</td>
+                          <td
+                            className="px-3 py-3 text-right text-gray-700"
+                            title={`Mensual: ${formatMoneda(emp.sueldoBase * 2)}`}
+                          >
+                            {formatMoneda(emp.sueldoBase)}
+                            <p className="text-[10px] text-gray-400">mensual: {formatMoneda(emp.sueldoBase * 2)}</p>
+                          </td>
                           <td className="px-3 py-3 text-right">
                             {emp.totalComisiones > 0 ? (
                               <div>
@@ -284,9 +290,18 @@ export default function Nomina() {
                                 {emp.desempenoPorcentaje !== undefined && (
                                   <p className="text-[10px] text-gray-400">{(emp.desempenoPorcentaje * 100).toFixed(0)}% desempeño</p>
                                 )}
+                                {emp.citasCompletadasMes !== undefined && (
+                                  <p className="text-[10px] text-gray-400">
+                                    {emp.citasCompletadasMes}/{emp.citasAgendadasMes ?? 0} citas
+                                  </p>
+                                )}
                               </div>
                             ) : emp.desempenoPorcentaje !== undefined ? (
                               <span className="text-xs text-gray-400">{(emp.desempenoPorcentaje * 100).toFixed(0)}% (no aplica)</span>
+                            ) : emp.citasAgendadasMes !== undefined ? (
+                              <span className="text-xs text-gray-400">
+                                {emp.citasCompletadasMes ?? 0}/{emp.citasAgendadasMes} citas (sin bono)
+                              </span>
                             ) : <span className="text-gray-400">—</span>}
                           </td>
                           <td className="px-3 py-3 text-right font-bold text-[#0f3460]">{formatMoneda(emp.totalDevengado)}</td>
