@@ -92,19 +92,34 @@ export default function CierreServicioWizard({
     if (!fotoBlob) return;
     setSaving(true);
 
+    // Helper: intentar obtener GPS con timeout manual (no el del helper).
+    // Si falla, permite al técnico continuar sin coords con confirmación.
+    const obtenerGPSConEscape = async (): Promise<{ coords: { lat: number; lng: number } | null; continuar: boolean }> => {
+      // Si ya tenemos coords del useEffect, listo
+      if (gpsCoords) return { coords: gpsCoords, continuar: true };
+
+      // Race entre el helper y un timeout de 12s
+      const MAX_MS = 12000;
+      toast.loading(`Obteniendo ubicación (hasta ${MAX_MS / 1000}s)...`, { id: 'cierre-gps' });
+
+      const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), MAX_MS));
+      const coords = await Promise.race([obtenerUbicacionGPS(), timeoutPromise]);
+      toast.dismiss('cierre-gps');
+
+      if (coords) return { coords, continuar: true };
+
+      // No enganchó — preguntar al técnico si quiere cerrar sin GPS
+      const continuarSinGPS = confirm(
+        'No pudimos obtener tu ubicación GPS (señal débil, permiso denegado o interior).\n\n' +
+        '¿Deseas cerrar el servicio SIN verificación de ubicación?\n\n' +
+        'La orden quedará marcada como "GPS no verificado".',
+      );
+      return { coords: null, continuar: continuarSinGPS };
+    };
+
     try {
-      // GPS obligatorio: si no lo capturamos al abrir, reintentamos aquí.
-      let coords = gpsCoords;
-      if (!coords) {
-        toast.loading('Obteniendo ubicación...', { id: 'cierre-gps' });
-        coords = await obtenerUbicacionGPS();
-        toast.dismiss('cierre-gps');
-      }
-      if (!coords) {
-        toast.error(
-          'No se pudo obtener tu ubicación. Activa el GPS del móvil, permite el acceso a la ubicación en el navegador y vuelve a intentar.',
-          { duration: 7000 },
-        );
+      const { coords, continuar } = await obtenerGPSConEscape();
+      if (!continuar) {
         setSaving(false);
         return;
       }
@@ -114,22 +129,27 @@ export default function CierreServicioWizard({
       const fotoUrl = await subirFotoCierre(orden.id, fotoBlob);
       console.log('Foto subida OK:', fotoUrl);
 
-      const distancia = clienteLat && clienteLng
+      // Calcular distancia solo si tenemos coords (puede ser null si el user eligió continuar sin GPS)
+      const distancia = coords && clienteLat && clienteLng
         ? distanciaMetros(coords.lat, coords.lng, clienteLat, clienteLng)
         : null;
 
-      // gpsVerificado = tenemos coords + (no hay con qué comparar, o distancia aceptable)
+      // gpsVerificado: true si hay coords y (no hay cliente con qué comparar, o distancia aceptable).
+      // false si el técnico cerró sin GPS o está alejado.
       const UMBRAL = 500;
-      const gpsVerificado = distancia === null ? true : distancia <= UMBRAL;
+      const gpsVerificado = coords
+        ? (distancia === null ? true : distancia <= UMBRAL)
+        : false;
 
       const fotoCierre: Record<string, unknown> = {
         url: fotoUrl,
-        lat: coords.lat,
-        lng: coords.lng,
+        lat: coords?.lat ?? 0,
+        lng: coords?.lng ?? 0,
         timestamp: Timestamp.now(),
         gpsVerificado,
       };
       if (distancia !== null) fotoCierre.distanciaCliente = distancia;
+      if (!coords) fotoCierre.sinGPS = true;
 
       const cierrePayload: Record<string, unknown> = {
         fechaCierre: Timestamp.now(),

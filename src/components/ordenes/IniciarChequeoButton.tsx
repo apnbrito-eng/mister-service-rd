@@ -75,20 +75,30 @@ export default function IniciarChequeoButton({
   const dispararCamara = async () => {
     if (procesando) return;
     setProcesando(true);
-    toast.loading('Verificando GPS...', { id: 'chequeo' });
+
+    // Race entre GPS y timeout de 12s
+    const MAX_MS = 12000;
+    toast.loading(`Verificando GPS (hasta ${MAX_MS / 1000}s)...`, { id: 'chequeo' });
     try {
-      const gps = await obtenerUbicacionGPS();
+      const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), MAX_MS));
+      const gps = await Promise.race([obtenerUbicacionGPS(), timeoutPromise]);
       toast.dismiss('chequeo');
+
       if (!gps) {
-        toast.error(
-          'No se pudo obtener tu ubicación. Activa el GPS, permite acceso a la ubicación y vuelve a intentar.',
-          { duration: 6000 },
+        // No enganchó — dar opción al técnico de continuar sin GPS
+        const continuar = confirm(
+          'No pudimos obtener tu ubicación GPS.\n\n' +
+          '¿Deseas iniciar el chequeo SIN verificación de ubicación?\n\n' +
+          'Se registrará la foto pero el chequeo quedará marcado como "GPS no verificado".',
         );
-        setProcesando(false);
-        return;
+        if (!continuar) {
+          setProcesando(false);
+          return;
+        }
+        gpsRef.current = null; // marca que no hay GPS
+      } else {
+        gpsRef.current = gps;
       }
-      // Guardamos el GPS en ref para usarlo después de tomar la foto
-      gpsRef.current = gps;
 
       if (inputRef.current) {
         inputRef.current.value = '';
@@ -105,19 +115,16 @@ export default function IniciarChequeoButton({
   };
 
   const handleArchivo = async (file: File) => {
-    const gps = gpsRef.current;
-    if (!file || !gps) {
-      // Si no hay GPS (caso raro), abortar limpio
+    if (!file) {
       setProcesando(false);
-      if (!gps) {
-        toast.error('Se perdió la ubicación. Intenta de nuevo.');
-      }
       return;
     }
+    // gpsRef puede ser null si el técnico eligió continuar sin GPS
+    const gps = gpsRef.current;
     try {
-      // Validar distancia si tenemos coords del cliente
+      // Validar distancia solo si tenemos ambas coords
       let distancia: number | undefined;
-      if (typeof orden.clienteLat === 'number' && typeof orden.clienteLng === 'number') {
+      if (gps && typeof orden.clienteLat === 'number' && typeof orden.clienteLng === 'number') {
         distancia = distanciaMetros(gps.lat, gps.lng, orden.clienteLat, orden.clienteLng);
         if (distancia > UMBRAL_LEJOS_METROS) {
           const ok = confirm(
@@ -146,9 +153,14 @@ export default function IniciarChequeoButton({
         tecnicoId: usuarioId,
         tecnicoNombre: usuario,
         fotoUrl,
-        lat: gps.lat,
-        lng: gps.lng,
       };
+      if (gps) {
+        inicioChequeo.lat = gps.lat;
+        inicioChequeo.lng = gps.lng;
+      } else {
+        inicioChequeo.sinGPS = true;
+        inicioChequeo.gpsVerificado = false;
+      }
       if (typeof distancia === 'number') {
         inicioChequeo.distanciaClienteMetros = distancia;
         inicioChequeo.gpsVerificado = distancia <= UMBRAL_LEJOS_METROS;
