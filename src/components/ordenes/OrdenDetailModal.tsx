@@ -354,7 +354,7 @@ export default function OrdenDetailModal({
         <div>
           <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-              {'\u{1F4B5}'} Pagos y facturación
+              {'\u{1F4B5}'} Pagos y Conduce de Garantía
             </h3>
             <div className="flex items-center gap-2">
               {puedeEnviarAFacturacion && (
@@ -449,14 +449,14 @@ export default function OrdenDetailModal({
           {/* Estado de envío a facturación */}
           {orden.enviadaAFacturacion && !orden.facturada && (
             <div className="mt-2 text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-2">
-              Enviada a facturación por <strong>{orden.enviadaAFacturacionPorNombre || '—'}</strong>
+              Enviada por <strong>{orden.enviadaAFacturacionPorNombre || '—'}</strong>
               {orden.enviadaAFacturacionAt && ` · ${formatFecha(orden.enviadaAFacturacionAt)}`}
-              . Pendiente de procesar por admin / coordinadora.
+              . Pendiente de emitir conduce de garantía por admin / coordinadora.
             </div>
           )}
           {orden.facturada && (
             <div className="mt-2 text-[11px] text-green-700 bg-green-50 border border-green-100 rounded-lg p-2">
-              Facturada {orden.facturaNumero ? `(${orden.facturaNumero})` : ''}
+              Conduce de Garantía emitido {orden.facturaNumero ? `(${orden.facturaNumero})` : ''}
               {orden.facturadaPorNombre && ` por ${orden.facturadaPorNombre}`}
               {orden.facturadaAt && ` · ${formatFecha(orden.facturadaAt)}`}
             </div>

@@ -30,7 +30,7 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
 
   const handleClick = async () => {
     if (!habilitado) return;
-    if (!confirm('¿Enviar esta orden a facturación? Admin/Coordinadora recibirá una notificación para facturar.')) return;
+    if (!confirm('¿Enviar esta orden para emitir Conduce de Garantía? Admin/Coordinadora recibirá una notificación.')) return;
 
     setSaving(true);
     try {
@@ -74,7 +74,7 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
               destinatarioId: p.uid!,
               destinatarioNombre: p.nombre,
               tipo: 'orden_enviada_a_facturacion',
-              titulo: 'Orden lista para facturar',
+              titulo: 'Orden lista para conduce de garantía',
               mensaje: `${orden.numero || orden.id} — ${orden.clienteNombre}. Enviada por ${usuario}.`,
               ordenId: orden.id,
               ordenNumero: orden.numero,
@@ -85,10 +85,10 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
         console.warn('No se pudieron crear todas las notificaciones:', err);
       }
 
-      toast.success('Enviada a facturación');
+      toast.success('Enviada a conduce de garantía');
     } catch (err) {
       console.error(err);
-      toast.error('Error al enviar a facturación');
+      toast.error('Error al enviar a conduce');
     } finally {
       setSaving(false);
     }
@@ -98,7 +98,7 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
     return (
       <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
         <Check size={12} />
-        {orden.facturada ? `Facturada ${orden.facturaNumero || ''}` : 'En facturación'}
+        {orden.facturada ? `Conduce ${orden.facturaNumero || ''}` : 'En proceso'}
       </span>
     );
   }
@@ -111,12 +111,12 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
       title={
         !tienePago
           ? 'Requiere al menos un pago registrado'
-          : 'Enviar a facturación'
+          : 'Enviar a conduce'
       }
       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#0f3460] hover:bg-[#1a5fa8] text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
     >
       <Receipt size={12} />
-      {saving ? 'Enviando...' : 'Enviar a facturación'}
+      {saving ? 'Enviando...' : 'Enviar a conduce'}
     </button>
   );
 }

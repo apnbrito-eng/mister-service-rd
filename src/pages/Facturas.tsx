@@ -214,12 +214,12 @@ export default function Facturas() {
         docData.bancoDestino = form.bancoDestino.trim();
       }
       await addDoc(collection(db, 'facturas'), docData);
-      toast.success(`Factura ${numero} creada`);
+      toast.success(`Conduce ${numero} creado`);
       setShowModal(false);
       resetForm();
     } catch (err) {
       console.error(err);
-      toast.error('Error al crear la factura');
+      toast.error('Error al crear el conduce de garantía');
     } finally {
       setSaving(false);
     }
@@ -232,9 +232,9 @@ export default function Facturas() {
         estado: 'pagada',
         fechaPago: Timestamp.now(),
       });
-      toast.success(`Factura ${factura.numero} marcada como pagada`);
+      toast.success(`Conduce ${factura.numero} marcado como pagado`);
     } catch {
-      toast.error('Error al actualizar la factura');
+      toast.error('Error al actualizar el conduce de garantía');
     }
   };
 
@@ -245,16 +245,16 @@ export default function Facturas() {
       await updateDoc(doc(db, 'facturas', factura.id), {
         estado: 'anulada',
       });
-      toast.success(`Factura ${factura.numero} anulada`);
+      toast.success(`Conduce ${factura.numero} anulado`);
     } catch {
-      toast.error('Error al anular la factura');
+      toast.error('Error al anular el conduce de garantía');
     }
   };
 
   // Delete
   const handleDelete = async (factura: Factura) => {
     if (!puedeEliminar) {
-      toast.error('No tienes permiso para eliminar facturas');
+      toast.error('No tienes permiso para eliminar conduces de garantía');
       return;
     }
     if (!confirm(`¿Eliminar la factura ${factura.numero}? Esta acción no se puede deshacer.`)) return;
@@ -262,7 +262,7 @@ export default function Facturas() {
       await deleteDoc(doc(db, 'facturas', factura.id));
       toast.success('Factura eliminada');
     } catch {
-      toast.error('Error al eliminar la factura');
+      toast.error('Error al eliminar el conduce de garantía');
     }
   };
 
@@ -271,7 +271,7 @@ export default function Facturas() {
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(`
-      <html><head><title>Factura ${factura.numero}</title>
+      <html><head><title>Conduce de Garantía ${factura.numero}</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
@@ -307,6 +307,7 @@ export default function Facturas() {
           <p class="company">Santo Domingo, República Dominicana</p>
         </div>
         <div class="factura-info">
+          <p style="font-size:14px;font-weight:700;color:#0f3460;letter-spacing:2px;margin:0 0 4px;">CONDUCE DE GARANTÍA</p>
           <p class="factura-num">${factura.numero}</p>
           <span class="estado estado-${factura.estado}">${ESTADO_LABELS[factura.estado]}</span>
         </div>
@@ -367,7 +368,7 @@ export default function Facturas() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Facturas</h1>
+          <h1 className="text-2xl font-bold text-[#0f3460]">Conduces de Garantía</h1>
           <p className="text-gray-500 text-sm">{facturas.length} facturas</p>
         </div>
         {puedeCrear && (
@@ -375,7 +376,7 @@ export default function Facturas() {
           onClick={() => { resetForm(); setShowModal(true); }}
           className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
         >
-          <Plus size={18} /> Nueva Factura
+          <Plus size={18} /> Nuevo Conduce de Garantía
         </button>
         )}
       </div>
@@ -473,7 +474,7 @@ export default function Facturas() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
           <FileText size={48} className="mx-auto text-gray-300 mb-3" />
           <p className="text-gray-400">
-            {busqueda || filtro !== 'todas' ? 'No se encontraron facturas con los filtros aplicados' : 'Sin facturas registradas'}
+            {busqueda || filtro !== 'todas' ? 'No se encontraron conduces con los filtros aplicados' : 'Sin conduces de garantía registrados'}
           </p>
         </div>
       ) : (
@@ -482,7 +483,7 @@ export default function Facturas() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-gray-100">
-                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">#Factura</th>
+                  <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">#Conduce</th>
                   <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
                   <th className="text-left px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Orden</th>
                   <th className="text-right px-5 py-3.5 text-xs font-semibold text-gray-500 uppercase tracking-wider">Monto (RD$)</th>
@@ -556,7 +557,7 @@ export default function Facturas() {
                         {puedeEliminar && (
                           <button
                             onClick={() => handleDelete(factura)}
-                            title="Eliminar factura"
+                            title="Eliminar conduce de garantía"
                             className="flex items-center gap-1 px-2 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-medium hover:bg-red-100 transition-colors"
                           >
                             <Trash2 size={13} />
@@ -588,12 +589,12 @@ export default function Facturas() {
                           </div>
 
                           <div className="bg-white rounded-xl p-3 border border-gray-100">
-                            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">ITBIS</div>
+                            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">ITBIS (ref. interna)</div>
                             <div className="text-sm font-bold text-orange-600">
                               {typeof factura.itbisMonto === 'number' ? formatMoneda(factura.itbisMonto) : <span className="text-gray-400">—</span>}
                             </div>
                             {typeof factura.itbisPorcentaje === 'number' && (
-                              <div className="text-[10px] text-gray-500 mt-0.5">{factura.itbisPorcentaje}% del subtotal</div>
+                              <div className="text-[10px] text-gray-500 mt-0.5">{factura.itbisPorcentaje}% · no fiscal</div>
                             )}
                           </div>
 
@@ -683,7 +684,7 @@ export default function Facturas() {
       <Modal
         isOpen={showModal}
         onClose={() => { setShowModal(false); resetForm(); }}
-        title="Nueva Factura"
+        title="Nuevo Conduce de Garantía"
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">

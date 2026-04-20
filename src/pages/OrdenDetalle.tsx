@@ -733,7 +733,7 @@ export default function OrdenDetalle() {
           {(puede(userProfile, 'pagosRegistrar') || puede(userProfile, 'ordenesEnviarAFacturacion') || (orden.pagos && orden.pagos.length > 0)) && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
-                <h3 className="text-sm font-semibold text-gray-500 uppercase">💵 Pagos y facturación</h3>
+                <h3 className="text-sm font-semibold text-gray-500 uppercase">💵 Pagos y Conduce de Garantía</h3>
                 <div className="flex items-center gap-2">
                   {puede(userProfile, 'ordenesEnviarAFacturacion') && (
                     <EnviarFacturacionButton orden={orden} userProfile={userProfile} />
@@ -815,14 +815,14 @@ export default function OrdenDetalle() {
 
               {orden.enviadaAFacturacion && !orden.facturada && (
                 <div className="mt-2 text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-2">
-                  Enviada a facturación por <strong>{orden.enviadaAFacturacionPorNombre || '—'}</strong>
+                  Enviada por <strong>{orden.enviadaAFacturacionPorNombre || '—'}</strong>
                   {orden.enviadaAFacturacionAt && ` · ${formatFecha(orden.enviadaAFacturacionAt)}`}
                   . Pendiente de procesar por admin / coordinadora.
                 </div>
               )}
               {orden.facturada && (
                 <div className="mt-2 text-[11px] text-green-700 bg-green-50 border border-green-100 rounded-lg p-2">
-                  Facturada {orden.facturaNumero ? `(${orden.facturaNumero})` : ''}
+                  Conduce de Garantía emitido {orden.facturaNumero ? `(${orden.facturaNumero})` : ''}
                   {orden.facturadaPorNombre && ` por ${orden.facturadaPorNombre}`}
                   {orden.facturadaAt && ` · ${formatFecha(orden.facturadaAt)}`}
                 </div>

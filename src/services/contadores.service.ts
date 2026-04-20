@@ -31,7 +31,10 @@ export async function siguienteNumeroCotizacion(): Promise<string> {
   return `QT-${String(nuevoNumero).padStart(5, '0')}`;
 }
 
-/** Genera siguiente número de factura atómicamente: FAC-00001, FAC-00002... */
+/**
+ * Genera siguiente número de Conduce de Garantía atómicamente: CG-00001, CG-00002...
+ * El contador en Firestore sigue siendo `ultimaFactura` para no romper datos existentes.
+ */
 export async function siguienteNumeroFactura(): Promise<string> {
   const contadorRef = doc(db, 'config', 'contadores');
 
@@ -43,5 +46,5 @@ export async function siguienteNumeroFactura(): Promise<string> {
     return siguiente;
   });
 
-  return `FAC-${String(nuevoNumero).padStart(5, '0')}`;
+  return `CG-${String(nuevoNumero).padStart(5, '0')}`;
 }

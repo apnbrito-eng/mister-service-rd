@@ -66,14 +66,14 @@ export default function FacturacionPendiente() {
     return () => unsub();
   }, []);
 
-  if (loading) return <LoadingSpinner fullPage text="Cargando bandeja de facturación..." />;
+  if (loading) return <LoadingSpinner fullPage text="Cargando bandeja de conduces..." />;
 
   if (!puedeFacturar) {
     return (
       <div className="p-6">
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
           <p className="text-amber-800 font-medium">
-            No tienes permisos para procesar facturación. Contacta al administrador.
+            No tienes permisos para procesar conduces de garantía. Contacta al administrador.
           </p>
         </div>
       </div>
@@ -87,9 +87,9 @@ export default function FacturacionPendiente() {
           <Inbox size={20} className="text-[#0f3460]" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Facturación Pendiente</h1>
+          <h1 className="text-2xl font-bold text-[#0f3460]">Conduces Pendientes</h1>
           <p className="text-gray-500 text-sm">
-            Órdenes enviadas por las operarias listas para facturar.
+            Órdenes enviadas por las operarias listas para emitir conduce de garantía.
           </p>
         </div>
         <span className="ml-auto inline-flex items-center gap-1.5 bg-blue-50 text-[#0f3460] px-3 py-1 rounded-full text-sm font-semibold">
@@ -101,7 +101,7 @@ export default function FacturacionPendiente() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
           <Receipt size={40} className="mx-auto text-gray-300 mb-3" />
           <p className="text-gray-500 text-sm">
-            No hay órdenes pendientes de facturar. Cuando una operaria envíe una orden a facturación, aparecerá aquí.
+            No hay órdenes pendientes. Cuando una operaria envíe una orden para conduce de garantía, aparecerá aquí.
           </p>
         </div>
       ) : (
@@ -365,11 +365,11 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
         updatedAt: ahora,
       });
 
-      toast.success(`Factura ${numero} generada`);
+      toast.success(`Conduce ${numero} generado`);
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error('Error al generar la factura');
+      toast.error('Error al generar el conduce de garantía');
     } finally {
       setGenerando(false);
     }
@@ -378,7 +378,7 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
   if (!orden) return null;
 
   return (
-    <Modal isOpen={!!orden} onClose={onClose} title={`Procesar facturación — ${orden.numero || ''}`} size="lg">
+    <Modal isOpen={!!orden} onClose={onClose} title={`Emitir conduce de garantía — ${orden.numero || ''}`} size="lg">
       <div className="space-y-5">
         {/* Stepper */}
         <div className="flex items-center gap-2">
@@ -392,7 +392,7 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
             {cargandoCotizacion && <p className="text-sm text-gray-500">Cargando cotización...</p>}
             <div>
               <p className="text-xs text-gray-600 mb-2">
-                Items que se incluirán en la factura. Edita lo que sea necesario.
+                Items que se incluirán en el conduce de garantía. Edita lo que sea necesario.
               </p>
               <div className="space-y-2">
                 {items.map(it => (
@@ -438,7 +438,7 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
               </button>
             </div>
             <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg p-3">
-              <span className="text-sm font-medium text-[#0f3460]">Total factura</span>
+              <span className="text-sm font-medium text-[#0f3460]">Total conduce</span>
               <span className="text-lg font-bold text-[#0f3460]">{fmtMonto(totalItems)}</span>
             </div>
             <div className="flex justify-end gap-3 pt-2">
@@ -468,7 +468,7 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
             </p>
             {pagosPrevios.length === 0 ? (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-                Esta orden no tiene pagos registrados. La factura se generará igual con estado "Emitida" (pago pendiente).
+                Esta orden no tiene pagos registrados. El conduce de garantía se generará igual con estado "Emitido" (pago pendiente).
               </div>
             ) : (
               <div className="space-y-2">
@@ -500,7 +500,7 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
                 <div className="text-base font-semibold text-green-600">{fmtMonto(totalPagado)}</div>
               </div>
               <div>
-                <div className="text-[11px] text-blue-700 uppercase">Total factura</div>
+                <div className="text-[11px] text-blue-700 uppercase">Total conduce</div>
                 <div className="text-base font-semibold text-[#0f3460]">{fmtMonto(totalItems)}</div>
               </div>
             </div>
@@ -519,7 +519,7 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
                 className="inline-flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60"
               >
                 <Check size={14} />
-                {generando ? 'Generando factura...' : 'Generar factura'}
+                {generando ? 'Generando conduce...' : 'Generar conduce de garantía'}
               </button>
             </div>
           </div>
