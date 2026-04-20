@@ -78,13 +78,21 @@ export default function IniciarChequeoButton({
     if (!file) return;
     setProcesando(true);
     try {
-      // 1. Capturar GPS (no bloqueante, si falla seguimos sin coords)
+      // 1. Capturar GPS — obligatorio. Si falla, abortar.
       toast.loading('Obteniendo ubicación...', { id: 'chequeo' });
       const gps = await obtenerUbicacionGPS();
+      if (!gps) {
+        toast.error(
+          'No se pudo obtener la ubicación. Activa el GPS y permite el acceso a la ubicación en tu navegador para continuar.',
+          { id: 'chequeo', duration: 6000 },
+        );
+        setProcesando(false);
+        return;
+      }
 
       // 2. Si tenemos coords del cliente, comparar distancia
       let distancia: number | undefined;
-      if (gps && typeof orden.clienteLat === 'number' && typeof orden.clienteLng === 'number') {
+      if (typeof orden.clienteLat === 'number' && typeof orden.clienteLng === 'number') {
         distancia = distanciaMetros(gps.lat, gps.lng, orden.clienteLat, orden.clienteLng);
         if (distancia > UMBRAL_LEJOS_METROS) {
           toast.dismiss('chequeo');
@@ -113,11 +121,9 @@ export default function IniciarChequeoButton({
         tecnicoId: usuarioId,
         tecnicoNombre: usuario,
         fotoUrl,
+        lat: gps.lat,
+        lng: gps.lng,
       };
-      if (gps) {
-        inicioChequeo.lat = gps.lat;
-        inicioChequeo.lng = gps.lng;
-      }
       if (typeof distancia === 'number') {
         inicioChequeo.distanciaClienteMetros = distancia;
         inicioChequeo.gpsVerificado = distancia <= UMBRAL_LEJOS_METROS;
