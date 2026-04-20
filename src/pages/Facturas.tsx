@@ -64,6 +64,7 @@ export default function Facturas() {
   const [filtro, setFiltro] = useState<EstadoFactura | 'todas'>('todas');
   const [busqueda, setBusqueda] = useState('');
   const [yearSelected, setYearSelected] = useState(new Date().getFullYear());
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     clienteNombre: '',
@@ -493,7 +494,12 @@ export default function Facturas() {
               </thead>
               <tbody>
                 {facturasFiltradas.map(factura => (
-                  <tr key={factura.id} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                <>
+                  <tr
+                    key={factura.id}
+                    onClick={() => setExpandedId(id => id === factura.id ? null : factura.id)}
+                    className={`border-b border-gray-50 transition-colors cursor-pointer ${expandedId === factura.id ? 'bg-blue-50/50' : 'hover:bg-gray-50/50'}`}
+                  >
                     <td className="px-5 py-3.5">
                       <span className="font-mono text-sm font-bold text-[#0f3460]">{factura.numero}</span>
                     </td>
@@ -567,6 +573,105 @@ export default function Facturas() {
                       </div>
                     </td>
                   </tr>
+                  {expandedId === factura.id && (
+                    <tr key={`${factura.id}-detail`} className="bg-blue-50/30 border-b border-gray-100">
+                      <td colSpan={8} className="px-5 py-4">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                          <div className="bg-white rounded-xl p-3 border border-gray-100">
+                            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Subtotal</div>
+                            <div className="text-sm font-bold text-gray-900">
+                              {typeof factura.subtotal === 'number' ? formatMoneda(factura.subtotal) : <span className="text-gray-400">— (sin desglose)</span>}
+                            </div>
+                            {typeof factura.subtotal === 'number' && (
+                              <div className="text-[10px] text-gray-500 mt-0.5">Base imponible</div>
+                            )}
+                          </div>
+
+                          <div className="bg-white rounded-xl p-3 border border-gray-100">
+                            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">ITBIS</div>
+                            <div className="text-sm font-bold text-orange-600">
+                              {typeof factura.itbisMonto === 'number' ? formatMoneda(factura.itbisMonto) : <span className="text-gray-400">—</span>}
+                            </div>
+                            {typeof factura.itbisPorcentaje === 'number' && (
+                              <div className="text-[10px] text-gray-500 mt-0.5">{factura.itbisPorcentaje}% del subtotal</div>
+                            )}
+                          </div>
+
+                          <div className="bg-white rounded-xl p-3 border border-gray-100">
+                            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Costo piezas</div>
+                            <div className="text-sm font-bold text-red-600">
+                              {typeof factura.costoPiezas === 'number' ? `-${formatMoneda(factura.costoPiezas)}` : <span className="text-gray-400">—</span>}
+                            </div>
+                            <div className="text-[10px] text-gray-500 mt-0.5">De items del inventario</div>
+                          </div>
+
+                          <div className="bg-green-50 rounded-xl p-3 border border-green-200">
+                            <div className="text-[10px] font-semibold text-green-700 uppercase tracking-wide mb-1">Ganancia neta</div>
+                            <div className="text-base font-bold text-green-700">
+                              {typeof factura.gananciaNeta === 'number' ? formatMoneda(factura.gananciaNeta) : <span className="text-gray-400">—</span>}
+                            </div>
+                            <div className="text-[10px] text-green-700 mt-0.5">Subtotal − piezas</div>
+                          </div>
+                        </div>
+
+                        {/* Bloque de comisión del técnico */}
+                        {factura.comisionTecnicoId && typeof factura.comisionTecnicoMonto === 'number' && (
+                          <div className="mt-3 bg-white rounded-xl p-3 border border-gray-100">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-[#0f3460] text-white flex items-center justify-center text-xs font-bold">
+                                  {(factura.comisionTecnicoNombre || 'T').split(' ').map(s => s[0]).join('').slice(0, 2)}
+                                </div>
+                                <div>
+                                  <div className="text-xs font-semibold text-gray-900">
+                                    Comisión técnico · {factura.comisionTecnicoNombre}
+                                  </div>
+                                  <div className="text-[11px] text-gray-500">
+                                    {factura.comisionTecnicoPorcentaje}% sobre ganancia neta
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-base font-bold text-emerald-600">
+                                  {formatMoneda(factura.comisionTecnicoMonto)}
+                                </div>
+                                <div className="text-[10px] text-gray-400">ganancia técnico</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Items detallados */}
+                        {Array.isArray(factura.items) && factura.items.length > 0 && (
+                          <div className="mt-3 bg-white rounded-xl border border-gray-100 overflow-hidden">
+                            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide bg-gray-50 px-3 py-1.5">
+                              Items ({factura.items.length})
+                            </div>
+                            <div className="divide-y divide-gray-50">
+                              {factura.items.map((item, i) => (
+                                <div key={i} className="px-3 py-1.5 flex items-center justify-between text-xs">
+                                  <div className="flex-1 min-w-0">
+                                    <span className="text-gray-900">{item.descripcion}</span>
+                                    {item.tipoItem === 'pieza' && (
+                                      <span className="ml-1 text-[10px] bg-red-50 text-red-700 px-1.5 rounded-full">pieza</span>
+                                    )}
+                                    {item.tipoItem === 'servicio' && (
+                                      <span className="ml-1 text-[10px] bg-blue-50 text-blue-700 px-1.5 rounded-full">servicio</span>
+                                    )}
+                                  </div>
+                                  <div className="text-gray-500 mx-2">{item.cantidad} × {formatMoneda(item.precio)}</div>
+                                  <div className="font-semibold text-gray-900 w-20 text-right">
+                                    {formatMoneda(item.cantidad * item.precio)}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
                 ))}
               </tbody>
             </table>
