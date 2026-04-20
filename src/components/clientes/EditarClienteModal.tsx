@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import Modal from '../Modal';
+import MiniMapaCliente from '../ordenes/MiniMapaCliente';
 import { Cliente, DireccionCliente } from '../../types';
 import {
   actualizarCliente,
@@ -9,8 +10,18 @@ import {
   eliminarDireccionCliente,
 } from '../../services/clientes.service';
 import AgregarDireccionModal from './AgregarDireccionModal';
+import { detectarCoordenadasURL, reverseGeocode, cargarGooglePlaces } from '../../utils/direccion';
 import { Home, Edit2, Trash2, Plus, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+interface PlaceAutocompleteLike {
+  getPlace: () => {
+    formatted_address?: string;
+    name?: string;
+    geometry?: { location: { lat: () => number; lng: () => number } };
+  };
+  addListener: (event: string, cb: () => void) => void;
+}
 
 interface Props {
   isOpen: boolean;
@@ -33,6 +44,63 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
   const [saving, setSaving] = useState(false);
   const [showAgregarDir, setShowAgregarDir] = useState(false);
   const [editandoDir, setEditandoDir] = useState<DireccionCliente | null>(null);
+
+  const dirInputRef = useRef<HTMLInputElement>(null);
+  const acRef = useRef<PlaceAutocompleteLike | null>(null);
+
+  // Cargar Google Places para autocomplete en el input de dirección principal
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelado = false;
+    const init = () => {
+      if (cancelado) return;
+      const w = window as unknown as {
+        google?: { maps?: { places?: { Autocomplete: new (i: HTMLInputElement, o: object) => PlaceAutocompleteLike } } };
+      };
+      const places = w.google?.maps?.places;
+      if (!places || !dirInputRef.current) return;
+      try {
+        acRef.current = new places.Autocomplete(dirInputRef.current, {
+          componentRestrictions: { country: 'do' },
+          fields: ['formatted_address', 'geometry', 'name'],
+        });
+        acRef.current.addListener('place_changed', () => {
+          if (!acRef.current) return;
+          const place = acRef.current.getPlace();
+          if (!place.geometry) return;
+          const nombre = place.name || '';
+          const dir = place.formatted_address || '';
+          const textoFinal = nombre && !dir.startsWith(nombre) ? `${nombre}, ${dir}` : dir;
+          setDireccion(textoFinal);
+          setLat(place.geometry.location.lat());
+          setLng(place.geometry.location.lng());
+          toast.success('📍 Ubicación de Google capturada');
+        });
+      } catch (err) {
+        console.warn('Error inicializando Places:', err);
+      }
+    };
+    cargarGooglePlaces(import.meta.env.VITE_GOOGLE_MAPS_KEY).then(ok => {
+      if (cancelado || !ok) return;
+      setTimeout(init, 200);
+    });
+    return () => { cancelado = true; acRef.current = null; };
+  }, [isOpen]);
+
+  /** onChange del input de dirección — además detecta URL de Maps / coords pegadas. */
+  const handleDireccionChange = async (texto: string) => {
+    const coords = detectarCoordenadasURL(texto);
+    if (coords) {
+      setLat(coords.lat);
+      setLng(coords.lng);
+      setDireccion('Obteniendo dirección...');
+      toast.success('📍 Coordenadas exactas guardadas');
+      const legible = await reverseGeocode(coords.lat, coords.lng);
+      setDireccion(legible || `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`);
+      return;
+    }
+    setDireccion(texto);
+  };
 
   // Cargar cliente en tiempo real mientras el modal esté abierto
   useEffect(() => {
@@ -92,9 +160,12 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
     }
     setCapturandoGps(true);
     navigator.geolocation.getCurrentPosition(
-      pos => {
-        setLat(pos.coords.latitude);
-        setLng(pos.coords.longitude);
+      async pos => {
+        const { latitude, longitude } = pos.coords;
+        setLat(latitude);
+        setLng(longitude);
+        const legible = await reverseGeocode(latitude, longitude);
+        if (legible) setDireccion(legible);
         setCapturandoGps(false);
         toast.success('Ubicación capturada');
       },
@@ -211,13 +282,21 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">Dirección principal</label>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Dirección principal
+                  <span className="ml-2 text-[10px] text-gray-400 font-normal">
+                    (Busca en Google, pega URL de Maps o location de WhatsApp)
+                  </span>
+                </label>
                 <div className="flex gap-2">
                   <input
+                    ref={dirInputRef}
                     type="text"
                     value={direccion}
-                    onChange={e => setDireccion(e.target.value)}
+                    onChange={e => handleDireccionChange(e.target.value)}
+                    placeholder="Escribe un lugar, dirección o pega URL de Google Maps"
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    autoComplete="off"
                   />
                   <button
                     type="button"
@@ -226,13 +305,24 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                     className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium disabled:opacity-60"
                   >
                     <MapPin size={12} />
-                    {capturandoGps ? '...' : 'GPS'}
+                    {capturandoGps ? '...' : 'Mi ubicación'}
                   </button>
                 </div>
                 {lat !== undefined && lng !== undefined && (
-                  <p className="text-[11px] text-green-700 mt-1">
-                    ✓ {lat.toFixed(4)}, {lng.toFixed(4)}
+                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    ✓ Coordenadas exactas guardadas ·{' '}
+                    <a
+                      href={`https://maps.google.com/?q=${lat},${lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-green-700 hover:underline font-medium"
+                    >
+                      Ver en Maps →
+                    </a>
                   </p>
+                )}
+                {lat !== undefined && lng !== undefined && (
+                  <MiniMapaCliente lat={lat} lng={lng} direccion={direccion} />
                 )}
               </div>
               <div className="col-span-2">

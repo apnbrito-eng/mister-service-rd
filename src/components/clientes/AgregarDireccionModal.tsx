@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Modal from '../Modal';
+import MiniMapaCliente from '../ordenes/MiniMapaCliente';
 import { DireccionCliente } from '../../types';
 import { agregarDireccionCliente } from '../../services/clientes.service';
+import { detectarCoordenadasURL, reverseGeocode, cargarGooglePlaces } from '../../utils/direccion';
 import { MapPin, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -10,8 +12,17 @@ interface Props {
   onClose: () => void;
   clienteId: string;
   clienteNombre: string;
-  /** Se llama cuando se creó la dirección; recibe la dirección completa. */
   onSaved?: (direccion: DireccionCliente) => void;
+}
+
+// Tipo mínimo del Autocomplete que usamos (Google Maps API)
+interface PlaceAutocompleteLike {
+  getPlace: () => {
+    formatted_address?: string;
+    name?: string;
+    geometry?: { location: { lat: () => number; lng: () => number } };
+  };
+  addListener: (event: string, cb: () => void) => void;
 }
 
 export default function AgregarDireccionModal({
@@ -29,6 +40,10 @@ export default function AgregarDireccionModal({
   const [capturandoGps, setCapturandoGps] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const inputRef = useRef<HTMLInputElement>(null);
+  const acRef = useRef<PlaceAutocompleteLike | null>(null);
+
+  // Reset al abrir
   useEffect(() => {
     if (isOpen) {
       setEtiqueta('');
@@ -39,6 +54,71 @@ export default function AgregarDireccionModal({
     }
   }, [isOpen]);
 
+  // Cargar e inicializar Google Places
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelado = false;
+
+    const init = () => {
+      if (cancelado) return;
+      const w = window as unknown as {
+        google?: { maps?: { places?: { Autocomplete: new (i: HTMLInputElement, o: object) => PlaceAutocompleteLike } } };
+      };
+      const places = w.google?.maps?.places;
+      if (!places || !inputRef.current) return;
+      try {
+        acRef.current = new places.Autocomplete(inputRef.current, {
+          componentRestrictions: { country: 'do' },
+          fields: ['formatted_address', 'geometry', 'name'],
+        });
+        acRef.current.addListener('place_changed', () => {
+          if (!acRef.current) return;
+          const place = acRef.current.getPlace();
+          if (!place.geometry) return;
+          const nombre = place.name || '';
+          const dir = place.formatted_address || '';
+          const textoFinal = nombre && !dir.startsWith(nombre) ? `${nombre}, ${dir}` : dir;
+          setDireccion(textoFinal);
+          setLat(place.geometry.location.lat());
+          setLng(place.geometry.location.lng());
+          toast.success('📍 Ubicación de Google capturada');
+        });
+      } catch (err) {
+        console.warn('Error inicializando Places:', err);
+      }
+    };
+
+    cargarGooglePlaces(import.meta.env.VITE_GOOGLE_MAPS_KEY).then(ok => {
+      if (cancelado) return;
+      if (!ok) return;
+      // Esperar a que el input esté montado
+      setTimeout(init, 100);
+    });
+
+    return () => {
+      cancelado = true;
+      acRef.current = null;
+    };
+  }, [isOpen]);
+
+  /**
+   * onChange del input — además del texto, detecta si pegaron una URL de Google Maps,
+   * Apple Maps, Waze, share-location de WhatsApp, etc., y extrae las coordenadas.
+   */
+  const handleDireccionChange = async (texto: string) => {
+    const coords = detectarCoordenadasURL(texto);
+    if (coords) {
+      setLat(coords.lat);
+      setLng(coords.lng);
+      setDireccion('Obteniendo dirección...');
+      toast.success('📍 Coordenadas exactas guardadas');
+      const legible = await reverseGeocode(coords.lat, coords.lng);
+      setDireccion(legible || `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`);
+      return;
+    }
+    setDireccion(texto);
+  };
+
   const handleUbicacionActual = () => {
     if (!navigator.geolocation) {
       toast.error('Tu navegador no soporta geolocalización');
@@ -46,9 +126,12 @@ export default function AgregarDireccionModal({
     }
     setCapturandoGps(true);
     navigator.geolocation.getCurrentPosition(
-      pos => {
-        setLat(pos.coords.latitude);
-        setLng(pos.coords.longitude);
+      async pos => {
+        const { latitude, longitude } = pos.coords;
+        setLat(latitude);
+        setLng(longitude);
+        const legible = await reverseGeocode(latitude, longitude);
+        if (legible) setDireccion(legible);
         setCapturandoGps(false);
         toast.success('Ubicación capturada');
       },
@@ -93,8 +176,8 @@ export default function AgregarDireccionModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Nueva dirección · ${clienteNombre}`} size="sm">
-      <form onSubmit={guardar} className="space-y-3">
+    <Modal isOpen={isOpen} onClose={onClose} title={`Nueva dirección · ${clienteNombre}`} size="md">
+      <form onSubmit={guardar} className="space-y-4">
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Etiqueta <span className="text-red-500">*</span>
@@ -113,14 +196,46 @@ export default function AgregarDireccionModal({
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Dirección <span className="text-red-500">*</span>
+            <span className="ml-2 text-[10px] text-gray-400 font-normal">
+              (Busca en Google, pega URL de Maps o location de WhatsApp)
+            </span>
           </label>
-          <input
-            type="text"
-            value={direccion}
-            onChange={e => setDireccion(e.target.value)}
-            placeholder="Calle Principal #123, Sector, Santo Domingo"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-          />
+          <div className="flex gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={direccion}
+              onChange={e => handleDireccionChange(e.target.value)}
+              placeholder="Escribe un lugar, dirección o pega URL de Google Maps"
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              onClick={handleUbicacionActual}
+              disabled={capturandoGps}
+              className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium flex items-center gap-1 shrink-0 disabled:opacity-50"
+            >
+              <MapPin size={12} />
+              {capturandoGps ? 'Obteniendo...' : 'Mi ubicación'}
+            </button>
+          </div>
+          {lat !== undefined && lng !== undefined && (
+            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+              <Check size={12} /> Coordenadas exactas guardadas ·{' '}
+              <a
+                href={`https://maps.google.com/?q=${lat},${lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-green-700 hover:underline font-medium"
+              >
+                Ver en Maps →
+              </a>
+            </p>
+          )}
+          {lat !== undefined && lng !== undefined && (
+            <MiniMapaCliente lat={lat} lng={lng} direccion={direccion} />
+          )}
         </div>
 
         <div>
@@ -134,31 +249,6 @@ export default function AgregarDireccionModal({
             placeholder="Al lado del colmado, casa amarilla..."
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
           />
-        </div>
-
-        <div>
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Coordenadas <span className="text-gray-400">(opcional)</span>
-          </label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleUbicacionActual}
-              disabled={capturandoGps}
-              className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium disabled:opacity-60"
-            >
-              <MapPin size={12} />
-              {capturandoGps ? 'Obteniendo...' : 'Usar mi ubicación'}
-            </button>
-            {lat !== undefined && lng !== undefined && (
-              <span className="inline-flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-2">
-                <Check size={12} /> {lat.toFixed(4)}, {lng.toFixed(4)}
-              </span>
-            )}
-          </div>
-          <p className="text-[11px] text-gray-500 mt-1">
-            Si estás en el sitio, usa "Mi ubicación" para guardar GPS preciso. Si no, déjalo en blanco — se resuelve después.
-          </p>
         </div>
 
         <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
