@@ -19,7 +19,9 @@ import CancelarOrdenModal from '../components/ordenes/CancelarOrdenModal';
 import FaseStepper from '../components/ordenes/FaseStepper';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import ReagendarModal from '../components/ordenes/ReagendarModal';
-import { XCircle } from 'lucide-react';
+import RegistrarPagoModal from '../components/ordenes/RegistrarPagoModal';
+import EnviarFacturacionButton from '../components/ordenes/EnviarFacturacionButton';
+import { XCircle, Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
 import { generarTrackingToken } from '../services/gps.service';
 import { whatsappUrl } from '../utils/whatsapp';
 
@@ -41,6 +43,7 @@ export default function OrdenDetalle() {
   const [precioAprobacion, setPrecioAprobacion] = useState('');
   const [aprobandoPrecio, setAprobandoPrecio] = useState(false);
   const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
+  const [showPagoModal, setShowPagoModal] = useState(false);
 
   // Pre-fill approval input
   useEffect(() => {
@@ -684,6 +687,157 @@ export default function OrdenDetalle() {
               </div>
             </div>
           )}
+
+          {/* Banner de inicio de chequeo */}
+          {orden.inicioChequeo && !orden.eliminada && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <div className="bg-green-50 border border-green-300 rounded-xl p-3 flex items-start gap-3">
+                {orden.inicioChequeo.fotoUrl && (
+                  <a href={orden.inicioChequeo.fotoUrl} target="_blank" rel="noopener noreferrer" className="shrink-0">
+                    <img
+                      src={orden.inicioChequeo.fotoUrl}
+                      alt="Inicio chequeo"
+                      className="w-16 h-16 rounded-lg object-cover border border-green-200"
+                    />
+                  </a>
+                )}
+                <div className="flex-1 text-sm">
+                  <p className="font-semibold text-green-900">
+                    📸 Chequeo iniciado por {orden.inicioChequeo.tecnicoNombre}
+                  </p>
+                  <p className="text-xs text-green-800 mt-0.5">
+                    {formatFecha(orden.inicioChequeo.fechaInicio)}
+                    {typeof orden.inicioChequeo.distanciaClienteMetros === 'number' && (
+                      <span className={`ml-2 ${orden.inicioChequeo.gpsVerificado ? 'text-green-700' : 'text-amber-700'}`}>
+                        · GPS a {orden.inicioChequeo.distanciaClienteMetros}m{' '}
+                        {orden.inicioChequeo.gpsVerificado ? 'OK' : '(alejado)'}
+                      </span>
+                    )}
+                  </p>
+                  {typeof orden.inicioChequeo.lat === 'number' && typeof orden.inicioChequeo.lng === 'number' && (
+                    <a
+                      href={`https://maps.google.com/?q=${orden.inicioChequeo.lat},${orden.inicioChequeo.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-green-700 hover:underline inline-flex items-center gap-0.5 mt-0.5"
+                    >
+                      Ver ubicación en Maps
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Pagos y facturación */}
+          {(puede(userProfile, 'pagosRegistrar') || puede(userProfile, 'ordenesEnviarAFacturacion') || (orden.pagos && orden.pagos.length > 0)) && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                <h3 className="text-sm font-semibold text-gray-500 uppercase">💵 Pagos y facturación</h3>
+                <div className="flex items-center gap-2">
+                  {puede(userProfile, 'ordenesEnviarAFacturacion') && (
+                    <EnviarFacturacionButton orden={orden} userProfile={userProfile} />
+                  )}
+                  {puede(userProfile, 'pagosRegistrar') && !orden.facturada && (
+                    <button
+                      type="button"
+                      onClick={() => setShowPagoModal(true)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                    >
+                      <Plus size={12} /> Registrar pago
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {(() => {
+                const total = Number(orden.precioFinal || orden.precioAprobado || orden.precioSugerido || 0);
+                const pagado = Number(orden.montoPagado || 0);
+                const pendiente = Math.max(0, total - pagado);
+                const estado = orden.estadoPago || (pagado === 0 ? 'pendiente' : pagado >= total && total > 0 ? 'completo' : 'parcial');
+                const colorEstado =
+                  estado === 'completo'
+                    ? 'bg-green-100 text-green-700 border-green-200'
+                    : estado === 'parcial'
+                      ? 'bg-amber-100 text-amber-800 border-amber-200'
+                      : 'bg-gray-100 text-gray-600 border-gray-200';
+                return (
+                  <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 grid grid-cols-4 gap-3 text-sm mb-3">
+                    <div>
+                      <div className="text-[11px] text-blue-700 uppercase tracking-wide">Total</div>
+                      <div className="text-base font-semibold text-[#0f3460]">{formatMoneda(total)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-blue-700 uppercase tracking-wide">Pagado</div>
+                      <div className="text-base font-semibold text-green-600">{formatMoneda(pagado)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-blue-700 uppercase tracking-wide">Pendiente</div>
+                      <div className="text-base font-semibold text-orange-600">{formatMoneda(pendiente)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[11px] text-blue-700 uppercase tracking-wide">Estado</div>
+                      <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border capitalize ${colorEstado}`}>
+                        {estado}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {orden.pagos && orden.pagos.length > 0 && (
+                <div className="space-y-1.5">
+                  {orden.pagos.map(p => (
+                    <div key={p.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        {p.metodo === 'efectivo' && <Banknote size={14} className="text-green-600" />}
+                        {p.metodo === 'transferencia' && <ArrowRightLeft size={14} className="text-blue-600" />}
+                        {p.metodo === 'tarjeta' && <CreditCard size={14} className="text-purple-600" />}
+                        <div>
+                          <span className="font-medium text-gray-900">
+                            {formatMoneda(Number(p.monto))}
+                          </span>
+                          <span className="text-gray-500 ml-2 capitalize">{p.metodo}</span>
+                          {p.metodo === 'efectivo' && p.recibidoPorNombre && (
+                            <span className="text-gray-500"> · {p.recibidoPorNombre}</span>
+                          )}
+                          {(p.metodo === 'transferencia' || p.metodo === 'tarjeta') && p.bancoNombre && (
+                            <span className="text-gray-500"> → {p.bancoNombre}</span>
+                          )}
+                          {p.referencia && <span className="text-gray-500"> · Ref {p.referencia}</span>}
+                        </div>
+                      </div>
+                      <span className="text-gray-400 text-[11px]">{formatFecha(p.fecha)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {orden.enviadaAFacturacion && !orden.facturada && (
+                <div className="mt-2 text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-2">
+                  Enviada a facturación por <strong>{orden.enviadaAFacturacionPorNombre || '—'}</strong>
+                  {orden.enviadaAFacturacionAt && ` · ${formatFecha(orden.enviadaAFacturacionAt)}`}
+                  . Pendiente de procesar por admin / coordinadora.
+                </div>
+              )}
+              {orden.facturada && (
+                <div className="mt-2 text-[11px] text-green-700 bg-green-50 border border-green-100 rounded-lg p-2">
+                  Facturada {orden.facturaNumero ? `(${orden.facturaNumero})` : ''}
+                  {orden.facturadaPorNombre && ` por ${orden.facturadaPorNombre}`}
+                  {orden.facturadaAt && ` · ${formatFecha(orden.facturadaAt)}`}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Modal de registrar pago */}
+          <RegistrarPagoModal
+            isOpen={showPagoModal}
+            onClose={() => setShowPagoModal(false)}
+            orden={orden}
+            userProfile={userProfile}
+          />
+
 
           {/* Registro de Auditoría */}
           {orden.auditoria && orden.auditoria.length > 0 && (

@@ -15,7 +15,8 @@ interface Props {
 /**
  * Marca la orden como "enviada a facturación" y notifica a admin/coordinadoras.
  * Requiere:
- *  - orden con cotización aprobada (estadoAprobacion === 'aprobado')
+ *  - orden con un precio definido (cualquiera de: precioFinal, precioAprobado,
+ *    precioSugerido > 0, o cotizacionId vinculado, o estadoAprobacion === 'aprobado')
  *  - al menos un pago registrado (montoPagado > 0)
  *  - usuario con permiso `ordenesEnviarAFacturacion`
  */
@@ -23,9 +24,16 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
   const [saving, setSaving] = useState(false);
 
   const yaEnviada = !!orden.enviadaAFacturacion;
-  const tieneCotizacionAprobada = orden.estadoAprobacion === 'aprobado';
+  // Tiene "precio para facturar" si cualquiera de estos existe con valor > 0
+  // o si hay una cotización vinculada
+  const tienePrecio =
+    Number(orden.precioFinal || 0) > 0 ||
+    Number(orden.precioAprobado || 0) > 0 ||
+    Number(orden.precioSugerido || 0) > 0 ||
+    !!orden.cotizacionId ||
+    orden.estadoAprobacion === 'aprobado';
   const tienePago = Number(orden.montoPagado || 0) > 0;
-  const habilitado = tieneCotizacionAprobada && tienePago && !yaEnviada && !orden.facturada;
+  const habilitado = tienePrecio && tienePago && !yaEnviada && !orden.facturada;
 
   const handleClick = async () => {
     if (!habilitado) return;
@@ -108,8 +116,8 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
       onClick={handleClick}
       disabled={!habilitado || saving}
       title={
-        !tieneCotizacionAprobada
-          ? 'Requiere cotización aprobada'
+        !tienePrecio
+          ? 'La orden necesita un precio definido (sugerido, aprobado o cotización)'
           : !tienePago
             ? 'Requiere al menos un pago registrado'
             : 'Enviar a facturación'
