@@ -200,9 +200,14 @@ export interface ComisionRegistro {
   fechaCobro: Date;
   precioFinal: number;
   costoPiezas: number;
-  basePendienteComision: number;
+  basePendienteComision: number;   // ganancia neta (subtotal sin ITBIS - piezas)
   comisionPorcentaje: number;
   comisionMonto: number;
+  // Desglose fiscal (se llena cuando se genera comisión desde factura)
+  subtotal?: number;
+  itbisMonto?: number;
+  facturaId?: string;
+  facturaNumero?: string;
   estadoLiquidacion: 'pendiente' | 'liquidada';
   quincenaAsignada?: string;
   liquidadaEn?: Date;
@@ -415,6 +420,18 @@ export interface Factura {
   metodoPago?: MetodoPago;
   bancoDestino?: string;
   cotizacionId?: string;
+  // Desglose fiscal (el total ya incluye ITBIS, se desglosa al facturar)
+  subtotal?: number;            // total sin ITBIS = total / 1.18
+  itbisPorcentaje?: number;     // 18 por default
+  itbisMonto?: number;          // total - subtotal
+  costoPiezas?: number;         // suma de costoCompra de items tipo pieza
+  gananciaNeta?: number;        // subtotal - costoPiezas
+  // Comisión del técnico asociada (denormalizado para reportes)
+  comisionTecnicoId?: string;
+  comisionTecnicoNombre?: string;
+  comisionTecnicoPorcentaje?: number;
+  comisionTecnicoMonto?: number;
+  comisionRegistroId?: string;  // id del doc en colección `comisiones`
   createdAt: Date;
 }
 

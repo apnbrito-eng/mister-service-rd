@@ -17,6 +17,7 @@ import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import { crearRegistroAuditoria, formatFecha, parseOrden } from '../utils';
 import { siguienteNumeroFactura } from '../services/contadores.service';
+import { registrarComisionPorFactura, desglosarTotalConITBIS, calcularCostoPiezasDeItems } from '../utils/comisiones';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Inbox, Receipt, ArrowRight, Banknote, ArrowRightLeft, CreditCard, Trash2, Plus, Check } from 'lucide-react';
@@ -277,6 +278,11 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
         return obj;
       });
 
+      // Desglose fiscal (el total cobrado ya incluye ITBIS → desglosar)
+      const desglose = desglosarTotalConITBIS(totalItems);
+      const costoPiezas = calcularCostoPiezasDeItems(itemsLimpios as unknown as import('../types').ItemCotizacion[]);
+      const gananciaNeta = Math.max(0, Math.round((desglose.subtotal - costoPiezas) * 100) / 100);
+
       const facturaPayload: Record<string, unknown> = {
         numero,
         clienteId: orden.clienteId,
@@ -285,6 +291,11 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
         ordenNumero: orden.numero,
         items: itemsLimpios,
         total: totalItems,
+        subtotal: desglose.subtotal,
+        itbisPorcentaje: desglose.itbisPorcentaje,
+        itbisMonto: desglose.itbis,
+        costoPiezas,
+        gananciaNeta,
         estado: totalPagado >= totalItems ? 'pagada' : 'emitida',
         fechaEmision: ahora,
         createdAt: ahora,
@@ -302,6 +313,31 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
       );
 
       const facturaRef = await addDoc(collection(db, 'facturas'), facturaLimpia);
+
+      // Registrar/actualizar comisión del técnico sobre ganancia neta
+      let comisionInfo: Awaited<ReturnType<typeof registrarComisionPorFactura>> | null = null;
+      try {
+        comisionInfo = await registrarComisionPorFactura({
+          orden,
+          facturaId: facturaRef.id,
+          facturaNumero: numero,
+          totalFactura: totalItems,
+          items: itemsLimpios as unknown as import('../types').ItemCotizacion[],
+          userProfile,
+        });
+        // Denormalizar los datos de comisión en el doc de factura
+        if (comisionInfo && comisionInfo.comisionId && comisionInfo.tecnicoId) {
+          await updateDoc(doc(db, 'facturas', facturaRef.id), {
+            comisionRegistroId: comisionInfo.comisionId,
+            comisionTecnicoId: comisionInfo.tecnicoId,
+            comisionTecnicoNombre: comisionInfo.tecnicoNombre,
+            comisionTecnicoPorcentaje: comisionInfo.porcentaje,
+            comisionTecnicoMonto: comisionInfo.comisionMonto,
+          });
+        }
+      } catch (err) {
+        console.warn('Error registrando comisión por factura:', err);
+      }
 
       // Marcar la orden
       const registro = crearRegistroAuditoria(

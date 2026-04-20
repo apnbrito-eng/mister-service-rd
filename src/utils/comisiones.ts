@@ -2,8 +2,62 @@ import {
   collection, addDoc, doc, getDoc, getDocs, query, where, Timestamp, updateDoc, arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, Cotizacion, Factura, Personal, Usuario, ItemCotizacion } from '../types';
+import { OrdenServicio, Personal, Usuario, ItemCotizacion } from '../types';
 import { crearRegistroAuditoria } from './index';
+
+/** ITBIS (impuesto al valor agregado) estándar de RD. */
+export const ITBIS_PORCENTAJE = 18;
+
+/**
+ * Desglosa un total que YA incluye ITBIS:
+ *   subtotal = total / 1.18
+ *   itbis = total - subtotal
+ */
+export function desglosarTotalConITBIS(total: number): {
+  subtotal: number;
+  itbis: number;
+  total: number;
+  itbisPorcentaje: number;
+} {
+  const subtotal = Math.round((total / (1 + ITBIS_PORCENTAJE / 100)) * 100) / 100;
+  const itbis = Math.round((total - subtotal) * 100) / 100;
+  return { subtotal, itbis, total, itbisPorcentaje: ITBIS_PORCENTAJE };
+}
+
+/**
+ * Calcula el desglose completo para una factura:
+ *  total (lo que paga el cliente) → subtotal + itbis
+ *  costoPiezas = suma de costoCompra * cantidad de items tipo pieza
+ *  gananciaNeta = subtotal - costoPiezas
+ *  comisionMonto = gananciaNeta * (porcentajeTecnico / 100)
+ */
+export function calcularDesgloseFactura(args: {
+  total: number;
+  items?: ItemCotizacion[];
+  porcentajeTecnico: number;
+}): {
+  subtotal: number;
+  itbis: number;
+  itbisPorcentaje: number;
+  costoPiezas: number;
+  gananciaNeta: number;
+  comisionMonto: number;
+  comisionPorcentaje: number;
+} {
+  const { subtotal, itbis, itbisPorcentaje } = desglosarTotalConITBIS(args.total);
+  const costoPiezas = calcularCostoPiezasDeItems(args.items);
+  const gananciaNeta = Math.max(0, Math.round((subtotal - costoPiezas) * 100) / 100);
+  const comisionMonto = Math.round(gananciaNeta * (args.porcentajeTecnico / 100) * 100) / 100;
+  return {
+    subtotal,
+    itbis,
+    itbisPorcentaje,
+    costoPiezas,
+    gananciaNeta,
+    comisionMonto,
+    comisionPorcentaje: args.porcentajeTecnico,
+  };
+}
 
 /**
  * Calcula el costo de piezas de una orden a partir de su factura o cotización vinculada.
@@ -126,6 +180,140 @@ function obtenerPorcentajeComision(personal: Personal | null | undefined): numbe
   if (personal.nivel === 'senior') return COMISION_DEFAULT_SENIOR;
   if (personal.nivel === 'junior') return COMISION_DEFAULT_JUNIOR;
   return COMISION_DEFAULT_FALLBACK;
+}
+
+/**
+ * Resuelve el % de comisión del técnico asignado a una orden.
+ * Devuelve también el doc de Personal por si el caller necesita `nombre`.
+ */
+export async function obtenerTecnicoParaComision(
+  tecnicoId: string | undefined,
+): Promise<{ personal: Personal | null; porcentaje: number }> {
+  if (!tecnicoId) return { personal: null, porcentaje: COMISION_DEFAULT_FALLBACK };
+  try {
+    const snap = await getDoc(doc(db, 'personal', tecnicoId));
+    if (snap.exists()) {
+      const personal = { id: snap.id, ...snap.data() } as Personal;
+      return { personal, porcentaje: obtenerPorcentajeComision(personal) };
+    }
+  } catch (err) {
+    console.warn('No se pudo leer técnico:', err);
+  }
+  return { personal: null, porcentaje: COMISION_DEFAULT_FALLBACK };
+}
+
+/**
+ * Crea o actualiza un ComisionRegistro a partir de una factura recién generada.
+ * Es idempotente por `ordenId` — si ya existe una comisión, actualiza sus montos
+ * en lugar de duplicarla. Devuelve el id del registro creado/actualizado.
+ */
+export async function registrarComisionPorFactura(args: {
+  orden: OrdenServicio;
+  facturaId: string;
+  facturaNumero: string;
+  totalFactura: number;
+  items?: ItemCotizacion[];
+  userProfile: Usuario | null;
+}): Promise<{ comisionId: string | null; comisionMonto: number; gananciaNeta: number; subtotal: number; itbis: number; costoPiezas: number; porcentaje: number; tecnicoId: string; tecnicoNombre: string }> {
+  const { orden, facturaId, facturaNumero, totalFactura, items, userProfile } = args;
+  const usuario = userProfile?.nombre || 'Sistema';
+
+  if (!orden.tecnicoId) {
+    return {
+      comisionId: null, comisionMonto: 0, gananciaNeta: 0, subtotal: 0, itbis: 0, costoPiezas: 0,
+      porcentaje: 0, tecnicoId: '', tecnicoNombre: '',
+    };
+  }
+  if (orden.soloChequeo) {
+    return {
+      comisionId: null, comisionMonto: 0, gananciaNeta: 0, subtotal: 0, itbis: 0, costoPiezas: 0,
+      porcentaje: 0, tecnicoId: orden.tecnicoId, tecnicoNombre: orden.tecnicoNombre || '',
+    };
+  }
+
+  const { personal, porcentaje } = await obtenerTecnicoParaComision(orden.tecnicoId);
+  const tecnicoNombre = orden.tecnicoNombre || personal?.nombre || 'Técnico';
+
+  const desglose = calcularDesgloseFactura({ total: totalFactura, items, porcentajeTecnico: porcentaje });
+
+  const fechaCobro = new Date();
+  const quincena = calcularQuincenaActual(fechaCobro);
+
+  // Buscar si ya existe comisión para esta orden (idempotencia + actualización)
+  let comisionExistenteId: string | null = null;
+  try {
+    const existQ = await getDocs(query(
+      collection(db, 'comisiones'),
+      where('ordenId', '==', orden.id),
+    ));
+    if (!existQ.empty) comisionExistenteId = existQ.docs[0].id;
+  } catch (err) {
+    console.warn('No se pudo buscar comisión existente:', err);
+  }
+
+  const payload: Record<string, unknown> = {
+    tecnicoId: orden.tecnicoId,
+    tecnicoNombre,
+    ordenId: orden.id,
+    ordenNumero: orden.numero || '',
+    clienteNombre: orden.clienteNombre || '',
+    fechaCobro: Timestamp.fromDate(fechaCobro),
+    precioFinal: totalFactura,
+    subtotal: desglose.subtotal,
+    itbisMonto: desglose.itbis,
+    costoPiezas: desglose.costoPiezas,
+    basePendienteComision: desglose.gananciaNeta,
+    comisionPorcentaje: desglose.comisionPorcentaje,
+    comisionMonto: desglose.comisionMonto,
+    facturaId,
+    facturaNumero,
+    estadoLiquidacion: 'pendiente',
+    quincenaAsignada: quincena,
+    updatedAt: Timestamp.now(),
+  };
+
+  let comisionId = comisionExistenteId;
+  try {
+    if (comisionExistenteId) {
+      await updateDoc(doc(db, 'comisiones', comisionExistenteId), payload);
+    } else {
+      payload.createdAt = Timestamp.now();
+      const ref = await addDoc(collection(db, 'comisiones'), payload);
+      comisionId = ref.id;
+    }
+
+    // Auditoría en la orden (no bloqueante)
+    try {
+      const reg = crearRegistroAuditoria(
+        usuario,
+        'cierre',
+        `Factura ${facturaNumero} generada — Comisión RD$${desglose.comisionMonto.toLocaleString('es-DO')} para ${tecnicoNombre} (${porcentaje}%)`,
+        'comision',
+        '',
+        `RD$${desglose.comisionMonto.toLocaleString('es-DO')}`,
+      );
+      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+        auditoria: arrayUnion(reg),
+        updatedAt: Timestamp.now(),
+      });
+    } catch (err) {
+      console.warn('No se pudo registrar auditoría de comisión:', err);
+    }
+  } catch (err) {
+    console.error('Error registrando comisión por factura:', err);
+  }
+
+  return {
+    comisionId,
+    comisionMonto: desglose.comisionMonto,
+    gananciaNeta: desglose.gananciaNeta,
+    subtotal: desglose.subtotal,
+    itbis: desglose.itbis,
+    costoPiezas: desglose.costoPiezas,
+    porcentaje,
+    tecnicoId: orden.tecnicoId,
+    tecnicoNombre,
+  };
 }
 
 /**
