@@ -71,6 +71,8 @@ export default function GestionUsuarios() {
   const [accessPassword, setAccessPassword] = useState('');
   const [showAccessPassword, setShowAccessPassword] = useState(false);
   const [accessSaving, setAccessSaving] = useState(false);
+  // 'email' = enviar email de recuperación; 'directa' = cambiar contraseña directamente (Admin SDK)
+  const [accessMode, setAccessMode] = useState<'email' | 'directa'>('directa');
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -215,6 +217,7 @@ export default function GestionUsuarios() {
     setAccessUser(u);
     setAccessPassword('');
     setShowAccessPassword(false);
+    setAccessMode('directa');
     setShowAccessModal(true);
   };
 
@@ -222,6 +225,53 @@ export default function GestionUsuarios() {
     setShowAccessModal(false);
     setAccessUser(null);
     setAccessPassword('');
+  };
+
+  /**
+   * Cambia la contraseña directamente usando el endpoint /api/admin/reset-password
+   * (Firebase Admin SDK en Vercel). No envía email al usuario.
+   */
+  const handleCambiarPasswordDirecto = async () => {
+    if (!accessUser || !accessUser.email) return;
+    if (accessPassword.length < 8) {
+      toast.error('La contraseña debe tener al menos 8 caracteres');
+      return;
+    }
+    setAccessSaving(true);
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        toast.error('Sesión expirada. Vuelve a iniciar sesión.');
+        setAccessSaving(false);
+        return;
+      }
+      const idToken = await currentUser.getIdToken();
+
+      const resp = await fetch('/api/admin/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idToken,
+          targetEmail: accessUser.email,
+          newPassword: accessPassword,
+        }),
+      });
+
+      const data = await resp.json().catch(() => ({}));
+
+      if (!resp.ok) {
+        toast.error(data.error || `Error ${resp.status}`);
+        return;
+      }
+
+      toast.success(`✅ Contraseña cambiada para ${accessUser.nombre}`);
+      closeAccessModal();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al cambiar contraseña');
+    } finally {
+      setAccessSaving(false);
+    }
   };
 
   /** Crear cuenta en Firebase Auth para un usuario existente en Firestore */
@@ -692,30 +742,113 @@ export default function GestionUsuarios() {
             </div>
 
             {accessUser.uid ? (
-              // Usuario ya tiene Auth → enviar email de reset
-              <div className="space-y-3">
-                <p className="text-sm text-gray-700">
-                  Este usuario ya tiene cuenta en Firebase Authentication. Para cambiar su contraseña,
-                  le enviaremos un email con un enlace de recuperación a <strong>{accessUser.email}</strong>.
-                </p>
-                <div className="flex justify-end gap-3 pt-2">
+              // Usuario ya tiene Auth → permitir cambiar directo o enviar email
+              <div className="space-y-4">
+                {/* Selector de modo */}
+                <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={closeAccessModal}
-                    disabled={accessSaving}
-                    className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+                    onClick={() => setAccessMode('directa')}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                      accessMode === 'directa'
+                        ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
                   >
-                    Cancelar
+                    Cambiar directamente
                   </button>
                   <button
                     type="button"
-                    onClick={handleEnviarResetPassword}
-                    disabled={accessSaving}
-                    className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                    onClick={() => setAccessMode('email')}
+                    className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                      accessMode === 'email'
+                        ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                        : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+                    }`}
                   >
-                    {accessSaving ? 'Enviando...' : 'Enviar email de recuperación'}
+                    Enviar email de reset
                   </button>
                 </div>
+
+                {accessMode === 'directa' ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-700">
+                      Define una nueva contraseña para <strong>{accessUser.nombre}</strong>. El
+                      cambio es inmediato; no se le notifica por email. Comunícale la nueva
+                      contraseña por otro medio.
+                    </p>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Nueva contraseña <span className="text-gray-400">(mínimo 8 caracteres)</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showAccessPassword ? 'text' : 'password'}
+                          value={accessPassword}
+                          onChange={e => setAccessPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                          autoComplete="new-password"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAccessPassword(!showAccessPassword)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                        >
+                          {showAccessPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                      {accessPassword && accessPassword.length < 8 && (
+                        <p className="text-[11px] text-red-500 mt-1">Faltan {8 - accessPassword.length} caracteres</p>
+                      )}
+                    </div>
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={closeAccessModal}
+                        disabled={accessSaving}
+                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCambiarPasswordDirecto}
+                        disabled={accessSaving || accessPassword.length < 8}
+                        className="flex items-center gap-1 px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                      >
+                        <Key size={14} />
+                        {accessSaving ? 'Guardando...' : 'Cambiar contraseña'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-gray-700">
+                      Se enviará un enlace de recuperación al email{' '}
+                      <strong>{accessUser.email}</strong>. El usuario define su propia contraseña
+                      desde el enlace.
+                    </p>
+                    <div className="flex justify-end gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={closeAccessModal}
+                        disabled={accessSaving}
+                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleEnviarResetPassword}
+                        disabled={accessSaving}
+                        className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                      >
+                        {accessSaving ? 'Enviando...' : 'Enviar email'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               // Usuario sin Auth → crear cuenta con contraseña
