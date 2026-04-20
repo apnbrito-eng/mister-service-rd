@@ -35,5 +35,7 @@ firebase-debug.log
 # CORS config local para gsutil
 cors.json
 
-# Claude Code local settings
-.claude/
+# Claude Code local settings (ignorar todo menos los agentes y comandos del equipo)
+.claude/*
+!.claude/agents/
+!.claude/commands/
