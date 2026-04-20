@@ -11,6 +11,9 @@ import EliminarOrdenButton from './EliminarOrdenButton';
 import FaseStepper from './FaseStepper';
 import CancelarOrdenModal from './CancelarOrdenModal';
 import ReagendarModal from './ReagendarModal';
+import RegistrarPagoModal from './RegistrarPagoModal';
+import EnviarFacturacionButton from './EnviarFacturacionButton';
+import { Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
 
 interface OrdenDetailModalProps {
   orden: OrdenServicio;
@@ -36,8 +39,11 @@ export default function OrdenDetailModal({
   standbyItems = [],
 }: OrdenDetailModalProps) {
   const puedeModificar = puede(userProfile, 'ordenesModificar');
+  const puedeRegistrarPago = puede(userProfile, 'pagosRegistrar');
+  const puedeEnviarAFacturacion = puede(userProfile, 'ordenesEnviarAFacturacion');
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showReagendarModal, setShowReagendarModal] = useState(false);
+  const [showPagoModal, setShowPagoModal] = useState(false);
   const conStandby = tieneStandby(orden, standbyItems);
   const tienePiezaPendiente = standbyItems.some(s => s.ordenId === orden.id && s.estado !== 'llego');
   const mostrarBannerReagendar = orden.fase === 'aprobado' && tienePiezaPendiente && !orden.eliminada;
@@ -298,6 +304,128 @@ export default function OrdenDetailModal({
           </div>
         </div>
       )}
+
+      {/* Pagos y facturación */}
+      {(puedeRegistrarPago || puedeEnviarAFacturacion || (orden.pagos && orden.pagos.length > 0)) && (
+        <div>
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+              {'\u{1F4B5}'} Pagos y facturación
+            </h3>
+            <div className="flex items-center gap-2">
+              {puedeEnviarAFacturacion && (
+                <EnviarFacturacionButton orden={orden} userProfile={userProfile} />
+              )}
+              {puedeRegistrarPago && !orden.facturada && (
+                <button
+                  type="button"
+                  onClick={() => setShowPagoModal(true)}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                >
+                  <Plus size={12} /> Registrar pago
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Resumen */}
+          {(() => {
+            const total = Number(orden.precioFinal || orden.precioAprobado || orden.precioSugerido || 0);
+            const pagado = Number(orden.montoPagado || 0);
+            const pendiente = Math.max(0, total - pagado);
+            const estado = orden.estadoPago || (pagado === 0 ? 'pendiente' : pagado >= total && total > 0 ? 'completo' : 'parcial');
+            const colorEstado =
+              estado === 'completo'
+                ? 'bg-green-100 text-green-700 border-green-200'
+                : estado === 'parcial'
+                  ? 'bg-amber-100 text-amber-800 border-amber-200'
+                  : 'bg-gray-100 text-gray-600 border-gray-200';
+            return (
+              <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 grid grid-cols-4 gap-3 text-sm mb-2">
+                <div>
+                  <div className="text-[11px] text-blue-700 uppercase tracking-wide">Total</div>
+                  <div className="text-base font-semibold text-[#0f3460]">
+                    RD$ {total.toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-blue-700 uppercase tracking-wide">Pagado</div>
+                  <div className="text-base font-semibold text-green-600">
+                    RD$ {pagado.toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-blue-700 uppercase tracking-wide">Pendiente</div>
+                  <div className="text-base font-semibold text-orange-600">
+                    RD$ {pendiente.toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-blue-700 uppercase tracking-wide">Estado</div>
+                  <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-semibold border capitalize ${colorEstado}`}>
+                    {estado}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Lista de pagos */}
+          {orden.pagos && orden.pagos.length > 0 && (
+            <div className="space-y-1.5">
+              {orden.pagos.map(p => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-xs"
+                >
+                  <div className="flex items-center gap-2">
+                    {p.metodo === 'efectivo' && <Banknote size={14} className="text-green-600" />}
+                    {p.metodo === 'transferencia' && <ArrowRightLeft size={14} className="text-blue-600" />}
+                    {p.metodo === 'tarjeta' && <CreditCard size={14} className="text-purple-600" />}
+                    <div>
+                      <span className="font-medium text-gray-900">
+                        RD$ {Number(p.monto).toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                      </span>
+                      <span className="text-gray-500 ml-2 capitalize">{p.metodo}</span>
+                      {p.metodo === 'efectivo' && p.recibidoPorNombre && (
+                        <span className="text-gray-500"> · {p.recibidoPorNombre}</span>
+                      )}
+                      {(p.metodo === 'transferencia' || p.metodo === 'tarjeta') && p.bancoNombre && (
+                        <span className="text-gray-500"> → {p.bancoNombre}</span>
+                      )}
+                      {p.referencia && <span className="text-gray-500"> · Ref {p.referencia}</span>}
+                    </div>
+                  </div>
+                  <span className="text-gray-400 text-[11px]">{formatFecha(p.fecha)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Estado de envío a facturación */}
+          {orden.enviadaAFacturacion && !orden.facturada && (
+            <div className="mt-2 text-[11px] text-blue-700 bg-blue-50 border border-blue-100 rounded-lg p-2">
+              Enviada a facturación por <strong>{orden.enviadaAFacturacionPorNombre || '—'}</strong>
+              {orden.enviadaAFacturacionAt && ` · ${formatFecha(orden.enviadaAFacturacionAt)}`}
+              . Pendiente de procesar por admin / coordinadora.
+            </div>
+          )}
+          {orden.facturada && (
+            <div className="mt-2 text-[11px] text-green-700 bg-green-50 border border-green-100 rounded-lg p-2">
+              Facturada {orden.facturaNumero ? `(${orden.facturaNumero})` : ''}
+              {orden.facturadaPorNombre && ` por ${orden.facturadaPorNombre}`}
+              {orden.facturadaAt && ` · ${formatFecha(orden.facturadaAt)}`}
+            </div>
+          )}
+        </div>
+      )}
+
+      <RegistrarPagoModal
+        isOpen={showPagoModal}
+        onClose={() => setShowPagoModal(false)}
+        orden={orden}
+        userProfile={userProfile}
+      />
 
       {/* Created By */}
       <div>

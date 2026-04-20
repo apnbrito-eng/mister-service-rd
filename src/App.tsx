@@ -40,6 +40,8 @@ import GestionUsuarios from './pages/GestionUsuarios';
 import TrackingCliente from './pages/TrackingCliente';
 import AgendaDia from './pages/AgendaDia';
 import MetricasMensuales from './pages/MetricasMensuales';
+import Bancos from './pages/Bancos';
+import FacturacionPendiente from './pages/FacturacionPendiente';
 
 // Public website pages
 import PublicLayout from './components/public/PublicLayout';
@@ -174,6 +176,8 @@ function AppRoutes() {
         <Route path="comisiones" element={<RolRoute roles={['administrador', 'coordinadora']}><Comisiones /></RolRoute>} />
         <Route path="nomina" element={<RolRoute roles={['administrador', 'coordinadora']}><Nomina /></RolRoute>} />
         <Route path="historial-anuladas" element={<PermisoRoute permiso="ordenesVerEliminadas"><HistorialAnuladas /></PermisoRoute>} />
+        <Route path="bancos" element={<PermisoRoute permiso="bancosGestionar"><Bancos /></PermisoRoute>} />
+        <Route path="facturacion-pendiente" element={<RolRoute roles={['administrador', 'coordinadora']}><FacturacionPendiente /></RolRoute>} />
         <Route path="configuracion/usuarios" element={<RolRoute roles={['administrador', 'coordinadora']}><GestionUsuarios /></RolRoute>} />
       </Route>
 

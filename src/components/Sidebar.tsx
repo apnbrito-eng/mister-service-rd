@@ -26,6 +26,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [standbyCount, setStandbyCount] = useState(0);
   const [citasCount, setCitasCount] = useState(0);
   const [solicitudesCount, setSolicitudesCount] = useState(0);
+  const [facturacionPendienteCount, setFacturacionPendienteCount] = useState(0);
 
   useEffect(() => {
     const q1 = query(collection(db, 'standby_piezas'), where('estado', '!=', 'llego'));
@@ -36,7 +37,16 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     const q3 = query(collection(db, 'solicitudes_servicio'), where('estado', '==', 'pendiente'));
     const unsub3 = onSnapshot(q3, (snap) => setSolicitudesCount(snap.size));
 
-    return () => { unsub1(); unsub2(); unsub3(); };
+    const q4 = query(collection(db, 'ordenes_servicio'), where('enviadaAFacturacion', '==', true));
+    const unsub4 = onSnapshot(q4, (snap) => {
+      const count = snap.docs.filter(d => {
+        const data = d.data();
+        return !data.facturada && !data.eliminada;
+      }).length;
+      setFacturacionPendienteCount(count);
+    });
+
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
   }, []);
 
   const handleLogout = async () => {
@@ -64,6 +74,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { to: '/admin/clientes', icon: Users, label: 'Clientes', show: p('clientesVer') },
     { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: p('cotizacionesVer') },
     { to: '/admin/facturas', icon: Receipt, label: 'Facturas', show: p('facturasVer') },
+    { to: '/admin/facturacion-pendiente', icon: Inbox, label: 'Facturación Pendiente', badge: facturacionPendienteCount, show: isAdmin || userProfile?.rol === 'coordinadora' },
     { to: '/admin/taller', icon: Wrench, label: 'Equipos Taller', show: p('ordenesVer') },
     { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: p('ordenesVer') },
     { to: '/admin/mantenimiento', icon: Calendar, label: 'Mantenimiento', show: p('ordenesVer') },
@@ -75,6 +86,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: isAdmin || userProfile?.rol === 'coordinadora' },
     { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: isAdmin || userProfile?.rol === 'coordinadora' || p('ordenesVerEliminadas') },
     { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: isAdmin || p('configuracionModificar') },
+    { to: '/admin/bancos', icon: Building2, label: 'Bancos', show: p('bancosGestionar') },
     { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionModificar') || userProfile?.rol === 'operaria' || isAdmin },
     { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
     { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: p('personalModificar') },

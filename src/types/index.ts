@@ -154,6 +154,20 @@ export interface OrdenServicio {
   efectivoEntregadoEn?: Date;
   // Cotización vinculada (Fase 4B)
   cotizacionId?: string;
+  // Pagos y facturación (Fase 7)
+  pagos?: PagoOrden[];
+  montoPagado?: number;
+  estadoPago?: EstadoPagoOrden;
+  enviadaAFacturacion?: boolean;
+  enviadaAFacturacionAt?: Date;
+  enviadaAFacturacionPorId?: string;
+  enviadaAFacturacionPorNombre?: string;
+  facturada?: boolean;
+  facturaId?: string;
+  facturaNumero?: string;
+  facturadaAt?: Date;
+  facturadaPorId?: string;
+  facturadaPorNombre?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -480,6 +494,11 @@ export interface PermisosSistema {
   configuracionModificar: boolean;
   // Cierre del día
   cierreDiaEjecutar: boolean;
+  // Pagos y facturación (Fase 7)
+  pagosRegistrar: boolean;
+  ordenesEnviarAFacturacion: boolean;
+  facturasCerrar: boolean;
+  bancosGestionar: boolean;
   // Técnico (opcional, solo para rol técnico)
   tecnicoVistaAgenda?: 'dia' | 'semana' | 'mes';
   tecnicoSoloPropiasCitas?: boolean;
@@ -506,6 +525,8 @@ const TODO_FALSE: PermisosSistema = {
   rendimientoVer: false,
   configuracionVer: false, configuracionModificar: false,
   cierreDiaEjecutar: false,
+  pagosRegistrar: false, ordenesEnviarAFacturacion: false,
+  facturasCerrar: false, bancosGestionar: false,
 };
 
 const TODO_TRUE: PermisosSistema = {
@@ -519,6 +540,8 @@ const TODO_TRUE: PermisosSistema = {
   rendimientoVer: true,
   configuracionVer: true, configuracionModificar: true,
   cierreDiaEjecutar: true,
+  pagosRegistrar: true, ordenesEnviarAFacturacion: true,
+  facturasCerrar: true, bancosGestionar: true,
 };
 
 export const PERMISOS_TODO_FALSE: PermisosSistema = { ...TODO_FALSE };
@@ -538,6 +561,8 @@ export const PERMISOS_DEFAULT_OPERARIA: PermisosSistema = {
   clientesVer: true, clientesCrear: true, clientesModificar: true,
   personalVer: true,
   rendimientoVer: true,
+  pagosRegistrar: true, ordenesEnviarAFacturacion: true,
+  facturasVer: true,
 };
 
 export const PERMISOS_DEFAULT_SECRETARIA: PermisosSistema = {
@@ -545,6 +570,7 @@ export const PERMISOS_DEFAULT_SECRETARIA: PermisosSistema = {
   ordenesVer: true, ordenesCrear: true, ordenesModificar: true,
   clientesVer: true, clientesCrear: true, clientesModificar: true,
   personalVer: true,
+  pagosRegistrar: true,
 };
 
 export const PERMISOS_DEFAULT_TECNICO_SISTEMA: PermisosSistema = {
@@ -599,6 +625,53 @@ export interface Producto {
   activo: boolean;
   createdAt: Date;
 }
+
+/** Banco configurable por admin (destino de transferencias). */
+export interface Banco {
+  id: string;
+  nombre: string;
+  activo: boolean;
+  orden?: number;
+  createdAt: Date;
+  updatedAt?: Date;
+}
+
+export const BANCOS_RD_SEED: string[] = [
+  'Banco Popular Dominicano',
+  'Banreservas',
+  'BHD',
+  'Scotiabank',
+  'Banco Santa Cruz',
+  'Banesco',
+  'APAP',
+  'Banco Caribe',
+  'Promerica',
+  'Banco Ademi',
+];
+
+/**
+ * Pago registrado sobre una orden. Una orden puede tener varios pagos
+ * (abonos parciales) que se suman en `montoPagado` a nivel de la orden.
+ */
+export interface PagoOrden {
+  id: string;
+  metodo: 'efectivo' | 'transferencia' | 'tarjeta';
+  monto: number;
+  fecha: Date;
+  // Si efectivo
+  recibidoPorId?: string;
+  recibidoPorNombre?: string;
+  // Si transferencia o tarjeta
+  bancoId?: string;
+  bancoNombre?: string;
+  referencia?: string;
+  notas?: string;
+  // Quién registró el pago (operaria/admin)
+  registradoPorId: string;
+  registradoPorNombre: string;
+}
+
+export type EstadoPagoOrden = 'pendiente' | 'parcial' | 'completo';
 
 export interface Gasto {
   id: string;
@@ -756,6 +829,7 @@ export type TipoNotificacion =
   | 'recordatorio'
   | 'pieza_llego'
   | 'orden_asignada'
+  | 'orden_enviada_a_facturacion'
   | 'otro';
 
 export interface Notificacion {
