@@ -654,10 +654,30 @@ export default function TecnicoVista() {
                   {marcadoresMapa.map(m => (
                     <Marker key={m.id} position={[m.lat, m.lng]} icon={crearPinNumerado(m.orden)}>
                       <Popup>
-                        <div className="text-sm">
-                          <p className="font-semibold">{m.orden}. {m.clienteNombre}</p>
-                          <p>🕐 {formatHora(m.fechaCita)}</p>
-                          <p className="text-xs text-gray-600">{m.direccion}</p>
+                        <div className="text-sm min-w-[180px]">
+                          <p className="font-semibold text-[#0f3460]">{m.orden}. {m.clienteNombre}</p>
+                          <p className="mt-0.5">🕐 {formatHora(m.fechaCita)}</p>
+                          <p className="text-xs text-gray-700 mt-0.5">
+                            🔧 {m.equipoTipo}{m.equipoMarca ? ` · ${m.equipoMarca}` : ''}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-0.5">📍 {m.direccion}</p>
+                          <div className="flex gap-1 mt-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedOrden(m)}
+                              className="flex-1 px-2 py-1 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded text-xs font-medium"
+                            >
+                              Ver detalle
+                            </button>
+                            <a
+                              href={googleMapsLink(m.lat, m.lng)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs font-medium inline-flex items-center"
+                            >
+                              Ir
+                            </a>
+                          </div>
                         </div>
                       </Popup>
                     </Marker>
