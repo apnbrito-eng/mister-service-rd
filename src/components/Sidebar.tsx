@@ -86,6 +86,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: isAdmin || userProfile?.rol === 'coordinadora' },
     { to: '/admin/avances', icon: Wallet, label: 'Avances a Empleados', show: p('avancesGestionar') },
     { to: '/admin/reportes-dgii', icon: FileText, label: 'Reportes DGII', show: isAdmin || userProfile?.rol === 'coordinadora' },
+    { to: '/admin/estado-resultado', icon: TrendingUp, label: 'Estado de Resultado', show: isAdmin || userProfile?.rol === 'coordinadora' },
     { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: isAdmin || userProfile?.rol === 'coordinadora' || p('ordenesVerEliminadas') },
     { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: isAdmin || p('configuracionModificar') },
     { to: '/admin/bancos', icon: Building2, label: 'Bancos', show: p('bancosGestionar') },

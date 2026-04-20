@@ -44,6 +44,7 @@ import Bancos from './pages/Bancos';
 import FacturacionPendiente from './pages/FacturacionPendiente';
 import Avances from './pages/Avances';
 import ReportesDGII from './pages/ReportesDGII';
+import EstadoResultado from './pages/EstadoResultado';
 
 // Public website pages
 import PublicLayout from './components/public/PublicLayout';
@@ -182,6 +183,7 @@ function AppRoutes() {
         <Route path="facturacion-pendiente" element={<RolRoute roles={['administrador', 'coordinadora']}><FacturacionPendiente /></RolRoute>} />
         <Route path="avances" element={<PermisoRoute permiso="avancesGestionar"><Avances /></PermisoRoute>} />
         <Route path="reportes-dgii" element={<RolRoute roles={['administrador', 'coordinadora']}><ReportesDGII /></RolRoute>} />
+        <Route path="estado-resultado" element={<RolRoute roles={['administrador', 'coordinadora']}><EstadoResultado /></RolRoute>} />
         <Route path="configuracion/usuarios" element={<RolRoute roles={['administrador', 'coordinadora']}><GestionUsuarios /></RolRoute>} />
       </Route>
 
