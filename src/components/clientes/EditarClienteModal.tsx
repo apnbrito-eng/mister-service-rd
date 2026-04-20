@@ -38,6 +38,8 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
   const [direccion, setDireccion] = useState('');
   const [referenciaDireccion, setReferenciaDireccion] = useState('');
   const [sector, setSector] = useState('');
+  const [rnc, setRnc] = useState('');
+  const [cedula, setCedula] = useState('');
   const [lat, setLat] = useState<number | undefined>();
   const [lng, setLng] = useState<number | undefined>();
   const [capturandoGps, setCapturandoGps] = useState(false);
@@ -120,6 +122,8 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
         sector: (raw.sector as string) || undefined,
         ciudad: (raw.ciudad as string) || undefined,
         zona: (raw.zona as string) || undefined,
+        rnc: (raw.rnc as string) || undefined,
+        cedula: (raw.cedula as string) || undefined,
         lat: typeof raw.lat === 'number' ? raw.lat : undefined,
         lng: typeof raw.lng === 'number' ? raw.lng : undefined,
         direcciones: Array.isArray(raw.direcciones) ? (raw.direcciones as DireccionCliente[]) : [],
@@ -133,6 +137,8 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
       setDireccion(d => d || c.direccion);
       setReferenciaDireccion(r => r || c.referenciaDireccion || '');
       setSector(s => s || c.sector || '');
+      setRnc(r => r || c.rnc || '');
+      setCedula(x => x || c.cedula || '');
       setLat(l => (l !== undefined ? l : c.lat));
       setLng(l => (l !== undefined ? l : c.lng));
     });
@@ -148,6 +154,8 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
       setDireccion('');
       setReferenciaDireccion('');
       setSector('');
+      setRnc('');
+      setCedula('');
       setLat(undefined);
       setLng(undefined);
     }
@@ -191,11 +199,22 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
         direccion: direccion.trim(),
         referenciaDireccion: referenciaDireccion.trim() || undefined,
         sector: sector.trim() || undefined,
+        rnc: rnc.trim() || undefined,
+        cedula: cedula.trim() || undefined,
         lat,
         lng,
       });
       toast.success('Cliente actualizado');
-      if (cliente) onUpdated?.({ ...cliente, nombre: nombre.trim(), email: email.trim(), direccion: direccion.trim(), lat, lng });
+      if (cliente) onUpdated?.({
+        ...cliente,
+        nombre: nombre.trim(),
+        email: email.trim(),
+        direccion: direccion.trim(),
+        rnc: rnc.trim() || undefined,
+        cedula: cedula.trim() || undefined,
+        lat,
+        lng,
+      });
     } catch (err) {
       console.error(err);
       toast.error('Error al actualizar cliente');
@@ -278,6 +297,32 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  RNC <span className="text-gray-400 font-normal">(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={rnc}
+                  onChange={e => setRnc(e.target.value)}
+                  placeholder="000-00000-0"
+                  inputMode="numeric"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  Cédula <span className="text-gray-400 font-normal">(opcional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={cedula}
+                  onChange={e => setCedula(e.target.value)}
+                  placeholder="000-0000000-0"
+                  inputMode="numeric"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
                 />
               </div>
