@@ -462,6 +462,19 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     efectivoEntregadoPor: (raw.efectivoEntregadoPor as string) || undefined,
     efectivoEntregadoEn: parseFirestoreDate(raw.efectivoEntregadoEn) || undefined,
     cotizacionId: (raw.cotizacionId as string) || undefined,
+    inicioChequeo: raw.inicioChequeo ? (() => {
+      const ic = raw.inicioChequeo as Record<string, unknown>;
+      return {
+        fechaInicio: parseFirestoreDate(ic.fechaInicio) || new Date(),
+        tecnicoId: (ic.tecnicoId as string) || '',
+        tecnicoNombre: (ic.tecnicoNombre as string) || '',
+        fotoUrl: (ic.fotoUrl as string) || '',
+        lat: typeof ic.lat === 'number' ? ic.lat : undefined,
+        lng: typeof ic.lng === 'number' ? ic.lng : undefined,
+        distanciaClienteMetros: typeof ic.distanciaClienteMetros === 'number' ? ic.distanciaClienteMetros : undefined,
+        gpsVerificado: typeof ic.gpsVerificado === 'boolean' ? ic.gpsVerificado : undefined,
+      };
+    })() : undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden) || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),

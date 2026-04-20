@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio } from '../types';
-import { subirFotoCierre, distanciaMetros } from '../services/storage.service';
+import { subirFotoCierre, distanciaMetros, obtenerUbicacionGPS } from '../services/storage.service';
 import { crearRegistroAuditoria } from '../utils';
 import Modal from './Modal';
 import {
@@ -93,14 +93,43 @@ export default function CierreServicioWizard({
     setSaving(true);
 
     try {
+      // GPS obligatorio: si no lo capturamos al abrir, reintentamos aquí.
+      let coords = gpsCoords;
+      if (!coords) {
+        toast.loading('Obteniendo ubicación...', { id: 'cierre-gps' });
+        coords = await obtenerUbicacionGPS();
+        toast.dismiss('cierre-gps');
+      }
+      if (!coords) {
+        toast.error(
+          'No se pudo obtener la ubicación. Activa el GPS y permite el acceso a la ubicación para cerrar el servicio.',
+          { duration: 6000 },
+        );
+        setSaving(false);
+        return;
+      }
+
       // Subir foto a Firebase Storage
       console.log('Subiendo foto...', { ordenId: orden.id, fileSize: fotoBlob.size, fileType: fotoBlob.type });
       const fotoUrl = await subirFotoCierre(orden.id, fotoBlob);
       console.log('Foto subida OK:', fotoUrl);
 
-      const distancia = gpsCoords && clienteLat && clienteLng
-        ? distanciaMetros(gpsCoords.lat, gpsCoords.lng, clienteLat, clienteLng)
+      const distancia = clienteLat && clienteLng
+        ? distanciaMetros(coords.lat, coords.lng, clienteLat, clienteLng)
         : null;
+
+      // gpsVerificado = tenemos coords + (no hay con qué comparar, o distancia aceptable)
+      const UMBRAL = 500;
+      const gpsVerificado = distancia === null ? true : distancia <= UMBRAL;
+
+      const fotoCierre: Record<string, unknown> = {
+        url: fotoUrl,
+        lat: coords.lat,
+        lng: coords.lng,
+        timestamp: Timestamp.now(),
+        gpsVerificado,
+      };
+      if (distancia !== null) fotoCierre.distanciaCliente = distancia;
 
       const cierrePayload: Record<string, unknown> = {
         fechaCierre: Timestamp.now(),
@@ -109,14 +138,7 @@ export default function CierreServicioWizard({
         equipoFunciona: equipoFunciona === 'si',
         clienteSatisfecho: clienteSatisfecho === 'si',
         revisoConexiones: revisoConexiones === 'si',
-        fotoCierre: {
-          url: fotoUrl,
-          lat: gpsCoords?.lat || 0,
-          lng: gpsCoords?.lng || 0,
-          timestamp: Timestamp.now(),
-          gpsVerificado: !!gpsCoords,
-          distanciaCliente: distancia || null,
-        },
+        fotoCierre,
       };
 
       const nuevoHistorial = [
