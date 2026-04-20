@@ -7,7 +7,7 @@ import { calcularQuincenaActual, listarUltimasQuincenas } from '../utils/comisio
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { DollarSign, Lock, ChevronDown, ChevronRight } from 'lucide-react';
+import { DollarSign, Lock, ChevronDown, ChevronRight, Calendar, Download } from 'lucide-react';
 
 export default function Comisiones() {
   const { userProfile } = useApp();
@@ -18,10 +18,17 @@ export default function Comisiones() {
   const [loading, setLoading] = useState(true);
   const [comisiones, setComisiones] = useState<ComisionRegistro[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
+  const [modoFiltro, setModoFiltro] = useState<'quincena' | 'rango'>('quincena');
   const [filtroQuincena, setFiltroQuincena] = useState<string>(calcularQuincenaActual(new Date()));
+  // Rango libre — default: mes en curso
+  const hoy = new Date();
+  const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const [fechaDesde, setFechaDesde] = useState<string>(primerDiaMes.toISOString().slice(0, 10));
+  const [fechaHasta, setFechaHasta] = useState<string>(hoy.toISOString().slice(0, 10));
   const [filtroTecnico, setFiltroTecnico] = useState<string>('');
   const [filtroEstado, setFiltroEstado] = useState<'pendiente' | 'liquidada' | 'todas'>('pendiente');
   const [vista, setVista] = useState<'detallado' | 'por_tecnico'>('detallado');
+  const [mostrarCosto, setMostrarCosto] = useState(true);
   const [tecnicosExpandidos, setTecnicosExpandidos] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -64,13 +71,56 @@ export default function Comisiones() {
   const tecnicos = personal.filter(p => p.rol === 'tecnico' && p.activo);
 
   const comisionesFiltradas = useMemo(() => {
+    let desdeTime: number | null = null;
+    let hastaTime: number | null = null;
+    if (modoFiltro === 'rango') {
+      if (fechaDesde) desdeTime = new Date(fechaDesde + 'T00:00:00').getTime();
+      if (fechaHasta) hastaTime = new Date(fechaHasta + 'T23:59:59').getTime();
+    }
     return comisiones.filter(c => {
-      if (filtroQuincena && c.quincenaAsignada !== filtroQuincena) return false;
+      if (modoFiltro === 'quincena') {
+        if (filtroQuincena && c.quincenaAsignada !== filtroQuincena) return false;
+      } else {
+        const t = c.fechaCobro.getTime();
+        if (desdeTime !== null && t < desdeTime) return false;
+        if (hastaTime !== null && t > hastaTime) return false;
+      }
       if (filtroTecnico && c.tecnicoId !== filtroTecnico) return false;
       if (filtroEstado !== 'todas' && c.estadoLiquidacion !== filtroEstado) return false;
       return true;
     });
-  }, [comisiones, filtroQuincena, filtroTecnico, filtroEstado]);
+  }, [comisiones, modoFiltro, filtroQuincena, fechaDesde, fechaHasta, filtroTecnico, filtroEstado]);
+
+  const exportarCSV = () => {
+    const encabezados = ['Fecha cobro', 'OS#', 'Cliente', 'Tecnico', 'Precio', 'Piezas', 'Base', '%', 'Comision', 'Estado', 'Quincena'];
+    const filas = comisionesFiltradas.map(c => [
+      c.fechaCobro.toISOString().slice(0, 10),
+      c.ordenNumero,
+      c.clienteNombre,
+      c.tecnicoNombre,
+      c.precioFinal,
+      c.costoPiezas,
+      c.basePendienteComision,
+      c.comisionPorcentaje,
+      c.comisionMonto,
+      c.estadoLiquidacion,
+      c.quincenaAsignada || '',
+    ]);
+    const csv = [encabezados, ...filas]
+      .map(row => row.map(v => {
+        const s = String(v ?? '');
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      }).join(','))
+      .join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const rotulo = modoFiltro === 'quincena' ? filtroQuincena : `${fechaDesde}_${fechaHasta}`;
+    a.download = `comisiones_${rotulo}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const totales = useMemo(() => {
     return comisionesFiltradas.reduce((acc, c) => ({
@@ -117,61 +167,148 @@ export default function Comisiones() {
           <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
             <DollarSign size={24} /> Comisiones
           </h1>
-          <p className="text-gray-500 text-sm">Quincena {filtroQuincena} · {comisionesFiltradas.length} comisiones</p>
+          <p className="text-gray-500 text-sm">
+            {modoFiltro === 'quincena' ? `Quincena ${filtroQuincena}` : `${fechaDesde} → ${fechaHasta}`}
+            {' · '}{comisionesFiltradas.length} comisiones
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={exportarCSV}
+          disabled={comisionesFiltradas.length === 0}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 rounded-lg text-sm font-medium disabled:opacity-50"
+        >
+          <Download size={14} /> Exportar CSV
+        </button>
       </div>
 
       {/* Filtros */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Quincena</label>
-          <select value={filtroQuincena} onChange={e => setFiltroQuincena(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
-            {quincenasDisponibles.map(q => <option key={q} value={q}>{q}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Técnico</label>
-          <select value={filtroTecnico} onChange={e => setFiltroTecnico(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
-            <option value="">Todos los técnicos</option>
-            {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Estado</label>
-          <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value as 'pendiente' | 'liquidada' | 'todas')}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
-            <option value="pendiente">Pendientes</option>
-            <option value="liquidada">Liquidadas</option>
-            <option value="todas">Todas</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Vista</label>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+        {/* Toggle modo filtro */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-gray-600 mr-2">Filtrar por:</span>
           <div className="flex bg-gray-100 rounded-lg p-1">
-            <button type="button" onClick={() => setVista('detallado')}
-              className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${vista === 'detallado' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}>
-              Detallado
+            <button
+              type="button"
+              onClick={() => setModoFiltro('quincena')}
+              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${modoFiltro === 'quincena' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}
+            >
+              Quincena
             </button>
-            <button type="button" onClick={() => setVista('por_tecnico')}
-              className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${vista === 'por_tecnico' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}>
-              Por técnico
+            <button
+              type="button"
+              onClick={() => setModoFiltro('rango')}
+              className={`px-3 py-1 rounded text-xs font-medium transition-colors inline-flex items-center gap-1 ${modoFiltro === 'rango' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}
+            >
+              <Calendar size={11} /> Rango libre
             </button>
           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          {modoFiltro === 'quincena' ? (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Quincena</label>
+              <select value={filtroQuincena} onChange={e => setFiltroQuincena(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                {quincenasDisponibles.map(q => <option key={q} value={q}>{q}</option>)}
+              </select>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Desde</label>
+                <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Hasta</label>
+                <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              </div>
+            </>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Técnico</label>
+            <select value={filtroTecnico} onChange={e => setFiltroTecnico(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+              <option value="">Todos los técnicos</option>
+              {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Estado</label>
+            <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value as 'pendiente' | 'liquidada' | 'todas')}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+              <option value="pendiente">Pendientes</option>
+              <option value="liquidada">Liquidadas</option>
+              <option value="todas">Todas</option>
+            </select>
+          </div>
+          {modoFiltro === 'quincena' && (
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Vista</label>
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button type="button" onClick={() => setVista('detallado')}
+                  className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${vista === 'detallado' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}>
+                  Detallado
+                </button>
+                <button type="button" onClick={() => setVista('por_tecnico')}
+                  className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${vista === 'por_tecnico' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}>
+                  Por técnico
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Toggles adicionales */}
+        <div className="flex items-center gap-4 pt-2 border-t border-gray-100">
+          <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={mostrarCosto}
+              onChange={e => setMostrarCosto(e.target.checked)}
+              className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+            />
+            Mostrar costo de piezas y base
+          </label>
+          {modoFiltro === 'rango' && (
+            <div className="flex bg-gray-100 rounded-lg p-1 ml-auto">
+              <button type="button" onClick={() => setVista('detallado')}
+                className={`py-1 px-3 rounded text-xs font-medium transition-colors ${vista === 'detallado' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}>
+                Detallado
+              </button>
+              <button type="button" onClick={() => setVista('por_tecnico')}
+                className={`py-1 px-3 rounded text-xs font-medium transition-colors ${vista === 'por_tecnico' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}>
+                Por técnico
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Totales */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-          <p className="text-xs font-medium text-gray-500 uppercase">Total base (sin piezas)</p>
-          <p className="text-xl font-bold text-[#0f3460] mt-1">{formatMoneda(totales.base)}</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-          <p className="text-xs font-medium text-gray-500 uppercase">Total piezas</p>
-          <p className="text-xl font-bold text-[#0f3460] mt-1">{formatMoneda(totales.piezas)}</p>
-        </div>
+      <div className={`grid grid-cols-1 gap-3 ${mostrarCosto ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+        {mostrarCosto && (
+          <>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <p className="text-xs font-medium text-gray-500 uppercase">Total base (sin piezas)</p>
+              <p className="text-xl font-bold text-[#0f3460] mt-1">{formatMoneda(totales.base)}</p>
+            </div>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+              <p className="text-xs font-medium text-gray-500 uppercase">Total piezas</p>
+              <p className="text-xl font-bold text-[#0f3460] mt-1">{formatMoneda(totales.piezas)}</p>
+            </div>
+          </>
+        )}
+        {!mostrarCosto && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+            <p className="text-xs font-medium text-gray-500 uppercase">Total órdenes</p>
+            <p className="text-xl font-bold text-[#0f3460] mt-1">{comisionesFiltradas.length}</p>
+          </div>
+        )}
         <div className="bg-emerald-50 rounded-2xl shadow-sm border border-emerald-200 p-4">
           <p className="text-xs font-medium text-emerald-700 uppercase">Total comisiones</p>
           <p className="text-xl font-bold text-emerald-900 mt-1">{formatMoneda(totales.comision)}</p>
@@ -190,8 +327,12 @@ export default function Comisiones() {
                   <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Cliente</th>
                   <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Técnico</th>
                   <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Precio final</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Piezas</th>
-                  <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Base</th>
+                  {mostrarCosto && (
+                    <>
+                      <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Piezas</th>
+                      <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Base</th>
+                    </>
+                  )}
                   <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">%</th>
                   <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Comisión</th>
                   <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Estado</th>
@@ -199,7 +340,7 @@ export default function Comisiones() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {comisionesFiltradas.length === 0 ? (
-                  <tr><td colSpan={10} className="py-12 text-center text-gray-400">Sin comisiones para los filtros seleccionados</td></tr>
+                  <tr><td colSpan={mostrarCosto ? 10 : 8} className="py-12 text-center text-gray-400">Sin comisiones para los filtros seleccionados</td></tr>
                 ) : comisionesFiltradas.map(c => (
                   <tr key={c.id} className="hover:bg-gray-50">
                     <td className="px-3 py-3 text-xs text-gray-600">{formatFecha(c.fechaCobro)}</td>
@@ -207,8 +348,12 @@ export default function Comisiones() {
                     <td className="px-3 py-3 text-gray-700 hidden md:table-cell">{c.clienteNombre}</td>
                     <td className="px-3 py-3 text-gray-700">{c.tecnicoNombre}</td>
                     <td className="px-3 py-3 text-right text-gray-700">{formatMoneda(c.precioFinal)}</td>
-                    <td className="px-3 py-3 text-right text-gray-500 hidden md:table-cell">{formatMoneda(c.costoPiezas)}</td>
-                    <td className="px-3 py-3 text-right text-gray-700 hidden md:table-cell">{formatMoneda(c.basePendienteComision)}</td>
+                    {mostrarCosto && (
+                      <>
+                        <td className="px-3 py-3 text-right text-gray-500 hidden md:table-cell">{formatMoneda(c.costoPiezas)}</td>
+                        <td className="px-3 py-3 text-right text-gray-700 hidden md:table-cell">{formatMoneda(c.basePendienteComision)}</td>
+                      </>
+                    )}
                     <td className="px-3 py-3 text-right text-gray-700">{c.comisionPorcentaje}%</td>
                     <td className="px-3 py-3 text-right font-semibold text-emerald-700">{formatMoneda(c.comisionMonto)}</td>
                     <td className="px-3 py-3 text-center">
