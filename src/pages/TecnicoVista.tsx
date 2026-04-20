@@ -13,6 +13,7 @@ import Modal from '../components/Modal';
 import Logo from '../components/Logo';
 import CierreServicioWizard from '../components/CierreServicioWizard';
 import FaseStepper from '../components/ordenes/FaseStepper';
+import IniciarChequeoButton from '../components/ordenes/IniciarChequeoButton';
 import NotificacionesPanel from '../components/NotificacionesPanel';
 import { guardarUbicacionVehiculo } from '../services/gps.service';
 import {
@@ -752,6 +753,8 @@ export default function TecnicoVista() {
                     {/* Actions */}
                     {!completado && (
                       <div className="mt-4 flex flex-wrap gap-2">
+                        {/* Iniciar chequeo (foto + GPS, solo el día de la cita) */}
+                        <IniciarChequeoButton orden={orden} userProfile={userProfile} size="sm" />
                         {permisos.puedeMarcarCompletado && (() => {
                           const necesitaAprobacion =
                             orden.precioSugerido !== undefined &&

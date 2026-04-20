@@ -154,6 +154,8 @@ export interface OrdenServicio {
   efectivoEntregadoEn?: Date;
   // Cotización vinculada (Fase 4B)
   cotizacionId?: string;
+  // Inicio de chequeo (Fase 8) — registro técnico al llegar al sitio
+  inicioChequeo?: InicioChequeo;
   // Pagos y facturación (Fase 7)
   pagos?: PagoOrden[];
   montoPagado?: number;
@@ -778,6 +780,21 @@ export interface FotoCierre {
   distanciaCliente?: number;
 }
 
+/**
+ * Registro de inicio de chequeo por parte del técnico al llegar al sitio.
+ * Se genera con una foto + GPS desde la vista del técnico.
+ */
+export interface InicioChequeo {
+  fechaInicio: Date;
+  tecnicoId: string;
+  tecnicoNombre: string;
+  fotoUrl: string;
+  lat?: number;
+  lng?: number;
+  distanciaClienteMetros?: number;
+  gpsVerificado?: boolean;
+}
+
 export interface CierreServicio {
   fechaCierre: Date;
   tecnicoId: string;
@@ -883,6 +900,7 @@ export type TipoNotificacion =
   | 'pieza_llego'
   | 'orden_asignada'
   | 'orden_enviada_a_facturacion'
+  | 'chequeo_iniciado'
   | 'otro';
 
 export interface Notificacion {

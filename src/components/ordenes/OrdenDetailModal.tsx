@@ -81,6 +81,50 @@ export default function OrdenDetailModal({
         </div>
       )}
 
+      {/* Banner de chequeo iniciado por el técnico */}
+      {orden.inicioChequeo && !orden.eliminada && (
+        <div className="bg-green-50 border border-green-300 rounded-xl p-3 flex items-start gap-3">
+          {orden.inicioChequeo.fotoUrl && (
+            <a
+              href={orden.inicioChequeo.fotoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Ver foto completa"
+              className="shrink-0"
+            >
+              <img
+                src={orden.inicioChequeo.fotoUrl}
+                alt="Inicio de chequeo"
+                className="w-16 h-16 rounded-lg object-cover border border-green-200"
+              />
+            </a>
+          )}
+          <div className="flex-1 text-sm">
+            <p className="font-semibold text-green-900">
+              {'\u{1F4F8}'} Chequeo iniciado por {orden.inicioChequeo.tecnicoNombre}
+            </p>
+            <p className="text-xs text-green-800 mt-0.5">
+              {formatFecha(orden.inicioChequeo.fechaInicio)}
+              {typeof orden.inicioChequeo.distanciaClienteMetros === 'number' && (
+                <span className={`ml-2 ${orden.inicioChequeo.gpsVerificado ? 'text-green-700' : 'text-amber-700'}`}>
+                  · GPS a {orden.inicioChequeo.distanciaClienteMetros}m {orden.inicioChequeo.gpsVerificado ? 'OK' : '(alejado)'}
+                </span>
+              )}
+            </p>
+            {typeof orden.inicioChequeo.lat === 'number' && typeof orden.inicioChequeo.lng === 'number' && (
+              <a
+                href={`https://maps.google.com/?q=${orden.inicioChequeo.lat},${orden.inicioChequeo.lng}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[11px] text-green-700 hover:underline inline-flex items-center gap-0.5 mt-0.5"
+              >
+                Ver ubicación en Maps
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Banner pieza pendiente — sugiere reagendar */}
       {mostrarBannerReagendar && (
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-start gap-3">

@@ -22,6 +22,25 @@ export async function subirFotoCierre(
   return await getDownloadURL(ref);
 }
 
+/** Sube foto de inicio de chequeo a Firebase Storage y retorna URL pública */
+export async function subirFotoInicioChequeo(
+  ordenId: string,
+  file: File | Blob
+): Promise<string> {
+  const timestamp = Date.now();
+  const fileName = `inicio-chequeo-${timestamp}.jpg`;
+  const path = `fotos-servicio/${ordenId}/${fileName}`;
+  const ref = storageRef(storage, path);
+
+  const uploadPromise = uploadBytes(ref, file);
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Timeout: la subida de la foto tardó más de 30 segundos')), 30000)
+  );
+
+  await Promise.race([uploadPromise, timeoutPromise]);
+  return await getDownloadURL(ref);
+}
+
 /** Obtiene posición GPS del dispositivo */
 export function obtenerUbicacionGPS(): Promise<{ lat: number; lng: number } | null> {
   return new Promise((resolve) => {
