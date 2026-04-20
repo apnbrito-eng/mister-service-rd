@@ -3,7 +3,7 @@ import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs, arrayUnion 
 import { db } from '../firebase/config';
 import { OrdenServicio, Cliente, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, FaseOrden, StandbyPieza } from '../types';
 import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria, formatMoneda, tieneStandby } from '../utils';
-import { calcularQuincenaActual } from '../utils/comisiones';
+import { calcularQuincenaActual, rangoQuincena } from '../utils/comisiones';
 import { ComisionRegistro } from '../types';
 import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
 import { useApp } from '../context/AppContext';
@@ -86,6 +86,7 @@ export default function TecnicoVista() {
   const [previousCount, setPreviousCount] = useState<number | null>(null);
   const [compartiendoGPS, setCompartiendoGPS] = useState(false);
   const [comisionesQuincena, setComisionesQuincena] = useState<ComisionRegistro[]>([]);
+  const [mostrarDetalleGanancias, setMostrarDetalleGanancias] = useState(false);
   const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
 
   // Permisos del técnico (con fallback seguro)
@@ -481,18 +482,78 @@ export default function TecnicoVista() {
 
       <div className="max-w-4xl mx-auto p-4 space-y-4">
         {/* Comisión acumulada de la quincena (Fase 5) */}
-        {comisionesQuincena.length > 0 && (() => {
+        {(() => {
           const total = comisionesQuincena.reduce((s, c) => s + c.comisionMonto, 0);
           const quincena = calcularQuincenaActual(new Date());
-          const proximoPago = quincena.endsWith('Q1') ? '15' : '30';
+          const { inicio, fin } = rangoQuincena(quincena);
+          const esQ1 = quincena.endsWith('Q1');
+          const diaPago = esQ1 ? 15 : 30;
+          const rangoTxt = `${format(inicio, "d 'de' MMMM", { locale: es })} — ${format(fin, "d 'de' MMMM", { locale: es })}`;
+          const nOrdenes = comisionesQuincena.length;
           return (
-            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl shadow-sm p-4 text-white">
-              <p className="text-[11px] uppercase tracking-wide opacity-90">Tu comisión acumulada — quincena {quincena}</p>
-              <p className="text-2xl font-bold mt-1">{formatMoneda(total)}</p>
-              <div className="flex items-center justify-between mt-2 text-xs opacity-90">
-                <span>{comisionesQuincena.length} orden{comisionesQuincena.length !== 1 ? 'es' : ''}</span>
-                <span>Próximo pago: día {proximoPago}</span>
-              </div>
+            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl shadow-sm overflow-hidden text-white">
+              <button
+                type="button"
+                onClick={() => setMostrarDetalleGanancias(v => !v)}
+                className="w-full p-4 text-left hover:bg-white/5 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide opacity-90">
+                      💰 Mis ganancias · Quincena actual
+                    </p>
+                    <p className="text-2xl font-bold mt-1">{formatMoneda(total)}</p>
+                    <p className="text-[11px] opacity-90 mt-0.5">
+                      {rangoTxt}
+                    </p>
+                  </div>
+                  <div className="text-right text-xs">
+                    <div className="bg-white/20 rounded-lg px-2 py-1 font-semibold">
+                      Pago día {diaPago}
+                    </div>
+                    <div className="mt-1 opacity-90">
+                      {nOrdenes} orden{nOrdenes !== 1 ? 'es' : ''}
+                    </div>
+                  </div>
+                </div>
+                {nOrdenes > 0 && (
+                  <div className="flex items-center justify-center gap-1 mt-2 text-[11px] opacity-75">
+                    <span>{mostrarDetalleGanancias ? 'Ocultar detalle' : 'Ver detalle por orden'}</span>
+                    <span className={`transition-transform ${mostrarDetalleGanancias ? 'rotate-180' : ''}`}>▼</span>
+                  </div>
+                )}
+              </button>
+              {mostrarDetalleGanancias && nOrdenes > 0 && (
+                <div className="bg-emerald-700/40 border-t border-white/10 max-h-64 overflow-y-auto">
+                  {comisionesQuincena
+                    .slice()
+                    .sort((a, b) => b.fechaCobro.getTime() - a.fechaCobro.getTime())
+                    .map(c => (
+                      <div key={c.id} className="px-4 py-2 border-b border-white/10 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">
+                              {c.ordenNumero} · {c.clienteNombre}
+                            </div>
+                            <div className="opacity-75 text-[10px]">
+                              {format(c.fechaCobro, "dd MMM", { locale: es })}
+                              {' · '}
+                              Base {formatMoneda(c.basePendienteComision || 0)} × {c.comisionPorcentaje}%
+                            </div>
+                          </div>
+                          <div className="font-bold text-right">
+                            {formatMoneda(c.comisionMonto)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+              {nOrdenes === 0 && (
+                <div className="px-4 pb-4 text-[11px] opacity-75">
+                  Aún no tienes comisiones en esta quincena. Cada vez que una orden tuya pase a facturada, acumulas ganancia aquí.
+                </div>
+              )}
             </div>
           );
         })()}
