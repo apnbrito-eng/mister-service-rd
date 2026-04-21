@@ -537,8 +537,6 @@ export default function TecnicoVista() {
                             </div>
                             <div className="opacity-75 text-[10px]">
                               {format(c.fechaCobro, "dd MMM", { locale: es })}
-                              {' · '}
-                              Base {formatMoneda(c.basePendienteComision || 0)} × {c.comisionPorcentaje}%
                             </div>
                           </div>
                           <div className="font-bold text-right">
