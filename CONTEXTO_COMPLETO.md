@@ -35,7 +35,7 @@ El sistema es **paralelo a la facturación fiscal** — la empresa ya tiene otro
 - **Idioma UI:** Español (Dominicano). Identificadores en código también español (`clienteNombre`, `fechaCita`, `fase`, `tecnicoId`).
 
 **Deploy Hook Vercel** (por si webhook GitHub falla):
-`https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/RlN747BZpS` (POST sin body)
+`https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/kfkia6Sqin` (POST sin body)
 
 **Env vars requeridas en Vercel:**
 - `FIREBASE_PROJECT_ID=mister-service-app-cloude`
@@ -370,7 +370,7 @@ npx tsc --noEmit
 npm run lint
 
 # Forzar deploy Vercel si webhook falla
-curl -X POST https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/RlN747BZpS
+curl -X POST https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/kfkia6Sqin
 ```
 
 ---

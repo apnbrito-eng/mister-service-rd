@@ -58,4 +58,4 @@ You NEVER write code yourself. You can Read files to understand context, but imp
 - Sueldo base del personal es MENSUAL, se divide /2 por quincena en la nómina.
 - ITBIS 18% es referencia interna (para calcular ganancia neta y comisión del técnico), NO es declaración fiscal.
 - Bancos reales configurados: Popular (Fixman SRL), BHD/Banreservas/Santa Cruz/Scotiabank (Jorge L. Brito).
-- Vercel deploy hook (por si webhook GitHub→Vercel falla): `https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/RlN747BZpS`
+- Vercel deploy hook (por si webhook GitHub→Vercel falla): `https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/kfkia6Sqin`
