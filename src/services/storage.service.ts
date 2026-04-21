@@ -86,10 +86,10 @@ export function obtenerUbicacionGPS(
       );
     });
 
-  return intentar(true, 15000).then((alta) => {
+  return intentar(true, 8000).then((alta) => {
     if (alta) return alta;
     // Fallback rápido cuando el GPS físico no responde
-    return intentar(false, 10000);
+    return intentar(false, 6000);
   });
 }
 

@@ -125,22 +125,16 @@ export default function CierreServicioWizard({
         return { coords: gpsCoords, continuar: true };
       }
 
-      // Race entre el helper y un timeout de 8s
-      const MAX_MS = 8000;
-      toast.loading(`Verificando GPS (hasta ${MAX_MS / 1000}s)...`, { id: 'cierre-gps' });
+      // Sin race externo — el helper ya controla sus timeouts internos (alta 8s + baja 6s)
+      // y dispara onError con el código real para que podamos diagnosticar.
+      toast.loading('Verificando GPS...', { id: 'cierre-gps' });
       logCierre('GPS request start en submit');
 
       let ultimoError: GpsErrorInfo | null = null;
-      const timeoutPromise = new Promise<null>(resolve =>
-        setTimeout(() => { logCierre(`GPS timeout local ${MAX_MS}ms`); resolve(null); }, MAX_MS),
-      );
-      const coords = await Promise.race([
-        obtenerUbicacionGPS(err => {
-          ultimoError = err;
-          logCierre(`GPS error (highAccuracy=${err.highAccuracy})`, err);
-        }),
-        timeoutPromise,
-      ]);
+      const coords = await obtenerUbicacionGPS(err => {
+        ultimoError = err;
+        logCierre(`GPS error (highAccuracy=${err.highAccuracy})`, err);
+      });
       toast.dismiss('cierre-gps');
 
       if (coords) {

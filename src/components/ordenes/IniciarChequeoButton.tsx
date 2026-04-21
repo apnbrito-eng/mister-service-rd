@@ -159,21 +159,15 @@ export default function IniciarChequeoButton({
       // GPS se pide DESPUÉS de la foto: Chrome móvil suspende getCurrentPosition
       // mientras la cámara tenía foco, así que pedirlo antes devolvía null.
       // El change event del input sigue contando como user-gesture.
+      // Sin race externo — dejamos que obtenerUbicacionGPS controle sus propios
+      // timeouts (alta 8s + baja 6s) y dispare onError con el código real.
       let ultimoGpsError: GpsErrorInfo | null = null;
       toast.loading('Obteniendo GPS...', { id: 'chequeo' });
       logChequeo('GPS request start (post-foto)');
-      const gps = await Promise.race([
-        obtenerUbicacionGPS(err => {
-          ultimoGpsError = err;
-          logChequeo(`GPS error (highAccuracy=${err.highAccuracy})`, err);
-        }),
-        new Promise<null>(resolve =>
-          setTimeout(() => {
-            logChequeo('GPS timeout local de 12000ms');
-            resolve(null);
-          }, 12000),
-        ),
-      ]);
+      const gps = await obtenerUbicacionGPS(err => {
+        ultimoGpsError = err;
+        logChequeo(`GPS error (highAccuracy=${err.highAccuracy})`, err);
+      });
       if (gps) logChequeo('GPS resolved', gps);
       else logChequeo('GPS resolved = null');
 
