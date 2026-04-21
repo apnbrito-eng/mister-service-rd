@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   doc,
   updateDoc,
@@ -15,11 +15,34 @@ import {
   subirFotoInicioChequeo,
   obtenerUbicacionGPS,
   distanciaMetros,
+  type GpsErrorInfo,
 } from '../../services/storage.service';
 import { crearNotificacion } from '../../services/notificaciones.service';
 import { crearRegistroAuditoria, faseLabel } from '../../utils';
-import { Camera, CheckCircle2 } from 'lucide-react';
+import { Camera, CheckCircle2, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+/** Log con timestamp para diagnóstico del flujo de chequeo. */
+function logChequeo(msg: string, extra?: unknown): void {
+  const t = new Date().toISOString().substring(11, 23);
+  if (extra !== undefined) console.log(`[chequeo ${t}] ${msg}`, extra);
+  else console.log(`[chequeo ${t}] ${msg}`);
+}
+
+/** Mensaje específico por código de error de Geolocation API. */
+function mensajeGpsError(err: GpsErrorInfo | null): string {
+  if (!err) return 'No pudimos obtener tu ubicación GPS.';
+  switch (err.code) {
+    case 1:
+      return 'Permiso de ubicación bloqueado. Toca el candado en la barra de direcciones y permite la ubicación.';
+    case 2:
+      return 'GPS no disponible. Revisa que la ubicación esté activada en el sistema.';
+    case 3:
+      return 'GPS tardó demasiado. Sal al exterior y vuelve a intentar.';
+    default:
+      return err.message || 'No pudimos obtener tu ubicación GPS.';
+  }
+}
 
 interface Props {
   orden: OrdenServicio;
@@ -50,10 +73,39 @@ export default function IniciarChequeoButton({
   forzarVisible = false,
 }: Props) {
   const [procesando, setProcesando] = useState(false);
+  const [permisoGps, setPermisoGps] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
   const inputRef = useRef<HTMLInputElement>(null);
   // Promise del GPS en curso (se inicia AL MISMO TIEMPO que abrimos la cámara,
   // en paralelo, para no romper el user-gesture que iOS Safari requiere)
   const gpsPromiseRef = useRef<Promise<{ lat: number; lng: number } | null> | null>(null);
+  // Último error del GPS — se actualiza desde el onError del helper
+  const ultimoGpsErrorRef = useRef<GpsErrorInfo | null>(null);
+
+  // Query del Permissions API al montar (Chrome/Android soportan; iOS Safari no tiene 'geolocation' pero no rompe)
+  useEffect(() => {
+    const nav = navigator as Navigator & {
+      permissions?: { query: (p: { name: PermissionName }) => Promise<PermissionStatus> };
+    };
+    if (!nav.permissions?.query) return;
+    let cancelado = false;
+    nav.permissions
+      .query({ name: 'geolocation' as PermissionName })
+      .then(status => {
+        if (cancelado) return;
+        setPermisoGps(status.state as typeof permisoGps);
+        logChequeo(`permiso geolocation inicial = ${status.state}`);
+        // Reaccionar a cambios (ej: técnico acaba de conceder el permiso)
+        status.onchange = () => {
+          if (cancelado) return;
+          setPermisoGps(status.state as typeof permisoGps);
+          logChequeo(`permiso geolocation cambió a = ${status.state}`);
+        };
+      })
+      .catch(() => {
+        // Permissions API no soporta 'geolocation' en este navegador → dejar 'unknown'
+      });
+    return () => { cancelado = true; };
+  }, []);
 
   // Reglas de visibilidad
   const yaIniciado = !!orden.inicioChequeo;
@@ -81,20 +133,47 @@ export default function IniciarChequeoButton({
    */
   const dispararCamara = () => {
     if (procesando) return;
+
+    // Si sabemos (Permissions API) que el permiso ya fue denegado, abortar sin pedir cámara.
+    if (permisoGps === 'denied') {
+      toast.error(mensajeGpsError({ code: 1, message: 'denied', highAccuracy: true }), {
+        duration: 8000,
+      });
+      logChequeo('abortar — permiso geolocation = denied');
+      return;
+    }
+
     setProcesando(true);
+    logChequeo('tap botón Iniciar chequeo', { ordenId: orden.id, permisoGps });
 
-    // 1) Iniciar GPS en paralelo (race con timeout de 12s) SIN await
-    const MAX_MS = 12000;
+    // 1) Iniciar GPS en paralelo (race con timeout 8s) SIN await — user gesture intacto
+    const MAX_MS = 8000;
+    ultimoGpsErrorRef.current = null;
+    logChequeo('GPS request start');
     gpsPromiseRef.current = Promise.race([
-      obtenerUbicacionGPS(),
-      new Promise<null>(resolve => setTimeout(() => resolve(null), MAX_MS)),
-    ]);
+      obtenerUbicacionGPS(err => {
+        ultimoGpsErrorRef.current = err;
+        logChequeo(`GPS error (highAccuracy=${err.highAccuracy})`, err);
+      }),
+      new Promise<null>(resolve =>
+        setTimeout(() => {
+          logChequeo(`GPS timeout local de ${MAX_MS}ms`);
+          resolve(null);
+        }, MAX_MS),
+      ),
+    ]).then(res => {
+      if (res) logChequeo('GPS resolved', res);
+      else logChequeo('GPS resolved = null');
+      return res;
+    });
 
-    // 2) Abrir cámara inmediatamente — user gesture preservado
+    // 2) Abrir cámara inmediatamente — user gesture preservado (iOS)
     if (inputRef.current) {
       inputRef.current.value = '';
       inputRef.current.click();
+      logChequeo('cámara abierta (input.click)');
     } else {
+      logChequeo('inputRef null — cámara no se abrió');
       setProcesando(false);
     }
   };
@@ -104,24 +183,36 @@ export default function IniciarChequeoButton({
       setProcesando(false);
       return;
     }
+    logChequeo('foto recibida', { sizeKB: Math.round(file.size / 1024), type: file.type });
     try {
       // Esperar a que el GPS (que empezó al abrir la cámara) termine.
       // Si el técnico se tarda tomando la foto, el GPS ya debería estar listo.
-      toast.loading('Procesando ubicación...', { id: 'chequeo' });
+      toast.loading('Verificando GPS (hasta 8s)...', { id: 'chequeo' });
       const gps = await (gpsPromiseRef.current || Promise.resolve(null));
 
       // Si GPS falló, preguntar al técnico si quiere continuar sin verificación
       if (!gps) {
         toast.dismiss('chequeo');
-        const continuar = confirm(
-          'No pudimos obtener tu ubicación GPS.\n\n' +
-          '¿Deseas iniciar el chequeo SIN verificación de ubicación?\n\n' +
-          'La foto se registrará pero el chequeo quedará marcado como "GPS no verificado".',
-        );
-        if (!continuar) {
+        const err = ultimoGpsErrorRef.current;
+        const motivo = mensajeGpsError(err);
+        logChequeo('GPS sin resultado — mostrar confirm', { err, motivo });
+        // Si el error es permiso denegado, cortar — no tiene sentido preguntar.
+        if (err?.code === 1) {
+          toast.error(motivo, { duration: 8000 });
           setProcesando(false);
           return;
         }
+        const continuar = confirm(
+          motivo +
+          '\n\n¿Deseas iniciar el chequeo SIN verificación de ubicación?\n\n' +
+          'La foto se registrará pero el chequeo quedará marcado como "GPS no verificado".',
+        );
+        if (!continuar) {
+          logChequeo('técnico canceló el flujo sin GPS');
+          setProcesando(false);
+          return;
+        }
+        logChequeo('técnico aceptó continuar sin GPS');
       }
 
       // Validar distancia solo si tenemos ambas coords
@@ -142,7 +233,9 @@ export default function IniciarChequeoButton({
 
       // Subir foto
       toast.loading('Subiendo foto...', { id: 'chequeo' });
+      logChequeo('subiendo foto a Storage...');
       const fotoUrl = await subirFotoInicioChequeo(orden.id, file);
+      logChequeo('foto subida', { fotoUrl });
 
       // 4. Construir registro
       const usuario = userProfile?.nombre || orden.tecnicoNombre || 'Técnico';
@@ -212,7 +305,9 @@ export default function IniciarChequeoButton({
       updates.auditoria = arrayUnion(registro);
 
       // 7. Actualizar Firestore
+      logChequeo('firestore update inicio...');
       await updateDoc(doc(db, 'ordenes_servicio', orden.id), updates);
+      logChequeo('firestore update OK');
 
       // 8. Notificar a admin/coordinadora/operaria
       try {
@@ -250,8 +345,9 @@ export default function IniciarChequeoButton({
             }),
           ),
         );
+        logChequeo('notificaciones enviadas', { destinos: destinos.size });
       } catch (err) {
-        console.warn('No se pudieron crear notificaciones de chequeo:', err);
+        console.warn('[chequeo] No se pudieron crear notificaciones:', err);
       }
 
       toast.success('Chequeo iniciado · ' + new Date(fechaInicio).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' }), {
@@ -272,7 +368,16 @@ export default function IniciarChequeoButton({
       : 'px-4 py-2 text-sm gap-2';
 
   return (
-    <>
+    <div className="inline-flex flex-col gap-1.5 items-start">
+      {permisoGps === 'denied' && (
+        <div className="inline-flex items-start gap-1.5 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-md px-2 py-1 max-w-xs">
+          <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+          <span>
+            Permiso de ubicación bloqueado. Toca el candado en la barra de direcciones
+            y permite la ubicación para poder iniciar chequeo.
+          </span>
+        </div>
+      )}
       <input
         ref={inputRef}
         type="file"
@@ -285,6 +390,7 @@ export default function IniciarChequeoButton({
             handleArchivo(f);
           } else {
             // Usuario canceló la cámara sin tomar foto
+            logChequeo('usuario canceló la cámara');
             gpsPromiseRef.current = null;
             setProcesando(false);
           }
@@ -293,12 +399,12 @@ export default function IniciarChequeoButton({
       <button
         type="button"
         onClick={dispararCamara}
-        disabled={procesando}
-        className={`inline-flex items-center ${tamano} bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-semibold disabled:opacity-60`}
+        disabled={procesando || permisoGps === 'denied'}
+        className={`inline-flex items-center ${tamano} bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-semibold disabled:opacity-60 disabled:cursor-not-allowed`}
       >
         <Camera size={size === 'sm' ? 12 : 16} />
         {procesando ? 'Iniciando...' : 'Iniciar chequeo'}
       </button>
-    </>
+    </div>
   );
 }

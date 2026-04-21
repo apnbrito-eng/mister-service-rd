@@ -41,6 +41,15 @@ export async function subirFotoInicioChequeo(
   return await getDownloadURL(ref);
 }
 
+/** Error estructurado del GPS para que el caller pueda mostrar mensajes específicos. */
+export interface GpsErrorInfo {
+  /** 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT, 0=otro */
+  code: number;
+  message: string;
+  /** Intento que falló: true = alta precisión; false = baja precisión */
+  highAccuracy: boolean;
+}
+
 /**
  * Obtiene posición GPS del dispositivo con estrategia de 2 pasos:
  *  1) Intenta alta precisión (GPS físico) con timeout 15s.
@@ -49,15 +58,30 @@ export async function subirFotoInicioChequeo(
  *
  * Motivo del fallback: en Android en interiores, el GPS físico puede tardar 30+ segundos.
  * La baja precisión usa red WiFi/celular y responde en 1-3s con ~100m de exactitud.
+ *
+ * @param onError callback opcional que recibe el error de cada intento (útil para
+ *                mostrar mensaje específico al usuario según el código).
  */
-export function obtenerUbicacionGPS(): Promise<{ lat: number; lng: number } | null> {
-  if (!navigator.geolocation) return Promise.resolve(null);
+export function obtenerUbicacionGPS(
+  onError?: (err: GpsErrorInfo) => void,
+): Promise<{ lat: number; lng: number } | null> {
+  if (!navigator.geolocation) {
+    onError?.({ code: 0, message: 'navigator.geolocation no disponible', highAccuracy: true });
+    return Promise.resolve(null);
+  }
 
   const intentar = (enableHighAccuracy: boolean, timeout: number) =>
     new Promise<{ lat: number; lng: number } | null>((resolve) => {
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => resolve(null),
+        (err) => {
+          onError?.({
+            code: err.code,
+            message: err.message || '',
+            highAccuracy: enableHighAccuracy,
+          });
+          resolve(null);
+        },
         { enableHighAccuracy, timeout, maximumAge: 0 },
       );
     });

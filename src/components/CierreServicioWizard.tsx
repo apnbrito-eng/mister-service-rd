@@ -2,13 +2,29 @@ import { useState, useEffect, useRef } from 'react';
 import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio } from '../types';
-import { subirFotoCierre, distanciaMetros, obtenerUbicacionGPS } from '../services/storage.service';
+import { subirFotoCierre, distanciaMetros, obtenerUbicacionGPS, type GpsErrorInfo } from '../services/storage.service';
 import { crearRegistroAuditoria } from '../utils';
 import Modal from './Modal';
 import {
   Camera, Check, X, Loader2, CheckCircle, AlertCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+function logCierre(msg: string, extra?: unknown): void {
+  const t = new Date().toISOString().substring(11, 23);
+  if (extra !== undefined) console.log(`[cierre ${t}] ${msg}`, extra);
+  else console.log(`[cierre ${t}] ${msg}`);
+}
+
+function mensajeGpsError(err: GpsErrorInfo | null): string {
+  if (!err) return 'No pudimos obtener tu ubicación GPS.';
+  switch (err.code) {
+    case 1: return 'Permiso de ubicación bloqueado. Toca el candado en la barra de direcciones y permite la ubicación.';
+    case 2: return 'GPS no disponible. Revisa que la ubicación esté activada en el sistema.';
+    case 3: return 'GPS tardó demasiado. Sal al exterior y vuelve a intentar.';
+    default: return err.message || 'No pudimos obtener tu ubicación GPS.';
+  }
+}
 
 interface Props {
   isOpen: boolean;
@@ -41,8 +57,16 @@ export default function CierreServicioWizard({
   useEffect(() => {
     if (!isOpen) return;
     let cancelado = false;
-    obtenerUbicacionGPS().then(coords => {
-      if (!cancelado && coords) setGpsCoords(coords);
+    logCierre('wizard abierto — GPS preflight');
+    obtenerUbicacionGPS(err => {
+      logCierre('GPS preflight error', err);
+    }).then(coords => {
+      if (!cancelado && coords) {
+        logCierre('GPS preflight OK', coords);
+        setGpsCoords(coords);
+      } else if (!cancelado) {
+        logCierre('GPS preflight sin resultado — se pedirá de nuevo al cerrar');
+      }
     });
     return () => { cancelado = true; };
   }, [isOpen]);
@@ -96,22 +120,44 @@ export default function CierreServicioWizard({
     // Si falla, permite al técnico continuar sin coords con confirmación.
     const obtenerGPSConEscape = async (): Promise<{ coords: { lat: number; lng: number } | null; continuar: boolean }> => {
       // Si ya tenemos coords del useEffect, listo
-      if (gpsCoords) return { coords: gpsCoords, continuar: true };
+      if (gpsCoords) {
+        logCierre('usando GPS del preflight', gpsCoords);
+        return { coords: gpsCoords, continuar: true };
+      }
 
-      // Race entre el helper y un timeout de 12s
-      const MAX_MS = 12000;
-      toast.loading(`Obteniendo ubicación (hasta ${MAX_MS / 1000}s)...`, { id: 'cierre-gps' });
+      // Race entre el helper y un timeout de 8s
+      const MAX_MS = 8000;
+      toast.loading(`Verificando GPS (hasta ${MAX_MS / 1000}s)...`, { id: 'cierre-gps' });
+      logCierre('GPS request start en submit');
 
-      const timeoutPromise = new Promise<null>(resolve => setTimeout(() => resolve(null), MAX_MS));
-      const coords = await Promise.race([obtenerUbicacionGPS(), timeoutPromise]);
+      let ultimoError: GpsErrorInfo | null = null;
+      const timeoutPromise = new Promise<null>(resolve =>
+        setTimeout(() => { logCierre(`GPS timeout local ${MAX_MS}ms`); resolve(null); }, MAX_MS),
+      );
+      const coords = await Promise.race([
+        obtenerUbicacionGPS(err => {
+          ultimoError = err;
+          logCierre(`GPS error (highAccuracy=${err.highAccuracy})`, err);
+        }),
+        timeoutPromise,
+      ]);
       toast.dismiss('cierre-gps');
 
-      if (coords) return { coords, continuar: true };
+      if (coords) {
+        logCierre('GPS resolved', coords);
+        return { coords, continuar: true };
+      }
 
-      // No enganchó — preguntar al técnico si quiere cerrar sin GPS
+      const motivo = mensajeGpsError(ultimoError);
+      logCierre('GPS sin resultado — confirm', { ultimoError, motivo });
+      // Permiso denegado: abortar sin preguntar
+      if (ultimoError && (ultimoError as GpsErrorInfo).code === 1) {
+        toast.error(motivo, { duration: 8000 });
+        return { coords: null, continuar: false };
+      }
       const continuarSinGPS = confirm(
-        'No pudimos obtener tu ubicación GPS (señal débil, permiso denegado o interior).\n\n' +
-        '¿Deseas cerrar el servicio SIN verificación de ubicación?\n\n' +
+        motivo +
+        '\n\n¿Deseas cerrar el servicio SIN verificación de ubicación?\n\n' +
         'La orden quedará marcada como "GPS no verificado".',
       );
       return { coords: null, continuar: continuarSinGPS };
