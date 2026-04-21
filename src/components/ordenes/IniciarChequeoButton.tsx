@@ -75,11 +75,6 @@ export default function IniciarChequeoButton({
   const [procesando, setProcesando] = useState(false);
   const [permisoGps, setPermisoGps] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
   const inputRef = useRef<HTMLInputElement>(null);
-  // Promise del GPS en curso (se inicia AL MISMO TIEMPO que abrimos la cámara,
-  // en paralelo, para no romper el user-gesture que iOS Safari requiere)
-  const gpsPromiseRef = useRef<Promise<{ lat: number; lng: number } | null> | null>(null);
-  // Último error del GPS — se actualiza desde el onError del helper
-  const ultimoGpsErrorRef = useRef<GpsErrorInfo | null>(null);
 
   // Query del Permissions API al montar (Chrome/Android soportan; iOS Safari no tiene 'geolocation' pero no rompe)
   useEffect(() => {
@@ -123,13 +118,10 @@ export default function IniciarChequeoButton({
   if (!ordenActiva || !esDiaCita) return null;
 
   /**
-   * Al tocar el botón:
-   * 1) Iniciamos GPS en paralelo (promise guardada en ref).
-   * 2) Inmediatamente abrimos la cámara — esto REQUIERE user-gesture directo en iOS.
-   * 3) Cuando el técnico tome la foto, handleArchivo espera la promesa de GPS.
-   *
-   * Este orden es crítico: si hacemos `await` antes de `input.click()`, iOS Safari
-   * pierde el gesto y la cámara no abre. Por eso inicio el GPS SIN await.
+   * Al tocar el botón abrimos la cámara inmediatamente (user-gesture válido).
+   * El GPS se pide en `handleArchivo` DESPUÉS de recibir la foto, porque Chrome
+   * móvil suspende getCurrentPosition mientras la cámara ocupa foreground.
+   * El change event del input sigue contando como user-gesture en Chrome e iOS.
    */
   const dispararCamara = () => {
     if (procesando) return;
@@ -146,28 +138,7 @@ export default function IniciarChequeoButton({
     setProcesando(true);
     logChequeo('tap botón Iniciar chequeo', { ordenId: orden.id, permisoGps });
 
-    // 1) Iniciar GPS en paralelo (race con timeout 8s) SIN await — user gesture intacto
-    const MAX_MS = 8000;
-    ultimoGpsErrorRef.current = null;
-    logChequeo('GPS request start');
-    gpsPromiseRef.current = Promise.race([
-      obtenerUbicacionGPS(err => {
-        ultimoGpsErrorRef.current = err;
-        logChequeo(`GPS error (highAccuracy=${err.highAccuracy})`, err);
-      }),
-      new Promise<null>(resolve =>
-        setTimeout(() => {
-          logChequeo(`GPS timeout local de ${MAX_MS}ms`);
-          resolve(null);
-        }, MAX_MS),
-      ),
-    ]).then(res => {
-      if (res) logChequeo('GPS resolved', res);
-      else logChequeo('GPS resolved = null');
-      return res;
-    });
-
-    // 2) Abrir cámara inmediatamente — user gesture preservado (iOS)
+    // Abrir cámara inmediatamente — user gesture preservado (iOS + Chrome)
     if (inputRef.current) {
       inputRef.current.value = '';
       inputRef.current.click();
@@ -185,15 +156,32 @@ export default function IniciarChequeoButton({
     }
     logChequeo('foto recibida', { sizeKB: Math.round(file.size / 1024), type: file.type });
     try {
-      // Esperar a que el GPS (que empezó al abrir la cámara) termine.
-      // Si el técnico se tarda tomando la foto, el GPS ya debería estar listo.
-      toast.loading('Verificando GPS (hasta 8s)...', { id: 'chequeo' });
-      const gps = await (gpsPromiseRef.current || Promise.resolve(null));
+      // GPS se pide DESPUÉS de la foto: Chrome móvil suspende getCurrentPosition
+      // mientras la cámara tenía foco, así que pedirlo antes devolvía null.
+      // El change event del input sigue contando como user-gesture.
+      let ultimoGpsError: GpsErrorInfo | null = null;
+      toast.loading('Obteniendo GPS...', { id: 'chequeo' });
+      logChequeo('GPS request start (post-foto)');
+      const gps = await Promise.race([
+        obtenerUbicacionGPS(err => {
+          ultimoGpsError = err;
+          logChequeo(`GPS error (highAccuracy=${err.highAccuracy})`, err);
+        }),
+        new Promise<null>(resolve =>
+          setTimeout(() => {
+            logChequeo('GPS timeout local de 12000ms');
+            resolve(null);
+          }, 12000),
+        ),
+      ]);
+      if (gps) logChequeo('GPS resolved', gps);
+      else logChequeo('GPS resolved = null');
 
       // Si GPS falló, preguntar al técnico si quiere continuar sin verificación
       if (!gps) {
         toast.dismiss('chequeo');
-        const err = ultimoGpsErrorRef.current;
+        // Cast defensivo: TS narrow-ea a 'never' por el flow de la let capturada en closure.
+        const err = ultimoGpsError as GpsErrorInfo | null;
         const motivo = mensajeGpsError(err);
         logChequeo('GPS sin resultado — mostrar confirm', { err, motivo });
         // Si el error es permiso denegado, cortar — no tiene sentido preguntar.
@@ -357,7 +345,6 @@ export default function IniciarChequeoButton({
       console.error(err);
       toast.error('Error al iniciar el chequeo', { id: 'chequeo' });
     } finally {
-      gpsPromiseRef.current = null;
       setProcesando(false);
     }
   };
@@ -391,7 +378,6 @@ export default function IniciarChequeoButton({
           } else {
             // Usuario canceló la cámara sin tomar foto
             logChequeo('usuario canceló la cámara');
-            gpsPromiseRef.current = null;
             setProcesando(false);
           }
         }}
