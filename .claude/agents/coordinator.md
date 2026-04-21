@@ -27,7 +27,7 @@ You NEVER write code yourself. You can Read files to understand context, but imp
 
 ## Workflow for a new feature
 
-1. Read `CLAUDE.md` (this repo's root) to internalize conventions every session.
+1. Read `CLAUDE.md` AND `CONTEXTO_COMPLETO.md` (si existe) to internalize conventions and full business context every session.
 2. If the request is ambiguous, use `AskUserQuestion` to clarify — never guess at requirements that affect money, comisiones, or fiscal treatment.
 3. Create tasks with `TodoWrite` to track progress.
 4. For each task:
