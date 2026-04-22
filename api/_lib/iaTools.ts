@@ -9,6 +9,23 @@ import type { Firestore, Query, DocumentData, Timestamp as AdminTimestamp } from
 
 export type Rol = 'administrador' | 'coordinadora' | 'operaria' | 'secretaria';
 
+/**
+ * Sprint 1 introdujo iaHabilitada como campo opcional con defaults por rol SOLO
+ * en creaciones nuevas. Usuarios existentes no tienen el campo → se trata como
+ * default por rol (admin/coord ON, resto OFF). Esta función es duplicada de
+ * src/utils/permisos.ts porque api/_lib no puede importar de src/.
+ */
+export function iaHabilitadaDefaultPorRol(rol: string): boolean {
+  return rol === 'administrador' || rol === 'coordinadora';
+}
+
+export function tieneAccesoAsistenteIA(perfil: { rol?: string; iaHabilitada?: boolean } | null | undefined): boolean {
+  if (!perfil?.rol) return false;
+  if (perfil.iaHabilitada === true) return true;
+  if (perfil.iaHabilitada === undefined) return iaHabilitadaDefaultPorRol(perfil.rol);
+  return false;
+}
+
 export interface ToolDef {
   name: string;
   description: string;

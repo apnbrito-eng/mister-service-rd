@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, Send } from 'lucide-react';
 import { auth } from '../firebase/config';
+import { useApp } from '../context/AppContext';
+import { iaHabilitadaDefaultPorRol } from '../utils/permisos';
 
 interface Mensaje {
   role: 'user' | 'assistant';
@@ -19,6 +21,7 @@ interface UsoInfo {
  * La UI definitiva (chat flotante role-aware) llega en Sprint 4.
  */
 export default function AsistenteIA() {
+  const { userProfile } = useApp();
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [input, setInput] = useState('');
   const [enviando, setEnviando] = useState(false);
@@ -31,6 +34,24 @@ export default function AsistenteIA() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [mensajes, enviando]);
+
+  // iaHabilitada === undefined se trata como default por rol (Sprint 1 solo aplicó
+  // defaults en creaciones nuevas — usuarios existentes no tienen el campo).
+  const tieneAcceso =
+    userProfile?.iaHabilitada === true ||
+    (userProfile?.iaHabilitada === undefined &&
+      !!userProfile?.rol &&
+      iaHabilitadaDefaultPorRol(userProfile.rol));
+
+  if (!tieneAcceso) {
+    return (
+      <div className="p-6">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 text-yellow-900">
+          Tu usuario no tiene el Asistente IA habilitado. Pedí acceso al administrador.
+        </div>
+      </div>
+    );
+  }
 
   const enviar = async () => {
     const texto = input.trim();

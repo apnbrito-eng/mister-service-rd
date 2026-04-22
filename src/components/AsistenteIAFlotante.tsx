@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Minus, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
+import { iaHabilitadaDefaultPorRol } from '../utils/permisos';
 
 interface Mensaje {
   role: 'user' | 'assistant';
@@ -68,8 +69,16 @@ export default function AsistenteIAFlotante() {
   }, [input, abierto]);
 
   // ----- Guards tempranos -----
-  if (!userProfile?.iaHabilitada) return null;
-  if (userProfile.rol === 'tecnico' || userProfile.rol === 'ayudante') return null;
+  // iaHabilitada === undefined se trata como default por rol (Sprint 1 solo aplicó
+  // defaults en creaciones nuevas — usuarios existentes no tienen el campo).
+  const tieneAcceso =
+    userProfile?.iaHabilitada === true ||
+    (userProfile?.iaHabilitada === undefined &&
+      !!userProfile?.rol &&
+      iaHabilitadaDefaultPorRol(userProfile.rol));
+
+  if (!tieneAcceso) return null;
+  if (userProfile?.rol === 'tecnico' || userProfile?.rol === 'ayudante') return null;
   if (!currentUser) return null;
 
   const abrirPanel = () => {

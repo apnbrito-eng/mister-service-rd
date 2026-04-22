@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import { getAdminAuth, getAdminFirestore } from '../_lib/firebaseAdmin.js';
-import { toolsParaRol, ejecutarTool, contextoFechaRD, type Rol as RolTool } from '../_lib/iaTools.js';
+import { toolsParaRol, ejecutarTool, contextoFechaRD, tieneAccesoAsistenteIA, type Rol as RolTool } from '../_lib/iaTools.js';
 
 /**
  * POST /api/ai/chat
@@ -134,8 +134,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'No se encontró tu perfil en el sistema. Contacta al administrador.' });
     }
 
-    // 6. Validar iaHabilitada
-    if (perfil.iaHabilitada !== true) {
+    // 6. Validar iaHabilitada (undefined se trata como default por rol — usuarios
+    // existentes pre-Sprint 1 no tienen el campo seteado).
+    if (!tieneAccesoAsistenteIA(perfil)) {
       return res.status(403).json({ error: 'Tu usuario no tiene el Asistente IA habilitado. Pedí acceso al administrador.' });
     }
 
