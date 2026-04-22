@@ -129,6 +129,185 @@ function quincenaActualAhora(): { inicio: Date; fin: Date } {
 }
 
 // ---------------------------------------------------------------------------
+// Contexto fecha/hora RD — usado por el system prompt del Asistente IA para
+// que el modelo sepa qué día es "hoy", qué es "esta semana", etc.
+// ---------------------------------------------------------------------------
+
+const DIAS_SEMANA_ES = [
+  'domingo',
+  'lunes',
+  'martes',
+  'miércoles',
+  'jueves',
+  'viernes',
+  'sábado',
+];
+
+const MESES_ES = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+];
+
+/** Último día del mes dado (1-12) en el año dado. Soporta años bisiestos. */
+function ultimoDiaDelMes(mes: number, anio: number): number {
+  // Truco estándar: el día 0 del mes siguiente = último día del mes actual.
+  // Date.UTC con día=0 del mes (mes-1+1=mes) retrocede al último día.
+  const d = new Date(Date.UTC(anio, mes, 0));
+  return d.getUTCDate();
+}
+
+/** Formato YYYY-MM-DD a partir de componentes year/month/day (1-indexado). */
+function ymd(anio: number, mes: number, dia: number): string {
+  const y = String(anio);
+  const m = String(mes).padStart(2, '0');
+  const d = String(dia).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Fecha/hora ISO con offset -04:00 (RD, sin DST).
+ * No usa Intl; construye el string manualmente a partir del Date UTC.
+ */
+function isoConOffsetRD(fecha: Date): string {
+  const rdMs = fecha.getTime() - RD_OFFSET_MS;
+  const rd = new Date(rdMs);
+  const y = rd.getUTCFullYear();
+  const mo = String(rd.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(rd.getUTCDate()).padStart(2, '0');
+  const hh = String(rd.getUTCHours()).padStart(2, '0');
+  const mm = String(rd.getUTCMinutes()).padStart(2, '0');
+  const ss = String(rd.getUTCSeconds()).padStart(2, '0');
+  return `${y}-${mo}-${d}T${hh}:${mm}:${ss}-04:00`;
+}
+
+/** Devuelve los componentes (año/mes/día/dowSunday0) en hora RD del Date dado. */
+function componentesRD(fecha: Date): { anio: number; mes: number; dia: number; dow: number } {
+  const rdMs = fecha.getTime() - RD_OFFSET_MS;
+  const rd = new Date(rdMs);
+  return {
+    anio: rd.getUTCFullYear(),
+    mes: rd.getUTCMonth() + 1,
+    dia: rd.getUTCDate(),
+    dow: rd.getUTCDay(),
+  };
+}
+
+/**
+ * Contexto completo de fecha/hora en RD (GMT-4 fijo). Se inyecta como bloque
+ * dinámico en el system prompt del Asistente IA para que el modelo sepa qué
+ * día/semana/mes/quincena corresponde a "hoy".
+ *
+ * Reglas:
+ * - Semana: lunes a domingo (estándar ES). Lunes = inicio.
+ * - Quincena: Q1 = día 30 del mes anterior → día 14 del mes actual (paga 15).
+ *             Q2 = día 15 → día 29 del mes actual (paga día 30, o último día
+ *             del mes si el mes tiene menos de 30 días).
+ * - Si hoy es día 30 o 31, ya estamos en Q1 del mes SIGUIENTE.
+ */
+export function contextoFechaRD(): {
+  fechaHoraIso: string;
+  diaSemanaEspanol: string;
+  fechaLargaEspanol: string;
+  hoy: string;
+  ayer: string;
+  manana: string;
+  semanaActual: { inicio: string; fin: string };
+  mesActual: { inicio: string; fin: string };
+  quincenaActual: {
+    etiqueta: string;
+    inicio: string;
+    fin: string;
+    diaPago: string;
+  };
+} {
+  const ahora = new Date();
+  const { anio, mes, dia, dow } = componentesRD(ahora);
+
+  // Hoy / ayer / mañana — se calculan sumando ms a partir de medianoche RD
+  // (04:00 UTC del día correspondiente).
+  const medianocheHoyUTC = Date.UTC(anio, mes - 1, dia, 4, 0, 0, 0);
+  const hoyStr = ymd(anio, mes, dia);
+  const ayerDate = new Date(medianocheHoyUTC - 24 * 60 * 60 * 1000);
+  const mananaDate = new Date(medianocheHoyUTC + 24 * 60 * 60 * 1000);
+  const ayerC = componentesRD(ayerDate);
+  const mananaC = componentesRD(mananaDate);
+
+  // Semana lunes→domingo. dow: 0=dom,1=lun,...6=sab.
+  // Offset desde el lunes: lun=0, mar=1, ..., dom=6.
+  const offsetLunes = (dow + 6) % 7;
+  const lunesUTC = medianocheHoyUTC - offsetLunes * 24 * 60 * 60 * 1000;
+  const domingoUTC = lunesUTC + 6 * 24 * 60 * 60 * 1000;
+  const lunesC = componentesRD(new Date(lunesUTC));
+  const domingoC = componentesRD(new Date(domingoUTC));
+
+  // Mes actual: día 1 → último día del mes.
+  const ultimoDia = ultimoDiaDelMes(mes, anio);
+
+  // Quincena actual: reutiliza calcularQuincenaActual() existente.
+  // Para el texto del system prompt computamos inicio/fin localmente (no via
+  // rangoQuincena) porque rangoQuincena asume Q2 fin = día 29 y para febrero
+  // non-bisiesto eso overflow a marzo 1 al construir el UTC Date. Acá queremos
+  // strings YYYY-MM-DD limpios que matcheen el spec (ej feb no bisiesto:
+  // "Q2 febrero (15 → 28 feb)").
+  const qActual = calcularQuincenaActual(ahora);
+  let qInicioStr: string;
+  let qFinStr: string;
+  let diaPagoStr: string;
+  if (qActual.quincena === 1) {
+    // Q1: día 30 del mes anterior → día 14 del mes actual de la quincena.
+    const mesPrev = qActual.mes === 1 ? 12 : qActual.mes - 1;
+    const anioPrev = qActual.mes === 1 ? qActual.anio - 1 : qActual.anio;
+    qInicioStr = ymd(anioPrev, mesPrev, 30);
+    qFinStr = ymd(qActual.anio, qActual.mes, 14);
+    diaPagoStr = ymd(qActual.anio, qActual.mes, 15);
+  } else {
+    // Q2: día 15 → día 29 (o último día si el mes tiene < 29, caso feb no
+    // bisiesto: termina día 28). diaPago = día 30 o último día si el mes
+    // tiene < 30 (caso único: febrero, 28 o 29).
+    const ultDia = ultimoDiaDelMes(qActual.mes, qActual.anio);
+    qInicioStr = ymd(qActual.anio, qActual.mes, 15);
+    qFinStr = ymd(qActual.anio, qActual.mes, Math.min(29, ultDia));
+    diaPagoStr = ymd(qActual.anio, qActual.mes, Math.min(30, ultDia));
+  }
+
+  const etiqueta = `Q${qActual.quincena} ${MESES_ES[qActual.mes - 1]} ${qActual.anio}`;
+  const fechaLarga = `${dia} de ${MESES_ES[mes - 1]} de ${anio}`;
+
+  return {
+    fechaHoraIso: isoConOffsetRD(ahora),
+    diaSemanaEspanol: DIAS_SEMANA_ES[dow],
+    fechaLargaEspanol: fechaLarga,
+    hoy: hoyStr,
+    ayer: ymd(ayerC.anio, ayerC.mes, ayerC.dia),
+    manana: ymd(mananaC.anio, mananaC.mes, mananaC.dia),
+    semanaActual: {
+      inicio: ymd(lunesC.anio, lunesC.mes, lunesC.dia),
+      fin: ymd(domingoC.anio, domingoC.mes, domingoC.dia),
+    },
+    mesActual: {
+      inicio: ymd(anio, mes, 1),
+      fin: ymd(anio, mes, ultimoDia),
+    },
+    quincenaActual: {
+      etiqueta,
+      inicio: qInicioStr,
+      fin: qFinStr,
+      diaPago: diaPagoStr,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Utilidades internas
 // ---------------------------------------------------------------------------
 

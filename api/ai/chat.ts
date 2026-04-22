@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import { getAdminAuth, getAdminFirestore } from '../_lib/firebaseAdmin.js';
-import { toolsParaRol, ejecutarTool, type Rol as RolTool } from '../_lib/iaTools.js';
+import { toolsParaRol, ejecutarTool, contextoFechaRD, type Rol as RolTool } from '../_lib/iaTools.js';
 
 /**
  * POST /api/ai/chat
@@ -22,7 +22,7 @@ interface Mensaje {
   content: string;
 }
 
-const SYSTEM_BASE = `Eres el asistente IA interno de Mister Service RD, un negocio de reparación de electrodomésticos en República Dominicana. Hablas español dominicano, conciso y profesional.
+const SYSTEM_BASE_SIN_FECHA = `Eres el asistente IA interno de Mister Service RD, un negocio de reparación de electrodomésticos en República Dominicana. Hablas español dominicano, conciso y profesional.
 
 Contexto del negocio:
 - Sistema operativo interno, paralelo a la facturación DGII (que se hace en otro software autorizado).
@@ -147,7 +147,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 8. Construir system prompt + tools habilitadas para el rol
     const bloqueRol = SYSTEM_POR_ROL[rol] || '';
-    const systemPrompt = `${SYSTEM_BASE}\n\n${bloqueRol}`;
+    const bloqueEstatico = `${SYSTEM_BASE_SIN_FECHA}\n\n${bloqueRol}`;
+
+    // Bloque dinámico de fecha/hora RD — se regenera en CADA request para que
+    // el modelo sepa qué día es "hoy", qué rango cubre "esta semana"/"esta
+    // quincena", etc. Va PRIMERO para que tenga peso al interpretar la pregunta.
+    const ctx = contextoFechaRD();
+    const bloqueFecha = `FECHA Y HORA ACTUAL (zona horaria República Dominicana, GMT-4):
+- Hoy: ${ctx.diaSemanaEspanol}, ${ctx.fechaLargaEspanol} (${ctx.hoy})
+- Ayer: ${ctx.ayer} | Mañana: ${ctx.manana}
+- Semana actual (lunes a domingo): ${ctx.semanaActual.inicio} a ${ctx.semanaActual.fin}
+- Mes actual: ${ctx.mesActual.inicio} a ${ctx.mesActual.fin}
+- Quincena actual (${ctx.quincenaActual.etiqueta}): ${ctx.quincenaActual.inicio} a ${ctx.quincenaActual.fin}, paga ${ctx.quincenaActual.diaPago}
+- Hora actual: ${ctx.fechaHoraIso}
+
+Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fechas exactas para llamar las tools. Nunca asumas otra fecha — siempre estos valores de arriba.`;
+
     const rolTool = rol as RolTool; // ya descartamos tecnico/ayudante
     const toolsDisponibles = toolsParaRol(rolTool);
     const anthropicTools = toolsDisponibles.map((t) => ({
@@ -158,10 +173,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 9. Tool use loop (max MAX_TOOL_USE_ITERACIONES iteraciones)
     const anthropic = new Anthropic({ apiKey });
+    // System en dos bloques: (1) fecha dinámica SIN cache_control (cambia en
+    // cada request, invalidaría el cache si se marcara), (2) base estática +
+    // rol CON cache_control ephemeral para aprovechar prompt caching.
     const systemParam = [
       {
         type: 'text' as const,
-        text: systemPrompt,
+        text: bloqueFecha,
+      },
+      {
+        type: 'text' as const,
+        text: bloqueEstatico,
         cache_control: { type: 'ephemeral' as const },
       },
     ];
