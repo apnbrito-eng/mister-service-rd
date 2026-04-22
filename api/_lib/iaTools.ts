@@ -133,9 +133,15 @@ function rangoQuincena(q: 1 | 2, mes: number, anio: number): { inicio: Date; fin
     const fin = new Date(Date.UTC(anio, mes - 1, 14, 4, 0, 0, 0) + (24 * 60 * 60 * 1000 - 1));
     return { inicio, fin };
   }
-  // Q2: día 15 al 29
+  // Q2: día 15 al 29 (o al último día del mes si es febrero no bisiesto, 28
+  // días). Usar `new Date(Date.UTC(anio, mes, 0)).getUTCDate()` aprovechando
+  // que día=0 del mes siguiente retrocede al último día del mes actual. Sin
+  // esto, feb 2027 (28 días) construye UTC(2027,1,29) y Date hace rollover
+  // a 1 de marzo, incluyendo un día extra en el rango. Fix #77.
+  const ultimoDia = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
+  const diaFin = Math.min(29, ultimoDia);
   const inicio = new Date(Date.UTC(anio, mes - 1, 15, 4, 0, 0, 0));
-  const fin = new Date(Date.UTC(anio, mes - 1, 29, 4, 0, 0, 0) + (24 * 60 * 60 * 1000 - 1));
+  const fin = new Date(Date.UTC(anio, mes - 1, diaFin, 4, 0, 0, 0) + (24 * 60 * 60 * 1000 - 1));
   return { inicio, fin };
 }
 

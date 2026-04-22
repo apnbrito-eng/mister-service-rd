@@ -1,45 +1,40 @@
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Minus, Send } from 'lucide-react';
-import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 import { iaHabilitadaDefaultPorRol } from '../utils/permisos';
-
-interface Mensaje {
-  role: 'user' | 'assistant';
-  content: string;
-}
+import { useAsistenteIAChat } from '../hooks/useAsistenteIAChat';
 
 /**
- * Burbuja flotante del Asistente IA (Sprint 4).
+ * Burbuja flotante del Asistente IA.
  * Se monta en el Layout admin — aparece solo en /admin/*.
  *
  * Visibilidad:
- *  - userProfile.iaHabilitada === true
+ *  - userProfile.iaHabilitada === true (o undefined con default por rol ON).
  *  - rol distinto de tecnico / ayudante (backend igual lo rechaza, pero por UX no mostrar).
  *  - user autenticado (currentUser).
  *
- * Estado de conversación vivo dentro del componente. Persiste mientras el
- * Layout esté montado (navegación entre páginas admin). No persiste entre
- * refreshes — la persistencia en Firestore llega en Sprint 5.
+ * Sprint 5: la lógica de chat vive en `useAsistenteIAChat`. La conversación
+ * se persiste en la colección `conversaciones_ia` via backend. Al minimizar
+ * el panel NO se limpia (se preserva la sesión). Al hacer refresh del navegador
+ * se pierde el hilo local pero queda el audit log en Firestore.
  */
 export default function AsistenteIAFlotante() {
   const { currentUser, userProfile } = useApp();
+  const { mensajes, enviar, pensando, error, tokensSesion } = useAsistenteIAChat();
 
   const [abierto, setAbierto] = useState(false);
   const [montado, setMontado] = useState(false); // para animación de entrada
-  const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [input, setInput] = useState('');
-  const [pensando, setPensando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [tokensSesion, setTokensSesion] = useState<{ input: number; output: number; costoUSD: number }>({
-    input: 0,
-    output: 0,
-    costoUSD: 0,
-  });
   const [hayNoLeido, setHayNoLeido] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Para detectar cuándo se agregó un nuevo mensaje del assistant y marcar
+  // "no leído" si el panel está cerrado. Guarda el length previo visto.
+  const mensajesLenAnterior = useRef<number>(0);
+  const abiertoRef = useRef<boolean>(abierto);
+
+  useEffect(() => { abiertoRef.current = abierto; }, [abierto]);
 
   // Auto-scroll al fondo cuando cambia la lista de mensajes o el estado "pensando"
   useEffect(() => {
@@ -47,6 +42,21 @@ export default function AsistenteIAFlotante() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [mensajes, pensando, abierto]);
+
+  // Detectar nuevos mensajes del assistant cuando el panel está cerrado:
+  // si `mensajes.length` aumentó y el último es del assistant y no estamos
+  // mirando el panel, marcar `hayNoLeido`. Evita disparar sobre el push del
+  // user (el length aumenta también ahí).
+  useEffect(() => {
+    const prev = mensajesLenAnterior.current;
+    mensajesLenAnterior.current = mensajes.length;
+    if (mensajes.length > prev) {
+      const ultimo = mensajes[mensajes.length - 1];
+      if (ultimo?.role === 'assistant' && !abiertoRef.current) {
+        setHayNoLeido(true);
+      }
+    }
+  }, [mensajes]);
 
   // Animación de entrada del panel: dejar que el DOM pinte el estado inicial
   // antes de aplicar las clases "abiertas" para que la transición se vea.
@@ -87,67 +97,21 @@ export default function AsistenteIAFlotante() {
   };
 
   const cerrarPanel = () => {
+    // NO llamar limpiar() — preservar la conversación al minimizar.
     setAbierto(false);
   };
 
-  const enviar = async () => {
+  const handleEnviar = async () => {
     const texto = input.trim();
     if (!texto || pensando) return;
-
-    const userMsg: Mensaje = { role: 'user', content: texto };
-    const nuevoHistorial = [...mensajes, userMsg];
-    setMensajes(nuevoHistorial);
     setInput('');
-    setPensando(true);
-    setError(null);
-
-    try {
-      const idToken = await currentUser.getIdToken();
-      const resp = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ mensajes: nuevoHistorial }),
-      });
-
-      const data = await resp.json().catch(() => ({}));
-
-      if (!resp.ok) {
-        const errorMsg =
-          resp.status === 403
-            ? (typeof data.error === 'string' && data.error) ||
-              'Tu acceso al asistente fue desactivado. Contacta al administrador.'
-            : resp.status === 500
-            ? 'Hubo un error procesando tu pregunta. Reintenta o reformula.'
-            : (typeof data.error === 'string' && data.error) || `Error ${resp.status}`;
-        setMensajes(prev => [...prev, { role: 'assistant', content: errorMsg }]);
-        if (!abierto) setHayNoLeido(true);
-        return;
-      }
-
-      const respuesta: string = typeof data.respuesta === 'string' ? data.respuesta : '';
-      setMensajes(prev => [...prev, { role: 'assistant', content: respuesta }]);
-      setTokensSesion(prev => ({
-        input: prev.input + (Number(data.tokensInput) || 0),
-        output: prev.output + (Number(data.tokensOutput) || 0),
-        costoUSD: prev.costoUSD + (Number(data.costoEstimadoUSD) || 0),
-      }));
-      if (!abierto) setHayNoLeido(true);
-    } catch (err) {
-      console.error('[AsistenteIAFlotante] error de red:', err);
-      toast.error('No pude contactar al servidor. Reintenta.');
-      setError('No pude contactar al servidor. Reintenta.');
-    } finally {
-      setPensando(false);
-    }
+    await enviar(texto);
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      enviar();
+      handleEnviar();
     }
   };
 
@@ -212,6 +176,13 @@ export default function AsistenteIAFlotante() {
         </div>
       </div>
 
+      {/* Banner de error — arriba del body para consistencia con página */}
+      {error && (
+        <div className="bg-red-50 border-b border-red-200 text-red-700 px-3 py-2 text-xs flex-shrink-0">
+          {error}
+        </div>
+      )}
+
       {/* Body — mensajes scrollables */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2 bg-[#f9fafb]">
         {mensajes.length === 0 && !pensando && (
@@ -259,11 +230,6 @@ export default function AsistenteIAFlotante() {
 
       {/* Footer — input + contador */}
       <div className="border-t border-gray-100 p-3 space-y-2 flex-shrink-0 bg-white">
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 text-xs">
-            {error}
-          </div>
-        )}
         <div className="flex items-end gap-2">
           <textarea
             ref={textareaRef}
@@ -277,7 +243,7 @@ export default function AsistenteIAFlotante() {
           />
           <button
             type="button"
-            onClick={enviar}
+            onClick={handleEnviar}
             disabled={pensando || !input.trim()}
             aria-label="Enviar mensaje"
             className="flex items-center justify-center p-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

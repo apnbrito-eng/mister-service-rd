@@ -150,9 +150,13 @@ export function rangoQuincena(quincena: string): { inicio: Date; fin: Date } {
     const fin = new Date(y, m - 1, 14, 23, 59, 59);
     return { inicio, fin };
   }
-  // Q2 cubre 15-29 del mes
+  // Q2 cubre 15-29 del mes (o hasta el último día si febrero no bisiesto, 28
+  // días). Sin este clamp, `new Date(y, 1, 29)` para feb no bisiesto hace
+  // rollover a 1 de marzo, incluyendo un día extra en el rango. Fix #77.
+  const ultimoDia = new Date(y, m, 0).getDate();
+  const diaFin = Math.min(29, ultimoDia);
   const inicio = new Date(y, m - 1, 15, 0, 0, 0);
-  const fin = new Date(y, m - 1, 29, 23, 59, 59);
+  const fin = new Date(y, m - 1, diaFin, 23, 59, 59);
   return { inicio, fin };
 }
 

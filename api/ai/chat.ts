@@ -1,18 +1,23 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { getAdminAuth, getAdminFirestore } from '../_lib/firebaseAdmin.js';
 import { toolsParaRol, ejecutarTool, contextoFechaRD, tieneAccesoAsistenteIA, type Rol as RolTool } from '../_lib/iaTools.js';
 
 /**
  * POST /api/ai/chat
- * Body: { mensajes: Array<{ role: 'user' | 'assistant', content: string }> }
+ * Body: { mensajes: Array<{ role: 'user' | 'assistant', content: string }>, conversacionId?: string }
  * Headers: Authorization: Bearer <Firebase ID token>
  *
  * Valida que el usuario tenga iaHabilitada === true y que su rol NO sea
  * tecnico/ayudante (fase beta). Llama a Claude Sonnet con un system prompt
  * role-aware + tools READ-only de Firestore. Tool use loop con max 5 iteraciones.
  * Token tracking acumula todas las iteraciones para reportar costo real.
- * No persiste nada en Firestore (logging llega en Sprint 5). Sin streaming (Sprint 4).
+ *
+ * Sprint 5: persiste conversaciones exitosas en la colección `conversaciones_ia`.
+ * Si el body trae `conversacionId`, valida que pertenezca al mismo uid (403 si
+ * no). Conversaciones con error NO se persisten. El system prompt y los
+ * tool_use/tool_result internos tampoco se guardan — solo user/assistant texto.
  */
 
 type Rol = 'administrador' | 'coordinadora' | 'operaria' | 'secretaria' | 'tecnico' | 'ayudante';
@@ -70,6 +75,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const lastMensaje = mensajes[mensajes.length - 1] as Mensaje;
   if (lastMensaje.role !== 'user') {
     return res.status(400).json({ error: 'El último mensaje debe ser del usuario' });
+  }
+  const conversacionIdBody: unknown = body.conversacionId;
+  if (
+    conversacionIdBody !== undefined &&
+    conversacionIdBody !== null &&
+    typeof conversacionIdBody !== 'string'
+  ) {
+    return res.status(400).json({ error: 'conversacionId, si se envía, debe ser string' });
   }
 
   // 2. Extraer ID token
@@ -144,6 +157,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rol = perfil.rol;
     if (!rol || rol === 'tecnico' || rol === 'ayudante') {
       return res.status(403).json({ error: 'El Asistente IA está en fase beta. Tu rol todavía no tiene acceso.' });
+    }
+
+    // 7.5. Si viene conversacionId, validar que exista y pertenezca al uid.
+    // No propagamos el doc existente — solo guardamos la ref para el update
+    // posterior y rechazamos si no es del usuario actual.
+    const conversacionIdInput: string | null =
+      typeof conversacionIdBody === 'string' && conversacionIdBody.length > 0
+        ? conversacionIdBody
+        : null;
+    let docRefExistente: FirebaseFirestore.DocumentReference | null = null;
+    if (conversacionIdInput !== null) {
+      const ref = db.collection('conversaciones_ia').doc(conversacionIdInput);
+      const snap = await ref.get();
+      if (!snap.exists || snap.data()?.usuarioId !== uid) {
+        return res.status(403).json({ error: 'Conversación inválida o no autorizada.' });
+      }
+      docRefExistente = ref;
     }
 
     // 8. Construir system prompt + tools habilitadas para el rol
@@ -290,12 +320,73 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
     const costoEstimadoUSDraw = (totalTokensInput / 1_000_000) * 3 + (totalTokensOutput / 1_000_000) * 15;
     const costoEstimadoUSD = Math.round(costoEstimadoUSDraw * 1_000_000) / 1_000_000;
 
+    // 11. Persistir conversación en Firestore (solo si hubo respuesta exitosa).
+    // Guardamos únicamente los mensajes visibles al usuario (role user/assistant
+    // con content string). NO guardamos system prompts, tool_use ni tool_result
+    // (privacy + ruido). Timestamps usan Timestamp.now() porque serverTimestamp
+    // no funciona dentro de arrayUnion y aquí escribimos el array completo.
+    const ahoraTs = Timestamp.now();
+    const mensajesPersistibles = [
+      ...(mensajes as Mensaje[]).map((m) => ({
+        role: m.role,
+        content: m.content,
+        timestamp: ahoraTs,
+      })),
+      {
+        role: 'assistant' as const,
+        content: respuesta,
+        timestamp: ahoraTs,
+      },
+    ];
+
+    let conversacionIdOut: string | null = conversacionIdInput;
+    try {
+      if (docRefExistente) {
+        // Update: sobrescribimos mensajes con el array completo + acumulamos
+        // tokens/costo con FieldValue.increment.
+        await docRefExistente.update({
+          mensajes: mensajesPersistibles,
+          ultimoMensajeAt: ahoraTs,
+          tokensInputTotal: FieldValue.increment(totalTokensInput),
+          tokensOutputTotal: FieldValue.increment(totalTokensOutput),
+          costoTotalUSD: FieldValue.increment(costoEstimadoUSD),
+          cantidadMensajes: mensajesPersistibles.length,
+        });
+      } else {
+        // Nueva conversación: stripear undefined en el payload (convención
+        // del proyecto). Todos los campos requeridos están presentes; los
+        // opcionales (usuarioEmail, usuarioNombre) solo se incluyen si hay
+        // valor concreto.
+        const payload: Record<string, unknown> = {
+          usuarioId: uid,
+          usuarioRol: rol,
+          iniciadaAt: ahoraTs,
+          ultimoMensajeAt: ahoraTs,
+          mensajes: mensajesPersistibles,
+          tokensInputTotal: totalTokensInput,
+          tokensOutputTotal: totalTokensOutput,
+          costoTotalUSD: costoEstimadoUSD,
+          cantidadMensajes: mensajesPersistibles.length,
+        };
+        if (perfil.nombre) payload.usuarioNombre = perfil.nombre;
+        if (userEmail) payload.usuarioEmail = userEmail;
+        const nuevoDoc = await db.collection('conversaciones_ia').add(payload);
+        conversacionIdOut = nuevoDoc.id;
+      }
+    } catch (err: unknown) {
+      // Persistencia es best-effort: si falla, logueamos pero no rompemos la
+      // respuesta al usuario. El audit log puede quedar incompleto, pero el
+      // asistente sigue funcionando.
+      console.error('ai/chat persistencia falló:', err);
+    }
+
     return res.status(200).json({
       respuesta,
       tokensInput: totalTokensInput,
       tokensOutput: totalTokensOutput,
       costoEstimadoUSD,
       iteraciones,
+      conversacionId: conversacionIdOut,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error desconocido';

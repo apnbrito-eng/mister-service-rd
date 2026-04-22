@@ -4,7 +4,7 @@ import {
   Users, UserCog, FileText, Settings, LogOut, Wrench,
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight,
   Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
-  CalendarCheck, Sparkles,
+  CalendarCheck, Sparkles, History,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -97,6 +97,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: isAdmin },
     { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: isAdmin },
     { to: '/admin/asistente', icon: Sparkles, label: 'Asistente IA · pantalla completa', show: userProfile?.rol === 'administrador' },
+    { to: '/admin/asistente/historial', icon: History, label: 'Historial IA', show: userProfile?.rol === 'administrador' },
     { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: p('configuracionVer') },
   ];
 
