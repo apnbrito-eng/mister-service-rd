@@ -96,7 +96,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: isAdmin },
     { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: isAdmin },
     { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: isAdmin },
-    { to: '/admin/asistente', icon: Sparkles, label: 'Asistente IA (BETA)', show: userProfile?.rol === 'administrador' },
+    { to: '/admin/asistente', icon: Sparkles, label: 'Asistente IA · pantalla completa', show: userProfile?.rol === 'administrador' },
     { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: p('configuracionVer') },
   ];
 

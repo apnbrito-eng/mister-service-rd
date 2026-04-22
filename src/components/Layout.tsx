@@ -4,6 +4,7 @@ import Sidebar from './Sidebar';
 import { useApp } from '../context/AppContext';
 import { Menu } from 'lucide-react';
 import NotificacionesPanel from './NotificacionesPanel';
+import AsistenteIAFlotante from './AsistenteIAFlotante';
 
 export default function Layout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -55,6 +56,9 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Burbuja flotante del Asistente IA — solo /admin/* (Sprint 4) */}
+      <AsistenteIAFlotante />
     </div>
   );
 }
