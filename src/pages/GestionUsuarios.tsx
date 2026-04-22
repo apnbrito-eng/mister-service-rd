@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, setDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
@@ -185,6 +185,30 @@ export default function GestionUsuarios() {
 
       if (editingId) {
         await updateDoc(doc(db, 'personal', editingId), data);
+
+        // Sync ampliado a usuarios/{uid} cuando hay Auth vinculado (task #76).
+        // El doc en `usuarios/` es el profile real-time que consume AppContext; si no
+        // se propaga, cambios en iaHabilitada/rol/permisos no llegan al usuario hasta
+        // que vuelva a iniciar sesión. Envolvemos en try/catch independiente para no
+        // romper el updateDoc principal si falla el sync.
+        try {
+          const editedUser = usuarios.find(u => u.id === editingId);
+          const uid = editedUser?.uid;
+          if (uid && uid !== 'existing') {
+            const syncPayload: Record<string, unknown> = {};
+            if (data.iaHabilitada !== undefined) syncPayload.iaHabilitada = data.iaHabilitada;
+            if (data.rol !== undefined) syncPayload.rol = data.rol;
+            if (data.nombre !== undefined) syncPayload.nombre = data.nombre;
+            if (data.email !== undefined) syncPayload.email = data.email;
+            if (data.activo !== undefined) syncPayload.activo = data.activo;
+            if (data.permisosPersonalizados !== undefined) syncPayload.permisosPersonalizados = data.permisosPersonalizados;
+            if (data.permisosSistema !== undefined) syncPayload.permisosSistema = data.permisosSistema;
+            await setDoc(doc(db, 'usuarios', uid), syncPayload, { merge: true });
+          }
+        } catch (syncErr) {
+          console.warn('Sync a usuarios/{uid} falló (no bloquea el update principal):', syncErr);
+        }
+
         toast.success('Usuario actualizado');
       } else {
         // Create Firebase Auth user using a secondary app to not kick out admin

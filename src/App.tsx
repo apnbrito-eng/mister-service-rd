@@ -44,6 +44,7 @@ import Bancos from './pages/Bancos';
 import FacturacionPendiente from './pages/FacturacionPendiente';
 import Avances from './pages/Avances';
 import EstadoResultado from './pages/EstadoResultado';
+import AsistenteIA from './pages/AsistenteIA';
 
 // Public website pages
 import PublicLayout from './components/public/PublicLayout';
@@ -171,6 +172,7 @@ function AppRoutes() {
         <Route path="formularios" element={<RolRoute roles={['administrador']}><Formularios /></RolRoute>} />
         <Route path="formularios/:id" element={<RolRoute roles={['administrador']}><FormularioEditor /></RolRoute>} />
         <Route path="solicitudes" element={<RolRoute roles={['administrador']}><Solicitudes /></RolRoute>} />
+        <Route path="asistente" element={<RolRoute roles={['administrador']}><AsistenteIA /></RolRoute>} />
         <Route path="configuracion" element={<PermisoRoute permiso="configuracionVer"><Configuracion /></PermisoRoute>} />
         <Route path="cierre-dia" element={<PermisoRoute permiso="cierreDiaEjecutar"><CierreDia /></PermisoRoute>} />
         <Route path="precios" element={<PermisoRoute permiso="configuracionVer"><PreciosServicios /></PermisoRoute>} />

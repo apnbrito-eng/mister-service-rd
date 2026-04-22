@@ -4,7 +4,7 @@ import {
   Users, UserCog, FileText, Settings, LogOut, Wrench,
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight,
   Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
-  CalendarCheck,
+  CalendarCheck, Sparkles,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -96,6 +96,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: isAdmin },
     { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: isAdmin },
     { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: isAdmin },
+    { to: '/admin/asistente', icon: Sparkles, label: 'Asistente IA (BETA)', show: userProfile?.rol === 'administrador' },
     { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: p('configuracionVer') },
   ];
 
