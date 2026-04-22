@@ -63,3 +63,12 @@ export function puede(userProfile: Usuario | null | undefined, accion: AccionPer
 export function permisosDefaultDeRol(rol: Rol): PermisosSistema {
   return { ...(DEFAULTS_POR_ROL[rol] || PERMISOS_TODO_FALSE) };
 }
+
+/**
+ * Default del toggle de Asistente IA por rol.
+ * ON por defecto para administrador y coordinadora; OFF para el resto.
+ * Los roles tecnico y ayudante quedan bloqueados en la UI (disponible en fase futura).
+ */
+export function iaHabilitadaDefaultPorRol(rol: Rol): boolean {
+  return rol === 'administrador' || rol === 'coordinadora';
+}

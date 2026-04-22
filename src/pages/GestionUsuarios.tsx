@@ -5,7 +5,7 @@ import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { Personal, Rol, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, PermisosSistema } from '../types';
-import { permisosDefaultDeRol } from '../utils/permisos';
+import { permisosDefaultDeRol, iaHabilitadaDefaultPorRol } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Plus, Edit, Key, Power, User, Shield, Eye, EyeOff, Check, X, KeyRound, ExternalLink } from 'lucide-react';
@@ -40,6 +40,7 @@ interface FormState {
   permisos: TecnicoPermisos;
   permisosPersonalizados: boolean;
   permisosSistema: PermisosSistema;
+  iaHabilitada: boolean;
 }
 
 const initialForm: FormState = {
@@ -52,6 +53,7 @@ const initialForm: FormState = {
   permisos: { ...PERMISOS_DEFAULT_TECNICO },
   permisosPersonalizados: false,
   permisosSistema: permisosDefaultDeRol('tecnico'),
+  iaHabilitada: iaHabilitadaDefaultPorRol('tecnico'),
 };
 
 const COLORES_TECNICO = ['#3b82f6', '#f97316', '#14b8a6', '#a855f7', '#22c55e', '#ef4444', '#f59e0b', '#0f3460'];
@@ -107,6 +109,7 @@ export default function GestionUsuarios() {
       permisos: u.permisos || { ...PERMISOS_DEFAULT_TECNICO },
       permisosPersonalizados: !!u.permisosPersonalizados,
       permisosSistema: u.permisosSistema || permisosDefaultDeRol(u.rol),
+      iaHabilitada: u.iaHabilitada ?? false,
     });
     setEditingId(u.id);
     setShowModal(true);
@@ -142,6 +145,15 @@ export default function GestionUsuarios() {
     setForm(f => ({ ...f, permisos: { ...f.permisos, soloPropiasCitas: v } }));
   };
 
+  const handleRolChange = (nuevoRol: Rol) => {
+    setForm(f => ({
+      ...f,
+      rol: nuevoRol,
+      // iaHabilitada: en CREACIÓN recalcular según default del rol; en EDICIÓN no tocar.
+      iaHabilitada: editingId ? f.iaHabilitada : iaHabilitadaDefaultPorRol(nuevoRol),
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nombre.trim()) { toast.error('Nombre es obligatorio'); return; }
@@ -158,6 +170,8 @@ export default function GestionUsuarios() {
         color: form.color,
         disponibilidad: true,
         activo: true,
+        // iaHabilitada siempre boolean (nunca undefined) — Firestore rechaza undefined.
+        iaHabilitada: form.iaHabilitada === true,
       };
 
       if (form.rol === 'tecnico') {
@@ -480,7 +494,7 @@ export default function GestionUsuarios() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Rol *</label>
-                  <select value={form.rol} onChange={e => setForm(f => ({ ...f, rol: e.target.value as Rol }))}
+                  <select value={form.rol} onChange={e => handleRolChange(e.target.value as Rol)}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
                     <option value="administrador">Administrador</option>
                     <option value="secretaria">Secretaria</option>
@@ -694,6 +708,34 @@ export default function GestionUsuarios() {
               </div>
             )}
           </div>
+
+          {/* Acceso al Asistente IA */}
+          {(() => {
+            const iaBloqueada = form.rol === 'tecnico' || form.rol === 'ayudante';
+            return (
+              <div>
+                <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-2 pb-2 border-b border-gray-100">
+                  Acceso al Asistente IA
+                </h3>
+                <label
+                  className={`flex items-start gap-2 ${iaBloqueada ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                  title={iaBloqueada ? 'Disponible en una fase futura del proyecto' : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.iaHabilitada === true}
+                    disabled={iaBloqueada}
+                    onChange={e => setForm(f => ({ ...f, iaHabilitada: e.target.checked }))}
+                    className="mt-1 rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+                  />
+                  <span className="text-sm text-gray-800">Habilitar acceso al Asistente IA</span>
+                </label>
+                <p className="text-xs text-gray-500 mt-1 ml-6">
+                  Si está activo, este usuario verá un chat flotante en la esquina inferior derecha para hacerle preguntas a la IA del sistema.
+                </p>
+              </div>
+            );
+          })()}
 
           {/* Botones */}
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

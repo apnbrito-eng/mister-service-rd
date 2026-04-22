@@ -38,6 +38,8 @@ export interface Usuario {
   /** Cuando true, usar `permisosSistema` en vez del default por rol */
   permisosPersonalizados?: boolean;
   color?: string;
+  /** Habilita el chat flotante del Asistente IA para este usuario. Bloqueado para tecnico/ayudante. */
+  iaHabilitada?: boolean;
 }
 
 /**
@@ -686,6 +688,8 @@ export interface Personal {
   sueldoBase?: number;
   operariaId?: string;
   operariaNombre?: string;
+  /** Habilita el chat flotante del Asistente IA para este miembro del personal. Bloqueado para tecnico/ayudante. */
+  iaHabilitada?: boolean;
 }
 
 export interface Producto {

@@ -11,7 +11,7 @@ import Modal from '../components/Modal';
 import { Plus, Edit, Check, X, Users, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Key, Eye, EyeOff, Link2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
-import { puede } from '../utils/permisos';
+import { puede, iaHabilitadaDefaultPorRol } from '../utils/permisos';
 
 const ROL_LABELS: Record<Rol, string> = {
   administrador: 'Administrador',
@@ -66,6 +66,7 @@ export default function PersonalPage() {
     nombre: '', rol: 'tecnico', telefono: '', email: '', especialidad: '', zona: '', horario: '', color: '#3b82f6', disponibilidad: true, activo: true,
     nivel: 'senior', comisionPorcentaje: 10, sueldoBase: 0,
     operariaId: '', operariaNombre: '',
+    iaHabilitada: iaHabilitadaDefaultPorRol('tecnico'),
   });
 
   // Credenciales de acceso al sistema (separadas del form principal)
@@ -136,6 +137,8 @@ export default function PersonalPage() {
     setSaving(true);
     try {
       const aplicaComision = ROLES_CON_COMISION.includes(form.rol);
+      // iaHabilitada siempre boolean (nunca undefined) — Firestore rechaza undefined.
+      const iaHabilitadaValue = form.iaHabilitada === true;
       const data: Record<string, unknown> = {
         nombre: form.nombre,
         rol: form.rol,
@@ -147,6 +150,7 @@ export default function PersonalPage() {
         color: form.color || '#3b82f6',
         disponibilidad: form.disponibilidad,
         activo: form.activo,
+        iaHabilitada: iaHabilitadaValue,
       };
       if (aplicaComision) {
         data.nivel = form.nivel || 'senior';
@@ -184,6 +188,7 @@ export default function PersonalPage() {
             color: form.color || '#3b82f6',
             activo: true,
             createdAt: Timestamp.now(),
+            iaHabilitada: iaHabilitadaValue,
           };
           if (form.rol === 'tecnico') usuarioData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
           data.email = emailAcceso.trim().toLowerCase();
@@ -247,6 +252,7 @@ export default function PersonalPage() {
               telefono: form.telefono || '',
               color: form.color || '#3b82f6',
               activo: form.activo,
+              iaHabilitada: iaHabilitadaValue,
             };
             if (form.rol === 'tecnico') {
               usuarioData.permisos = personalActual.permisos || PERMISOS_DEFAULT_TECNICO;
@@ -275,6 +281,7 @@ export default function PersonalPage() {
           color: form.color || '#3b82f6',
           activo: true,
           createdAt: Timestamp.now(),
+          iaHabilitada: iaHabilitadaValue,
         };
         if (form.rol === 'tecnico') usuarioData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
 
@@ -344,6 +351,7 @@ export default function PersonalPage() {
       nombre: '', rol: 'tecnico', telefono: '', email: '', especialidad: '', zona: '', horario: '', color: '#3b82f6', disponibilidad: true, activo: true,
       nivel: 'senior', comisionPorcentaje: 10, sueldoBase: 0,
       operariaId: '', operariaNombre: '',
+      iaHabilitada: iaHabilitadaDefaultPorRol('tecnico'),
     });
     setEmailAcceso('');
     setPasswordAcceso('');
@@ -359,6 +367,7 @@ export default function PersonalPage() {
       sueldoBase: typeof p.sueldoBase === 'number' ? p.sueldoBase : 0,
       operariaId: p.operariaId || '',
       operariaNombre: p.operariaNombre || '',
+      iaHabilitada: p.iaHabilitada ?? false,
     });
     setEmailAcceso('');
     setPasswordAcceso('');
@@ -475,6 +484,7 @@ export default function PersonalPage() {
           color: personalActual.color || '#3b82f6',
           activo: personalActual.activo,
           createdAt: Timestamp.now(),
+          iaHabilitada: personalActual.iaHabilitada === true,
         };
         if (personalActual.rol === 'tecnico') {
           usuarioData.permisos = personalActual.permisos || PERMISOS_DEFAULT_TECNICO;
@@ -540,14 +550,17 @@ export default function PersonalPage() {
 
   const handleRolChange = (rol: Rol) => {
     setForm(f => {
+      // iaHabilitada: en CREACIÓN recalcular según default del rol; en EDICIÓN no tocar.
+      const iaHabilitada = editingId ? f.iaHabilitada : iaHabilitadaDefaultPorRol(rol);
       const aplicaComision = ROLES_CON_COMISION.includes(rol);
       if (!aplicaComision) {
-        return { ...f, rol };
+        return { ...f, rol, iaHabilitada };
       }
       // Si pasa a un rol con comisión y no hay valor, aplicar default
       return {
         ...f,
         rol,
+        iaHabilitada,
         nivel: f.nivel || 'senior',
         comisionPorcentaje: typeof f.comisionPorcentaje === 'number'
           ? f.comisionPorcentaje
@@ -1239,6 +1252,33 @@ export default function PersonalPage() {
               Activo
             </label>
           </div>
+
+          {/* Acceso al Asistente IA */}
+          {(() => {
+            const iaBloqueada = form.rol === 'tecnico' || form.rol === 'ayudante';
+            return (
+              <div className="mt-2 pt-4 border-t border-gray-100">
+                <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-2">Acceso al Asistente IA</h3>
+                <label
+                  className={`flex items-start gap-2 ${iaBloqueada ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                  title={iaBloqueada ? 'Disponible en una fase futura del proyecto' : undefined}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.iaHabilitada === true}
+                    disabled={iaBloqueada}
+                    onChange={e => setForm(f => ({ ...f, iaHabilitada: e.target.checked }))}
+                    className="mt-1 rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+                  />
+                  <span className="text-sm text-gray-800">Habilitar acceso al Asistente IA</span>
+                </label>
+                <p className="text-xs text-gray-500 mt-1 ml-6">
+                  Si está activo, este usuario verá un chat flotante en la esquina inferior derecha para hacerle preguntas a la IA del sistema.
+                </p>
+              </div>
+            );
+          })()}
+
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => { setShowModal(false); setEditingId(null); resetForm(); }}
               className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
