@@ -366,6 +366,19 @@ function incluyeBusqueda(campo: unknown, busqueda: string): boolean {
   return normalizar(campo).includes(normalizar(busqueda));
 }
 
+/**
+ * Duplicado de src/services/clientes.service.ts (api/_lib no puede importar de src/).
+ * Normaliza teléfono RD: quita no-dígitos, drop leading '1' si 11 dígitos,
+ * toma últimos 10.
+ */
+function normalizarTelefono(tel: string): string {
+  const soloDigitos = tel.replace(/\D/g, '');
+  if (soloDigitos.length === 11 && soloDigitos.startsWith('1')) {
+    return soloDigitos.substring(1);
+  }
+  return soloDigitos.slice(-10);
+}
+
 // ---------------------------------------------------------------------------
 // Tools
 // ---------------------------------------------------------------------------
@@ -927,6 +940,237 @@ const TOOL_QUERY_PERSONAL: ToolDef = {
   },
 };
 
+interface QueryPreciosServiciosInput {
+  marca?: string;
+  equipoTipo?: string;
+  servicio?: string;
+  busqueda?: string;
+  limite?: number;
+}
+
+const TOOL_QUERY_PRECIOS_SERVICIOS: ToolDef = {
+  name: 'query_precios_servicios',
+  description:
+    "Consulta el tarifario de servicios (precios estándar por marca, tipo de equipo y servicio). Filtra por marca, tipo de equipo, nombre de servicio o búsqueda libre. Solo retorna servicios activos. Retorna hasta 'limite' resultados (default 20, max 50).",
+  input_schema: {
+    type: 'object',
+    properties: {
+      marca: { type: 'string', description: 'Marca del equipo (match parcial, ej: "LG", "Samsung").' },
+      equipoTipo: { type: 'string', description: 'Tipo de equipo (match parcial, ej: "nevera", "lavadora").' },
+      servicio: { type: 'string', description: 'Nombre del servicio (match parcial, ej: "cambio compresor").' },
+      busqueda: { type: 'string', description: 'Búsqueda libre sobre marca, equipoTipo, servicio y categoría.' },
+      limite: { type: 'number', description: 'Cantidad máxima. Default 20, máx 50.' },
+    },
+  },
+  rolesPermitidos: ['administrador', 'coordinadora', 'operaria', 'secretaria'],
+  ejecutar: async (input: QueryPreciosServiciosInput) => {
+    const db = getAdminFirestore();
+    const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 20, 1), 50);
+    const snap = await db.collection('precios_servicios').limit(limite * 3).get();
+    const filtrados = snap.docs
+      .map((d) => d.data())
+      .filter((raw) => {
+        // Default ON: ocultar inactivos
+        if (raw.activo === false) return false;
+        if (input?.marca && !incluyeBusqueda(raw.marca, input.marca)) return false;
+        if (input?.equipoTipo && !incluyeBusqueda(raw.equipoTipo, input.equipoTipo)) return false;
+        if (input?.servicio && !incluyeBusqueda(raw.nombre, input.servicio)) return false;
+        if (input?.busqueda) {
+          const concat = [raw.marca, raw.equipoTipo, raw.nombre, raw.categoria]
+            .filter((v) => typeof v === 'string')
+            .join(' ');
+          if (!incluyeBusqueda(concat, input.busqueda)) return false;
+        }
+        return true;
+      });
+    const items = filtrados.slice(0, limite).map((raw) => {
+      const out: Record<string, unknown> = {
+        marca: raw.marca || '',
+        equipoTipo: raw.equipoTipo || '',
+        categoria: raw.categoria || '',
+        servicio: raw.nombre || '',
+        precio: typeof raw.precio === 'number' ? raw.precio : 0,
+      };
+      if (typeof raw.notas === 'string' && raw.notas.length > 0) {
+        out.notas = raw.notas;
+      }
+      return out;
+    });
+    return { servicios: items, cantidad: items.length };
+  },
+};
+
+interface QueryClientesInput {
+  telefono?: string;
+  nombre?: string;
+  email?: string;
+  limite?: number;
+}
+
+const TOOL_QUERY_CLIENTES: ToolDef = {
+  name: 'query_clientes',
+  description:
+    "Busca clientes por teléfono (match exacto con normalización RD), nombre o email (match parcial). Debes especificar al menos uno de los tres criterios. Retorna hasta 'limite' resultados (default 20, max 50).",
+  input_schema: {
+    type: 'object',
+    properties: {
+      telefono: { type: 'string', description: 'Teléfono del cliente. Se normaliza a 10 dígitos para match exacto.' },
+      nombre: { type: 'string', description: 'Texto a buscar en el nombre (match parcial).' },
+      email: { type: 'string', description: 'Texto a buscar en el email (match parcial).' },
+      limite: { type: 'number', description: 'Cantidad máxima. Default 20, máx 50.' },
+    },
+  },
+  rolesPermitidos: ['administrador', 'coordinadora', 'operaria', 'secretaria'],
+  ejecutar: async (input: QueryClientesInput) => {
+    const telefono = typeof input?.telefono === 'string' ? input.telefono.trim() : '';
+    const nombre = typeof input?.nombre === 'string' ? input.nombre.trim() : '';
+    const email = typeof input?.email === 'string' ? input.email.trim() : '';
+    if (!telefono && !nombre && !email) {
+      throw new Error('Debes especificar al menos un criterio de búsqueda (telefono, nombre o email).');
+    }
+    const db = getAdminFirestore();
+    const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 20, 1), 50);
+
+    let docs: DocumentData[];
+    if (telefono) {
+      // Match exacto server-side por telefonoNormalizado.
+      const telNorm = normalizarTelefono(telefono);
+      const q: Query<DocumentData> = db
+        .collection('clientes')
+        .where('telefonoNormalizado', '==', telNorm);
+      const snap = await q.limit(limite).get();
+      docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } else {
+      // Nombre y/o email → fetch con margen y filtrar in-memory (AND si ambos).
+      const snap = await db.collection('clientes').limit(limite * 3).get();
+      docs = snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((c) => {
+          if (nombre && !incluyeBusqueda(c.nombre, nombre)) return false;
+          if (email && !incluyeBusqueda(c.email, email)) return false;
+          return true;
+        });
+    }
+
+    const items = docs.slice(0, limite).map((c) => {
+      const out: Record<string, unknown> = {
+        id: c.id,
+        nombre: c.nombre || '',
+        telefono: c.telefono || '',
+        direccion: c.direccion || '',
+      };
+      if (typeof c.email === 'string' && c.email.length > 0) out.email = c.email;
+      if (typeof c.sector === 'string' && c.sector.length > 0) out.sector = c.sector;
+      if (typeof c.ciudad === 'string' && c.ciudad.length > 0) out.ciudad = c.ciudad;
+      if (typeof c.zona === 'string' && c.zona.length > 0) out.zona = c.zona;
+      if (typeof c.rnc === 'string' && c.rnc.length > 0) out.rnc = c.rnc;
+      if (typeof c.cedula === 'string' && c.cedula.length > 0) out.cedula = c.cedula;
+      return out;
+    });
+    return { clientes: items, cantidad: items.length };
+  },
+};
+
+const CATEGORIAS_GASTO_VALIDAS = new Set([
+  'repuestos',
+  'transporte',
+  'herramientas',
+  'servicios',
+  'otros',
+]);
+
+interface QueryGastosInput {
+  desde?: string;
+  hasta?: string;
+  categoria?: string;
+  limite?: number;
+}
+
+const TOOL_QUERY_GASTOS: ToolDef = {
+  name: 'query_gastos',
+  description:
+    "Consulta gastos del negocio en un rango de fechas. Si no pasás rango, usa el mes actual. Filtra opcionalmente por categoría ('repuestos','transporte','herramientas','servicios','otros'). Retorna lista de gastos, total, cantidad y el rango usado. Solo accesible para administrador.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      desde: { type: 'string', description: 'YYYY-MM-DD, hora RD. Filtra fecha.' },
+      hasta: { type: 'string', description: 'YYYY-MM-DD, hora RD. Filtra fecha.' },
+      categoria: {
+        type: 'string',
+        enum: ['repuestos', 'transporte', 'herramientas', 'servicios', 'otros'],
+      },
+      limite: { type: 'number', description: 'Cantidad máxima de gastos a listar. Default 30, máx 100.' },
+    },
+  },
+  rolesPermitidos: ['administrador'],
+  ejecutar: async (input: QueryGastosInput) => {
+    const db = getAdminFirestore();
+    const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 30, 1), 100);
+
+    let rangoInicio: Date;
+    let rangoFin: Date;
+    let desdeStr: string;
+    let hastaStr: string;
+    if (input?.desde || input?.hasta) {
+      const ctx = contextoFechaRD();
+      const desdeUsado = input?.desde || ctx.mesActual.inicio;
+      const hastaUsado = input?.hasta || ctx.mesActual.fin;
+      rangoInicio = parseFechaRD(desdeUsado).inicio;
+      rangoFin = parseFechaRD(hastaUsado).fin;
+      desdeStr = desdeUsado;
+      hastaStr = hastaUsado;
+    } else {
+      // Sin fechas → mes actual RD
+      const ctx = contextoFechaRD();
+      rangoInicio = parseFechaRD(ctx.mesActual.inicio).inicio;
+      rangoFin = parseFechaRD(ctx.mesActual.fin).fin;
+      desdeStr = ctx.mesActual.inicio;
+      hastaStr = ctx.mesActual.fin;
+    }
+
+    // Validar categoría si se pasa (aunque el schema lo restringe, defensivo).
+    if (input?.categoria && !CATEGORIAS_GASTO_VALIDAS.has(input.categoria)) {
+      throw new Error(
+        `Categoría inválida '${input.categoria}'. Válidas: ${[...CATEGORIAS_GASTO_VALIDAS].join(', ')}`,
+      );
+    }
+
+    // where(fecha, range) + orderBy(fecha, desc) no requiere composite index.
+    // Filtrar categoría post-query in-memory (misma regla que query_ordenes).
+    const q: Query<DocumentData> = db
+      .collection('gastos')
+      .where('fecha', '>=', rangoInicio)
+      .where('fecha', '<=', rangoFin)
+      .orderBy('fecha', 'desc');
+    const snap = await q.get();
+
+    let total = 0;
+    const gastos: Array<Record<string, unknown>> = [];
+    for (const d of snap.docs) {
+      const data = d.data();
+      if (input?.categoria && data.categoria !== input.categoria) continue;
+      const fecha = toDate(data.fecha);
+      if (typeof data.monto === 'number') total += data.monto;
+      if (gastos.length < limite) {
+        gastos.push({
+          fecha: fecha ? fecha.toISOString() : null,
+          categoria: data.categoria || '',
+          descripcion: data.descripcion || '',
+          monto: typeof data.monto === 'number' ? data.monto : 0,
+          metodoPago: data.metodoPago || '',
+        });
+      }
+    }
+
+    return {
+      gastos,
+      total: redondear(total),
+      cantidad: gastos.length,
+      rangoUsado: { desde: desdeStr, hasta: hastaStr },
+    };
+  },
+};
+
 export const TOOLS: ToolDef[] = [
   TOOL_QUERY_ORDENES,
   TOOL_COUNT_ORDENES,
@@ -936,6 +1180,9 @@ export const TOOLS: ToolDef[] = [
   TOOL_QUERY_COMISIONES,
   TOOL_QUERY_FACTURACION,
   TOOL_QUERY_PERSONAL,
+  TOOL_QUERY_PRECIOS_SERVICIOS,
+  TOOL_QUERY_CLIENTES,
+  TOOL_QUERY_GASTOS,
 ];
 
 export function toolsParaRol(rol: Rol): ToolDef[] {
