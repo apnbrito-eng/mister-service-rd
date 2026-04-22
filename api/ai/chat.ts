@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import { getAdminAuth, getAdminFirestore } from '../_lib/firebaseAdmin.js';
+import { toolsParaRol, ejecutarTool, type Rol as RolTool } from '../_lib/iaTools.js';
 
 /**
  * POST /api/ai/chat
@@ -9,8 +10,9 @@ import { getAdminAuth, getAdminFirestore } from '../_lib/firebaseAdmin.js';
  *
  * Valida que el usuario tenga iaHabilitada === true y que su rol NO sea
  * tecnico/ayudante (fase beta). Llama a Claude Sonnet con un system prompt
- * role-aware. No persiste nada en Firestore (el logging de uso llega en Sprint 5).
- * Sin tools ni streaming (Sprints 3/4).
+ * role-aware + tools READ-only de Firestore. Tool use loop con max 5 iteraciones.
+ * Token tracking acumula todas las iteraciones para reportar costo real.
+ * No persiste nada en Firestore (logging llega en Sprint 5). Sin streaming (Sprint 4).
  */
 
 type Rol = 'administrador' | 'coordinadora' | 'operaria' | 'secretaria' | 'tecnico' | 'ayudante';
@@ -29,7 +31,7 @@ Contexto del negocio:
 - Quincenas RD: Q1 va del día 30 al 14, paga día 15. Q2 va del día 15 al 29, paga día 30.
 - Sueldo base es MENSUAL, se divide entre 2 por quincena en la nómina.
 
-En esta fase inicial NO TIENES acceso a la base de datos en tiempo real. Solo puedes responder preguntas generales sobre cómo funciona el sistema, conceptos del negocio, o ayudar a interpretar conceptos. En las próximas fases tendrás acceso a consultar órdenes, inventario, etc. Si te piden datos específicos, di amablemente que en esta versión todavía no puedes consultarlos pero en la siguiente sí.
+Tienes acceso a herramientas para consultar la base de datos del sistema en tiempo real. Cuando el usuario pregunte algo sobre datos concretos (órdenes, inventario, comisiones, agenda, etc.), USA las herramientas disponibles antes de decir que no sabes. Si no encuentras una herramienta apropiada para la pregunta, di amablemente que esa información específica todavía no la puedes consultar. Cuando uses una herramienta, primero entiende bien qué te están preguntando, después ejecuta la(s) herramienta(s) que necesites, y finalmente responde con los datos en lenguaje natural — no muestres JSON crudo al usuario.
 
 Eres educado pero directo. No alargues respuestas innecesariamente.`;
 
@@ -39,6 +41,9 @@ const SYSTEM_POR_ROL: Record<string, string> = {
   operaria: `Eres asistente de la OPERARIA. Puedes hablar de órdenes, citas, agenda del día, inventario, productos, clientes. NO discutes comisiones, nómina, ganancias, ni temas financieros del negocio. Si te preguntan, redirige al administrador.`,
   secretaria: `Eres asistente de la SECRETARIA. Puedes hablar de citas, agenda, productos, órdenes activas y cómo gestionar nuevos leads. NO discutes información financiera de ningún tipo. Si te preguntan, redirige al administrador.`,
 };
+
+const MAX_TOOL_USE_ITERACIONES = 5;
+const MAX_TOKENS_POR_ITERACION = 2048;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -140,67 +145,134 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'El Asistente IA está en fase beta. Tu rol todavía no tiene acceso.' });
     }
 
-    // 8. Construir system prompt
+    // 8. Construir system prompt + tools habilitadas para el rol
     const bloqueRol = SYSTEM_POR_ROL[rol] || '';
     const systemPrompt = `${SYSTEM_BASE}\n\n${bloqueRol}`;
+    const rolTool = rol as RolTool; // ya descartamos tecnico/ayudante
+    const toolsDisponibles = toolsParaRol(rolTool);
+    const anthropicTools = toolsDisponibles.map((t) => ({
+      name: t.name,
+      description: t.description,
+      input_schema: t.input_schema,
+    }));
 
-    // 9. Llamar a Claude
+    // 9. Tool use loop (max MAX_TOOL_USE_ITERACIONES iteraciones)
     const anthropic = new Anthropic({ apiKey });
-    let response;
-    try {
-      response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
-        system: [
-          {
-            type: 'text',
-            text: systemPrompt,
-            cache_control: { type: 'ephemeral' },
-          },
-        ],
-        messages: (mensajes as Mensaje[]).map((m) => ({ role: m.role, content: m.content })),
-      });
-    } catch (err: unknown) {
-      const status = (err as { status?: number })?.status;
-      const message = err instanceof Error ? err.message : 'Error desconocido';
-      if (status === 401) {
-        console.error('ai/chat anthropic 401:', err);
-        return res.status(500).json({ error: 'Credenciales de Anthropic inválidas (revisar ANTHROPIC_API_KEY)' });
+    const systemParam = [
+      {
+        type: 'text' as const,
+        text: systemPrompt,
+        cache_control: { type: 'ephemeral' as const },
+      },
+    ];
+
+    // messages va acumulando la conversación completa (turno inicial + ida-vuelta de tools)
+    const messagesLoop: Anthropic.MessageParam[] = (mensajes as Mensaje[]).map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    let totalTokensInput = 0;
+    let totalTokensOutput = 0;
+    let respuestaFinal: Anthropic.Message | null = null;
+    let iteraciones = 0;
+
+    while (iteraciones < MAX_TOOL_USE_ITERACIONES) {
+      iteraciones += 1;
+      let response: Anthropic.Message;
+      try {
+        response = await anthropic.messages.create({
+          model: 'claude-sonnet-4-6',
+          max_tokens: MAX_TOKENS_POR_ITERACION,
+          system: systemParam,
+          tools: anthropicTools.length > 0 ? anthropicTools : undefined,
+          messages: messagesLoop,
+        });
+      } catch (err: unknown) {
+        const status = (err as { status?: number })?.status;
+        const message = err instanceof Error ? err.message : 'Error desconocido';
+        if (status === 401) {
+          console.error('ai/chat anthropic 401:', err);
+          return res.status(500).json({ error: 'Credenciales de Anthropic inválidas (revisar ANTHROPIC_API_KEY)' });
+        }
+        if (status === 429) {
+          return res.status(429).json({ error: 'Anthropic rate limit alcanzado. Intenta de nuevo en unos segundos.' });
+        }
+        if (status === 400) {
+          return res.status(400).json({ error: `Petición rechazada por Anthropic: ${message.substring(0, 300)}` });
+        }
+        throw err;
       }
-      if (status === 429) {
-        return res.status(429).json({ error: 'Anthropic rate limit alcanzado. Intenta de nuevo en unos segundos.' });
+
+      // Acumular tokens de ESTA iteración
+      const usage = response.usage;
+      const inputBase = typeof usage.input_tokens === 'number' ? usage.input_tokens : 0;
+      const cacheCreation = typeof usage.cache_creation_input_tokens === 'number' ? usage.cache_creation_input_tokens : 0;
+      const cacheRead = typeof usage.cache_read_input_tokens === 'number' ? usage.cache_read_input_tokens : 0;
+      totalTokensInput += inputBase + cacheCreation + cacheRead;
+      totalTokensOutput += usage.output_tokens || 0;
+
+      respuestaFinal = response;
+
+      if (response.stop_reason !== 'tool_use') {
+        break;
       }
-      if (status === 400) {
-        return res.status(400).json({ error: `Petición rechazada por Anthropic: ${message.substring(0, 300)}` });
+
+      // Ejecutar todas las tools llamadas en esta respuesta
+      const toolUseBlocks = response.content.filter(
+        (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+      );
+      if (toolUseBlocks.length === 0) {
+        // stop_reason=tool_use sin bloques → defensa: salimos
+        break;
       }
-      throw err;
+
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      for (const block of toolUseBlocks) {
+        const resultado = await ejecutarTool(block.name, block.input, { rol: rolTool, uid });
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: JSON.stringify(resultado.ok ? resultado.result : { error: resultado.error }),
+          is_error: !resultado.ok,
+        });
+      }
+
+      // Agregar assistant turn (con tool_use blocks) y user turn (con tool_results)
+      messagesLoop.push({ role: 'assistant', content: response.content });
+      messagesLoop.push({ role: 'user', content: toolResults });
     }
 
-    // 10. Extraer texto y uso
+    if (!respuestaFinal) {
+      return res.status(500).json({ error: 'No se obtuvo respuesta del modelo' });
+    }
+
+    if (respuestaFinal.stop_reason === 'tool_use') {
+      // Se terminaron las iteraciones sin que Claude cierre con end_turn
+      return res.status(500).json({
+        error: `El asistente necesitó más de ${MAX_TOOL_USE_ITERACIONES} pasos para responder. Reformulá la pregunta más específica.`,
+      });
+    }
+
+    // 10. Extraer texto final
     const textChunks: string[] = [];
-    for (const block of response.content) {
+    for (const block of respuestaFinal.content) {
       if (block.type === 'text') {
         textChunks.push(block.text);
       }
     }
     const respuesta = textChunks.join('');
 
-    const usage = response.usage;
-    const inputBase = typeof usage.input_tokens === 'number' ? usage.input_tokens : 0;
-    const cacheCreation = typeof usage.cache_creation_input_tokens === 'number' ? usage.cache_creation_input_tokens : 0;
-    const cacheRead = typeof usage.cache_read_input_tokens === 'number' ? usage.cache_read_input_tokens : 0;
-    const tokensInput = inputBase + cacheCreation + cacheRead;
-    const tokensOutput = usage.output_tokens || 0;
-
     // Pricing Sonnet 4: $3/M input, $15/M output (referencia, redondeado a 6 decimales)
-    const costoEstimadoUSDraw = (tokensInput / 1_000_000) * 3 + (tokensOutput / 1_000_000) * 15;
+    const costoEstimadoUSDraw = (totalTokensInput / 1_000_000) * 3 + (totalTokensOutput / 1_000_000) * 15;
     const costoEstimadoUSD = Math.round(costoEstimadoUSDraw * 1_000_000) / 1_000_000;
 
     return res.status(200).json({
       respuesta,
-      tokensInput,
-      tokensOutput,
+      tokensInput: totalTokensInput,
+      tokensOutput: totalTokensOutput,
       costoEstimadoUSD,
+      iteraciones,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error desconocido';
