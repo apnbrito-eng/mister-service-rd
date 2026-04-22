@@ -7,7 +7,8 @@ import { crearRegistroAuditoria } from '../../utils';
 import { mensajeDatosCuentaBancaria, whatsappUrl } from '../../utils/whatsapp';
 import Modal from '../Modal';
 import toast from 'react-hot-toast';
-import { Banknote, ArrowRightLeft, CreditCard, Trash2, MessageCircle, Copy } from 'lucide-react';
+import { Banknote, ArrowRightLeft, CreditCard, Trash2, Copy } from 'lucide-react';
+import WhatsAppIcon from '../icons/WhatsAppIcon';
 
 interface Props {
   isOpen: boolean;
@@ -378,7 +379,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-semibold"
                               >
-                                <MessageCircle size={12} /> Compartir por WhatsApp
+                                <WhatsAppIcon filled={false} className="text-white" size={12} /> Compartir por WhatsApp
                               </a>
                             )}
                             <button

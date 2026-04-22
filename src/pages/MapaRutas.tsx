@@ -12,7 +12,8 @@ import Modal from '../components/Modal';
 import OrdenEditForm from '../components/ordenes/OrdenEditForm';
 import type { EditFormState } from '../components/ordenes/OrdenEditForm';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
-import { MapPin, Navigation, Route, Clock, Phone, MessageCircle, Satellite, Truck, WifiOff, Edit2, AlertTriangle } from 'lucide-react';
+import { MapPin, Navigation, Route, Clock, Phone, Satellite, Truck, WifiOff, Edit2, AlertTriangle } from 'lucide-react';
+import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import { suscribirTodasUbicaciones } from '../services/gps.service';
 import { UbicacionVehiculo } from '../types';
 import { formatDistanceToNow, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, subDays, isSameDay } from 'date-fns';
@@ -954,7 +955,7 @@ export default function MapaRutas() {
                           <a href={whatsappUrl(m.clienteTelefono, mensajesWhatsApp.recordatorioCita(m.clienteNombre, fechaTexto, m.fechaCita ? formatHora(m.fechaCita) : ''))}
                             target="_blank" rel="noreferrer"
                             className="text-green-600 text-xs flex items-center gap-1">
-                            <MessageCircle size={10} /> WhatsApp
+                            <WhatsAppIcon filled={true} size={12} /> WhatsApp
                           </a>
                         </div>
                       )}

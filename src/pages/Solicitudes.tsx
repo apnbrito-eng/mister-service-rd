@@ -4,7 +4,8 @@ import { actualizarEstadoSolicitud, convertirAOrden } from '../services/solicitu
 import { SolicitudServicio, EstadoSolicitud } from '../types/formularios';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Inbox, Search, Filter, Eye, MessageCircle, FileText, CheckCircle, XCircle, ArrowRight, ExternalLink, Download } from 'lucide-react';
+import { Inbox, Search, Filter, Eye, FileText, CheckCircle, XCircle, ArrowRight, ExternalLink, Download } from 'lucide-react';
+import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import toast from 'react-hot-toast';
 
 const ESTADO_BADGE: Record<EstadoSolicitud, string> = {
@@ -521,7 +522,7 @@ export default function Solicitudes() {
                   onClick={handleWhatsApp}
                   className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-medium text-sm"
                 >
-                  <MessageCircle size={16} />
+                  <WhatsAppIcon filled={false} className="text-white" size={16} />
                   WhatsApp
                 </button>
               </div>

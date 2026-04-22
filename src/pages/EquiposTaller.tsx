@@ -5,7 +5,8 @@ import { EquipoTaller, EstadoEquipo } from '../types';
 import { formatFechaCorta, formatMoneda, TIPOS_EQUIPO, whatsappLink } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, Package, MessageCircle, Bell, Clock } from 'lucide-react';
+import { Plus, Package, Clock } from 'lucide-react';
+import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import { differenceInDays } from 'date-fns';
 import toast from 'react-hot-toast';
 
@@ -194,7 +195,7 @@ export default function EquiposTaller() {
                           <button onClick={() => handleNotificarCliente(eq)}
                             className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded-lg text-xs transition-colors"
                             title="Notificar cliente por WhatsApp">
-                            <Bell size={12} />
+                            <WhatsAppIcon filled={false} className="text-white" size={12} />
                           </button>
                         )}
                       </td>

@@ -14,8 +14,9 @@ import {
   esDiaLaboral, obtenerDiaSiguienteLaboral,
 } from '../../services/recordatorios.service';
 import {
-  Calendar, MessageCircle, Check, AlertTriangle, ChevronDown, ChevronUp, MapPin,
+  Calendar, Check, AlertTriangle, ChevronDown, ChevronUp, MapPin,
 } from 'lucide-react';
+import WhatsAppIcon from '../icons/WhatsAppIcon';
 import { format, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -207,7 +208,7 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
           <div className={`shrink-0 p-2 rounded-lg ${urgente ? 'bg-red-100' : 'bg-blue-100'}`}>
             {tipo === 'ruta_manana'
               ? <MapPin size={18} className={urgente ? 'text-red-600' : 'text-blue-600'} />
-              : <MessageCircle size={18} className={urgente ? 'text-red-600' : 'text-blue-600'} />}
+              : <WhatsAppIcon filled={false} className={urgente ? 'text-red-600' : 'text-blue-600'} size={18} />}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -290,7 +291,7 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
                       className="text-green-600 hover:text-green-700 inline-flex items-center gap-1"
                       title="Abrir WhatsApp"
                     >
-                      <MessageCircle size={13} />
+                      <WhatsAppIcon filled={true} size={13} />
                     </a>
                   )}
                 </div>
@@ -340,7 +341,7 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
       <div className="flex items-center gap-2 flex-wrap mb-2">
         {tipo === 'ruta_manana'
           ? <Calendar size={16} className={urgente ? 'text-red-600' : 'text-indigo-600'} />
-          : <MessageCircle size={16} className={urgente ? 'text-red-600' : 'text-indigo-600'} />}
+          : <WhatsAppIcon filled={false} className={urgente ? 'text-red-600' : 'text-indigo-600'} size={16} />}
         <p className={`font-semibold text-sm ${urgente ? 'text-red-900' : 'text-indigo-900'}`}>
           {tipo === 'ruta_manana'
             ? `Organización de ruta de mañana (${formatFechaLarga(diaManana)})`

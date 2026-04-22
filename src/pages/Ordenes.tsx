@@ -12,7 +12,7 @@ import {
   faseLabel, faseColor, formatFecha, formatHora, tiempoTranscurrido,
   TIPOS_EQUIPO, DURACIONES, HORARIOS, HORARIOS_LABEL,
   estadoSimpleBorder,
-  formatTelefono, whatsappLink, googleMapsLink, parseOrden, formatMoneda,
+  formatTelefono, googleMapsLink, parseOrden, formatMoneda,
   crearRegistroAuditoria
 } from '../utils';
 import Badge from '../components/Badge';
@@ -23,7 +23,7 @@ import { puede } from '../utils/permisos';
 import { esOrdenMantenimiento } from '../utils';
 import { buscarPrecioMantenimiento } from '../services/precios.service';
 import {
-  Plus, Search, Clock, Calendar, MapPin, Phone, MessageCircle,
+  Plus, Search, Clock, Calendar, MapPin, Phone,
   Wrench, User, FileText, Edit2, CalendarDays, RefreshCw, Eye,
   List, LayoutGrid
 } from 'lucide-react';

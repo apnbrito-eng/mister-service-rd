@@ -14,7 +14,6 @@ import {
 import LoadingSpinner from '../components/LoadingSpinner';
 import {
   Globe,
-  MessageCircle,
   Image,
   BarChart3,
   Phone,
@@ -24,6 +23,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
+import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import toast from 'react-hot-toast';
 
 export default function ConfiguracionWeb() {
@@ -277,7 +277,7 @@ export default function ConfiguracionWeb() {
       {/* ────── Section 1: WhatsApp ────── */}
       <div className={cardClass}>
         <div className="flex items-center gap-2">
-          <MessageCircle className="w-5 h-5 text-green-600" />
+          <WhatsAppIcon filled={true} size={20} />
           <h2 className="text-lg font-semibold text-gray-900">WhatsApp</h2>
         </div>
 

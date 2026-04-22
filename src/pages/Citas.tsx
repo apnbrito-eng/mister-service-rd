@@ -9,7 +9,8 @@ import { siguienteNumeroOrden } from '../services/contadores.service';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
-import { Phone, Clock, MessageCircle, Check, X, Plus, AlertTriangle, MapPin, Camera, Wrench } from 'lucide-react';
+import { Phone, Clock, Check, X, Plus, AlertTriangle, MapPin, Camera, Wrench } from 'lucide-react';
+import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import { differenceInMinutes, isSameDay, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -547,7 +548,7 @@ export default function Citas() {
                       rel="noreferrer"
                       className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"
                     >
-                      <MessageCircle size={14} /> WhatsApp
+                      <WhatsAppIcon filled={false} className="text-white" size={14} /> WhatsApp
                     </a>
                     <button
                       onClick={() => {

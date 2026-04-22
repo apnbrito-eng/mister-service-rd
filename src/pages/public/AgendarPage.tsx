@@ -3,7 +3,8 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { Calendario } from '../../types';
 import { Link } from 'react-router-dom';
-import { Calendar, User, Clock, ChevronRight, MessageCircle, AlertCircle } from 'lucide-react';
+import { Calendar, User, Clock, ChevronRight, AlertCircle } from 'lucide-react';
+import WhatsAppIcon from '../../components/icons/WhatsAppIcon';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 
@@ -76,7 +77,7 @@ export default function AgendarPage() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-green-600 transition-colors"
               >
-                <MessageCircle size={16} /> Agendar por WhatsApp
+                <WhatsAppIcon filled={false} className="text-white" size={16} /> Agendar por WhatsApp
               </a>
             </div>
           ) : (
@@ -125,7 +126,7 @@ export default function AgendarPage() {
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 bg-green-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-green-600 transition-colors"
                 >
-                  <MessageCircle size={14} /> Escribir por WhatsApp
+                  <WhatsAppIcon filled={false} className="text-white" size={14} /> Escribir por WhatsApp
                 </a>
               </div>
             </div>

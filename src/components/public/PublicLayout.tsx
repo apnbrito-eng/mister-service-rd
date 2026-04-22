@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Phone, Mail, MapPin, Clock, Menu, X, MessageCircle } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Menu, X } from 'lucide-react';
+import WhatsAppIcon from '../icons/WhatsAppIcon';
 import { useState, useEffect } from 'react';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 import { ConfigWeb } from '../../services/configWeb.service';
@@ -83,7 +84,7 @@ function PublicNav({ config }: { config: ConfigWeb }) {
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
           >
-            <MessageCircle size={16} /> WhatsApp
+            <WhatsAppIcon filled={false} className="text-white" size={16} /> WhatsApp
           </a>
         </div>
 
@@ -118,7 +119,7 @@ function PublicNav({ config }: { config: ConfigWeb }) {
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-3 rounded-xl text-sm font-semibold w-full"
           >
-            <MessageCircle size={16} /> Escribir por WhatsApp
+            <WhatsAppIcon filled={false} className="text-white" size={16} /> Escribir por WhatsApp
           </a>
         </div>
       )}
@@ -221,7 +222,7 @@ export default function PublicLayout() {
         className="fixed bottom-6 right-6 z-50 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition-colors"
         aria-label="WhatsApp"
       >
-        <MessageCircle size={24} />
+        <WhatsAppIcon filled={false} className="text-white" size={24} />
       </a>
     </div>
   );

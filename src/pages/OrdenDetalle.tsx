@@ -10,9 +10,10 @@ import Badge from '../components/Badge';
 import { useApp } from '../context/AppContext';
 import {
   ArrowLeft, Phone, Wrench, User, Calendar,
-  Clock, MessageSquare, Save, MapPin, ExternalLink, MessageCircle,
+  Clock, MessageSquare, Save, MapPin, ExternalLink,
   Satellite, Copy, Power, ClipboardCheck, AlertTriangle, FileText, Package
 } from 'lucide-react';
+import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import toast from 'react-hot-toast';
 import { puede } from '../utils/permisos';
 import CancelarOrdenModal from '../components/ordenes/CancelarOrdenModal';
@@ -379,7 +380,7 @@ export default function OrdenDetalle() {
                   <a href={whatsappLink(orden.clienteTelefono, `Hola ${orden.clienteNombre}, le contactamos de Mister Service RD sobre su ${orden.equipoTipo}.`)}
                     target="_blank" rel="noreferrer"
                     className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded-lg text-xs transition-colors">
-                    <MessageCircle size={12} /> WhatsApp
+                    <WhatsAppIcon filled={false} className="text-white" size={12} /> WhatsApp
                   </a>
                 </div>
               )}
@@ -1058,7 +1059,7 @@ export default function OrdenDetalle() {
                     <a href={whatsappUrl(orden.clienteTelefono, `Hola ${orden.clienteNombre} 👋\nSu técnico ${orden.tecnicoNombre || ''} está en camino.\nPuede seguir su ubicación en tiempo real aquí:\n📍 ${orden.trackingGPS.enlace}\n- Mister Service RD`)}
                       target="_blank" rel="noreferrer"
                       className="flex-1 flex items-center justify-center gap-1 bg-green-500 hover:bg-green-600 text-white px-2 py-2 rounded-lg text-xs font-medium">
-                      <MessageCircle size={12} /> WhatsApp
+                      <WhatsAppIcon filled={false} className="text-white" size={12} /> WhatsApp
                     </a>
                   )}
                 </div>

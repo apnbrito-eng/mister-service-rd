@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
 import {
   Waves, Thermometer, Wind, Flame, Refrigerator, Zap,
-  CheckCircle, Calendar, MessageCircle, Phone, ArrowRight,
+  CheckCircle, Calendar, Phone, ArrowRight,
   Home, Building, Repeat, Wrench, Shield, Clock
 } from 'lucide-react';
+import WhatsAppIcon from '../../components/icons/WhatsAppIcon';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 
 interface Servicio {
@@ -296,7 +297,7 @@ export default function ServiciosPage() {
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 bg-green-500 text-white px-8 py-4 rounded-xl font-bold text-sm hover:bg-green-600 transition-colors"
             >
-              <MessageCircle size={18} /> Escribir por WhatsApp
+              <WhatsAppIcon filled={false} className="text-white" size={18} /> Escribir por WhatsApp
             </a>
           </div>
         </div>

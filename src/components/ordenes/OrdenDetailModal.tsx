@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Phone, MessageCircle, MapPin, Edit2, AlertTriangle, XCircle, Package } from 'lucide-react';
+import { Phone, MapPin, Edit2, AlertTriangle, XCircle, Package } from 'lucide-react';
 import { OrdenServicio, Usuario, StandbyPieza } from '../../types';
+import WhatsAppIcon from '../icons/WhatsAppIcon';
 import {
   formatFecha, formatTelefono, whatsappLink,
   estadoSimpleLabel, estadoSimpleColor, tiempoTranscurrido, tieneStandby,
@@ -205,7 +206,7 @@ export default function OrdenDetailModal({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition-colors"
               >
-                <MessageCircle size={12} />
+                <WhatsAppIcon filled={false} className="text-white" size={12} />
                 WhatsApp
               </a>
             </div>

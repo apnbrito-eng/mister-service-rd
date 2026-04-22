@@ -5,7 +5,8 @@ import { crearSolicitud, subirArchivoSolicitud } from '../../services/solicitude
 import CampoFormularioInput from '../../components/public/CampoFormulario';
 import { CampoFormulario } from '../../types/formularios';
 import LoadingSpinner from '../../components/LoadingSpinner';
-import { Wrench, CheckCircle, MessageCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Wrench, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import WhatsAppIcon from '../../components/icons/WhatsAppIcon';
 import toast from 'react-hot-toast';
 
 export default function FormularioPublico() {
@@ -62,7 +63,7 @@ export default function FormularioPublico() {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-6 py-3 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-xl transition-colors"
             >
-              <MessageCircle className="w-5 h-5" />
+              <WhatsAppIcon filled={false} className="text-white" size={20} />
               Contactar por WhatsApp
             </a>
           )}

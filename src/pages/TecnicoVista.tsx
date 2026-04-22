@@ -17,9 +17,10 @@ import IniciarChequeoButton from '../components/ordenes/IniciarChequeoButton';
 import NotificacionesPanel from '../components/NotificacionesPanel';
 import { guardarUbicacionVehiculo } from '../services/gps.service';
 import {
-  MapPin, Clock, Phone, MessageSquare, CheckCircle, LogOut, Navigation,
+  MapPin, Clock, Phone, CheckCircle, LogOut, Navigation,
   User, Bell, StickyNote, Eye, History, FileText, X, Check
 } from 'lucide-react';
+import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import { isSameDay, format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { signOut } from 'firebase/auth';
@@ -878,7 +879,7 @@ export default function TecnicoVista() {
                           <a href={whatsappUrl(orden.clienteTelefono, mensajesWhatsApp.recordatorioCita(orden.clienteNombre, format(orden.fechaCita || new Date(), "dd/MM/yyyy"), formatHora(orden.fechaCita)))}
                             target="_blank" rel="noreferrer"
                             className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium">
-                            <MessageSquare size={12} /> WhatsApp
+                            <WhatsAppIcon filled={false} className="text-white" size={12} /> WhatsApp
                           </a>
                         )}
                         <button onClick={() => setSelectedOrden(orden)}
