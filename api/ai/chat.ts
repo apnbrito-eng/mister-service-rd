@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
-import { getAdminAuth, getAdminFirestore } from '../_lib/firebaseAdmin';
+import { getAdminAuth, getAdminFirestore } from '../_lib/firebaseAdmin.js';
 
 /**
  * POST /api/ai/chat
