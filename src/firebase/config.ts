@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
@@ -14,6 +15,31 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+
+// App Check: valida que los requests vienen de la app real (no bots/scripts).
+// El enforcement (bloqueo real) se activa manualmente en Firebase Console
+// tras validar que los tokens llegan en producción.
+if (typeof window !== 'undefined') {
+  if (import.meta.env.DEV) {
+    // @ts-expect-error - propiedad global de Firebase para debug en localhost
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
+  const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+  if (siteKey) {
+    try {
+      initializeAppCheck(app, {
+        provider: new ReCaptchaV3Provider(siteKey),
+        isTokenAutoRefreshEnabled: true,
+      });
+      console.log('[firebase] App Check inicializado con reCAPTCHA v3');
+    } catch (err) {
+      console.error('[firebase] Error inicializando App Check:', err);
+    }
+  } else {
+    console.warn('[firebase] VITE_RECAPTCHA_SITE_KEY no definida, App Check desactivado');
+  }
+}
+
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
