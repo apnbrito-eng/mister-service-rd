@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Wrench, Phone, Mail, MapPin, Clock, Menu, X, MessageCircle } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Menu, X, MessageCircle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 import { ConfigWeb } from '../../services/configWeb.service';
@@ -51,13 +51,15 @@ function PublicNav({ config }: { config: ConfigWeb }) {
       {/* Main nav */}
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-3">
-          <div className="bg-primary rounded-xl p-2 flex items-center justify-center">
-            <Wrench size={24} className="text-white" />
-          </div>
-          <div>
-            <div className="font-bold text-xl text-primary leading-tight">Mister Service</div>
-            <div className="font-semibold text-xs text-primary-medium leading-tight">RD</div>
-          </div>
+          <img
+            src="/logo-compacto.png"
+            alt="Mister Service RD"
+            className="h-12 w-auto select-none"
+            draggable={false}
+          />
+          <span className="font-bold text-lg text-primary leading-tight hidden sm:inline">
+            Mister Service RD
+          </span>
         </Link>
 
         {/* Desktop links */}
@@ -132,13 +134,13 @@ function Footer({ config }: { config: ConfigWeb }) {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-3 mb-4">
-              <div className="bg-white/20 rounded-xl p-2">
-                <Wrench size={24} className="text-white" />
-              </div>
-              <div>
-                <div className="font-bold text-xl leading-tight">Mister Service</div>
-                <div className="font-semibold text-sm text-blue-200 leading-tight">RD</div>
-              </div>
+              <img
+                src="/logo-compacto.png"
+                alt="Mister Service RD"
+                className="h-12 w-auto select-none"
+                draggable={false}
+              />
+              <span className="font-bold text-xl leading-tight">Mister Service RD</span>
             </div>
             <p className="text-blue-200 text-sm leading-relaxed">
               Servicio técnico profesional de electrodomésticos en República Dominicana.

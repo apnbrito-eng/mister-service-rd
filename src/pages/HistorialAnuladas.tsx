@@ -386,13 +386,13 @@ export default function HistorialAnuladas() {
                 <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
                   {esEliminada && (
                     <button type="button" onClick={() => handleRestaurarEliminada(detalle)} disabled={processing}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-60">
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium disabled:opacity-60">
                       <RotateCcw size={14} /> Restaurar orden
                     </button>
                   )}
                   {esCancelada && (
                     <button type="button" onClick={() => handleReabrirCancelada(detalle)} disabled={processing}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-60">
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium disabled:opacity-60">
                       <RotateCcw size={14} /> Reabrir orden
                     </button>
                   )}

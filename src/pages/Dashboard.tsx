@@ -520,6 +520,20 @@ export default function Dashboard() {
   // ---- render ----
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
+      {/* Watermark sutil con el logo del brand */}
+      <div
+        aria-hidden="true"
+        className="fixed bottom-8 right-8 opacity-5 pointer-events-none z-0"
+        style={{
+          backgroundImage: 'url(/logo-compacto.png)',
+          backgroundSize: 'contain',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'bottom right',
+          width: '400px',
+          height: '400px',
+        }}
+      />
+
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
@@ -585,7 +599,7 @@ export default function Dashboard() {
           value={ordenesActivasHoy.length}
           subtitle="activas hoy"
           icon={<ClipboardList size={22} />}
-          color="bg-blue-500"
+          color="bg-brand-500"
           onClick={() => navigate('/admin/ordenes')}
         />
         <KpiCard

@@ -38,7 +38,7 @@ export default function Layout() {
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar - mobile */}
-        <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-[#0f3460] text-white">
+        <div className="lg:hidden flex items-center justify-between px-4 py-3 bg-brand-800 text-white">
           <button onClick={() => setMobileSidebarOpen(true)}>
             <Menu size={24} />
           </button>

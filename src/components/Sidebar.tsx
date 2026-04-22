@@ -102,24 +102,22 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   return (
     <aside
-      className={`bg-[#0f3460] flex flex-col h-full transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'} relative`}
+      className={`bg-brand-800 flex flex-col h-full transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'} relative`}
     >
       {/* Toggle button */}
       <button
         onClick={onToggle}
-        className="absolute -right-3 top-6 z-10 bg-[#1a5fa8] text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg hover:bg-[#2d7dd2] transition-colors"
+        className="absolute -right-3 top-6 z-10 bg-brand-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg hover:bg-brand-500 transition-colors"
       >
         {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
       {/* Logo */}
-      <div className={`p-4 border-b border-white/10 ${collapsed ? 'flex justify-center' : ''}`}>
+      <div className={`p-4 border-b border-brand-700 transition-all duration-300 ${collapsed ? 'flex justify-center' : ''}`}>
         {collapsed ? (
-          <div className="bg-white/20 rounded-xl p-2">
-            <Wrench size={20} className="text-white" />
-          </div>
+          <Logo size="sm" compact />
         ) : (
-          <Logo white />
+          <Logo size="md" />
         )}
       </div>
 

@@ -976,7 +976,7 @@ export default function OrdenDetalle() {
                     },
                   });
                 }}
-                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 <FileText size={14} /> Generar cotización
               </button>

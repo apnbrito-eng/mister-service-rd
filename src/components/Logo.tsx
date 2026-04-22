@@ -1,36 +1,48 @@
-import { Wrench } from 'lucide-react';
-
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg';
+  /**
+   * Prop heredada. Ya no afecta la apariencia porque los PNGs del brand
+   * tienen colores propios. Se mantiene para compatibilidad con call sites.
+   */
   white?: boolean;
+  /**
+   * Fuerza la variante compacta (solo personaje). Si no se pasa, la variante
+   * se deriva de `size`: `sm` usa compacto, `md`/`lg` usan el logo completo.
+   */
+  compact?: boolean;
 }
 
-export default function Logo({ size = 'md', white = false }: LogoProps) {
-  const sizes = {
-    sm: { icon: 20, text: 'text-lg', sub: 'text-xs' },
-    md: { icon: 28, text: 'text-xl', sub: 'text-sm' },
-    lg: { icon: 40, text: 'text-3xl', sub: 'text-base' },
+/**
+ * Logo oficial de Mister Service RD.
+ *
+ * Renderiza directamente los PNGs servidos desde `public/`:
+ *  - `/logo-full.png`      → logo completo (personaje + texto).
+ *  - `/logo-compacto.png`  → solo personaje, para espacios reducidos.
+ *
+ * Ambas imágenes tienen fondo transparente y el texto ya incrustado, por eso
+ * no se renderiza texto adicional dentro de este componente.
+ */
+export default function Logo({ size = 'md', compact }: LogoProps) {
+  const useCompact = compact ?? size === 'sm';
+
+  // Altura en píxeles por variante. Ancho queda "auto" para preservar aspect ratio.
+  const heights = {
+    sm: useCompact ? 36 : 32,
+    md: useCompact ? 48 : 52,
+    lg: useCompact ? 64 : 72,
   };
 
-  const s = sizes[size];
-  const colorClass = white ? 'text-white' : 'text-[#0f3460]';
-  const subColorClass = white ? 'text-blue-200' : 'text-[#1a5fa8]';
-  const iconBg = white ? 'bg-white/20' : 'bg-[#0f3460]';
-  const iconColor = white ? 'text-white' : 'text-white';
+  const src = useCompact ? '/logo-compacto.png' : '/logo-full.png';
+  const alt = 'Mister Service RD';
+  const height = heights[size];
 
   return (
-    <div className="flex items-center gap-3">
-      <div className={`${iconBg} rounded-xl p-2 flex items-center justify-center`}>
-        <Wrench size={s.icon} className={iconColor} />
-      </div>
-      <div>
-        <div className={`font-bold ${s.text} ${colorClass} leading-tight`}>
-          Mister Service
-        </div>
-        <div className={`font-semibold ${s.sub} ${subColorClass} leading-tight`}>
-          RD
-        </div>
-      </div>
-    </div>
+    <img
+      src={src}
+      alt={alt}
+      style={{ height, width: 'auto' }}
+      className="block select-none"
+      draggable={false}
+    />
   );
 }

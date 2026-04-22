@@ -235,7 +235,7 @@ export default function FormularioPublico() {
           <button
             type="submit"
             disabled={submitting}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl w-full transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="bg-brand-600 hover:bg-brand-700 text-white font-bold py-4 rounded-xl w-full transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {submitting ? (
               <>

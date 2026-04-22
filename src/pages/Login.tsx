@@ -38,14 +38,14 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#0f3460] via-[#1a5fa8] to-[#2d7dd2] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Card */}
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="bg-[#0f3460] px-8 py-10 flex flex-col items-center">
-            <Logo size="lg" white />
-            <p className="text-blue-300 text-sm mt-4 text-center">
+          <div className="bg-brand-800 px-8 py-10 flex flex-col items-center">
+            <Logo size="lg" />
+            <p className="text-blue-200 text-sm mt-4 text-center">
               Sistema de Gestión de Servicios
             </p>
           </div>
@@ -95,7 +95,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#0f3460] hover:bg-[#1a5fa8] text-white py-3 rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2 mt-2"
+                className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3 rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2 mt-2"
               >
                 {loading ? (
                   <>
@@ -110,7 +110,7 @@ export default function Login() {
           </div>
         </div>
 
-        <p className="text-center text-blue-200 text-xs mt-6">
+        <p className="text-center text-brand-700 text-xs mt-6">
           © 2024 Mister Service RD · Todos los derechos reservados
         </p>
       </div>
