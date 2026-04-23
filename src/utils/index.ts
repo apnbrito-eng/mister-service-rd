@@ -1,7 +1,7 @@
 import { format, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
-import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria } from '../types';
+import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria, PiezaUsada, CondicionPieza, OrigenPieza } from '../types';
 
 /** Orden visual del ciclo de fases (agendado va antes de diagnostico) */
 export const FASES_ORDENADAS: FaseOrden[] = [
@@ -435,6 +435,34 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
           gpsVerificado: (foto.gpsVerificado as boolean) || false,
           distanciaCliente: (foto.distanciaCliente as number) || undefined,
         } : undefined,
+        // Piezas utilizadas (Fase A1)
+        piezasUsadas: Array.isArray(cs.piezasUsadas)
+          ? (cs.piezasUsadas as Array<Record<string, unknown>>).map((p): PiezaUsada => ({
+              id: (p.id as string) || `pieza_${Math.random().toString(36).slice(2)}`,
+              nombre: (p.nombre as string) || '',
+              marca: (p.marca as string) || undefined,
+              modelo: (p.modelo as string) || undefined,
+              condicion: ((p.condicion as CondicionPieza) || 'usada'),
+              origen: ((p.origen as OrigenPieza) || 'inventario_taller'),
+              cantidad: typeof p.cantidad === 'number' ? (p.cantidad as number) : 1,
+              costoUnitario: typeof p.costoUnitario === 'number' ? (p.costoUnitario as number) : 0,
+              costoTotal: typeof p.costoTotal === 'number'
+                ? (p.costoTotal as number)
+                : (typeof p.cantidad === 'number' ? (p.cantidad as number) : 1) * (typeof p.costoUnitario === 'number' ? (p.costoUnitario as number) : 0),
+              proveedor: (p.proveedor as string) || undefined,
+              fotoUrl: (p.fotoUrl as string) || undefined,
+              notas: (p.notas as string) || undefined,
+              registradaPor: (p.registradaPor as string) || '',
+              registradaPorNombre: (p.registradaPorNombre as string) || '',
+              registradaEn: parseFirestoreDate(p.registradaEn) || new Date(),
+              aprobadaPorAdmin: typeof p.aprobadaPorAdmin === 'boolean' ? (p.aprobadaPorAdmin as boolean) : undefined,
+              aprobadaEn: parseFirestoreDate(p.aprobadaEn) || undefined,
+              aprobadaPor: (p.aprobadaPor as string) || undefined,
+            }))
+          : undefined,
+        piezasValidadasPorAdmin: typeof cs.piezasValidadasPorAdmin === 'boolean' ? (cs.piezasValidadasPorAdmin as boolean) : undefined,
+        piezasValidadasEn: parseFirestoreDate(cs.piezasValidadasEn) || undefined,
+        piezasValidadasPor: (cs.piezasValidadasPor as string) || undefined,
         // Wizard completo legacy
         piezasRetiradas: cs.piezasRetiradas ? (cs.piezasRetiradas as Array<Record<string, unknown>>) as unknown as import('../types').PiezaRetirada[] : undefined,
         piezasInstaladas: cs.piezasInstaladas ? (cs.piezasInstaladas as Array<Record<string, unknown>>) as unknown as import('../types').PiezaInstalada[] : undefined,
@@ -504,6 +532,9 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     facturadaAt: parseFirestoreDate(raw.facturadaAt) || undefined,
     facturadaPorId: (raw.facturadaPorId as string) || undefined,
     facturadaPorNombre: (raw.facturadaPorNombre as string) || undefined,
+    // Piezas utilizadas (Fase A1)
+    costoPiezasTotal: typeof raw.costoPiezasTotal === 'number' ? raw.costoPiezasTotal : undefined,
+    cantidadPiezasUsadas: typeof raw.cantidadPiezasUsadas === 'number' ? raw.cantidadPiezasUsadas : undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden) || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),

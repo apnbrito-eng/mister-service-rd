@@ -192,6 +192,9 @@ export interface OrdenServicio {
   facturadaAt?: Date;
   facturadaPorId?: string;
   facturadaPorNombre?: string;
+  // Piezas utilizadas en el cierre (Fase A1)
+  costoPiezasTotal?: number;       // suma de PiezaUsada.costoTotal
+  cantidadPiezasUsadas?: number;   // suma de PiezaUsada.cantidad
   createdAt: Date;
   updatedAt: Date;
 }
@@ -878,6 +881,11 @@ export interface CierreServicio {
   clienteSatisfecho?: boolean;
   revisoConexiones?: boolean;
   fotoCierre?: FotoCierre;
+  // Piezas utilizadas en el servicio (Fase A1 — captura técnico)
+  piezasUsadas?: PiezaUsada[];
+  piezasValidadasPorAdmin?: boolean;
+  piezasValidadasEn?: Date;
+  piezasValidadasPor?: string;
   // Wizard completo (legacy — para órdenes cerradas con el formato anterior)
   piezasRetiradas?: PiezaRetirada[];
   piezasInstaladas?: PiezaInstalada[];
@@ -885,6 +893,38 @@ export interface CierreServicio {
   descripcionTrabajo?: string;
   trabajoPendiente?: string;
   satisfaccionCliente?: number;
+}
+
+export type CondicionPieza = 'nueva' | 'usada';
+
+export type OrigenPieza =
+  | 'inventario_taller'          // del almacén general
+  | 'inventario_vehiculo'         // de lo que el técnico lleva en su vehículo
+  | 'comprada_externamente';      // comprada en la calle/ferretería sin registro en inventario
+
+/**
+ * Pieza utilizada por el técnico en una orden de servicio. Se captura al
+ * cerrar la orden y queda pendiente de validación por admin (Fase A2).
+ */
+export interface PiezaUsada {
+  id: string;                     // generado al crear (crypto.randomUUID)
+  nombre: string;                 // requerido
+  marca?: string;
+  modelo?: string;
+  condicion: CondicionPieza;      // requerido
+  origen: OrigenPieza;            // requerido
+  cantidad: number;               // requerido, default 1
+  costoUnitario: number;          // requerido, RD$, puede ser 0
+  costoTotal: number;              // computed: cantidad × costoUnitario
+  proveedor?: string;              // útil si origen = comprada_externamente
+  fotoUrl?: string;                // subida a Firebase Storage
+  notas?: string;
+  registradaPor: string;           // uid del técnico
+  registradaPorNombre: string;     // snapshot
+  registradaEn: Date;              // persistido como Timestamp, leído como Date
+  aprobadaPorAdmin?: boolean;      // default false — lo llena admin en Fase A2
+  aprobadaEn?: Date;
+  aprobadaPor?: string;
 }
 
 export interface TrackingGPS {
