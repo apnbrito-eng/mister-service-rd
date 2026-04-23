@@ -11,7 +11,7 @@ import { toolsParaRol, ejecutarTool, contextoFechaRD, tieneAccesoAsistenteIA, ty
  *
  * Valida que el usuario tenga iaHabilitada === true y que su rol NO sea
  * tecnico/ayudante (fase beta). Llama a Claude Sonnet con un system prompt
- * role-aware + tools READ-only de Firestore. Tool use loop con max 5 iteraciones.
+ * role-aware + tools READ-only de Firestore. Tool use loop con max 10 iteraciones.
  * Token tracking acumula todas las iteraciones para reportar costo real.
  *
  * Sprint 5: persiste conversaciones exitosas en la colección `conversaciones_ia`.
@@ -96,7 +96,22 @@ EJEMPLO DE FORMATO CORRECTO PARA get_orden_detallada:
    7:23 PM · Servicio cerrado — equipo OK, cliente satisfecho
    7:24 PM · Pago registrado y enviado a facturación · CG-00012 emitido
 
-Resumen: servicio cerrado en 7 minutos. Sin complicaciones, cobrado y facturado el mismo día.`;
+Resumen: servicio cerrado en 7 minutos. Sin complicaciones, cobrado y facturado el mismo día.
+
+MANEJO DE PREGUNTAS COMPUESTAS:
+
+Si el usuario te pregunta VARIAS cosas en una sola oración (ej: 'cuántos servicios hizo X, qué piezas usó, y cuánto costó todo'), responde por partes claramente separadas. Para cada sub-pregunta:
+
+- Si tienes una herramienta apropiada, úsala y responde con los datos.
+- Si NO tienes una herramienta para esa parte específica, di explícitamente: 'Para [sub-tema X] no tengo una herramienta directa — los datos pueden no estar capturados en el sistema o requerir cruzar múltiples colecciones manualmente.' y continúa con las otras partes.
+
+NUNCA devuelvas error si puedes contestar parcialmente. Una respuesta parcial bien marcada es mejor que ningún dato.
+
+Ejemplo correcto:
+Pregunta: 'cuántos servicios hizo Aury este mes y qué piezas usó'
+Respuesta:
+📊 Servicios: Aury Mon realizó X servicios entre el 1 y el 30 de abril...
+📦 Piezas usadas: Para este dato específico no tengo una herramienta directa — las piezas usadas por técnico no están agregadas en el sistema actualmente. Puedes revisarlo manualmente en la sección Inventario, o pedirme el detalle orden por orden si quieres.`;
 
 const SYSTEM_POR_ROL: Record<string, string> = {
   administrador: `Eres asistente del ADMINISTRADOR. Tienes acceso completo a todos los temas del negocio: órdenes, clientes, comisiones, nómina, gastos, ganancias, configuración fiscal.
@@ -107,7 +122,7 @@ Si eres asistente del ADMINISTRADOR, tienes acceso a herramientas ampliadas incl
   secretaria: `Eres asistente de la SECRETARIA. Puedes hablar de citas, agenda, productos, órdenes activas y cómo gestionar nuevos leads. NO discutes información financiera de ningún tipo. Si te preguntan, redirige al administrador.`,
 };
 
-const MAX_TOOL_USE_ITERACIONES = 5;
+const MAX_TOOL_USE_ITERACIONES = 10;
 const MAX_TOKENS_POR_ITERACION = 2048;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -360,13 +375,6 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
       return res.status(500).json({ error: 'No se obtuvo respuesta del modelo' });
     }
 
-    if (respuestaFinal.stop_reason === 'tool_use') {
-      // Se terminaron las iteraciones sin que Claude cierre con end_turn
-      return res.status(500).json({
-        error: `El asistente necesitó más de ${MAX_TOOL_USE_ITERACIONES} pasos para responder. Reformulá la pregunta más específica.`,
-      });
-    }
-
     // 10. Extraer texto final
     const textChunks: string[] = [];
     for (const block of respuestaFinal.content) {
@@ -374,7 +382,20 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
         textChunks.push(block.text);
       }
     }
-    const respuesta = textChunks.join('');
+    const textoExtraido = textChunks.join('');
+
+    // Si se agotaron las iteraciones con stop_reason=tool_use, devolvemos una
+    // respuesta parcial graceful en vez de romper con 500. Tomamos el texto
+    // acumulado del último turno del LLM (puede ser vacío si solo tiró
+    // tool_use) y agregamos una nota visible para el usuario.
+    const alcanzoMaximo = respuestaFinal.stop_reason === 'tool_use';
+    let respuesta: string;
+    if (alcanzoMaximo) {
+      const textoBase = textoExtraido || 'Pude procesar parte de tu pregunta pero no toda.';
+      respuesta = `${textoBase}\n\n---\n⚠️ Algunas partes de tu pregunta requieren más pasos de los que pude procesar. Si falta info, reformúlala en 2 preguntas más pequeñas.`;
+    } else {
+      respuesta = textoExtraido;
+    }
 
     // Pricing Sonnet 4: $3/M input, $15/M output (referencia, redondeado a 6 decimales)
     const costoEstimadoUSDraw = (totalTokensInput / 1_000_000) * 3 + (totalTokensOutput / 1_000_000) * 15;
@@ -440,14 +461,18 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
       console.error('ai/chat persistencia falló:', err);
     }
 
-    return res.status(200).json({
+    const responsePayload: Record<string, unknown> = {
       respuesta,
       tokensInput: totalTokensInput,
       tokensOutput: totalTokensOutput,
       costoEstimadoUSD,
       iteraciones,
       conversacionId: conversacionIdOut,
-    });
+    };
+    if (alcanzoMaximo) {
+      responsePayload.partialResponse = true;
+    }
+    return res.status(200).json(responsePayload);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Error desconocido';
     console.error('ai/chat error:', err);
