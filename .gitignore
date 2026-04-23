@@ -9,6 +9,9 @@ node_modules/
 # Build
 dist/
 
+# Version metadata (generado por Vite en cada build)
+public/version.json
+
 # Environment variables
 .env
 .env.local

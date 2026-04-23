@@ -46,6 +46,7 @@ import Avances from './pages/Avances';
 import EstadoResultado from './pages/EstadoResultado';
 import AsistenteIA from './pages/AsistenteIA';
 import AsistenteIAHistorial from './pages/AsistenteIAHistorial';
+import BannerNuevaVersion from './components/BannerNuevaVersion';
 
 // Public website pages
 import PublicLayout from './components/public/PublicLayout';
@@ -207,6 +208,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppProvider>
+        <BannerNuevaVersion />
         <Toaster
           position="top-right"
           toastOptions={{
