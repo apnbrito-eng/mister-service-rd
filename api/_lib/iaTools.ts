@@ -1171,6 +1171,600 @@ const TOOL_QUERY_GASTOS: ToolDef = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Tools admin-only (Sprint 6)
+// ---------------------------------------------------------------------------
+
+const TOOL_GET_ORDEN_DETALLADA: ToolDef = {
+  name: 'get_orden_detallada',
+  description:
+    "Admin-only. Obtiene el detalle COMPLETO de una orden específica: todos los campos base más información enriquecida — piezas standby vinculadas, cotizaciones históricas, historial de fases, auditoría de cambios, registros de pago y detalles del conduce de garantía (CG) si existe. Úsala para preguntas como '¿qué pasó con la orden OS-0035?' o 'dame todo lo que sabes de la orden X'.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      numero: { type: 'string', description: 'Número de orden, ej: OS-0035.' },
+    },
+    required: ['numero'],
+  },
+  rolesPermitidos: ['administrador'],
+  ejecutar: async (input: { numero: string }) => {
+    if (!input?.numero || typeof input.numero !== 'string') {
+      throw new Error("Falta 'numero' (string)");
+    }
+    const numero = input.numero.trim();
+    const db = getAdminFirestore();
+    const snap = await db
+      .collection('ordenes_servicio')
+      .where('numero', '==', numero)
+      .limit(1)
+      .get();
+    if (snap.empty) {
+      throw new Error(`Orden '${numero}' no encontrada`);
+    }
+    const doc0 = snap.docs[0];
+    const data = doc0.data();
+    const ordenId = doc0.id;
+
+    // Fetch en paralelo: piezas standby, cotizaciones y factura (si hay).
+    const promesas: [
+      Promise<FirebaseFirestore.QuerySnapshot<DocumentData>>,
+      Promise<FirebaseFirestore.QuerySnapshot<DocumentData>>,
+      Promise<FirebaseFirestore.DocumentSnapshot<DocumentData> | null>,
+    ] = [
+      db.collection('standby_piezas').where('ordenId', '==', ordenId).get(),
+      db.collection('cotizaciones').where('ordenId', '==', ordenId).get(),
+      typeof data.facturaId === 'string' && data.facturaId.length > 0
+        ? db.collection('facturas').doc(data.facturaId).get()
+        : Promise.resolve(null),
+    ];
+    const [standbySnap, cotizacionesSnap, facturaSnap] = await Promise.all(promesas);
+
+    const piezasStandby = standbySnap.docs.map((d) => {
+      const sd = d.data();
+      return serializarTimestamps({ id: d.id, ...sd });
+    });
+    const cotizaciones = cotizacionesSnap.docs.map((d) => {
+      const cd = d.data();
+      return serializarTimestamps({ id: d.id, ...cd });
+    });
+
+    let conduceGarantia: unknown = null;
+    if (facturaSnap && facturaSnap.exists) {
+      const fd = facturaSnap.data() || {};
+      conduceGarantia = serializarTimestamps({ id: facturaSnap.id, ...fd });
+    }
+
+    const ordenBase = serializarTimestamps({ id: ordenId, ...data });
+    const pagosRegistrados = Array.isArray(data.pagos)
+      ? data.pagos.map((p) => serializarTimestamps(p))
+      : [];
+    const historialFases = Array.isArray(data.historialFases)
+      ? data.historialFases.map((h) => serializarTimestamps(h))
+      : [];
+    const auditoria = Array.isArray(data.auditoria)
+      ? data.auditoria.map((a) => serializarTimestamps(a))
+      : [];
+
+    return {
+      ordenBase,
+      piezasStandby,
+      cotizaciones,
+      pagosRegistrados,
+      historialFases,
+      auditoria,
+      conduceGarantia,
+    };
+  },
+};
+
+interface QueryPiezasInventarioInput {
+  busqueda?: string;
+  marca?: string;
+  stockMaximoAlerta?: number;
+  limite?: number;
+}
+
+const TOOL_QUERY_PIEZAS_INVENTARIO: ToolDef = {
+  name: 'query_piezas_inventario',
+  description:
+    "Admin-only. Consulta las piezas del inventario interno del taller, incluyendo precioCompra y proveedorSugerido (datos sensibles no expuestos en query_productos). Filtra por nombre/código/descripción (busqueda), marca (buscado también dentro de nombre/código/descripción), o stock bajo un umbral. Útil para '¿cuánto stock tengo de actuador Mabe?' o '¿qué piezas tengo con menos de 3 unidades?'. Default limite 20, máx 50.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      busqueda: { type: 'string', description: 'Texto a buscar en nombre, código o descripción (match parcial).' },
+      marca: { type: 'string', description: 'Marca a buscar dentro de nombre/código/descripción (el schema no tiene campo marca dedicado).' },
+      stockMaximoAlerta: { type: 'number', description: 'Si se pasa, filtra solo piezas con stockActual <= ese valor.' },
+      limite: { type: 'number', description: 'Cantidad máxima. Default 20, máx 50.' },
+    },
+  },
+  rolesPermitidos: ['administrador'],
+  ejecutar: async (input: QueryPiezasInventarioInput) => {
+    const db = getAdminFirestore();
+    const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 20, 1), 50);
+    const snap = await db.collection('piezas_inventario').get();
+    const docs = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+    const filtrados = docs.filter(({ data: p }) => {
+      // Default: ocultar inactivos (activo === false). Si activo es undefined, se incluye.
+      if (p.activo === false) return false;
+      if (input?.stockMaximoAlerta !== undefined) {
+        const stock = typeof p.stockActual === 'number' ? p.stockActual : 0;
+        if (stock > input.stockMaximoAlerta) return false;
+      }
+      if (input?.busqueda) {
+        const match =
+          incluyeBusqueda(p.nombre, input.busqueda) ||
+          incluyeBusqueda(p.codigo, input.busqueda) ||
+          incluyeBusqueda(p.descripcion, input.busqueda);
+        if (!match) return false;
+      }
+      if (input?.marca) {
+        const match =
+          incluyeBusqueda(p.nombre, input.marca) ||
+          incluyeBusqueda(p.codigo, input.marca) ||
+          incluyeBusqueda(p.descripcion, input.marca);
+        if (!match) return false;
+      }
+      return true;
+    });
+    const items = filtrados.slice(0, limite).map(({ id, data: p }) => {
+      const out: Record<string, unknown> = {
+        id,
+        nombre: p.nombre || '',
+        stock: typeof p.stockActual === 'number' ? p.stockActual : 0,
+        precioVenta: typeof p.precioVenta === 'number' ? p.precioVenta : 0,
+        activo: p.activo !== false,
+      };
+      if (typeof p.codigo === 'string' && p.codigo.length > 0) out.codigo = p.codigo;
+      if (typeof p.categoria === 'string' && p.categoria.length > 0) out.categoria = p.categoria;
+      if (typeof p.descripcion === 'string' && p.descripcion.length > 0) out.descripcion = p.descripcion;
+      if (typeof p.stockMinimo === 'number') out.stockMinimo = p.stockMinimo;
+      if (typeof p.precioCompra === 'number') out.precioCompra = p.precioCompra;
+      if (typeof p.proveedorSugerido === 'string' && p.proveedorSugerido.length > 0) {
+        out.proveedorSugerido = p.proveedorSugerido;
+      }
+      return out;
+    });
+    return { piezas: items, cantidad: items.length };
+  },
+};
+
+const ESTADOS_STANDBY_VALIDOS = new Set(['buscando', 'importada', 'dificil', 'llego']);
+
+interface QueryStandbyPiezasInput {
+  estado?: string;
+  tecnicoNombre?: string;
+  ordenNumero?: string;
+  desde?: string;
+  hasta?: string;
+  limite?: number;
+}
+
+const TOOL_QUERY_STANDBY_PIEZAS: ToolDef = {
+  name: 'query_standby_piezas',
+  description:
+    "Admin-only. Consulta piezas en standby (esperando llegar) vinculadas a órdenes. Filtra por estado ('buscando','importada','dificil','llego'), nombre del técnico (match parcial sobre tecnicoNombre denormalizado), orden específica (pasando 'OS-####') o rango de fechas sobre fechaInicio. Útil para '¿qué piezas están pendientes de llegar?' o '¿qué piezas tiene esperando Juan?'. Default limite 20, máx 50.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      estado: { type: 'string', enum: ['buscando', 'importada', 'dificil', 'llego'] },
+      tecnicoNombre: { type: 'string', description: 'Match parcial sobre nombre del técnico (campo denormalizado tecnicoNombre).' },
+      ordenNumero: { type: 'string', description: 'Número de orden, ej: OS-0035. Si se pasa, se resuelve a ordenId primero.' },
+      desde: { type: 'string', description: 'YYYY-MM-DD, hora RD. Filtra fechaInicio.' },
+      hasta: { type: 'string', description: 'YYYY-MM-DD, hora RD. Filtra fechaInicio.' },
+      limite: { type: 'number', description: 'Cantidad máxima. Default 20, máx 50.' },
+    },
+  },
+  rolesPermitidos: ['administrador'],
+  ejecutar: async (input: QueryStandbyPiezasInput) => {
+    const db = getAdminFirestore();
+    const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 20, 1), 50);
+
+    if (input?.estado !== undefined && input.estado !== null && input.estado !== '') {
+      if (typeof input.estado !== 'string' || !ESTADOS_STANDBY_VALIDOS.has(input.estado)) {
+        throw new Error(
+          `Estado inválido '${input.estado}'. Válidos: ${[...ESTADOS_STANDBY_VALIDOS].join(', ')}`,
+        );
+      }
+    }
+
+    let ordenIdResuelto: string | null = null;
+    if (input?.ordenNumero && typeof input.ordenNumero === 'string') {
+      const ordenSnap = await db
+        .collection('ordenes_servicio')
+        .where('numero', '==', input.ordenNumero.trim())
+        .limit(1)
+        .get();
+      if (ordenSnap.empty) {
+        return { standby: [], cantidad: 0 };
+      }
+      ordenIdResuelto = ordenSnap.docs[0].id;
+    }
+
+    let q: Query<DocumentData> = db.collection('standby_piezas');
+    if (ordenIdResuelto) {
+      q = q.where('ordenId', '==', ordenIdResuelto);
+    }
+    if (input?.estado) {
+      q = q.where('estado', '==', input.estado);
+    }
+
+    const snap = await q.get();
+    let docs = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+
+    // Filtro técnico post-query: StandbyPieza solo guarda tecnicoNombre
+    // denormalizado (no tecnicoId), así que filtramos en memoria por match
+    // parcial sobre ese campo.
+    if (input?.tecnicoNombre && typeof input.tecnicoNombre === 'string') {
+      docs = docs.filter(({ data }) => incluyeBusqueda(data.tecnicoNombre, input.tecnicoNombre!));
+    }
+
+    // Filtro fecha post-query para evitar composite index cuando se combina
+    // con otros where.
+    if (input?.desde || input?.hasta) {
+      const inicio = input.desde ? parseFechaRD(input.desde).inicio : null;
+      const fin = input.hasta ? parseFechaRD(input.hasta).fin : null;
+      docs = docs.filter(({ data }) => {
+        const f = toDate(data.fechaInicio);
+        if (!f) return false;
+        if (inicio && f < inicio) return false;
+        if (fin && f > fin) return false;
+        return true;
+      });
+    }
+
+    const items = docs.slice(0, limite).map(({ id, data }) => {
+      const fechaInicio = toDate(data.fechaInicio);
+      const out: Record<string, unknown> = {
+        id,
+        piezaFaltante: data.piezaFaltante || '',
+        clienteNombre: data.clienteNombre || '',
+        equipoTipo: data.equipoTipo || '',
+        equipoMarca: data.equipoMarca || '',
+        estado: data.estado || '',
+        fechaInicio: fechaInicio ? fechaInicio.toISOString() : null,
+      };
+      if (typeof data.ordenId === 'string' && data.ordenId.length > 0) out.ordenId = data.ordenId;
+      if (typeof data.tecnicoNombre === 'string' && data.tecnicoNombre.length > 0) {
+        out.tecnicoNombre = data.tecnicoNombre;
+      }
+      if (typeof data.notas === 'string' && data.notas.length > 0) out.notas = data.notas;
+      return out;
+    });
+
+    return { standby: items, cantidad: items.length };
+  },
+};
+
+const ESTADOS_COTIZACION_VALIDOS = new Set(['borrador', 'enviada', 'aceptada', 'rechazada']);
+
+interface QueryCotizacionesInput {
+  estado?: string;
+  clienteNombre?: string;
+  desde?: string;
+  hasta?: string;
+  limite?: number;
+}
+
+const TOOL_QUERY_COTIZACIONES: ToolDef = {
+  name: 'query_cotizaciones',
+  description:
+    "Admin-only. Consulta cotizaciones emitidas a clientes. Filtra por estado ('borrador','enviada','aceptada','rechazada'), nombre de cliente (match parcial) o rango de fechas sobre createdAt. Útil para '¿cuántas cotizaciones enviadas tengo pendientes?' o '¿qué cotizamos a Juan Ramírez el mes pasado?'. Default limite 20, máx 50.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      estado: { type: 'string', enum: ['borrador', 'enviada', 'aceptada', 'rechazada'] },
+      clienteNombre: { type: 'string', description: 'Match parcial sobre nombre del cliente.' },
+      desde: { type: 'string', description: 'YYYY-MM-DD, hora RD. Filtra createdAt.' },
+      hasta: { type: 'string', description: 'YYYY-MM-DD, hora RD. Filtra createdAt.' },
+      limite: { type: 'number', description: 'Cantidad máxima. Default 20, máx 50.' },
+    },
+  },
+  rolesPermitidos: ['administrador'],
+  ejecutar: async (input: QueryCotizacionesInput) => {
+    const db = getAdminFirestore();
+    const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 20, 1), 50);
+
+    if (input?.estado !== undefined && input.estado !== null && input.estado !== '') {
+      if (typeof input.estado !== 'string' || !ESTADOS_COTIZACION_VALIDOS.has(input.estado)) {
+        throw new Error(
+          `Estado inválido '${input.estado}'. Válidos: ${[...ESTADOS_COTIZACION_VALIDOS].join(', ')}`,
+        );
+      }
+    }
+
+    let q: Query<DocumentData> = db.collection('cotizaciones');
+    if (input?.estado) {
+      q = q.where('estado', '==', input.estado);
+    }
+
+    const snap = await q.get();
+    let docs = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+
+    if (input?.desde || input?.hasta) {
+      const inicio = input.desde ? parseFechaRD(input.desde).inicio : null;
+      const fin = input.hasta ? parseFechaRD(input.hasta).fin : null;
+      docs = docs.filter(({ data }) => {
+        const f = toDate(data.createdAt);
+        if (!f) return false;
+        if (inicio && f < inicio) return false;
+        if (fin && f > fin) return false;
+        return true;
+      });
+    }
+
+    if (input?.clienteNombre) {
+      docs = docs.filter(({ data }) => incluyeBusqueda(data.clienteNombre, input.clienteNombre!));
+    }
+
+    const items = docs.slice(0, limite).map(({ id, data }) => {
+      const createdAt = toDate(data.createdAt);
+      const itemsCount = Array.isArray(data.items) ? data.items.length : 0;
+      const out: Record<string, unknown> = {
+        id,
+        numero: data.numero || '',
+        clienteNombre: data.clienteNombre || '',
+        total: typeof data.total === 'number' ? data.total : 0,
+        estado: data.estado || '',
+        fechaEmision: createdAt ? createdAt.toISOString() : null,
+        itemsCount,
+      };
+      if (typeof data.tecnicoNombre === 'string' && data.tecnicoNombre.length > 0) {
+        out.tecnicoNombre = data.tecnicoNombre;
+      }
+      if (typeof data.ordenId === 'string' && data.ordenId.length > 0) out.ordenId = data.ordenId;
+      if (typeof data.convertida === 'boolean') out.convertida = data.convertida;
+      if (typeof data.facturaId === 'string' && data.facturaId.length > 0) out.facturaId = data.facturaId;
+      if (typeof data.notas === 'string' && data.notas.length > 0) out.notas = data.notas;
+      return out;
+    });
+
+    return { cotizaciones: items, cantidad: items.length };
+  },
+};
+
+interface QueryAvancesInput {
+  personalId?: string;
+  estado?: 'pendiente' | 'descontado';
+  desde?: string;
+  hasta?: string;
+  limite?: number;
+}
+
+const TOOL_QUERY_AVANCES_EMPLEADOS: ToolDef = {
+  name: 'query_avances_empleados',
+  description:
+    "Admin-only. Consulta avances (adelantos) de nómina dados a empleados en la colección 'avances'. Filtra por empleado, estado ('pendiente' = no descontado aún, 'descontado' = ya aplicado a una liquidación) o rango de fechas sobre fecha. Útil para '¿cuánto le he adelantado a Aury este mes?' o '¿qué avances quedan pendientes de descontar?'. Default limite 20, máx 50.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      personalId: { type: 'string' },
+      estado: { type: 'string', enum: ['pendiente', 'descontado'] },
+      desde: { type: 'string', description: 'YYYY-MM-DD, hora RD. Filtra fecha.' },
+      hasta: { type: 'string', description: 'YYYY-MM-DD, hora RD. Filtra fecha.' },
+      limite: { type: 'number', description: 'Cantidad máxima. Default 20, máx 50.' },
+    },
+  },
+  rolesPermitidos: ['administrador'],
+  ejecutar: async (input: QueryAvancesInput) => {
+    const db = getAdminFirestore();
+    const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 20, 1), 50);
+
+    let q: Query<DocumentData> = db.collection('avances');
+    if (input?.personalId && typeof input.personalId === 'string') {
+      q = q.where('personalId', '==', input.personalId);
+    }
+    if (input?.estado === 'pendiente') {
+      q = q.where('descontado', '==', false);
+    } else if (input?.estado === 'descontado') {
+      q = q.where('descontado', '==', true);
+    }
+
+    const snap = await q.get();
+    let docs = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+
+    if (input?.desde || input?.hasta) {
+      const inicio = input.desde ? parseFechaRD(input.desde).inicio : null;
+      const fin = input.hasta ? parseFechaRD(input.hasta).fin : null;
+      docs = docs.filter(({ data }) => {
+        const f = toDate(data.fecha);
+        if (!f) return false;
+        if (inicio && f < inicio) return false;
+        if (fin && f > fin) return false;
+        return true;
+      });
+    }
+
+    const items = docs.slice(0, limite).map(({ id, data }) => {
+      const fecha = toDate(data.fecha);
+      const out: Record<string, unknown> = {
+        id,
+        personalId: data.personalId || '',
+        personalNombre: data.personalNombre || '',
+        monto: typeof data.monto === 'number' ? data.monto : 0,
+        fecha: fecha ? fecha.toISOString() : null,
+        descontado: data.descontado === true,
+        quincenaAsignada: data.quincenaAsignada || '',
+      };
+      if (typeof data.motivo === 'string' && data.motivo.length > 0) out.motivo = data.motivo;
+      if (typeof data.liquidacionId === 'string' && data.liquidacionId.length > 0) {
+        out.liquidacionId = data.liquidacionId;
+      }
+      if (typeof data.metodoPago === 'string' && data.metodoPago.length > 0) {
+        out.metodoPago = data.metodoPago;
+      }
+      return out;
+    });
+
+    return { avances: items, cantidad: items.length };
+  },
+};
+
+interface QueryLiquidacionesInput {
+  quincena?: string;
+  personalId?: string;
+  desde?: string;
+  hasta?: string;
+  limite?: number;
+}
+
+const TOOL_QUERY_LIQUIDACIONES_NOMINA: ToolDef = {
+  name: 'query_liquidaciones_nomina',
+  description:
+    "Admin-only. Consulta liquidaciones de nómina históricas. Cada documento contiene un array 'empleados[]'; esta tool RETORNA UNA FILA POR EMPLEADO × QUINCENA. Filtra por quincena (formato interno 'YYYY-MM-Q1' o 'YYYY-MM-Q2'), empleado específico (personalId) o rango de fechas sobre fechaGeneracion. Útil para '¿cuánto pagué en nómina la quincena pasada?' o '¿qué comisión final tuvo Aury en Q1 marzo?'. Default limite 20 filas, máx 50.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      quincena: {
+        type: 'string',
+        description: "Quincena en formato interno 'YYYY-MM-Q1' o 'YYYY-MM-Q2' (ej. '2026-04-Q2').",
+      },
+      personalId: { type: 'string' },
+      desde: { type: 'string', description: 'YYYY-MM-DD, hora RD. Filtra fechaGeneracion.' },
+      hasta: { type: 'string', description: 'YYYY-MM-DD, hora RD. Filtra fechaGeneracion.' },
+      limite: { type: 'number', description: 'Cantidad máxima de filas (empleado×quincena). Default 20, máx 50.' },
+    },
+  },
+  rolesPermitidos: ['administrador'],
+  ejecutar: async (input: QueryLiquidacionesInput) => {
+    const db = getAdminFirestore();
+    const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 20, 1), 50);
+
+    let q: Query<DocumentData> = db.collection('liquidaciones_nomina');
+    if (input?.quincena && typeof input.quincena === 'string') {
+      q = q.where('quincena', '==', input.quincena.trim());
+    }
+
+    const snap = await q.get();
+    let liquidaciones = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+
+    if (input?.desde || input?.hasta) {
+      const inicio = input.desde ? parseFechaRD(input.desde).inicio : null;
+      const fin = input.hasta ? parseFechaRD(input.hasta).fin : null;
+      liquidaciones = liquidaciones.filter(({ data }) => {
+        const f = toDate(data.fechaGeneracion);
+        if (!f) return false;
+        if (inicio && f < inicio) return false;
+        if (fin && f > fin) return false;
+        return true;
+      });
+    }
+
+    const filas: Array<Record<string, unknown>> = [];
+    for (const { id, data } of liquidaciones) {
+      if (filas.length >= limite) break;
+      const empleados = Array.isArray(data.empleados) ? data.empleados : [];
+      const fechaGeneracion = toDate(data.fechaGeneracion);
+      const fechaGeneracionIso = fechaGeneracion ? fechaGeneracion.toISOString() : null;
+      for (const emp of empleados) {
+        if (filas.length >= limite) break;
+        if (input?.personalId && emp.personalId !== input.personalId) continue;
+        const fila: Record<string, unknown> = {
+          liquidacionId: id,
+          quincena: data.quincena || '',
+          fechaGeneracion: fechaGeneracionIso,
+          estado: data.estado || '',
+          personalId: emp.personalId || '',
+          personalNombre: emp.personalNombre || '',
+          rol: emp.rol || '',
+          sueldoBase: typeof emp.sueldoBase === 'number' ? emp.sueldoBase : 0,
+          totalComisiones: typeof emp.totalComisiones === 'number' ? emp.totalComisiones : 0,
+          totalDevengado: typeof emp.totalDevengado === 'number' ? emp.totalDevengado : 0,
+          pagado: emp.pagado === true,
+        };
+        if (typeof emp.bono === 'number') fila.bono = emp.bono;
+        if (typeof emp.totalAvances === 'number') fila.totalAvances = emp.totalAvances;
+        if (typeof emp.totalNeto === 'number') fila.totalNeto = emp.totalNeto;
+        filas.push(fila);
+      }
+    }
+
+    return { liquidaciones: filas, cantidad: filas.length };
+  },
+};
+
+const FRECUENCIAS_MANTENIMIENTO_VALIDAS = new Set(['mensual', 'trimestral', 'semestral', 'anual']);
+
+interface QueryMantenimientoInput {
+  clienteNombre?: string;
+  activo?: boolean;
+  proximasXdias?: number;
+  frecuencia?: string;
+  limite?: number;
+}
+
+const TOOL_QUERY_MANTENIMIENTO: ToolDef = {
+  name: 'query_mantenimiento',
+  description:
+    "Admin-only. Consulta mantenimientos programados (servicios preventivos recurrentes) de la colección 'mantenimiento'. Filtra por cliente (match parcial), activo (true/false) o frecuencia ('mensual','trimestral','semestral','anual'). Si pasas 'proximasXdias', retorna mantenimientos con proximaFecha <= hoy + X días — esto incluye mantenimientos ATRASADOS (fechas pasadas) y los próximos X días. Útil para ver todo lo pendiente (ej. '¿qué mantenimientos tengo pendientes para esta semana?' o '¿ya agendé el mantenimiento de María González?'). Default limite 20, máx 50.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      clienteNombre: { type: 'string', description: 'Match parcial sobre nombre del cliente.' },
+      activo: { type: 'boolean' },
+      proximasXdias: { type: 'number', description: 'Filtra proximaFecha <= hoy + X días (hora RD). Incluye mantenimientos ATRASADOS (proximaFecha en el pasado) además de los próximos X días.' },
+      frecuencia: { type: 'string', enum: ['mensual', 'trimestral', 'semestral', 'anual'] },
+      limite: { type: 'number', description: 'Cantidad máxima. Default 20, máx 50.' },
+    },
+  },
+  rolesPermitidos: ['administrador'],
+  ejecutar: async (input: QueryMantenimientoInput) => {
+    const db = getAdminFirestore();
+    const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 20, 1), 50);
+
+    if (input?.frecuencia !== undefined && input.frecuencia !== null && input.frecuencia !== '') {
+      if (typeof input.frecuencia !== 'string' || !FRECUENCIAS_MANTENIMIENTO_VALIDAS.has(input.frecuencia)) {
+        throw new Error(
+          `Frecuencia inválida '${input.frecuencia}'. Válidas: ${[...FRECUENCIAS_MANTENIMIENTO_VALIDAS].join(', ')}`,
+        );
+      }
+    }
+
+    let q: Query<DocumentData> = db.collection('mantenimiento');
+    if (typeof input?.activo === 'boolean') {
+      q = q.where('activo', '==', input.activo);
+    }
+    if (input?.frecuencia) {
+      q = q.where('frecuencia', '==', input.frecuencia);
+    }
+
+    const snap = await q.get();
+    let docs = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+
+    // Filtro proximasXdias: proximaFecha <= hoy (RD) + X días.
+    if (typeof input?.proximasXdias === 'number' && input.proximasXdias >= 0) {
+      const ctx = contextoFechaRD();
+      const { inicio: hoyInicioUTC } = parseFechaRD(ctx.hoy);
+      const limiteMs = hoyInicioUTC.getTime() + input.proximasXdias * 24 * 60 * 60 * 1000 + (24 * 60 * 60 * 1000 - 1);
+      const limiteDate = new Date(limiteMs);
+      docs = docs.filter(({ data }) => {
+        const f = toDate(data.proximaFecha);
+        if (!f) return false;
+        return f <= limiteDate;
+      });
+    }
+
+    if (input?.clienteNombre) {
+      docs = docs.filter(({ data }) => incluyeBusqueda(data.clienteNombre, input.clienteNombre!));
+    }
+
+    const items = docs.slice(0, limite).map(({ id, data }) => {
+      const proximaFecha = toDate(data.proximaFecha);
+      const out: Record<string, unknown> = {
+        id,
+        clienteNombre: data.clienteNombre || '',
+        equipoTipo: data.equipoTipo || '',
+        frecuencia: data.frecuencia || '',
+        proximaFecha: proximaFecha ? proximaFecha.toISOString() : null,
+        activo: data.activo === true,
+      };
+      if (typeof data.tecnicoId === 'string' && data.tecnicoId.length > 0) out.tecnicoId = data.tecnicoId;
+      return out;
+    });
+
+    return { mantenimientos: items, cantidad: items.length };
+  },
+};
+
 export const TOOLS: ToolDef[] = [
   TOOL_QUERY_ORDENES,
   TOOL_COUNT_ORDENES,
@@ -1183,6 +1777,14 @@ export const TOOLS: ToolDef[] = [
   TOOL_QUERY_PRECIOS_SERVICIOS,
   TOOL_QUERY_CLIENTES,
   TOOL_QUERY_GASTOS,
+  // Admin-only (Sprint 6)
+  TOOL_GET_ORDEN_DETALLADA,
+  TOOL_QUERY_PIEZAS_INVENTARIO,
+  TOOL_QUERY_STANDBY_PIEZAS,
+  TOOL_QUERY_COTIZACIONES,
+  TOOL_QUERY_AVANCES_EMPLEADOS,
+  TOOL_QUERY_LIQUIDACIONES_NOMINA,
+  TOOL_QUERY_MANTENIMIENTO,
 ];
 
 export function toolsParaRol(rol: Rol): ToolDef[] {
