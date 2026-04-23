@@ -113,3 +113,21 @@ Este repo tiene un equipo de 5 agentes especializados que trabajan en conjunto:
 **Cómo agregar o modificar agentes:** editar los archivos en `.claude/agents/*.md`. El frontmatter define el `name` (usado en `Agent("name", ...)`) y el `description` (usado por Claude para decidir cuándo delegar).
 
 **Deploy Hook (para `devops`):** `https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/kfkia6Sqin` — POST sin body.
+
+## Banner de nueva versión
+
+El sistema detecta automáticamente cuando hay un deploy nuevo en
+producción y muestra un banner arriba con botón "Recargar ahora".
+
+- Implementado en commit 92f3ccf (23 abr 2026)
+- vite.config.ts inyecta git commit hash como __APP_VERSION__ al bundle
+- public/version.json se genera en cada build con el mismo hash
+- src/hooks/useVersionCheck.ts hace poll cada 5 min + al focus del
+  window a /version.json
+- src/components/BannerNuevaVersion.tsx renderiza banner fijo z-9999
+  cuando la versión del servidor difiere del bundle en ejecución
+- Mountado en App.tsx fuera de los layouts — aparece en admin,
+  público y vista técnico
+
+Esto elimina la necesidad de pedir al equipo que haga hard refresh
+manual después de cada deploy importante.
