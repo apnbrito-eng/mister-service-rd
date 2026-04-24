@@ -1765,6 +1765,196 @@ const TOOL_QUERY_MANTENIMIENTO: ToolDef = {
   },
 };
 
+const ROLES_PONCHES_VALIDOS = new Set([
+  'administrador',
+  'coordinadora',
+  'operaria',
+  'secretaria',
+  'tecnico',
+  'ayudante',
+]);
+
+interface QueryPonchesInput {
+  personalNombre?: string;
+  rol?: string;
+  desde?: string;
+  hasta?: string;
+  soloAusentes?: boolean;
+  llegadaTardeDespuesDe?: string;
+}
+
+const TOOL_QUERY_PONCHES: ToolDef = {
+  name: 'query_ponches',
+  description:
+    "Admin-only. Consulta ponches de asistencia del personal. Filtra por nombre del empleado (match parcial), rol específico, rango de fechas (default hoy en hora RD), llegadas tardías (entrada después de HH:MM) o ausentes (personal activo sin ponche de entrada en el rango). Retorna ponches agrupados por persona con tipo, hora, fotoUrl y ubicación GPS si está disponible. Útil para '¿quién no ponchó hoy?', '¿cuántas horas trabajó Aury esta quincena?', '¿quién llegó tarde el lunes?'.",
+  input_schema: {
+    type: 'object',
+    properties: {
+      personalNombre: { type: 'string', description: 'Match parcial sobre el nombre del empleado.' },
+      rol: {
+        type: 'string',
+        enum: ['administrador', 'coordinadora', 'operaria', 'secretaria', 'tecnico', 'ayudante'],
+        description: 'Filtro por rol exacto del empleado.',
+      },
+      desde: { type: 'string', description: 'YYYY-MM-DD, hora RD. Default hoy.' },
+      hasta: { type: 'string', description: 'YYYY-MM-DD, hora RD. Default hoy.' },
+      soloAusentes: {
+        type: 'boolean',
+        description: 'Si true, retorna solo personal activo que NO tiene ponche de entrada en el rango.',
+      },
+      llegadaTardeDespuesDe: {
+        type: 'string',
+        description: 'Hora HH:MM (ej. "09:00"). Filtra solo ponches de entrada con hora RD posterior a ese valor.',
+      },
+    },
+  },
+  rolesPermitidos: ['administrador'],
+  ejecutar: async (input: QueryPonchesInput) => {
+    const db = getAdminFirestore();
+
+    if (input?.rol !== undefined && input.rol !== null && input.rol !== '') {
+      if (typeof input.rol !== 'string' || !ROLES_PONCHES_VALIDOS.has(input.rol)) {
+        throw new Error(
+          `Rol inválido '${input.rol}'. Válidos: ${[...ROLES_PONCHES_VALIDOS].join(', ')}`,
+        );
+      }
+    }
+
+    if (input?.llegadaTardeDespuesDe !== undefined && input.llegadaTardeDespuesDe !== null && input.llegadaTardeDespuesDe !== '') {
+      if (typeof input.llegadaTardeDespuesDe !== 'string' || !/^\d{2}:\d{2}$/.test(input.llegadaTardeDespuesDe)) {
+        throw new Error(
+          `llegadaTardeDespuesDe inválido '${input.llegadaTardeDespuesDe}'. Formato esperado: HH:MM (ej. '09:00').`,
+        );
+      }
+    }
+
+    // Default a hoy en hora RD si no se pasa rango.
+    const ctx = contextoFechaRD();
+    const fechaDesde = input?.desde && typeof input.desde === 'string' ? input.desde.trim() : ctx.hoy;
+    const fechaHasta = input?.hasta && typeof input.hasta === 'string' ? input.hasta.trim() : ctx.hoy;
+
+    // Validar formato YYYY-MM-DD vía parseFechaRD (lanza error si inválido).
+    parseFechaRD(fechaDesde);
+    parseFechaRD(fechaHasta);
+
+    const snap = await db
+      .collection('ponches')
+      .where('fechaRD', '>=', fechaDesde)
+      .where('fechaRD', '<=', fechaHasta)
+      .get();
+
+    let ponches = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
+
+    // Filtros post-query
+    if (input?.personalNombre && typeof input.personalNombre === 'string') {
+      ponches = ponches.filter(({ data }) => incluyeBusqueda(data.personalNombre, input.personalNombre!));
+    }
+    if (input?.rol) {
+      ponches = ponches.filter(({ data }) => data.personalRol === input.rol);
+    }
+    if (input?.llegadaTardeDespuesDe) {
+      const corte = input.llegadaTardeDespuesDe;
+      ponches = ponches.filter(({ data }) => {
+        if (data.tipo !== 'entrada') return false;
+        const ts = toDate(data.timestamp);
+        if (!ts) return false;
+        const horaRD = formatHoraRD(ts);
+        return horaRD > corte;
+      });
+    }
+
+    // Agrupar por personalUid
+    const porPersonal: Record<string, {
+      personalUid: string;
+      personalId: string;
+      personalNombre: string;
+      personalRol: string;
+      ponches: Array<Record<string, unknown>>;
+    }> = {};
+
+    for (const { id, data } of ponches) {
+      const uid = typeof data.personalUid === 'string' ? data.personalUid : '';
+      if (!uid) continue;
+      if (!porPersonal[uid]) {
+        porPersonal[uid] = {
+          personalUid: uid,
+          personalId: typeof data.personalId === 'string' ? data.personalId : '',
+          personalNombre: typeof data.personalNombre === 'string' ? data.personalNombre : '',
+          personalRol: typeof data.personalRol === 'string' ? data.personalRol : '',
+          ponches: [],
+        };
+      }
+      const ts = toDate(data.timestamp);
+      const ponche: Record<string, unknown> = {
+        id,
+        tipo: data.tipo || '',
+        hora: ts ? ts.toISOString() : null,
+        fechaRD: data.fechaRD || '',
+      };
+      if (typeof data.fotoUrl === 'string' && data.fotoUrl.length > 0) ponche.fotoUrl = data.fotoUrl;
+      if (data.ubicacion && typeof data.ubicacion === 'object') {
+        ponche.ubicacion = serializarTimestamps(data.ubicacion);
+      }
+      if (typeof data.dispositivo === 'string' && data.dispositivo.length > 0) ponche.dispositivo = data.dispositivo;
+      if (typeof data.notas === 'string' && data.notas.length > 0) ponche.notas = data.notas;
+      porPersonal[uid].ponches.push(ponche);
+    }
+
+    // Ordenar ponches de cada persona por hora ascendente para que el LLM
+    // vea entrada antes que salida.
+    for (const persona of Object.values(porPersonal)) {
+      persona.ponches.sort((a, b) => {
+        const ha = typeof a.hora === 'string' ? a.hora : '';
+        const hb = typeof b.hora === 'string' ? b.hora : '';
+        return ha.localeCompare(hb);
+      });
+    }
+
+    const resultado = Object.values(porPersonal);
+
+    if (input?.soloAusentes === true) {
+      const personalSnap = await db.collection('personal').where('activo', '==', true).get();
+      const activos = personalSnap.docs.map((d) => ({ id: d.id, data: d.data() }));
+      const uidsConEntrada = new Set(
+        ponches
+          .filter(({ data }) => data.tipo === 'entrada')
+          .map(({ data }) => (typeof data.personalUid === 'string' ? data.personalUid : ''))
+          .filter((uid) => uid.length > 0),
+      );
+      const ausentes = activos
+        .filter(({ data }) => {
+          const uid = typeof data.uid === 'string' ? data.uid : '';
+          if (!uid) return false;
+          if (input?.rol && data.rol !== input.rol) return false;
+          if (input?.personalNombre && !incluyeBusqueda(data.nombre, input.personalNombre)) return false;
+          return !uidsConEntrada.has(uid);
+        })
+        .map(({ id, data }) => {
+          const out: Record<string, unknown> = {
+            personalId: id,
+            nombre: typeof data.nombre === 'string' ? data.nombre : '',
+            rol: typeof data.rol === 'string' ? data.rol : '',
+          };
+          if (typeof data.telefono === 'string' && data.telefono.length > 0) out.telefono = data.telefono;
+          return out;
+        });
+
+      return {
+        ausentes,
+        totalAusentes: ausentes.length,
+        rango: { desde: fechaDesde, hasta: fechaHasta },
+      };
+    }
+
+    return {
+      totalPonches: ponches.length,
+      totalPersonas: resultado.length,
+      rango: { desde: fechaDesde, hasta: fechaHasta },
+      personal: resultado,
+    };
+  },
+};
+
 export const TOOLS: ToolDef[] = [
   TOOL_QUERY_ORDENES,
   TOOL_COUNT_ORDENES,
@@ -1785,6 +1975,7 @@ export const TOOLS: ToolDef[] = [
   TOOL_QUERY_AVANCES_EMPLEADOS,
   TOOL_QUERY_LIQUIDACIONES_NOMINA,
   TOOL_QUERY_MANTENIMIENTO,
+  TOOL_QUERY_PONCHES,
 ];
 
 export function toolsParaRol(rol: Rol): ToolDef[] {
