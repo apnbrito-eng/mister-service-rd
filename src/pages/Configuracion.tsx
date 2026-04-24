@@ -186,7 +186,7 @@ export default function Configuracion() {
         },
         userProfile?.nombre,
       );
-      toast.success('Datos de la empresa guardados correctamente');
+      toast.success('Datos de la empresa guardados y sincronizados al sitio público');
     } catch (err) {
       console.error('[Configuracion] Error guardando empresa:', err);
       toast.error('No se pudo guardar. Intenta de nuevo.');

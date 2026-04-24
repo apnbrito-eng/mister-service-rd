@@ -97,4 +97,34 @@ export async function actualizarConfigEmpresa(
   if (cambios.email !== undefined) payload.email = cambios.email;
   if (usuarioNombre) payload.updatedPor = usuarioNombre;
   await setDoc(doc(db, COLLECTION, DOC_ID), payload, { merge: true });
+
+  // Sincronización best-effort a config_web/sitio.contacto para que el sitio
+  // público refleje teléfono/email/dirección editados en /admin/configuracion.
+  // - DocId correcto es 'sitio' (no 'principal').
+  // - Los campos viven anidados bajo `contacto`.
+  // - `nombre` y `rnc` NO existen en config_web → se omiten (el nombre del
+  //   negocio en la landing está hardcoded en PublicLayout).
+  // - `contacto.horario` existe en config_web pero no en config/empresa:
+  //   setDoc({merge:true}) con objeto anidado hace deep merge, así que
+  //   escribir solo telefono/email/direccion NO pisa `contacto.horario`.
+  // - Si falla, NO re-lanzamos: el save principal a config/empresa ya pasó.
+  try {
+    const contactoPayload: Record<string, unknown> = {};
+    if (cambios.telefono !== undefined) contactoPayload.telefono = cambios.telefono;
+    if (cambios.email !== undefined) contactoPayload.email = cambios.email;
+    if (cambios.direccion !== undefined) contactoPayload.direccion = cambios.direccion;
+    if (Object.keys(contactoPayload).length > 0) {
+      await setDoc(
+        doc(db, 'config_web', 'sitio'),
+        {
+          contacto: contactoPayload,
+          updatedAt: Timestamp.now(),
+        },
+        { merge: true },
+      );
+    }
+  } catch (err) {
+    console.warn('[configEmpresa] No pude sincronizar a config_web:', err);
+    // No re-lanzamos: el save principal ya fue exitoso.
+  }
 }
