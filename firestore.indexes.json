@@ -1,0 +1,21 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "ponches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "fechaRD", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "ponches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "personalUid", "order": "ASCENDING" },
+        { "fieldPath": "fechaRD", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
