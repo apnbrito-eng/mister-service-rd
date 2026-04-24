@@ -4,7 +4,7 @@ import {
   Users, UserCog, FileText, Settings, LogOut, Wrench,
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight,
   Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
-  CalendarCheck, Sparkles, History, Package,
+  CalendarCheck, Sparkles, History,
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -27,7 +27,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [citasCount, setCitasCount] = useState(0);
   const [solicitudesCount, setSolicitudesCount] = useState(0);
   const [facturacionPendienteCount, setFacturacionPendienteCount] = useState(0);
-  const [piezasPendientesCount, setPiezasPendientesCount] = useState(0);
 
   useEffect(() => {
     const q1 = query(collection(db, 'standby_piezas'), where('estado', '!=', 'llego'));
@@ -47,30 +46,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       setFacturacionPendienteCount(count);
     });
 
-    // Piezas pendientes de validar — solo admin
-    let unsub5: (() => void) | null = null;
-    if (userProfile?.rol === 'administrador') {
-      const q5 = query(
-        collection(db, 'ordenes_servicio'),
-        where('fase', 'in', ['trabajo_realizado', 'cerrado']),
-      );
-      unsub5 = onSnapshot(q5, (snap) => {
-        const count = snap.docs.filter(d => {
-          const data = d.data() as Record<string, unknown>;
-          if (data.eliminada) return false;
-          const cs = data.cierreServicio as { piezasUsadas?: unknown[]; piezasValidadasPorAdmin?: boolean } | undefined;
-          if (!cs) return false;
-          if (!Array.isArray(cs.piezasUsadas) || cs.piezasUsadas.length === 0) return false;
-          if (cs.piezasValidadasPorAdmin === true) return false;
-          return true;
-        }).length;
-        setPiezasPendientesCount(count);
-      });
-    } else {
-      setPiezasPendientesCount(0);
-    }
-
-    return () => { unsub1(); unsub2(); unsub3(); unsub4(); if (unsub5) unsub5(); };
+    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
   }, [userProfile?.rol]);
 
   const handleLogout = async () => {
@@ -99,7 +75,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: p('cotizacionesVer') },
     { to: '/admin/facturas', icon: Receipt, label: 'Conduces de Garantía', show: p('facturasVer') },
     { to: '/admin/facturacion-pendiente', icon: Inbox, label: 'Conduces Pendientes', badge: facturacionPendienteCount, show: isAdmin || userProfile?.rol === 'coordinadora' },
-    { to: '/admin/piezas-pendientes-validacion', icon: Package, label: 'Piezas Pendientes', badge: piezasPendientesCount, show: userProfile?.rol === 'administrador' },
     { to: '/admin/taller', icon: Wrench, label: 'Equipos Taller', show: p('ordenesVer') },
     { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: p('ordenesVer') },
     { to: '/admin/mantenimiento', icon: Calendar, label: 'Mantenimiento', show: p('ordenesVer') },

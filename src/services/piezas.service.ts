@@ -1,7 +1,8 @@
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { Timestamp } from 'firebase/firestore';
-import { storage } from '../firebase/config';
-import type { PiezaUsada, CondicionPieza, OrigenPieza } from '../types';
+import { arrayUnion, doc, Timestamp, updateDoc } from 'firebase/firestore';
+import { db, storage } from '../firebase/config';
+import type { OrdenServicio, PiezaUsada, CondicionPieza, OrigenPieza } from '../types';
+import { crearRegistroAuditoria } from '../utils';
 
 const UPLOAD_TIMEOUT_MS = 30_000;
 
@@ -112,4 +113,59 @@ export function calcularTotales(piezas: PiezaUsada[]): { costoTotal: number; can
     }),
     { costoTotal: 0, cantidadTotal: 0 },
   );
+}
+
+/**
+ * Aprueba todas las piezas registradas por el técnico en una orden, marcando
+ * cada pieza como aprobada y sellando `cierreServicio.piezasValidadasPorAdmin`.
+ *
+ * Normaliza fechas internas de las piezas a Timestamp para consistencia en
+ * Firestore y strip-ea undefined antes de escribir. Agrega registro de
+ * auditoría con la acción `aprobar_piezas`.
+ *
+ * Reutilizado desde Conduces Pendientes y (antes) la página de Piezas
+ * Pendientes de Validación ya eliminada.
+ */
+export async function aprobarPiezasDeOrden(
+  orden: OrdenServicio,
+  admin: { uid: string; nombre: string },
+): Promise<void> {
+  const cs = orden.cierreServicio;
+  if (!cs || !Array.isArray(cs.piezasUsadas) || cs.piezasUsadas.length === 0) {
+    throw new Error('La orden no tiene piezas para aprobar.');
+  }
+
+  const now = Timestamp.now();
+
+  // Normalizar fechas internas y marcar cada pieza como aprobada.
+  const piezasAprobadas = cs.piezasUsadas.map(p => {
+    const base: Record<string, unknown> = {
+      ...p,
+      registradaEn: p.registradaEn instanceof Date ? Timestamp.fromDate(p.registradaEn) : p.registradaEn,
+      aprobadaPorAdmin: true,
+      aprobadaEn: now,
+      aprobadaPor: admin.uid,
+    };
+    if (p.editadaEn !== undefined) {
+      base.editadaEn = p.editadaEn instanceof Date ? Timestamp.fromDate(p.editadaEn) : p.editadaEn;
+    }
+    // Strip undefined
+    return Object.fromEntries(Object.entries(base).filter(([, v]) => v !== undefined));
+  });
+
+  const cantidad = cs.piezasUsadas.length;
+  const registro = crearRegistroAuditoria(
+    admin.nombre,
+    'aprobar_piezas',
+    `Aprobó ${cantidad} pieza${cantidad === 1 ? '' : 's'} registrada${cantidad === 1 ? '' : 's'} por ${cs.tecnicoNombre || 'el técnico'}.`,
+  );
+
+  await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+    'cierreServicio.piezasUsadas': piezasAprobadas,
+    'cierreServicio.piezasValidadasPorAdmin': true,
+    'cierreServicio.piezasValidadasEn': now,
+    'cierreServicio.piezasValidadasPor': admin.uid,
+    auditoria: arrayUnion(registro),
+    updatedAt: now,
+  });
 }

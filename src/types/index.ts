@@ -111,7 +111,8 @@ export type AccionAuditoria =
   | 'cierre'
   | 'marcar_chequeo'
   | 'aprobar_piezas'
-  | 'editar_piezas';
+  | 'editar_piezas'
+  | 'editar_orden_datos_cliente';
 
 export type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'link' | 'otro';
 

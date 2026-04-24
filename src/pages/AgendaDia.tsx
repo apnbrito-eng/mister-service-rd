@@ -363,8 +363,17 @@ function TecnicoColumn({ tecnico, ordenes, onSelectOrden }: {
               className="w-full text-left bg-white rounded-lg border border-gray-200 border-l-4 shadow-sm hover:shadow-md transition-shadow p-2.5"
               style={{ borderLeftColor: borderColor }}
             >
-              <div className="flex items-center justify-between gap-2 mb-1">
-                <span className="font-mono text-[11px] font-bold text-[#0f3460]">{o.numero || '#--'}</span>
+              <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-mono text-[11px] font-bold text-[#0f3460]">{o.numero || '#--'}</span>
+                  {o.cierreServicio?.piezasUsadas &&
+                    o.cierreServicio.piezasUsadas.length > 0 &&
+                    !o.cierreServicio.piezasValidadasPorAdmin && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-medium">
+                      ⚠️ Piezas por validar
+                    </span>
+                  )}
+                </div>
                 <span
                   className="text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white"
                   style={{ backgroundColor: borderColor }}
