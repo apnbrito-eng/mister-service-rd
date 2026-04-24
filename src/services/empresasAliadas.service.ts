@@ -51,7 +51,7 @@ export async function obtenerEmpresa(id: string): Promise<EmpresaAliada | null> 
 }
 
 export async function listarEmpresas(soloActivas?: boolean): Promise<EmpresaAliada[]> {
-  let q = soloActivas
+  const q = soloActivas
     ? query(collection(db, COL), where('activa', '==', true))
     : query(collection(db, COL));
   const snap = await getDocs(q);

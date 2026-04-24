@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 import { getAdminAuth, getAdminFirestore } from '../_lib/firebaseAdmin.js';
 import { toolsParaRol, ejecutarTool, contextoFechaRD, tieneAccesoAsistenteIA, type Rol as RolTool } from '../_lib/iaTools.js';
 
@@ -410,12 +410,19 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
     // (privacy + ruido). Timestamps usan Timestamp.now() porque serverTimestamp
     // no funciona dentro de arrayUnion y aquí escribimos el array completo.
     const ahoraTs = Timestamp.now();
-    const mensajesPersistibles = [
-      ...(mensajes as Mensaje[]).map((m) => ({
-        role: m.role,
-        content: m.content,
+
+    // Mensajes que ESTE request agrega: el último user del body + la respuesta
+    // del assistant. Los mensajes previos del body ya viven en Firestore (en
+    // continuaciones) o son los iniciales (en una conversación nueva). Esta
+    // separación es clave para que el branch de UPDATE haga append en
+    // transacción y no overwrite — evita la race cross-tab donde 2 pestañas
+    // del mismo usuario con el mismo conversacionId se pisan los mensajes.
+    const mensajesNuevos = [
+      {
+        role: lastMensaje.role,
+        content: lastMensaje.content,
         timestamp: ahoraTs,
-      })),
+      },
       {
         role: 'assistant' as const,
         content: respuesta,
@@ -426,31 +433,64 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
     let conversacionIdOut: string | null = conversacionIdInput;
     try {
       if (docRefExistente) {
-        // Update: sobrescribimos mensajes con el array completo + acumulamos
-        // tokens/costo con FieldValue.increment.
-        await docRefExistente.update({
-          mensajes: mensajesPersistibles,
-          ultimoMensajeAt: ahoraTs,
-          tokensInputTotal: FieldValue.increment(totalTokensInput),
-          tokensOutputTotal: FieldValue.increment(totalTokensOutput),
-          costoTotalUSD: FieldValue.increment(costoEstimadoUSD),
-          cantidadMensajes: mensajesPersistibles.length,
+        // Update transaccional: leemos el array actual de mensajes dentro de
+        // la tx, hacemos APPEND de los mensajes nuevos y acumulamos tokens/
+        // costo sumando lo existente. Si 2 pestañas escriben concurrentemente,
+        // Firestore reintenta la tx y ambas terminan agregando sus mensajes
+        // sin pisarse. tokensInputTotal/etc. no usan FieldValue.increment
+        // porque ya estamos dentro de una transacción y conviene mantener una
+        // sola fuente de verdad (el snapshot leído).
+        const refExistente = docRefExistente;
+        await db.runTransaction(async (tx) => {
+          const snap = await tx.get(refExistente);
+          if (!snap.exists) {
+            throw new Error('Conversación desaparecida durante la transacción');
+          }
+          const data = snap.data() as Record<string, unknown> | undefined;
+          const mensajesActuales = Array.isArray(data?.mensajes) ? (data!.mensajes as unknown[]) : [];
+          const tokensInputPrev = typeof data?.tokensInputTotal === 'number' ? data!.tokensInputTotal as number : 0;
+          const tokensOutputPrev = typeof data?.tokensOutputTotal === 'number' ? data!.tokensOutputTotal as number : 0;
+          const costoPrev = typeof data?.costoTotalUSD === 'number' ? data!.costoTotalUSD as number : 0;
+
+          const mensajesActualizados = [...mensajesActuales, ...mensajesNuevos];
+          tx.update(refExistente, {
+            mensajes: mensajesActualizados,
+            ultimoMensajeAt: ahoraTs,
+            tokensInputTotal: tokensInputPrev + totalTokensInput,
+            tokensOutputTotal: tokensOutputPrev + totalTokensOutput,
+            costoTotalUSD: Math.round((costoPrev + costoEstimadoUSD) * 1_000_000) / 1_000_000,
+            cantidadMensajes: mensajesActualizados.length,
+          });
         });
       } else {
         // Nueva conversación: stripear undefined en el payload (convención
         // del proyecto). Todos los campos requeridos están presentes; los
         // opcionales (usuarioEmail, usuarioNombre) solo se incluyen si hay
-        // valor concreto.
+        // valor concreto. Aquí persistimos TODO el historial recibido (mensajes
+        // iniciales del body + respuesta del assistant), no solo los "nuevos",
+        // porque al ser una conversación nueva no hay nada previo en Firestore.
+        const mensajesIniciales = [
+          ...(mensajes as Mensaje[]).map((m) => ({
+            role: m.role,
+            content: m.content,
+            timestamp: ahoraTs,
+          })),
+          {
+            role: 'assistant' as const,
+            content: respuesta,
+            timestamp: ahoraTs,
+          },
+        ];
         const payload: Record<string, unknown> = {
           usuarioId: uid,
           usuarioRol: rol,
           iniciadaAt: ahoraTs,
           ultimoMensajeAt: ahoraTs,
-          mensajes: mensajesPersistibles,
+          mensajes: mensajesIniciales,
           tokensInputTotal: totalTokensInput,
           tokensOutputTotal: totalTokensOutput,
           costoTotalUSD: costoEstimadoUSD,
-          cantidadMensajes: mensajesPersistibles.length,
+          cantidadMensajes: mensajesIniciales.length,
         };
         if (perfil.nombre) payload.usuarioNombre = perfil.nombre;
         if (userEmail) payload.usuarioEmail = userEmail;

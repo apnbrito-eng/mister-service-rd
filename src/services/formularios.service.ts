@@ -80,7 +80,7 @@ export async function obtenerFormularioPorSlug(slug: string): Promise<Formulario
 }
 
 export async function listarFormularios(empresaId?: string): Promise<FormularioServicio[]> {
-  let q = empresaId
+  const q = empresaId
     ? query(collection(db, COL), where('empresaId', '==', empresaId))
     : query(collection(db, COL));
   const snap = await getDocs(q);

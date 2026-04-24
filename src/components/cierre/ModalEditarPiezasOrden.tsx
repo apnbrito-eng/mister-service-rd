@@ -5,8 +5,9 @@ import toast from 'react-hot-toast';
 import { db } from '../../firebase/config';
 import { useApp } from '../../context/AppContext';
 import { crearRegistroAuditoria, formatMoneda } from '../../utils';
+import { iconoCondicion, iconoOrigen, etiquetaOrigen } from '../../utils/piezas';
 import { calcularTotales, borrarFotoPieza } from '../../services/piezas.service';
-import type { CondicionPieza, OrdenServicio, OrigenPieza, PiezaUsada } from '../../types';
+import type { OrdenServicio, PiezaUsada } from '../../types';
 import Modal from '../Modal';
 import PiezaFormModal from './PiezaFormModal';
 
@@ -27,18 +28,6 @@ import PiezaFormModal from './PiezaFormModal';
 interface Props {
   orden: OrdenServicio | null;
   onClose: () => void;
-}
-
-function iconoCondicion(c: CondicionPieza): string {
-  return c === 'nueva' ? '✨' : '♻️';
-}
-
-function iconoOrigen(o: OrigenPieza): string {
-  return o === 'inventario_taller' ? '🏭' : o === 'inventario_vehiculo' ? '🚗' : '🛒';
-}
-
-function etiquetaOrigen(o: OrigenPieza): string {
-  return o === 'inventario_taller' ? 'Taller' : o === 'inventario_vehiculo' ? 'Vehículo' : 'Externa';
 }
 
 export default function ModalEditarPiezasOrden({ orden, onClose }: Props) {

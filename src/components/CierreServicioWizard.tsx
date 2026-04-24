@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, PiezaUsada, CondicionPieza, OrigenPieza } from '../types';
+import { OrdenServicio, PiezaUsada } from '../types';
 import { subirFotoCierre, distanciaMetros, obtenerUbicacionGPS, type GpsErrorInfo } from '../services/storage.service';
 import { calcularTotales, borrarFotoPieza } from '../services/piezas.service';
 import { crearRegistroAuditoria } from '../utils';
+import { iconoCondicion, iconoOrigen, etiquetaOrigen } from '../utils/piezas';
 import Modal from './Modal';
 import PiezaFormModal from './cierre/PiezaFormModal';
 import {
@@ -26,18 +27,6 @@ function mensajeGpsError(err: GpsErrorInfo | null): string {
     case 3: return 'GPS tardó demasiado. Sal al exterior y vuelve a intentar.';
     default: return err.message || 'No pudimos obtener tu ubicación GPS.';
   }
-}
-
-function iconoCondicion(c: CondicionPieza): string {
-  return c === 'nueva' ? '✨' : '♻️';
-}
-
-function iconoOrigen(o: OrigenPieza): string {
-  return o === 'inventario_taller' ? '🏭' : o === 'inventario_vehiculo' ? '🚗' : '🛒';
-}
-
-function etiquetaOrigen(o: OrigenPieza): string {
-  return o === 'inventario_taller' ? 'Taller' : o === 'inventario_vehiculo' ? 'Vehículo' : 'Externa';
 }
 
 interface Props {

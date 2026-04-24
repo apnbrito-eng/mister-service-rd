@@ -172,7 +172,6 @@ export default function Ordenes() {
       }
     );
     return () => unsub();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOrden?.id]);
 
   // Pre-fill approval input when selecting an order with suggested price

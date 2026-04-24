@@ -165,7 +165,7 @@ export function listarUltimasQuincenas(n: number = 12): string[] {
   const out: string[] = [];
   const hoy = new Date();
   // Empezar por la quincena actual y retroceder
-  let cursor = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const cursor = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
   let actual = calcularQuincenaActual(cursor);
   out.push(actual);
   // Saltos de 15 días aprox para enumerar

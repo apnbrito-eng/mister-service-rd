@@ -12,10 +12,11 @@ import {
   arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, Cotizacion, ItemCotizacion, Usuario, PagoOrden, CondicionPieza, OrigenPieza } from '../types';
+import { OrdenServicio, Cotizacion, ItemCotizacion, Usuario, PagoOrden } from '../types';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import { crearRegistroAuditoria, formatFecha, formatMoneda, parseOrden } from '../utils';
+import { iconoCondicion, iconoOrigen, etiquetaOrigen } from '../utils/piezas';
 import { siguienteNumeroFactura } from '../services/contadores.service';
 import { registrarComisionPorFactura, desglosarTotalConITBIS, calcularCostoPiezasDeItems } from '../utils/comisiones';
 import { obtenerConfigFiscal } from '../services/configFiscal.service';
@@ -32,18 +33,6 @@ import toast from 'react-hot-toast';
 
 function fmtMonto(n: number): string {
   return `RD$${Number(n || 0).toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
-
-function iconoCondicionPieza(c: CondicionPieza): string {
-  return c === 'nueva' ? '✨' : '♻️';
-}
-
-function iconoOrigenPieza(o: OrigenPieza): string {
-  return o === 'inventario_taller' ? '🏭' : o === 'inventario_vehiculo' ? '🚗' : '🛒';
-}
-
-function etiquetaOrigenPieza(o: OrigenPieza): string {
-  return o === 'inventario_taller' ? 'Taller' : o === 'inventario_vehiculo' ? 'Vehículo' : 'Externa';
 }
 
 interface ItemEditable extends ItemCotizacion {
@@ -192,13 +181,15 @@ export default function FacturacionPendiente() {
                     >
                       Procesar <ArrowRight size={12} />
                     </button>
-                    <button
-                      onClick={() => setEditandoOrdenAdmin(o)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold"
-                      title="Editar cualquier campo de la orden"
-                    >
-                      <Pencil size={12} /> Editar orden completa
-                    </button>
+                    {esAdmin && (
+                      <button
+                        onClick={() => setEditandoOrdenAdmin(o)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold"
+                        title="Editar cualquier campo de la orden"
+                      >
+                        <Pencil size={12} /> Editar orden completa
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-xs mt-3 bg-gray-50 rounded-lg p-2">
@@ -253,10 +244,10 @@ export default function FacturacionPendiente() {
                               <span className="font-medium text-gray-900 truncate">📦 {p.nombre}</span>
                               {p.marca && <span className="text-gray-500">· {p.marca}</span>}
                               <span className="text-gray-500">
-                                {iconoCondicionPieza(p.condicion)} {p.condicion === 'nueva' ? 'Nueva' : 'Usada'}
+                                {iconoCondicion(p.condicion)} {p.condicion === 'nueva' ? 'Nueva' : 'Usada'}
                               </span>
                               <span className="text-gray-500">
-                                {iconoOrigenPieza(p.origen)} {etiquetaOrigenPieza(p.origen)}
+                                {iconoOrigen(p.origen)} {etiquetaOrigen(p.origen)}
                               </span>
                             </div>
                             <span className="text-gray-700 font-medium">

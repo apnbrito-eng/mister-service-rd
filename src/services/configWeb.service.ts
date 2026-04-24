@@ -114,12 +114,16 @@ export async function obtenerConfigWeb(): Promise<ConfigWeb> {
   }
 }
 
-/** Guarda la config web en Firestore */
+/** Guarda la config web en Firestore (merge para no pisar campos no incluidos) */
 export async function guardarConfigWeb(config: ConfigWeb): Promise<void> {
-  await setDoc(CONFIG_DOC, {
-    ...config,
-    updatedAt: Timestamp.now(),
-  });
+  await setDoc(
+    CONFIG_DOC,
+    {
+      ...config,
+      updatedAt: Timestamp.now(),
+    },
+    { merge: true },
+  );
 }
 
 /** Sube una imagen para la web pública y retorna la URL */

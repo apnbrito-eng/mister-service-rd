@@ -353,7 +353,6 @@ export function getTecnicoColor(nombre: string): string {
   return TECNICO_COLORS[nombre] || TECNICO_COLORS.default;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function parseFirestoreDate(val: unknown): Date | null {
   if (!val) return null;
   if (val instanceof Date) return val;

@@ -59,10 +59,16 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
   // render, que a su vez haría que los consumidores con useEffect-dependencia
   // bucleen).
   const mensajesRef = useRef<Mensaje[]>(mensajes);
-  const conversacionIdRef = useRef<string | null>(conversacionId);
+  // conversacionIdRef es la fuente de verdad SINCRÓNICA. El setState equivalente
+  // se actualiza también para que el render lo refleje, pero las decisiones
+  // dentro de `enviar()` (¿ya hay conversacionId? ¿debo crear uno?) se basan en
+  // el ref para evitar la race rapid-fire: 2 clicks consecutivos en "Enviar"
+  // antes de que React reconcilie el setState dispararían 2 fetches sin
+  // conversacionId, y el backend crearía 2 docs distintos. Con el ref, la
+  // segunda llamada ya ve el id de la primera.
+  const conversacionIdRef = useRef<string | null>(null);
 
   useEffect(() => { mensajesRef.current = mensajes; }, [mensajes]);
-  useEffect(() => { conversacionIdRef.current = conversacionId; }, [conversacionId]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -89,6 +95,7 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
     setError(null);
     setTokensSesion({ input: 0, output: 0, costoUSD: 0 });
     setConversacionId(null);
+    conversacionIdRef.current = null;
   }, []);
 
   const enviar = useCallback(async (texto: string) => {
@@ -171,6 +178,11 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
       }));
       const convId = (data as { conversacionId?: unknown }).conversacionId;
       if (typeof convId === 'string' && convId.length > 0 && conversacionIdRef.current === null) {
+        // Setear AMBOS: el ref (sincrónico, gana la primera respuesta) y el
+        // state (visible al render). Si una segunda llamada concurrente entró
+        // antes de que esta respuesta volviera, ya escribió su propio id en el
+        // ref — en ese caso este branch no entra y respetamos el primero.
+        conversacionIdRef.current = convId;
         setConversacionId(convId);
       }
     } catch (err: unknown) {
