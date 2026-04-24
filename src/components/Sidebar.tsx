@@ -2,10 +2,11 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, Calendar, Map,
   Users, UserCog, FileText, Settings, LogOut, Wrench,
-  TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight,
+  TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight, ChevronDown,
   Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
   CalendarCheck, Sparkles, History,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useApp } from '../context/AppContext';
@@ -20,6 +21,45 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
+type SidebarItem = {
+  to: string;
+  icon: LucideIcon;
+  label: string;
+  show: boolean;
+  badge?: number;
+};
+
+type SidebarSection = {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  items: SidebarItem[];
+  defaultExpanded: boolean;
+};
+
+type SidebarNode =
+  | { kind: 'item'; item: SidebarItem }
+  | { kind: 'section'; section: SidebarSection };
+
+const STORAGE_KEY = 'sidebar_sections_state';
+
+function loadState(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveState(state: Record<string, boolean>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    /* silencio */
+  }
+}
+
 export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { userProfile } = useApp();
   const navigate = useNavigate();
@@ -27,6 +67,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [citasCount, setCitasCount] = useState(0);
   const [solicitudesCount, setSolicitudesCount] = useState(0);
   const [facturacionPendienteCount, setFacturacionPendienteCount] = useState(0);
+  const [sectionsState, setSectionsState] = useState<Record<string, boolean>>(loadState);
 
   useEffect(() => {
     const q1 = query(collection(db, 'standby_piezas'), where('estado', '!=', 'llego'));
@@ -62,44 +103,206 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   // Permisos granulares
   const p = (acc: AccionPermiso) => puede(userProfile, acc);
 
-  const navItems = [
-    { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', show: true },
-    { to: '/admin/agenda-dia', icon: CalendarCheck, label: 'Agenda del Día', show: p('ordenesVer') },
-    { to: '/admin/ordenes', icon: ClipboardList, label: 'Órdenes', show: p('ordenesVer') },
-    { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
-    { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
-    { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios', show: isAdmin || isOperaria || isSecretaria },
-    { to: '/admin/standby', icon: Clock, label: 'Stand-by / Piezas', badge: standbyCount, show: p('ordenesVer') },
-    { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
-    { to: '/admin/clientes', icon: Users, label: 'Clientes', show: p('clientesVer') },
-    { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: p('cotizacionesVer') },
-    { to: '/admin/facturas', icon: Receipt, label: 'Conduces de Garantía', show: p('facturasVer') },
-    { to: '/admin/facturacion-pendiente', icon: Inbox, label: 'Conduces Pendientes', badge: facturacionPendienteCount, show: isAdmin || userProfile?.rol === 'coordinadora' },
-    { to: '/admin/taller', icon: Wrench, label: 'Equipos Taller', show: p('ordenesVer') },
-    { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: p('ordenesVer') },
-    { to: '/admin/mantenimiento', icon: Calendar, label: 'Mantenimiento', show: p('ordenesVer') },
-    { to: '/admin/gastos', icon: DollarSign, label: 'Gastos e Ingresos', show: p('gastosVer') },
-    { to: '/admin/rendimiento', icon: TrendingUp, label: 'Rendimiento', show: p('rendimientoVer') },
-    { to: '/admin/metricas-mensuales', icon: TrendingUp, label: 'Métricas del Mes', show: p('rendimientoVer') || isAdmin },
-    { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
-    { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: isAdmin || p('configuracionVer') },
-    { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: isAdmin || userProfile?.rol === 'coordinadora' },
-    { to: '/admin/avances', icon: Wallet, label: 'Avances a Empleados', show: p('avancesGestionar') },
-    { to: '/admin/estado-resultado', icon: TrendingUp, label: 'Estado de Resultado', show: isAdmin || userProfile?.rol === 'coordinadora' },
-    { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: isAdmin || userProfile?.rol === 'coordinadora' || p('ordenesVerEliminadas') },
-    { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: isAdmin || p('configuracionModificar') },
-    { to: '/admin/bancos', icon: Building2, label: 'Bancos', show: p('bancosGestionar') },
-    { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionModificar') || userProfile?.rol === 'operaria' || isAdmin },
-    { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
-    { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: p('personalModificar') },
-    { to: '/admin/web', icon: Globe, label: 'Página Web', show: isAdmin },
-    { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: isAdmin },
-    { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: isAdmin },
-    { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: isAdmin },
-    { to: '/admin/asistente', icon: Sparkles, label: 'Asistente IA · pantalla completa', show: userProfile?.rol === 'administrador' },
-    { to: '/admin/asistente/historial', icon: History, label: 'Historial IA', show: userProfile?.rol === 'administrador' },
-    { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: p('configuracionVer') },
+  // Estructura del sidebar: secciones colapsables + items sueltos
+  const estructura: SidebarNode[] = [
+    // Dashboard — item suelto
+    {
+      kind: 'item',
+      item: { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', show: true },
+    },
+    // Operaciones
+    {
+      kind: 'section',
+      section: {
+        id: 'operaciones',
+        label: 'Operaciones',
+        icon: ClipboardList,
+        defaultExpanded: true,
+        items: [
+          { to: '/admin/agenda-dia', icon: CalendarCheck, label: 'Agenda del Día', show: p('ordenesVer') },
+          { to: '/admin/ordenes', icon: ClipboardList, label: 'Órdenes', show: p('ordenesVer') },
+          { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
+          { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
+          { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios', show: isAdmin || isOperaria || isSecretaria },
+          { to: '/admin/standby', icon: Clock, label: 'Stand-by / Piezas', badge: standbyCount, show: p('ordenesVer') },
+          { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
+          { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
+          { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: isAdmin || userProfile?.rol === 'coordinadora' || p('ordenesVerEliminadas') },
+        ],
+      },
+    },
+    // Clientes — item suelto
+    {
+      kind: 'item',
+      item: { to: '/admin/clientes', icon: Users, label: 'Clientes', show: p('clientesVer') },
+    },
+    // Documentos
+    {
+      kind: 'section',
+      section: {
+        id: 'documentos',
+        label: 'Documentos',
+        icon: FileText,
+        defaultExpanded: true,
+        items: [
+          { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: p('cotizacionesVer') },
+          { to: '/admin/facturas', icon: Receipt, label: 'Conduces de Garantía', show: p('facturasVer') },
+          { to: '/admin/facturacion-pendiente', icon: Inbox, label: 'Conduces Pendientes', badge: facturacionPendienteCount, show: isAdmin || userProfile?.rol === 'coordinadora' },
+        ],
+      },
+    },
+    // Catálogo e Inventario
+    {
+      kind: 'section',
+      section: {
+        id: 'catalogo_inventario',
+        label: 'Catálogo e Inventario',
+        icon: Boxes,
+        defaultExpanded: false,
+        items: [
+          { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: p('ordenesVer') },
+          { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionModificar') || userProfile?.rol === 'operaria' || isAdmin },
+          { to: '/admin/taller', icon: Wrench, label: 'Equipos Taller', show: p('ordenesVer') },
+          { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: isAdmin || p('configuracionModificar') },
+        ],
+      },
+    },
+    // Finanzas
+    {
+      kind: 'section',
+      section: {
+        id: 'finanzas',
+        label: 'Finanzas',
+        icon: DollarSign,
+        defaultExpanded: true,
+        items: [
+          { to: '/admin/gastos', icon: DollarSign, label: 'Gastos e Ingresos', show: p('gastosVer') },
+          { to: '/admin/bancos', icon: Building2, label: 'Bancos', show: p('bancosGestionar') },
+          { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: isAdmin || userProfile?.rol === 'coordinadora' },
+          { to: '/admin/avances', icon: Wallet, label: 'Avances a Empleados', show: p('avancesGestionar') },
+          { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: isAdmin || p('configuracionVer') },
+          { to: '/admin/estado-resultado', icon: TrendingUp, label: 'Estado de Resultado', show: isAdmin || userProfile?.rol === 'coordinadora' },
+          { to: '/admin/rendimiento', icon: TrendingUp, label: 'Rendimiento', show: p('rendimientoVer') },
+          { to: '/admin/metricas-mensuales', icon: TrendingUp, label: 'Métricas del Mes', show: p('rendimientoVer') || isAdmin },
+        ],
+      },
+    },
+    // Mantenimiento — item suelto
+    {
+      kind: 'item',
+      item: { to: '/admin/mantenimiento', icon: Calendar, label: 'Mantenimiento', show: p('ordenesVer') },
+    },
+    // Web y Solicitudes
+    {
+      kind: 'section',
+      section: {
+        id: 'web_solicitudes',
+        label: 'Web y Solicitudes',
+        icon: Globe,
+        defaultExpanded: false,
+        items: [
+          { to: '/admin/web', icon: Globe, label: 'Página Web', show: isAdmin },
+          { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: isAdmin },
+          { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: isAdmin },
+          { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: isAdmin },
+        ],
+      },
+    },
+    // Asistente IA
+    {
+      kind: 'section',
+      section: {
+        id: 'asistente_ia',
+        label: 'Asistente IA',
+        icon: Sparkles,
+        defaultExpanded: false,
+        items: [
+          { to: '/admin/asistente', icon: Sparkles, label: 'Chat (pantalla completa)', show: userProfile?.rol === 'administrador' },
+          { to: '/admin/asistente/historial', icon: History, label: 'Historial IA', show: userProfile?.rol === 'administrador' },
+        ],
+      },
+    },
+    // Sistema
+    {
+      kind: 'section',
+      section: {
+        id: 'sistema',
+        label: 'Sistema',
+        icon: Settings,
+        defaultExpanded: false,
+        items: [
+          { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
+          { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: p('personalModificar') },
+          { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: p('configuracionVer') },
+        ],
+      },
+    },
   ];
+
+  // Helpers para el estado de expansión de secciones
+  const isExpanded = (id: string, defaultExpanded: boolean): boolean => {
+    return id in sectionsState ? sectionsState[id] : defaultExpanded;
+  };
+
+  const toggleSection = (id: string, defaultExpanded: boolean) => {
+    setSectionsState((prev) => {
+      const current = id in prev ? prev[id] : defaultExpanded;
+      const next = { ...prev, [id]: !current };
+      saveState(next);
+      return next;
+    });
+  };
+
+  // Aplana todos los items visibles (para modo collapsed)
+  const itemsPlanos: SidebarItem[] = estructura.flatMap((node) => {
+    if (node.kind === 'item') {
+      return node.item.show ? [node.item] : [];
+    }
+    return node.section.items.filter((it) => it.show);
+  });
+
+  // Clases compartidas del NavLink
+  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+    `flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors text-sm relative group ${
+      isActive
+        ? 'bg-white/20 text-white font-medium'
+        : 'text-blue-200 hover:bg-white/10 hover:text-white'
+    }`;
+
+  // Render de un item (usado tanto colapsado como expandido dentro de secciones)
+  const renderItem = (item: SidebarItem, opts?: { tabDisabled?: boolean; indent?: boolean }) => (
+    <NavLink
+      key={item.to}
+      to={item.to}
+      tabIndex={opts?.tabDisabled ? -1 : undefined}
+      className={({ isActive }) =>
+        `${navLinkClass({ isActive })} ${opts?.indent && !collapsed ? 'pl-8' : ''}`
+      }
+    >
+      <item.icon size={18} className="flex-shrink-0" />
+      {!collapsed && (
+        <>
+          <span className="truncate">{item.label}</span>
+          {item.badge !== undefined && item.badge > 0 && (
+            <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+              {item.badge}
+            </span>
+          )}
+        </>
+      )}
+      {collapsed && item.badge !== undefined && item.badge > 0 && (
+        <span className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+          {item.badge > 9 ? '9+' : item.badge}
+        </span>
+      )}
+      {/* Tooltip for collapsed */}
+      {collapsed && (
+        <div className="absolute left-full ml-2 bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+          {item.label}
+        </div>
+      )}
+    </NavLink>
+  );
 
   return (
     <aside
@@ -132,42 +335,48 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
       {/* Nav items */}
       <nav className="flex-1 overflow-y-auto py-2">
-        {navItems.filter(item => item.show).map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors text-sm relative group ${
-                isActive
-                  ? 'bg-white/20 text-white font-medium'
-                  : 'text-blue-200 hover:bg-white/10 hover:text-white'
-              }`
+        {collapsed ? (
+          // Modo colapsado: todos los items en un listado plano, sin headers
+          itemsPlanos.map((item) => renderItem(item))
+        ) : (
+          // Modo expandido: secciones colapsables + items sueltos
+          estructura.map((node, idx) => {
+            if (node.kind === 'item') {
+              if (!node.item.show) return null;
+              return renderItem(node.item);
             }
-          >
-            <item.icon size={18} className="flex-shrink-0" />
-            {!collapsed && (
-              <>
-                <span className="truncate">{item.label}</span>
-                {item.badge !== undefined && item.badge > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
-                    {item.badge}
-                  </span>
-                )}
-              </>
-            )}
-            {collapsed && item.badge !== undefined && item.badge > 0 && (
-              <span className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                {item.badge > 9 ? '9+' : item.badge}
-              </span>
-            )}
-            {/* Tooltip for collapsed */}
-            {collapsed && (
-              <div className="absolute left-full ml-2 bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
-                {item.label}
+            const sec = node.section;
+            const visibleItems = sec.items.filter((it) => it.show);
+            if (visibleItems.length === 0) return null;
+            const expanded = isExpanded(sec.id, sec.defaultExpanded);
+            return (
+              <div key={sec.id} className={idx > 0 ? 'mt-1' : ''}>
+                <button
+                  type="button"
+                  onClick={() => toggleSection(sec.id, sec.defaultExpanded)}
+                  aria-expanded={expanded}
+                  className="flex items-center gap-3 px-4 py-2 mx-2 w-[calc(100%-1rem)] rounded-lg text-blue-300 hover:bg-white/5 hover:text-white transition-colors text-xs uppercase tracking-wide font-semibold"
+                >
+                  <sec.icon size={16} className="flex-shrink-0" />
+                  <span className="truncate flex-1 text-left">{sec.label}</span>
+                  <ChevronDown
+                    size={14}
+                    className={`flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-0' : '-rotate-90'}`}
+                  />
+                </button>
+                <div
+                  className={`overflow-hidden transition-all duration-200 ease-in-out ${
+                    expanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
+                  }`}
+                >
+                  {visibleItems.map((item) =>
+                    renderItem(item, { tabDisabled: !expanded, indent: true })
+                  )}
+                </div>
               </div>
-            )}
-          </NavLink>
-        ))}
+            );
+          })
+        )}
       </nav>
 
       {/* Logout */}
