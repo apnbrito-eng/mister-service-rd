@@ -5,9 +5,11 @@ import { ConfigGPS, ProveedorGPS, Personal, OrdenServicio } from '../types';
 import { obtenerConfigGPS, guardarConfigGPS } from '../services/gps.service';
 import { geocodificarDireccion } from '../services/geocoding.service';
 import { suscribirConfigFiscal, actualizarConfigFiscal, ConfigFiscal } from '../services/configFiscal.service';
+import { suscribirConfigEmpresa, actualizarConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa } from '../services/configEmpresa.service';
+import { suscribirTiposEquipo, actualizarTiposEquipo } from '../services/configTiposEquipo.service';
 import { collection, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { parseOrden } from '../utils';
+import { parseOrden, TIPOS_EQUIPO } from '../utils';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 
@@ -137,13 +139,19 @@ export default function Configuracion() {
     abortRef.current?.abort();
   };
 
-  const [empresa, setEmpresa] = useState({
-    nombre: 'Mister Service RD',
-    rnc: '000-000000-0',
-    direccion: 'Santo Domingo, República Dominicana',
-    telefono: '809-555-0000',
-    email: 'info@misterservicerd.com',
-  });
+  const [empresa, setEmpresa] = useState<ConfigEmpresa>({ ...CONFIG_EMPRESA_DEFAULT });
+  const [empresaSaving, setEmpresaSaving] = useState(false);
+  const [tiposEquipo, setTiposEquipo] = useState<string[]>([...TIPOS_EQUIPO]);
+  const [nuevoTipo, setNuevoTipo] = useState('');
+
+  useEffect(() => {
+    const unsubEmpresa = suscribirConfigEmpresa(cfg => setEmpresa(cfg));
+    const unsubTipos = suscribirTiposEquipo(lista => setTiposEquipo(lista));
+    return () => {
+      unsubEmpresa();
+      unsubTipos();
+    };
+  }, []);
 
   const [gpsConfig, setGpsConfig] = useState<ConfigGPS>({
     proveedor: 'Dispositivo del técnico',
@@ -163,26 +171,59 @@ export default function Configuracion() {
     });
   }, []);
 
-  const [tiposEquipo, setTiposEquipo] = useState([
-    'Lavadora', 'Secadora', 'Nevera', 'Estufa', 'Aire Acondicionado', 'Microondas', 'Lavavajillas',
-  ]);
-  const [nuevoTipo, setNuevoTipo] = useState('');
-
-  const handleSaveEmpresa = () => {
-    toast.success('Datos de empresa guardados');
+  const handleSaveEmpresa = async () => {
+    if (!puedeModificar) return;
+    if (empresaSaving) return;
+    setEmpresaSaving(true);
+    try {
+      await actualizarConfigEmpresa(
+        {
+          nombre: empresa.nombre?.trim() || '',
+          rnc: empresa.rnc?.trim() || '',
+          direccion: empresa.direccion?.trim() || '',
+          telefono: empresa.telefono?.trim() || '',
+          email: empresa.email?.trim() || '',
+        },
+        userProfile?.nombre,
+      );
+      toast.success('Datos de la empresa guardados correctamente');
+    } catch (err) {
+      console.error('[Configuracion] Error guardando empresa:', err);
+      toast.error('No se pudo guardar. Intenta de nuevo.');
+    } finally {
+      setEmpresaSaving(false);
+    }
   };
 
-  const handleAddTipo = () => {
-    if (!nuevoTipo.trim()) return;
-    if (tiposEquipo.includes(nuevoTipo.trim())) { toast.error('Ya existe'); return; }
-    setTiposEquipo([...tiposEquipo, nuevoTipo.trim()]);
-    setNuevoTipo('');
-    toast.success('Tipo agregado');
+  const handleAddTipo = async () => {
+    if (!puedeModificar) return;
+    const t = nuevoTipo.trim();
+    if (!t) return;
+    if (tiposEquipo.includes(t)) {
+      toast.error('Ese tipo ya existe');
+      return;
+    }
+    const nuevaLista = [...tiposEquipo, t];
+    try {
+      await actualizarTiposEquipo(nuevaLista, userProfile?.nombre);
+      setNuevoTipo('');
+      toast.success('Tipo agregado');
+    } catch (err) {
+      console.error('[Configuracion] Error agregando tipo:', err);
+      toast.error('No se pudo guardar. Intenta de nuevo.');
+    }
   };
 
-  const handleRemoveTipo = (tipo: string) => {
-    setTiposEquipo(tiposEquipo.filter(t => t !== tipo));
-    toast.success('Tipo eliminado');
+  const handleRemoveTipo = async (tipo: string) => {
+    if (!puedeModificar) return;
+    const nuevaLista = tiposEquipo.filter(t => t !== tipo);
+    try {
+      await actualizarTiposEquipo(nuevaLista, userProfile?.nombre);
+      toast.success('Tipo eliminado');
+    } catch (err) {
+      console.error('[Configuracion] Error quitando tipo:', err);
+      toast.error('No se pudo guardar. Intenta de nuevo.');
+    }
   };
 
   const handleSaveGPS = async () => {
@@ -277,10 +318,19 @@ export default function Configuracion() {
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
           </div>
           {puedeModificar && (
-            <button onClick={handleSaveEmpresa}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors">
-              Guardar Cambios
+            <button
+              onClick={handleSaveEmpresa}
+              disabled={empresaSaving}
+              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+            >
+              {empresaSaving ? 'Guardando...' : 'Guardar Cambios'}
             </button>
+          )}
+          {empresa.updatedAt && (
+            <p className="text-[11px] text-gray-400">
+              Última actualización: {empresa.updatedAt.toLocaleString('es-DO')}
+              {empresa.updatedPor ? ` · por ${empresa.updatedPor}` : ''}
+            </p>
           )}
         </div>
       </div>
@@ -422,6 +472,9 @@ export default function Configuracion() {
             Agregar
           </button>
         </div>
+        <p className="text-xs text-gray-500 mt-3">
+          Nota: estos tipos se guardan, pero los formularios de órdenes siguen usando la lista del sistema. Agregar un tipo nuevo aquí no lo hace seleccionable al crear órdenes.
+        </p>
       </div>
 
       {/* GPS Vehicular */}
