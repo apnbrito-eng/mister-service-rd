@@ -3,6 +3,7 @@ import { User, onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot, getDocs, collection, query, where } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import { Usuario } from '../types';
+import { useAutoRefreshToken } from '../hooks/useAutoRefreshToken';
 
 interface AppContextType {
   currentUser: User | null;
@@ -27,6 +28,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Ref to hold the profile listener unsubscribe so we can clean it up
   const profileUnsubRef = useRef<(() => void) | null>(null);
+
+  // Auto-refresh del ID token de Firebase cada 45 min para evitar que la
+  // sesión expire mientras la pestaña está abierta pero inactiva.
+  useAutoRefreshToken(currentUser);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
