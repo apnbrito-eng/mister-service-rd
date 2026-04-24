@@ -12,6 +12,7 @@ import {
 import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Logo from '../components/Logo';
+import WebcamCapture from '../components/ponche/WebcamCapture';
 import {
   subirFotoPonche,
   detectarDispositivo,
@@ -70,6 +71,9 @@ export default function Ponche() {
 
   // Lightbox de foto
   const [fotoLightbox, setFotoLightbox] = useState<string | null>(null);
+
+  // Modal de webcam (solo desktop)
+  const [mostrarWebcam, setMostrarWebcam] = useState(false);
 
   // Resolver personalId real desde la colección `personal` (por uid o email)
   const [personalId, setPersonalId] = useState<string | null>(null);
@@ -168,27 +172,24 @@ export default function Ponche() {
     navigate('/login');
   };
 
-  // Cuando el usuario toca "Ponchar Entrada/Salida", abrir el input file
+  // Cuando el usuario toca "Ponchar Entrada/Salida":
+  // - En móvil: input file nativo con capture="user" (cámara frontal).
+  // - En desktop: abrir modal WebcamCapture con getUserMedia (capture="user"
+  //   lo ignora el navegador en PC/Mac y termina abriendo el selector de archivos).
   const iniciarPonche = (tipo: TipoPonche) => {
     setTipoPendiente(tipo);
     setError(null);
-    // Disparar input file (cámara frontal en móvil)
-    inputFotoRef.current?.click();
+    const dispositivo = detectarDispositivo();
+    if (dispositivo === 'desktop') {
+      setMostrarWebcam(true);
+    } else {
+      // Disparar input file (cámara frontal en móvil)
+      inputFotoRef.current?.click();
+    }
   };
 
-  // Al seleccionar foto: iniciar preview + GPS en paralelo
-  const onFotoSeleccionada = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    // Reset input para permitir volver a seleccionar la misma foto si cancela
-    if (inputFotoRef.current) inputFotoRef.current.value = '';
-    if (!file) return;
-
-    // Validación de tamaño (5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('La foto es demasiado grande (máximo 5MB).');
-      return;
-    }
-
+  // Procesar una foto (ya sea de input file o de webcam): set preview + GPS en paralelo.
+  const procesarFotoCapturada = async (file: File) => {
     // Crear preview
     if (fotoPreview) URL.revokeObjectURL(fotoPreview);
     const previewUrl = URL.createObjectURL(file);
@@ -207,6 +208,39 @@ export default function Ponche() {
     } finally {
       setObteniendoGPS(false);
     }
+  };
+
+  // Al seleccionar foto (flujo móvil con input file)
+  const onFotoSeleccionada = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset input para permitir volver a seleccionar la misma foto si cancela
+    if (inputFotoRef.current) inputFotoRef.current.value = '';
+    if (!file) return;
+
+    // Validación de tamaño (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La foto es demasiado grande (máximo 5MB).');
+      return;
+    }
+
+    await procesarFotoCapturada(file);
+  };
+
+  // Callback de WebcamCapture (flujo desktop): recibe el Blob ya confirmado por el user.
+  const onFotoWebcam = async (blob: Blob) => {
+    setMostrarWebcam(false);
+    const file = new File([blob], `selfie-ponche-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    // Validación de tamaño (5MB) — improbable pero por consistencia con el flujo móvil.
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('La foto es demasiado grande (máximo 5MB).');
+      return;
+    }
+    await procesarFotoCapturada(file);
+  };
+
+  const cancelarWebcam = () => {
+    setMostrarWebcam(false);
+    setTipoPendiente(null);
   };
 
   const reiniciarCaptura = () => {
@@ -357,6 +391,14 @@ export default function Ponche() {
           className="hidden"
           onChange={onFotoSeleccionada}
         />
+
+        {/* Modal de webcam (solo desktop) */}
+        {mostrarWebcam && (
+          <WebcamCapture
+            onFoto={onFotoWebcam}
+            onCancelar={cancelarWebcam}
+          />
+        )}
 
         {/* Preview modal (overlay) */}
         {modo !== 'idle' && fotoPreview && (
