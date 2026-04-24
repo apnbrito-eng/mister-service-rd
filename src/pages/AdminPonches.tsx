@@ -8,7 +8,15 @@ import {
   Filter, Calendar as CalendarIcon, AlertCircle,
 } from 'lucide-react';
 import type { Personal, Ponche, Rol } from '../types';
-import { fechaRDHoy } from '../services/ponches.service';
+import {
+  fechaRDHoy,
+  rangoPresetHoy,
+  rangoPresetAyer,
+  rangoPresetEstaSemana,
+  rangoPresetEstaQuincena,
+  rangoPresetEsteMes,
+  rangoPresetUltimos30Dias,
+} from '../services/ponches.service';
 
 function tsToDate(t: Ponche['timestamp'] | undefined): Date | null {
   if (!t) return null;
@@ -44,6 +52,26 @@ function esDiaLaborable(fechaRD: string): boolean {
   return date.getDay() !== 0;
 }
 
+/** Formato "Lun 24 abr" para columna Fecha del modo multi-día. */
+function formatFechaCorta(fechaRD: string): string {
+  const [y, m, d] = fechaRD.split('-').map(Number);
+  try {
+    return format(new Date(y, m - 1, d), "EEE d MMM", { locale: es });
+  } catch {
+    return fechaRD;
+  }
+}
+
+/** Diferencia inclusive en días entre dos fechas YYYY-MM-DD. */
+function diasEntre(desde: string, hasta: string): number {
+  const [ya, ma, da] = desde.split('-').map(Number);
+  const [yb, mb, db] = hasta.split('-').map(Number);
+  const a = new Date(ya, ma - 1, da);
+  const b = new Date(yb, mb - 1, db);
+  const ms = b.getTime() - a.getTime();
+  return Math.floor(ms / 86_400_000) + 1;
+}
+
 const ROLES_FILTRO: Array<{ value: '' | Rol; label: string }> = [
   { value: '', label: 'Todos los roles' },
   { value: 'administrador', label: 'Administrador' },
@@ -54,12 +82,13 @@ const ROLES_FILTRO: Array<{ value: '' | Rol; label: string }> = [
   { value: 'ayudante', label: 'Ayudante' },
 ];
 
-/** Filas agrupadas por persona (join de entrada + salida). */
+/** Filas agrupadas por persona (single-day) o (persona, día) (multi-día). */
 interface FilaPonche {
   personalId: string;
   personalUid: string;
   personalNombre: string;
   personalRol: Rol;
+  fechaRD: string;
   entrada: Ponche | null;
   salida: Ponche | null;
 }
@@ -74,28 +103,57 @@ function escaparCSV(v: string | number | undefined | null): string {
 }
 
 export default function AdminPonches() {
-  const [fechaSeleccionada, setFechaSeleccionada] = useState<string>(fechaRDHoy());
+  const [desde, setDesde] = useState<string>(fechaRDHoy());
+  const [hasta, setHasta] = useState<string>(fechaRDHoy());
   const [filtroPersonal, setFiltroPersonal] = useState<string>('');
   const [filtroRol, setFiltroRol] = useState<'' | Rol>('');
 
   const [ponches, setPonches] = useState<Ponche[]>([]);
   const [cargando, setCargando] = useState(true);
-  const [personal, setPersonal] = useState<Personal[]>([]);
+  const [personalList, setPersonalList] = useState<Personal[]>([]);
 
   const [fotoLightbox, setFotoLightbox] = useState<string | null>(null);
 
-  // Subscripción a ponches del día
+  const esRangoMultiDia = desde !== hasta;
+
+  // Asegurar desde <= hasta cuando cambia alguno
+  const aplicarPreset = (r: { desde: string; hasta: string }) => {
+    setDesde(r.desde);
+    setHasta(r.hasta);
+  };
+
+  const onCambioDesde = (valor: string) => {
+    setDesde(valor);
+    if (hasta < valor) setHasta(valor);
+  };
+
+  const onCambioHasta = (valor: string) => {
+    setHasta(valor);
+    if (desde > valor) setDesde(valor);
+  };
+
+  // Subscripción a ponches del rango. Sin composite index:
+  // solo orderBy fechaRD + sort secundario por timestamp en memoria.
   useEffect(() => {
     setCargando(true);
     const q = query(
       collection(db, 'ponches'),
-      where('fechaRD', '==', fechaSeleccionada),
-      orderBy('timestamp', 'asc'),
+      where('fechaRD', '>=', desde),
+      where('fechaRD', '<=', hasta),
+      orderBy('fechaRD', 'asc'),
     );
     const unsub = onSnapshot(
       q,
       (snap) => {
         const lista = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Ponche));
+        lista.sort((a, b) => {
+          if (a.fechaRD !== b.fechaRD) return a.fechaRD.localeCompare(b.fechaRD);
+          const ta = (a.timestamp as { toMillis?: () => number })?.toMillis?.()
+            ?? +new Date(a.timestamp as unknown as string | number | Date);
+          const tb = (b.timestamp as { toMillis?: () => number })?.toMillis?.()
+            ?? +new Date(b.timestamp as unknown as string | number | Date);
+          return ta - tb;
+        });
         setPonches(lista);
         setCargando(false);
       },
@@ -105,7 +163,7 @@ export default function AdminPonches() {
       },
     );
     return () => unsub();
-  }, [fechaSeleccionada]);
+  }, [desde, hasta]);
 
   // Subscripción a personal (para el selector + badges de ausentes)
   useEffect(() => {
@@ -113,18 +171,21 @@ export default function AdminPonches() {
       collection(db, 'personal'),
       (snap) => {
         const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Personal));
-        setPersonal(list);
+        setPersonalList(list);
       },
       (err) => console.error('[AdminPonches] Error personal:', err),
     );
     return () => unsub();
   }, []);
 
-  // Agrupar por personalUid
+  // Agrupar por (personalId, fechaRD) en multi-día o por personalId en single-día.
+  // Preferimos personalId como key principal porque Ponche.tsx ya lo resuelve
+  // al doc real (via uid → email → fallback).
   const filas: FilaPonche[] = useMemo(() => {
     const map = new Map<string, FilaPonche>();
     for (const p of ponches) {
-      const key = p.personalUid || p.personalId;
+      const baseKey = p.personalId || p.personalUid;
+      const key = esRangoMultiDia ? `${baseKey}|${p.fechaRD}` : baseKey;
       const existente = map.get(key);
       if (!existente) {
         map.set(key, {
@@ -132,6 +193,7 @@ export default function AdminPonches() {
           personalUid: p.personalUid,
           personalNombre: p.personalNombre,
           personalRol: p.personalRol,
+          fechaRD: p.fechaRD,
           entrada: p.tipo === 'entrada' ? p : null,
           salida: p.tipo === 'salida' ? p : null,
         });
@@ -140,25 +202,53 @@ export default function AdminPonches() {
         if (p.tipo === 'salida') existente.salida = p;
       }
     }
-    return Array.from(map.values()).sort((a, b) =>
-      a.personalNombre.localeCompare(b.personalNombre, 'es'),
-    );
-  }, [ponches]);
+    const arr = Array.from(map.values());
+    if (esRangoMultiDia) {
+      // Ordenar primero por fecha desc (más reciente primero), luego nombre
+      return arr.sort((a, b) => {
+        if (a.fechaRD !== b.fechaRD) return b.fechaRD.localeCompare(a.fechaRD);
+        return a.personalNombre.localeCompare(b.personalNombre, 'es');
+      });
+    }
+    return arr.sort((a, b) => a.personalNombre.localeCompare(b.personalNombre, 'es'));
+  }, [ponches, esRangoMultiDia]);
 
-  // Personal activo que no ponchó (badges de ausencia)
+  // Personal activo que no ponchó (badges de ausencia).
+  // Solo aplica en modo single-día y si el día es laborable.
+  // Fix Issue 1: matching tolerante por 3 llaves (uid, id, email) para
+  // evitar que el doc personal con uid desactualizado marque a un empleado
+  // que SÍ ponchó como "ausente".
   const ausentes: Personal[] = useMemo(() => {
-    if (!esDiaLaborable(fechaSeleccionada)) return [];
-    const uidsConPonche = new Set(filas.map((f) => f.personalUid));
-    return personal.filter(
-      (p) =>
-        p.activo &&
-        !!p.uid &&
-        !uidsConPonche.has(p.uid) &&
-        // respetar filtros si están activos
-        (filtroRol === '' || p.rol === filtroRol) &&
-        (filtroPersonal === '' || p.id === filtroPersonal),
+    if (esRangoMultiDia) return [];
+    if (!esDiaLaborable(desde)) return [];
+
+    const uidsConPonche = new Set(ponches.map((p) => p.personalUid).filter(Boolean));
+    const idsConPonche = new Set(ponches.map((p) => p.personalId).filter(Boolean));
+    const emailsConPonche = new Set(
+      ponches
+        .map((p) => {
+          // Resolver email del empleado que ponchó usando personalList
+          const persona = personalList.find(
+            (pp) => pp.id === p.personalId || (pp.uid && pp.uid === p.personalUid),
+          );
+          return persona?.email?.toLowerCase();
+        })
+        .filter((e): e is string => Boolean(e)),
     );
-  }, [personal, filas, fechaSeleccionada, filtroRol, filtroPersonal]);
+
+    return personalList.filter((p) => {
+      if (!p.activo) return false;
+      if (p.rol === 'ayudante') return false; // ayudantes no siempre laboran
+      // Matching por cualquiera de las 3 llaves → NO es ausente
+      if (p.uid && uidsConPonche.has(p.uid)) return false;
+      if (idsConPonche.has(p.id)) return false;
+      if (p.email && emailsConPonche.has(p.email.toLowerCase())) return false;
+      // No matchea por ninguna → ausente, aplicar filtros
+      if (filtroRol !== '' && p.rol !== filtroRol) return false;
+      if (filtroPersonal !== '' && p.id !== filtroPersonal) return false;
+      return true;
+    });
+  }, [personalList, ponches, desde, esRangoMultiDia, filtroRol, filtroPersonal]);
 
   // Aplicar filtros sobre filas
   const filasFiltradas = useMemo(() => {
@@ -170,14 +260,16 @@ export default function AdminPonches() {
   }, [filas, filtroRol, filtroPersonal]);
 
   const exportarCSV = () => {
-    const headers = ['nombre', 'rol', 'entrada', 'salida', 'horas', 'gps_entrada', 'gps_salida'];
+    const headers = esRangoMultiDia
+      ? ['fecha', 'nombre', 'rol', 'entrada', 'salida', 'horas', 'gps_entrada', 'gps_salida']
+      : ['nombre', 'rol', 'entrada', 'salida', 'horas', 'gps_entrada', 'gps_salida'];
     const rows = filasFiltradas.map((f) => {
       const fe = tsToDate(f.entrada?.timestamp);
       const fs = tsToDate(f.salida?.timestamp);
       const horas = fe && fs ? formatDuracion(fs.getTime() - fe.getTime()) : '';
       const gpsE = f.entrada?.ubicacion ? `${f.entrada.ubicacion.lat},${f.entrada.ubicacion.lng}` : '';
       const gpsS = f.salida?.ubicacion ? `${f.salida.ubicacion.lat},${f.salida.ubicacion.lng}` : '';
-      return [
+      const base = [
         f.personalNombre,
         f.personalRol,
         formatHora12(fe),
@@ -186,6 +278,7 @@ export default function AdminPonches() {
         gpsE,
         gpsS,
       ];
+      return esRangoMultiDia ? [f.fechaRD, ...base] : base;
     });
     const csv = [
       headers.join(','),
@@ -195,7 +288,9 @@ export default function AdminPonches() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `ponches_${fechaSeleccionada}.csv`;
+    a.download = esRangoMultiDia
+      ? `ponches_${desde}_a_${hasta}.csv`
+      : `ponches_${desde}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -203,11 +298,23 @@ export default function AdminPonches() {
   };
 
   const fechaTexto = (() => {
-    const [y, m, d] = fechaSeleccionada.split('-').map(Number);
+    if (esRangoMultiDia) {
+      const [ya, ma, da] = desde.split('-').map(Number);
+      const [yb, mb, db] = hasta.split('-').map(Number);
+      try {
+        const txtDesde = format(new Date(ya, ma - 1, da), "d 'de' MMM", { locale: es });
+        const txtHasta = format(new Date(yb, mb - 1, db), "d 'de' MMM yyyy", { locale: es });
+        const dias = diasEntre(desde, hasta);
+        return `${txtDesde} - ${txtHasta} · ${dias} días`;
+      } catch {
+        return `${desde} - ${hasta}`;
+      }
+    }
+    const [y, m, d] = desde.split('-').map(Number);
     try {
       return format(new Date(y, m - 1, d), "EEEE, d 'de' MMMM yyyy", { locale: es });
     } catch {
-      return fechaSeleccionada;
+      return desde;
     }
   })();
 
@@ -238,15 +345,74 @@ export default function AdminPonches() {
           <Filter size={14} />
           Filtros
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+
+        {/* Barra de presets de rango */}
+        <div className="flex flex-wrap gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => aplicarPreset(rangoPresetHoy())}
+            className="px-3 py-1 text-xs font-medium border border-brand-200 text-brand-700 rounded-full hover:bg-brand-50 transition-colors"
+          >
+            Hoy
+          </button>
+          <button
+            type="button"
+            onClick={() => aplicarPreset(rangoPresetAyer())}
+            className="px-3 py-1 text-xs font-medium border border-brand-200 text-brand-700 rounded-full hover:bg-brand-50 transition-colors"
+          >
+            Ayer
+          </button>
+          <button
+            type="button"
+            onClick={() => aplicarPreset(rangoPresetEstaSemana())}
+            className="px-3 py-1 text-xs font-medium border border-brand-200 text-brand-700 rounded-full hover:bg-brand-50 transition-colors"
+          >
+            Esta semana
+          </button>
+          <button
+            type="button"
+            onClick={() => aplicarPreset(rangoPresetEstaQuincena())}
+            className="px-3 py-1 text-xs font-medium border border-brand-200 text-brand-700 rounded-full hover:bg-brand-50 transition-colors"
+          >
+            Esta quincena
+          </button>
+          <button
+            type="button"
+            onClick={() => aplicarPreset(rangoPresetEsteMes())}
+            className="px-3 py-1 text-xs font-medium border border-brand-200 text-brand-700 rounded-full hover:bg-brand-50 transition-colors"
+          >
+            Este mes
+          </button>
+          <button
+            type="button"
+            onClick={() => aplicarPreset(rangoPresetUltimos30Dias())}
+            className="px-3 py-1 text-xs font-medium border border-brand-200 text-brand-700 rounded-full hover:bg-brand-50 transition-colors"
+          >
+            Últimos 30 días
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Fecha</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Desde</label>
             <div className="relative">
               <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
               <input
                 type="date"
-                value={fechaSeleccionada}
-                onChange={(e) => setFechaSeleccionada(e.target.value)}
+                value={desde}
+                onChange={(e) => onCambioDesde(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Hasta</label>
+            <div className="relative">
+              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+              <input
+                type="date"
+                value={hasta}
+                onChange={(e) => onCambioHasta(e.target.value)}
                 className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
@@ -259,7 +425,7 @@ export default function AdminPonches() {
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               <option value="">Todos</option>
-              {personal
+              {personalList
                 .filter((p) => p.activo)
                 .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
                 .map((p) => (
@@ -290,13 +456,16 @@ export default function AdminPonches() {
           <div className="p-8 text-center text-gray-500 text-sm">Cargando…</div>
         ) : filasFiltradas.length === 0 && ausentes.length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-sm">
-            No hay ponches registrados para esta fecha con los filtros seleccionados.
+            No hay ponches registrados para este rango con los filtros seleccionados.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr className="text-left text-xs uppercase tracking-wide text-gray-600">
+                  {esRangoMultiDia && (
+                    <th className="px-4 py-3 font-semibold">Fecha</th>
+                  )}
                   <th className="px-4 py-3 font-semibold">Personal</th>
                   <th className="px-4 py-3 font-semibold">Entrada</th>
                   <th className="px-4 py-3 font-semibold">Salida</th>
@@ -310,8 +479,16 @@ export default function AdminPonches() {
                   const fs = tsToDate(f.salida?.timestamp);
                   const horas = fe && fs ? formatDuracion(fs.getTime() - fe.getTime()) : (fe ? '—' : '');
                   const gps = f.entrada?.ubicacion || f.salida?.ubicacion;
+                  const rowKey = esRangoMultiDia
+                    ? `${f.personalId || f.personalUid}|${f.fechaRD}`
+                    : (f.personalId || f.personalUid);
                   return (
-                    <tr key={f.personalUid || f.personalId} className="hover:bg-gray-50">
+                    <tr key={rowKey} className="hover:bg-gray-50">
+                      {esRangoMultiDia && (
+                        <td className="px-4 py-3 text-gray-700 capitalize whitespace-nowrap">
+                          {formatFechaCorta(f.fechaRD)}
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-900">{f.personalNombre}</div>
                         <span className="inline-block mt-1 text-[10px] uppercase tracking-wide bg-gray-100 text-gray-700 rounded px-2 py-0.5">
@@ -371,8 +548,8 @@ export default function AdminPonches() {
                     </tr>
                   );
                 })}
-                {/* Personal ausente */}
-                {ausentes.map((p) => (
+                {/* Personal ausente — solo en modo single-día */}
+                {!esRangoMultiDia && ausentes.map((p) => (
                   <tr key={`ausente-${p.id}`} className="bg-red-50/30 hover:bg-red-50/50">
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">{p.nombre}</div>
