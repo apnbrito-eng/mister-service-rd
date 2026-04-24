@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
@@ -12,6 +12,7 @@ import { Plus, Edit, Check, X, Users, Power, Trash2, RotateCcw, ChevronDown, Che
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 import { puede, iaHabilitadaDefaultPorRol } from '../utils/permisos';
+import { agruparPorRol } from '../utils/roles';
 
 const ROL_LABELS: Record<Rol, string> = {
   administrador: 'Administrador',
@@ -867,66 +868,83 @@ export default function PersonalPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {personal.filter(p => p.activo).map(p => (
-                <tr key={p.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: p.color || '#0f3460' }}>
-                        {p.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                      </div>
-                      <span className="text-sm font-medium text-gray-900">{p.nombre}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-0.5">
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit ${ROL_COLORS[p.rol]}`}>
-                        {ROL_LABELS[p.rol]}
-                      </span>
-                      {ROLES_CON_COMISION.includes(p.rol) && p.nivel && (
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 w-fit">
-                          {p.nivel === 'senior' ? 'Senior' : 'Junior'} · {typeof p.comisionPorcentaje === 'number' ? p.comisionPorcentaje : comisionDefaultPorNivel(p.nivel)}%
+              {agruparPorRol(personal.filter(p => p.activo)).map(grupo => (
+                <Fragment key={grupo.rol}>
+                  <tr className="bg-[#0f3460]/5 border-t border-b border-[#0f3460]/10">
+                    <td colSpan={8} className="px-4 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{grupo.icono}</span>
+                        <h3 className="text-sm font-semibold text-[#0f3460]">
+                          {grupo.label}
+                        </h3>
+                        <span className="ml-auto text-xs text-gray-600 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                          {grupo.items.length}
                         </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.telefono ? formatTelefono(p.telefono) : '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.email || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-600 hidden lg:table-cell">{p.especialidad || '—'}</td>
-                  <td className="px-4 py-3 text-xs text-gray-600 hidden lg:table-cell">{p.zona || '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">
-                      <Check size={10} /> Activo
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
-                      {puedeModificarPersonal && (
-                        <button onClick={() => handleEdit(p)} title="Editar"
-                          className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
-                          <Edit size={14} />
-                        </button>
-                      )}
-                      {puedeModificarPersonal && p.rol !== 'ayudante' && ROLES_CON_ACCESO.includes(p.rol) && !p.uid && p.email && (
-                        <button onClick={() => abrirVincularExistente(p)} title="Vincular cuenta existente"
-                          className="p-2 hover:bg-indigo-50 rounded-lg text-indigo-600 transition-colors">
-                          <Link2 size={14} />
-                        </button>
-                      )}
-                      {puedeEliminarPersonal && (
-                        <button onClick={() => abrirModalDesactivar(p)} title="Desactivar"
-                          className="p-2 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors">
-                          <Power size={14} />
-                        </button>
-                      )}
-                      {puedeEliminarPersonal && (
-                        <button onClick={() => abrirModalEliminar(p)} title="Eliminar"
-                          className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                      </div>
+                    </td>
+                  </tr>
+                  {grupo.items.map(p => (
+                    <tr key={p.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: p.color || '#0f3460' }}>
+                            {p.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                          </div>
+                          <span className="text-sm font-medium text-gray-900">{p.nombre}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit ${ROL_COLORS[p.rol]}`}>
+                            {ROL_LABELS[p.rol]}
+                          </span>
+                          {ROLES_CON_COMISION.includes(p.rol) && p.nivel && (
+                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 w-fit">
+                              {p.nivel === 'senior' ? 'Senior' : 'Junior'} · {typeof p.comisionPorcentaje === 'number' ? p.comisionPorcentaje : comisionDefaultPorNivel(p.nivel)}%
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.telefono ? formatTelefono(p.telefono) : '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.email || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-600 hidden lg:table-cell">{p.especialidad || '—'}</td>
+                      <td className="px-4 py-3 text-xs text-gray-600 hidden lg:table-cell">{p.zona || '—'}</td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">
+                          <Check size={10} /> Activo
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          {puedeModificarPersonal && (
+                            <button onClick={() => handleEdit(p)} title="Editar"
+                              className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
+                              <Edit size={14} />
+                            </button>
+                          )}
+                          {puedeModificarPersonal && p.rol !== 'ayudante' && ROLES_CON_ACCESO.includes(p.rol) && !p.uid && p.email && (
+                            <button onClick={() => abrirVincularExistente(p)} title="Vincular cuenta existente"
+                              className="p-2 hover:bg-indigo-50 rounded-lg text-indigo-600 transition-colors">
+                              <Link2 size={14} />
+                            </button>
+                          )}
+                          {puedeEliminarPersonal && (
+                            <button onClick={() => abrirModalDesactivar(p)} title="Desactivar"
+                              className="p-2 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors">
+                              <Power size={14} />
+                            </button>
+                          )}
+                          {puedeEliminarPersonal && (
+                            <button onClick={() => abrirModalEliminar(p)} title="Eliminar"
+                              className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -962,40 +980,57 @@ export default function PersonalPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {inactivos.map(p => (
-                      <tr key={p.id} className="opacity-60 hover:bg-gray-50 hover:opacity-80 transition-opacity">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: p.color || '#0f3460' }}>
-                              {p.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    {agruparPorRol(inactivos).map(grupo => (
+                      <Fragment key={grupo.rol}>
+                        <tr className="bg-gray-100/60 border-t border-b border-gray-200">
+                          <td colSpan={5} className="px-4 py-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">{grupo.icono}</span>
+                              <h3 className="text-xs font-semibold text-gray-700">
+                                {grupo.label}
+                              </h3>
+                              <span className="ml-auto text-[11px] text-gray-600 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                                {grupo.items.length}
+                              </span>
                             </div>
-                            <span className="text-sm font-medium text-gray-900">{p.nombre}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ROL_COLORS[p.rol]}`}>
-                            {ROL_LABELS[p.rol]}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.telefono ? formatTelefono(p.telefono) : '—'}</td>
-                        <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.email || '—'}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
-                            {puedeModificarPersonal && (
-                              <button onClick={() => handleReactivar(p)} title="Reactivar"
-                                className="p-2 hover:bg-green-50 rounded-lg text-green-600 transition-colors">
-                                <RotateCcw size={14} />
-                              </button>
-                            )}
-                            {puedeEliminarPersonal && (
-                              <button onClick={() => abrirModalEliminar(p)} title="Eliminar"
-                                className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                          </td>
+                        </tr>
+                        {grupo.items.map(p => (
+                          <tr key={p.id} className="opacity-60 hover:bg-gray-50 hover:opacity-80 transition-opacity">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: p.color || '#0f3460' }}>
+                                  {p.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                </div>
+                                <span className="text-sm font-medium text-gray-900">{p.nombre}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ROL_COLORS[p.rol]}`}>
+                                {ROL_LABELS[p.rol]}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.telefono ? formatTelefono(p.telefono) : '—'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.email || '—'}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-1">
+                                {puedeModificarPersonal && (
+                                  <button onClick={() => handleReactivar(p)} title="Reactivar"
+                                    className="p-2 hover:bg-green-50 rounded-lg text-green-600 transition-colors">
+                                    <RotateCcw size={14} />
+                                  </button>
+                                )}
+                                {puedeEliminarPersonal && (
+                                  <button onClick={() => abrirModalEliminar(p)} title="Eliminar"
+                                    className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>

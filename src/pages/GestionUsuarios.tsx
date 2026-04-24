@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, setDoc, doc, Timestamp, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
@@ -6,6 +6,7 @@ import { getAuth } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { Personal, Rol, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, PermisosSistema } from '../types';
 import { permisosDefaultDeRol, iaHabilitadaDefaultPorRol } from '../utils/permisos';
+import { agruparPorRol } from '../utils/roles';
 import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
@@ -537,60 +538,77 @@ export default function GestionUsuarios() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {usuarios.map(u => (
-                <tr key={u.id} className={`hover:bg-gray-50 ${!u.activo ? 'opacity-50' : ''}`}>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                        style={{ backgroundColor: u.color || '#0f3460' }}>
-                        {u.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
+              {agruparPorRol(usuarios).map(grupo => (
+                <Fragment key={grupo.rol}>
+                  <tr className="bg-[#0f3460]/5 border-t border-b border-[#0f3460]/10">
+                    <td colSpan={6} className="px-4 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{grupo.icono}</span>
+                        <h3 className="text-sm font-semibold text-[#0f3460]">
+                          {grupo.label}
+                        </h3>
+                        <span className="ml-auto text-xs text-gray-600 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
+                          {grupo.items.length}
+                        </span>
                       </div>
-                      <span className="text-sm font-medium text-gray-900">{u.nombre}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ROL_COLORS[u.rol]}`}>
-                      {ROL_LABELS[u.rol]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{u.email || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 hidden lg:table-cell">{u.telefono || '—'}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-1">
-                      <span className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full w-fit ${u.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {u.activo ? 'Activo' : 'Inactivo'}
-                      </span>
-                      {u.uid ? (
-                        <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full w-fit bg-green-50 text-green-700 border border-green-200">
-                          🟢 Con acceso
+                    </td>
+                  </tr>
+                  {grupo.items.map(u => (
+                    <tr key={u.id} className={`hover:bg-gray-50 ${!u.activo ? 'opacity-50' : ''}`}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold"
+                            style={{ backgroundColor: u.color || '#0f3460' }}>
+                            {u.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                          </div>
+                          <span className="text-sm font-medium text-gray-900">{u.nombre}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ROL_COLORS[u.rol]}`}>
+                          {ROL_LABELS[u.rol]}
                         </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full w-fit bg-red-50 text-red-700 border border-red-200">
-                          🔴 Sin acceso
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <div className="flex items-center gap-1 justify-end">
-                      <button onClick={() => openEdit(u)} title="Editar permisos"
-                        className="p-2 hover:bg-blue-50 rounded-lg text-blue-500 transition-colors">
-                        <Edit size={14} />
-                      </button>
-                      <button
-                        onClick={() => openAccessModal(u)}
-                        title={u.uid ? 'Cambiar contraseña' : 'Crear acceso'}
-                        className={`p-2 rounded-lg transition-colors ${u.uid ? 'hover:bg-yellow-50 text-yellow-600' : 'hover:bg-red-50 text-red-600'}`}
-                      >
-                        {u.uid ? <Key size={14} /> : <KeyRound size={14} />}
-                      </button>
-                      <button onClick={() => handleToggleActivo(u)} title={u.activo ? 'Desactivar' : 'Activar'}
-                        className={`p-2 rounded-lg transition-colors ${u.activo ? 'hover:bg-red-50 text-red-500' : 'hover:bg-green-50 text-green-500'}`}>
-                        <Power size={14} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{u.email || '—'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600 hidden lg:table-cell">{u.telefono || '—'}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-col gap-1">
+                          <span className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full w-fit ${u.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {u.activo ? 'Activo' : 'Inactivo'}
+                          </span>
+                          {u.uid ? (
+                            <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full w-fit bg-green-50 text-green-700 border border-green-200">
+                              🟢 Con acceso
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full w-fit bg-red-50 text-red-700 border border-red-200">
+                              🔴 Sin acceso
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center gap-1 justify-end">
+                          <button onClick={() => openEdit(u)} title="Editar permisos"
+                            className="p-2 hover:bg-blue-50 rounded-lg text-blue-500 transition-colors">
+                            <Edit size={14} />
+                          </button>
+                          <button
+                            onClick={() => openAccessModal(u)}
+                            title={u.uid ? 'Cambiar contraseña' : 'Crear acceso'}
+                            className={`p-2 rounded-lg transition-colors ${u.uid ? 'hover:bg-yellow-50 text-yellow-600' : 'hover:bg-red-50 text-red-600'}`}
+                          >
+                            {u.uid ? <Key size={14} /> : <KeyRound size={14} />}
+                          </button>
+                          <button onClick={() => handleToggleActivo(u)} title={u.activo ? 'Desactivar' : 'Activar'}
+                            className={`p-2 rounded-lg transition-colors ${u.activo ? 'hover:bg-red-50 text-red-500' : 'hover:bg-green-50 text-green-500'}`}>
+                            <Power size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </Fragment>
               ))}
             </tbody>
           </table>
