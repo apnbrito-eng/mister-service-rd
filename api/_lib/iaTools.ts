@@ -386,6 +386,7 @@ function normalizarTelefono(tel: string): string {
 interface QueryOrdenesInput {
   fase?: string;
   tecnicoId?: string;
+  tecnicoNombre?: string;
   clienteNombre?: string;
   fechaDesde?: string;
   fechaHasta?: string;
@@ -408,6 +409,7 @@ interface PostFiltrosOrdenes {
   clienteNombre?: string;
   fase?: string;
   tecnicoId?: string;
+  tecnicoNombre?: string;
 }
 
 /**
@@ -471,6 +473,13 @@ function construirQueryOrdenes(
     postFiltros.clienteNombre = input.clienteNombre;
   }
 
+  // tecnicoNombre también requiere substring match (case/accent-insensitive) →
+  // siempre se resuelve client-side. Permite consultar por nombre parcial sin
+  // necesidad del ID interno del técnico.
+  if (input.tecnicoNombre && typeof input.tecnicoNombre === 'string') {
+    postFiltros.tecnicoNombre = input.tecnicoNombre;
+  }
+
   return { query: q, postFiltros };
 }
 
@@ -489,6 +498,9 @@ function aplicarFiltrosPost(
     if (postFiltros.fase && data.fase !== postFiltros.fase) return false;
     if (postFiltros.tecnicoId && data.tecnicoId !== postFiltros.tecnicoId) return false;
     if (postFiltros.clienteNombre && !incluyeBusqueda(data.clienteNombre, postFiltros.clienteNombre)) {
+      return false;
+    }
+    if (postFiltros.tecnicoNombre && !incluyeBusqueda(data.tecnicoNombre, postFiltros.tecnicoNombre)) {
       return false;
     }
     return true;
@@ -557,12 +569,16 @@ function serializarTimestamps(val: unknown): unknown {
 const TOOL_QUERY_ORDENES: ToolDef = {
   name: 'query_ordenes',
   description:
-    "Busca órdenes de servicio por fase (nuevo_lead, en_gestion, agendado, en_diagnostico, en_cotizacion, aprobado, trabajo_realizado, cerrado, cancelado), técnico, nombre de cliente o rango de fechas (filtra sobre fechaCita). Retorna hasta 'limite' resultados (default 20, max 50).",
+    "Busca órdenes de servicio por fase (nuevo_lead, en_gestion, agendado, en_diagnostico, en_cotizacion, aprobado, trabajo_realizado, cerrado, cancelado), técnico (por ID o por nombre parcial), nombre de cliente o rango de fechas (filtra sobre fechaCita). Retorna hasta 'limite' resultados (default 20, max 50).",
   input_schema: {
     type: 'object',
     properties: {
       fase: { type: 'string', description: 'Una de las fases válidas del sistema.' },
       tecnicoId: { type: 'string', description: 'ID del técnico asignado.' },
+      tecnicoNombre: {
+        type: 'string',
+        description: 'Filtro por nombre parcial del técnico (case-insensitive). Ej: "Aury" matchea "Aury Mon García".',
+      },
       clienteNombre: { type: 'string', description: 'Texto a buscar dentro del nombre del cliente (match parcial).' },
       fechaDesde: { type: 'string', description: 'Fecha inicio formato YYYY-MM-DD (hora local RD). Filtra fechaCita.' },
       fechaHasta: { type: 'string', description: 'Fecha fin formato YYYY-MM-DD (hora local RD). Filtra fechaCita.' },
@@ -586,12 +602,16 @@ const TOOL_QUERY_ORDENES: ToolDef = {
 const TOOL_COUNT_ORDENES: ToolDef = {
   name: 'count_ordenes',
   description:
-    "Cuenta cuántas órdenes coinciden con los filtros dados. Más rápido que query_ordenes cuando solo querés saber el total.",
+    "Cuenta cuántas órdenes coinciden con los filtros dados (fase, técnico por ID o por nombre parcial, cliente, rango de fechas). Más rápido que query_ordenes cuando solo querés saber el total.",
   input_schema: {
     type: 'object',
     properties: {
       fase: { type: 'string' },
       tecnicoId: { type: 'string' },
+      tecnicoNombre: {
+        type: 'string',
+        description: 'Filtro por nombre parcial del técnico (case-insensitive). Ej: "Aury" matchea "Aury Mon García".',
+      },
       clienteNombre: { type: 'string' },
       fechaDesde: { type: 'string', description: 'YYYY-MM-DD, filtra fechaCita.' },
       fechaHasta: { type: 'string', description: 'YYYY-MM-DD, filtra fechaCita.' },
@@ -650,17 +670,22 @@ const TOOL_GET_ORDEN: ToolDef = {
 interface AgendaDiaInput {
   fecha: string;
   tecnicoId?: string;
+  tecnicoNombre?: string;
 }
 
 const TOOL_AGENDA_DIA: ToolDef = {
   name: 'agenda_dia',
   description:
-    "Trae todas las órdenes agendadas para una fecha específica (YYYY-MM-DD, hora RD), opcionalmente filtradas por técnico. Útil para preguntas como 'qué hay para hoy' o 'qué tiene Juan mañana'. Ordenadas por hora ascendente.",
+    "Trae todas las órdenes agendadas para una fecha específica (YYYY-MM-DD, hora RD), opcionalmente filtradas por técnico (por ID o por nombre parcial). Útil para preguntas como 'qué hay para hoy' o 'qué tiene Aury mañana'. Ordenadas por hora ascendente.",
   input_schema: {
     type: 'object',
     properties: {
       fecha: { type: 'string', description: 'YYYY-MM-DD, hora local RD.' },
       tecnicoId: { type: 'string' },
+      tecnicoNombre: {
+        type: 'string',
+        description: 'Filtro por nombre parcial del técnico (case-insensitive). Ej: "Aury" matchea "Aury Mon García".',
+      },
     },
     required: ['fecha'],
   },
@@ -678,6 +703,9 @@ const TOOL_AGENDA_DIA: ToolDef = {
     const postFiltros: PostFiltrosOrdenes = {};
     if (input.tecnicoId && typeof input.tecnicoId === 'string') {
       postFiltros.tecnicoId = input.tecnicoId;
+    }
+    if (input.tecnicoNombre && typeof input.tecnicoNombre === 'string') {
+      postFiltros.tecnicoNombre = input.tecnicoNombre;
     }
     const snap = await q.get();
     const filtrados = aplicarFiltrosPost(
@@ -756,6 +784,7 @@ const TOOL_QUERY_PRODUCTOS: ToolDef = {
 
 interface QueryComisionesInput {
   tecnicoId?: string;
+  tecnicoNombre?: string;
   desde?: string;
   hasta?: string;
   estado?: 'pendiente' | 'pagada';
@@ -764,11 +793,15 @@ interface QueryComisionesInput {
 const TOOL_QUERY_COMISIONES: ToolDef = {
   name: 'query_comisiones',
   description:
-    "Consulta comisiones de técnicos. Filtra por técnico, rango de fechas (YYYY-MM-DD sobre fechaCobro) o estado ('pendiente' | 'pagada'). Si no pasás rango, usa la quincena actual.",
+    "Consulta comisiones de técnicos. Filtra por técnico (por ID o por nombre parcial), rango de fechas (YYYY-MM-DD sobre fechaCobro) o estado ('pendiente' | 'pagada'). Si no pasás rango, usa la quincena actual.",
   input_schema: {
     type: 'object',
     properties: {
       tecnicoId: { type: 'string' },
+      tecnicoNombre: {
+        type: 'string',
+        description: 'Filtro por nombre parcial del técnico (case-insensitive). Ej: "Aury" matchea "Aury Mon García".',
+      },
       desde: { type: 'string', description: 'YYYY-MM-DD, hora RD.' },
       hasta: { type: 'string', description: 'YYYY-MM-DD, hora RD.' },
       estado: { type: 'string', enum: ['pendiente', 'pagada'] },
@@ -801,8 +834,11 @@ const TOOL_QUERY_COMISIONES: ToolDef = {
     }
 
     const snap = await q.get();
-    const items = snap.docs.map((d) => {
-      const data = d.data();
+    let docs = snap.docs.map((d) => d.data());
+    if (input?.tecnicoNombre) {
+      docs = docs.filter((data) => incluyeBusqueda(data.tecnicoNombre, input.tecnicoNombre!));
+    }
+    const items = docs.map((data) => {
       const fechaCobro = toDate(data.fechaCobro);
       const estadoRaw = data.estadoLiquidacion;
       const estado = estadoRaw === 'liquidada' ? 'pagada' : 'pendiente';
