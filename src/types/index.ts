@@ -1,3 +1,5 @@
+import type { Timestamp } from 'firebase/firestore';
+
 export type Rol = 'administrador' | 'coordinadora' | 'operaria' | 'secretaria' | 'tecnico' | 'ayudante';
 
 /** Roles que pueden iniciar sesión en el sistema (tienen cuenta en Firebase Auth) */
@@ -99,7 +101,17 @@ export interface HistorialFase {
   nota?: string;
 }
 
-export type AccionAuditoria = 'crear' | 'editar' | 'eliminar' | 'cambio_fase' | 'nota_tecnico' | 'precio_sugerido' | 'cierre' | 'marcar_chequeo';
+export type AccionAuditoria =
+  | 'crear'
+  | 'editar'
+  | 'eliminar'
+  | 'cambio_fase'
+  | 'nota_tecnico'
+  | 'precio_sugerido'
+  | 'cierre'
+  | 'marcar_chequeo'
+  | 'aprobar_piezas'
+  | 'editar_piezas';
 
 export type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'link' | 'otro';
 
@@ -884,7 +896,7 @@ export interface CierreServicio {
   // Piezas utilizadas en el servicio (Fase A1 — captura técnico)
   piezasUsadas?: PiezaUsada[];
   piezasValidadasPorAdmin?: boolean;
-  piezasValidadasEn?: Date;
+  piezasValidadasEn?: Timestamp | Date;
   piezasValidadasPor?: string;
   // Wizard completo (legacy — para órdenes cerradas con el formato anterior)
   piezasRetiradas?: PiezaRetirada[];
@@ -921,10 +933,18 @@ export interface PiezaUsada {
   notas?: string;
   registradaPor: string;           // uid del técnico
   registradaPorNombre: string;     // snapshot
-  registradaEn: Date;              // persistido como Timestamp, leído como Date
+  /** Persistido como Timestamp; leído como Date tras parseOrden. Acepta
+   *  ambos para permitir escrituras directas (Timestamp) y lecturas
+   *  ya hidratadas (Date). */
+  registradaEn: Timestamp | Date;
   aprobadaPorAdmin?: boolean;      // default false — lo llena admin en Fase A2
-  aprobadaEn?: Date;
+  aprobadaEn?: Timestamp | Date;
   aprobadaPor?: string;
+  /** Si el admin edita piezas registradas por el técnico (Fase A2) se
+   *  conserva el registradaPor/registradaPorNombre/registradaEn originales,
+   *  y se anotan estos campos para trazabilidad. */
+  editadaPor?: string;
+  editadaEn?: Timestamp | Date;
 }
 
 export interface TrackingGPS {

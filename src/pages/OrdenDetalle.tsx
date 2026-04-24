@@ -11,8 +11,9 @@ import { useApp } from '../context/AppContext';
 import {
   ArrowLeft, Phone, Wrench, User, Calendar,
   Clock, MessageSquare, Save, MapPin, ExternalLink,
-  Satellite, Copy, Power, ClipboardCheck, AlertTriangle, FileText, Package
+  Satellite, Copy, Power, ClipboardCheck, AlertTriangle, FileText, Package, Check
 } from 'lucide-react';
+import ModalEditarPiezasOrden from '../components/cierre/ModalEditarPiezasOrden';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import toast from 'react-hot-toast';
 import { puede } from '../utils/permisos';
@@ -45,6 +46,7 @@ export default function OrdenDetalle() {
   const [aprobandoPrecio, setAprobandoPrecio] = useState(false);
   const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
   const [showPagoModal, setShowPagoModal] = useState(false);
+  const [modalPiezasAbierto, setModalPiezasAbierto] = useState(false);
 
   // Pre-fill approval input
   useEffect(() => {
@@ -536,6 +538,96 @@ export default function OrdenDetalle() {
                   </div>
                 )}
 
+                {/* Piezas utilizadas (Fase A1/A2) — detalle completo */}
+                {orden.cierreServicio.piezasUsadas && orden.cierreServicio.piezasUsadas.length > 0 && (() => {
+                  const cs = orden.cierreServicio;
+                  if (!cs) return null;
+                  const piezas = cs.piezasUsadas!;
+                  const costoTotal = piezas.reduce((acc, p) => acc + (Number(p.costoTotal) || 0), 0);
+                  const cantidadTotal = piezas.reduce((acc, p) => acc + (Number(p.cantidad) || 0), 0);
+                  const validada = cs.piezasValidadasPorAdmin === true;
+                  return (
+                    <div>
+                      <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                        <p className="text-xs font-semibold text-gray-500 uppercase">📦 Piezas utilizadas</p>
+                        <div className="text-[11px] flex items-center gap-2 flex-wrap">
+                          <span className="text-gray-600">
+                            {piezas.length} pieza{piezas.length === 1 ? '' : 's'} · {cantidadTotal} unidad{cantidadTotal === 1 ? '' : 'es'} · Costo {formatMoneda(costoTotal)}
+                          </span>
+                          {validada ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                              <Check size={10} /> Validadas
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 font-medium">
+                              Pendientes de validar
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {piezas.map(p => {
+                          const origenLabel = p.origen === 'inventario_taller' ? '🏭 Taller' : p.origen === 'inventario_vehiculo' ? '🚗 Vehículo' : '🛒 Externa';
+                          const condicionLabel = p.condicion === 'nueva' ? '✨ Nueva' : '♻️ Usada';
+                          const registrada = p.registradaEn instanceof Date ? p.registradaEn : ('toDate' in (p.registradaEn as object) ? (p.registradaEn as unknown as { toDate: () => Date }).toDate() : null);
+                          const editada = p.editadaEn ? (p.editadaEn instanceof Date ? p.editadaEn : ('toDate' in (p.editadaEn as object) ? (p.editadaEn as unknown as { toDate: () => Date }).toDate() : null)) : null;
+                          return (
+                            <div key={p.id} className="border border-gray-200 rounded-lg p-3 bg-white">
+                              <div className="font-semibold text-sm text-gray-900">📦 {p.nombre}</div>
+                              <div className="text-xs text-gray-700 mt-0.5">
+                                {p.marca && <>Marca: {p.marca} · </>}
+                                {p.modelo && <>Modelo: {p.modelo} · </>}
+                                Condición: {condicionLabel}
+                              </div>
+                              <div className="text-xs text-gray-700">
+                                Origen: {origenLabel}
+                                {p.proveedor && <> · Proveedor: {p.proveedor}</>}
+                              </div>
+                              <div className="text-xs text-gray-700">
+                                Cantidad: {p.cantidad} × {formatMoneda(p.costoUnitario)} = <span className="font-semibold">{formatMoneda(p.costoTotal)}</span>
+                              </div>
+                              <div className="text-[11px] text-gray-500 mt-1">
+                                Registrada por {p.registradaPorNombre || 'técnico'}
+                                {registrada && <> · {formatFecha(registrada)}</>}
+                                {editada && p.editadaPor && (
+                                  <> · <span className="text-amber-700">Editada por admin {formatFecha(editada)}</span></>
+                                )}
+                                {p.aprobadaPorAdmin && (
+                                  <span className="ml-2 text-green-700">✓ Aprobada</span>
+                                )}
+                              </div>
+                              {p.fotoUrl && (
+                                <a
+                                  href={p.fotoUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-block mt-1 text-xs text-[#1a5fa8] hover:underline"
+                                >
+                                  Ver foto
+                                </a>
+                              )}
+                              {p.notas && (
+                                <p className="text-xs italic text-gray-600 mt-1">Notas: {p.notas}</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {userProfile?.rol === 'administrador' && !validada && (
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setModalPiezasAbierto(true)}
+                            className="text-xs font-semibold text-[#1a5fa8] hover:underline"
+                          >
+                            Validar ahora →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Checklist (legacy) */}
                 {(orden.cierreServicio.checklist?.length || 0) > 0 && orden.cierreServicio.checklist && (
                   <div>
@@ -837,6 +929,12 @@ export default function OrdenDetalle() {
             onClose={() => setShowPagoModal(false)}
             orden={orden}
             userProfile={userProfile}
+          />
+
+          {/* Modal de validar / editar piezas (solo admin) */}
+          <ModalEditarPiezasOrden
+            orden={modalPiezasAbierto ? orden : null}
+            onClose={() => setModalPiezasAbierto(false)}
           />
 
 

@@ -1,4 +1,4 @@
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { Timestamp } from 'firebase/firestore';
 import { storage } from '../firebase/config';
 import type { PiezaUsada, CondicionPieza, OrigenPieza } from '../types';
@@ -30,6 +30,27 @@ export async function subirFotoPieza(
   return withTimeout(getDownloadURL(ref), UPLOAD_TIMEOUT_MS, 'get download URL pieza');
 }
 
+/**
+ * Borra una foto de pieza de Firebase Storage dada su URL de descarga.
+ * Fire-and-forget: no lanza error si la foto no existe o la URL está mal
+ * formada. Solo hace log de diagnóstico.
+ *
+ * URL esperada: https://firebasestorage.googleapis.com/v0/b/{bucket}/o/{pathEncoded}?alt=media&token=...
+ * Se extrae y decodifica el path (p.ej. "fotos-piezas/{ordenId}/{piezaId}.jpg").
+ */
+export async function borrarFotoPieza(fotoUrl: string): Promise<void> {
+  if (!fotoUrl) return;
+  try {
+    const url = new URL(fotoUrl);
+    const pathEncoded = url.pathname.split('/o/')[1]?.split('?')[0];
+    if (!pathEncoded) return;
+    const path = decodeURIComponent(pathEncoded);
+    await deleteObject(storageRef(storage, path));
+  } catch (err) {
+    console.warn('[piezas] No pude borrar foto de Storage:', err);
+  }
+}
+
 export interface InputPieza {
   id?: string;                     // si viene, se usa (útil para pre-subir foto)
   nombre: string;
@@ -47,9 +68,8 @@ export interface InputPieza {
 /**
  * Construye una PiezaUsada aplicando defaults y strip de undefined.
  * costoTotal siempre es computed (cantidad × costoUnitario).
- * `registradaEn` se escribe a Firestore como Timestamp; el tipo de interfaz
- * lo expone como Date post-parse. Aquí devolvemos Timestamp (asignable a
- * `Date` por la convención del proyecto — parseOrden lo convertirá).
+ * `registradaEn` se persiste como Firestore Timestamp; la interfaz
+ * PiezaUsada lo tipa como `Timestamp | Date` (parseOrden lo hidrata a Date al leer).
  */
 export function crearPiezaUsada(
   input: InputPieza,
@@ -69,8 +89,7 @@ export function crearPiezaUsada(
     costoTotal,
     registradaPor: tecnico.uid,
     registradaPorNombre: tecnico.nombre,
-    // Firestore acepta Timestamp; TypeScript lo casta a Date por la interfaz.
-    registradaEn: Timestamp.now() as unknown as Date,
+    registradaEn: Timestamp.now(),
     aprobadaPorAdmin: false,
   };
 

@@ -458,6 +458,8 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
               aprobadaPorAdmin: typeof p.aprobadaPorAdmin === 'boolean' ? (p.aprobadaPorAdmin as boolean) : undefined,
               aprobadaEn: parseFirestoreDate(p.aprobadaEn) || undefined,
               aprobadaPor: (p.aprobadaPor as string) || undefined,
+              editadaPor: (p.editadaPor as string) || undefined,
+              editadaEn: parseFirestoreDate(p.editadaEn) || undefined,
             }))
           : undefined,
         piezasValidadasPorAdmin: typeof cs.piezasValidadasPorAdmin === 'boolean' ? (cs.piezasValidadasPorAdmin as boolean) : undefined,

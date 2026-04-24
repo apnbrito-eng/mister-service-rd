@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Phone, MapPin, Edit2, AlertTriangle, XCircle, Package } from 'lucide-react';
 import { OrdenServicio, Usuario, StandbyPieza } from '../../types';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import {
-  formatFecha, formatTelefono, whatsappLink,
+  formatFecha, formatMoneda, formatTelefono, whatsappLink,
   estadoSimpleLabel, estadoSimpleColor, tiempoTranscurrido, tieneStandby,
 } from '../../utils';
 import { puede } from '../../utils/permisos';
@@ -471,6 +472,39 @@ export default function OrdenDetailModal({
         orden={orden}
         userProfile={userProfile}
       />
+
+      {/* Piezas utilizadas — resumen compacto (link al detalle para ver/validar) */}
+      {orden.cierreServicio?.piezasUsadas && orden.cierreServicio.piezasUsadas.length > 0 && (() => {
+        const piezas = orden.cierreServicio!.piezasUsadas!;
+        const costoTotal = Number(orden.costoPiezasTotal) || piezas.reduce((acc, p) => acc + (Number(p.costoTotal) || 0), 0);
+        const validada = orden.cierreServicio?.piezasValidadasPorAdmin === true;
+        return (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <Package size={14} /> Piezas utilizadas
+            </h3>
+            <div className="flex items-center justify-between flex-wrap gap-2 bg-gray-50 border border-gray-100 rounded-lg p-3 text-sm">
+              <div>
+                <span className="font-medium text-gray-900">
+                  {piezas.length} pieza{piezas.length === 1 ? '' : 's'}
+                </span>
+                <span className="text-gray-600"> · {formatMoneda(costoTotal)} · </span>
+                {validada ? (
+                  <span className="text-green-700 font-medium">Validadas</span>
+                ) : (
+                  <span className="text-orange-600 font-medium">Pendientes</span>
+                )}
+              </div>
+              <Link
+                to={`/admin/ordenes/${orden.id}`}
+                className="text-xs font-semibold text-[#1a5fa8] hover:underline"
+              >
+                Ver detalle →
+              </Link>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Created By */}
       <div>
