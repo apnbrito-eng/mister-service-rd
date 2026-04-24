@@ -130,6 +130,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 4. Cambiar la contraseña
     await auth.updateUser(targetUser.uid, { password: newPassword });
 
+    // 5. Audit log (best-effort, no bloquea el response principal)
+    try {
+      const db = getFirestore();
+      await db.collection('auditoria_admin').add({
+        accion: 'reset_password',
+        solicitanteUid: callerUid,
+        solicitanteEmail: callerEmail ?? null,
+        objetivoUid: targetUser.uid,
+        objetivoEmail: targetUser.email ?? targetEmail.trim().toLowerCase(),
+        objetivoTipo: 'usuario',
+        motivo: 'Reset de contraseña por administrador',
+        timestamp: new Date(),
+      });
+    } catch (auditErr) {
+      console.warn('[reset-password] Audit log falló:', auditErr);
+    }
+
     return res.status(200).json({
       ok: true,
       message: `Contraseña actualizada para ${targetEmail}`,

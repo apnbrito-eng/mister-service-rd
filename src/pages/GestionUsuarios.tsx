@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, setDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, setDoc, doc, Timestamp, query, orderBy, serverTimestamp } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { Personal, Rol, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, PermisosSistema } from '../types';
 import { permisosDefaultDeRol, iaHabilitadaDefaultPorRol } from '../utils/permisos';
+import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, Edit, Key, Power, User, Shield, Eye, EyeOff, Check, X, KeyRound, ExternalLink } from 'lucide-react';
+import { Plus, Edit, Key, Power, User, Shield, Eye, EyeOff, Check, X, KeyRound, ExternalLink, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
@@ -59,6 +60,9 @@ const initialForm: FormState = {
 const COLORES_TECNICO = ['#3b82f6', '#f97316', '#14b8a6', '#a855f7', '#22c55e', '#ef4444', '#f59e0b', '#0f3460'];
 
 export default function GestionUsuarios() {
+  const { userProfile } = useApp();
+  const esAdminEstricto = userProfile?.rol === 'administrador';
+
   const [loading, setLoading] = useState(true);
   const [usuarios, setUsuarios] = useState<Personal[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -66,6 +70,14 @@ export default function GestionUsuarios() {
   const [form, setForm] = useState<FormState>(initialForm);
   const [saving, setSaving] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Snapshot del usuario en edición (para detectar cambios sensibles como email/rol).
+  const [original, setOriginal] = useState<Personal | null>(null);
+
+  // Confirmación de cambio de email (sub-modal con motivo obligatorio).
+  const [confirmEmailAbierto, setConfirmEmailAbierto] = useState(false);
+  const [motivoEmail, setMotivoEmail] = useState('');
+  const [cambiandoEmail, setCambiandoEmail] = useState(false);
 
   // Access modal (crear/cambiar contraseña para Firebase Auth)
   const [showAccessModal, setShowAccessModal] = useState(false);
@@ -91,6 +103,7 @@ export default function GestionUsuarios() {
     setForm(initialForm);
     setEditingId(null);
     setShowPassword(false);
+    setOriginal(null);
   };
 
   const openCreate = () => {
@@ -112,6 +125,7 @@ export default function GestionUsuarios() {
       iaHabilitada: u.iaHabilitada ?? false,
     });
     setEditingId(u.id);
+    setOriginal(u);
     setShowModal(true);
   };
 
@@ -154,91 +168,209 @@ export default function GestionUsuarios() {
     }));
   };
 
+  /**
+   * Guarda los cambios del formulario al doc `personal/{editingId}` (+ sync a
+   * `usuarios/{uid}`) o crea un nuevo personal si no hay `editingId`. Si
+   * `rolCambio` es true, escribe además un registro en `auditoria_admin`.
+   * NO toca el email en Firebase Auth — eso se maneja aparte vía endpoint.
+   */
+  const guardarRestoDeCambios = async (opts?: { rolCambio?: boolean; saltarEmailNuevo?: string }) => {
+    const data: Record<string, unknown> = {
+      nombre: form.nombre.trim(),
+      // Si saltarEmailNuevo viene, el email ya se actualizó server-side y
+      // usuarios/{uid} + personal también; igual lo persistimos para coherencia.
+      email: (opts?.saltarEmailNuevo ?? form.email).trim().toLowerCase(),
+      telefono: form.telefono,
+      rol: form.rol,
+      color: form.color,
+      disponibilidad: true,
+      activo: true,
+      // iaHabilitada siempre boolean (nunca undefined) — Firestore rechaza undefined.
+      iaHabilitada: form.iaHabilitada === true,
+    };
+
+    if (form.rol === 'tecnico') {
+      data.permisos = form.permisos;
+    }
+    // Permisos granulares (Fase 3B)
+    data.permisosPersonalizados = form.permisosPersonalizados;
+    if (form.permisosPersonalizados) {
+      data.permisosSistema = form.permisosSistema;
+    }
+
+    if (editingId) {
+      await updateDoc(doc(db, 'personal', editingId), data);
+
+      // Sync ampliado a usuarios/{uid} cuando hay Auth vinculado (task #76).
+      // El doc en `usuarios/` es el profile real-time que consume AppContext; si no
+      // se propaga, cambios en iaHabilitada/rol/permisos no llegan al usuario hasta
+      // que vuelva a iniciar sesión. Envolvemos en try/catch independiente para no
+      // romper el updateDoc principal si falla el sync.
+      try {
+        const editedUser = usuarios.find(u => u.id === editingId);
+        const uid = editedUser?.uid;
+        if (uid && uid !== 'existing') {
+          const syncPayload: Record<string, unknown> = {};
+          if (data.iaHabilitada !== undefined) syncPayload.iaHabilitada = data.iaHabilitada;
+          if (data.rol !== undefined) syncPayload.rol = data.rol;
+          if (data.nombre !== undefined) syncPayload.nombre = data.nombre;
+          if (data.email !== undefined) syncPayload.email = data.email;
+          if (data.activo !== undefined) syncPayload.activo = data.activo;
+          if (data.permisosPersonalizados !== undefined) syncPayload.permisosPersonalizados = data.permisosPersonalizados;
+          if (data.permisosSistema !== undefined) syncPayload.permisosSistema = data.permisosSistema;
+          await setDoc(doc(db, 'usuarios', uid), syncPayload, { merge: true });
+        }
+      } catch (syncErr) {
+        console.warn('Sync a usuarios/{uid} falló (no bloquea el update principal):', syncErr);
+      }
+
+      // Audit log para cambio de rol (decisión Jorge: sin motivo obligatorio,
+      // solo warning visual). Best-effort: no bloquea el save.
+      if (opts?.rolCambio && original) {
+        try {
+          const currentUser = auth.currentUser;
+          const editedUser = usuarios.find(u => u.id === editingId);
+          const auditPayload: Record<string, unknown> = {
+            accion: 'cambiar_rol_usuario',
+            solicitanteUid: currentUser?.uid ?? null,
+            solicitanteEmail: currentUser?.email ?? null,
+            objetivoUid: editedUser?.uid ?? null,
+            objetivoTipo: 'usuario',
+            objetivoId: editingId,
+            cambios: { rol: { antes: original.rol, despues: form.rol } },
+            motivo: 'Cambio sin motivo obligatorio (admin directo).',
+            timestamp: serverTimestamp(),
+          };
+          await addDoc(collection(db, 'auditoria_admin'), auditPayload);
+        } catch (auditErr) {
+          console.warn('Audit log (cambio de rol) falló:', auditErr);
+        }
+      }
+
+      toast.success('Usuario actualizado');
+    } else {
+      // Create Firebase Auth user using a secondary app to not kick out admin
+      let createdUid: string | null = null;
+      try {
+        const secondaryApp = initializeApp(auth.app.options, 'Secondary');
+        const secondaryAuth = getAuth(secondaryApp);
+        const cred = await createUserWithEmailAndPassword(secondaryAuth, form.email.trim(), form.password);
+        createdUid = cred.user.uid;
+        await deleteApp(secondaryApp);
+      } catch (authErr: unknown) {
+        const errCode = (authErr as { code?: string })?.code;
+        if (errCode === 'auth/email-already-in-use') {
+          toast.error('El email ya está registrado en Firebase Auth');
+          return;
+        }
+        console.warn('Auth creation issue:', authErr);
+      }
+      if (createdUid) data.uid = createdUid;
+      data.createdAt = Timestamp.now();
+      await addDoc(collection(db, 'personal'), data);
+      toast.success('Usuario creado');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nombre.trim()) { toast.error('Nombre es obligatorio'); return; }
     if (!form.email.trim()) { toast.error('Email es obligatorio'); return; }
     if (!editingId && form.password.length < 8) { toast.error('La contraseña debe tener al menos 8 caracteres'); return; }
 
+    // En modo edición, detectar cambios sensibles (email / rol).
+    const emailNormForm = form.email.trim().toLowerCase();
+    const emailNormOriginal = (original?.email ?? '').trim().toLowerCase();
+    const emailCambio = !!editingId && emailNormForm !== emailNormOriginal;
+    const rolCambio = !!editingId && !!original && form.rol !== original.rol;
+
+    // Si cambió el email y el usuario tiene uid real → abrir confirmación con motivo.
+    if (emailCambio) {
+      if (!esAdminEstricto) {
+        toast.error('Solo el administrador puede cambiar el email de un usuario.');
+        return;
+      }
+      const editedUser = usuarios.find(u => u.id === editingId);
+      const uid = editedUser?.uid;
+      if (!uid || uid === 'existing') {
+        toast.error('Este usuario no tiene Auth vinculado. Restablece la contraseña primero para vincular la cuenta.');
+        return;
+      }
+      setMotivoEmail('');
+      setConfirmEmailAbierto(true);
+      return;
+    }
+
+    // Sin cambios de email: flujo normal.
     setSaving(true);
     try {
-      const data: Record<string, unknown> = {
-        nombre: form.nombre.trim(),
-        email: form.email.trim().toLowerCase(),
-        telefono: form.telefono,
-        rol: form.rol,
-        color: form.color,
-        disponibilidad: true,
-        activo: true,
-        // iaHabilitada siempre boolean (nunca undefined) — Firestore rechaza undefined.
-        iaHabilitada: form.iaHabilitada === true,
-      };
-
-      if (form.rol === 'tecnico') {
-        data.permisos = form.permisos;
-      }
-      // Permisos granulares (Fase 3B)
-      data.permisosPersonalizados = form.permisosPersonalizados;
-      if (form.permisosPersonalizados) {
-        data.permisosSistema = form.permisosSistema;
-      }
-
-      if (editingId) {
-        await updateDoc(doc(db, 'personal', editingId), data);
-
-        // Sync ampliado a usuarios/{uid} cuando hay Auth vinculado (task #76).
-        // El doc en `usuarios/` es el profile real-time que consume AppContext; si no
-        // se propaga, cambios en iaHabilitada/rol/permisos no llegan al usuario hasta
-        // que vuelva a iniciar sesión. Envolvemos en try/catch independiente para no
-        // romper el updateDoc principal si falla el sync.
-        try {
-          const editedUser = usuarios.find(u => u.id === editingId);
-          const uid = editedUser?.uid;
-          if (uid && uid !== 'existing') {
-            const syncPayload: Record<string, unknown> = {};
-            if (data.iaHabilitada !== undefined) syncPayload.iaHabilitada = data.iaHabilitada;
-            if (data.rol !== undefined) syncPayload.rol = data.rol;
-            if (data.nombre !== undefined) syncPayload.nombre = data.nombre;
-            if (data.email !== undefined) syncPayload.email = data.email;
-            if (data.activo !== undefined) syncPayload.activo = data.activo;
-            if (data.permisosPersonalizados !== undefined) syncPayload.permisosPersonalizados = data.permisosPersonalizados;
-            if (data.permisosSistema !== undefined) syncPayload.permisosSistema = data.permisosSistema;
-            await setDoc(doc(db, 'usuarios', uid), syncPayload, { merge: true });
-          }
-        } catch (syncErr) {
-          console.warn('Sync a usuarios/{uid} falló (no bloquea el update principal):', syncErr);
-        }
-
-        toast.success('Usuario actualizado');
-      } else {
-        // Create Firebase Auth user using a secondary app to not kick out admin
-        let createdUid: string | null = null;
-        try {
-          const secondaryApp = initializeApp(auth.app.options, 'Secondary');
-          const secondaryAuth = getAuth(secondaryApp);
-          const cred = await createUserWithEmailAndPassword(secondaryAuth, form.email.trim(), form.password);
-          createdUid = cred.user.uid;
-          await deleteApp(secondaryApp);
-        } catch (authErr: unknown) {
-          const errCode = (authErr as { code?: string })?.code;
-          if (errCode === 'auth/email-already-in-use') {
-            toast.error('El email ya está registrado en Firebase Auth');
-            setSaving(false);
-            return;
-          }
-          console.warn('Auth creation issue:', authErr);
-        }
-        if (createdUid) data.uid = createdUid;
-        data.createdAt = Timestamp.now();
-        await addDoc(collection(db, 'personal'), data);
-        toast.success('Usuario creado');
-      }
+      await guardarRestoDeCambios({ rolCambio });
       setShowModal(false);
       resetForm();
     } catch (err) {
       console.error(err);
       toast.error('Error al guardar usuario');
     } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
+   * Handler del sub-modal de confirmar cambio de email. Llama al endpoint
+   * `/api/admin/cambiar-correo` y, si responde ok, guarda el resto de cambios
+   * (incluyendo rol si también cambió).
+   */
+  const confirmarCambioEmail = async () => {
+    if (!editingId || !original) return;
+    const motivo = motivoEmail.trim();
+    if (motivo.length < 5) {
+      toast.error('El motivo debe tener al menos 5 caracteres.');
+      return;
+    }
+    const editedUser = usuarios.find(u => u.id === editingId);
+    const uid = editedUser?.uid;
+    if (!uid || uid === 'existing') {
+      toast.error('Este usuario no tiene Auth vinculado.');
+      return;
+    }
+
+    setCambiandoEmail(true);
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        toast.error('Sesión expirada. Vuelve a iniciar sesión.');
+        return;
+      }
+      const token = await currentUser.getIdToken();
+      const nuevoEmail = form.email.trim().toLowerCase();
+      const resp = await fetch('/api/admin/cambiar-correo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ uid, nuevoEmail, motivo }),
+      });
+      const data = await resp.json().catch(() => ({} as { error?: string }));
+      if (!resp.ok) {
+        toast.error(data.error || `Error ${resp.status}`);
+        return;
+      }
+      toast.success('Email actualizado en el sistema de autenticación.');
+
+      // Guardar resto de cambios (nombre, tel, rol, permisos, iaHabilitada, etc.)
+      const rolCambio = form.rol !== original.rol;
+      setSaving(true);
+      await guardarRestoDeCambios({ rolCambio, saltarEmailNuevo: nuevoEmail });
+
+      setConfirmEmailAbierto(false);
+      setShowModal(false);
+      resetForm();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al cambiar el email');
+    } finally {
+      setCambiandoEmail(false);
       setSaving(false);
     }
   };
@@ -487,10 +619,57 @@ export default function GestionUsuarios() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email * <span className="text-xs text-gray-400">(usuario de acceso)</span></label>
-                  <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                    disabled={!!editingId}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50" />
+                  {(() => {
+                    const uidEditado = original?.uid;
+                    const uidEsExisting = !!editingId && uidEditado === 'existing';
+                    // En edición, el email solo es editable si es admin estricto y el uid
+                    // está resuelto (no 'existing'). En creación, siempre editable.
+                    const emailEditable = editingId
+                      ? esAdminEstricto && !uidEsExisting
+                      : true;
+                    const emailNormForm = form.email.trim().toLowerCase();
+                    const emailNormOriginal = (original?.email ?? '').trim().toLowerCase();
+                    const emailModificado = !!editingId && emailNormForm !== emailNormOriginal;
+                    const tooltipExisting = uidEsExisting
+                      ? 'Primero restablece la contraseña para vincular la cuenta'
+                      : undefined;
+                    const labelWarnTitle =
+                      editingId && emailEditable
+                        ? 'Cambio de email requiere motivo. El usuario deberá usar el nuevo email para iniciar sesión.'
+                        : undefined;
+                    const borderClass = !editingId
+                      ? 'border-gray-200'
+                      : emailModificado
+                      ? 'border-amber-500 bg-amber-50'
+                      : emailEditable
+                      ? 'border-amber-300'
+                      : 'border-gray-200';
+                    return (
+                      <>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                          {editingId && emailEditable && (
+                            <AlertTriangle size={12} className="text-amber-500" />
+                          )}
+                          <span title={labelWarnTitle}>
+                            Email * <span className="text-xs text-gray-400">(usuario de acceso)</span>
+                          </span>
+                        </label>
+                        <input
+                          type="email"
+                          value={form.email}
+                          onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                          disabled={!emailEditable}
+                          title={tooltipExisting}
+                          className={`w-full px-3 py-2 border ${borderClass} rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50`}
+                        />
+                        {emailModificado && (
+                          <p className="text-[11px] text-amber-700 mt-1">
+                            Modificado — se pedirá motivo al guardar.
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
@@ -517,14 +696,35 @@ export default function GestionUsuarios() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Rol *</label>
-                  <select value={form.rol} onChange={e => handleRolChange(e.target.value as Rol)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
-                    <option value="administrador">Administrador</option>
-                    <option value="secretaria">Secretaria</option>
-                    <option value="operaria">Operaria</option>
-                    <option value="tecnico">Técnico</option>
-                  </select>
+                  {(() => {
+                    const rolModificado = !!editingId && !!original && form.rol !== original.rol;
+                    const rolBorderClass = rolModificado
+                      ? 'border-amber-500 bg-amber-50'
+                      : 'border-gray-200 bg-white';
+                    return (
+                      <>
+                        <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                          {rolModificado && <AlertTriangle size={12} className="text-amber-500" />}
+                          <span>Rol *</span>
+                        </label>
+                        <select
+                          value={form.rol}
+                          onChange={e => handleRolChange(e.target.value as Rol)}
+                          className={`w-full px-3 py-2 border ${rolBorderClass} rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]`}
+                        >
+                          <option value="administrador">Administrador</option>
+                          <option value="secretaria">Secretaria</option>
+                          <option value="operaria">Operaria</option>
+                          <option value="tecnico">Técnico</option>
+                        </select>
+                        {rolModificado && (
+                          <p className="text-[11px] text-amber-700 mt-1">
+                            Cambio de rol — se registrará en auditoría.
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
                 {form.rol === 'tecnico' && (
                   <div>
@@ -771,6 +971,88 @@ export default function GestionUsuarios() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Sub-modal: confirmar cambio de email */}
+      <Modal
+        isOpen={confirmEmailAbierto}
+        onClose={() => {
+          if (!cambiandoEmail) {
+            setConfirmEmailAbierto(false);
+            setMotivoEmail('');
+          }
+        }}
+        title="Cambiar email de acceso al sistema"
+        size="md"
+      >
+        {editingId && original && (
+          <div className="space-y-4">
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3">
+              <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0" />
+              <div className="text-sm text-amber-900">
+                Este cambio afecta el acceso al sistema del usuario{' '}
+                <strong>{form.nombre || original.nombre}</strong>.
+              </div>
+            </div>
+
+            <div className="space-y-1 text-sm">
+              <p className="text-gray-600">Email actual (Firebase Auth):</p>
+              <p className="font-mono bg-gray-50 border border-gray-200 rounded px-2 py-1">
+                {original.email || '—'}
+              </p>
+              <p className="text-gray-600 mt-2">Nuevo email:</p>
+              <p className="font-mono bg-gray-50 border border-gray-200 rounded px-2 py-1">
+                {form.email.trim().toLowerCase()}
+              </p>
+            </div>
+
+            <ul className="text-xs text-gray-600 list-disc list-inside space-y-1">
+              <li>Deberá usar el nuevo email para iniciar sesión.</li>
+              <li>Su sesión actual seguirá activa hasta que cierre manualmente o expire.</li>
+              <li>El email quedará como no-verificado en Firebase Auth.</li>
+            </ul>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Motivo del cambio (requerido, mínimo 5 caracteres)
+              </label>
+              <textarea
+                value={motivoEmail}
+                onChange={e => setMotivoEmail(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                placeholder="Ej: el usuario cambió de correo corporativo."
+              />
+              {motivoEmail.length > 0 && motivoEmail.trim().length < 5 && (
+                <p className="text-[11px] text-red-500 mt-1">
+                  Faltan {5 - motivoEmail.trim().length} caracteres
+                </p>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmEmailAbierto(false);
+                  setMotivoEmail('');
+                }}
+                disabled={cambiandoEmail}
+                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarCambioEmail}
+                disabled={cambiandoEmail || motivoEmail.trim().length < 5}
+                className="flex items-center gap-1 px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              >
+                {cambiandoEmail ? 'Cambiando...' : 'Sí, cambiar email'}
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Modal Gestionar Acceso (Firebase Auth) */}
