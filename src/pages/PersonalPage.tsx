@@ -1,6 +1,6 @@
 import { useState, useEffect, Fragment } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, Timestamp, query, orderBy } from 'firebase/firestore';
-import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
@@ -117,6 +117,87 @@ export default function PersonalPage() {
     };
   }, []);
 
+  /**
+   * Llama al endpoint serverless `/api/admin/crear-usuario` que usa Admin SDK
+   * para crear la cuenta Firebase Auth + docs Firestore sin deslogueyar al admin.
+   * Devuelve true si se creó exitosamente, false si hubo error (ya mostró toast).
+   * En caso de `email-already-in-use` (409), invoca `onEmailYaExiste` para que el
+   * caller abra el modal de vinculación — y devuelve false para que el caller
+   * corte el flujo (el modal continúa por otro camino).
+   */
+  const crearUsuarioViaEndpoint = async (opts: {
+    personalId: string | null;
+    onEmailYaExiste: () => void;
+  }): Promise<boolean> => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      toast.error('Sesión expirada, vuelve a iniciar sesión');
+      return false;
+    }
+    let idToken: string;
+    try {
+      idToken = await currentUser.getIdToken();
+    } catch {
+      toast.error('No se pudo obtener la sesión. Vuelve a iniciar sesión.');
+      return false;
+    }
+
+    const payload: Record<string, unknown> = {
+      email: emailAcceso.trim().toLowerCase(),
+      password: passwordAcceso,
+      nombre: form.nombre.trim(),
+      rol: form.rol,
+      iaHabilitada: form.iaHabilitada === true,
+      disponibilidad: form.disponibilidad === true,
+      activo: form.activo !== false,
+    };
+    if (form.telefono) payload.telefono = form.telefono;
+    if (form.especialidad) payload.especialidad = form.especialidad;
+    if (form.zona) payload.zona = form.zona;
+    if (form.horario) payload.horario = form.horario;
+    if (form.color) payload.color = form.color;
+    if (form.nivel) payload.nivel = form.nivel;
+    if (typeof form.sueldoBase === 'number') payload.sueldoBase = form.sueldoBase;
+    if (typeof form.comisionPorcentaje === 'number') payload.comisionPorcentaje = form.comisionPorcentaje;
+    if (form.operariaId) payload.operariaId = form.operariaId;
+    if (form.operariaNombre) payload.operariaNombre = form.operariaNombre;
+    if (opts.personalId) payload.personalId = opts.personalId;
+
+    let resp: Response;
+    try {
+      resp = await fetch('/api/admin/crear-usuario', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (err) {
+      console.error('[crearUsuarioViaEndpoint] Error de red:', err);
+      toast.error('Error de red al crear el usuario');
+      return false;
+    }
+
+    let data: { uid?: string; personalId?: string; error?: string } = {};
+    try {
+      data = await resp.json();
+    } catch {
+      /* puede venir vacío en 5xx raros */
+    }
+
+    if (resp.status === 409) {
+      // Email ya existe en Firebase Auth → delegar al modal de vinculación
+      opts.onEmailYaExiste();
+      return false;
+    }
+    if (!resp.ok) {
+      toast.error(data.error || 'Error al crear el usuario');
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nombre || !form.rol) { toast.error('Nombre y rol son requeridos'); return; }
@@ -180,8 +261,8 @@ export default function PersonalPage() {
             setSaving(false);
             return;
           }
-          // Intentar crear la cuenta Auth; si el email ya existe, ofrecer vincular
-          const usuarioData: Record<string, unknown> = {
+          // Preservar datos para el flujo de vinculación si el email ya existe
+          const usuarioDataParaVincular: Record<string, unknown> = {
             nombre: form.nombre,
             email: emailAcceso.trim().toLowerCase(),
             rol: form.rol,
@@ -191,53 +272,31 @@ export default function PersonalPage() {
             createdAt: Timestamp.now(),
             iaHabilitada: iaHabilitadaValue,
           };
-          if (form.rol === 'tecnico') usuarioData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
-          data.email = emailAcceso.trim().toLowerCase();
+          if (form.rol === 'tecnico') usuarioDataParaVincular.permisos = { ...PERMISOS_DEFAULT_TECNICO };
+          const personalDataParaVincular: Record<string, unknown> = { ...data, email: emailAcceso.trim().toLowerCase() };
           if (form.rol === 'tecnico' && !personalActual?.permisos) {
-            data.permisos = { ...PERMISOS_DEFAULT_TECNICO };
+            personalDataParaVincular.permisos = { ...PERMISOS_DEFAULT_TECNICO };
           }
 
-          let createdUid: string | null = null;
-          try {
-            const secondaryApp = initializeApp(auth.app.options, 'PersonalSecondary');
-            const secondaryAuth = getAuth(secondaryApp);
-            const cred = await createUserWithEmailAndPassword(
-              secondaryAuth,
-              emailAcceso.trim().toLowerCase(),
-              passwordAcceso
-            );
-            createdUid = cred.user.uid;
-            await deleteApp(secondaryApp);
-          } catch (authErr: unknown) {
-            const errCode = (authErr as { code?: string })?.code;
-            if (errCode === 'auth/email-already-in-use') {
-              // Abrir flujo de vinculación y preservar datos pendientes
+          // Llamada al endpoint serverless (usa Admin SDK, no deslogueya al admin)
+          const ok = await crearUsuarioViaEndpoint({
+            personalId: editingId,
+            onEmailYaExiste: () => {
               setVincularPending({
                 personalId: editingId,
-                personalData: data,
-                usuarioData,
+                personalData: personalDataParaVincular,
+                usuarioData: usuarioDataParaVincular,
               });
               setVincularTarget(personalActual || null);
               setVincularEmail(emailAcceso.trim().toLowerCase());
               setVincularPassword(passwordAcceso);
               setShowVincularModal(true);
-              setSaving(false);
-              return;
-            }
-            if (errCode === 'auth/weak-password') { toast.error('Contraseña demasiado débil'); setSaving(false); return; }
-            if (errCode === 'auth/invalid-email') { toast.error('Email de acceso inválido'); setSaving(false); return; }
-            console.error('Error creando cuenta Auth:', authErr);
-            toast.error('Error al crear la cuenta de acceso');
+            },
+          });
+          if (!ok) {
             setSaving(false);
             return;
           }
-          if (createdUid) {
-            try {
-              await setDoc(doc(db, 'usuarios', createdUid), usuarioData);
-            } catch (err) { console.warn('No se pudo crear usuarios/{uid}:', err); }
-            data.uid = createdUid;
-          }
-          await updateDoc(doc(db, 'personal', editingId), data);
           toast.success(`Acceso creado. Puede iniciar sesión con ${emailAcceso.trim()}`);
         } else {
           // EDIT normal
@@ -267,72 +326,52 @@ export default function PersonalPage() {
           toast.success('Personal actualizado');
         }
       } else {
-        // CREAR: si necesita acceso, crear auth + usuarios doc + personal doc con uid
-        let createdUid: string | null = null;
-        const personalData: Record<string, unknown> = { ...data, createdAt: Timestamp.now() };
-        if (form.rol === 'tecnico') personalData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
-        // Retrocompat: guardar email de acceso también en personal.email
-        if (necesitaAcceso) personalData.email = emailAcceso.trim().toLowerCase();
-
-        const usuarioData: Record<string, unknown> = {
-          nombre: form.nombre,
-          email: necesitaAcceso ? emailAcceso.trim().toLowerCase() : '',
-          rol: form.rol,
-          telefono: form.telefono || '',
-          color: form.color || '#3b82f6',
-          activo: true,
-          createdAt: Timestamp.now(),
-          iaHabilitada: iaHabilitadaValue,
-        };
-        if (form.rol === 'tecnico') usuarioData.permisos = { ...PERMISOS_DEFAULT_TECNICO };
-
+        // CREAR
         if (necesitaAcceso) {
-          try {
-            const secondaryApp = initializeApp(auth.app.options, 'PersonalSecondary');
-            const secondaryAuth = getAuth(secondaryApp);
-            const cred = await createUserWithEmailAndPassword(
-              secondaryAuth,
-              emailAcceso.trim().toLowerCase(),
-              passwordAcceso
-            );
-            createdUid = cred.user.uid;
-            await deleteApp(secondaryApp);
-          } catch (authErr: unknown) {
-            const errCode = (authErr as { code?: string })?.code;
-            if (errCode === 'auth/email-already-in-use') {
-              // Disparar flujo de vinculación con cuenta existente
+          // Preservar datos para el flujo de vinculación si el email ya existe
+          const personalDataParaVincular: Record<string, unknown> = {
+            ...data,
+            createdAt: Timestamp.now(),
+            email: emailAcceso.trim().toLowerCase(),
+          };
+          if (form.rol === 'tecnico') personalDataParaVincular.permisos = { ...PERMISOS_DEFAULT_TECNICO };
+
+          const usuarioDataParaVincular: Record<string, unknown> = {
+            nombre: form.nombre,
+            email: emailAcceso.trim().toLowerCase(),
+            rol: form.rol,
+            telefono: form.telefono || '',
+            color: form.color || '#3b82f6',
+            activo: true,
+            createdAt: Timestamp.now(),
+            iaHabilitada: iaHabilitadaValue,
+          };
+          if (form.rol === 'tecnico') usuarioDataParaVincular.permisos = { ...PERMISOS_DEFAULT_TECNICO };
+
+          // Llamada al endpoint serverless (Admin SDK → no deslogueya al admin)
+          const ok = await crearUsuarioViaEndpoint({
+            personalId: null,
+            onEmailYaExiste: () => {
               setVincularPending({
                 personalId: null,
-                personalData,
-                usuarioData,
+                personalData: personalDataParaVincular,
+                usuarioData: usuarioDataParaVincular,
               });
               setVincularTarget(null);
               setVincularEmail(emailAcceso.trim().toLowerCase());
               setVincularPassword(passwordAcceso);
               setShowVincularModal(true);
-              setSaving(false);
-              return;
-            }
-            if (errCode === 'auth/weak-password') { toast.error('Contraseña demasiado débil'); setSaving(false); return; }
-            if (errCode === 'auth/invalid-email') { toast.error('Email de acceso inválido'); setSaving(false); return; }
-            console.error('Error creando cuenta Auth:', authErr);
-            toast.error('Error al crear la cuenta de acceso');
+            },
+          });
+          if (!ok) {
             setSaving(false);
             return;
           }
-        }
-
-        if (createdUid) {
-          try {
-            await setDoc(doc(db, 'usuarios', createdUid), usuarioData);
-          } catch (err) { console.warn('No se pudo crear usuarios/{uid}:', err); }
-          personalData.uid = createdUid;
-        }
-
-        await addDoc(collection(db, 'personal'), personalData);
-        if (necesitaAcceso) {
           toast.success(`Personal creado. Puede iniciar sesión con ${emailAcceso.trim()}`);
         } else {
+          // Ayudante (sin acceso al sistema) → solo crea el doc `personal`
+          const personalData: Record<string, unknown> = { ...data, createdAt: Timestamp.now() };
+          await addDoc(collection(db, 'personal'), personalData);
           toast.success('Ayudante creado');
         }
       }
