@@ -37,7 +37,8 @@ export function rangoMesCalendario(quincena: string): { inicio: Date; fin: Date 
 
 /**
  * Genera una nueva liquidación quincenal:
- * - Toma todo el personal activo con rol en ROLES_CON_ACCESO (excluye ayudantes).
+ * - Toma todo el personal activo con rol en ROLES_CON_ACCESO y distinto de ayudante.
+ *   (ayudante tiene acceso al sistema sólo para el módulo de ponche — no entra a nómina).
  * - Para técnicos: suma comisiones pendientes que caen en la quincena.
  * - Para operarias/coordinadoras: calcula desempeño + bono.
  * - Para todos: suma sueldoBase del personal.
@@ -74,7 +75,7 @@ export async function generarLiquidacion(
   const personalSnap = await getDocs(collection(db, 'personal'));
   const personal = personalSnap.docs
     .map(d => ({ id: d.id, ...d.data() } as Personal))
-    .filter(p => p.activo && ROLES_CON_ACCESO.includes(p.rol));
+    .filter(p => p.activo && p.rol !== 'ayudante' && ROLES_CON_ACCESO.includes(p.rol));
 
   // Comisiones pendientes en el rango (filtrar client-side para evitar índice compuesto)
   const comisionesSnap = await getDocs(collection(db, 'comisiones'));

@@ -3,7 +3,7 @@ import type { Timestamp } from 'firebase/firestore';
 export type Rol = 'administrador' | 'coordinadora' | 'operaria' | 'secretaria' | 'tecnico' | 'ayudante';
 
 /** Roles que pueden iniciar sesión en el sistema (tienen cuenta en Firebase Auth) */
-export const ROLES_CON_ACCESO: Rol[] = ['administrador', 'coordinadora', 'operaria', 'secretaria', 'tecnico'];
+export const ROLES_CON_ACCESO: Rol[] = ['administrador', 'coordinadora', 'operaria', 'secretaria', 'tecnico', 'ayudante'];
 
 export type FaseOrden =
   | 'nuevo_lead'
@@ -1075,4 +1075,37 @@ export interface RecordatorioDiario {
   items?: ItemAviso[];
   notificadoAAdmin?: boolean;
   createdAt: Date;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Ponche de asistencia (módulo de entrada/salida con foto)
+// ═══════════════════════════════════════════════════════════════
+
+export type TipoPonche = 'entrada' | 'salida';
+export type DispositivoPonche = 'movil' | 'desktop';
+
+export interface Ponche {
+  id: string;
+  personalId: string;
+  /** uid del auth del empleado que ponchó */
+  personalUid: string;
+  personalNombre: string;
+  personalRol: Rol;
+  tipo: TipoPonche;
+  timestamp: Timestamp | Date;
+  /** YYYY-MM-DD en hora RD, para queries por día */
+  fechaRD: string;
+  /** URL pública de la selfie (requerida) */
+  fotoUrl: string;
+  ubicacion?: {
+    lat: number;
+    lng: number;
+  };
+  dispositivo: DispositivoPonche;
+  notas?: string;
+  // Auditoría
+  validadoPor?: string;
+  validadoEn?: Timestamp | Date;
+  corregidoPor?: string;
+  corregidoEn?: Timestamp | Date;
 }

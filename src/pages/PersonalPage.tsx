@@ -300,10 +300,8 @@ export default function PersonalPage() {
           toast.success(`Acceso creado. Puede iniciar sesión con ${emailAcceso.trim()}`);
         } else {
           // EDIT normal
-          if (personalActual && personalActual.rol !== 'ayudante' && form.rol === 'ayudante' && personalActual.uid) {
-            // rol con acceso → ayudante: desvincular uid (no borramos Auth)
-            data.uid = null;
-          }
+          // Nota: al bajar de rol a 'ayudante' preservamos el uid — los ayudantes
+          // ahora necesitan login para usar el módulo /ponche.
           await updateDoc(doc(db, 'personal', editingId), data);
           if (personalActual?.uid && necesitaAcceso) {
             const usuarioData: Record<string, unknown> = {
@@ -1095,7 +1093,7 @@ export default function PersonalPage() {
             </select>
             <p className="text-[11px] text-gray-400 mt-1">
               {form.rol === 'ayudante'
-                ? 'Los ayudantes NO tienen cuenta de acceso al sistema.'
+                ? 'Los ayudantes tienen acceso limitado solo al módulo de Ponche.'
                 : 'Este rol tiene acceso al sistema — se creará una cuenta de login.'}
             </p>
           </div>

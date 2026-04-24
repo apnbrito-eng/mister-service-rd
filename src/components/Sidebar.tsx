@@ -105,6 +105,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   // Estructura del sidebar: secciones colapsables + items sueltos
   const estructura: SidebarNode[] = [
+    // Ponche — item suelto (visible a TODOS los roles, primera posición)
+    {
+      kind: 'item',
+      item: { to: '/ponche', icon: Clock, label: 'Ponche', show: true },
+    },
     // Dashboard — item suelto
     {
       kind: 'item',
@@ -233,6 +238,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         items: [
           { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
           { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: p('personalModificar') },
+          { to: '/admin/ponches', icon: ClipboardCheck, label: 'Reporte de Ponches', show: esAdminOCoord },
           { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: p('configuracionVer') },
         ],
       },

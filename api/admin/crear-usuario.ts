@@ -55,6 +55,7 @@ const ROLES_CON_ACCESO = [
   'operaria',
   'secretaria',
   'tecnico',
+  'ayudante',
 ] as const;
 
 type RolConAcceso = (typeof ROLES_CON_ACCESO)[number];

@@ -46,6 +46,8 @@ import Avances from './pages/Avances';
 import EstadoResultado from './pages/EstadoResultado';
 import AsistenteIA from './pages/AsistenteIA';
 import AsistenteIAHistorial from './pages/AsistenteIAHistorial';
+import Ponche from './pages/Ponche';
+import AdminPonches from './pages/AdminPonches';
 import BannerNuevaVersion from './components/BannerNuevaVersion';
 
 // Public website pages
@@ -74,6 +76,17 @@ function TecnicoRoute({ children }: { children: React.ReactNode }) {
   if (loading) return <LoadingSpinner fullPage text="Cargando..." />;
   if (!currentUser) return <Navigate to="/login" replace />;
   if (userProfile?.rol === 'tecnico') return <Navigate to="/tecnico" replace />;
+  return <>{children}</>;
+}
+
+/**
+ * AyudanteRoute: el rol `ayudante` sólo tiene acceso al módulo de ponche.
+ * Cualquier intento de entrar a /admin lo redirige a /ponche.
+ */
+function AyudanteRoute({ children }: { children: React.ReactNode }) {
+  const { userProfile, loading } = useApp();
+  if (loading) return <LoadingSpinner fullPage text="Cargando..." />;
+  if (userProfile?.rol === 'ayudante') return <Navigate to="/ponche" replace />;
   return <>{children}</>;
 }
 
@@ -137,7 +150,9 @@ function AppRoutes() {
         currentUser ? (
           userProfile?.rol === 'tecnico'
             ? <Navigate to="/tecnico" replace />
-            : <Navigate to="/admin" replace />
+            : userProfile?.rol === 'ayudante'
+              ? <Navigate to="/ponche" replace />
+              : <Navigate to="/admin" replace />
         ) : <Login />
       } />
 
@@ -145,8 +160,14 @@ function AppRoutes() {
         <ProtectedRoute><TecnicoVista /></ProtectedRoute>
       } />
 
+      {/* Ponche de asistencia — accesible a TODOS los roles autenticados,
+          incluyendo ayudantes. No usa el Layout admin. */}
+      <Route path="/ponche" element={
+        <ProtectedRoute><Ponche /></ProtectedRoute>
+      } />
+
       <Route path="/admin" element={
-        <ProtectedRoute><TecnicoRoute><Layout /></TecnicoRoute></ProtectedRoute>
+        <ProtectedRoute><TecnicoRoute><AyudanteRoute><Layout /></AyudanteRoute></TecnicoRoute></ProtectedRoute>
       }>
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
@@ -188,6 +209,7 @@ function AppRoutes() {
         <Route path="avances" element={<PermisoRoute permiso="avancesGestionar"><Avances /></PermisoRoute>} />
         <Route path="estado-resultado" element={<RolRoute roles={['administrador', 'coordinadora']}><EstadoResultado /></RolRoute>} />
         <Route path="configuracion/usuarios" element={<RolRoute roles={['administrador', 'coordinadora']}><GestionUsuarios /></RolRoute>} />
+        <Route path="ponches" element={<RolRoute roles={['administrador', 'coordinadora']}><AdminPonches /></RolRoute>} />
       </Route>
 
       {/* Legacy redirects — old /dashboard, /ordenes etc. now under /admin */}
