@@ -176,6 +176,7 @@ export default function Configuracion() {
     if (empresaSaving) return;
     setEmpresaSaving(true);
     try {
+      const precioChequeoNum = Number(empresa.precioChequeoDefault);
       await actualizarConfigEmpresa(
         {
           nombre: empresa.nombre?.trim() || '',
@@ -183,6 +184,10 @@ export default function Configuracion() {
           direccion: empresa.direccion?.trim() || '',
           telefono: empresa.telefono?.trim() || '',
           email: empresa.email?.trim() || '',
+          precioChequeoDefault:
+            !isNaN(precioChequeoNum) && precioChequeoNum > 0
+              ? precioChequeoNum
+              : undefined,
         },
         userProfile?.nombre,
       );
@@ -316,6 +321,31 @@ export default function Configuracion() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input type="email" value={empresa.email} onChange={e => setEmpresa(f => ({ ...f, email: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Precio default del chequeo (RD$)
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={50}
+              value={empresa.precioChequeoDefault ?? ''}
+              onChange={e => {
+                const raw = e.target.value;
+                const num = Number(raw);
+                setEmpresa(f => ({
+                  ...f,
+                  precioChequeoDefault:
+                    raw === '' || isNaN(num) ? undefined : num,
+                }));
+              }}
+              placeholder="2000"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">
+              Monto sugerido al cerrar una orden como "solo chequeo" cuando el cliente no procede con la reparación.
+            </p>
           </div>
           {puedeModificar && (
             <button

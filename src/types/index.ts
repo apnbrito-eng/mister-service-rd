@@ -112,7 +112,9 @@ export type AccionAuditoria =
   | 'marcar_chequeo'
   | 'aprobar_piezas'
   | 'editar_piezas'
-  | 'editar_orden_datos_cliente';
+  | 'editar_orden_datos_cliente'
+  | 'poner_standby'
+  | 'reactivar_orden';
 
 export type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'link' | 'otro';
 
@@ -208,6 +210,13 @@ export interface OrdenServicio {
   // Piezas utilizadas en el cierre (Fase A1)
   costoPiezasTotal?: number;       // suma de PiezaUsada.costoTotal
   cantidadPiezasUsadas?: number;   // suma de PiezaUsada.cantidad
+  // Stand-by de orden — no cambia la fase, solo congela la ejecución
+  enStandby?: boolean;
+  standbyMotivo?: string;
+  standbyDesde?: Timestamp | Date;
+  standbyHasta?: Timestamp | Date;   // fecha estimada de reactivación
+  standbyNotas?: string;
+  standbyPor?: string;               // nombre de quien la puso en stand-by
   createdAt: Date;
   updatedAt: Date;
 }

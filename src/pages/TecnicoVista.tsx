@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, Cliente, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, FaseOrden, StandbyPieza } from '../types';
+import { OrdenServicio, Cliente, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, FaseOrden, StandbyPieza, MetodoPago } from '../types';
 import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria, formatMoneda, tieneStandby } from '../utils';
+import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
 import { calcularQuincenaActual, rangoQuincena } from '../utils/comisiones';
 import { ComisionRegistro } from '../types';
 import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
@@ -18,7 +19,8 @@ import NotificacionesPanel from '../components/NotificacionesPanel';
 import { guardarUbicacionVehiculo } from '../services/gps.service';
 import {
   MapPin, Clock, Phone, CheckCircle, LogOut, Navigation,
-  User, Bell, StickyNote, Eye, History, FileText, X, Check
+  User, Bell, StickyNote, Eye, History, FileText, X, Check,
+  ClipboardCheck, Pause, Play
 } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import { isSameDay, format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
@@ -89,6 +91,31 @@ export default function TecnicoVista() {
   const [comisionesQuincena, setComisionesQuincena] = useState<ComisionRegistro[]>([]);
   const [mostrarDetalleGanancias, setMostrarDetalleGanancias] = useState(false);
   const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
+  const [empresaConfig, setEmpresaConfig] = useState<ConfigEmpresa>({ ...CONFIG_EMPRESA_DEFAULT });
+
+  // Solo chequeo desde técnico
+  const [showChequeoModal, setShowChequeoModal] = useState(false);
+  const [ordenChequeo, setOrdenChequeo] = useState<OrdenServicio | null>(null);
+  const [chequeoForm, setChequeoForm] = useState<{ precio: string; motivo: string; metodoPago: MetodoPago | '' }>({
+    precio: '',
+    motivo: '',
+    metodoPago: '',
+  });
+  const [savingChequeo, setSavingChequeo] = useState(false);
+
+  // Stand-by desde técnico
+  const [showStandbyModal, setShowStandbyModal] = useState(false);
+  const [ordenStandby, setOrdenStandby] = useState<OrdenServicio | null>(null);
+  const [standbyForm, setStandbyForm] = useState<{ motivo: string; hasta: string; notas: string }>({
+    motivo: 'Esperando pieza',
+    hasta: '',
+    notas: '',
+  });
+  const [savingStandby, setSavingStandby] = useState(false);
+  const [reactivandoId, setReactivandoId] = useState<string | null>(null);
+
+  const precioChequeoSugerido =
+    empresaConfig.precioChequeoDefault ?? PRECIO_CHEQUEO_DEFAULT_FALLBACK;
 
   // Permisos del técnico (con fallback seguro)
   const permisos: TecnicoPermisos = userProfile?.permisos || PERMISOS_DEFAULT_TECNICO;
@@ -154,7 +181,9 @@ export default function TecnicoVista() {
       });
     }
 
-    return () => { unsub(); unsubComisiones(); unsubStandby(); };
+    const unsubEmpresa = suscribirConfigEmpresa(cfg => setEmpresaConfig(cfg));
+
+    return () => { unsub(); unsubComisiones(); unsubStandby(); unsubEmpresa(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile?.id]);
 
@@ -392,6 +421,167 @@ export default function TecnicoVista() {
   const handleLogout = async () => {
     await signOut(auth);
     navigate('/login');
+  };
+
+  const abrirChequeo = (orden: OrdenServicio) => {
+    setOrdenChequeo(orden);
+    setChequeoForm({
+      precio: String(precioChequeoSugerido),
+      motivo: '',
+      metodoPago: '',
+    });
+    setShowChequeoModal(true);
+  };
+
+  const cerrarChequeoModal = () => {
+    setShowChequeoModal(false);
+    setOrdenChequeo(null);
+    setChequeoForm({ precio: String(precioChequeoSugerido), motivo: '', metodoPago: '' });
+  };
+
+  const handleConfirmarChequeo = async () => {
+    if (!ordenChequeo) return;
+    const precio = Number(chequeoForm.precio);
+    if (isNaN(precio) || precio <= 0) {
+      toast.error('Ingresa un precio de chequeo válido');
+      return;
+    }
+    if (!chequeoForm.motivo.trim()) {
+      toast.error('Escribe el motivo por el que el cliente no procedió');
+      return;
+    }
+    setSavingChequeo(true);
+    try {
+      const ahora = Timestamp.now();
+      const usuario = userProfile?.nombre || 'Técnico';
+      const nuevoHistorial = [
+        ...ordenChequeo.historialFases.map(h => ({
+          fase: h.fase,
+          timestamp: Timestamp.fromDate(h.timestamp instanceof Date ? h.timestamp : new Date()),
+          usuario: h.usuario || '',
+          ...(h.nota ? { nota: h.nota } : {}),
+        })),
+        {
+          fase: 'cerrado' as FaseOrden,
+          timestamp: ahora,
+          usuario,
+          nota: `Solo chequeo — ${chequeoForm.motivo.trim()}`,
+        },
+      ];
+      const registroAuditoria = crearRegistroAuditoria(
+        usuario,
+        'marcar_chequeo',
+        `Marcó orden como solo chequeo (RD$ ${precio.toLocaleString('es-DO')}) — ${chequeoForm.motivo.trim()}`,
+        'soloChequeo',
+        'false',
+        'true'
+      );
+      const updateData: Record<string, unknown> = {
+        soloChequeo: true,
+        precioChequeo: precio,
+        motivoChequeo: chequeoForm.motivo.trim(),
+        fase: 'cerrado',
+        estadoSimple: 'completado',
+        estado: 'cerrado',
+        historialFases: nuevoHistorial,
+        auditoria: arrayUnion(registroAuditoria),
+        updatedAt: ahora,
+      };
+      if (chequeoForm.metodoPago) {
+        updateData.metodoPagoCierre = chequeoForm.metodoPago;
+      }
+      await updateDoc(doc(db, 'ordenes_servicio', ordenChequeo.id), updateData);
+      toast.success('Orden cerrada como solo chequeo');
+      cerrarChequeoModal();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al cerrar como solo chequeo');
+    } finally {
+      setSavingChequeo(false);
+    }
+  };
+
+  const abrirStandby = (orden: OrdenServicio) => {
+    setOrdenStandby(orden);
+    setStandbyForm({ motivo: 'Esperando pieza', hasta: '', notas: '' });
+    setShowStandbyModal(true);
+  };
+
+  const cerrarStandbyModal = () => {
+    setShowStandbyModal(false);
+    setOrdenStandby(null);
+    setStandbyForm({ motivo: 'Esperando pieza', hasta: '', notas: '' });
+  };
+
+  const handleConfirmarStandby = async () => {
+    if (!ordenStandby) return;
+    if (!standbyForm.motivo.trim()) {
+      toast.error('Selecciona un motivo');
+      return;
+    }
+    setSavingStandby(true);
+    try {
+      const ahora = Timestamp.now();
+      const usuario = userProfile?.nombre || 'Técnico';
+      const detalleHasta = standbyForm.hasta
+        ? ` · estimada reactivación ${standbyForm.hasta}`
+        : '';
+      const registroAuditoria = crearRegistroAuditoria(
+        usuario,
+        'poner_standby',
+        `Puso la orden en stand-by — ${standbyForm.motivo.trim()}${detalleHasta}`,
+        'enStandby',
+        'false',
+        'true'
+      );
+      const payload: Record<string, unknown> = {
+        enStandby: true,
+        standbyMotivo: standbyForm.motivo.trim(),
+        standbyDesde: ahora,
+        standbyPor: usuario,
+        auditoria: arrayUnion(registroAuditoria),
+        updatedAt: ahora,
+      };
+      if (standbyForm.hasta) {
+        const dt = new Date(`${standbyForm.hasta}T00:00:00`);
+        if (!isNaN(dt.getTime())) payload.standbyHasta = Timestamp.fromDate(dt);
+      }
+      if (standbyForm.notas.trim()) payload.standbyNotas = standbyForm.notas.trim();
+      await updateDoc(doc(db, 'ordenes_servicio', ordenStandby.id), payload);
+      toast.success('Orden en stand-by');
+      cerrarStandbyModal();
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al poner en stand-by');
+    } finally {
+      setSavingStandby(false);
+    }
+  };
+
+  const handleReactivarOrden = async (orden: OrdenServicio) => {
+    setReactivandoId(orden.id);
+    try {
+      const usuario = userProfile?.nombre || 'Técnico';
+      const registroAuditoria = crearRegistroAuditoria(
+        usuario,
+        'reactivar_orden',
+        'Reactivó la orden desde stand-by',
+        'enStandby',
+        'true',
+        'false'
+      );
+      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+        enStandby: false,
+        auditoria: arrayUnion(registroAuditoria),
+        updatedAt: Timestamp.now(),
+      });
+      toast.success('Orden reactivada');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al reactivar orden');
+    } finally {
+      setReactivandoId(null);
+    }
   };
 
   const [capturandoGpsOrdenId, setCapturandoGpsOrdenId] = useState<string | null>(null);
@@ -830,8 +1020,46 @@ export default function TecnicoVista() {
                       </span>
                     </div>
 
-                    {/* Actions */}
-                    {!completado && (
+                    {/* Banner stand-by — reemplaza acciones normales */}
+                    {!completado && orden.enStandby && (
+                      <div className="mt-4 space-y-2">
+                        <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-3 flex items-start gap-2">
+                          <Pause size={16} className="text-yellow-700 mt-0.5 shrink-0" />
+                          <div className="flex-1 text-xs text-yellow-900">
+                            <p className="font-semibold">
+                              ⏸ Stand-by
+                              {orden.standbyHasta && (
+                                <span className="ml-1 font-normal">
+                                  · hasta {format(orden.standbyHasta instanceof Date ? orden.standbyHasta : new Date(), 'dd/MM/yyyy', { locale: es })}
+                                </span>
+                              )}
+                            </p>
+                            {orden.standbyMotivo && (
+                              <p className="mt-0.5">Motivo: {orden.standbyMotivo}</p>
+                            )}
+                            {orden.standbyNotas && (
+                              <p className="mt-0.5 italic">{orden.standbyNotas}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => handleReactivarOrden(orden)}
+                            disabled={reactivandoId === orden.id}
+                            className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-60"
+                          >
+                            <Play size={12} /> {reactivandoId === orden.id ? 'Reactivando...' : '▶ Reactivar'}
+                          </button>
+                          <button onClick={() => setSelectedOrden(orden)}
+                            className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-medium ml-auto">
+                            <Eye size={12} /> Ver detalle
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Actions (orden activa, no en stand-by) */}
+                    {!completado && !orden.enStandby && (
                       <div className="mt-4 flex flex-wrap gap-2">
                         {/* Iniciar chequeo (foto + GPS, solo el día de la cita) */}
                         <IniciarChequeoButton orden={orden} userProfile={userProfile} size="sm" />
@@ -853,6 +1081,30 @@ export default function TecnicoVista() {
                             </button>
                           );
                         })()}
+                        {/* Cerrar como solo chequeo (cliente no procede) */}
+                        {permisos.puedeMarcarCompletado &&
+                          !orden.soloChequeo &&
+                          ['en_diagnostico', 'en_cotizacion', 'aprobado'].includes(orden.fase) && (
+                          <button
+                            onClick={() => abrirChequeo(orden)}
+                            className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-medium"
+                            title={`Cerrar como solo chequeo (RD$${precioChequeoSugerido.toLocaleString('es-DO')})`}
+                          >
+                            <ClipboardCheck size={12} /> 🔍 Solo chequeo
+                          </button>
+                        )}
+                        {/* Poner en stand-by */}
+                        {permisos.puedeMarcarCompletado &&
+                          !orden.soloChequeo &&
+                          ['en_diagnostico', 'en_cotizacion', 'aprobado'].includes(orden.fase) && (
+                          <button
+                            onClick={() => abrirStandby(orden)}
+                            className="flex items-center gap-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-2 rounded-lg text-xs font-medium"
+                            title="Poner orden en stand-by"
+                          >
+                            <Pause size={12} /> ⏸ Stand-by
+                          </button>
+                        )}
                         {permisos.puedeAgregarNotas && (
                           <button onClick={() => openNota(orden)}
                             className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-medium">
@@ -1039,6 +1291,166 @@ export default function TecnicoVista() {
           </div>
         </Modal>
       )}
+
+      {/* Modal solo chequeo (técnico) */}
+      <Modal
+        isOpen={showChequeoModal}
+        onClose={cerrarChequeoModal}
+        title="Cerrar como solo chequeo"
+      >
+        <div className="space-y-4">
+          {ordenChequeo && (
+            <div className="bg-gray-50 rounded-lg p-3 text-xs">
+              <p className="font-semibold">{ordenChequeo.clienteNombre}</p>
+              <p>{ordenChequeo.equipoTipo}{ordenChequeo.equipoMarca ? ` · ${ordenChequeo.equipoMarca}` : ''}</p>
+              <p className="text-gray-500 mt-0.5">{ordenChequeo.numero || ''}</p>
+            </div>
+          )}
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+            ¿El cliente decidió NO proceder con la reparación? Se cerrará la orden como solo chequeo.
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Precio del chequeo (RD$) *
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={50}
+              value={chequeoForm.precio}
+              onChange={e => setChequeoForm(f => ({ ...f, precio: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">
+              Sugerido: RD${precioChequeoSugerido.toLocaleString('es-DO')}
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Método de pago</label>
+            <select
+              value={chequeoForm.metodoPago}
+              onChange={e => setChequeoForm(f => ({ ...f, metodoPago: e.target.value as MetodoPago | '' }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            >
+              <option value="">Sin especificar</option>
+              <option value="efectivo">Efectivo</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="tarjeta">Tarjeta</option>
+              <option value="link">Link</option>
+              <option value="otro">Otro</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Motivo *</label>
+            <textarea
+              rows={3}
+              value={chequeoForm.motivo}
+              onChange={e => setChequeoForm(f => ({ ...f, motivo: e.target.value }))}
+              placeholder="Ej: El cliente consideró muy costosa la reparación..."
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={cerrarChequeoModal}
+              disabled={savingChequeo}
+              className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmarChequeo}
+              disabled={savingChequeo}
+              className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+            >
+              {savingChequeo ? 'Guardando...' : 'Confirmar chequeo'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal stand-by (técnico) */}
+      <Modal
+        isOpen={showStandbyModal}
+        onClose={cerrarStandbyModal}
+        title="Poner orden en stand-by"
+      >
+        <div className="space-y-4">
+          {ordenStandby && (
+            <div className="bg-gray-50 rounded-lg p-3 text-xs">
+              <p className="font-semibold">{ordenStandby.clienteNombre}</p>
+              <p>{ordenStandby.equipoTipo}{ordenStandby.equipoMarca ? ` · ${ordenStandby.equipoMarca}` : ''}</p>
+              <p className="text-gray-500 mt-0.5">{ordenStandby.numero || ''}</p>
+            </div>
+          )}
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-900">
+            La orden se congela: no aparecerá en alertas SLA hasta que la reactives. Útil cuando hay que esperar piezas o coordinar con el cliente.
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Motivo *</label>
+            <select
+              value={standbyForm.motivo}
+              onChange={e => setStandbyForm(f => ({ ...f, motivo: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            >
+              <option value="Esperando pieza">Esperando pieza</option>
+              <option value="Cliente no disponible">Cliente no disponible</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha estimada de reactivación
+            </label>
+            <input
+              type="date"
+              value={standbyForm.hasta}
+              onChange={e => setStandbyForm(f => ({ ...f, hasta: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">Opcional. Útil para recordar cuándo retomar la orden.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+            <textarea
+              rows={3}
+              value={standbyForm.notas}
+              onChange={e => setStandbyForm(f => ({ ...f, notas: e.target.value }))}
+              placeholder="Detalle del motivo, pieza esperada, contacto..."
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={cerrarStandbyModal}
+              disabled={savingStandby}
+              className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmarStandby}
+              disabled={savingStandby}
+              className="px-5 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+            >
+              {savingStandby ? 'Guardando...' : '⏸ Poner en stand-by'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

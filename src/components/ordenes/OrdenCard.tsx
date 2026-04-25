@@ -40,6 +40,9 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
             {orden.soloChequeo && (
               <Badge label="Solo chequeo" color="bg-yellow-100 text-yellow-800" />
             )}
+            {orden.enStandby && (
+              <Badge label="⏸ Stand-by" color="bg-yellow-100 text-yellow-800" />
+            )}
             {orden.eliminada && (
               <Badge label="Eliminada" color="bg-red-100 text-red-700" />
             )}

@@ -14,6 +14,8 @@ export interface ConfigEmpresa {
   direccion: string;
   telefono: string;
   email: string;
+  /** Precio default sugerido al cerrar una orden como "solo chequeo" (RD$). */
+  precioChequeoDefault?: number;
   updatedAt?: Date;
   updatedPor?: string;
 }
@@ -21,12 +23,16 @@ export interface ConfigEmpresa {
 const COLLECTION = 'config';
 const DOC_ID = 'empresa';
 
+/** Precio por defecto del chequeo (RD$) cuando aún no hay valor configurado. */
+export const PRECIO_CHEQUEO_DEFAULT_FALLBACK = 2000;
+
 export const CONFIG_EMPRESA_DEFAULT: ConfigEmpresa = {
   nombre: 'Mister Service RD',
   rnc: '000-000000-0',
   direccion: '',
   telefono: '',
   email: '',
+  precioChequeoDefault: PRECIO_CHEQUEO_DEFAULT_FALLBACK,
 };
 
 function mapData(data: Record<string, unknown> | undefined): ConfigEmpresa {
@@ -50,6 +56,12 @@ function mapData(data: Record<string, unknown> | undefined): ConfigEmpresa {
         : CONFIG_EMPRESA_DEFAULT.telefono,
     email:
       typeof d.email === 'string' ? d.email : CONFIG_EMPRESA_DEFAULT.email,
+    precioChequeoDefault:
+      typeof d.precioChequeoDefault === 'number' &&
+      !isNaN(d.precioChequeoDefault as number) &&
+      (d.precioChequeoDefault as number) > 0
+        ? (d.precioChequeoDefault as number)
+        : CONFIG_EMPRESA_DEFAULT.precioChequeoDefault,
     updatedAt:
       (d.updatedAt as { toDate?: () => Date } | undefined)?.toDate?.() ||
       undefined,
@@ -95,6 +107,8 @@ export async function actualizarConfigEmpresa(
   if (cambios.direccion !== undefined) payload.direccion = cambios.direccion;
   if (cambios.telefono !== undefined) payload.telefono = cambios.telefono;
   if (cambios.email !== undefined) payload.email = cambios.email;
+  if (cambios.precioChequeoDefault !== undefined)
+    payload.precioChequeoDefault = cambios.precioChequeoDefault;
   if (usuarioNombre) payload.updatedPor = usuarioNombre;
   await setDoc(doc(db, COLLECTION, DOC_ID), payload, { merge: true });
 

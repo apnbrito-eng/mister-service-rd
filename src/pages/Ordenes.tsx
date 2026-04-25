@@ -40,6 +40,7 @@ import type { EditFormState } from '../components/ordenes/OrdenEditForm';
 import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
 import type { CreateFormState } from '../components/ordenes/OrdenCreateModal';
 import OrdenesTablero from '../components/ordenes/OrdenesTablero';
+import { crearNotificacion } from '../services/notificaciones.service';
 
 const ESTADOS_SIMPLE: EstadoOrdenSimple[] = ['pendiente', 'en_proceso', 'completado', 'cancelado'];
 
@@ -210,6 +211,22 @@ export default function Ordenes() {
         auditoria: arrayUnion(registroAuditoria),
         updatedAt: Timestamp.now(),
       });
+      // Notificar al técnico para que pueda continuar con el trabajo
+      if (selectedOrden.tecnicoId) {
+        try {
+          await crearNotificacion({
+            destinatarioId: selectedOrden.tecnicoId,
+            destinatarioNombre: selectedOrden.tecnicoNombre,
+            tipo: 'precio_aprobado',
+            titulo: `Precio aprobado · ${selectedOrden.numero || 'orden'}`,
+            mensaje: `Precio aprobado: RD$${precio.toLocaleString('es-DO')}. Cliente: ${selectedOrden.clienteNombre}. Puedes marcar el trabajo como realizado.`,
+            ordenId: selectedOrden.id,
+            ordenNumero: selectedOrden.numero,
+          });
+        } catch (notifErr) {
+          console.error('Error creando notificación de precio aprobado:', notifErr);
+        }
+      }
       toast.success('\u{2705} Precio aprobado');
     } catch (err) {
       console.error(err);

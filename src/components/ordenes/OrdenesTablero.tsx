@@ -333,9 +333,14 @@ export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Prop
                               Chequeo
                             </span>
                           )}
+                          {o.enStandby && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-yellow-100 text-yellow-800">
+                              ⏸ Stand-by
+                            </span>
+                          )}
                           {conStandby && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-yellow-100 text-yellow-800">
-                              <Package size={9} /> Standby
+                              <Package size={9} /> Piezas
                             </span>
                           )}
                         </div>

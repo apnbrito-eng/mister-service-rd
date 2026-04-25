@@ -11,7 +11,8 @@ import { useApp } from '../context/AppContext';
 import {
   ArrowLeft, Phone, Wrench, User, Calendar,
   Clock, MessageSquare, Save, MapPin, ExternalLink,
-  Satellite, Copy, Power, ClipboardCheck, AlertTriangle, FileText, Package, Check
+  Satellite, Copy, Power, ClipboardCheck, AlertTriangle, FileText, Package, Check,
+  Pause, Play
 } from 'lucide-react';
 import ModalEditarPiezasOrden from '../components/cierre/ModalEditarPiezasOrden';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
@@ -26,6 +27,10 @@ import EnviarFacturacionButton from '../components/ordenes/EnviarFacturacionButt
 import { XCircle, Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
 import { generarTrackingToken } from '../services/gps.service';
 import { whatsappUrl } from '../utils/whatsapp';
+import { crearNotificacion } from '../services/notificaciones.service';
+import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const METODO_PAGO_LABELS: Record<MetodoPago, string> = {
   efectivo: 'Efectivo',
@@ -47,6 +52,15 @@ export default function OrdenDetalle() {
   const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [modalPiezasAbierto, setModalPiezasAbierto] = useState(false);
+  const [empresaConfig, setEmpresaConfig] = useState<ConfigEmpresa>({ ...CONFIG_EMPRESA_DEFAULT });
+
+  useEffect(() => {
+    const unsub = suscribirConfigEmpresa(cfg => setEmpresaConfig(cfg));
+    return () => unsub();
+  }, []);
+
+  const precioChequeoSugerido =
+    empresaConfig.precioChequeoDefault ?? PRECIO_CHEQUEO_DEFAULT_FALLBACK;
 
   // Pre-fill approval input
   useEffect(() => {
@@ -84,6 +98,22 @@ export default function OrdenDetalle() {
         auditoria: arrayUnion(registroAuditoria),
         updatedAt: Timestamp.now(),
       });
+      // Notificar al técnico para que pueda continuar con el trabajo
+      if (orden.tecnicoId) {
+        try {
+          await crearNotificacion({
+            destinatarioId: orden.tecnicoId,
+            destinatarioNombre: orden.tecnicoNombre,
+            tipo: 'precio_aprobado',
+            titulo: `Precio aprobado · ${orden.numero || 'orden'}`,
+            mensaje: `Precio aprobado: RD$${precio.toLocaleString('es-DO')}. Cliente: ${orden.clienteNombre}. Puedes marcar el trabajo como realizado.`,
+            ordenId: orden.id,
+            ordenNumero: orden.numero,
+          });
+        } catch (notifErr) {
+          console.error('Error creando notificación de precio aprobado:', notifErr);
+        }
+      }
       toast.success('✅ Precio aprobado');
     } catch (err) {
       console.error(err);
@@ -185,20 +215,127 @@ export default function OrdenDetalle() {
     metodoPago: MetodoPago | '';
     bancoDestino: string;
     motivo: string;
-  }>({ precio: '2000', metodoPago: '', bancoDestino: '', motivo: '' });
+  }>({ precio: String(precioChequeoSugerido), metodoPago: '', bancoDestino: '', motivo: '' });
   const [savingChequeo, setSavingChequeo] = useState(false);
 
   const resetChequeoForm = () => {
-    setChequeoForm({ precio: '2000', metodoPago: '', bancoDestino: '', motivo: '' });
+    setChequeoForm({
+      precio: String(precioChequeoSugerido),
+      metodoPago: '',
+      bancoDestino: '',
+      motivo: '',
+    });
   };
 
   const puedeMarcarChequeo = (): boolean => {
     if (!orden || !userProfile) return false;
     if (orden.soloChequeo) return false;
-    if (!['en_cotizacion', 'aprobado'].includes(orden.fase)) return false;
-    if (userProfile.rol === 'administrador' || userProfile.rol === 'coordinadora' || userProfile.rol === 'operaria') return true;
+    if (orden.enStandby) return false;
+    if (!['en_diagnostico', 'en_cotizacion', 'aprobado'].includes(orden.fase)) return false;
+    if (puede(userProfile, 'cotizacionesAprobarPrecio')) return true;
     if (userProfile.rol === 'tecnico' && orden.tecnicoId === userProfile.id) return true;
     return false;
+  };
+
+  // Stand-by — modal state
+  const [showStandbyModal, setShowStandbyModal] = useState(false);
+  const [standbyForm, setStandbyForm] = useState<{ motivo: string; hasta: string; notas: string }>({
+    motivo: 'Esperando pieza',
+    hasta: '',
+    notas: '',
+  });
+  const [savingStandby, setSavingStandby] = useState(false);
+  const [reactivando, setReactivando] = useState(false);
+
+  const puedePonerStandby = (): boolean => {
+    if (!orden || !userProfile) return false;
+    if (orden.enStandby) return false;
+    if (orden.eliminada) return false;
+    if (['cerrado', 'cancelado'].includes(orden.fase)) return false;
+    if (orden.soloChequeo) return false;
+    if (puede(userProfile, 'cotizacionesAprobarPrecio')) return true;
+    if (userProfile.rol === 'tecnico' && orden.tecnicoId === userProfile.id) return true;
+    return false;
+  };
+
+  const puedeReactivar = (): boolean => {
+    if (!orden) return false;
+    if (!orden.enStandby) return false;
+    // Reactivar: admin/coord/operaria (con cotizacionesAprobarPrecio) — NO técnico desde admin
+    return puede(userProfile, 'cotizacionesAprobarPrecio');
+  };
+
+  const handleConfirmarStandby = async () => {
+    if (!id || !orden) return;
+    if (!standbyForm.motivo.trim()) {
+      toast.error('Selecciona un motivo');
+      return;
+    }
+    setSavingStandby(true);
+    try {
+      const ahora = Timestamp.now();
+      const usuario = userProfile?.nombre || 'Sistema';
+      const detalleHasta = standbyForm.hasta
+        ? ` · estimada reactivación ${standbyForm.hasta}`
+        : '';
+      const registroAuditoria = crearRegistroAuditoria(
+        usuario,
+        'poner_standby',
+        `Puso la orden en stand-by — ${standbyForm.motivo.trim()}${detalleHasta}`,
+        'enStandby',
+        'false',
+        'true'
+      );
+      const payload: Record<string, unknown> = {
+        enStandby: true,
+        standbyMotivo: standbyForm.motivo.trim(),
+        standbyDesde: ahora,
+        standbyPor: usuario,
+        auditoria: arrayUnion(registroAuditoria),
+        updatedAt: ahora,
+      };
+      if (standbyForm.hasta) {
+        const dt = new Date(`${standbyForm.hasta}T00:00:00`);
+        if (!isNaN(dt.getTime())) payload.standbyHasta = Timestamp.fromDate(dt);
+      }
+      if (standbyForm.notas.trim()) payload.standbyNotas = standbyForm.notas.trim();
+      await updateDoc(doc(db, 'ordenes_servicio', id), payload);
+      toast.success('Orden en stand-by');
+      setShowStandbyModal(false);
+      setStandbyForm({ motivo: 'Esperando pieza', hasta: '', notas: '' });
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al poner en stand-by');
+    } finally {
+      setSavingStandby(false);
+    }
+  };
+
+  const handleReactivar = async () => {
+    if (!id || !orden) return;
+    setReactivando(true);
+    try {
+      const usuario = userProfile?.nombre || 'Sistema';
+      const registroAuditoria = crearRegistroAuditoria(
+        usuario,
+        'reactivar_orden',
+        'Reactivó la orden desde stand-by',
+        'enStandby',
+        'true',
+        'false'
+      );
+      await updateDoc(doc(db, 'ordenes_servicio', id), {
+        enStandby: false,
+        auditoria: arrayUnion(registroAuditoria),
+        updatedAt: Timestamp.now(),
+      });
+      toast.success('Orden reactivada');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al reactivar');
+    } finally {
+      setReactivando(false);
+    }
   };
 
   const handleConfirmarChequeo = async () => {
@@ -365,6 +502,59 @@ export default function OrdenDetalle() {
               </p>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Banner stand-by */}
+      {orden.enStandby && !orden.eliminada && (
+        <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 flex items-start gap-3">
+          <Pause size={20} className="text-yellow-700 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-yellow-900">
+              ⏸ Orden en Stand-by
+              {orden.standbyHasta && (() => {
+                const fechaHasta = orden.standbyHasta instanceof Date
+                  ? orden.standbyHasta
+                  : ('toDate' in (orden.standbyHasta as object)
+                    ? (orden.standbyHasta as unknown as { toDate: () => Date }).toDate()
+                    : null);
+                return fechaHasta ? (
+                  <span className="ml-1 font-normal">
+                    · hasta {format(fechaHasta, 'dd/MM/yyyy', { locale: es })}
+                  </span>
+                ) : null;
+              })()}
+            </p>
+            {orden.standbyMotivo && (
+              <p className="text-xs text-yellow-800 mt-1">Motivo: {orden.standbyMotivo}</p>
+            )}
+            {orden.standbyNotas && (
+              <p className="text-xs text-yellow-800 mt-1 italic">{orden.standbyNotas}</p>
+            )}
+            {orden.standbyPor && (
+              <p className="text-[11px] text-yellow-700 mt-1">
+                Puesto en stand-by por {orden.standbyPor}
+                {orden.standbyDesde && (() => {
+                  const fechaDesde = orden.standbyDesde instanceof Date
+                    ? orden.standbyDesde
+                    : ('toDate' in (orden.standbyDesde as object)
+                      ? (orden.standbyDesde as unknown as { toDate: () => Date }).toDate()
+                      : null);
+                  return fechaDesde ? ` · ${formatFecha(fechaDesde)}` : '';
+                })()}
+              </p>
+            )}
+          </div>
+          {puedeReactivar() && (
+            <button
+              type="button"
+              onClick={handleReactivar}
+              disabled={reactivando}
+              className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium shrink-0 inline-flex items-center gap-1 disabled:opacity-60"
+            >
+              <Play size={14} /> {reactivando ? 'Reactivando...' : '▶ Reactivar'}
+            </button>
+          )}
         </div>
       )}
 
@@ -727,10 +917,10 @@ export default function OrdenDetalle() {
             </div>
           )}
 
-          {/* Aprobación de precio (solo admin/operaciones) */}
+          {/* Aprobación de precio (solo quien tenga el permiso cotizacionesAprobarPrecio) */}
           {orden.precioSugerido !== undefined &&
            orden.estadoAprobacion !== 'aprobado' &&
-           (userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora' || userProfile?.rol === 'operaria') && (
+           puede(userProfile, 'cotizacionesAprobarPrecio') && (
             <div className="bg-yellow-50 rounded-2xl shadow-sm border-2 border-yellow-200 p-6">
               <h3 className="text-sm font-semibold text-yellow-800 uppercase mb-3 flex items-center gap-1">
                 ⏳ Aprobar Precio
@@ -1110,6 +1300,26 @@ export default function OrdenDetalle() {
             </div>
           )}
 
+          {/* Poner en stand-by */}
+          {puedePonerStandby() && (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Stand-by</h3>
+              <p className="text-xs text-gray-500 mb-3">
+                Congela la orden cuando hay que esperar piezas o coordinar con el cliente. La fase no cambia.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setStandbyForm({ motivo: 'Esperando pieza', hasta: '', notas: '' });
+                  setShowStandbyModal(true);
+                }}
+                className="w-full flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+              >
+                <Pause size={14} /> ⏸ Poner en stand-by
+              </button>
+            </div>
+          )}
+
           {/* Stepper de fases + acciones (cancelar / eliminar) */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-3">
             <h3 className="text-sm font-semibold text-gray-500 uppercase">Flujo de la orden</h3>
@@ -1270,6 +1480,75 @@ export default function OrdenDetalle() {
               className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
             >
               {savingChequeo ? 'Guardando...' : 'Confirmar chequeo'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal stand-by */}
+      <Modal
+        isOpen={showStandbyModal}
+        onClose={() => { setShowStandbyModal(false); }}
+        title="Poner orden en stand-by"
+      >
+        <div className="space-y-4">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-900">
+            La orden se congela: no aparecerá en alertas SLA hasta que se reactive. Útil cuando hay que esperar piezas o coordinar con el cliente.
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Motivo *</label>
+            <select
+              value={standbyForm.motivo}
+              onChange={e => setStandbyForm(f => ({ ...f, motivo: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            >
+              <option value="Esperando pieza">Esperando pieza</option>
+              <option value="Cliente no disponible">Cliente no disponible</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha estimada de reactivación
+            </label>
+            <input
+              type="date"
+              value={standbyForm.hasta}
+              onChange={e => setStandbyForm(f => ({ ...f, hasta: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+            <p className="text-[11px] text-gray-400 mt-1">Opcional. Útil para recordar cuándo retomar.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+            <textarea
+              rows={3}
+              value={standbyForm.notas}
+              onChange={e => setStandbyForm(f => ({ ...f, notas: e.target.value }))}
+              placeholder="Detalle del motivo, pieza esperada, contacto..."
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowStandbyModal(false)}
+              disabled={savingStandby}
+              className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmarStandby}
+              disabled={savingStandby}
+              className="px-5 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+            >
+              {savingStandby ? 'Guardando...' : '⏸ Poner en stand-by'}
             </button>
           </div>
         </div>

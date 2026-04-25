@@ -127,6 +127,27 @@ export default function OrdenDetailModal({
         </div>
       )}
 
+      {/* Banner stand-by */}
+      {orden.enStandby && !orden.eliminada && (
+        <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-3 flex items-start gap-3">
+          <Package size={18} className="text-yellow-700 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-semibold text-yellow-900 text-sm">⏸ Stand-by</p>
+            {orden.standbyMotivo && (
+              <p className="text-xs text-yellow-800 mt-0.5">Motivo: {orden.standbyMotivo}</p>
+            )}
+            {orden.standbyNotas && (
+              <p className="text-xs text-yellow-800 mt-0.5 italic">{orden.standbyNotas}</p>
+            )}
+            {orden.standbyPor && (
+              <p className="text-[11px] text-yellow-700 mt-0.5">
+                Por {orden.standbyPor}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Banner pieza pendiente — sugiere reagendar */}
       {mostrarBannerReagendar && (
         <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex items-start gap-3">
@@ -297,10 +318,10 @@ export default function OrdenDetailModal({
         </div>
       )}
 
-      {/* Aprobacion de precio (solo admin/operaciones, solo si hay sugerido y no aprobado) */}
+      {/* Aprobacion de precio (gated por permiso cotizacionesAprobarPrecio) */}
       {orden.precioSugerido !== undefined &&
        orden.estadoAprobacion !== 'aprobado' &&
-       (userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora' || userProfile?.rol === 'operaria') && (
+       puede(userProfile, 'cotizacionesAprobarPrecio') && (
         <div className="bg-yellow-50 rounded-xl p-4 border-2 border-yellow-200">
           <h3 className="text-sm font-semibold text-yellow-800 uppercase tracking-wide mb-2 flex items-center gap-1">
             {'\u{23F3}'} Aprobar Precio
