@@ -7,7 +7,7 @@ import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
-import { Plus, FileText, Trash2, Check, Printer, Search, Filter, DollarSign, CalendarDays, TrendingUp, X, ChevronDown } from 'lucide-react';
+import { Plus, FileText, Trash2, Check, Printer, Search, Filter, DollarSign, CalendarDays, TrendingUp, X, ChevronDown, Shield } from 'lucide-react';
 import { startOfMonth, startOfDay, endOfDay, startOfYear, endOfYear, isWithinInterval, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -75,6 +75,13 @@ export default function Facturas() {
     bancoDestino: '',
     items: [{ descripcion: '', cantidad: 1, precio: 0 }] as ItemCotizacion[],
   });
+
+  // ─── Marcar como garantía manual ───
+  const [showGarantiaManualModal, setShowGarantiaManualModal] = useState(false);
+  const [facturaGarantiaManual, setFacturaGarantiaManual] = useState<Factura | null>(null);
+  const [garantiaManualRazon, setGarantiaManualRazon] = useState('');
+  const [savingGarantiaManual, setSavingGarantiaManual] = useState(false);
+  const puedeMarcarGarantia = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
 
   // Real-time listener
   useEffect(() => {
@@ -254,6 +261,96 @@ export default function Facturas() {
       toast.success('Factura eliminada');
     } catch {
       toast.error('Error al eliminar el conduce de garantía');
+    }
+  };
+
+  // ─── Marcar como garantía manual (admin / coord) ───
+  const handleAbrirGarantiaManual = (factura: Factura) => {
+    setFacturaGarantiaManual(factura);
+    setGarantiaManualRazon('');
+    setShowGarantiaManualModal(true);
+  };
+
+  const handleConfirmarGarantiaManual = async () => {
+    if (!facturaGarantiaManual) return;
+    const razon = garantiaManualRazon.trim();
+    if (razon.length < 10) {
+      toast.error('La razón debe tener al menos 10 caracteres');
+      return;
+    }
+    if (!facturaGarantiaManual.garantia || facturaGarantiaManual.garantia.estado !== 'vigente') {
+      toast.error('Solo se puede marcar manualmente una garantía vigente');
+      return;
+    }
+    setSavingGarantiaManual(true);
+    try {
+      const ahoraTs = Timestamp.now();
+      // 1) Update factura: garantía pasa a reclamada con origen manual_admin
+      await updateDoc(doc(db, 'facturas', facturaGarantiaManual.id), {
+        'garantia.estado': 'reclamada',
+        'garantia.reclamadaEn': ahoraTs,
+        'garantia.problemaDescripcion': razon,
+        'garantia.origen': 'manual_admin',
+      });
+
+      // 2) Crear cita_por_confirmar con tipo 'garantia'
+      const citaPayload: Record<string, unknown> = {
+        tipo: 'garantia',
+        esGarantia: true,
+        referenciaFacturaId: facturaGarantiaManual.id,
+        referenciaConduce: facturaGarantiaManual.numero || '',
+        referenciaOrdenId: facturaGarantiaManual.ordenId || '',
+        clienteId: facturaGarantiaManual.clienteId,
+        clienteNombre: facturaGarantiaManual.clienteNombre,
+        clienteTelefono: facturaGarantiaManual.clienteTelefono,
+        telefono: facturaGarantiaManual.clienteTelefono,
+        equipoTipo: facturaGarantiaManual.equipoTipo,
+        equipoMarca: facturaGarantiaManual.equipoMarca,
+        equipoModelo: facturaGarantiaManual.equipoModelo,
+        servicio: 'Reclamo de garantía (manual)',
+        falla: razon,
+        descripcionProblema: razon,
+        tecnicoOriginalUid: facturaGarantiaManual.tecnicoId,
+        tecnicoOriginalNombre: facturaGarantiaManual.tecnicoNombre,
+        origen: 'manual_admin',
+        origenGarantia: 'manual_admin',
+        estado: 'pendiente',
+        createdAt: ahoraTs,
+      };
+      const citaLimpia = Object.fromEntries(
+        Object.entries(citaPayload).filter(([, v]) => v !== undefined),
+      );
+      await addDoc(collection(db, 'citas_por_confirmar'), citaLimpia);
+
+      // 3) Audit log
+      try {
+        const auditPayload: Record<string, unknown> = {
+          accion: 'marcar_garantia_admin',
+          solicitanteUid: userProfile?.id || null,
+          solicitanteNombre: userProfile?.nombre || null,
+          objetivoTipo: 'factura',
+          objetivoId: facturaGarantiaManual.id,
+          conduceNumero: facturaGarantiaManual.numero || null,
+          ordenId: facturaGarantiaManual.ordenId || null,
+          razon,
+          timestamp: ahoraTs,
+        };
+        await addDoc(collection(db, 'auditoria_admin'),
+          Object.fromEntries(Object.entries(auditPayload).filter(([, v]) => v !== undefined)),
+        );
+      } catch (auditErr) {
+        console.warn('Audit log marcar_garantia_admin falló:', auditErr);
+      }
+
+      toast.success('Garantía marcada manualmente. Cita creada.');
+      setShowGarantiaManualModal(false);
+      setFacturaGarantiaManual(null);
+      setGarantiaManualRazon('');
+    } catch (err) {
+      console.error('Error marcando garantía manual:', err);
+      toast.error('Error al marcar la garantía');
+    } finally {
+      setSavingGarantiaManual(false);
     }
   };
 
@@ -550,6 +647,18 @@ export default function Facturas() {
                             WhatsApp
                           </button>
                         )}
+                        {factura.garantia?.estado === 'vigente' && puedeMarcarGarantia && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAbrirGarantiaManual(factura);
+                            }}
+                            title="Marcar como garantía (sin reclamo del cliente)"
+                            className="flex items-center gap-1 px-2 py-1.5 bg-amber-50 text-amber-700 rounded-lg text-xs font-medium hover:bg-amber-100 transition-colors"
+                          >
+                            <Shield size={13} /> Marcar garantía
+                          </button>
+                        )}
                         <button
                           onClick={() => handlePrint(factura)}
                           title="Imprimir"
@@ -825,6 +934,85 @@ export default function Facturas() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal: marcar como garantía manual */}
+      <Modal
+        isOpen={showGarantiaManualModal}
+        onClose={() => {
+          if (savingGarantiaManual) return;
+          setShowGarantiaManualModal(false);
+          setFacturaGarantiaManual(null);
+          setGarantiaManualRazon('');
+        }}
+        title="Marcar como garantía manual"
+        size="md"
+      >
+        {facturaGarantiaManual && (
+          <div className="space-y-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
+              <p className="font-semibold mb-1">¿Iniciar trabajo de garantía sin reclamo del cliente?</p>
+              <p className="text-xs">
+                Esto creará una entrada en <strong>Citas por Confirmar</strong> referenciando el
+                Conduce <strong>{facturaGarantiaManual.numero}</strong>. La garantía pasará a
+                estado <strong>"reclamada"</strong> sin necesidad de que el cliente la reclame
+                remotamente.
+              </p>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-700 space-y-0.5">
+              <p><span className="font-semibold">Cliente:</span> {facturaGarantiaManual.clienteNombre}</p>
+              {facturaGarantiaManual.equipoTipo && (
+                <p>
+                  <span className="font-semibold">Equipo:</span> {facturaGarantiaManual.equipoTipo}
+                  {facturaGarantiaManual.equipoMarca ? ` ${facturaGarantiaManual.equipoMarca}` : ''}
+                  {facturaGarantiaManual.equipoModelo ? ` · ${facturaGarantiaManual.equipoModelo}` : ''}
+                </p>
+              )}
+              {facturaGarantiaManual.tecnicoNombre && (
+                <p><span className="font-semibold">Técnico que atendió:</span> {facturaGarantiaManual.tecnicoNombre}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Razón <span className="text-red-600">*</span>
+                <span className="ml-2 text-[10px] text-gray-400 font-normal">(mínimo 10 caracteres)</span>
+              </label>
+              <textarea
+                value={garantiaManualRazon}
+                onChange={e => setGarantiaManualRazon(e.target.value)}
+                rows={4}
+                placeholder="Describe el motivo por el cual se inicia esta garantía manualmente..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">
+                {garantiaManualRazon.trim().length}/10 mínimo
+              </p>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={savingGarantiaManual}
+                onClick={() => {
+                  setShowGarantiaManualModal(false);
+                  setFacturaGarantiaManual(null);
+                  setGarantiaManualRazon('');
+                }}
+                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarGarantiaManual}
+                disabled={savingGarantiaManual || garantiaManualRazon.trim().length < 10}
+                className="px-6 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-sm font-medium disabled:opacity-60 transition-colors flex items-center gap-2"
+              >
+                <Shield size={14} />
+                {savingGarantiaManual ? 'Creando...' : 'Crear cita de garantía'}
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

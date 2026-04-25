@@ -82,23 +82,39 @@ export async function generarLiquidacion(
   const comisionesEnRango = comisionesSnap.docs
     .map(d => {
       const raw = d.data();
-      return {
+      const desc = raw.descuentoPorGarantia as Record<string, unknown> | undefined;
+      const comision: ComisionRegistro = {
         id: d.id,
-        tecnicoId: raw.tecnicoId || '',
-        tecnicoNombre: raw.tecnicoNombre || '',
-        ordenId: raw.ordenId || '',
-        ordenNumero: raw.ordenNumero || '',
-        clienteNombre: raw.clienteNombre || '',
+        tecnicoId: (raw.tecnicoId as string) || '',
+        tecnicoNombre: (raw.tecnicoNombre as string) || '',
+        ordenId: (raw.ordenId as string) || '',
+        ordenNumero: (raw.ordenNumero as string) || '',
+        clienteNombre: (raw.clienteNombre as string) || '',
         fechaCobro: raw.fechaCobro?.toDate?.() || new Date(),
-        precioFinal: raw.precioFinal || 0,
-        costoPiezas: raw.costoPiezas || 0,
-        basePendienteComision: raw.basePendienteComision || 0,
-        comisionPorcentaje: raw.comisionPorcentaje || 0,
-        comisionMonto: raw.comisionMonto || 0,
-        estadoLiquidacion: raw.estadoLiquidacion || 'pendiente',
-        quincenaAsignada: raw.quincenaAsignada,
+        precioFinal: (raw.precioFinal as number) || 0,
+        costoPiezas: (raw.costoPiezas as number) || 0,
+        basePendienteComision: (raw.basePendienteComision as number) || 0,
+        comisionPorcentaje: (raw.comisionPorcentaje as number) || 0,
+        comisionMonto: (raw.comisionMonto as number) || 0,
+        estadoLiquidacion: (raw.estadoLiquidacion as 'pendiente' | 'liquidada') || 'pendiente',
+        quincenaAsignada: raw.quincenaAsignada as string | undefined,
         createdAt: raw.createdAt?.toDate?.() || new Date(),
-      } as ComisionRegistro;
+      };
+      if (desc && typeof desc === 'object') {
+        comision.descuentoPorGarantia = {
+          monto: (desc.monto as number) || 0,
+          facturaIdReasignada: (desc.facturaIdReasignada as string) || '',
+          conduceNumero: (desc.conduceNumero as string) || '',
+          ordenIdReasignada: (desc.ordenIdReasignada as string) || '',
+          motivo: (desc.motivo as string) || '',
+          notas: (desc.notas as string) || undefined,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          aplicadoEn: (desc.aplicadoEn as any)?.toDate?.() || new Date(),
+          aplicadoPor: (desc.aplicadoPor as string) || '',
+          aplicadoPorNombre: (desc.aplicadoPorNombre as string) || '',
+        };
+      }
+      return comision;
     })
     .filter(c =>
       c.estadoLiquidacion === 'pendiente' &&
@@ -134,7 +150,13 @@ export async function generarLiquidacion(
     if (p.rol === 'tecnico') {
       const comisionesT = comisionesEnRango.filter(c => c.tecnicoId === p.id);
       comisionesIds = comisionesT.map(c => c.id);
-      totalComisiones = comisionesT.reduce((s, c) => s + c.comisionMonto, 0);
+      // Sumar comisión + descuentoPorGarantia.monto (que ya es negativo). Si la nómina del técnico
+      // original ya cerró cuando se aplica el descuento, queda flotante y se recoge en la próxima
+      // quincena (el filtro pendiente sigue cumpliéndose hasta que se cierre la liquidación).
+      totalComisiones = comisionesT.reduce(
+        (s, c) => s + c.comisionMonto + (c.descuentoPorGarantia?.monto ?? 0),
+        0,
+      );
       cantidadOrdenesConComision = comisionesT.length;
     } else if (p.rol === 'operaria' || p.rol === 'coordinadora') {
       // Bono operaria es MENSUAL: solo se paga en Q2, medido sobre todo el mes calendario.

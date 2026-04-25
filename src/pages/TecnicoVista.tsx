@@ -158,23 +158,39 @@ export default function TecnicoVista() {
         const items = snap.docs
           .map(d => {
             const raw = d.data();
-            return {
+            const desc = raw.descuentoPorGarantia as Record<string, unknown> | undefined;
+            const comision: ComisionRegistro = {
               id: d.id,
-              tecnicoId: raw.tecnicoId || '',
-              tecnicoNombre: raw.tecnicoNombre || '',
-              ordenId: raw.ordenId || '',
-              ordenNumero: raw.ordenNumero || '',
-              clienteNombre: raw.clienteNombre || '',
+              tecnicoId: (raw.tecnicoId as string) || '',
+              tecnicoNombre: (raw.tecnicoNombre as string) || '',
+              ordenId: (raw.ordenId as string) || '',
+              ordenNumero: (raw.ordenNumero as string) || '',
+              clienteNombre: (raw.clienteNombre as string) || '',
               fechaCobro: raw.fechaCobro?.toDate?.() || new Date(),
-              precioFinal: raw.precioFinal || 0,
-              costoPiezas: raw.costoPiezas || 0,
-              basePendienteComision: raw.basePendienteComision || 0,
-              comisionPorcentaje: raw.comisionPorcentaje || 0,
-              comisionMonto: raw.comisionMonto || 0,
-              estadoLiquidacion: raw.estadoLiquidacion || 'pendiente',
-              quincenaAsignada: raw.quincenaAsignada,
+              precioFinal: (raw.precioFinal as number) || 0,
+              costoPiezas: (raw.costoPiezas as number) || 0,
+              basePendienteComision: (raw.basePendienteComision as number) || 0,
+              comisionPorcentaje: (raw.comisionPorcentaje as number) || 0,
+              comisionMonto: (raw.comisionMonto as number) || 0,
+              estadoLiquidacion: (raw.estadoLiquidacion as 'pendiente' | 'liquidada') || 'pendiente',
+              quincenaAsignada: raw.quincenaAsignada as string | undefined,
               createdAt: raw.createdAt?.toDate?.() || new Date(),
-            } as ComisionRegistro;
+            };
+            if (desc && typeof desc === 'object') {
+              comision.descuentoPorGarantia = {
+                monto: (desc.monto as number) || 0,
+                facturaIdReasignada: (desc.facturaIdReasignada as string) || '',
+                conduceNumero: (desc.conduceNumero as string) || '',
+                ordenIdReasignada: (desc.ordenIdReasignada as string) || '',
+                motivo: (desc.motivo as string) || '',
+                notas: (desc.notas as string) || undefined,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                aplicadoEn: (desc.aplicadoEn as any)?.toDate?.() || new Date(),
+                aplicadoPor: (desc.aplicadoPor as string) || '',
+                aplicadoPorNombre: (desc.aplicadoPorNombre as string) || '',
+              };
+            }
+            return comision;
           })
           .filter(c => c.tecnicoId === userProfile.id && c.quincenaAsignada === quincena);
         setComisionesQuincena(items);
@@ -674,7 +690,13 @@ export default function TecnicoVista() {
       <div className="max-w-4xl mx-auto p-4 space-y-4">
         {/* Comisión acumulada de la quincena (Fase 5) */}
         {(() => {
-          const total = comisionesQuincena.reduce((s, c) => s + c.comisionMonto, 0);
+          const totalBruto = comisionesQuincena.reduce((s, c) => s + c.comisionMonto, 0);
+          const totalDescuentos = comisionesQuincena.reduce(
+            (s, c) => s + (c.descuentoPorGarantia?.monto ?? 0),
+            0,
+          );
+          const total = totalBruto + totalDescuentos;
+          const comisionesConDescuento = comisionesQuincena.filter(c => c.descuentoPorGarantia);
           const quincena = calcularQuincenaActual(new Date());
           const { inicio, fin } = rangoQuincena(quincena);
           const esQ1 = quincena.endsWith('Q1');
@@ -741,6 +763,47 @@ export default function TecnicoVista() {
               {nOrdenes === 0 && (
                 <div className="px-4 pb-4 text-[11px] opacity-75">
                   Aún no tienes comisiones en esta quincena. Cada vez que una orden tuya pase a facturada, acumulas ganancia aquí.
+                </div>
+              )}
+
+              {/* Descuentos por garantía */}
+              {comisionesConDescuento.length > 0 && (
+                <div className="bg-red-900/30 border-t-2 border-red-300/40 px-4 py-3 text-xs">
+                  <div className="flex items-center gap-1.5 font-semibold mb-2 text-red-100">
+                    <span>⚠️</span>
+                    <span>Comisiones descontadas por garantía</span>
+                  </div>
+                  <div className="space-y-2">
+                    {comisionesConDescuento.map(c => {
+                      const d = c.descuentoPorGarantia!;
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const fechaApl = d.aplicadoEn instanceof Date ? d.aplicadoEn : (d.aplicadoEn as any)?.toDate?.() || new Date();
+                      return (
+                        <div key={`desc-${c.id}`} className="bg-red-900/40 rounded-lg px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="font-medium text-red-50 truncate">
+                                Conduce {d.conduceNumero || '—'} · Orden {c.ordenNumero}
+                              </div>
+                              <div className="opacity-80 text-[10px] text-red-100">
+                                {format(fechaApl, "dd MMM yyyy", { locale: es })}
+                              </div>
+                              <div className="text-[10px] text-red-100/90 mt-0.5">
+                                Motivo: {d.motivo || '—'}
+                              </div>
+                            </div>
+                            <div className="font-bold text-right text-red-100">
+                              {formatMoneda(d.monto)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-red-300/30 flex items-center justify-between text-red-100">
+                    <span className="font-semibold">Total descontado en este período:</span>
+                    <span className="font-bold">{formatMoneda(totalDescuentos)}</span>
+                  </div>
                 </div>
               )}
             </div>

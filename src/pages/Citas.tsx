@@ -1,15 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, Timestamp, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, Timestamp, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
-import { CitaPorConfirmar, Personal, OrdenServicio } from '../types';
+import { CitaPorConfirmar, Personal, OrdenServicio, GarantiaOrigen } from '../types';
 import { tiempoTranscurrido, TIPOS_EQUIPO, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, esOrdenMantenimiento, formatMoneda, crearRegistroAuditoria } from '../utils';
 import { buscarPrecioMantenimiento } from '../services/precios.service';
 import { siguienteNumeroOrden } from '../services/contadores.service';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
-import { Phone, Clock, Check, X, Plus, AlertTriangle, MapPin, Camera, Wrench } from 'lucide-react';
+import { Phone, Clock, Check, X, Plus, AlertTriangle, MapPin, Camera, Wrench, Shield } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import { differenceInMinutes, isSameDay, format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -60,6 +60,19 @@ export default function Citas() {
 
   const [saving, setSaving] = useState(false);
 
+  // ─── Garantía: cambio de técnico ───
+  const MOTIVOS_CAMBIO_TECNICO = [
+    'Técnico original no disponible',
+    'Técnico ya no trabaja aquí',
+    'Cliente prefiere otro técnico',
+    'Otro',
+  ] as const;
+  const [garantiaMotivo, setGarantiaMotivo] = useState<string>('');
+  const [garantiaNotas, setGarantiaNotas] = useState<string>('');
+  const [comisionMontoOriginal, setComisionMontoOriginal] = useState<number | null>(null);
+  const [cargandoComisionOriginal, setCargandoComisionOriginal] = useState(false);
+  const [comisionOriginalId, setComisionOriginalId] = useState<string | null>(null);
+
   useEffect(() => {
     const unsub = onSnapshot(
       query(collection(db, 'citas_por_confirmar'), orderBy('createdAt', 'asc')),
@@ -69,7 +82,7 @@ export default function Citas() {
           return {
             id: d.id,
             clienteNombre: raw.clienteNombre || '',
-            telefono: raw.telefono || '',
+            telefono: raw.telefono || raw.clienteTelefono || '',
             servicio: raw.servicio || '',
             falla: raw.falla,
             horarioSolicitado: raw.horarioSolicitado,
@@ -88,6 +101,16 @@ export default function Citas() {
             calendarioNombre: raw.calendarioNombre,
             fechaSolicitada: raw.fechaSolicitada?.toDate?.() || undefined,
             horaSolicitada: raw.horaSolicitada,
+            // Garantía
+            tipo: raw.tipo,
+            esGarantia: raw.esGarantia === true,
+            referenciaFacturaId: raw.referenciaFacturaId,
+            referenciaConduce: raw.referenciaConduce,
+            referenciaOrdenId: raw.referenciaOrdenId,
+            tecnicoOriginalUid: raw.tecnicoOriginalUid,
+            tecnicoOriginalNombre: raw.tecnicoOriginalNombre,
+            descripcionProblema: raw.descripcionProblema,
+            origenGarantia: raw.origenGarantia as GarantiaOrigen | undefined,
             createdAt: raw.createdAt?.toDate?.() || new Date(),
           } as CitaPorConfirmar;
         }));
@@ -126,6 +149,56 @@ export default function Citas() {
       )
       .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
   }, [agendarForm.tecnicoId, agendarForm.tecnicoNombre, agendarForm.fechaCita, ordenes]);
+
+  // ─── Garantía: cargar comisión original cuando el modal de agendar se abre con una cita de garantía ───
+  useEffect(() => {
+    if (!showAgendarModal || !selectedCita?.esGarantia || !selectedCita.referenciaOrdenId || !selectedCita.tecnicoOriginalUid) {
+      setComisionMontoOriginal(null);
+      setComisionOriginalId(null);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      setCargandoComisionOriginal(true);
+      try {
+        const q = query(
+          collection(db, 'comisiones'),
+          where('ordenId', '==', selectedCita.referenciaOrdenId),
+          where('tecnicoId', '==', selectedCita.tecnicoOriginalUid),
+          limit(1),
+        );
+        const snap = await getDocs(q);
+        if (cancelado) return;
+        if (snap.empty) {
+          setComisionMontoOriginal(null);
+          setComisionOriginalId(null);
+        } else {
+          const d = snap.docs[0];
+          const data = d.data() as Record<string, unknown>;
+          const monto = typeof data.comisionMonto === 'number' ? (data.comisionMonto as number) : 0;
+          setComisionMontoOriginal(monto);
+          setComisionOriginalId(d.id);
+        }
+      } catch (err) {
+        console.warn('No se pudo cargar la comisión original de la garantía:', err);
+        if (!cancelado) {
+          setComisionMontoOriginal(null);
+          setComisionOriginalId(null);
+        }
+      } finally {
+        if (!cancelado) setCargandoComisionOriginal(false);
+      }
+    })();
+    return () => { cancelado = true; };
+  }, [showAgendarModal, selectedCita?.esGarantia, selectedCita?.referenciaOrdenId, selectedCita?.tecnicoOriginalUid]);
+
+  // Reset garantía form al cerrar el modal
+  useEffect(() => {
+    if (!showAgendarModal) {
+      setGarantiaMotivo('');
+      setGarantiaNotas('');
+    }
+  }, [showAgendarModal]);
 
   // Google Places Autocomplete en el campo de dirección
   useEffect(() => {
@@ -352,6 +425,17 @@ export default function Citas() {
       toast.error('Ese horario ya está ocupado por el técnico seleccionado');
       return;
     }
+    // Garantía con cambio de técnico: motivo requerido
+    const cambioTecnicoGarantia = !!(
+      selectedCita.esGarantia &&
+      agendarForm.tecnicoId &&
+      selectedCita.tecnicoOriginalUid &&
+      agendarForm.tecnicoId !== selectedCita.tecnicoOriginalUid
+    );
+    if (cambioTecnicoGarantia && !garantiaMotivo) {
+      toast.error('Selecciona un motivo para el cambio de técnico');
+      return;
+    }
     setSaving(true);
     try {
       const numero = await siguienteNumeroOrden();
@@ -387,6 +471,19 @@ export default function Citas() {
       };
       if (tecnicoElegido?.operariaId) ordenData.operariaId = tecnicoElegido.operariaId;
       if (tecnicoElegido?.operariaNombre) ordenData.operariaNombre = tecnicoElegido.operariaNombre;
+      // Garantía: marcar la nueva orden como reasignación si la cita es de garantía
+      if (selectedCita.esGarantia) {
+        ordenData.esGarantia = true;
+        if (selectedCita.tecnicoOriginalUid) ordenData.tecnicoOriginalUid = selectedCita.tecnicoOriginalUid;
+        if (selectedCita.tecnicoOriginalNombre) ordenData.tecnicoOriginalNombre = selectedCita.tecnicoOriginalNombre;
+        if (selectedCita.referenciaConduce) ordenData.referenciaConduce = selectedCita.referenciaConduce;
+        if (selectedCita.referenciaFacturaId) ordenData.referenciaFacturaId = selectedCita.referenciaFacturaId;
+        if (selectedCita.referenciaOrdenId) ordenData.referenciaOrdenId = selectedCita.referenciaOrdenId;
+        // Usar la descripción del problema reclamado si está
+        if (selectedCita.descripcionProblema) {
+          ordenData.descripcionFalla = selectedCita.descripcionProblema;
+        }
+      }
       // Copiar datos del cliente capturados en el registro/formulario público (strip undefined)
       if (selectedCita.clienteEmail) ordenData.clienteEmail = selectedCita.clienteEmail;
       if (selectedCita.clienteDireccion) ordenData.clienteDireccion = selectedCita.clienteDireccion;
@@ -421,13 +518,132 @@ export default function Citas() {
         }
       }
 
-      await addDoc(collection(db, 'ordenes_servicio'), ordenData);
+      const nuevaOrdenRef = await addDoc(collection(db, 'ordenes_servicio'), ordenData);
       if (precioMantPreaprobado !== null) {
         toast(`Mantenimiento detectado: precio preaprobado ${formatMoneda(precioMantPreaprobado)} según catálogo.`, {
           duration: 6000,
           style: { borderLeft: '4px solid #1a5fa8', background: '#eff6ff', color: '#0f3460' },
         });
       }
+
+      // ─── Garantía: aplicar descuento, actualizar factura y registrar auditoría ───
+      if (selectedCita.esGarantia) {
+        const ahoraTs = Timestamp.now();
+        let descuentoAplicado = false;
+        let descuentoMonto = 0;
+
+        // 1) Descuento a la comisión del técnico original (si cambió de técnico y existe la comisión)
+        if (cambioTecnicoGarantia && comisionOriginalId && comisionMontoOriginal !== null && comisionMontoOriginal > 0) {
+          try {
+            const descuentoPayload: Record<string, unknown> = {
+              monto: -comisionMontoOriginal,
+              facturaIdReasignada: selectedCita.referenciaFacturaId || '',
+              conduceNumero: selectedCita.referenciaConduce || '',
+              ordenIdReasignada: nuevaOrdenRef.id,
+              motivo: garantiaMotivo,
+              aplicadoEn: ahoraTs,
+              aplicadoPor: userProfile?.id || '',
+              aplicadoPorNombre: userProfile?.nombre || 'Sistema',
+            };
+            if (garantiaNotas.trim()) descuentoPayload.notas = garantiaNotas.trim();
+            const descuentoLimpio = Object.fromEntries(
+              Object.entries(descuentoPayload).filter(([, v]) => v !== undefined),
+            );
+            await updateDoc(doc(db, 'comisiones', comisionOriginalId), {
+              descuentoPorGarantia: descuentoLimpio,
+              estaAnulada: true,
+              updatedAt: ahoraTs,
+            });
+            descuentoAplicado = true;
+            descuentoMonto = comisionMontoOriginal;
+          } catch (errDesc) {
+            console.warn('No se pudo aplicar el descuento por garantía:', errDesc);
+            toast('No se pudo aplicar el descuento a la comisión del técnico original. Verifica manualmente.', {
+              duration: 6000,
+              style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
+            });
+          }
+        } else if (cambioTecnicoGarantia && !comisionOriginalId) {
+          toast('No se encontró comisión del técnico original. Descuento no aplicado.', {
+            duration: 5000,
+            style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
+          });
+        }
+
+        // 2) Actualizar factura: snapshot del técnico original + ordenGarantiaId + estado reclamada
+        if (selectedCita.referenciaFacturaId) {
+          try {
+            const facturaUpdate: Record<string, unknown> = {
+              'garantia.ordenGarantiaId': nuevaOrdenRef.id,
+              'garantia.estado': 'reclamada',
+            };
+            if (selectedCita.tecnicoOriginalUid) facturaUpdate['garantia.tecnicoOriginalUid'] = selectedCita.tecnicoOriginalUid;
+            if (selectedCita.tecnicoOriginalNombre) facturaUpdate['garantia.tecnicoOriginalNombre'] = selectedCita.tecnicoOriginalNombre;
+            await updateDoc(doc(db, 'facturas', selectedCita.referenciaFacturaId), facturaUpdate);
+          } catch (errFact) {
+            console.warn('No se pudo actualizar la factura referenciada:', errFact);
+          }
+        }
+
+        // 3) Audit log: cambio_tecnico_garantia
+        if (cambioTecnicoGarantia) {
+          try {
+            const auditPayload: Record<string, unknown> = {
+              accion: 'cambio_tecnico_garantia',
+              solicitanteUid: userProfile?.id || null,
+              solicitanteNombre: userProfile?.nombre || null,
+              objetivoTipo: 'orden',
+              objetivoId: nuevaOrdenRef.id,
+              ordenIdReasignada: nuevaOrdenRef.id,
+              ordenIdOriginal: selectedCita.referenciaOrdenId || null,
+              facturaId: selectedCita.referenciaFacturaId || null,
+              conduceNumero: selectedCita.referenciaConduce || null,
+              tecnicoOriginalUid: selectedCita.tecnicoOriginalUid || null,
+              tecnicoOriginalNombre: selectedCita.tecnicoOriginalNombre || null,
+              tecnicoNuevoUid: agendarForm.tecnicoId,
+              tecnicoNuevoNombre: agendarForm.tecnicoNombre,
+              motivo: garantiaMotivo,
+              notas: garantiaNotas.trim() || null,
+              montoDescontado: descuentoAplicado ? descuentoMonto : 0,
+              descuentoAplicado,
+              comisionOriginalId: comisionOriginalId || null,
+              timestamp: ahoraTs,
+            };
+            await addDoc(collection(db, 'auditoria_admin'),
+              Object.fromEntries(Object.entries(auditPayload).filter(([, v]) => v !== undefined)),
+            );
+          } catch (errAudit) {
+            console.warn('Audit log cambio_tecnico_garantia falló:', errAudit);
+          }
+        }
+
+        // 4) Audit log adicional cuando el descuento sí se aplicó
+        if (descuentoAplicado) {
+          try {
+            const auditDesc: Record<string, unknown> = {
+              accion: 'descuento_garantia_tecnico',
+              solicitanteUid: userProfile?.id || null,
+              solicitanteNombre: userProfile?.nombre || null,
+              objetivoTipo: 'comision',
+              objetivoId: comisionOriginalId,
+              tecnicoAfectadoUid: selectedCita.tecnicoOriginalUid || null,
+              tecnicoAfectadoNombre: selectedCita.tecnicoOriginalNombre || null,
+              monto: -descuentoMonto,
+              ordenIdOriginal: selectedCita.referenciaOrdenId || null,
+              ordenIdReasignada: nuevaOrdenRef.id,
+              conduceNumero: selectedCita.referenciaConduce || null,
+              motivo: garantiaMotivo,
+              timestamp: ahoraTs,
+            };
+            await addDoc(collection(db, 'auditoria_admin'),
+              Object.fromEntries(Object.entries(auditDesc).filter(([, v]) => v !== undefined)),
+            );
+          } catch (errAudit) {
+            console.warn('Audit log descuento_garantia_tecnico falló:', errAudit);
+          }
+        }
+      }
+
       await deleteDoc(doc(db, 'citas_por_confirmar', selectedCita.id));
       if (typeof selectedCita.clienteLat !== 'number' || typeof selectedCita.clienteLng !== 'number') {
         toast('Esta orden no tiene ubicación GPS. El técnico no podrá verla en el mapa. Puedes agregarla después desde la orden.', {
@@ -457,6 +673,15 @@ export default function Citas() {
 
   const tecnicos = personal.filter(p => p.rol === 'tecnico' && p.activo);
 
+  // ─── Garantía: derivados para el modal de agendar ───
+  const esGarantiaConCambioTecnico = !!(
+    selectedCita?.esGarantia &&
+    agendarForm.tecnicoId &&
+    selectedCita.tecnicoOriginalUid &&
+    agendarForm.tecnicoId !== selectedCita.tecnicoOriginalUid
+  );
+  const motivoRequeridoIncompleto = esGarantiaConCambioTecnico && !garantiaMotivo;
+
   if (loading) return <LoadingSpinner fullPage text="Cargando citas..." />;
 
   return (
@@ -485,17 +710,26 @@ export default function Citas() {
           {citas.map(cita => {
             const minutos = differenceInMinutes(new Date(), cita.createdAt);
             const esUrgente = minutos > 15;
+            const esGarantia = cita.tipo === 'garantia' || cita.esGarantia === true;
+            const borderClass = esGarantia
+              ? 'border-amber-300 bg-amber-50/40'
+              : esUrgente
+                ? 'border-red-300 bg-red-50/50'
+                : 'border-gray-100';
             return (
               <div
                 key={cita.id}
-                className={`bg-white rounded-2xl shadow-sm border-2 p-5 ${
-                  esUrgente ? 'border-red-300 bg-red-50/50' : 'border-gray-100'
-                }`}
+                className={`bg-white rounded-2xl shadow-sm border-2 p-5 ${borderClass}`}
               >
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold text-gray-900">{cita.clienteNombre}</h3>
+                      {esGarantia && (
+                        <span className="flex items-center gap-1 bg-amber-100 text-amber-800 text-xs font-bold px-2 py-0.5 rounded-full">
+                          <Shield size={11} /> GARANTÍA
+                        </span>
+                      )}
                       {esUrgente && (
                         <span className="flex items-center gap-1 bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">
                           <AlertTriangle size={10} /> +{minutos} min
@@ -507,6 +741,19 @@ export default function Citas() {
                         </span>
                       )}
                     </div>
+                    {esGarantia && (
+                      <div className="mt-1 mb-2 bg-amber-100/60 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-900 space-y-0.5">
+                        {cita.tecnicoOriginalNombre && (
+                          <p><span className="font-semibold">Técnico original:</span> {cita.tecnicoOriginalNombre}</p>
+                        )}
+                        {cita.referenciaConduce && (
+                          <p><span className="font-semibold">Conduce ref:</span> {cita.referenciaConduce}</p>
+                        )}
+                        {cita.descripcionProblema && (
+                          <p><span className="font-semibold">Problema:</span> {cita.descripcionProblema}</p>
+                        )}
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
                       <Phone size={14} /> {cita.telefono}
                     </div>
@@ -803,6 +1050,25 @@ export default function Citas() {
               <p className="text-sm font-medium text-blue-900">{selectedCita.clienteNombre} · {selectedCita.telefono}</p>
               <p className="text-sm text-blue-700">{selectedCita.servicio}</p>
             </div>
+            {selectedCita.esGarantia && (
+              <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Shield size={16} className="text-amber-700" />
+                  <span className="text-sm font-bold text-amber-900">Cita de garantía</span>
+                </div>
+                <div className="text-xs text-amber-900 space-y-0.5">
+                  {selectedCita.tecnicoOriginalNombre && (
+                    <p><span className="font-semibold">Técnico original:</span> {selectedCita.tecnicoOriginalNombre}</p>
+                  )}
+                  {selectedCita.referenciaConduce && (
+                    <p><span className="font-semibold">Conduce ref:</span> {selectedCita.referenciaConduce}</p>
+                  )}
+                  {selectedCita.descripcionProblema && (
+                    <p><span className="font-semibold">Problema reclamado:</span> {selectedCita.descripcionProblema}</p>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de equipo *</label>
@@ -871,12 +1137,76 @@ export default function Citas() {
               <textarea value={agendarForm.notas} onChange={e => setAgendarForm(f => ({ ...f, notas: e.target.value }))} rows={2}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
             </div>
+
+            {/* Garantía: advertencia por cambio de técnico */}
+            {esGarantiaConCambioTecnico && (
+              <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={18} className="text-red-700" />
+                  <span className="text-sm font-bold text-red-800">ADVERTENCIA: Cambio de técnico</span>
+                </div>
+                <div className="text-xs text-red-900 space-y-1">
+                  <p><span className="font-semibold">Técnico original:</span> {selectedCita?.tecnicoOriginalNombre || '—'}</p>
+                  <p><span className="font-semibold">Técnico nuevo:</span> {agendarForm.tecnicoNombre || '—'}</p>
+                </div>
+                <div className="bg-white border border-red-200 rounded-lg p-3 text-xs text-red-900">
+                  <p>
+                    Esto descontará el <span className="font-bold">100% de la comisión</span> que recibió{' '}
+                    <span className="font-semibold">{selectedCita?.tecnicoOriginalNombre || 'el técnico original'}</span> por el trabajo original:
+                  </p>
+                  <p className="text-base font-bold text-red-700 mt-1">
+                    {cargandoComisionOriginal
+                      ? 'Cargando comisión...'
+                      : comisionMontoOriginal !== null
+                        ? `-${formatMoneda(comisionMontoOriginal)}`
+                        : 'No se encontró comisión registrada (no se aplicará descuento)'}
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-red-900 mb-1">
+                    Motivo del cambio <span className="text-red-700">*</span>
+                  </label>
+                  <div className="space-y-1">
+                    {MOTIVOS_CAMBIO_TECNICO.map(m => (
+                      <label key={m} className="flex items-center gap-2 text-xs text-red-900 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="garantia-motivo"
+                          value={m}
+                          checked={garantiaMotivo === m}
+                          onChange={() => setGarantiaMotivo(m)}
+                          className="accent-red-600"
+                        />
+                        {m}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-red-900 mb-1">
+                    Notas adicionales (opcional)
+                  </label>
+                  <textarea
+                    value={garantiaNotas}
+                    onChange={e => setGarantiaNotas(e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-red-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-red-400 bg-white"
+                    placeholder="Detalles del cambio..."
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" onClick={() => { setShowAgendarModal(false); setSelectedCita(null); }}
                 className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
-              <button type="submit" disabled={saving}
-                className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
-                {saving ? 'Agendando...' : 'Confirmar y Agendar'}
+              <button type="submit" disabled={saving || motivoRequeridoIncompleto}
+                className={`px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-60 ${
+                  esGarantiaConCambioTecnico
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-[#0f3460] hover:bg-[#1a5fa8] text-white'
+                }`}>
+                {saving ? 'Agendando...' : esGarantiaConCambioTecnico ? 'Confirmar y Aplicar' : 'Confirmar y Agendar'}
               </button>
             </div>
           </form>
