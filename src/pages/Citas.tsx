@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, Timestamp, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, Timestamp, getDoc, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 import { CitaPorConfirmar, Personal, OrdenServicio, GarantiaOrigen } from '../types';
@@ -535,27 +535,60 @@ export default function Citas() {
         // 1) Descuento a la comisión del técnico original (si cambió de técnico y existe la comisión)
         if (cambioTecnicoGarantia && comisionOriginalId && comisionMontoOriginal !== null && comisionMontoOriginal > 0) {
           try {
-            const descuentoPayload: Record<string, unknown> = {
-              monto: -comisionMontoOriginal,
-              facturaIdReasignada: selectedCita.referenciaFacturaId || '',
-              conduceNumero: selectedCita.referenciaConduce || '',
-              ordenIdReasignada: nuevaOrdenRef.id,
-              motivo: garantiaMotivo,
-              aplicadoEn: ahoraTs,
-              aplicadoPor: userProfile?.id || '',
-              aplicadoPorNombre: userProfile?.nombre || 'Sistema',
-            };
-            if (garantiaNotas.trim()) descuentoPayload.notas = garantiaNotas.trim();
-            const descuentoLimpio = Object.fromEntries(
-              Object.entries(descuentoPayload).filter(([, v]) => v !== undefined),
-            );
-            await updateDoc(doc(db, 'comisiones', comisionOriginalId), {
-              descuentoPorGarantia: descuentoLimpio,
-              estaAnulada: true,
-              updatedAt: ahoraTs,
-            });
-            descuentoAplicado = true;
-            descuentoMonto = comisionMontoOriginal;
+            // Idempotencia: leer el doc de comisión justo antes de aplicar el
+            // descuento. Si ya está anulada (otro flujo previo), NO re-aplicar.
+            const comisionRef = doc(db, 'comisiones', comisionOriginalId);
+            const comisionSnap = await getDoc(comisionRef);
+            if (!comisionSnap.exists()) {
+              toast.error('Comisión original no encontrada. No se aplicó descuento. Verifica manualmente.');
+            } else if (comisionSnap.data()?.estaAnulada === true) {
+              toast('Comisión ya fue anulada en una reasignación previa. No se re-descontó.', {
+                duration: 5000,
+                style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
+              });
+              // Audit log del skip por idempotencia (best-effort)
+              try {
+                const auditOmision: Record<string, unknown> = {
+                  accion: 'descuento_garantia_omitido_idempotencia',
+                  solicitanteUid: userProfile?.id || null,
+                  solicitanteNombre: userProfile?.nombre || null,
+                  objetivoTipo: 'comision',
+                  objetivoId: comisionOriginalId,
+                  ordenIdReasignada: nuevaOrdenRef.id,
+                  facturaId: selectedCita.referenciaFacturaId || null,
+                  conduceNumero: selectedCita.referenciaConduce || null,
+                  motivo: 'Comisión ya anulada previamente',
+                  timestamp: ahoraTs,
+                };
+                await addDoc(collection(db, 'auditoria_admin'),
+                  Object.fromEntries(Object.entries(auditOmision).filter(([, v]) => v !== undefined)),
+                );
+              } catch (errAuditOmision) {
+                console.warn('Audit log descuento_garantia_omitido_idempotencia falló:', errAuditOmision);
+              }
+            } else {
+              const descuentoPayload: Record<string, unknown> = {
+                monto: -comisionMontoOriginal,
+                facturaIdReasignada: selectedCita.referenciaFacturaId || '',
+                conduceNumero: selectedCita.referenciaConduce || '',
+                ordenIdReasignada: nuevaOrdenRef.id,
+                motivo: garantiaMotivo,
+                aplicadoEn: ahoraTs,
+                aplicadoPor: userProfile?.id || '',
+                aplicadoPorNombre: userProfile?.nombre || 'Sistema',
+              };
+              if (garantiaNotas.trim()) descuentoPayload.notas = garantiaNotas.trim();
+              const descuentoLimpio = Object.fromEntries(
+                Object.entries(descuentoPayload).filter(([, v]) => v !== undefined),
+              );
+              await updateDoc(comisionRef, {
+                descuentoPorGarantia: descuentoLimpio,
+                estaAnulada: true,
+                updatedAt: ahoraTs,
+              });
+              descuentoAplicado = true;
+              descuentoMonto = comisionMontoOriginal;
+            }
           } catch (errDesc) {
             console.warn('No se pudo aplicar el descuento por garantía:', errDesc);
             toast('No se pudo aplicar el descuento a la comisión del técnico original. Verifica manualmente.', {

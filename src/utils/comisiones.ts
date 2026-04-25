@@ -350,6 +350,13 @@ export async function registrarComisionPorOrden(
     if (!orden.tecnicoId) {
       return { creada: false, razon: 'sin técnico asignado' };
     }
+    // Defense-in-depth (server-side gate): si la orden tiene precio sugerido
+    // pero NO está aprobada por oficina, no se genera comisión. Esto protege
+    // contra writes directos a Firestore (admin SDK, scripts) que bypassen
+    // la validación del UI.
+    if (orden.precioSugerido !== undefined && orden.estadoAprobacion !== 'aprobado') {
+      return { creada: false, razon: 'precio sugerido pero no aprobado por oficina' };
+    }
     // Idempotencia
     const existeQ = await getDocs(query(
       collection(db, 'comisiones'),

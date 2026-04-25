@@ -544,13 +544,13 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     standbyHasta: parseFirestoreDate(raw.standbyHasta) || undefined,
     standbyNotas: (raw.standbyNotas as string) || undefined,
     standbyPor: (raw.standbyPor as string) || undefined,
-    // Garantía — orden reasignada
-    esGarantia: typeof raw.esGarantia === 'boolean' ? (raw.esGarantia as boolean) : undefined,
-    tecnicoOriginalUid: (raw.tecnicoOriginalUid as string) || undefined,
-    tecnicoOriginalNombre: (raw.tecnicoOriginalNombre as string) || undefined,
-    referenciaConduce: (raw.referenciaConduce as string) || undefined,
-    referenciaFacturaId: (raw.referenciaFacturaId as string) || undefined,
-    referenciaOrdenId: (raw.referenciaOrdenId as string) || undefined,
+    // Garantía — orden reasignada (checks defensivos: tipo exacto)
+    esGarantia: raw.esGarantia === true ? true : undefined,
+    tecnicoOriginalUid: typeof raw.tecnicoOriginalUid === 'string' && raw.tecnicoOriginalUid.length > 0 ? raw.tecnicoOriginalUid : undefined,
+    tecnicoOriginalNombre: typeof raw.tecnicoOriginalNombre === 'string' && raw.tecnicoOriginalNombre.length > 0 ? raw.tecnicoOriginalNombre : undefined,
+    referenciaConduce: typeof raw.referenciaConduce === 'string' && raw.referenciaConduce.length > 0 ? raw.referenciaConduce : undefined,
+    referenciaFacturaId: typeof raw.referenciaFacturaId === 'string' && raw.referenciaFacturaId.length > 0 ? raw.referenciaFacturaId : undefined,
+    referenciaOrdenId: typeof raw.referenciaOrdenId === 'string' && raw.referenciaOrdenId.length > 0 ? raw.referenciaOrdenId : undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden) || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),
@@ -592,19 +592,26 @@ export function parseFactura(id: string, raw: Record<string, unknown>): Factura 
   let garantia: GarantiaInfo | undefined;
   if (raw.garantia && typeof raw.garantia === 'object') {
     const g = raw.garantia as Record<string, unknown>;
-    garantia = {
-      tiempoDias: typeof g.tiempoDias === 'number' ? (g.tiempoDias as number) : 0,
-      inicioFecha: parseFirestoreDate(g.inicioFecha) || new Date(),
-      finFecha: parseFirestoreDate(g.finFecha) || new Date(),
-      token: (g.token as string) || '',
-      estado: (g.estado as GarantiaEstado) || 'vigente',
-      reclamadaEn: parseFirestoreDate(g.reclamadaEn) || undefined,
-      problemaDescripcion: (g.problemaDescripcion as string) || undefined,
-      origen: (g.origen as GarantiaOrigen) || undefined,
-      ordenGarantiaId: (g.ordenGarantiaId as string) || undefined,
-      tecnicoOriginalUid: (g.tecnicoOriginalUid as string) || undefined,
-      tecnicoOriginalNombre: (g.tecnicoOriginalNombre as string) || undefined,
-    };
+    const inicioFecha = parseFirestoreDate(g.inicioFecha);
+    const finFecha = parseFirestoreDate(g.finFecha);
+    // Si las fechas críticas no son válidas (factura legacy sin estos
+    // campos), preferimos NO retornar el bloque garantía antes que mostrar
+    // fechas inventadas (`new Date()`) en el frontend.
+    if (inicioFecha && finFecha) {
+      garantia = {
+        tiempoDias: typeof g.tiempoDias === 'number' ? (g.tiempoDias as number) : 0,
+        inicioFecha,
+        finFecha,
+        token: (g.token as string) || '',
+        estado: (g.estado as GarantiaEstado) || 'vigente',
+        reclamadaEn: parseFirestoreDate(g.reclamadaEn) || undefined,
+        problemaDescripcion: (g.problemaDescripcion as string) || undefined,
+        origen: (g.origen as GarantiaOrigen) || undefined,
+        ordenGarantiaId: (g.ordenGarantiaId as string) || undefined,
+        tecnicoOriginalUid: (g.tecnicoOriginalUid as string) || undefined,
+        tecnicoOriginalNombre: (g.tecnicoOriginalNombre as string) || undefined,
+      };
+    }
   }
 
   return {

@@ -283,46 +283,58 @@ export default function Facturas() {
       return;
     }
     setSavingGarantiaManual(true);
+    const ahoraTs = Timestamp.now();
     try {
-      const ahoraTs = Timestamp.now();
-      // 1) Update factura: garantía pasa a reclamada con origen manual_admin
-      await updateDoc(doc(db, 'facturas', facturaGarantiaManual.id), {
-        'garantia.estado': 'reclamada',
-        'garantia.reclamadaEn': ahoraTs,
-        'garantia.problemaDescripcion': razon,
-        'garantia.origen': 'manual_admin',
+      // FIX CRÍTICO: envolver update factura + creación de cita en una transacción
+      // para evitar que dos admins simultáneos creen citas duplicadas.
+      await runTransaction(db, async (tx) => {
+        const facturaRef = doc(db, 'facturas', facturaGarantiaManual.id);
+        const facturaSnap = await tx.get(facturaRef);
+        const data = facturaSnap.data();
+        if (!data || data.garantia?.estado !== 'vigente') {
+          throw new Error('GARANTIA_YA_RECLAMADA');
+        }
+
+        // 1) Update factura: garantía pasa a reclamada con origen manual_admin
+        tx.update(facturaRef, {
+          'garantia.estado': 'reclamada',
+          'garantia.reclamadaEn': ahoraTs,
+          'garantia.problemaDescripcion': razon,
+          'garantia.origen': 'manual_admin',
+        });
+
+        // 2) Crear cita_por_confirmar con tipo 'garantia' (mismo tx)
+        const citaPayload: Record<string, unknown> = {
+          tipo: 'garantia',
+          esGarantia: true,
+          referenciaFacturaId: facturaGarantiaManual.id,
+          referenciaConduce: facturaGarantiaManual.numero || '',
+          referenciaOrdenId: facturaGarantiaManual.ordenId || '',
+          clienteId: facturaGarantiaManual.clienteId,
+          clienteNombre: facturaGarantiaManual.clienteNombre,
+          clienteTelefono: facturaGarantiaManual.clienteTelefono,
+          telefono: facturaGarantiaManual.clienteTelefono,
+          equipoTipo: facturaGarantiaManual.equipoTipo,
+          equipoMarca: facturaGarantiaManual.equipoMarca,
+          equipoModelo: facturaGarantiaManual.equipoModelo,
+          servicio: 'Reclamo de garantía (manual)',
+          falla: razon,
+          descripcionProblema: razon,
+          tecnicoOriginalUid: facturaGarantiaManual.tecnicoId,
+          tecnicoOriginalNombre: facturaGarantiaManual.tecnicoNombre,
+          origen: 'manual_admin',
+          origenGarantia: 'manual_admin',
+          estado: 'pendiente',
+          createdAt: ahoraTs,
+        };
+        const citaLimpia = Object.fromEntries(
+          Object.entries(citaPayload).filter(([, v]) => v !== undefined),
+        );
+        const nuevaCitaRef = doc(collection(db, 'citas_por_confirmar'));
+        tx.set(nuevaCitaRef, citaLimpia);
       });
 
-      // 2) Crear cita_por_confirmar con tipo 'garantia'
-      const citaPayload: Record<string, unknown> = {
-        tipo: 'garantia',
-        esGarantia: true,
-        referenciaFacturaId: facturaGarantiaManual.id,
-        referenciaConduce: facturaGarantiaManual.numero || '',
-        referenciaOrdenId: facturaGarantiaManual.ordenId || '',
-        clienteId: facturaGarantiaManual.clienteId,
-        clienteNombre: facturaGarantiaManual.clienteNombre,
-        clienteTelefono: facturaGarantiaManual.clienteTelefono,
-        telefono: facturaGarantiaManual.clienteTelefono,
-        equipoTipo: facturaGarantiaManual.equipoTipo,
-        equipoMarca: facturaGarantiaManual.equipoMarca,
-        equipoModelo: facturaGarantiaManual.equipoModelo,
-        servicio: 'Reclamo de garantía (manual)',
-        falla: razon,
-        descripcionProblema: razon,
-        tecnicoOriginalUid: facturaGarantiaManual.tecnicoId,
-        tecnicoOriginalNombre: facturaGarantiaManual.tecnicoNombre,
-        origen: 'manual_admin',
-        origenGarantia: 'manual_admin',
-        estado: 'pendiente',
-        createdAt: ahoraTs,
-      };
-      const citaLimpia = Object.fromEntries(
-        Object.entries(citaPayload).filter(([, v]) => v !== undefined),
-      );
-      await addDoc(collection(db, 'citas_por_confirmar'), citaLimpia);
-
-      // 3) Audit log
+      // 3) Audit log — best-effort, FUERA de la transacción.
       try {
         const auditPayload: Record<string, unknown> = {
           accion: 'marcar_garantia_admin',
@@ -348,7 +360,16 @@ export default function Facturas() {
       setGarantiaManualRazon('');
     } catch (err) {
       console.error('Error marcando garantía manual:', err);
-      toast.error('Error al marcar la garantía');
+      const msg = err instanceof Error ? err.message : '';
+      if (msg === 'GARANTIA_YA_RECLAMADA') {
+        toast.error('Esta garantía ya fue reclamada por otro admin. Refrescá la página.');
+        // Cerrar el modal: la UI se refresca sola por el onSnapshot de facturas.
+        setShowGarantiaManualModal(false);
+        setFacturaGarantiaManual(null);
+        setGarantiaManualRazon('');
+      } else {
+        toast.error('Error al marcar la garantía');
+      }
     } finally {
       setSavingGarantiaManual(false);
     }
