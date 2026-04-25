@@ -187,6 +187,9 @@ export interface PayloadEnvioCita {
   telefono: string;
   clienteEmail?: string;
   clienteDireccion?: string;
+  /** Coordenadas capturadas por Google Places, GPS o URL pegada. */
+  clienteLat?: number;
+  clienteLng?: number;
   clienteSector?: string;
   equipoTipo: string;
   equipoMarca?: string;
@@ -264,6 +267,12 @@ export async function enviarSolicitudCita(
 
   if (payload.clienteEmail?.trim()) data.clienteEmail = payload.clienteEmail.trim();
   if (payload.clienteDireccion?.trim()) data.clienteDireccion = payload.clienteDireccion.trim();
+  if (typeof payload.clienteLat === 'number' && Number.isFinite(payload.clienteLat)) {
+    data.clienteLat = payload.clienteLat;
+  }
+  if (typeof payload.clienteLng === 'number' && Number.isFinite(payload.clienteLng)) {
+    data.clienteLng = payload.clienteLng;
+  }
   if (payload.clienteSector?.trim()) data.clienteSector = payload.clienteSector.trim();
   if (payload.equipoMarca?.trim()) data.equipoMarca = payload.equipoMarca.trim();
   if (payload.equipoModelo?.trim()) data.equipoModelo = payload.equipoModelo.trim();

@@ -1,6 +1,6 @@
 import { collection, query, where, getDocs, doc, setDoc, updateDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Cliente, DireccionCliente } from '../types';
+import { Cliente, CitaPorConfirmar, DireccionCliente } from '../types';
 
 /** Normaliza teléfono a 10 dígitos locales de RD */
 export function normalizarTelefono(tel: string): string {
@@ -162,6 +162,116 @@ export async function actualizarDireccionCliente(
     direcciones: actualizadas,
     updatedAt: Timestamp.now(),
   });
+}
+
+/**
+ * Crea o actualiza un cliente a partir de una `CitaPorConfirmar` que se está
+ * confirmando desde /admin/citas. Centraliza el lookup por teléfono normalizado:
+ *
+ *   - Si el cliente NO existe → lo crea con los datos de la cita y, si hay
+ *     dirección, la guarda como `direccion`/`lat`/`lng` principal del cliente.
+ *   - Si el cliente YA existe y la cita trae una dirección que NO es duplicada
+ *     contra `cliente.direccion` ni contra ningún elemento de `direcciones[]`
+ *     → la agrega al array `direcciones[]` con etiqueta "Captada del formulario público".
+ *   - Si la cita no trae dirección, no agrega nada al cliente existente.
+ *
+ * El sector y la referencia de dirección (cuando los manda el form público) se
+ * concatenan en `referencia` de `DireccionCliente` para no perderlos sin tener
+ * que extender el tipo.
+ *
+ * Retorna `{ clienteId, creado, direccionAgregada }` para que el caller pueda
+ * informar al usuario si se creó algo nuevo o si simplemente se enlazó al
+ * cliente existente.
+ */
+export async function crearOActualizarClienteDesdeCita(
+  cita: CitaPorConfirmar,
+  usuarioActual: { uid?: string; nombre: string },
+): Promise<{ clienteId: string; creado: boolean; direccionAgregada: boolean }> {
+  const dirNueva = (cita.clienteDireccion || '').trim();
+  const referenciaCompleta = [
+    cita.clienteSector ? `Sector: ${cita.clienteSector}` : null,
+    cita.clienteReferencia || null,
+  ]
+    .filter(Boolean)
+    .join('. ') || undefined;
+
+  const existente = await buscarClientePorTelefono(cita.telefono);
+
+  if (existente) {
+    // Cliente ya existe. Solo agregamos dirección si:
+    //   1. La cita trae dirección no vacía.
+    //   2. No coincide con la dirección principal del cliente.
+    //   3. No coincide con ninguna dirección alternativa ya guardada.
+    if (!dirNueva) {
+      return { clienteId: existente.id, creado: false, direccionAgregada: false };
+    }
+
+    const direccionesActuales = Array.isArray(existente.data.direcciones)
+      ? (existente.data.direcciones as DireccionCliente[])
+      : [];
+
+    const dirPrincipal = (existente.data.direccion || '').toLowerCase().trim();
+    const dirNuevaLower = dirNueva.toLowerCase();
+    const yaExiste =
+      dirPrincipal === dirNuevaLower ||
+      direccionesActuales.some(
+        d => (d.direccion || '').toLowerCase().trim() === dirNuevaLower,
+      );
+
+    if (yaExiste) {
+      return { clienteId: existente.id, creado: false, direccionAgregada: false };
+    }
+
+    // Construir DireccionCliente sin undefineds (Firestore los rechaza)
+    const nuevaDir: DireccionCliente = {
+      id: `dir_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      etiqueta: 'Captada del formulario público',
+      direccion: dirNueva,
+    };
+    if (typeof cita.clienteLat === 'number') nuevaDir.lat = cita.clienteLat;
+    if (typeof cita.clienteLng === 'number') nuevaDir.lng = cita.clienteLng;
+    if (referenciaCompleta) nuevaDir.referencia = referenciaCompleta;
+
+    const nuevaLimpia = Object.fromEntries(
+      Object.entries(nuevaDir).filter(([, v]) => v !== undefined),
+    ) as DireccionCliente;
+
+    await updateDoc(doc(db, 'clientes', existente.id), {
+      direcciones: [...direccionesActuales, nuevaLimpia],
+      updatedAt: Timestamp.now(),
+      actualizadoPor: usuarioActual.nombre,
+    });
+
+    return { clienteId: existente.id, creado: false, direccionAgregada: true };
+  }
+
+  // Cliente NO existe → crear con los datos de la cita.
+  // Reusamos la convención de `buscarOCrearCliente`: ID = teléfono normalizado.
+  const telNorm = normalizarTelefono(cita.telefono);
+  const clienteId = telNorm;
+  const payload: Record<string, unknown> = {
+    nombre: cita.clienteNombre,
+    telefono: cita.telefono,
+    telefonoNormalizado: telNorm,
+    email: cita.clienteEmail || '',
+    direccion: dirNueva,
+    referenciaDireccion: referenciaCompleta || '',
+    sector: cita.clienteSector || '',
+    origen: 'formulario_publico',
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now(),
+    creadoPor: usuarioActual.nombre,
+  };
+  if (typeof cita.clienteLat === 'number') payload.lat = cita.clienteLat;
+  if (typeof cita.clienteLng === 'number') payload.lng = cita.clienteLng;
+
+  // Strip undefined defensivo (Firestore los rechaza)
+  const payloadLimpio = Object.fromEntries(
+    Object.entries(payload).filter(([, v]) => v !== undefined),
+  );
+
+  await setDoc(doc(db, 'clientes', clienteId), payloadLimpio);
+  return { clienteId, creado: true, direccionAgregada: false };
 }
 
 /** Elimina una dirección alternativa del cliente. */

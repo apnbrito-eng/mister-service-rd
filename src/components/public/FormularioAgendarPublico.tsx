@@ -14,6 +14,7 @@ import { normalizarTelefono } from '../../services/clientes.service';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 import LoadingSpinner from '../LoadingSpinner';
+import CampoDireccionConPlaces from '../shared/CampoDireccionConPlaces';
 
 const inputClass =
   'w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition';
@@ -24,6 +25,9 @@ interface FormState {
   telefono: string;
   clienteEmail: string;
   clienteDireccion: string;
+  /** Lat/lng capturados por Places, "Mi ubicación" o URL pegada. */
+  clienteLat?: number;
+  clienteLng?: number;
   clienteSector: string;
   equipoTipo: string;
   equipoMarca: string;
@@ -43,6 +47,8 @@ const FORM_INITIAL: FormState = {
   telefono: '',
   clienteEmail: '',
   clienteDireccion: '',
+  clienteLat: undefined,
+  clienteLng: undefined,
   clienteSector: '',
   equipoTipo: '',
   equipoMarca: '',
@@ -252,6 +258,8 @@ export default function FormularioAgendarPublico() {
         telefono: form.telefono.trim(),
         clienteEmail: form.clienteEmail.trim() || undefined,
         clienteDireccion: form.clienteDireccion.trim() || undefined,
+        clienteLat: typeof form.clienteLat === 'number' ? form.clienteLat : undefined,
+        clienteLng: typeof form.clienteLng === 'number' ? form.clienteLng : undefined,
         clienteSector: mostrarSector
           ? form.clienteSector.trim() || undefined
           : undefined,
@@ -496,14 +504,25 @@ export default function FormularioAgendarPublico() {
 
       <div className={mostrarSector ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : ''}>
         <div>
-          <label className={labelClass}>Dirección</label>
-          <input
-            type="text"
-            className={inputClass}
-            value={form.clienteDireccion}
-            onChange={e => update({ clienteDireccion: e.target.value })}
-            placeholder="Calle Ej. #45, Edif. ..."
-            autoComplete="street-address"
+          <label className={labelClass}>
+            Dirección
+            <span className="ml-2 text-[10px] text-gray-400 font-normal">
+              (Busca en Google, pega URL de Maps o usa &quot;Mi ubicación&quot;)
+            </span>
+          </label>
+          <CampoDireccionConPlaces
+            valor={form.clienteDireccion}
+            lat={form.clienteLat}
+            lng={form.clienteLng}
+            onChange={datos =>
+              update({
+                clienteDireccion: datos.direccion,
+                clienteLat: datos.lat,
+                clienteLng: datos.lng,
+              })
+            }
+            placeholder="Busca un lugar (Agora Mall, Plaza Central...) o tu dirección"
+            inputClassName={inputClass}
           />
         </div>
         {mostrarSector && (
@@ -597,8 +616,23 @@ export default function FormularioAgendarPublico() {
               className={inputClass}
               value={form.fechaSolicitada}
               min={hoy}
-              onChange={e => update({ fechaSolicitada: e.target.value })}
+              onChange={e => {
+                const valor = e.target.value;
+                if (!valor) {
+                  update({ fechaSolicitada: '' });
+                  return;
+                }
+                const dia = new Date(valor + 'T12:00:00').getDay();
+                if (dia === 0) {
+                  toast.error('No atendemos los domingos. Por favor elige otro día.');
+                  return;
+                }
+                update({ fechaSolicitada: valor });
+              }}
             />
+            <p className="text-[10px] text-gray-400 mt-1">
+              Lunes a sábado. Los domingos no atendemos.
+            </p>
           </div>
           <div>
             <label className={labelClass}>Hora preferida</label>

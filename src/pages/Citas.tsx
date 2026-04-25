@@ -6,6 +6,7 @@ import { CitaPorConfirmar, Personal, OrdenServicio, GarantiaOrigen } from '../ty
 import { tiempoTranscurrido, TIPOS_EQUIPO, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, esOrdenMantenimiento, formatMoneda, crearRegistroAuditoria } from '../utils';
 import { buscarPrecioMantenimiento } from '../services/precios.service';
 import { siguienteNumeroOrden } from '../services/contadores.service';
+import { crearOActualizarClienteDesdeCita } from '../services/clientes.service';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
@@ -92,6 +93,7 @@ export default function Citas() {
             clienteEmail: raw.clienteEmail,
             clienteDireccion: raw.clienteDireccion,
             clienteReferencia: raw.clienteReferencia,
+            clienteSector: raw.clienteSector,
             clienteLat: typeof raw.clienteLat === 'number' ? raw.clienteLat : undefined,
             clienteLng: typeof raw.clienteLng === 'number' ? raw.clienteLng : undefined,
             equipoTipo: raw.equipoTipo,
@@ -440,6 +442,28 @@ export default function Citas() {
     }
     setSaving(true);
     try {
+      // 1) Resolver / crear el cliente a partir del teléfono de la cita.
+      //    Si el teléfono no existe → se crea cliente nuevo con los datos
+      //    capturados en el form público (origen: 'formulario_publico').
+      //    Si existe y la dirección de la cita no estaba registrada, se
+      //    agrega al array `direcciones[]` del cliente.
+      let clienteResolvedId = '';
+      let clienteCreado = false;
+      let direccionAgregada = false;
+      try {
+        const res = await crearOActualizarClienteDesdeCita(selectedCita, {
+          uid: userProfile?.id,
+          nombre: userProfile?.nombre || 'Sistema',
+        });
+        clienteResolvedId = res.clienteId;
+        clienteCreado = res.creado;
+        direccionAgregada = res.direccionAgregada;
+      } catch (errCli) {
+        // No bloqueamos el agendamiento por esto — la orden se crea con
+        // clienteId vacío como antes y se puede vincular manualmente luego.
+        console.warn('No se pudo crear/actualizar el cliente desde la cita:', errCli);
+      }
+
       const numero = await siguienteNumeroOrden();
       const ahora = Timestamp.now();
       const fechaCitaTs = Timestamp.fromDate(
@@ -449,7 +473,7 @@ export default function Citas() {
       const tecnicoElegido = personal.find(p => p.id === agendarForm.tecnicoId);
       const ordenData: Record<string, unknown> = {
         numero,
-        clienteId: '',
+        clienteId: clienteResolvedId,
         clienteNombre: selectedCita.clienteNombre,
         clienteTelefono: selectedCita.telefono,
         equipoTipo: agendarForm.equipoTipo,
@@ -686,7 +710,12 @@ export default function Citas() {
           style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
         });
       }
-      toast.success(`Orden ${numero} creada y agendada`);
+      const sufijoCliente = clienteCreado
+        ? ' (cliente creado)'
+        : direccionAgregada
+          ? ' (dirección agregada al cliente)'
+          : '';
+      toast.success(`Orden ${numero} creada y agendada${sufijoCliente}`);
       setShowAgendarModal(false);
       setSelectedCita(null);
     } catch {
