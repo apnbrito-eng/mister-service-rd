@@ -10,6 +10,7 @@ import {
   ConfigContacto,
   getWhatsAppUrl,
 } from '../services/configWeb.service';
+import { ConfigFormularioAgendar } from '../types/configFormularioAgendar';
 
 // ─── Caché en memoria ────────────────────────────────
 // Evita que cada página pública re-lea Firestore al montar.
@@ -49,6 +50,9 @@ export function useConfigWeb(): { config: ConfigWeb; loading: boolean } {
             estadisticas: (data.estadisticas as ConfigEstadisticas) || CONFIG_WEB_DEFAULTS.estadisticas,
             contacto: (data.contacto as ConfigContacto) || CONFIG_WEB_DEFAULTS.contacto,
             marcas: Array.isArray(data.marcas) ? (data.marcas as string[]) : CONFIG_WEB_DEFAULTS.marcas,
+            formularioAgendar:
+              (data.formularioAgendar as ConfigFormularioAgendar) ||
+              CONFIG_WEB_DEFAULTS.formularioAgendar,
             updatedAt: data.updatedAt?.toDate?.() || undefined,
           };
           cachedConfig = parsed;

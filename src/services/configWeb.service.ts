@@ -1,6 +1,10 @@
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
+import {
+  ConfigFormularioAgendar,
+  CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
+} from '../types/configFormularioAgendar';
 
 // ─── Tipos ───────────────────────────────────────────
 
@@ -50,6 +54,8 @@ export interface ConfigWeb {
   estadisticas: ConfigEstadisticas;
   contacto: ConfigContacto;
   marcas: string[];
+  /** Configuración del formulario público de agendamiento (`/agendar`). */
+  formularioAgendar?: ConfigFormularioAgendar;
   updatedAt?: Date;
 }
 
@@ -86,6 +92,7 @@ export const CONFIG_WEB_DEFAULTS: ConfigWeb = {
     horario: 'Lun - Sáb: 8:00 AM - 6:00 PM',
   },
   marcas: ['LG', 'Samsung', 'Whirlpool', 'Mabe', 'GE', 'Frigidaire', 'Electrolux', 'Bosch', 'Daewoo', 'Panasonic', 'Carrier', 'Midea'],
+  formularioAgendar: { ...CONFIG_FORMULARIO_AGENDAR_DEFAULTS },
 };
 
 // ─── Referencia Firestore ────────────────────────────
@@ -106,6 +113,9 @@ export async function obtenerConfigWeb(): Promise<ConfigWeb> {
       estadisticas: (data.estadisticas as ConfigEstadisticas) || CONFIG_WEB_DEFAULTS.estadisticas,
       contacto: (data.contacto as ConfigContacto) || CONFIG_WEB_DEFAULTS.contacto,
       marcas: Array.isArray(data.marcas) ? (data.marcas as string[]) : CONFIG_WEB_DEFAULTS.marcas,
+      formularioAgendar:
+        (data.formularioAgendar as ConfigFormularioAgendar) ||
+        CONFIG_WEB_DEFAULTS.formularioAgendar,
       updatedAt: data.updatedAt?.toDate?.() || undefined,
     };
   } catch (err) {

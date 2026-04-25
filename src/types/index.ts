@@ -483,6 +483,16 @@ export interface CitaPorConfirmar {
   tecnicoOriginalNombre?: string;
   descripcionProblema?: string;
   origenGarantia?: GarantiaOrigen;
+  // ── Campos opcionales agregados por el formulario público `/agendar` ──
+  /** Sector / barrio del cliente (ej: "Naco", "Bella Vista"). */
+  clienteSector?: string;
+  /** Cómo conoció el cliente al negocio (Google, Facebook, etc.). */
+  comoNosConocio?: string;
+  /** Map { tituloDelCampo: valorEnviado } para campos extra que el admin
+   *  agregó al formulario público. */
+  camposPersonalizados?: Record<string, string>;
+  /** Teléfono normalizado a 10 dígitos (resultado de `normalizarTelefono`). */
+  telefonoNormalizado?: string;
   createdAt: Date;
 }
 

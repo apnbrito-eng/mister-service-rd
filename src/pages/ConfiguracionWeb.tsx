@@ -24,6 +24,7 @@ import {
   Upload,
 } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
+import ConfigFormularioAgendarSection from '../components/admin/ConfigFormularioAgendarSection';
 import toast from 'react-hot-toast';
 
 export default function ConfiguracionWeb() {
@@ -273,6 +274,9 @@ export default function ConfiguracionWeb() {
           </p>
         </div>
       </div>
+
+      {/* ────── Section 0: Formulario de Agendamiento ────── */}
+      <ConfigFormularioAgendarSection />
 
       {/* ────── Section 1: WhatsApp ────── */}
       <div className={cardClass}>
