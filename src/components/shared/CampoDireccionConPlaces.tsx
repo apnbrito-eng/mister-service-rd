@@ -6,6 +6,7 @@ import {
   detectarCoordenadasURL,
   reverseGeocode,
 } from '../../utils/direccion';
+import MiniMapaCliente from '../ordenes/MiniMapaCliente';
 
 /**
  * Datos que el campo emite hacia el padre cada vez que cambia el texto
@@ -185,7 +186,13 @@ export default function CampoDireccionConPlaces({
     );
   };
 
-  const tieneCoords = typeof lat === 'number' && typeof lng === 'number';
+  const tieneCoords =
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng);
+  const resolviendoDireccion = valor.trim() === 'Obteniendo dirección...';
+  const mostrarMapa = tieneCoords && placesDisponible;
 
   return (
     <div className={className}>
@@ -213,17 +220,26 @@ export default function CampoDireccionConPlaces({
         )}
       </div>
       {tieneCoords && (
-        <p className="text-xs text-green-600 mt-1 flex items-center gap-1 flex-wrap">
-          <Check size={12} /> Coordenadas exactas guardadas ·{' '}
+        <p className="text-xs text-green-600 mt-2 flex items-center gap-1 flex-wrap font-medium">
+          <Check size={14} />{' '}
+          {resolviendoDireccion ? 'Resolviendo dirección…' : 'Ubicación confirmada'} ·{' '}
           <a
             href={`https://maps.google.com/?q=${lat},${lng}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-green-700 hover:underline font-medium"
+            className="text-green-700 hover:underline"
           >
             Ver en Maps
           </a>
         </p>
+      )}
+      {mostrarMapa && (
+        <MiniMapaCliente
+          lat={lat as number}
+          lng={lng as number}
+          direccion={resolviendoDireccion ? undefined : valor}
+          height={200}
+        />
       )}
       {!placesDisponible && (
         <p className="text-[10px] text-gray-400 mt-1">
