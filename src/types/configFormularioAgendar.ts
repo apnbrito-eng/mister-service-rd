@@ -50,6 +50,10 @@ export interface ConfigFormularioAgendar {
   opcionesComoNosConocio?: string[];
   /** Lista ordenada de campos extra. Render en el mismo orden del array. */
   camposPersonalizados?: CampoPersonalizado[];
+  /** Bloques de hora seleccionables por el cliente en `/agendar`.
+   *  Texto libre (ej: "9:00 AM", "11:00 AM"). Se guarda tal cual en
+   *  `citas_por_confirmar.horaSolicitada`. */
+  bloquesHora?: string[];
 }
 
 /** Defaults razonables si la config no existe en Firestore. */
@@ -74,4 +78,5 @@ export const CONFIG_FORMULARIO_AGENDAR_DEFAULTS: Required<
     'Otro',
   ],
   camposPersonalizados: [],
+  bloquesHora: ['9:00 AM', '11:00 AM', '1:00 PM', '3:00 PM', '5:00 PM'],
 };

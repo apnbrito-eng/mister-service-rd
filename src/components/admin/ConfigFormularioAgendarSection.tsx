@@ -40,6 +40,7 @@ export default function ConfigFormularioAgendarSection() {
     ...CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
   });
   const [nuevaOpcion, setNuevaOpcion] = useState('');
+  const [nuevoBloque, setNuevoBloque] = useState('');
 
   useEffect(() => {
     let activo = true;
@@ -82,6 +83,33 @@ export default function ConfigFormularioAgendarSection() {
     update({
       opcionesComoNosConocio: actuales.filter((_, i) => i !== idx),
     });
+  };
+
+  // ─── Bloques de hora ───────────────────────────────
+
+  const agregarBloque = () => {
+    const v = nuevoBloque.trim();
+    if (!v) return;
+    const actuales = config.bloquesHora ?? [];
+    if (actuales.includes(v)) {
+      toast.error('Ese bloque ya existe');
+      return;
+    }
+    update({ bloquesHora: [...actuales, v] });
+    setNuevoBloque('');
+  };
+
+  const eliminarBloque = (idx: number) => {
+    const actuales = config.bloquesHora ?? [];
+    update({ bloquesHora: actuales.filter((_, i) => i !== idx) });
+  };
+
+  const moverBloque = (idx: number, direccion: -1 | 1) => {
+    const actuales = [...(config.bloquesHora ?? [])];
+    const destino = idx + direccion;
+    if (destino < 0 || destino >= actuales.length) return;
+    [actuales[idx], actuales[destino]] = [actuales[destino], actuales[idx]];
+    update({ bloquesHora: actuales });
   };
 
   // ─── Campos personalizados ──────────────────────────
@@ -147,6 +175,14 @@ export default function ConfigFormularioAgendarSection() {
   const handleGuardar = async () => {
     setSaving(true);
     try {
+      // Validación: debe haber al menos 1 bloque de hora disponible
+      const bloques = config.bloquesHora ?? [];
+      if (bloques.length === 0) {
+        toast.error('Debe haber al menos 1 bloque de hora');
+        setSaving(false);
+        return;
+      }
+
       // Validación: si un campo es select, debe tener al menos una opción
       const personalizados = config.camposPersonalizados ?? [];
       for (const c of personalizados) {
@@ -196,6 +232,8 @@ export default function ConfigFormularioAgendarSection() {
   const mostrarComoConocio = config.mostrarCampoComoNosConocio ?? true;
   const opcionesConocio = config.opcionesComoNosConocio ?? [];
   const personalizados = config.camposPersonalizados ?? [];
+  const bloques = config.bloquesHora ?? [];
+  const bloquesVacios = bloques.length === 0;
 
   return (
     <div className={cardClass}>
@@ -360,6 +398,91 @@ export default function ConfigFormularioAgendarSection() {
         )}
       </div>
 
+      {/* Bloques de hora disponibles */}
+      <div className="space-y-3 border-t border-gray-100 pt-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">
+            Bloques de hora disponibles
+          </h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Bloques que el cliente verá como botones para elegir su hora
+            preferida en <code className="text-xs bg-gray-100 px-1 rounded">/agendar</code>.
+            Texto libre (ej: &quot;9:00 AM&quot;, &quot;7:00 PM&quot;).
+          </p>
+        </div>
+
+        {bloques.length === 0 ? (
+          <p className="text-xs text-red-600 font-medium">
+            Debe haber al menos 1 bloque de hora.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {bloques.map((bloque, idx) => (
+              <div
+                key={`${bloque}-${idx}`}
+                className="flex items-center justify-between gap-2 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2"
+              >
+                <span className="text-sm text-gray-700 font-medium">
+                  {bloque}
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => moverBloque(idx, -1)}
+                    disabled={idx === 0}
+                    className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                    title="Subir"
+                  >
+                    <ArrowUp className="w-4 h-4 text-gray-600" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moverBloque(idx, 1)}
+                    disabled={idx === bloques.length - 1}
+                    className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                    title="Bajar"
+                  >
+                    <ArrowDown className="w-4 h-4 text-gray-600" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => eliminarBloque(idx)}
+                    className="p-1.5 rounded hover:bg-red-100 transition"
+                    title="Eliminar bloque"
+                  >
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            className={`${inputClass} flex-1`}
+            placeholder="Ej: 7:00 PM"
+            value={nuevoBloque}
+            onChange={e => setNuevoBloque(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                agregarBloque();
+              }
+            }}
+          />
+          <button
+            type="button"
+            onClick={agregarBloque}
+            className="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium px-3 py-2 transition"
+          >
+            <Plus className="w-4 h-4" />
+            Agregar bloque
+          </button>
+        </div>
+      </div>
+
       {/* Campos personalizados */}
       <div className="space-y-3 border-t border-gray-100 pt-4">
         <div className="flex items-center justify-between">
@@ -405,8 +528,13 @@ export default function ConfigFormularioAgendarSection() {
         <button
           type="button"
           onClick={handleGuardar}
-          disabled={saving}
+          disabled={saving || bloquesVacios}
           className={saveBtnClass}
+          title={
+            bloquesVacios
+              ? 'Agrega al menos 1 bloque de hora antes de guardar'
+              : undefined
+          }
         >
           <Save className="w-4 h-4" />
           {saving ? 'Guardando...' : 'Guardar Formulario'}

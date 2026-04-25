@@ -493,6 +493,12 @@ export interface CitaPorConfirmar {
   camposPersonalizados?: Record<string, string>;
   /** Teléfono normalizado a 10 dígitos (resultado de `normalizarTelefono`). */
   telefonoNormalizado?: string;
+  /** Número de WhatsApp asignado al cliente por round-robin al enviar
+   *  la solicitud por la web (10 dígitos, formato RD). Permite saber
+   *  a quién se le redirigió la confirmación. */
+  whatsappAsignado?: string;
+  /** Etiqueta del número asignado (ej: "Línea 1"). */
+  whatsappAsignadoNombre?: string;
   createdAt: Date;
 }
 

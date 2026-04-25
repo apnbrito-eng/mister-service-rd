@@ -111,6 +111,8 @@ export default function Citas() {
             tecnicoOriginalNombre: raw.tecnicoOriginalNombre,
             descripcionProblema: raw.descripcionProblema,
             origenGarantia: raw.origenGarantia as GarantiaOrigen | undefined,
+            whatsappAsignado: raw.whatsappAsignado,
+            whatsappAsignadoNombre: raw.whatsappAsignadoNombre,
             createdAt: raw.createdAt?.toDate?.() || new Date(),
           } as CitaPorConfirmar;
         }));

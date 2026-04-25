@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   onSnapshot,
+  runTransaction,
   setDoc,
   Timestamp,
   Unsubscribe,
@@ -17,12 +18,14 @@ import {
   ConfigFormularioAgendar,
   CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
 } from '../types/configFormularioAgendar';
+import { ConfigWhatsApp, NumeroWhatsApp } from './configWeb.service';
 import { Personal } from '../types';
 import { normalizarTelefono } from './clientes.service';
 import { crearNotificacion } from './notificaciones.service';
 import { crearRegistroAuditoria } from '../utils';
 
 const CONFIG_DOC = doc(db, 'config_web', 'sitio');
+const CONTADORES_DOC = doc(db, 'config_web', 'contadores');
 
 /**
  * Lee la config del formulario público desde `config_web/sitio.formularioAgendar`.
@@ -119,6 +122,64 @@ export async function guardarConfigFormularioAgendar(
   }
 }
 
+// ─── Round-robin de WhatsApp para /agendar ──────────────────────────
+
+/**
+ * Selecciona el siguiente número de WhatsApp en rotación verdadera
+ * (round-robin) usando un contador transaccional en
+ * `config_web/contadores.formularioAgendarRR`.
+ *
+ * - SOLO se usa en el submit del formulario público `/agendar`.
+ * - Ignora el flag `rotacion` de `config_web/sitio.whatsapp`: si hay
+ *   más de un activo, siempre rota.
+ * - Si la lista está vacía, lanza error (el caller debe manejarlo
+ *   con fallback "te llamaremos").
+ *
+ * El resto del sitio (marketing) sigue usando `getWhatsAppUrl` que
+ * elige al azar — no modifiques ese helper.
+ */
+export async function obtenerWhatsAppRoundRobin(
+  numerosActivos: NumeroWhatsApp[],
+): Promise<NumeroWhatsApp> {
+  if (!numerosActivos.length) {
+    throw new Error('No hay números de WhatsApp activos configurados');
+  }
+
+  const indice = await runTransaction(db, async tx => {
+    const snap = await tx.get(CONTADORES_DOC);
+    const actual = (snap.data()?.formularioAgendarRR ?? 0) as number;
+    tx.set(
+      CONTADORES_DOC,
+      { formularioAgendarRR: actual + 1 },
+      { merge: true },
+    );
+    return actual % numerosActivos.length;
+  });
+
+  return numerosActivos[indice];
+}
+
+/**
+ * Lee `config_web/sitio.whatsapp` y devuelve los números marcados como
+ * `activo === true`. Pensado para consumirse junto con
+ * `obtenerWhatsAppRoundRobin`. Retorna `[]` si el doc no existe o
+ * la lista de números no está, para que el caller decida si hace
+ * fallback gracioso.
+ */
+async function leerNumerosWhatsAppActivos(): Promise<NumeroWhatsApp[]> {
+  try {
+    const snap = await getDoc(CONFIG_DOC);
+    if (!snap.exists()) return [];
+    const data = snap.data();
+    const wa = (data?.whatsapp as ConfigWhatsApp | undefined) || undefined;
+    if (!wa || !Array.isArray(wa.numeros)) return [];
+    return wa.numeros.filter(n => n && n.activo === true && !!n.numero);
+  } catch (err) {
+    console.warn('No se pudo leer whatsapp de config_web/sitio:', err);
+    return [];
+  }
+}
+
 // ─── Submit del formulario público ──────────────────────────────────
 
 export interface PayloadEnvioCita {
@@ -145,6 +206,10 @@ export interface ResultadoEnvioCita {
   citaId?: string;
   error?: string;
   mensaje?: string;
+  /** Número de WhatsApp asignado al cliente por round-robin (si aplica). */
+  whatsappAsignado?: string;
+  /** Etiqueta del número asignado (ej: "Línea 1"). */
+  whatsappAsignadoNombre?: string;
 }
 
 /**
@@ -256,6 +321,25 @@ export async function enviarSolicitudCita(
     );
   }
 
+  // Round-robin de WhatsApp: si hay números activos, asignamos uno
+  // y lo guardamos en la cita. Si falla cualquier paso (read, runTx),
+  // procedemos sin asignación — la cita igual queda registrada.
+  let waAsignado: NumeroWhatsApp | null = null;
+  try {
+    const activos = await leerNumerosWhatsAppActivos();
+    if (activos.length > 0) {
+      waAsignado = await obtenerWhatsAppRoundRobin(activos);
+      data.whatsappAsignado = waAsignado.numero;
+      data.whatsappAsignadoNombre = waAsignado.nombre;
+    }
+  } catch (err) {
+    console.warn(
+      'Round-robin de WhatsApp falló, se procede sin asignación:',
+      err,
+    );
+    waAsignado = null;
+  }
+
   let citaId: string;
   try {
     const ref = await addDoc(collection(db, 'citas_por_confirmar'), data);
@@ -280,7 +364,12 @@ export async function enviarSolicitudCita(
     console.warn('Notificación a staff falló:', err);
   }
 
-  return { ok: true, citaId };
+  const resultado: ResultadoEnvioCita = { ok: true, citaId };
+  if (waAsignado) {
+    resultado.whatsappAsignado = waAsignado.numero;
+    resultado.whatsappAsignadoNombre = waAsignado.nombre;
+  }
+  return resultado;
 }
 
 /**

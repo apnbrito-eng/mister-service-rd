@@ -55,6 +55,75 @@ const FORM_INITIAL: FormState = {
   hp: '',
 };
 
+interface DatosMensajeWhatsApp {
+  nombre: string;
+  telefono: string;
+  email?: string;
+  direccion?: string;
+  sector?: string;
+  equipoTipo: string;
+  equipoMarca?: string;
+  equipoModelo?: string;
+  falla: string;
+  fechaSolicitada?: string;
+  horaSolicitada?: string;
+  comoNosConocio?: string;
+}
+
+/**
+ * Construye el mensaje pre-llenado de WhatsApp con toda la info del form
+ * para que el agente que recibe pueda ir directo a confirmar la cita en
+ * /admin/citas sin pedirle datos al cliente.
+ *
+ * Usa formato `*bold*` que WhatsApp renderiza, viñetas Unicode `•`, y
+ * sin emojis literales (consistente con la convención del proyecto).
+ */
+function construirMensajeWhatsApp(
+  datos: DatosMensajeWhatsApp,
+  camposPersonalizados: Record<string, string>,
+): string {
+  const lineas: (string | null)[] = [
+    `Hola, soy *${datos.nombre}* y acabo de enviar una solicitud de cita por la web.`,
+    ``,
+    `*Teléfono:* ${datos.telefono}`,
+    datos.email ? `*Email:* ${datos.email}` : null,
+    ``,
+    datos.direccion ? `*Dirección:* ${datos.direccion}` : null,
+    datos.sector ? `*Sector:* ${datos.sector}` : null,
+    ``,
+    `*Equipo:* ${datos.equipoTipo}${datos.equipoMarca ? ' ' + datos.equipoMarca : ''}${datos.equipoModelo ? ' (' + datos.equipoModelo + ')' : ''}`,
+    `*Falla reportada:* ${datos.falla}`,
+    ``,
+    `*Fecha preferida:* ${datos.fechaSolicitada || 'No especificada'}`,
+    `*Hora preferida:* ${datos.horaSolicitada || 'No especificada'}`,
+    datos.comoNosConocio ? `*¿Cómo nos conoció?* ${datos.comoNosConocio}` : null,
+  ];
+
+  if (
+    camposPersonalizados &&
+    Object.keys(camposPersonalizados).length > 0
+  ) {
+    lineas.push('', '*Información adicional:*');
+    for (const [key, value] of Object.entries(camposPersonalizados)) {
+      lineas.push(`• ${key}: ${value}`);
+    }
+  }
+
+  lineas.push('', '_Por favor, confírmame la cita cuando puedas. Gracias._');
+  return lineas.filter((l): l is string => l !== null).join('\n');
+}
+
+/**
+ * Construye URL `wa.me` con prefijo internacional `1` para RD si el
+ * número viene en 10 dígitos. Mismo patrón que `getWhatsAppUrl` en
+ * `configWeb.service.ts`.
+ */
+function construirUrlWhatsAppRD(numero: string, mensaje: string): string {
+  const dig = numero.replace(/\D/g, '');
+  const intl = dig.length === 10 ? `1${dig}` : dig;
+  return `https://wa.me/${intl}?text=${encodeURIComponent(mensaje)}`;
+}
+
 export default function FormularioAgendarPublico() {
   const { config: configWeb } = useConfigWeb();
 
@@ -66,6 +135,10 @@ export default function FormularioAgendarPublico() {
   const [form, setForm] = useState<FormState>(FORM_INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [resultadoWhatsApp, setResultadoWhatsApp] = useState<{
+    url: string;
+    nombre: string;
+  } | null>(null);
 
   // Suscripción a config — los cambios del admin se reflejan en vivo
   useEffect(() => {
@@ -96,6 +169,8 @@ export default function FormularioAgendarPublico() {
   const mostrarComoConocio = config.mostrarCampoComoNosConocio ?? true;
   const opcionesConocio = config.opcionesComoNosConocio ?? [];
   const camposPersonalizados = config.camposPersonalizados ?? [];
+  const bloquesHora =
+    config.bloquesHora ?? CONFIG_FORMULARIO_AGENDAR_DEFAULTS.bloquesHora;
 
   const update = (partial: Partial<FormState>) => {
     setForm(prev => ({ ...prev, ...partial }));
@@ -214,6 +289,41 @@ export default function FormularioAgendarPublico() {
         toast.error(res.error || 'No pudimos registrar tu solicitud');
         return;
       }
+
+      // Si el round-robin asignó un número, construimos URL pre-llenada
+      // con todos los datos del form para que el agente pueda confirmar
+      // sin pedir nada extra al cliente.
+      if (res.whatsappAsignado) {
+        const mensaje = construirMensajeWhatsApp(
+          {
+            nombre,
+            telefono: form.telefono.trim(),
+            email: form.clienteEmail.trim() || undefined,
+            direccion: form.clienteDireccion.trim() || undefined,
+            sector: mostrarSector
+              ? form.clienteSector.trim() || undefined
+              : undefined,
+            equipoTipo: form.equipoTipo,
+            equipoMarca: form.equipoMarca.trim() || undefined,
+            equipoModelo: form.equipoModelo.trim() || undefined,
+            falla: form.falla.trim(),
+            fechaSolicitada: form.fechaSolicitada || undefined,
+            horaSolicitada: form.horaSolicitada || undefined,
+            comoNosConocio: mostrarComoConocio
+              ? form.comoNosConocio.trim() || undefined
+              : undefined,
+          },
+          customConLabels,
+        );
+        const url = construirUrlWhatsAppRD(res.whatsappAsignado, mensaje);
+        setResultadoWhatsApp({
+          url,
+          nombre: res.whatsappAsignadoNombre || 'nuestro coordinador',
+        });
+      } else {
+        setResultadoWhatsApp(null);
+      }
+
       setSuccess(true);
       setForm(FORM_INITIAL);
     } catch (err) {
@@ -266,27 +376,46 @@ export default function FormularioAgendarPublico() {
         <h2 className="text-2xl font-bold text-gray-900 mb-3">
           ¡Solicitud recibida!
         </h2>
-        <p className="text-gray-600 text-sm mb-6 max-w-md mx-auto">
-          {config.mensajeExito ??
-            CONFIG_FORMULARIO_AGENDAR_DEFAULTS.mensajeExito}
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        {resultadoWhatsApp ? (
+          <>
+            <p className="text-gray-600 text-sm mb-8 max-w-md mx-auto">
+              Hemos registrado tu solicitud. Para agilizar la confirmación,
+              envía un mensaje de WhatsApp a{' '}
+              <span className="font-semibold text-gray-800">
+                {resultadoWhatsApp.nombre}
+              </span>
+              .
+            </p>
+            <a
+              href={resultadoWhatsApp.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-3 bg-green-500 hover:bg-green-600 text-white text-lg font-semibold px-8 py-4 rounded-xl shadow-lg transition"
+            >
+              <WhatsAppIcon filled={false} className="text-white" size={22} />
+              Abrir WhatsApp para confirmar
+            </a>
+            <p className="text-xs text-gray-400 mt-6">
+              Si no tienes WhatsApp, te llamaremos al teléfono que registraste.
+            </p>
+          </>
+        ) : (
+          <p className="text-gray-600 text-sm mb-6 max-w-md mx-auto">
+            {config.mensajeExito ??
+              CONFIG_FORMULARIO_AGENDAR_DEFAULTS.mensajeExito}
+          </p>
+        )}
+        <div className="mt-8">
           <button
             type="button"
-            onClick={() => setSuccess(false)}
+            onClick={() => {
+              setSuccess(false);
+              setResultadoWhatsApp(null);
+            }}
             className="inline-flex items-center justify-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-primary-medium transition-colors"
           >
             Enviar otra solicitud
           </button>
-          <a
-            href={getWhatsAppUrl(configWeb, 'Hola, acabo de enviar una solicitud por la web')}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 bg-green-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-green-600 transition-colors"
-          >
-            <WhatsAppIcon filled={false} className="text-white" size={14} />{' '}
-            Avisar por WhatsApp
-          </a>
         </div>
       </div>
     );
@@ -473,12 +602,32 @@ export default function FormularioAgendarPublico() {
           </div>
           <div>
             <label className={labelClass}>Hora preferida</label>
-            <input
-              type="time"
-              className={inputClass}
-              value={form.horaSolicitada}
-              onChange={e => update({ horaSolicitada: e.target.value })}
-            />
+            {bloquesHora.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {bloquesHora.map(bloque => {
+                  const seleccionado = form.horaSolicitada === bloque;
+                  return (
+                    <button
+                      type="button"
+                      key={bloque}
+                      onClick={() => update({ horaSolicitada: bloque })}
+                      className={`px-4 py-3 rounded-lg border-2 text-sm transition ${
+                        seleccionado
+                          ? 'border-primary bg-primary/10 text-primary font-semibold'
+                          : 'border-gray-300 text-gray-700 hover:border-primary/50'
+                      }`}
+                    >
+                      {bloque}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 italic">
+                No hay bloques de hora configurados. Te contactaremos para
+                coordinar.
+              </p>
+            )}
           </div>
         </div>
       </div>
