@@ -12,10 +12,11 @@ import {
   arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, Cotizacion, ItemCotizacion, Usuario, PagoOrden } from '../types';
+import { OrdenServicio, Cotizacion, ItemCotizacion, Usuario, PagoOrden, Factura, GarantiaInfo } from '../types';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import { crearRegistroAuditoria, formatFecha, formatMoneda, parseOrden } from '../utils';
+import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
 import { iconoCondicion, iconoOrigen, etiquetaOrigen } from '../utils/piezas';
 import { siguienteNumeroFactura } from '../services/contadores.service';
 import { registrarComisionPorFactura, desglosarTotalConITBIS, calcularCostoPiezasDeItems } from '../utils/comisiones';
@@ -294,6 +295,7 @@ export default function FacturacionPendiente() {
       <ProcesarFacturacionModal
         orden={procesando}
         userProfile={userProfile}
+        currentUserUid={currentUser?.uid || ''}
         onClose={() => setProcesando(null)}
       />
 
@@ -324,23 +326,40 @@ export default function FacturacionPendiente() {
 interface ModalProps {
   orden: OrdenServicio | null;
   userProfile: Usuario | null;
+  currentUserUid: string;
   onClose: () => void;
 }
 
-function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
+/** Presets de tiempo de garantía. El selector exige que se elija uno
+ *  antes de poder emitir el conduce. */
+const GARANTIA_PRESETS: Array<{ dias: number; label: string }> = [
+  { dias: 30, label: '30 días' },
+  { dias: 60, label: '60 días' },
+  { dias: 90, label: '90 días' },
+  { dias: 180, label: '6 meses' },
+  { dias: 365, label: '1 año' },
+];
+
+function ProcesarFacturacionModal({ orden, userProfile, currentUserUid, onClose }: ModalProps) {
   const [paso, setPaso] = useState<1 | 2>(1);
   const [items, setItems] = useState<ItemEditable[]>([]);
   const [cargandoCotizacion, setCargandoCotizacion] = useState(false);
   const [generando, setGenerando] = useState(false);
+  const [tiempoGarantiaDias, setTiempoGarantiaDias] = useState<number | null>(null);
+
+  const puedeConfigurarGarantia =
+    userProfile?.rol === 'coordinadora' || userProfile?.rol === 'administrador';
 
   // Cargar items de la cotización vinculada (o crear uno por defecto)
   useEffect(() => {
     if (!orden) {
       setItems([]);
       setPaso(1);
+      setTiempoGarantiaDias(null);
       return;
     }
     setPaso(1);
+    setTiempoGarantiaDias(null);
     const cargar = async () => {
       setCargandoCotizacion(true);
       try {
@@ -409,6 +428,10 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
       toast.error('Todos los items necesitan descripción');
       return;
     }
+    if (puedeConfigurarGarantia && !tiempoGarantiaDias) {
+      toast.error('Selecciona un tiempo de garantía antes de emitir el conduce');
+      return;
+    }
     setGenerando(true);
     try {
       const numero = await siguienteNumeroFactura();
@@ -445,6 +468,32 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
       const costoPiezas = calcularCostoPiezasDeItems(itemsLimpios as unknown as import('../types').ItemCotizacion[]);
       const gananciaNeta = Math.max(0, Math.round((desglose.subtotal - costoPiezas) * 100) / 100);
 
+      // Construir bloque de garantía si la coord/admin configuró tiempo
+      let garantia: GarantiaInfo | null = null;
+      if (puedeConfigurarGarantia && tiempoGarantiaDias) {
+        const inicioMs = Date.now();
+        const finMs = inicioMs + tiempoGarantiaDias * 86400 * 1000;
+        const token = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+          ? crypto.randomUUID()
+          : `tok_${inicioMs}_${Math.random().toString(36).slice(2)}`;
+        garantia = {
+          tiempoDias: tiempoGarantiaDias,
+          inicioFecha: Timestamp.fromMillis(inicioMs),
+          finFecha: Timestamp.fromMillis(finMs),
+          token,
+          estado: 'vigente',
+        };
+      }
+
+      // Snapshot de orden / equipo para que el endpoint público pueda leer
+      // todo desde el doc factura sin tocar otras colecciones.
+      const fechaServicio: Timestamp | undefined = (() => {
+        const fc = orden.cierreServicio?.fechaCierre;
+        if (fc instanceof Date) return Timestamp.fromDate(fc);
+        if (orden.fechaCita instanceof Date) return Timestamp.fromDate(orden.fechaCita);
+        return undefined;
+      })();
+
       const facturaPayload: Record<string, unknown> = {
         numero,
         clienteId: orden.clienteId,
@@ -468,6 +517,15 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
       if (bancoPrincipal) facturaPayload.bancoDestino = bancoPrincipal;
       if (orden.cotizacionId) facturaPayload.cotizacionId = orden.cotizacionId;
       if (totalPagado >= totalItems) facturaPayload.fechaPago = ahora;
+      // Denormalización para el endpoint público de garantía
+      if (orden.clienteTelefono) facturaPayload.clienteTelefono = orden.clienteTelefono;
+      if (orden.equipoTipo) facturaPayload.equipoTipo = orden.equipoTipo;
+      if (orden.equipoMarca) facturaPayload.equipoMarca = orden.equipoMarca;
+      if (orden.equipoModelo) facturaPayload.equipoModelo = orden.equipoModelo;
+      if (orden.tecnicoId) facturaPayload.tecnicoId = orden.tecnicoId;
+      if (orden.tecnicoNombre) facturaPayload.tecnicoNombre = orden.tecnicoNombre;
+      if (fechaServicio) facturaPayload.fechaServicio = fechaServicio;
+      if (garantia) facturaPayload.garantia = garantia;
 
       // Quitar undefined recursivamente
       const facturaLimpia = Object.fromEntries(
@@ -475,6 +533,30 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
       );
 
       const facturaRef = await addDoc(collection(db, 'facturas'), facturaLimpia);
+
+      // Audit log de emisión de garantía (no bloquea si falla)
+      if (garantia) {
+        try {
+          await addDoc(collection(db, 'auditoria_admin'), {
+            accion: 'emitir_garantia',
+            solicitanteUid: currentUserUid,
+            solicitanteNombre: usuario,
+            objetivoTipo: 'factura',
+            objetivoId: facturaRef.id,
+            conduceNumero: numero,
+            ordenId: orden.id,
+            ordenNumero: orden.numero,
+            garantia: {
+              tiempoDias: garantia.tiempoDias,
+              finFecha: garantia.finFecha,
+              token: (garantia.token || '').substring(0, 8) + '...',
+            },
+            timestamp: Timestamp.now(),
+          });
+        } catch (err) {
+          console.warn('[facturacion-pendiente] audit emitir_garantia falló (no bloquea):', err);
+        }
+      }
 
       // Registrar/actualizar comisión del técnico sobre ganancia neta
       let comisionInfo: Awaited<ReturnType<typeof registrarComisionPorFactura>> | null = null;
@@ -522,7 +604,64 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
         updatedAt: ahora,
       });
 
-      toast.success(`Conduce ${numero} generado`);
+      // Toast con CTA de WhatsApp si tenemos teléfono y se generó garantía
+      const telefono = orden.clienteTelefono || '';
+      if (garantia && telefono) {
+        // Construimos un objeto Factura mínimo en memoria para alimentar el
+        // helper de mensaje (no se relee Firestore).
+        const facturaParaMensaje: Factura = {
+          id: facturaRef.id,
+          numero,
+          clienteNombre: orden.clienteNombre,
+          clienteTelefono: telefono,
+          items: itemsLimpios as unknown as ItemCotizacion[],
+          total: totalItems,
+          estado: totalPagado >= totalItems ? 'pagada' : 'emitida',
+          fechaEmision: ahora.toDate(),
+          equipoTipo: orden.equipoTipo,
+          equipoMarca: orden.equipoMarca,
+          equipoModelo: orden.equipoModelo,
+          tecnicoId: orden.tecnicoId,
+          tecnicoNombre: orden.tecnicoNombre,
+          fechaServicio: fechaServicio?.toDate(),
+          garantia,
+          createdAt: ahora.toDate(),
+        };
+        toast.custom(
+          t => (
+            <div
+              className={`bg-white rounded-xl shadow-lg border border-gray-100 px-4 py-3 flex items-center gap-3 ${t.visible ? 'animate-enter' : 'animate-leave'}`}
+            >
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-gray-900">
+                  Conduce {numero} generado
+                </div>
+                <div className="text-xs text-gray-500">
+                  Enviá el conduce y link de garantía al cliente.
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  abrirWhatsApp(telefono, mensajeConduceGarantia(facturaParaMensaje));
+                  toast.dismiss(t.id);
+                }}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold"
+              >
+                Enviar por WhatsApp
+              </button>
+              <button
+                onClick={() => toast.dismiss(t.id)}
+                className="text-gray-400 hover:text-gray-600 text-xs"
+              >
+                Cerrar
+              </button>
+            </div>
+          ),
+          { duration: 8000 },
+        );
+      } else {
+        toast.success(`Conduce ${numero} generado`);
+      }
       onClose();
     } catch (err) {
       console.error(err);
@@ -661,6 +800,45 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
                 <div className="text-base font-semibold text-[#0f3460]">{fmtMonto(totalItems)}</div>
               </div>
             </div>
+
+            {/* Selector de tiempo de garantía (sólo coord/admin, requerido para emitir) */}
+            {puedeConfigurarGarantia && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+                  <div className="text-sm font-semibold text-amber-900">
+                    Tiempo de Garantía
+                  </div>
+                  {tiempoGarantiaDias === null && (
+                    <span className="text-[11px] text-red-600 font-medium">
+                      Requerido para emitir
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-amber-800 mb-3">
+                  Define cuántos días tendrá vigencia la garantía. El cliente recibirá un link único para consultar el estado y reclamar.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {GARANTIA_PRESETS.map(p => {
+                    const activo = tiempoGarantiaDias === p.dias;
+                    return (
+                      <button
+                        key={p.dias}
+                        type="button"
+                        onClick={() => setTiempoGarantiaDias(p.dias)}
+                        className={`px-3 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+                          activo
+                            ? 'bg-amber-600 text-white border-amber-600'
+                            : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-100'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-between gap-3 pt-2">
               <button
                 type="button"
@@ -672,8 +850,9 @@ function ProcesarFacturacionModal({ orden, userProfile, onClose }: ModalProps) {
               <button
                 type="button"
                 onClick={handleGenerar}
-                disabled={generando}
-                className="inline-flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60"
+                disabled={generando || (puedeConfigurarGarantia && tiempoGarantiaDias === null)}
+                className="inline-flex items-center gap-2 px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                title={puedeConfigurarGarantia && tiempoGarantiaDias === null ? 'Selecciona un tiempo de garantía' : ''}
               >
                 <Check size={14} />
                 {generando ? 'Generando conduce...' : 'Generar conduce de garantía'}

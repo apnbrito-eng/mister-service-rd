@@ -1,7 +1,7 @@
 import { format, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
-import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria, PiezaUsada, CondicionPieza, OrigenPieza } from '../types';
+import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria, PiezaUsada, CondicionPieza, OrigenPieza, Factura, EstadoFactura, GarantiaInfo, GarantiaEstado, GarantiaOrigen, ItemCotizacion, MetodoPago } from '../types';
 
 /** Orden visual del ciclo de fases (agendado va antes de diagnostico) */
 export const FASES_ORDENADAS: FaseOrden[] = [
@@ -544,6 +544,13 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     standbyHasta: parseFirestoreDate(raw.standbyHasta) || undefined,
     standbyNotas: (raw.standbyNotas as string) || undefined,
     standbyPor: (raw.standbyPor as string) || undefined,
+    // Garantía — orden reasignada
+    esGarantia: typeof raw.esGarantia === 'boolean' ? (raw.esGarantia as boolean) : undefined,
+    tecnicoOriginalUid: (raw.tecnicoOriginalUid as string) || undefined,
+    tecnicoOriginalNombre: (raw.tecnicoOriginalNombre as string) || undefined,
+    referenciaConduce: (raw.referenciaConduce as string) || undefined,
+    referenciaFacturaId: (raw.referenciaFacturaId as string) || undefined,
+    referenciaOrdenId: (raw.referenciaOrdenId as string) || undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden) || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),
@@ -563,6 +570,79 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
       : [],
     createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
     updatedAt: parseFirestoreDate(raw.updatedAt) || new Date(),
+  };
+}
+
+/**
+ * Parser/hidratador para documentos de la colección `facturas` (Conduces de
+ * Garantía). Convierte Timestamps en Dates y rehidrata el bloque `garantia`.
+ */
+export function parseFactura(id: string, raw: Record<string, unknown>): Factura {
+  const itemsRaw = Array.isArray(raw.items) ? (raw.items as Array<Record<string, unknown>>) : [];
+  const items: ItemCotizacion[] = itemsRaw.map(i => ({
+    descripcion: (i.descripcion as string) || '',
+    cantidad: typeof i.cantidad === 'number' ? (i.cantidad as number) : 0,
+    precio: typeof i.precio === 'number' ? (i.precio as number) : 0,
+    tipoItem: (i.tipoItem as ItemCotizacion['tipoItem']) || undefined,
+    servicioPrecioId: (i.servicioPrecioId as string) || undefined,
+    piezaInventarioId: (i.piezaInventarioId as string) || undefined,
+    costoCompra: typeof i.costoCompra === 'number' ? (i.costoCompra as number) : undefined,
+  }));
+
+  let garantia: GarantiaInfo | undefined;
+  if (raw.garantia && typeof raw.garantia === 'object') {
+    const g = raw.garantia as Record<string, unknown>;
+    garantia = {
+      tiempoDias: typeof g.tiempoDias === 'number' ? (g.tiempoDias as number) : 0,
+      inicioFecha: parseFirestoreDate(g.inicioFecha) || new Date(),
+      finFecha: parseFirestoreDate(g.finFecha) || new Date(),
+      token: (g.token as string) || '',
+      estado: (g.estado as GarantiaEstado) || 'vigente',
+      reclamadaEn: parseFirestoreDate(g.reclamadaEn) || undefined,
+      problemaDescripcion: (g.problemaDescripcion as string) || undefined,
+      origen: (g.origen as GarantiaOrigen) || undefined,
+      ordenGarantiaId: (g.ordenGarantiaId as string) || undefined,
+      tecnicoOriginalUid: (g.tecnicoOriginalUid as string) || undefined,
+      tecnicoOriginalNombre: (g.tecnicoOriginalNombre as string) || undefined,
+    };
+  }
+
+  return {
+    id,
+    numero: (raw.numero as string) || '',
+    clienteId: (raw.clienteId as string) || undefined,
+    clienteNombre: (raw.clienteNombre as string) || '',
+    clienteTelefono: (raw.clienteTelefono as string) || undefined,
+    ordenId: (raw.ordenId as string) || undefined,
+    ordenNumero: (raw.ordenNumero as string) || undefined,
+    items,
+    total: typeof raw.total === 'number' ? (raw.total as number) : 0,
+    estado: (raw.estado as EstadoFactura) || 'emitida',
+    fechaEmision: parseFirestoreDate(raw.fechaEmision) || new Date(),
+    fechaVencimiento: parseFirestoreDate(raw.fechaVencimiento) || undefined,
+    fechaPago: parseFirestoreDate(raw.fechaPago) || undefined,
+    notas: (raw.notas as string) || undefined,
+    metodoPago: (raw.metodoPago as MetodoPago) || undefined,
+    bancoDestino: (raw.bancoDestino as string) || undefined,
+    cotizacionId: (raw.cotizacionId as string) || undefined,
+    subtotal: typeof raw.subtotal === 'number' ? (raw.subtotal as number) : undefined,
+    itbisPorcentaje: typeof raw.itbisPorcentaje === 'number' ? (raw.itbisPorcentaje as number) : undefined,
+    itbisMonto: typeof raw.itbisMonto === 'number' ? (raw.itbisMonto as number) : undefined,
+    costoPiezas: typeof raw.costoPiezas === 'number' ? (raw.costoPiezas as number) : undefined,
+    gananciaNeta: typeof raw.gananciaNeta === 'number' ? (raw.gananciaNeta as number) : undefined,
+    comisionTecnicoId: (raw.comisionTecnicoId as string) || undefined,
+    comisionTecnicoNombre: (raw.comisionTecnicoNombre as string) || undefined,
+    comisionTecnicoPorcentaje: typeof raw.comisionTecnicoPorcentaje === 'number' ? (raw.comisionTecnicoPorcentaje as number) : undefined,
+    comisionTecnicoMonto: typeof raw.comisionTecnicoMonto === 'number' ? (raw.comisionTecnicoMonto as number) : undefined,
+    comisionRegistroId: (raw.comisionRegistroId as string) || undefined,
+    equipoTipo: (raw.equipoTipo as string) || undefined,
+    equipoMarca: (raw.equipoMarca as string) || undefined,
+    equipoModelo: (raw.equipoModelo as string) || undefined,
+    tecnicoId: (raw.tecnicoId as string) || undefined,
+    tecnicoNombre: (raw.tecnicoNombre as string) || undefined,
+    fechaServicio: parseFirestoreDate(raw.fechaServicio) || undefined,
+    garantia,
+    createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
   };
 }
 

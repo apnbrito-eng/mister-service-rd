@@ -1,4 +1,5 @@
 import { normalizarTelefono } from '../services/clientes.service';
+import type { Factura } from '../types';
 
 /** Abre WhatsApp con número formateado para RD (+1) */
 export function abrirWhatsApp(telefono: string, mensaje: string = ''): void {
@@ -53,6 +54,50 @@ export const mensajesWhatsApp = {
   mantenimientoProgramado: (nombre: string, equipo: string, fecha: string): string =>
     `Hola ${nombre}, le recordamos que tiene un mantenimiento programado de su ${equipo} para el *${fecha}*. ¿Desea confirmar? — Mister Service RD`,
 };
+
+/**
+ * Arma el mensaje de WhatsApp para enviarle al cliente el conduce de garantía
+ * recién emitido, junto al link público para consultar el estado y reclamar la
+ * garantía. El link sólo se incluye si la factura tiene `garantia.token`.
+ */
+export function mensajeConduceGarantia(factura: Factura): string {
+  const lineas: string[] = [];
+  lineas.push(`Hola ${factura.clienteNombre || ''},`.trim());
+  lineas.push('');
+  lineas.push(`Tu Conduce de Garantía *${factura.numero}* fue emitido.`);
+
+  const equipo = [factura.equipoTipo, factura.equipoMarca].filter(Boolean).join(' ').trim();
+  if (equipo) {
+    lineas.push(`Equipo: ${equipo}.`);
+  }
+
+  const total = typeof factura.total === 'number' ? factura.total : 0;
+  lineas.push(
+    `Total: RD$${total.toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}.`,
+  );
+
+  if (factura.garantia?.token) {
+    const finFechaRaw = factura.garantia.finFecha;
+    const finFecha = finFechaRaw instanceof Date
+      ? finFechaRaw
+      : (finFechaRaw && typeof (finFechaRaw as { toDate?: () => Date }).toDate === 'function'
+        ? (finFechaRaw as { toDate: () => Date }).toDate()
+        : new Date(finFechaRaw as unknown as string));
+    const finFechaTxt = isNaN(finFecha.getTime())
+      ? ''
+      : finFecha.toLocaleDateString('es-DO', { day: '2-digit', month: 'long', year: 'numeric' });
+    lineas.push('');
+    lineas.push('Tu garantía:');
+    lineas.push(`https://www.misterservicerd.com/garantia/${factura.garantia.token}`);
+    if (finFechaTxt) {
+      lineas.push(`Vigente hasta el ${finFechaTxt}.`);
+    }
+  }
+
+  lineas.push('');
+  lineas.push('Gracias por confiar en Mister Service RD.');
+  return lineas.join('\n');
+}
 
 /**
  * Arma el mensaje de WhatsApp con los datos de una cuenta bancaria para que el cliente

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Factura, Gasto, ComisionRegistro, Personal } from '../types';
-import { formatMoneda } from '../utils';
+import { Gasto, ComisionRegistro, Personal } from '../types';
+import { formatMoneda, parseFactura } from '../utils';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -46,7 +46,7 @@ async function cargarDataMes(year: number, month: number, personal: Personal[]):
   let costoPiezas = 0;
   let totalFacturas = 0;
   facturasSnap.docs.forEach(d => {
-    const f = d.data() as Factura;
+    const f = parseFactura(d.id, d.data() as Record<string, unknown>);
     if (f.estado === 'anulada') return;
     totalFacturas++;
     ventasBrutas += Number(f.total) || 0;

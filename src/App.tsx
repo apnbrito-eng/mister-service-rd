@@ -55,6 +55,7 @@ import PublicLayout from './components/public/PublicLayout';
 import HomePage from './pages/public/HomePage';
 import ServiciosPage from './pages/public/ServiciosPage';
 import AgendarPage from './pages/public/AgendarPage';
+import GarantiaCliente from './pages/public/GarantiaCliente';
 
 import { useEffect } from 'react';
 import { seedDatabase } from './firebase/seedData';
@@ -141,6 +142,7 @@ function AppRoutes() {
       <Route path="/cita/:calendarId" element={<CitaPublica />} />
       <Route path="/tracking/:token" element={<TrackingCliente />} />
       <Route path="/f/:slug" element={<FormularioPublico />} />
+      <Route path="/garantia/:token" element={<GarantiaCliente />} />
 
       {/* ═══════════════════════════════════════════════
           ADMIN / INTERNAL SYSTEM

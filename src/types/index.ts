@@ -114,7 +114,42 @@ export type AccionAuditoria =
   | 'editar_piezas'
   | 'editar_orden_datos_cliente'
   | 'poner_standby'
-  | 'reactivar_orden';
+  | 'reactivar_orden'
+  // Garantía (Sistema de Garantía — Commit 1)
+  | 'emitir_garantia'
+  | 'reclamo_garantia_cliente'
+  | 'marcar_garantia_admin'
+  | 'cambio_tecnico_garantia'
+  | 'descuento_garantia_tecnico';
+
+// ───────────────────────── Sistema de Garantía ─────────────────────────
+
+export type GarantiaEstado = 'vigente' | 'reclamada' | 'atendida' | 'expirada';
+export type GarantiaOrigen = 'reclamo_cliente' | 'manual_admin';
+
+export interface GarantiaInfo {
+  /** Días de garantía configurados al emitir el conduce (30, 60, 90, 180, 365) */
+  tiempoDias: number;
+  /** Fecha de emisión del conduce (inicio de la garantía) */
+  inicioFecha: Timestamp | Date;
+  /** Fecha de fin (computed: inicio + tiempoDias) */
+  finFecha: Timestamp | Date;
+  /** Token UUID para el link público */
+  token: string;
+  /** Estado actual de la garantía */
+  estado: GarantiaEstado;
+  /** Cuando el cliente reclamó */
+  reclamadaEn?: Timestamp | Date;
+  /** Descripción del problema (cliente o admin manual) */
+  problemaDescripcion?: string;
+  /** Origen del reclamo */
+  origen?: GarantiaOrigen;
+  /** Referencia a la orden nueva creada al atender la garantía */
+  ordenGarantiaId?: string;
+  /** Snapshot del técnico original cuando se reasigna a otro */
+  tecnicoOriginalUid?: string;
+  tecnicoOriginalNombre?: string;
+}
 
 export type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'link' | 'otro';
 
@@ -217,6 +252,13 @@ export interface OrdenServicio {
   standbyHasta?: Timestamp | Date;   // fecha estimada de reactivación
   standbyNotas?: string;
   standbyPor?: string;               // nombre de quien la puso en stand-by
+  // Garantía — campos cuando esta orden es la reasignación de un servicio en garantía
+  esGarantia?: boolean;
+  tecnicoOriginalUid?: string;
+  tecnicoOriginalNombre?: string;
+  referenciaConduce?: string;        // número del conduce original (CG-####)
+  referenciaFacturaId?: string;      // id del doc factura original
+  referenciaOrdenId?: string;        // id de la orden original
   createdAt: Date;
   updatedAt: Date;
 }
@@ -244,6 +286,23 @@ export interface ComisionRegistro {
   liquidadaEn?: Date;
   liquidadaPor?: string;
   notas?: string;
+  /**
+   * Descuento aplicado a esta comisión cuando el servicio entra en garantía y
+   * es reasignado a otro técnico. El monto es negativo (resta a la comisión
+   * original). Si está presente y `monto = -comisionMonto`, la comisión está
+   * efectivamente anulada (el campo `estaAnulada` es derivable).
+   */
+  descuentoPorGarantia?: {
+    monto: number;
+    facturaIdReasignada: string;
+    conduceNumero: string;
+    ordenIdReasignada: string;
+    motivo: string;
+    notas?: string;
+    aplicadoEn: Timestamp | Date;
+    aplicadoPor: string;
+    aplicadoPorNombre: string;
+  };
   createdAt: Date;
 }
 
@@ -414,6 +473,16 @@ export interface CitaPorConfirmar {
   calendarioNombre?: string;
   fechaSolicitada?: Date;
   horaSolicitada?: string;
+  // Garantía (cuando esta cita proviene de un reclamo de garantía)
+  tipo?: 'normal' | 'garantia';
+  esGarantia?: boolean;
+  referenciaFacturaId?: string;
+  referenciaConduce?: string;
+  referenciaOrdenId?: string;
+  tecnicoOriginalUid?: string;
+  tecnicoOriginalNombre?: string;
+  descripcionProblema?: string;
+  origenGarantia?: GarantiaOrigen;
   createdAt: Date;
 }
 
@@ -468,6 +537,8 @@ export interface Factura {
   numero: string;
   clienteId?: string;
   clienteNombre: string;
+  /** Teléfono del cliente, denormalizado al emitir el conduce */
+  clienteTelefono?: string;
   ordenId?: string;
   ordenNumero?: string;
   items: ItemCotizacion[];
@@ -492,6 +563,16 @@ export interface Factura {
   comisionTecnicoPorcentaje?: number;
   comisionTecnicoMonto?: number;
   comisionRegistroId?: string;  // id del doc en colección `comisiones`
+  // Snapshot de la orden/equipo al emitir el conduce (para que el endpoint
+  // público `/api/garantia/[token]` haga 1 sola lectura)
+  equipoTipo?: string;
+  equipoMarca?: string;
+  equipoModelo?: string;
+  tecnicoId?: string;
+  tecnicoNombre?: string;
+  fechaServicio?: Timestamp | Date;
+  /** Información de garantía cuando se emite el conduce */
+  garantia?: GarantiaInfo;
   createdAt: Date;
 }
 
@@ -1045,6 +1126,7 @@ export type TipoNotificacion =
   | 'orden_asignada'
   | 'orden_enviada_a_facturacion'
   | 'chequeo_iniciado'
+  | 'reclamo_garantia'
   | 'otro';
 
 export interface Notificacion {

@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, Timestamp, query, orderBy, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Factura, EstadoFactura, ItemCotizacion, MetodoPago, OrdenServicio } from '../types';
-import { formatMoneda, formatFechaCorta, generateNumeroFactura, parseOrden } from '../utils';
+import { formatMoneda, formatFechaCorta, generateNumeroFactura, parseOrden, parseFactura } from '../utils';
+import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
@@ -80,17 +81,7 @@ export default function Facturas() {
     const unsub = onSnapshot(
       query(collection(db, 'facturas'), orderBy('createdAt', 'desc')),
       (snap) => {
-        setFacturas(snap.docs.map(d => {
-          const data = d.data();
-          return {
-            id: d.id,
-            ...data,
-            fechaEmision: data.fechaEmision?.toDate?.() || new Date(),
-            fechaVencimiento: data.fechaVencimiento?.toDate?.() || null,
-            fechaPago: data.fechaPago?.toDate?.() || null,
-            createdAt: data.createdAt?.toDate?.() || new Date(),
-          } as Factura;
-        }));
+        setFacturas(snap.docs.map(d => parseFactura(d.id, d.data() as Record<string, unknown>)));
         setLoading(false);
       }
     );
@@ -545,6 +536,18 @@ export default function Facturas() {
                             className="flex items-center gap-1 px-2 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-medium hover:bg-green-100 transition-colors"
                           >
                             <Check size={13} /> Pagada
+                          </button>
+                        )}
+                        {factura.garantia?.token && factura.clienteTelefono && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              abrirWhatsApp(factura.clienteTelefono || '', mensajeConduceGarantia(factura));
+                            }}
+                            title="Enviar conduce y link de garantía por WhatsApp"
+                            className="flex items-center gap-1 px-2 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium hover:bg-emerald-100 transition-colors"
+                          >
+                            WhatsApp
                           </button>
                         )}
                         <button
