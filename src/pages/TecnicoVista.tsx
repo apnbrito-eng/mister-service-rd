@@ -492,9 +492,42 @@ export default function TecnicoVista() {
         'false',
         'true'
       );
+      // Registrar el pago del chequeo y enviar a facturación si hay método.
+      // Esto hace aparecer la orden en /admin/facturacion-pendiente para que
+      // admin/coord emita el conduce CG-#####.
+      const pagosPrev = Array.isArray(ordenChequeo.pagos) ? ordenChequeo.pagos : [];
+      const nuevoPago = chequeoForm.metodoPago ? {
+        id: `pago_chequeo_${Date.now()}`,
+        metodo: chequeoForm.metodoPago,
+        monto: precio,
+        fecha: ahora,
+        registradoPorId: userProfile?.id || '',
+        registradoPorNombre: usuario,
+      } : null;
+      const pagosTotal = [
+        ...pagosPrev.map(p => ({
+          id: p.id,
+          metodo: p.metodo,
+          monto: p.monto,
+          fecha: p.fecha instanceof Date ? Timestamp.fromDate(p.fecha) : p.fecha,
+          ...(p.recibidoPorId ? { recibidoPorId: p.recibidoPorId } : {}),
+          ...(p.recibidoPorNombre ? { recibidoPorNombre: p.recibidoPorNombre } : {}),
+          ...(p.bancoId ? { bancoId: p.bancoId } : {}),
+          ...(p.bancoNombre ? { bancoNombre: p.bancoNombre } : {}),
+          ...(p.referencia ? { referencia: p.referencia } : {}),
+          ...(p.notas ? { notas: p.notas } : {}),
+          registradoPorId: p.registradoPorId,
+          registradoPorNombre: p.registradoPorNombre,
+        })),
+        ...(nuevoPago ? [nuevoPago] : []),
+      ];
+      const montoPagadoTotal = pagosTotal.reduce((sum, p) => sum + Number(p.monto || 0), 0);
+
       const updateData: Record<string, unknown> = {
         soloChequeo: true,
+        tipoCierre: 'solo_chequeo',
         precioChequeo: precio,
+        precioFinal: precio,
         motivoChequeo: chequeoForm.motivo.trim(),
         fase: 'cerrado',
         estadoSimple: 'completado',
@@ -506,7 +539,22 @@ export default function TecnicoVista() {
       if (chequeoForm.metodoPago) {
         updateData.metodoPagoCierre = chequeoForm.metodoPago;
       }
+      if (nuevoPago) {
+        updateData.pagos = pagosTotal;
+        updateData.montoPagado = montoPagadoTotal;
+        updateData.estadoPago = montoPagadoTotal >= precio ? 'completo' : 'parcial';
+        updateData.enviadaAFacturacion = true;
+        updateData.enviadaAFacturacionAt = ahora;
+        if (userProfile?.id) updateData.enviadaAFacturacionPorId = userProfile.id;
+        updateData.enviadaAFacturacionPorNombre = usuario;
+      }
       await updateDoc(doc(db, 'ordenes_servicio', ordenChequeo.id), updateData);
+
+      // El chequeo NO genera comisión para el técnico (regla de negocio).
+      // Si el cliente regresa para reparar, oficina reactiva la orden vía
+      // `reactivarOrdenPostChequeo` y la comisión se paga sobre el monto de
+      // la reparación, no incluye los RD$2,000 del chequeo previo.
+
       toast.success('Orden cerrada como solo chequeo');
       cerrarChequeoModal();
     } catch (err) {

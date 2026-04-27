@@ -1,13 +1,16 @@
 import { useState } from 'react';
-import { Calendar, Clock, Wrench, User, XCircle } from 'lucide-react';
+import { Calendar, Clock, Wrench, User, XCircle, Play, RotateCcw } from 'lucide-react';
+import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import { OrdenServicio, StandbyPieza } from '../../types';
-import { estadoSimpleBorder, formatFecha, tiempoTranscurrido, tieneStandby } from '../../utils';
+import { estadoSimpleBorder, formatFecha, tiempoTranscurrido, tieneStandby, crearRegistroAuditoria } from '../../utils';
 import Badge from '../Badge';
 import EliminarOrdenButton from './EliminarOrdenButton';
 import FaseStepper from './FaseStepper';
 import CancelarOrdenModal from './CancelarOrdenModal';
 import { useApp } from '../../context/AppContext';
 import { puede } from '../../utils/permisos';
+import toast from 'react-hot-toast';
 
 interface OrdenCardProps {
   orden: OrdenServicio;
@@ -18,8 +21,43 @@ interface OrdenCardProps {
 export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenCardProps) {
   const { userProfile } = useApp();
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [reactivando, setReactivando] = useState(false);
   const puedeCancelar = puede(userProfile, 'ordenesModificar');
+  // Reactivar: admin/coord/operaria con permiso de editar órdenes (técnico ya
+  // tiene su botón en TecnicoVista). Excluimos rol técnico explícitamente para
+  // no duplicar el botón.
+  const puedeReactivar =
+    puede(userProfile, 'ordenesModificar') && userProfile?.rol !== 'tecnico';
   const conStandby = tieneStandby(orden, standbyItems);
+
+  const handleReactivar = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (reactivando) return;
+    if (!confirm(`¿Reactivar la orden ${orden.numero || orden.id}? Volverá a estado activo.`)) return;
+    setReactivando(true);
+    try {
+      const usuario = userProfile?.nombre || 'Sistema';
+      const registro = crearRegistroAuditoria(
+        usuario,
+        'reactivar_orden',
+        'Reactivó la orden desde stand-by',
+        'enStandby',
+        'true',
+        'false',
+      );
+      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+        enStandby: false,
+        auditoria: arrayUnion(registro),
+        updatedAt: Timestamp.now(),
+      });
+      toast.success('Orden reactivada');
+    } catch (err) {
+      console.error('Error al reactivar la orden:', err);
+      toast.error('Error al reactivar la orden');
+    } finally {
+      setReactivando(false);
+    }
+  };
   return (
     <div
       className={`bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 ${estadoSimpleBorder(orden.estadoSimple)} p-4 hover:shadow-md transition-shadow`}
@@ -40,8 +78,30 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
             {orden.soloChequeo && (
               <Badge label="Solo chequeo" color="bg-yellow-100 text-yellow-800" />
             )}
+            {orden.reactivadaPostChequeo && (
+              <span
+                className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-[10px] font-medium"
+                title={orden.cierreChequeoHistorico?.monto
+                  ? `Chequeo previo de RD$${orden.cierreChequeoHistorico.monto.toLocaleString('es-DO')} ya cobrado`
+                  : 'Chequeo previo ya cobrado'}
+              >
+                <RotateCcw size={10} /> Reparación post-chequeo
+              </span>
+            )}
             {orden.enStandby && (
               <Badge label="⏸ Stand-by" color="bg-yellow-100 text-yellow-800" />
+            )}
+            {orden.enStandby && puedeReactivar && (
+              <button
+                type="button"
+                onClick={handleReactivar}
+                disabled={reactivando}
+                title="Reactivar orden (quitar de stand-by)"
+                className="inline-flex items-center gap-1 text-[10px] font-medium bg-green-50 hover:bg-green-100 text-green-700 px-2 py-0.5 rounded-full disabled:opacity-60"
+              >
+                <Play size={10} />
+                {reactivando ? 'Reactivando...' : 'Reactivar'}
+              </button>
             )}
             {orden.eliminada && (
               <Badge label="Eliminada" color="bg-red-100 text-red-700" />

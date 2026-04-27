@@ -80,8 +80,8 @@ export function googleMapsLink(lat?: number, lng?: number, direccion?: string): 
   return '#';
 }
 
-export function faseLabel(fase: FaseOrden): string {
-  const labels: Record<FaseOrden, string> = {
+export function faseLabel(fase: FaseOrden | 'reactivada_post_chequeo'): string {
+  const labels: Record<FaseOrden | 'reactivada_post_chequeo', string> = {
     nuevo_lead: 'Nuevo Lead',
     en_gestion: 'En Gestión',
     en_diagnostico: 'En Diagnóstico',
@@ -91,6 +91,7 @@ export function faseLabel(fase: FaseOrden): string {
     trabajo_realizado: 'Trabajo Realizado',
     cerrado: 'Cerrado',
     cancelado: 'Cancelado',
+    reactivada_post_chequeo: 'Reactivada (post-chequeo)',
   };
   return labels[fase] || fase;
 }
@@ -125,8 +126,8 @@ export function estadoSimpleBorder(estado: EstadoOrdenSimple): string {
   return colors[estado] || 'border-l-gray-300';
 }
 
-export function faseColor(fase: FaseOrden): string {
-  const colors: Record<FaseOrden, string> = {
+export function faseColor(fase: FaseOrden | 'reactivada_post_chequeo'): string {
+  const colors: Record<FaseOrden | 'reactivada_post_chequeo', string> = {
     nuevo_lead: 'bg-gray-100 text-gray-700',
     en_gestion: 'bg-blue-100 text-blue-700',
     en_diagnostico: 'bg-yellow-100 text-yellow-700',
@@ -136,12 +137,13 @@ export function faseColor(fase: FaseOrden): string {
     trabajo_realizado: 'bg-teal-100 text-teal-700',
     cerrado: 'bg-green-100 text-green-700',
     cancelado: 'bg-red-100 text-red-700',
+    reactivada_post_chequeo: 'bg-blue-50 text-blue-700',
   };
   return colors[fase] || 'bg-gray-100 text-gray-700';
 }
 
-export function faseBgColor(fase: FaseOrden): string {
-  const colors: Record<FaseOrden, string> = {
+export function faseBgColor(fase: FaseOrden | 'reactivada_post_chequeo'): string {
+  const colors: Record<FaseOrden | 'reactivada_post_chequeo', string> = {
     nuevo_lead: '#6b7280',
     en_gestion: '#3b82f6',
     en_diagnostico: '#f59e0b',
@@ -151,6 +153,7 @@ export function faseBgColor(fase: FaseOrden): string {
     trabajo_realizado: '#14b8a6',
     cerrado: '#22c55e',
     cancelado: '#ef4444',
+    reactivada_post_chequeo: '#3b82f6',
   };
   return colors[fase] || '#6b7280';
 }
@@ -479,6 +482,27 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     soloChequeo: (raw.soloChequeo as boolean) || undefined,
     precioChequeo: typeof raw.precioChequeo === 'number' ? raw.precioChequeo : undefined,
     motivoChequeo: (raw.motivoChequeo as string) || undefined,
+    tipoCierre: raw.tipoCierre === 'solo_chequeo' || raw.tipoCierre === 'reparacion_completa'
+      ? raw.tipoCierre
+      : undefined,
+    reactivadaPostChequeo: raw.reactivadaPostChequeo === true ? true : undefined,
+    reactivadaPostChequeoEn: parseFirestoreDate(raw.reactivadaPostChequeoEn) || undefined,
+    reactivadaPostChequeoPor: typeof raw.reactivadaPostChequeoPor === 'string' && raw.reactivadaPostChequeoPor.length > 0
+      ? raw.reactivadaPostChequeoPor
+      : undefined,
+    cierreChequeoHistorico: raw.cierreChequeoHistorico && typeof raw.cierreChequeoHistorico === 'object'
+      ? (() => {
+          const ch = raw.cierreChequeoHistorico as Record<string, unknown>;
+          return {
+            monto: Number(ch.monto || 0),
+            fechaCierre: parseFirestoreDate(ch.fechaCierre) || new Date(),
+            conduceCG: typeof ch.conduceCG === 'string' && ch.conduceCG.length > 0 ? ch.conduceCG : undefined,
+            tecnicoId: typeof ch.tecnicoId === 'string' && ch.tecnicoId.length > 0 ? ch.tecnicoId : undefined,
+            tecnicoNombre: typeof ch.tecnicoNombre === 'string' && ch.tecnicoNombre.length > 0 ? ch.tecnicoNombre : undefined,
+            motivoChequeo: typeof ch.motivoChequeo === 'string' && ch.motivoChequeo.length > 0 ? ch.motivoChequeo : undefined,
+          };
+        })()
+      : undefined,
     eliminada: (raw.eliminada as boolean) || undefined,
     motivoEliminacion: (raw.motivoEliminacion as string) || undefined,
     eliminadaPor: (raw.eliminadaPor as string) || undefined,
@@ -552,7 +576,7 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     referenciaFacturaId: typeof raw.referenciaFacturaId === 'string' && raw.referenciaFacturaId.length > 0 ? raw.referenciaFacturaId : undefined,
     referenciaOrdenId: typeof raw.referenciaOrdenId === 'string' && raw.referenciaOrdenId.length > 0 ? raw.referenciaOrdenId : undefined,
     historialFases: historialRaw.map(h => ({
-      fase: (h.fase as FaseOrden) || 'nuevo_lead',
+      fase: (h.fase as FaseOrden | 'reactivada_post_chequeo') || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),
       usuario: (h.usuario as string) || 'Sistema',
       nota: (h.nota as string) || undefined,
@@ -648,6 +672,9 @@ export function parseFactura(id: string, raw: Record<string, unknown>): Factura 
     tecnicoId: (raw.tecnicoId as string) || undefined,
     tecnicoNombre: (raw.tecnicoNombre as string) || undefined,
     fechaServicio: parseFirestoreDate(raw.fechaServicio) || undefined,
+    tipoCierre: raw.tipoCierre === 'solo_chequeo' || raw.tipoCierre === 'reparacion_completa'
+      ? raw.tipoCierre
+      : undefined,
     garantia,
     createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
   };

@@ -64,6 +64,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const { userProfile } = useApp();
   const navigate = useNavigate();
   const [standbyCount, setStandbyCount] = useState(0);
+  const [ordenesStandbyCount, setOrdenesStandbyCount] = useState(0);
   const [citasCount, setCitasCount] = useState(0);
   const [solicitudesCount, setSolicitudesCount] = useState(0);
   const [facturacionPendienteCount, setFacturacionPendienteCount] = useState(0);
@@ -72,6 +73,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   useEffect(() => {
     const q1 = query(collection(db, 'standby_piezas'), where('estado', '!=', 'llego'));
     const unsub1 = onSnapshot(q1, (snap) => setStandbyCount(snap.size));
+
+    const q1b = query(collection(db, 'ordenes_servicio'), where('enStandby', '==', true));
+    const unsub1b = onSnapshot(q1b, (snap) => {
+      // Filtrar eliminadas en cliente para evitar índice compuesto
+      const count = snap.docs.filter(d => !d.data().eliminada).length;
+      setOrdenesStandbyCount(count);
+    });
 
     const unsub2 = onSnapshot(collection(db, 'citas_por_confirmar'), (snap) => setCitasCount(snap.size));
 
@@ -87,7 +95,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       setFacturacionPendienteCount(count);
     });
 
-    return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
+    return () => { unsub1(); unsub1b(); unsub2(); unsub3(); unsub4(); };
   }, [userProfile?.rol]);
 
   const handleLogout = async () => {
@@ -129,7 +137,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
           { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
           { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios', show: isAdmin || isOperaria || isSecretaria },
-          { to: '/admin/standby', icon: Clock, label: 'Stand-by / Piezas', badge: standbyCount, show: p('ordenesVer') },
+          { to: '/admin/standby', icon: Clock, label: 'Stand-by', badge: standbyCount + ordenesStandbyCount, show: p('ordenesVer') },
           { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
           { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
           { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: isAdmin || userProfile?.rol === 'coordinadora' || p('ordenesVerEliminadas') },

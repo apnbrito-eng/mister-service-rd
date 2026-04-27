@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, getDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, getDoc, doc, Timestamp, query, orderBy, where, arrayUnion } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase/config';
 import { StandbyPieza, EstadoStandby, MovimientoPieza, OrdenServicio } from '../types';
-import { formatFechaCorta, formatFecha, parseOrden } from '../utils';
+import { formatFechaCorta, formatFecha, parseOrden, crearRegistroAuditoria } from '../utils';
+import { useApp } from '../context/AppContext';
 import { crearNotificacion } from '../services/notificaciones.service';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { differenceInDays } from 'date-fns';
-import { Plus, Package, Check, Clock, History, ArrowDown, ArrowUp } from 'lucide-react';
+import { Plus, Package, Check, Clock, History, ArrowDown, ArrowUp, Pause, Play, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const ESTADO_LABELS: Record<EstadoStandby, string> = {
@@ -25,14 +27,18 @@ const ESTADO_COLORS: Record<EstadoStandby, string> = {
 };
 
 export default function Standby() {
+  const navigate = useNavigate();
+  const { userProfile } = useApp();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<StandbyPieza[]>([]);
+  const [ordenesStandby, setOrdenesStandby] = useState<OrdenServicio[]>([]);
   const [movimientos, setMovimientos] = useState<MovimientoPieza[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [filtroEstado, setFiltroEstado] = useState<string>('activas');
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<'piezas' | 'historial'>('piezas');
+  const [tab, setTab] = useState<'piezas' | 'ordenes' | 'historial'>('piezas');
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'retirada' | 'instalada'>('todos');
+  const [reactivandoId, setReactivandoId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     clienteNombre: '', equipoTipo: '', equipoMarca: '',
@@ -60,7 +66,24 @@ export default function Standby() {
         } as MovimientoPieza)));
       }
     );
-    return () => { unsub(); unsub2(); };
+    // Órdenes en stand-by — query simple por flag (sin índice compuesto).
+    // Filtramos eliminadas en cliente para evitar requisito de índice.
+    const unsub3 = onSnapshot(
+      query(collection(db, 'ordenes_servicio'), where('enStandby', '==', true)),
+      (snap) => {
+        const lista = snap.docs
+          .map(d => parseOrden(d.id, d.data() as Record<string, unknown>) as OrdenServicio)
+          .filter(o => !o.eliminada);
+        // Más recientes primero por standbyDesde (fallback updatedAt)
+        lista.sort((a, b) => {
+          const ta = a.standbyDesde instanceof Date ? a.standbyDesde.getTime() : (a.updatedAt?.getTime() || 0);
+          const tb = b.standbyDesde instanceof Date ? b.standbyDesde.getTime() : (b.updatedAt?.getTime() || 0);
+          return tb - ta;
+        });
+        setOrdenesStandby(lista);
+      }
+    );
+    return () => { unsub(); unsub2(); unsub3(); };
   }, []);
 
   const filteredItems = items.filter(i => {
@@ -146,36 +169,71 @@ export default function Standby() {
     }
   };
 
+  const handleReactivarOrden = async (orden: OrdenServicio) => {
+    if (!confirm(`¿Reactivar la orden ${orden.numero || orden.id}? Volverá a estado activo.`)) return;
+    setReactivandoId(orden.id);
+    try {
+      const usuario = userProfile?.nombre || 'Sistema';
+      const registro = crearRegistroAuditoria(
+        usuario,
+        'reactivar_orden',
+        'Reactivó la orden desde stand-by',
+        'enStandby',
+        'true',
+        'false',
+      );
+      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+        enStandby: false,
+        auditoria: arrayUnion(registro),
+        updatedAt: Timestamp.now(),
+      });
+      toast.success('Orden reactivada');
+    } catch (err) {
+      console.error('Error al reactivar orden:', err);
+      toast.error('Error al reactivar la orden');
+    } finally {
+      setReactivandoId(null);
+    }
+  };
+
   if (loading) return <LoadingSpinner fullPage text="Cargando stand-by..." />;
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Stand-by / Piezas</h1>
-          <p className="text-gray-500 text-sm">{items.filter(i => i.estado !== 'llego').length} piezas activas</p>
+          <h1 className="text-2xl font-bold text-[#0f3460]">Stand-by</h1>
+          <p className="text-gray-500 text-sm">
+            {items.filter(i => i.estado !== 'llego').length} piezas activas · {ordenesStandby.length} órdenes en stand-by
+          </p>
         </div>
-        <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
-          <Plus size={18} /> Registrar Pieza
-        </button>
+        {tab === 'piezas' && (
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            <Plus size={18} /> Registrar Pieza
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
-      <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100 w-fit">
+      <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100 w-fit flex-wrap">
         <button onClick={() => setTab('piezas')}
           className={`flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${tab === 'piezas' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
-          <Package size={14} /> Piezas en Stand-by
+          <Package size={14} /> Piezas ({items.filter(i => i.estado !== 'llego').length})
+        </button>
+        <button onClick={() => setTab('ordenes')}
+          className={`flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${tab === 'ordenes' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+          <Pause size={14} /> Órdenes ({ordenesStandby.length})
         </button>
         <button onClick={() => setTab('historial')}
           className={`flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${tab === 'historial' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
-          <History size={14} /> 📦 Historial de Piezas
+          <History size={14} /> Historial de Piezas
         </button>
       </div>
 
       {tab === 'historial' ? (
         <>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap" data-tab="historial">
             {(['todos', 'retirada', 'instalada'] as const).map(t => (
               <button key={t} onClick={() => setFiltroTipo(t)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroTipo === t ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
@@ -239,6 +297,91 @@ export default function Standby() {
               );
             })()}
           </div>
+        </>
+      ) : tab === 'ordenes' ? (
+        <>
+          {ordenesStandby.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
+              <Pause size={48} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-400 text-sm">Sin órdenes en stand-by</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {ordenesStandby.map(o => {
+                const desde = o.standbyDesde instanceof Date ? o.standbyDesde : null;
+                const hasta = o.standbyHasta instanceof Date ? o.standbyHasta : null;
+                const dias = desde ? differenceInDays(new Date(), desde) : 0;
+                const colorBorder = dias > 14 ? 'border-red-200' : dias >= 7 ? 'border-yellow-200' : 'border-gray-100';
+                return (
+                  <div
+                    key={o.id}
+                    className={`bg-white rounded-2xl shadow-sm border-2 p-5 cursor-pointer hover:shadow-md transition-shadow ${colorBorder}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(`/admin/ordenes/${o.id}`)}
+                    onKeyDown={(ev) => { if (ev.key === 'Enter') navigate(`/admin/ordenes/${o.id}`); }}
+                  >
+                    <div className="flex items-start justify-between mb-3 gap-2">
+                      <div className="min-w-0">
+                        <span className="font-mono text-xs font-bold text-[#0f3460]">{o.numero || '#--'}</span>
+                        <h3 className="font-semibold text-gray-900 truncate">{o.clienteNombre}</h3>
+                        <p className="text-sm text-gray-600 truncate">
+                          <Wrench size={11} className="inline mr-1" />
+                          {o.equipoTipo}{o.equipoMarca ? ` · ${o.equipoMarca}` : ''}
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 shrink-0">
+                        <Pause size={10} /> Stand-by
+                      </span>
+                    </div>
+                    {o.standbyMotivo && (
+                      <div className="bg-gray-50 rounded-lg p-3 mb-3">
+                        <p className="text-[10px] text-gray-500 uppercase">Motivo</p>
+                        <p className="text-sm font-medium text-gray-900">{o.standbyMotivo}</p>
+                        {o.standbyNotas && <p className="text-xs text-gray-500 italic mt-1">{o.standbyNotas}</p>}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-3 flex-wrap gap-2">
+                      {desde && (
+                        <span className="flex items-center gap-1">
+                          <Clock size={10} /> Desde {formatFechaCorta(desde)}
+                        </span>
+                      )}
+                      {desde && (
+                        <span className={`px-2 py-0.5 rounded-full border font-medium ${
+                          dias > 14 ? 'text-red-600 bg-red-50 border-red-200'
+                          : dias >= 7 ? 'text-yellow-600 bg-yellow-50 border-yellow-200'
+                          : 'text-green-600 bg-green-50 border-green-200'
+                        }`}>
+                          {dias} días
+                        </span>
+                      )}
+                    </div>
+                    {hasta && (
+                      <p className="text-xs text-gray-500 mb-3">
+                        Reactivación estimada: <span className="font-medium text-gray-700">{formatFechaCorta(hasta)}</span>
+                      </p>
+                    )}
+                    {o.standbyPor && (
+                      <p className="text-[11px] text-gray-400 mb-3">Puesto por: {o.standbyPor}</p>
+                    )}
+                    {o.tecnicoNombre && (
+                      <p className="text-xs text-gray-500 mb-3">Técnico: {o.tecnicoNombre}</p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(ev) => { ev.stopPropagation(); handleReactivarOrden(o); }}
+                      disabled={reactivandoId === o.id}
+                      className="w-full flex items-center justify-center gap-1.5 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-60"
+                    >
+                      <Play size={12} />
+                      {reactivandoId === o.id ? 'Reactivando...' : 'Reactivar orden'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       ) : (
       <>

@@ -81,23 +81,63 @@ export function calcularCostoPiezasDeItems(items: ItemCotizacion[] | undefined):
     }, 0);
 }
 
-/** Lee la cotización vinculada (si existe) o factura para sumar costo de piezas. */
+/**
+ * Lee la cotización vinculada (si existe) o factura para sumar costo de piezas.
+ *
+ * IMPORTANTE: una orden reactivada post-chequeo tendrá 2 facturas asociadas
+ * por `ordenId` — la del chequeo previo (CG, sin piezas) y la de la reparación
+ * (con piezas). Usar `docs[0]` no es determinístico y puede devolver la del
+ * chequeo, reportando `costoPiezas=0` y inflando la comisión.
+ *
+ * Estrategia (de más explícita a más laxa):
+ *  1. Si `orden.facturaId` está seteado, leer ese doc directamente. Es la
+ *     factura activa: el reactivar limpia este campo y `FacturacionPendiente`
+ *     lo repunta al emitir la nueva factura.
+ *  2. Fallback: query por `ordenId` + filtrado client-side excluyendo
+ *     facturas con `tipoCierre === 'solo_chequeo'` (denormalizado en
+ *     creación). Si hay varias, prefiere la de mayor `createdAt`.
+ *  3. Si todo lo anterior falla, usar la cotización vinculada.
+ */
 async function obtenerCostoPiezasDeOrden(orden: OrdenServicio): Promise<number> {
-  // Preferir factura vinculada (representa lo realmente cobrado)
+  // 1) Vía determinística: orden.facturaId apunta a la factura activa.
+  if (orden.facturaId) {
+    try {
+      const facSnap = await getDoc(doc(db, 'facturas', orden.facturaId));
+      if (facSnap.exists()) {
+        const items = facSnap.data().items as ItemCotizacion[] | undefined;
+        return calcularCostoPiezasDeItems(items);
+      }
+    } catch (err) {
+      console.warn('No se pudo leer factura por orden.facturaId:', err);
+    }
+  }
+  // 2) Fallback: query por ordenId con filtrado client-side
   try {
     const facturaQ = await getDocs(query(
       collection(db, 'facturas'),
       where('ordenId', '==', orden.id),
     ));
     if (!facturaQ.empty) {
-      const items = facturaQ.docs[0].data().items as ItemCotizacion[] | undefined;
+      // Excluir facturas del chequeo previo (denormalizado en factura)
+      const facturasReparacion = facturaQ.docs.filter(d => {
+        const data = d.data();
+        return data.tipoCierre !== 'solo_chequeo';
+      });
+      // Si tras filtrar quedan candidatas, tomar la más reciente
+      const candidatas = facturasReparacion.length > 0 ? facturasReparacion : facturaQ.docs;
+      const ordenadas = [...candidatas].sort((a, b) => {
+        const ta = (a.data().createdAt as { toMillis?: () => number } | undefined)?.toMillis?.() || 0;
+        const tb = (b.data().createdAt as { toMillis?: () => number } | undefined)?.toMillis?.() || 0;
+        return tb - ta;
+      });
+      const items = ordenadas[0].data().items as ItemCotizacion[] | undefined;
       const costo = calcularCostoPiezasDeItems(items);
       if (costo > 0) return costo;
     }
   } catch (err) {
     console.warn('No se pudo leer factura vinculada para costo de piezas:', err);
   }
-  // Fallback a cotización vinculada
+  // 3) Fallback a cotización vinculada
   if (orden.cotizacionId) {
     try {
       const cotSnap = await getDoc(doc(db, 'cotizaciones', orden.cotizacionId));
@@ -236,6 +276,10 @@ export async function registrarComisionPorFactura(args: {
       porcentaje: 0, tecnicoId: '', tecnicoNombre: '',
     };
   }
+  // El chequeo (RD$2,000) NUNCA genera comisión, ni siquiera si el cliente
+  // luego regresa para reparar. Si el cliente regresa, esa nueva orden se
+  // reactiva con `reactivadaPostChequeo=true` y la comisión se paga sobre el
+  // monto de la reparación, no incluye los 2,000 del chequeo previo.
   if (orden.soloChequeo) {
     return {
       comisionId: null, comisionMonto: 0, gananciaNeta: 0, subtotal: 0, itbis: 0, costoPiezas: 0,
@@ -341,8 +385,12 @@ export async function registrarComisionPorOrden(
     if (orden.fase !== 'cerrado' && orden.fase !== 'trabajo_realizado') {
       return { creada: false, razon: 'orden no está cerrada' };
     }
+    // El chequeo (RD$2,000) NUNCA genera comisión, ni siquiera si el cliente
+    // luego regresa para reparar. Si el cliente regresa, esa nueva orden se
+    // reactiva con `reactivadaPostChequeo=true` y la comisión se paga sobre el
+    // monto de la reparación (no incluye los 2,000 del chequeo previo).
     if (orden.soloChequeo) {
-      return { creada: false, razon: 'orden de solo chequeo (sin comisión)' };
+      return { creada: false, razon: 'solo_chequeo_sin_comision' };
     }
     if (!orden.precioFinal || orden.precioFinal <= 0) {
       return { creada: false, razon: 'sin precio final' };

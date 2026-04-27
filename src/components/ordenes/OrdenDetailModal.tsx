@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, MapPin, Edit2, AlertTriangle, XCircle, Package } from 'lucide-react';
+import { Phone, MapPin, Edit2, AlertTriangle, XCircle, Package, RotateCcw } from 'lucide-react';
 import { OrdenServicio, Usuario, StandbyPieza } from '../../types';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import {
@@ -16,6 +16,8 @@ import ReagendarModal from './ReagendarModal';
 import RegistrarPagoModal from './RegistrarPagoModal';
 import EnviarFacturacionButton from './EnviarFacturacionButton';
 import { Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
+import { reactivarOrdenPostChequeo } from '../../services/ordenes.service';
+import toast from 'react-hot-toast';
 
 interface OrdenDetailModalProps {
   orden: OrdenServicio;
@@ -46,9 +48,58 @@ export default function OrdenDetailModal({
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showReagendarModal, setShowReagendarModal] = useState(false);
   const [showPagoModal, setShowPagoModal] = useState(false);
+  const [reactivandoChequeo, setReactivandoChequeo] = useState(false);
   const conStandby = tieneStandby(orden, standbyItems);
   const tienePiezaPendiente = standbyItems.some(s => s.ordenId === orden.id && s.estado !== 'llego');
   const mostrarBannerReagendar = orden.fase === 'aprobado' && tienePiezaPendiente && !orden.eliminada;
+
+  // Botón "Reactivar para reparación": solo cuando la orden cerró como solo
+  // chequeo, no fue ya reactivada y el usuario tiene rol de oficina con
+  // permiso para modificar órdenes.
+  const rolOficina = userProfile?.rol === 'administrador' ||
+    userProfile?.rol === 'coordinadora' ||
+    userProfile?.rol === 'secretaria';
+  const puedeReactivarChequeo =
+    puedeModificar &&
+    rolOficina &&
+    orden.soloChequeo === true &&
+    orden.fase === 'cerrado' &&
+    orden.reactivadaPostChequeo !== true &&
+    !orden.eliminada;
+
+  const handleReactivarChequeo = async () => {
+    if (!userProfile) return;
+    const monto = orden.precioChequeo ?? 2000;
+    const formato = monto.toLocaleString('es-DO');
+    if (!confirm(
+      `¿El cliente regresó para hacer la reparación? Se reabrirá la orden. ` +
+      `El chequeo previo de RD$${formato} ya cobrado queda registrado como ` +
+      `histórico — no se cobrará de nuevo.`,
+    )) return;
+    setReactivandoChequeo(true);
+    try {
+      const result = await reactivarOrdenPostChequeo(orden.id, {
+        id: userProfile.id,
+        nombre: userProfile.nombre,
+      });
+      if (result.ok) {
+        toast.success('Orden reactivada para reparación');
+      } else if (result.razon === 'ya_reactivada') {
+        toast.error('Esta orden ya fue reactivada antes');
+      } else if (result.razon === 'no_es_solo_chequeo') {
+        toast.error('La orden no fue cerrada como solo chequeo');
+      } else if (result.razon === 'orden_no_existe') {
+        toast.error('La orden ya no existe');
+      } else {
+        toast.error('No se pudo reactivar la orden');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al reactivar la orden');
+    } finally {
+      setReactivandoChequeo(false);
+    }
+  };
   return (
     <div className="space-y-6">
       {/* Banner si está eliminada */}
@@ -170,8 +221,20 @@ export default function OrdenDetailModal({
         </div>
       )}
 
-      {/* Editar / Eliminar */}
-      <div className="flex justify-end gap-2 mb-4">
+      {/* Editar / Eliminar / Reactivar post-chequeo */}
+      <div className="flex justify-end gap-2 mb-4 flex-wrap">
+        {puedeReactivarChequeo && (
+          <button
+            type="button"
+            onClick={handleReactivarChequeo}
+            disabled={reactivandoChequeo}
+            className="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-2 rounded-lg text-sm font-medium disabled:opacity-60"
+            title="El cliente regresó para hacer la reparación"
+          >
+            <RotateCcw size={14} />
+            {reactivandoChequeo ? 'Reactivando...' : 'Reactivar para reparación'}
+          </button>
+        )}
         {puedeModificar && !orden.eliminada && (
           <button
             onClick={onEdit}
@@ -183,6 +246,52 @@ export default function OrdenDetailModal({
         )}
         <EliminarOrdenButton orden={orden} variant="button" onDeleted={onEliminar} />
       </div>
+
+      {/* Badge "Reparación post-chequeo" + histórico del chequeo previo */}
+      {orden.reactivadaPostChequeo && (
+        <div className="space-y-2">
+          <span
+            className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium"
+            title={orden.cierreChequeoHistorico?.monto
+              ? `Chequeo previo de RD$${orden.cierreChequeoHistorico.monto.toLocaleString('es-DO')} ya cobrado`
+              : 'Chequeo previo ya cobrado'}
+          >
+            <RotateCcw size={10} /> Reparación post-chequeo
+          </span>
+          {orden.cierreChequeoHistorico && (
+            <details className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <summary className="cursor-pointer text-sm font-medium text-blue-700">
+                Histórico del chequeo previo
+              </summary>
+              <div className="mt-2 text-xs text-gray-700 space-y-1">
+                <div>
+                  <strong>Fecha:</strong>{' '}
+                  {formatFecha(
+                    orden.cierreChequeoHistorico.fechaCierre instanceof Date
+                      ? orden.cierreChequeoHistorico.fechaCierre
+                      : orden.cierreChequeoHistorico.fechaCierre &&
+                        typeof (orden.cierreChequeoHistorico.fechaCierre as { toDate?: () => Date }).toDate === 'function'
+                          ? (orden.cierreChequeoHistorico.fechaCierre as { toDate: () => Date }).toDate()
+                          : undefined,
+                  )}
+                </div>
+                <div>
+                  <strong>Monto:</strong> RD${Number(orden.cierreChequeoHistorico.monto).toLocaleString('es-DO')}
+                </div>
+                {orden.cierreChequeoHistorico.tecnicoNombre && (
+                  <div><strong>Técnico:</strong> {orden.cierreChequeoHistorico.tecnicoNombre}</div>
+                )}
+                {orden.cierreChequeoHistorico.conduceCG && (
+                  <div><strong>Conduce:</strong> {orden.cierreChequeoHistorico.conduceCG}</div>
+                )}
+                {orden.cierreChequeoHistorico.motivoChequeo && (
+                  <div><strong>Motivo del chequeo:</strong> {orden.cierreChequeoHistorico.motivoChequeo}</div>
+                )}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
 
       {/* Stepper de fases */}
       <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 space-y-3">

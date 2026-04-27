@@ -253,6 +253,11 @@ export default function CierreServicioWizard({
       const ordenUpdate: Record<string, unknown> = {
         fase: 'trabajo_realizado',
         estadoSimple: 'completado',
+        // El cierre vía wizard es siempre reparación completa. Defensivo:
+        // si la orden venía de un reactivar (donde ya se setea), reescribir
+        // 'reparacion_completa' es idempotente y previene quedar 'solo_chequeo'
+        // por error.
+        tipoCierre: 'reparacion_completa',
         cierreServicio: cierrePayload,
         historialFases: nuevoHistorial,
         auditoria: arrayUnion(registroAuditoria),

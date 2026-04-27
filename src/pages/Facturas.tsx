@@ -206,6 +206,8 @@ export default function Facturas() {
         fechaEmision: Timestamp.now(),
         notas: form.notas.trim() || null,
         createdAt: Timestamp.now(),
+        // Conduces manuales se asumen como reparación completa (no chequeo).
+        tipoCierre: 'reparacion_completa',
       };
       if (form.metodoPago) docData.metodoPago = form.metodoPago;
       if (form.metodoPago === 'transferencia' && form.bancoDestino.trim()) {

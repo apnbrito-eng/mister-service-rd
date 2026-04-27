@@ -57,6 +57,9 @@ export default function Cotizaciones() {
         fechaEmision: Timestamp.now(),
         cotizacionId: cot.id,
         createdAt: Timestamp.now(),
+        // Convertir cotización → factura siempre representa reparación completa.
+        // El chequeo previo (RD$2,000) se factura por otra vía (sin cotización).
+        tipoCierre: 'reparacion_completa',
       };
       if (cot.clienteId) facturaData.clienteId = cot.clienteId;
       if (cot.ordenId) facturaData.ordenId = cot.ordenId;

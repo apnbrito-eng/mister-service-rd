@@ -2,7 +2,7 @@ import { FaseOrden } from '../types';
 import { faseLabel, faseColor } from '../utils';
 
 interface BadgeProps {
-  fase?: FaseOrden;
+  fase?: FaseOrden | 'reactivada_post_chequeo';
   label?: string;
   color?: string;
 }

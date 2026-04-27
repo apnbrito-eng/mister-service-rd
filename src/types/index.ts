@@ -95,7 +95,12 @@ export const ZONAS_RD = [
 export type ZonaRD = typeof ZONAS_RD[number];
 
 export interface HistorialFase {
-  fase: FaseOrden;
+  /**
+   * Normalmente una FaseOrden, pero también admite eventos sintéticos como
+   * 'reactivada_post_chequeo' que documentan transiciones especiales del
+   * ciclo de la orden que no son fases formales.
+   */
+  fase: FaseOrden | 'reactivada_post_chequeo';
   timestamp: Date;
   usuario: string;
   nota?: string;
@@ -115,6 +120,7 @@ export type AccionAuditoria =
   | 'editar_orden_datos_cliente'
   | 'poner_standby'
   | 'reactivar_orden'
+  | 'reactivar_orden_post_chequeo'
   // Garantía (Sistema de Garantía — Commit 1)
   | 'emitir_garantia'
   | 'reclamo_garantia_cliente'
@@ -209,6 +215,32 @@ export interface OrdenServicio {
   soloChequeo?: boolean;
   precioChequeo?: number;
   motivoChequeo?: string;
+  /**
+   * Distingue cómo se cerró la orden:
+   *  - 'solo_chequeo': se cobraron solo los RD$2,000 del chequeo, no se reparó.
+   *  - 'reparacion_completa': se hizo la reparación (con o sin chequeo previo).
+   * Si la orden venía de un chequeo previo (ver `reactivadaPostChequeo`),
+   * el chequeo NO se incluye en este flujo — queda como histórico aparte.
+   */
+  tipoCierre?: 'solo_chequeo' | 'reparacion_completa';
+  /** True cuando la orden fue reactivada para reparación tras un chequeo previo */
+  reactivadaPostChequeo?: boolean;
+  reactivadaPostChequeoEn?: Date | Timestamp;
+  reactivadaPostChequeoPor?: string;
+  /**
+   * Snapshot del cierre del chequeo previo, conservado para trazabilidad
+   * cuando la orden se reactiva para reparación. El conduce CG y la comisión
+   * (RD$0) del chequeo NO se modifican — siguen vigentes en `facturas` y
+   * `comisiones`. Esto es solo el histórico denormalizado.
+   */
+  cierreChequeoHistorico?: {
+    monto: number;
+    fechaCierre: Date | Timestamp;
+    conduceCG?: string;
+    tecnicoId?: string;
+    tecnicoNombre?: string;
+    motivoChequeo?: string;
+  };
   // Soft delete (Fase 3B)
   eliminada?: boolean;
   motivoEliminacion?: string;
@@ -587,6 +619,14 @@ export interface Factura {
   tecnicoId?: string;
   tecnicoNombre?: string;
   fechaServicio?: Timestamp | Date;
+  /**
+   * Distingue cómo se cerró la orden subyacente (denormalizado para que
+   * el cálculo de comisión pueda excluir la factura del chequeo previo
+   * sin re-leer la orden).
+   *  - 'solo_chequeo': cobro de RD$2,000 sin reparación.
+   *  - 'reparacion_completa': reparación normal.
+   */
+  tipoCierre?: 'solo_chequeo' | 'reparacion_completa';
   /** Información de garantía cuando se emite el conduce */
   garantia?: GarantiaInfo;
   createdAt: Date;

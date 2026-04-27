@@ -19,7 +19,7 @@ import toast from 'react-hot-toast';
 import {
   ClipboardList, Calendar, CheckCircle, Clock, DollarSign,
   ChevronDown, ChevronUp, User, Wrench, UserCheck,
-  ClipboardCheck, DollarSign as DollarIcon,
+  ClipboardCheck, DollarSign as DollarIcon, RotateCcw,
 } from 'lucide-react';
 
 export default function AgendaDia() {
@@ -129,9 +129,41 @@ export default function AgendaDia() {
         'false',
         'true'
       );
+      // Registrar el pago del chequeo (si hay método de pago) y enviar a
+      // facturación para que admin/coord pueda emitir el conduce CG-#####.
+      const pagoExistente = Array.isArray(ordenChequeo.pagos) ? ordenChequeo.pagos : [];
+      const nuevoPago = chequeoForm.metodoPago ? {
+        id: `pago_chequeo_${Date.now()}`,
+        metodo: chequeoForm.metodoPago,
+        monto: precio,
+        fecha: ahora,
+        registradoPorId: userProfile?.id || '',
+        registradoPorNombre: usuario,
+      } : null;
+      const pagosTotal = [
+        ...pagoExistente.map(p => ({
+          id: p.id,
+          metodo: p.metodo,
+          monto: p.monto,
+          fecha: p.fecha instanceof Date ? Timestamp.fromDate(p.fecha) : p.fecha,
+          ...(p.recibidoPorId ? { recibidoPorId: p.recibidoPorId } : {}),
+          ...(p.recibidoPorNombre ? { recibidoPorNombre: p.recibidoPorNombre } : {}),
+          ...(p.bancoId ? { bancoId: p.bancoId } : {}),
+          ...(p.bancoNombre ? { bancoNombre: p.bancoNombre } : {}),
+          ...(p.referencia ? { referencia: p.referencia } : {}),
+          ...(p.notas ? { notas: p.notas } : {}),
+          registradoPorId: p.registradoPorId,
+          registradoPorNombre: p.registradoPorNombre,
+        })),
+        ...(nuevoPago ? [nuevoPago] : []),
+      ];
+      const montoPagadoTotal = pagosTotal.reduce((sum, p) => sum + Number(p.monto || 0), 0);
+
       const updateData: Record<string, unknown> = {
         soloChequeo: true,
+        tipoCierre: 'solo_chequeo',
         precioChequeo: precio,
+        precioFinal: precio,
         motivoChequeo: chequeoForm.motivo.trim(),
         fase: 'cerrado',
         estadoSimple: 'completado',
@@ -141,7 +173,23 @@ export default function AgendaDia() {
         updatedAt: ahora,
       };
       if (chequeoForm.metodoPago) updateData.metodoPagoCierre = chequeoForm.metodoPago;
+      if (nuevoPago) {
+        updateData.pagos = pagosTotal;
+        updateData.montoPagado = montoPagadoTotal;
+        updateData.estadoPago = montoPagadoTotal >= precio ? 'completo' : 'parcial';
+        // Marcar como enviada a facturación para que admin/coord emita CG-#####
+        updateData.enviadaAFacturacion = true;
+        updateData.enviadaAFacturacionAt = ahora;
+        if (userProfile?.id) updateData.enviadaAFacturacionPorId = userProfile.id;
+        updateData.enviadaAFacturacionPorNombre = usuario;
+      }
       await updateDoc(doc(db, 'ordenes_servicio', ordenChequeo.id), updateData);
+
+      // El chequeo NO genera comisión para el técnico (regla de negocio).
+      // Si el cliente regresa para reparar, se reactiva la orden vía
+      // `reactivarOrdenPostChequeo` y la comisión se paga sobre el monto de
+      // la reparación, no incluye los RD$2,000 del chequeo previo.
+
       toast.success('Orden cerrada como solo chequeo');
       cerrarChequeoModal();
     } catch (err) {
@@ -642,6 +690,16 @@ function TecnicoColumn({
                   {o.soloChequeo && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-medium">
                       🔍 Chequeo
+                    </span>
+                  )}
+                  {o.reactivadaPostChequeo && (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 text-[10px] font-medium"
+                      title={o.cierreChequeoHistorico?.monto
+                        ? `Chequeo previo de RD$${o.cierreChequeoHistorico.monto.toLocaleString('es-DO')} ya cobrado`
+                        : 'Chequeo previo ya cobrado'}
+                    >
+                      <RotateCcw size={10} /> Reparación post-chequeo
                     </span>
                   )}
                   {o.cierreServicio?.piezasUsadas &&

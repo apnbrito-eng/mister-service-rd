@@ -516,6 +516,13 @@ function ProcesarFacturacionModal({ orden, userProfile, currentUserUid, onClose 
       if (metodoPagoPrincipal) facturaPayload.metodoPago = metodoPagoPrincipal;
       if (bancoPrincipal) facturaPayload.bancoDestino = bancoPrincipal;
       if (orden.cotizacionId) facturaPayload.cotizacionId = orden.cotizacionId;
+      // Denormalizar tipoCierre desde la orden — necesario para que
+      // `obtenerCostoPiezasDeOrden` distinga la factura del chequeo previo
+      // (CG, sin piezas) de la factura de la reparación (con piezas) en
+      // órdenes reactivadas post-chequeo.
+      if (orden.tipoCierre) facturaPayload.tipoCierre = orden.tipoCierre;
+      else if (orden.soloChequeo) facturaPayload.tipoCierre = 'solo_chequeo';
+      else facturaPayload.tipoCierre = 'reparacion_completa';
       if (totalPagado >= totalItems) facturaPayload.fechaPago = ahora;
       // Denormalización para el endpoint público de garantía
       if (orden.clienteTelefono) facturaPayload.clienteTelefono = orden.clienteTelefono;
@@ -885,6 +892,18 @@ function StepDot({ active, done, num, label }: { active: boolean; done: boolean;
 }
 
 function defaultItem(orden: OrdenServicio): ItemEditable {
+  // Solo Chequeo: el item es el chequeo del equipo, no el servicio completo.
+  if (orden.soloChequeo) {
+    const precioCheq = Number(orden.precioChequeo || orden.precioFinal || 0);
+    const descCheq = `Chequeo de ${orden.equipoTipo || 'equipo'}${orden.equipoMarca ? ` ${orden.equipoMarca}` : ''} (sin reparación)`;
+    return {
+      descripcion: descCheq.substring(0, 200),
+      cantidad: 1,
+      precio: precioCheq,
+      tipoItem: 'servicio',
+      _key: `it_default_chequeo_${Date.now()}`,
+    };
+  }
   const precio = Number(orden.precioFinal || orden.precioAprobado || orden.precioSugerido || 0);
   const desc = `${orden.equipoTipo}${orden.equipoMarca ? ` ${orden.equipoMarca}` : ''} — ${orden.descripcionFalla || 'Servicio'}`;
   return {

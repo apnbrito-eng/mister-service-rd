@@ -82,14 +82,21 @@ export default function FaseStepper({
       nota ? `Cambió fase a "${faseLabel(nuevaFase)}" — ${nota}` : `Cambió fase a "${faseLabel(nuevaFase)}"`,
       'fase', faseLabel(orden.fase), faseLabel(nuevaFase)
     );
-    await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+    const updatePayload: Record<string, unknown> = {
       fase: nuevaFase,
       estadoSimple: mapearEstadoSimple(nuevaFase),
       estado: nuevaFase === 'cerrado' ? 'cerrado' : 'activo',
       historialFases: nuevoHistorial,
       auditoria: arrayUnion(registro),
       updatedAt: ahora,
-    });
+    };
+    // Si la orden NO está marcada como solo_chequeo y se está cerrando, marcar
+    // explícitamente como reparacion_completa para distinguir cierre normal
+    // del chequeo previo (relevante en órdenes reactivadas post-chequeo).
+    if (nuevaFase === 'cerrado' && !orden.soloChequeo) {
+      updatePayload.tipoCierre = 'reparacion_completa';
+    }
+    await updateDoc(doc(db, 'ordenes_servicio', orden.id), updatePayload);
 
     if (nuevaFase === 'cerrado') {
       try {

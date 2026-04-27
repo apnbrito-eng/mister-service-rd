@@ -105,14 +105,21 @@ export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Prop
         : `Cambió fase a "${faseLabel(faseDestino)}" (tablero)`,
       'fase', faseLabel(orden.fase), faseLabel(faseDestino),
     );
-    await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+    const updatePayload: Record<string, unknown> = {
       fase: faseDestino,
       estadoSimple: mapearEstadoSimple(faseDestino),
       estado: faseDestino === 'cerrado' ? 'cerrado' : 'activo',
       historialFases: nuevoHistorial,
       auditoria: arrayUnion(registro),
       updatedAt: ahora,
-    });
+    };
+    // Si la orden NO está marcada como solo_chequeo y se está cerrando, marcar
+    // explícitamente como reparacion_completa para que `obtenerCostoPiezasDeOrden`
+    // pueda distinguir la factura del chequeo previo (en órdenes reactivadas).
+    if (faseDestino === 'cerrado' && !orden.soloChequeo) {
+      updatePayload.tipoCierre = 'reparacion_completa';
+    }
+    await updateDoc(doc(db, 'ordenes_servicio', orden.id), updatePayload);
 
     if (faseDestino === 'aprobado' && orden.tecnicoId) {
       try {
