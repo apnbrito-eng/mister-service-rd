@@ -63,35 +63,6 @@ mindmap
       Banner versión
 ```
 
-### 1.1 Flujo end-to-end del negocio
-
-```mermaid
-flowchart TD
-    A[Cliente llega] --> B{Por dónde?}
-    B --> C[Web /agendar]
-    B --> D[WhatsApp manual]
-    B --> E[Llamada]
-    C & D & E --> F[Cita en citas_por_confirmar]
-    F --> G[Coord/secretaria confirma]
-    G --> H[Crea OS-####]
-    H --> I[Asigna técnico]
-    I --> J[Técnico va al domicilio]
-    J --> K[Iniciar chequeo<br/>foto + GPS obligatorio]
-    K --> L[Diagnostica]
-    L --> M[Sugiere precio]
-    M --> N{Oficina aprueba?}
-    N -->|No| P[Negociar o cancelar]
-    N -->|Sí| R{Cliente decide<br/>reparar?}
-    R -->|Sí| O[Trabajo realizado<br/>+ foto cierre + GPS]
-    R -->|No| T[Cierre Solo Chequeo<br/>RD$2,000 sin comisión]
-    O --> S[Cierre normal<br/>+ comisión]
-    T -.cliente regresa después.-> U[Reactivar para reparación]
-    U --> M
-    S --> V[Operaria registra pago]
-    V --> W[Genera Conduce CG]
-    W --> X[Garantía vigente activa]
-```
-
 ---
 
 ## 2. Flujos detallados por módulo
@@ -398,6 +369,37 @@ mindmap
 | **Stand-by** | Orden pausada (esperando pieza, cliente no disponible) |
 | **App Check** | Firebase feature que bloquea requests sin token reCAPTCHA |
 | **parseOrden / parseFactura / parseCita** | Helpers que rehidratan docs de Firestore con tipos correctos |
+
+---
+
+## 9. Flujo end-to-end del negocio
+
+```mermaid
+flowchart TD
+    A[Cliente llega] --> B{Por dónde?}
+    B --> C[Web /agendar]
+    B --> D[WhatsApp manual]
+    B --> E[Llamada]
+    C & D & E --> F[Cita en citas_por_confirmar]
+    F --> G[Coord/secretaria confirma]
+    G --> H[Crea OS-####]
+    H --> I[Asigna técnico]
+    I --> J[Técnico va al domicilio]
+    J --> K[Iniciar chequeo<br/>foto + GPS obligatorio]
+    K --> L[Diagnostica]
+    L --> M[Sugiere precio]
+    M --> N{Oficina aprueba?}
+    N -->|No| P[Negociar o cancelar]
+    N -->|Sí| R{Cliente decide<br/>reparar?}
+    R -->|Sí| O[Trabajo realizado<br/>+ foto cierre + GPS]
+    R -->|No| T[Cierre Solo Chequeo<br/>RD$2,000 sin comisión]
+    O --> S[Cierre normal<br/>+ comisión]
+    T -.cliente regresa después.-> U[Reactivar para reparación]
+    U --> M
+    S --> V[Operaria registra pago]
+    V --> W[Genera Conduce CG]
+    W --> X[Garantía vigente activa]
+```
 
 ---
 
