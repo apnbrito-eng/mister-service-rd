@@ -6,7 +6,9 @@ import { OrdenServicio, Personal, MetodoPago, FaseOrden, Usuario } from '../type
 import {
   faseLabel, faseBgColor, formatMoneda, formatHora, parseOrden,
   getTecnicoColor, estadoSimpleLabel, crearRegistroAuditoria,
+  formatearEquipoLabel,
 } from '../utils';
+import FotoEquipoDisplay from '../components/shared/FotoEquipoDisplay';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { useApp } from '../context/AppContext';
@@ -717,16 +719,25 @@ function TecnicoColumn({
                   {faseLabel(o.fase)}
                 </span>
               </div>
-              <p className="text-xs font-semibold text-gray-900 truncate">{o.clienteNombre}</p>
-              <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500 flex-wrap">
-                {o.fechaCita && (
-                  <span className="inline-flex items-center gap-0.5">
-                    <Clock size={10} /> {formatHora(o.fechaCita)}
-                  </span>
+              <div className="flex items-start gap-2">
+                {o.fotoEquipoUrl && (
+                  <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                    <FotoEquipoDisplay url={o.fotoEquipoUrl} size="sm" />
+                  </div>
                 )}
-                <span className="inline-flex items-center gap-0.5 truncate">
-                  <Wrench size={10} /> {o.equipoTipo}{o.equipoMarca ? ` · ${o.equipoMarca}` : ''}
-                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-gray-900 truncate">{o.clienteNombre}</p>
+                  <div className="flex items-center gap-2 mt-1 text-[11px] text-gray-500 flex-wrap">
+                    {o.fechaCita && (
+                      <span className="inline-flex items-center gap-0.5">
+                        <Clock size={10} /> {formatHora(o.fechaCita)}
+                      </span>
+                    )}
+                    <span className="inline-flex items-center gap-0.5 truncate">
+                      <Wrench size={10} /> {formatearEquipoLabel(o)}
+                    </span>
+                  </div>
+                </div>
               </div>
               {o.fase === 'cerrado' && (o.precioFinal || o.precioAprobado) && (
                 <p className="text-[11px] text-emerald-700 font-semibold mt-1">

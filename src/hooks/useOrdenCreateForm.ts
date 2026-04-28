@@ -31,6 +31,8 @@ export interface CreateFormState {
   equipoTipo: string;
   equipoMarca: string;
   equipoModelo: string;
+  /** Solo se llena cuando `equipoTipo === 'Lavadora'`. */
+  equipoTipoMotor: '' | 'torre' | 'individual';
   descripcionFalla: string;
   tecnicoId: string;
   tecnicoNombre: string;
@@ -51,6 +53,7 @@ const FORM_INICIAL: CreateFormState = {
   equipoTipo: '',
   equipoMarca: '',
   equipoModelo: '',
+  equipoTipoMotor: '',
   descripcionFalla: '',
   tecnicoId: '',
   tecnicoNombre: '',
@@ -192,6 +195,9 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       equipoTipo: citaPreset.equipoTipo || '',
       equipoMarca: citaPreset.equipoMarca || '',
       equipoModelo: citaPreset.equipoModelo || '',
+      equipoTipoMotor: citaPreset.equipoTipoMotor === 'torre' || citaPreset.equipoTipoMotor === 'individual'
+        ? citaPreset.equipoTipoMotor
+        : '',
       descripcionFalla: citaPreset.descripcionProblema || citaPreset.falla || citaPreset.servicio || '',
       tecnicoId: '',
       tecnicoNombre: '',
@@ -616,6 +622,16 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       if (form.clienteLng !== undefined) ordenData.clienteLng = form.clienteLng;
       if (operariaIdDerivada) ordenData.operariaId = operariaIdDerivada;
       if (operariaNombreDerivada) ordenData.operariaNombre = operariaNombreDerivada;
+
+      // Configuración Torre/Individual: solo se persiste si el equipo es
+      // Lavadora y el usuario eligió un valor válido. Para otros tipos de
+      // equipo se omite (no se guarda como '' para no contaminar el doc).
+      if (
+        form.equipoTipo === 'Lavadora' &&
+        (form.equipoTipoMotor === 'torre' || form.equipoTipoMotor === 'individual')
+      ) {
+        ordenData.equipoTipoMotor = form.equipoTipoMotor;
+      }
 
       // Campos de garantía heredados de la cita (si aplica)
       if (citaPreset?.esGarantia) {

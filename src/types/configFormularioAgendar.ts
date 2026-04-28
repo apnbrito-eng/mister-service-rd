@@ -44,9 +44,15 @@ export interface ConfigFormularioAgendar {
   mensajeDeshabilitado?: string;
   /** Si true, mostrar input "Sector" (no requerido). Default: true. */
   mostrarCampoSector?: boolean;
-  /** Si true, mostrar select "¿Cómo nos conociste?". Default: true. */
+  /**
+   * @deprecated El campo "¿Cómo nos conociste?" se quitó del form público
+   * (sprint Torre/Foto/Cleanup). Se mantiene en el shape para no romper
+   * docs antiguos en Firestore.
+   */
   mostrarCampoComoNosConocio?: boolean;
-  /** Opciones para el select de "¿Cómo nos conociste?". */
+  /**
+   * @deprecated Ver `mostrarCampoComoNosConocio`. Mantener para compat.
+   */
   opcionesComoNosConocio?: string[];
   /** Lista ordenada de campos extra. Render en el mismo orden del array. */
   camposPersonalizados?: CampoPersonalizado[];
@@ -56,9 +62,20 @@ export interface ConfigFormularioAgendar {
   bloquesHora?: string[];
 }
 
-/** Defaults razonables si la config no existe en Firestore. */
+/**
+ * Defaults razonables si la config no existe en Firestore.
+ *
+ * Nota: los campos deprecated (`mostrarCampoComoNosConocio`, `opcionesComoNosConocio`)
+ * se omiten del default para no inducir su rehidratación en docs nuevos.
+ * Siguen aceptándose en lecturas (compat) pero no se renderizan en UI.
+ */
 export const CONFIG_FORMULARIO_AGENDAR_DEFAULTS: Required<
-  Omit<ConfigFormularioAgendar, 'camposPersonalizados'>
+  Omit<
+    ConfigFormularioAgendar,
+    | 'camposPersonalizados'
+    | 'mostrarCampoComoNosConocio'
+    | 'opcionesComoNosConocio'
+  >
 > & { camposPersonalizados: CampoPersonalizado[] } = {
   habilitado: true,
   tituloHero: 'Agenda tu cita',
@@ -69,14 +86,6 @@ export const CONFIG_FORMULARIO_AGENDAR_DEFAULTS: Required<
   mensajeDeshabilitado:
     'Agendamiento en línea temporalmente cerrado. Por favor contáctanos por WhatsApp.',
   mostrarCampoSector: true,
-  mostrarCampoComoNosConocio: true,
-  opcionesComoNosConocio: [
-    'Google',
-    'Facebook',
-    'Instagram',
-    'Recomendación',
-    'Otro',
-  ],
   camposPersonalizados: [],
   bloquesHora: ['9:00 AM', '11:00 AM', '1:00 PM', '3:00 PM', '5:00 PM'],
 };

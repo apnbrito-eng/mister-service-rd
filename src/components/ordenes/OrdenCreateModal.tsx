@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, User, Wrench, Calendar, AlertTriangle, CheckCircle, Loader2, Edit2, Home, ChevronDown, Shield } from 'lucide-react';
 import { Cliente, Personal, OrdenServicio, DireccionCliente, CitaPorConfirmar } from '../../types';
 import {
@@ -8,6 +8,7 @@ import {
 import Modal from '../Modal';
 import EditarClienteModal from '../clientes/EditarClienteModal';
 import CampoDireccionConPlaces from '../shared/CampoDireccionConPlaces';
+import FotoEquipoDisplay from '../shared/FotoEquipoDisplay';
 
 export interface CreateFormState {
   clienteId: string;
@@ -21,6 +22,8 @@ export interface CreateFormState {
   equipoTipo: string;
   equipoMarca: string;
   equipoModelo: string;
+  /** Solo se llena cuando `equipoTipo === 'Lavadora'`. */
+  equipoTipoMotor: '' | 'torre' | 'individual';
   descripcionFalla: string;
   tecnicoId: string;
   tecnicoNombre: string;
@@ -148,6 +151,19 @@ export default function OrdenCreateModal({
     (citaPreset.comoNosConocio ||
       (citaPreset.camposPersonalizados && Object.keys(citaPreset.camposPersonalizados).length > 0))
   );
+
+  // Reactivo: si la coord cambia el tipo de equipo (de Lavadora a otra cosa
+  // o viceversa), limpiamos el campo dependiente para evitar persistir
+  // datos inconsistentes (ej: Torre + tipo Nevera).
+  useEffect(() => {
+    if (form.equipoTipo !== 'Lavadora' && form.equipoTipoMotor) {
+      setForm(f => ({ ...f, equipoTipoMotor: '' }));
+    }
+    if (form.equipoTipo === 'Lavadora' && form.equipoModelo) {
+      setForm(f => ({ ...f, equipoModelo: '' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.equipoTipo]);
 
   return (
     <Modal
@@ -576,14 +592,36 @@ export default function OrdenCreateModal({
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Modelo</label>
-                <input
-                  type="text"
-                  value={form.equipoModelo}
-                  onChange={e => setForm(f => ({ ...f, equipoModelo: e.target.value }))}
-                  placeholder="Modelo del equipo"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                />
+                {form.equipoTipo === 'Lavadora' ? (
+                  <>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Configuración</label>
+                    <select
+                      value={form.equipoTipoMotor}
+                      onChange={e =>
+                        setForm(f => ({
+                          ...f,
+                          equipoTipoMotor: e.target.value as '' | 'torre' | 'individual',
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
+                    >
+                      <option value="">Selecciona configuración (opcional)</option>
+                      <option value="torre">Torre (lavadora-secadora vertical)</option>
+                      <option value="individual">Individual (solo lavadora)</option>
+                    </select>
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Modelo</label>
+                    <input
+                      type="text"
+                      value={form.equipoModelo}
+                      onChange={e => setForm(f => ({ ...f, equipoModelo: e.target.value }))}
+                      placeholder="Modelo del equipo"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    />
+                  </>
+                )}
               </div>
             </div>
             <div>
@@ -596,6 +634,16 @@ export default function OrdenCreateModal({
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
               />
             </div>
+
+            {/* Foto del equipo (solo cuando viene de cita pública con foto) */}
+            {citaPreset?.fotoEquipoUrl && (
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">
+                  Foto del equipo (capturada por el cliente)
+                </label>
+                <FotoEquipoDisplay url={citaPreset.fotoEquipoUrl} size="md" />
+              </div>
+            )}
           </div>
         </div>
 

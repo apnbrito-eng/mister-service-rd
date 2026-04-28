@@ -316,6 +316,41 @@ export function generateNumeroFactura(count: number): string {
 
 export const TIPOS_EQUIPO = ['Lavadora', 'Secadora', 'Nevera', 'Estufa', 'Aire Acondicionado', 'Microondas', 'Lavavajillas', 'Otro'];
 
+/**
+ * Formatea una línea descriptiva del equipo para listar en cards y resúmenes.
+ * Usa " · " como separador. Cuando hay `equipoTipoMotor` (lavadoras), se
+ * muestra como sufijo en vez del modelo de texto libre.
+ *
+ * Ejemplos:
+ *   formatearEquipoLabel({ equipoTipo: 'Lavadora', equipoMarca: 'Mabe', equipoTipoMotor: 'torre' })
+ *     => 'Lavadora · Mabe · Torre'
+ *   formatearEquipoLabel({ equipoTipo: 'Nevera', equipoMarca: 'LG', equipoModelo: 'GR-XXXX' })
+ *     => 'Nevera · LG · GR-XXXX'
+ */
+export function formatearEquipoLabel(equipo: {
+  equipoTipo?: string;
+  equipoMarca?: string;
+  equipoModelo?: string;
+  equipoTipoMotor?: 'torre' | 'individual';
+}): string {
+  const partes: string[] = [];
+  if (equipo.equipoTipo) partes.push(equipo.equipoTipo);
+  if (equipo.equipoMarca) partes.push(equipo.equipoMarca);
+  if (equipo.equipoTipoMotor) {
+    partes.push(equipo.equipoTipoMotor === 'torre' ? 'Torre' : 'Individual');
+  } else if (equipo.equipoModelo) {
+    partes.push(equipo.equipoModelo);
+  }
+  return partes.join(' · ');
+}
+
+/** Etiqueta legible del campo `equipoTipoMotor`. */
+export function labelTipoMotor(tipoMotor?: 'torre' | 'individual'): string {
+  if (tipoMotor === 'torre') return 'Torre';
+  if (tipoMotor === 'individual') return 'Individual';
+  return '';
+}
+
 export const DURACIONES = [15, 30, 45, 60, 90, 120];
 
 /**
@@ -383,6 +418,9 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     equipoTipo: (raw.equipoTipo as string) || '',
     equipoMarca: (raw.equipoMarca as string) || '',
     equipoModelo: (raw.equipoModelo as string) || undefined,
+    equipoTipoMotor: raw.equipoTipoMotor === 'torre' || raw.equipoTipoMotor === 'individual'
+      ? raw.equipoTipoMotor
+      : undefined,
     descripcionFalla: (raw.descripcionFalla as string) || '',
     fotoEquipoUrl: (raw.fotoEquipoUrl as string) || undefined,
     tecnicoId: (raw.tecnicoId as string) || undefined,

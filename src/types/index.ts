@@ -183,6 +183,12 @@ export interface OrdenServicio {
   equipoTipo: string;
   equipoMarca: string;
   equipoModelo?: string;
+  /**
+   * Configuración del motor cuando el equipo es Lavadora. Permite distinguir
+   * lavadoras tipo torre (combinadas con secadora) de las individuales.
+   * Solo se llena cuando `equipoTipo === 'Lavadora'`.
+   */
+  equipoTipoMotor?: 'torre' | 'individual';
   descripcionFalla: string;
   fotoEquipoUrl?: string;
   tecnicoId?: string;
@@ -513,6 +519,14 @@ export interface CitaPorConfirmar {
   equipoTipo?: string;
   equipoMarca?: string;
   equipoModelo?: string;
+  /**
+   * Configuración del motor cuando el equipo es Lavadora (torre/individual).
+   * Capturado desde el formulario público `/agendar` o desde el modal admin.
+   */
+  equipoTipoMotor?: 'torre' | 'individual';
+  /** UUID generado client-side al montar el form público para trazar la
+   *  foto del equipo subida a Firebase Storage. */
+  citaIdProvisional?: string;
   calendarioId?: string;
   calendarioNombre?: string;
   fechaSolicitada?: Date;
@@ -530,7 +544,10 @@ export interface CitaPorConfirmar {
   // ── Campos opcionales agregados por el formulario público `/agendar` ──
   /** Sector / barrio del cliente (ej: "Naco", "Bella Vista"). */
   clienteSector?: string;
-  /** Cómo conoció el cliente al negocio (Google, Facebook, etc.). */
+  /**
+   * Cómo conoció el cliente al negocio (Google, Facebook, etc.).
+   * @deprecated Removed from public form. Kept for historical citas.
+   */
   comoNosConocio?: string;
   /** Map { tituloDelCampo: valorEnviado } para campos extra que el admin
    *  agregó al formulario público. */

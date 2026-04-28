@@ -3,11 +3,12 @@ import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, Timestamp, g
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 import { CitaPorConfirmar, OrdenServicio, GarantiaOrigen } from '../types';
-import { tiempoTranscurrido, TIPOS_EQUIPO, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, formatMoneda } from '../utils';
+import { tiempoTranscurrido, TIPOS_EQUIPO, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, formatMoneda, labelTipoMotor } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
 import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
+import FotoEquipoDisplay from '../components/shared/FotoEquipoDisplay';
 import { useOrdenCreateForm } from '../hooks/useOrdenCreateForm';
 import { Phone, Clock, Check, X, Plus, AlertTriangle, MapPin, Camera, Wrench, Shield } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
@@ -92,6 +93,15 @@ export default function Citas() {
             equipoTipo: raw.equipoTipo,
             equipoMarca: raw.equipoMarca,
             equipoModelo: raw.equipoModelo,
+            equipoTipoMotor: raw.equipoTipoMotor === 'torre' || raw.equipoTipoMotor === 'individual'
+              ? raw.equipoTipoMotor
+              : undefined,
+            citaIdProvisional: typeof raw.citaIdProvisional === 'string' && raw.citaIdProvisional.length > 0
+              ? raw.citaIdProvisional
+              : undefined,
+            comoNosConocio: typeof raw.comoNosConocio === 'string' && raw.comoNosConocio.length > 0
+              ? raw.comoNosConocio
+              : undefined,
             calendarioId: raw.calendarioId,
             calendarioNombre: raw.calendarioNombre,
             fechaSolicitada: raw.fechaSolicitada?.toDate?.() || undefined,
@@ -709,7 +719,11 @@ export default function Citas() {
                       <Wrench size={12} className="text-gray-400" />
                       {cita.equipoTipo || cita.servicio}
                       {cita.equipoMarca ? ` · ${cita.equipoMarca}` : ''}
-                      {cita.equipoModelo ? ` · ${cita.equipoModelo}` : ''}
+                      {cita.equipoTipoMotor
+                        ? ` · ${labelTipoMotor(cita.equipoTipoMotor)}`
+                        : cita.equipoModelo
+                          ? ` · ${cita.equipoModelo}`
+                          : ''}
                     </p>
                     {cita.falla && <p className="text-xs text-gray-500 mt-0.5">Falla: {cita.falla}</p>}
                     {cita.clienteDireccion && (
@@ -726,11 +740,9 @@ export default function Citas() {
                       <p className="text-xs text-gray-500">Horario: {cita.horarioSolicitado}</p>
                     ) : null}
                     {cita.fotoEquipoUrl && (
-                      <a href={cita.fotoEquipoUrl} target="_blank" rel="noreferrer"
-                        className="mt-2 inline-block">
-                        <img src={cita.fotoEquipoUrl} alt="Foto del equipo"
-                          className="w-24 h-24 object-cover rounded-lg border border-gray-200 hover:border-[#1a5fa8] transition-colors" />
-                      </a>
+                      <div className="mt-2">
+                        <FotoEquipoDisplay url={cita.fotoEquipoUrl} size="sm" />
+                      </div>
                     )}
                     <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
                       <Clock size={10} /> {tiempoTranscurrido(cita.createdAt)}

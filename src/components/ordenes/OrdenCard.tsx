@@ -3,7 +3,8 @@ import { Calendar, Clock, Wrench, User, XCircle, Play, RotateCcw } from 'lucide-
 import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, StandbyPieza } from '../../types';
-import { estadoSimpleBorder, formatFecha, tiempoTranscurrido, tieneStandby, crearRegistroAuditoria } from '../../utils';
+import { estadoSimpleBorder, formatFecha, tiempoTranscurrido, tieneStandby, crearRegistroAuditoria, formatearEquipoLabel } from '../../utils';
+import FotoEquipoDisplay from '../shared/FotoEquipoDisplay';
 import Badge from '../Badge';
 import EliminarOrdenButton from './EliminarOrdenButton';
 import FaseStepper from './FaseStepper';
@@ -63,6 +64,13 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
       className={`bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 ${estadoSimpleBorder(orden.estadoSimple)} p-4 hover:shadow-md transition-shadow`}
     >
       <div className="flex flex-col md:flex-row md:items-center gap-3">
+        {/* Foto del equipo — thumbnail clickeable a la izquierda */}
+        {orden.fotoEquipoUrl && (
+          <div onClick={(e) => e.stopPropagation()} className="shrink-0 self-start">
+            <FotoEquipoDisplay url={orden.fotoEquipoUrl} size="sm" alt={`Equipo de ${orden.clienteNombre}`} />
+          </div>
+        )}
+
         {/* Main content - clickable */}
         <div
           className="flex-1 cursor-pointer min-w-0"
@@ -116,7 +124,7 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
             )}
           </div>
           <p className="text-sm font-medium text-gray-900 truncate">
-            {orden.equipoTipo} - {orden.clienteNombre}
+            {formatearEquipoLabel(orden)} - {orden.clienteNombre}
           </p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 text-xs text-gray-500">
             {orden.fechaCita && (

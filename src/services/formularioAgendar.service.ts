@@ -194,14 +194,21 @@ export interface PayloadEnvioCita {
   equipoTipo: string;
   equipoMarca?: string;
   equipoModelo?: string;
+  /** Configuración del motor cuando `equipoTipo === 'Lavadora'`. */
+  equipoTipoMotor?: 'torre' | 'individual';
   falla: string;
   fechaSolicitada?: string; // YYYY-MM-DD
   horaSolicitada?: string;
-  comoNosConocio?: string;
   /** Map { tituloCampo: valor } para los campos personalizados llenados. */
   camposPersonalizados?: Record<string, string>;
   /** Honeypot anti-bots — si tiene valor, se descarta silenciosamente. */
   honeypot?: string;
+  /** URL pública de la foto del equipo subida a Firebase Storage antes
+   *  del submit. Opcional. */
+  fotoEquipoUrl?: string;
+  /** UUID generado client-side al montar el form. Persiste en la cita
+   *  para auditoría del path en Storage. */
+  citaIdProvisional?: string;
 }
 
 export interface ResultadoEnvioCita {
@@ -276,7 +283,11 @@ export async function enviarSolicitudCita(
   if (payload.clienteSector?.trim()) data.clienteSector = payload.clienteSector.trim();
   if (payload.equipoMarca?.trim()) data.equipoMarca = payload.equipoMarca.trim();
   if (payload.equipoModelo?.trim()) data.equipoModelo = payload.equipoModelo.trim();
-  if (payload.comoNosConocio?.trim()) data.comoNosConocio = payload.comoNosConocio.trim();
+  if (payload.equipoTipoMotor === 'torre' || payload.equipoTipoMotor === 'individual') {
+    data.equipoTipoMotor = payload.equipoTipoMotor;
+  }
+  if (payload.fotoEquipoUrl?.trim()) data.fotoEquipoUrl = payload.fotoEquipoUrl.trim();
+  if (payload.citaIdProvisional?.trim()) data.citaIdProvisional = payload.citaIdProvisional.trim();
   if (payload.fechaSolicitada) {
     try {
       const d = new Date(payload.fechaSolicitada + 'T00:00:00');

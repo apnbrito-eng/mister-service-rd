@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Send } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Camera, CheckCircle2, Send, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import {
   ConfigFormularioAgendar,
   CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
@@ -10,6 +11,8 @@ import {
   suscribirConfigFormularioAgendar,
 } from '../../services/formularioAgendar.service';
 import { normalizarTelefono } from '../../services/clientes.service';
+import { storage } from '../../firebase/config';
+import { comprimirImagen } from '../../utils/imagen';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 import LoadingSpinner from '../LoadingSpinner';
@@ -48,11 +51,13 @@ interface FormState {
   clienteSector: string;
   equipoTipo: string;
   equipoMarca: string;
+  /** Texto libre para todos los equipos EXCEPTO Lavadora. */
   equipoModelo: string;
+  /** Solo cuando `equipoTipo === 'Lavadora'`: torre o individual. */
+  equipoTipoMotor: '' | 'torre' | 'individual';
   falla: string;
   fechaSolicitada: string;
   horaSolicitada: string;
-  comoNosConocio: string;
   /** Map { campoId: valor } para campos personalizados */
   custom: Record<string, string>;
   /** Honeypot anti-bots */
@@ -70,10 +75,10 @@ const FORM_INITIAL: FormState = {
   equipoTipo: '',
   equipoMarca: '',
   equipoModelo: '',
+  equipoTipoMotor: '',
   falla: '',
   fechaSolicitada: '',
   horaSolicitada: '',
-  comoNosConocio: '',
   custom: {},
   hp: '',
 };
@@ -87,10 +92,10 @@ interface DatosMensajeWhatsApp {
   equipoTipo: string;
   equipoMarca?: string;
   equipoModelo?: string;
+  equipoTipoMotor?: 'torre' | 'individual';
   falla: string;
   fechaSolicitada?: string;
   horaSolicitada?: string;
-  comoNosConocio?: string;
 }
 
 /**
@@ -105,6 +110,15 @@ function construirMensajeWhatsApp(
   datos: DatosMensajeWhatsApp,
   camposPersonalizados: Record<string, string>,
 ): string {
+  // Sufijo del equipo: para lavadoras se prioriza Torre/Individual; para
+  // otros equipos se usa el modelo de texto libre si existe.
+  let sufijoEquipo = '';
+  if (datos.equipoTipoMotor) {
+    sufijoEquipo = ` (${datos.equipoTipoMotor === 'torre' ? 'Torre' : 'Individual'})`;
+  } else if (datos.equipoModelo) {
+    sufijoEquipo = ` (${datos.equipoModelo})`;
+  }
+
   const lineas: (string | null)[] = [
     `Hola, soy *${datos.nombre}* y acabo de enviar una solicitud de cita por la web.`,
     ``,
@@ -114,12 +128,11 @@ function construirMensajeWhatsApp(
     datos.direccion ? `*Dirección:* ${datos.direccion}` : null,
     datos.sector ? `*Sector:* ${datos.sector}` : null,
     ``,
-    `*Equipo:* ${datos.equipoTipo}${datos.equipoMarca ? ' ' + datos.equipoMarca : ''}${datos.equipoModelo ? ' (' + datos.equipoModelo + ')' : ''}`,
+    `*Equipo:* ${datos.equipoTipo}${datos.equipoMarca ? ' ' + datos.equipoMarca : ''}${sufijoEquipo}`,
     `*Falla reportada:* ${datos.falla}`,
     ``,
     `*Fecha preferida:* ${datos.fechaSolicitada || 'No especificada'}`,
     `*Hora preferida:* ${datos.horaSolicitada || 'No especificada'}`,
-    datos.comoNosConocio ? `*¿Cómo nos conoció?* ${datos.comoNosConocio}` : null,
   ];
 
   if (
@@ -162,6 +175,94 @@ export default function FormularioAgendarPublico() {
     nombre: string;
   } | null>(null);
 
+  // ─── Foto del equipo ───
+  // Se genera un UUID al montar para trazar el path en Storage:
+  // `fotos-equipos-publico/{citaIdProvisional}/equipo-{ts}.jpg`. El UUID
+  // también se persiste en el doc de cita para auditoría.
+  const [citaIdProvisional] = useState<string>(() => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    // Fallback (browsers muy antiguos)
+    return `cp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+  });
+  const [fotoEquipoUrl, setFotoEquipoUrl] = useState<string | undefined>(undefined);
+  const [fotoSubiendo, setFotoSubiendo] = useState(false);
+  const fotoInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleFotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Reset el value del input para que volver a seleccionar el mismo archivo
+    // dispare el onChange (Chrome/Safari ignoran si el value no cambia).
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecciona un archivo de imagen');
+      return;
+    }
+
+    setFotoSubiendo(true);
+    let blob: Blob = file;
+    try {
+      blob = await comprimirImagen(file, { maxBytes: 1_000_000, maxDim: 1600 });
+    } catch (err) {
+      console.warn('Compresión client-side falló, se intenta subir el original:', err);
+      // Fallback: si la imagen es muy pesada y no la pudimos comprimir,
+      // avisamos pero seguimos. No bloqueamos al usuario.
+      if (file.size > 3 * 1024 * 1024) {
+        // Sin `icon` literal — la convención del proyecto es no usar emojis
+        // hardcodeados (se corrompen al pasar por encoding en algunos
+        // contextos). El toast por defecto ya tiene su propio styling.
+        toast(
+          'No se pudo optimizar la foto. Subiendo original (puede tardar más).',
+          { duration: 4000 },
+        );
+      }
+    }
+
+    try {
+      // Nombre FIJO `equipo.jpg` por sesión: si el cliente toma foto, decide
+      // cambiarla y toma otra, el upload sobrescribe la anterior en el mismo
+      // path en lugar de acumular huérfanos en Storage. Cada sesión tiene su
+      // propio `citaIdProvisional` (UUID), así que no hay colisión entre
+      // distintos clientes.
+      const filename = 'equipo.jpg';
+      const path = `fotos-equipos-publico/${citaIdProvisional}/${filename}`;
+      const ref = storageRef(storage, path);
+      await uploadBytes(ref, blob, { contentType: 'image/jpeg' });
+      const url = await getDownloadURL(ref);
+      setFotoEquipoUrl(url);
+    } catch (err) {
+      console.error('Upload de foto del equipo falló:', err);
+      toast.error('No se pudo subir la foto, continúa sin ella');
+      setFotoEquipoUrl(undefined);
+    } finally {
+      setFotoSubiendo(false);
+    }
+  };
+
+  const handleQuitarFoto = () => {
+    setFotoEquipoUrl(undefined);
+    // Nota: NO borramos el archivo en Storage — las reglas no permiten
+    // delete desde el cliente público y tampoco vale la pena. El blob
+    // queda huérfano y se limpia con un cron eventual si hace falta.
+  };
+
+  // Reactivo: si el cliente cambia el tipo de equipo después de elegir
+  // configuración Torre/Individual, limpiamos el campo. Mismo para modelo
+  // texto libre cuando vuelve a Lavadora.
+  useEffect(() => {
+    if (form.equipoTipo !== 'Lavadora' && form.equipoTipoMotor) {
+      setForm((prev) => ({ ...prev, equipoTipoMotor: '' }));
+    }
+    if (form.equipoTipo === 'Lavadora' && form.equipoModelo) {
+      setForm((prev) => ({ ...prev, equipoModelo: '' }));
+    }
+    // Solo nos interesa reaccionar al cambio de tipo — no incluimos
+    // equipoTipoMotor/equipoModelo para evitar bucles.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.equipoTipo]);
+
   // Suscripción a config — los cambios del admin se reflejan en vivo
   useEffect(() => {
     const unsub = suscribirConfigFormularioAgendar(c => {
@@ -192,8 +293,6 @@ export default function FormularioAgendarPublico() {
 
   const habilitado = config.habilitado ?? true;
   const mostrarSector = config.mostrarCampoSector ?? true;
-  const mostrarComoConocio = config.mostrarCampoComoNosConocio ?? true;
-  const opcionesConocio = config.opcionesComoNosConocio ?? [];
   const camposPersonalizados = config.camposPersonalizados ?? [];
   const bloquesHora =
     config.bloquesHora ?? CONFIG_FORMULARIO_AGENDAR_DEFAULTS.bloquesHora;
@@ -273,6 +372,17 @@ export default function FormularioAgendarPublico() {
         }
       }
 
+      // Para lavadoras, el "modelo" en realidad es la configuración del motor
+      // (Torre/Individual). Para otros equipos, sigue siendo texto libre.
+      const equipoModeloFinal =
+        form.equipoTipo === 'Lavadora'
+          ? undefined
+          : form.equipoModelo.trim() || undefined;
+      const equipoTipoMotorFinal: 'torre' | 'individual' | undefined =
+        form.equipoTipo === 'Lavadora' && (form.equipoTipoMotor === 'torre' || form.equipoTipoMotor === 'individual')
+          ? form.equipoTipoMotor
+          : undefined;
+
       const res = await enviarSolicitudCita({
         clienteNombre: nombre,
         telefono: form.telefono.trim(),
@@ -285,33 +395,35 @@ export default function FormularioAgendarPublico() {
           : undefined,
         equipoTipo: form.equipoTipo,
         equipoMarca: form.equipoMarca.trim() || undefined,
-        equipoModelo: form.equipoModelo.trim() || undefined,
+        equipoModelo: equipoModeloFinal,
+        equipoTipoMotor: equipoTipoMotorFinal,
         falla: form.falla.trim(),
         fechaSolicitada: form.fechaSolicitada || undefined,
         horaSolicitada: form.horaSolicitada || undefined,
-        comoNosConocio: mostrarComoConocio
-          ? form.comoNosConocio.trim() || undefined
-          : undefined,
         camposPersonalizados:
           Object.keys(customConLabels).length > 0
             ? customConLabels
             : undefined,
         honeypot: form.hp,
+        fotoEquipoUrl: fotoEquipoUrl || undefined,
+        citaIdProvisional,
       });
 
       if (!res.ok) {
         // Caso especial: anti-duplicado por teléfono en las últimas 24h.
         // No es un error técnico — es esperado si ya enviaron antes.
         if (res.error === 'duplicado_24h') {
+          // Sin `icon` literal — convención del proyecto.
           toast(
             res.mensaje ||
               'Ya recibimos tu solicitud reciente. Te contactaremos pronto.',
-            { icon: 'ℹ️', duration: 5000 },
+            { duration: 5000 },
           );
           // Limpiamos el form para que no se quede el botón "Enviando" ni
           // confundan al usuario; pero NO mostramos la pantalla de éxito
           // porque no creamos nada nuevo.
           setForm(FORM_INITIAL);
+          setFotoEquipoUrl(undefined);
           return;
         }
         toast.error(res.error || 'No pudimos registrar tu solicitud');
@@ -333,13 +445,11 @@ export default function FormularioAgendarPublico() {
               : undefined,
             equipoTipo: form.equipoTipo,
             equipoMarca: form.equipoMarca.trim() || undefined,
-            equipoModelo: form.equipoModelo.trim() || undefined,
+            equipoModelo: equipoModeloFinal,
+            equipoTipoMotor: equipoTipoMotorFinal,
             falla: form.falla.trim(),
             fechaSolicitada: form.fechaSolicitada || undefined,
             horaSolicitada: form.horaSolicitada || undefined,
-            comoNosConocio: mostrarComoConocio
-              ? form.comoNosConocio.trim() || undefined
-              : undefined,
           },
           customConLabels,
         );
@@ -354,6 +464,7 @@ export default function FormularioAgendarPublico() {
 
       setSuccess(true);
       setForm(FORM_INITIAL);
+      setFotoEquipoUrl(undefined);
     } catch (err) {
       console.error(err);
       toast.error('Ocurrió un error. Inténtalo de nuevo.');
@@ -604,14 +715,35 @@ export default function FormularioAgendarPublico() {
         </div>
 
         <div className="mt-4">
-          <label className={labelClass}>Modelo</label>
-          <input
-            type="text"
-            className={inputClass}
-            value={form.equipoModelo}
-            onChange={e => update({ equipoModelo: e.target.value })}
-            placeholder="Opcional"
-          />
+          {form.equipoTipo === 'Lavadora' ? (
+            <>
+              <label className={labelClass}>Configuración (opcional)</label>
+              <select
+                className={inputClass}
+                value={form.equipoTipoMotor}
+                onChange={e =>
+                  update({
+                    equipoTipoMotor: e.target.value as '' | 'torre' | 'individual',
+                  })
+                }
+              >
+                <option value="">Selecciona configuración (opcional)</option>
+                <option value="torre">Torre (lavadora-secadora vertical)</option>
+                <option value="individual">Individual (solo lavadora)</option>
+              </select>
+            </>
+          ) : (
+            <>
+              <label className={labelClass}>Modelo</label>
+              <input
+                type="text"
+                className={inputClass}
+                value={form.equipoModelo}
+                onChange={e => update({ equipoModelo: e.target.value })}
+                placeholder="Opcional"
+              />
+            </>
+          )}
         </div>
 
         <div className="mt-4">
@@ -626,6 +758,66 @@ export default function FormularioAgendarPublico() {
             placeholder="Describe brevemente la falla (mínimo 10 caracteres)..."
             required
             minLength={10}
+          />
+        </div>
+
+        {/* Foto del equipo */}
+        <div className="mt-4">
+          <label className={`${labelClass} inline-flex items-center gap-1.5`}>
+            <Camera size={14} />
+            Foto del equipo (opcional)
+          </label>
+          <p className="text-xs text-gray-500 mb-2">
+            Ayuda al técnico a identificar el equipo antes de llegar.
+          </p>
+
+          {!fotoEquipoUrl && (
+            <button
+              type="button"
+              onClick={() => fotoInputRef.current?.click()}
+              disabled={fotoSubiendo}
+              className="inline-flex items-center gap-2 px-4 py-3 min-h-[44px] bg-blue-50 hover:bg-blue-100 text-[#1a5fa8] rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+            >
+              <Camera size={16} />
+              {fotoSubiendo ? 'Subiendo...' : 'Tomar/Subir foto del equipo'}
+            </button>
+          )}
+
+          {fotoEquipoUrl && (
+            <div className="flex items-start gap-3">
+              <img
+                src={fotoEquipoUrl}
+                alt="Foto del equipo"
+                className="w-[150px] h-[150px] object-cover rounded-lg border border-gray-300"
+              />
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleQuitarFoto}
+                  className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                >
+                  <X size={12} /> Quitar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fotoInputRef.current?.click()}
+                  disabled={fotoSubiendo}
+                  className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] text-xs font-medium text-[#1a5fa8] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-60"
+                >
+                  <Camera size={12} />
+                  {fotoSubiendo ? 'Subiendo...' : 'Cambiar'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <input
+            ref={fotoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handleFotoChange}
+            className="hidden"
           />
         </div>
       </div>
@@ -692,25 +884,6 @@ export default function FormularioAgendarPublico() {
           </div>
         </div>
       </div>
-
-      {/* Cómo nos conociste */}
-      {mostrarComoConocio && opcionesConocio.length > 0 && (
-        <div className="border-t border-gray-100 pt-5">
-          <label className={labelClass}>¿Cómo nos conociste?</label>
-          <select
-            className={inputClass}
-            value={form.comoNosConocio}
-            onChange={e => update({ comoNosConocio: e.target.value })}
-          >
-            <option value="">Selecciona...</option>
-            {opcionesConocio.map(op => (
-              <option key={op} value={op}>
-                {op}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
 
       {/* Campos personalizados */}
       {camposPersonalizados.length > 0 && (

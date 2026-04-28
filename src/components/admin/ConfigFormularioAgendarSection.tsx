@@ -39,7 +39,6 @@ export default function ConfigFormularioAgendarSection() {
   const [config, setConfig] = useState<ConfigFormularioAgendar>({
     ...CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
   });
-  const [nuevaOpcion, setNuevaOpcion] = useState('');
   const [nuevoBloque, setNuevoBloque] = useState('');
 
   useEffect(() => {
@@ -62,27 +61,6 @@ export default function ConfigFormularioAgendarSection() {
 
   const update = (partial: Partial<ConfigFormularioAgendar>) => {
     setConfig(prev => ({ ...prev, ...partial }));
-  };
-
-  // ─── Opciones de "¿Cómo nos conociste?" ───────────────
-
-  const agregarOpcion = () => {
-    const v = nuevaOpcion.trim();
-    if (!v) return;
-    const actuales = config.opcionesComoNosConocio ?? [];
-    if (actuales.includes(v)) {
-      toast.error('Esa opción ya existe');
-      return;
-    }
-    update({ opcionesComoNosConocio: [...actuales, v] });
-    setNuevaOpcion('');
-  };
-
-  const eliminarOpcion = (idx: number) => {
-    const actuales = config.opcionesComoNosConocio ?? [];
-    update({
-      opcionesComoNosConocio: actuales.filter((_, i) => i !== idx),
-    });
   };
 
   // ─── Bloques de hora ───────────────────────────────
@@ -229,8 +207,6 @@ export default function ConfigFormularioAgendarSection() {
 
   const habilitado = config.habilitado ?? true;
   const mostrarSector = config.mostrarCampoSector ?? true;
-  const mostrarComoConocio = config.mostrarCampoComoNosConocio ?? true;
-  const opcionesConocio = config.opcionesComoNosConocio ?? [];
   const personalizados = config.camposPersonalizados ?? [];
   const bloques = config.bloquesHora ?? [];
   const bloquesVacios = bloques.length === 0;
@@ -335,67 +311,6 @@ export default function ConfigFormularioAgendarSection() {
           />
           Mostrar campo &quot;Sector&quot;
         </label>
-
-        <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input
-            type="checkbox"
-            checked={mostrarComoConocio}
-            onChange={e =>
-              update({ mostrarCampoComoNosConocio: e.target.checked })
-            }
-            className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
-          />
-          Mostrar campo &quot;¿Cómo nos conociste?&quot;
-        </label>
-
-        {mostrarComoConocio && (
-          <div className="ml-6 space-y-2">
-            <p className="text-xs text-gray-500">
-              Opciones del select &quot;¿Cómo nos conociste?&quot;:
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {opcionesConocio.map((opt, idx) => (
-                <span
-                  key={idx}
-                  className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 text-sm px-3 py-1.5 rounded-lg"
-                >
-                  {opt}
-                  <button
-                    type="button"
-                    onClick={() => eliminarOpcion(idx)}
-                    className="text-gray-400 hover:text-red-500 transition"
-                    title="Eliminar"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </span>
-              ))}
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                className={`${inputClass} flex-1`}
-                placeholder="Nueva opción"
-                value={nuevaOpcion}
-                onChange={e => setNuevaOpcion(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    agregarOpcion();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                onClick={agregarOpcion}
-                className="inline-flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium px-3 py-2 transition"
-              >
-                <Plus className="w-4 h-4" />
-                Agregar
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Bloques de hora disponibles */}

@@ -6,7 +6,9 @@ import WhatsAppIcon from '../icons/WhatsAppIcon';
 import {
   formatFecha, formatMoneda, formatTelefono, whatsappLink,
   estadoSimpleLabel, estadoSimpleColor, tiempoTranscurrido, tieneStandby,
+  labelTipoMotor,
 } from '../../utils';
+import FotoEquipoDisplay from '../shared/FotoEquipoDisplay';
 import { puede } from '../../utils/permisos';
 import Badge from '../Badge';
 import EliminarOrdenButton from './EliminarOrdenButton';
@@ -385,14 +387,26 @@ export default function OrdenDetailModal({
             <span className="text-gray-900">{orden.equipoMarca || '--'}</span>
           </div>
           <div>
-            <span className="text-gray-500 block text-xs">Modelo</span>
-            <span className="text-gray-900">{orden.equipoModelo || '--'}</span>
+            <span className="text-gray-500 block text-xs">
+              {orden.equipoTipoMotor ? 'Configuración' : 'Modelo'}
+            </span>
+            <span className="text-gray-900">
+              {orden.equipoTipoMotor
+                ? labelTipoMotor(orden.equipoTipoMotor)
+                : orden.equipoModelo || '--'}
+            </span>
           </div>
           <div>
             <span className="text-gray-500 block text-xs">Estado</span>
             <Badge label={estadoSimpleLabel(orden.estadoSimple || 'pendiente')} color={estadoSimpleColor(orden.estadoSimple || 'pendiente')} />
           </div>
         </div>
+        {orden.fotoEquipoUrl && (
+          <div className="mt-3">
+            <span className="text-gray-500 block text-xs mb-1">Foto del equipo</span>
+            <FotoEquipoDisplay url={orden.fotoEquipoUrl} size="md" />
+          </div>
+        )}
         <div className="mt-3">
           <span className="text-gray-500 block text-xs mb-1">Descripcion de la Falla</span>
           <p className="text-sm text-gray-900 bg-gray-50 rounded-lg p-3">{orden.descripcionFalla}</p>

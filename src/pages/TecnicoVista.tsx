@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, Cliente, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, FaseOrden, StandbyPieza, MetodoPago } from '../types';
-import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria, formatMoneda, tieneStandby } from '../utils';
+import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria, formatMoneda, tieneStandby, formatearEquipoLabel } from '../utils';
+import FotoEquipoDisplay from '../components/shared/FotoEquipoDisplay';
 import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
 import { calcularQuincenaActual, rangoQuincena } from '../utils/comisiones';
 import { ComisionRegistro } from '../types';
@@ -1063,12 +1064,19 @@ export default function TecnicoVista() {
                     </div>
 
                     {/* Equipo */}
-                    <h3 className="text-base font-semibold text-gray-900">
-                      {orden.equipoTipo}{orden.equipoMarca ? ` · ${orden.equipoMarca}` : ''}
-                    </h3>
-                    {orden.descripcionFalla && (
-                      <p className="text-xs text-gray-600 mt-1"><strong>Falla:</strong> {orden.descripcionFalla}</p>
-                    )}
+                    <div className="flex items-start gap-3">
+                      {orden.fotoEquipoUrl && (
+                        <FotoEquipoDisplay url={orden.fotoEquipoUrl} size="sm" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-base font-semibold text-gray-900">
+                          {formatearEquipoLabel(orden)}
+                        </h3>
+                        {orden.descripcionFalla && (
+                          <p className="text-xs text-gray-600 mt-1"><strong>Falla:</strong> {orden.descripcionFalla}</p>
+                        )}
+                      </div>
+                    </div>
 
                     {/* Dirección (siempre visible) */}
                     {(orden.clienteDireccion || ubi) && (
@@ -1321,7 +1329,18 @@ export default function TecnicoVista() {
             <div>
               <p className="text-xs text-gray-500">Equipo</p>
               <p className="font-semibold">{selectedOrden.equipoTipo} · {selectedOrden.equipoMarca}</p>
-              {selectedOrden.equipoModelo && <p className="text-xs text-gray-600">Modelo: {selectedOrden.equipoModelo}</p>}
+              {selectedOrden.equipoTipoMotor ? (
+                <p className="text-xs text-gray-600">
+                  Configuración: {selectedOrden.equipoTipoMotor === 'torre' ? 'Torre' : 'Individual'}
+                </p>
+              ) : (
+                selectedOrden.equipoModelo && <p className="text-xs text-gray-600">Modelo: {selectedOrden.equipoModelo}</p>
+              )}
+              {selectedOrden.fotoEquipoUrl && (
+                <div className="mt-2">
+                  <FotoEquipoDisplay url={selectedOrden.fotoEquipoUrl} size="md" />
+                </div>
+              )}
             </div>
             <div>
               <p className="text-xs text-gray-500">Falla reportada</p>
