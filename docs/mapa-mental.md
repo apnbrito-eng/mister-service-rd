@@ -407,3 +407,4 @@ flowchart TD
 > Ejemplo: `Sub1 [J: revisar esto el lunes]`
 >
 > **Última actualización**: por Cowork al final del sprint flujo técnico Plan B.
+
