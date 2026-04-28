@@ -48,6 +48,21 @@ export interface ConfigContacto {
   horario: string;
 }
 
+/**
+ * Configuración del sistema NPS de feedback en `/tracking/:token` cuando una
+ * orden se cierra (sprint feedback).
+ */
+export interface ConfigFeedbackNPS {
+  /** Si está deshabilitado, el componente no se muestra en /tracking */
+  habilitado: boolean;
+  /** URL de Google Reviews / Maps a la que se redirige al promotor (9-10) */
+  googleReviewsUrl?: string;
+  /** Mensaje mostrado tras enviar feedback (paso "gracias") */
+  mensajeAgradecimiento?: string;
+  /** Mensaje preformateado del WhatsApp del detractor al contactar coordinador */
+  mensajeWhatsAppDetractor?: string;
+}
+
 export interface ConfigWeb {
   whatsapp: ConfigWhatsApp;
   hero: ConfigHero;
@@ -64,6 +79,12 @@ export interface ConfigWeb {
    * público lo lee desde aquí sin chocar con PERMISSION_DENIED silencioso.
    */
   tiposEquipoPublicos?: string[];
+  /**
+   * Configuración del sistema NPS de feedback al cerrar orden (sprint
+   * feedback). Lectura pública desde `/tracking/:token`, edición admin
+   * desde `/admin/web`.
+   */
+  feedbackNPS?: ConfigFeedbackNPS;
   updatedAt?: Date;
 }
 
@@ -110,6 +131,12 @@ export const CONFIG_WEB_DEFAULTS: ConfigWeb = {
     'Secadora',
     'Otro',
   ],
+  feedbackNPS: {
+    habilitado: true,
+    mensajeAgradecimiento: 'Gracias por tu feedback. Cada respuesta nos ayuda a mejorar.',
+    mensajeWhatsAppDetractor:
+      'Hola, tuve un servicio recientemente y quiero compartirles mi experiencia.',
+  },
 };
 
 // ─── Referencia Firestore ────────────────────────────
@@ -138,6 +165,8 @@ export async function obtenerConfigWeb(): Promise<ConfigWeb> {
             (x): x is string => typeof x === 'string' && !!x,
           )
         : CONFIG_WEB_DEFAULTS.tiposEquipoPublicos,
+      feedbackNPS:
+        (data.feedbackNPS as ConfigFeedbackNPS) || CONFIG_WEB_DEFAULTS.feedbackNPS,
       updatedAt: data.updatedAt?.toDate?.() || undefined,
     };
   } catch (err) {

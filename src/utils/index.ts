@@ -613,6 +613,28 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     referenciaConduce: typeof raw.referenciaConduce === 'string' && raw.referenciaConduce.length > 0 ? raw.referenciaConduce : undefined,
     referenciaFacturaId: typeof raw.referenciaFacturaId === 'string' && raw.referenciaFacturaId.length > 0 ? raw.referenciaFacturaId : undefined,
     referenciaOrdenId: typeof raw.referenciaOrdenId === 'string' && raw.referenciaOrdenId.length > 0 ? raw.referenciaOrdenId : undefined,
+    feedback: raw.feedback && typeof raw.feedback === 'object'
+      ? (() => {
+          const f = raw.feedback as Record<string, unknown>;
+          const npsRaw = f.nps;
+          if (typeof npsRaw !== 'number' || npsRaw < 0 || npsRaw > 10) return undefined;
+          const fecha = parseFirestoreDate(f.fechaFeedback);
+          if (!fecha) return undefined;
+          const ratingTipo: 'detractor' | 'pasivo' | 'promotor' =
+            f.ratingTipo === 'detractor' || f.ratingTipo === 'pasivo' || f.ratingTipo === 'promotor'
+              ? f.ratingTipo
+              : npsRaw <= 6 ? 'detractor' : npsRaw <= 8 ? 'pasivo' : 'promotor';
+          const fb: NonNullable<OrdenServicio['feedback']> = {
+            nps: npsRaw,
+            ratingTipo,
+            fechaFeedback: fecha,
+          };
+          if (typeof f.comentario === 'string' && f.comentario.length > 0) fb.comentario = f.comentario;
+          if (f.googleReviewClicked === true) fb.googleReviewClicked = true;
+          if (f.whatsappContactClicked === true) fb.whatsappContactClicked = true;
+          return fb;
+        })()
+      : undefined,
     metadatosCita: raw.metadatosCita && typeof raw.metadatosCita === 'object'
       ? (() => {
           const m = raw.metadatosCita as Record<string, unknown>;

@@ -309,6 +309,25 @@ export interface OrdenServicio {
     whatsappAsignadoNombre?: string;
     citaOrigenId?: string;
   };
+  /**
+   * Feedback NPS del cliente al cerrar la orden (Sistema NPS — sprint feedback).
+   * Se captura desde `/tracking/:token` cuando `fase === 'cerrado'`. Inmutable
+   * una vez enviado: el cliente no puede sobrescribirlo. Los flags de
+   * `googleReviewClicked`/`whatsappContactClicked` SÍ se pueden actualizar
+   * después por separado (tracking de conversión).
+   */
+  feedback?: {
+    /** Net Promoter Score 0-10 */
+    nps: number;
+    ratingTipo: 'detractor' | 'pasivo' | 'promotor';
+    /** Comentario opcional del cliente (max 500 chars) */
+    comentario?: string;
+    fechaFeedback: Timestamp | Date;
+    /** True si el promotor tocó el botón "Dejar reseña en Google" */
+    googleReviewClicked?: boolean;
+    /** True si el detractor abrió el botón de WhatsApp para contactar coordinador */
+    whatsappContactClicked?: boolean;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -1212,6 +1231,7 @@ export type TipoNotificacion =
   | 'orden_enviada_a_facturacion'
   | 'chequeo_iniciado'
   | 'reclamo_garantia'
+  | 'feedback_detractor'
   | 'otro';
 
 export interface Notificacion {

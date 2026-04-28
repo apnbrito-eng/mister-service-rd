@@ -675,6 +675,55 @@ export default function OrdenDetailModal({
         );
       })()}
 
+      {/* Feedback NPS del cliente */}
+      {orden.feedback && (() => {
+        const fb = orden.feedback;
+        const fecha = fb.fechaFeedback instanceof Date
+          ? fb.fechaFeedback
+          : (typeof (fb.fechaFeedback as { toDate?: () => Date }).toDate === 'function'
+              ? (fb.fechaFeedback as { toDate: () => Date }).toDate()
+              : null);
+        const colorTipo =
+          fb.ratingTipo === 'promotor' ? 'bg-green-100 text-green-700 border-green-200'
+            : fb.ratingTipo === 'pasivo' ? 'bg-amber-100 text-amber-700 border-amber-200'
+              : 'bg-red-100 text-red-700 border-red-200';
+        const labelTipo = fb.ratingTipo === 'promotor' ? 'Promotor'
+          : fb.ratingTipo === 'pasivo' ? 'Pasivo' : 'Detractor';
+        return (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Feedback del cliente
+            </h3>
+            <div className={`rounded-lg border p-3 space-y-1.5 ${colorTipo}`}>
+              <div className="flex items-center gap-2 text-sm">
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-white text-sm font-bold">
+                  {fb.nps}
+                </span>
+                <span className="font-semibold">{labelTipo}</span>
+                <span className="opacity-60 text-xs ml-auto">
+                  {fecha ? formatFecha(fecha) : ''}
+                </span>
+              </div>
+              {fb.comentario && (
+                <p className="text-xs italic">&quot;{fb.comentario}&quot;</p>
+              )}
+              <div className="flex flex-wrap gap-2 text-[10px] pt-1">
+                {fb.googleReviewClicked && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/70 font-medium">
+                    Click reseña Google
+                  </span>
+                )}
+                {fb.whatsappContactClicked && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/70 font-medium">
+                    Contactó por WhatsApp
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Created By */}
       <div>
         <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Creado por</h3>

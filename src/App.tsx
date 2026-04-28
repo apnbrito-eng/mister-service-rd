@@ -48,6 +48,7 @@ import AsistenteIA from './pages/AsistenteIA';
 import AsistenteIAHistorial from './pages/AsistenteIAHistorial';
 import Ponche from './pages/Ponche';
 import AdminPonches from './pages/AdminPonches';
+import Feedback from './pages/Feedback';
 import BannerNuevaVersion from './components/BannerNuevaVersion';
 
 // Public website pages
@@ -212,6 +213,7 @@ function AppRoutes() {
         <Route path="estado-resultado" element={<RolRoute roles={['administrador', 'coordinadora']}><EstadoResultado /></RolRoute>} />
         <Route path="configuracion/usuarios" element={<RolRoute roles={['administrador', 'coordinadora']}><GestionUsuarios /></RolRoute>} />
         <Route path="ponches" element={<RolRoute roles={['administrador', 'coordinadora']}><AdminPonches /></RolRoute>} />
+        <Route path="feedback" element={<RolRoute roles={['administrador', 'coordinadora']}><Feedback /></RolRoute>} />
       </Route>
 
       {/* Legacy redirects — old /dashboard, /ordenes etc. now under /admin */}

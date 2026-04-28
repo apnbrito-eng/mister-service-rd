@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { db } from '../firebase/config';
-import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
-import { UbicacionVehiculo } from '../types';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { OrdenServicio, UbicacionVehiculo } from '../types';
 import { suscribirUbicacionVehiculo, calcularETA } from '../services/gps.service';
 import { parseFirestoreDate } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Logo from '../components/Logo';
-import { AlertCircle, MapPin, Clock, Navigation, User, Wrench, Wifi, WifiOff, CheckCircle, Truck, RefreshCw } from 'lucide-react';
+import FeedbackNPS, { FeedbackYaEnviado } from '../components/public/FeedbackNPS';
+import { useConfigWeb } from '../hooks/useConfigWeb';
+import { AlertCircle, Clock, User, Wrench, Wifi, WifiOff, CheckCircle, RefreshCw } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
@@ -65,6 +67,7 @@ function AutoCenterMap({ latVehiculo, lngVehiculo, latCliente, lngCliente }: { l
 
 interface OrdenMinima {
   id: string;
+  numero?: string;
   clienteNombre: string;
   clienteLat?: number;
   clienteLng?: number;
@@ -74,6 +77,7 @@ interface OrdenMinima {
   fechaCita?: Date;
   tecnicoNombre?: string;
   fase: string;
+  feedback?: NonNullable<OrdenServicio['feedback']>;
   trackingGPS?: {
     habilitado: boolean;
     token: string;
@@ -84,6 +88,7 @@ interface OrdenMinima {
 
 export default function TrackingCliente() {
   const { token } = useParams<{ token: string }>();
+  const { config: configWeb } = useConfigWeb();
   const [loading, setLoading] = useState(true);
   const [orden, setOrden] = useState<OrdenMinima | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -104,23 +109,54 @@ export default function TrackingCliente() {
       const doc = snap.docs[0];
       const raw = doc.data();
       const tg = raw.trackingGPS as Record<string, unknown> | undefined;
+      const fase = (raw.fase as string) || '';
+      const ordenCerrada = fase === 'cerrado' || fase === 'trabajo_realizado';
 
-      if (!tg?.habilitado) {
-        setError('El seguimiento no está disponible en este momento');
-        setLoading(false);
-        return;
+      // Si la orden ya está cerrada, permitimos renderizar la página igual
+      // aunque el tracking GPS esté deshabilitado o expirado — para que el
+      // cliente pueda ver el feedback NPS.
+      if (!ordenCerrada) {
+        if (!tg?.habilitado) {
+          setError('El seguimiento no está disponible en este momento');
+          setLoading(false);
+          return;
+        }
+        const expiresAt = parseFirestoreDate(tg.expiresAt);
+        if (expiresAt && expiresAt < new Date()) {
+          setError('Este enlace de seguimiento ha expirado');
+          setLoading(false);
+          return;
+        }
       }
 
-      // Check expiration
-      const expiresAt = parseFirestoreDate(tg.expiresAt);
-      if (expiresAt && expiresAt < new Date()) {
-        setError('Este enlace de seguimiento ha expirado');
-        setLoading(false);
-        return;
+      const expiresAt = tg ? parseFirestoreDate(tg.expiresAt) : null;
+
+      // Rehidratar feedback (defensivo, sin parseOrden completo para evitar
+      // pegar todo el shape de OrdenServicio en la query pública).
+      let feedback: NonNullable<OrdenServicio['feedback']> | undefined;
+      if (raw.feedback && typeof raw.feedback === 'object') {
+        const f = raw.feedback as Record<string, unknown>;
+        const npsRaw = f.nps;
+        const fecha = parseFirestoreDate(f.fechaFeedback);
+        if (typeof npsRaw === 'number' && npsRaw >= 0 && npsRaw <= 10 && fecha) {
+          const ratingTipo: 'detractor' | 'pasivo' | 'promotor' =
+            f.ratingTipo === 'detractor' || f.ratingTipo === 'pasivo' || f.ratingTipo === 'promotor'
+              ? f.ratingTipo
+              : npsRaw <= 6 ? 'detractor' : npsRaw <= 8 ? 'pasivo' : 'promotor';
+          feedback = {
+            nps: npsRaw,
+            ratingTipo,
+            fechaFeedback: fecha,
+          };
+          if (typeof f.comentario === 'string' && f.comentario.length > 0) feedback.comentario = f.comentario;
+          if (f.googleReviewClicked === true) feedback.googleReviewClicked = true;
+          if (f.whatsappContactClicked === true) feedback.whatsappContactClicked = true;
+        }
       }
 
       setOrden({
         id: doc.id,
+        numero: (raw.numero as string) || undefined,
         clienteNombre: (raw.clienteNombre as string) || '',
         clienteLat: raw.clienteLat as number | undefined,
         clienteLng: raw.clienteLng as number | undefined,
@@ -129,13 +165,16 @@ export default function TrackingCliente() {
         equipoMarca: raw.equipoMarca as string | undefined,
         fechaCita: parseFirestoreDate(raw.fechaCita) || undefined,
         tecnicoNombre: raw.tecnicoNombre as string | undefined,
-        fase: (raw.fase as string) || '',
-        trackingGPS: {
-          habilitado: true,
-          token: (tg.token as string) || '',
-          vehiculoId: (tg.vehiculoId as string) || '',
-          expiresAt: expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000),
-        },
+        fase,
+        feedback,
+        trackingGPS: tg && tg.habilitado
+          ? {
+              habilitado: true,
+              token: (tg.token as string) || '',
+              vehiculoId: (tg.vehiculoId as string) || '',
+              expiresAt: expiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000),
+            }
+          : undefined,
       });
       setError(null);
       setLoading(false);
@@ -193,17 +232,40 @@ export default function TrackingCliente() {
     );
   }
 
-  // Check if service already completed
+  // Servicio completado: mostrar mensaje de cierre + bloque de feedback NPS
   if (['trabajo_realizado', 'cerrado'].includes(orden.fase)) {
+    const feedbackHabilitado =
+      orden.fase === 'cerrado' && (configWeb?.feedbackNPS?.habilitado !== false);
+    // Numero del coordinador para detractores: primer numero activo del config
+    const numeroCoord = configWeb?.whatsapp?.numeros?.find((n) => n.activo)?.numero;
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md text-center">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle size={32} className="text-green-600" />
+      <div className="min-h-screen bg-gradient-to-br from-green-500 to-green-700 flex items-start justify-center p-4 py-8">
+        <div className="w-full max-w-md space-y-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 text-center">
+            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle size={32} className="text-green-600" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">¡Servicio completado!</h2>
+            <p className="text-gray-600">El técnico ya completó el servicio en su domicilio.</p>
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">¡Servicio completado!</h2>
-          <p className="text-gray-600 mb-4">✅ El técnico ya completó el servicio en su domicilio.</p>
-          <p className="text-xs text-gray-400 mt-6">Mister Service RD · Gracias por su confianza</p>
+
+          {feedbackHabilitado && (
+            orden.feedback
+              ? <FeedbackYaEnviado feedback={orden.feedback} />
+              : token
+                ? <FeedbackNPS
+                    token={token}
+                    clienteNombre={orden.clienteNombre}
+                    ordenNumero={orden.numero}
+                    numeroWhatsAppCoordinador={numeroCoord}
+                    configFeedback={configWeb?.feedbackNPS}
+                  />
+                : null
+          )}
+
+          <p className="text-center text-xs text-white/80">
+            Mister Service RD · Gracias por su confianza
+          </p>
         </div>
       </div>
     );

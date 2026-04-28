@@ -122,6 +122,23 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
                 Cancelada
               </span>
             )}
+            {orden.feedback && (() => {
+              const tipo = orden.feedback.ratingTipo;
+              const colorBadge =
+                tipo === 'promotor' ? 'bg-green-100 text-green-700'
+                  : tipo === 'pasivo' ? 'bg-amber-100 text-amber-700'
+                    : 'bg-red-100 text-red-700';
+              const titulo = tipo === 'promotor' ? 'Promotor'
+                : tipo === 'pasivo' ? 'Pasivo' : 'Detractor';
+              return (
+                <span
+                  title={`Cliente ${titulo} · NPS ${orden.feedback.nps}/10${orden.feedback.comentario ? ` · "${orden.feedback.comentario}"` : ''}`}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold cursor-help ${colorBadge}`}
+                >
+                  NPS {orden.feedback.nps}
+                </span>
+              );
+            })()}
           </div>
           <p className="text-sm font-medium text-gray-900 truncate">
             {formatearEquipoLabel(orden)} - {orden.clienteNombre}

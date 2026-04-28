@@ -5,6 +5,7 @@ import {
   ConfigHero,
   ConfigEstadisticas,
   ConfigContacto,
+  ConfigFeedbackNPS,
   NumeroWhatsApp,
   obtenerConfigWeb,
   guardarConfigWeb,
@@ -22,6 +23,7 @@ import {
   X,
   Trash2,
   Upload,
+  Star,
 } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import ConfigFormularioAgendarSection from '../components/admin/ConfigFormularioAgendarSection';
@@ -37,6 +39,7 @@ export default function ConfiguracionWeb() {
   const [savingEstadisticas, setSavingEstadisticas] = useState(false);
   const [savingContacto, setSavingContacto] = useState(false);
   const [savingMarcas, setSavingMarcas] = useState(false);
+  const [savingFeedback, setSavingFeedback] = useState(false);
   const [uploadingHero, setUploadingHero] = useState(false);
 
   // New marca input
@@ -229,6 +232,32 @@ export default function ConfiguracionWeb() {
       toast.error('Error al guardar marcas');
     } finally {
       setSavingMarcas(false);
+    }
+  };
+
+  // ─── Feedback NPS helpers ──────────────────────────────
+
+  const updateFeedback = (partial: Partial<ConfigFeedbackNPS>) => {
+    setConfig((prev) => ({
+      ...prev,
+      feedbackNPS: {
+        habilitado: prev.feedbackNPS?.habilitado ?? true,
+        ...prev.feedbackNPS,
+        ...partial,
+      },
+    }));
+  };
+
+  const guardarFeedback = async () => {
+    setSavingFeedback(true);
+    try {
+      await guardarConfigWeb(config);
+      toast.success('Feedback NPS guardado correctamente');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar Feedback NPS');
+    } finally {
+      setSavingFeedback(false);
     }
   };
 
@@ -714,6 +743,88 @@ export default function ConfiguracionWeb() {
           >
             <Save className="w-4 h-4" />
             {savingMarcas ? 'Guardando...' : 'Guardar Marcas'}
+          </button>
+        </div>
+      </div>
+
+      {/* ────── Section 6: Feedback NPS ────── */}
+      <div className={cardClass}>
+        <div className="flex items-center gap-2">
+          <Star className="w-5 h-5 text-emerald-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Feedback NPS de órdenes</h2>
+        </div>
+        <p className="text-xs text-gray-500 -mt-2">
+          Cuando una orden se cierra, el cliente entra a su link de tracking y ve una pregunta NPS (0-10).
+          Detractores reciben un canal directo a un coordinador; promotores reciben un enlace a Google Reviews.
+        </p>
+
+        {/* Habilitado */}
+        <div className="flex items-center gap-3">
+          <label className="text-sm font-medium text-gray-700">
+            Habilitar feedback en /tracking
+          </label>
+          <button
+            type="button"
+            onClick={() =>
+              updateFeedback({ habilitado: !(config.feedbackNPS?.habilitado ?? true) })
+            }
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+              config.feedbackNPS?.habilitado !== false ? 'bg-green-500' : 'bg-gray-300'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                config.feedbackNPS?.habilitado !== false ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+
+        <div>
+          <label className={labelClass}>URL de reseñas de Google</label>
+          <input
+            type="url"
+            className={inputClass}
+            value={config.feedbackNPS?.googleReviewsUrl || ''}
+            onChange={(e) => updateFeedback({ googleReviewsUrl: e.target.value })}
+            placeholder="https://g.page/r/CXXX..."
+          />
+          <p className="text-[11px] text-gray-500 mt-1">
+            Cuando un cliente da NPS 9-10, verá un botón para dejarte reseña en este enlace.
+          </p>
+        </div>
+
+        <div>
+          <label className={labelClass}>Mensaje WhatsApp para detractores</label>
+          <textarea
+            className={`${inputClass} min-h-[70px] resize-y`}
+            value={config.feedbackNPS?.mensajeWhatsAppDetractor || ''}
+            onChange={(e) =>
+              updateFeedback({ mensajeWhatsAppDetractor: e.target.value })
+            }
+            placeholder="Hola, tuve un servicio recientemente y quiero compartirles mi experiencia."
+          />
+        </div>
+
+        <div>
+          <label className={labelClass}>Mensaje de agradecimiento</label>
+          <textarea
+            className={`${inputClass} min-h-[70px] resize-y`}
+            value={config.feedbackNPS?.mensajeAgradecimiento || ''}
+            onChange={(e) => updateFeedback({ mensajeAgradecimiento: e.target.value })}
+            placeholder="Gracias por tu feedback. Cada respuesta nos ayuda a mejorar."
+          />
+        </div>
+
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={guardarFeedback}
+            disabled={savingFeedback}
+            className={saveBtnClass}
+          >
+            <Save className="w-4 h-4" />
+            {savingFeedback ? 'Guardando...' : 'Guardar Feedback NPS'}
           </button>
         </div>
       </div>
