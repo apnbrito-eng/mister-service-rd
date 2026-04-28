@@ -112,7 +112,7 @@ Este repo tiene un equipo de 5 agentes especializados que trabajan en conjunto:
 
 **Cómo agregar o modificar agentes:** editar los archivos en `.claude/agents/*.md`. El frontmatter define el `name` (usado en `Agent("name", ...)`) y el `description` (usado por Claude para decidir cuándo delegar).
 
-**Deploy Hook (para `devops`):** `https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/kfkia6Sqin` — POST sin body.
+**Deploy Hook (para `devops`):** `https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/dqfSS3mCJK` — POST sin body. Backup por si el webhook GitHub→Vercel se atora. Rotado el 28 abr 2026 tras incidente de webhook stale (resuelto con Disconnect/Reconnect del repo).
 
 ## Banner de nueva versión
 
