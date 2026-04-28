@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff, MapPin, Loader2, FileText } from 'lucide-react';
+import { Settings, Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff, MapPin, Loader2, FileText, ChevronUp, ChevronDown, ListPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfigGPS, ProveedorGPS, Personal, OrdenServicio } from '../types';
 import { obtenerConfigGPS, guardarConfigGPS } from '../services/gps.service';
@@ -7,7 +7,11 @@ import { geocodificarDireccion } from '../services/geocoding.service';
 import { suscribirConfigFiscal, actualizarConfigFiscal, ConfigFiscal } from '../services/configFiscal.service';
 import { suscribirConfigEmpresa, actualizarConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa } from '../services/configEmpresa.service';
 import { suscribirTiposEquipo, actualizarTiposEquipo } from '../services/configTiposEquipo.service';
-import { sincronizarTiposEquipoPublicos } from '../services/configWeb.service';
+import {
+  sincronizarTiposEquipoPublicos,
+  sincronizarModelosPorTipoEquipo,
+} from '../services/configWeb.service';
+import { useConfigWeb } from '../hooks/useConfigWeb';
 import { collection, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { parseOrden, TIPOS_EQUIPO } from '../utils';
@@ -145,6 +149,38 @@ export default function Configuracion() {
   const [tiposEquipo, setTiposEquipo] = useState<string[]>([...TIPOS_EQUIPO]);
   const [nuevoTipo, setNuevoTipo] = useState('');
 
+  // ─── Catálogo de modelos por tipo ─────────────────────
+  // Solo el rol `administrador` edita. Coordinadora/secretaria lo ven en
+  // read-only. Buffer local + botón "Guardar" para evitar persistir cada
+  // tecla y permitir reordenar antes de commitear.
+  const esAdminPuro = userProfile?.rol === 'administrador';
+  const { config: configWebSnapshot } = useConfigWeb();
+  const [modelosPorTipo, setModelosPorTipo] = useState<{ [tipo: string]: string[] }>({});
+  const [modelosDirty, setModelosDirty] = useState(false);
+  const [modelosSaving, setModelosSaving] = useState(false);
+  const [nuevoModeloPorTipo, setNuevoModeloPorTipo] = useState<{ [tipo: string]: string }>({});
+
+  // Sincroniza el buffer local con la última config publicada cuando NO hay
+  // cambios pendientes. Si el admin tiene cambios en buffer, no los pisa
+  // (evita perder edición si llegan eventos del listener mientras edita).
+  useEffect(() => {
+    if (modelosDirty) return;
+    const fromConfig = configWebSnapshot?.modelosPorTipoEquipo;
+    if (fromConfig && Object.keys(fromConfig).length > 0) {
+      setModelosPorTipo(fromConfig);
+    } else {
+      // Defaults sensatos cuando el admin nunca tocó esta sección.
+      setModelosPorTipo({
+        'Lavadora': ['Torre', 'Individual'],
+        'Nevera': ['Side-by-side', 'French door', 'Top freezer', 'Mini bar'],
+        'Estufa': ['Eléctrica', 'Gas', 'Mixta'],
+        'Aire Acondicionado': ['Split', 'Ventana', 'Portátil', 'Cassette'],
+        'Microondas': [],
+        'Secadora': ['Torre', 'Individual'],
+      });
+    }
+  }, [configWebSnapshot, modelosDirty]);
+
   useEffect(() => {
     const unsubEmpresa = suscribirConfigEmpresa(cfg => setEmpresa(cfg));
     const unsubTipos = suscribirTiposEquipo(lista => setTiposEquipo(lista));
@@ -153,6 +189,64 @@ export default function Configuracion() {
       unsubTipos();
     };
   }, []);
+
+  const handleAgregarModelo = (tipo: string) => {
+    if (!esAdminPuro) return;
+    const valor = (nuevoModeloPorTipo[tipo] || '').trim();
+    if (!valor) return;
+    const actuales = modelosPorTipo[tipo] || [];
+    if (actuales.some(m => m.toLowerCase() === valor.toLowerCase())) {
+      toast.error('Ese modelo ya existe en este tipo');
+      return;
+    }
+    setModelosPorTipo(prev => ({
+      ...prev,
+      [tipo]: [...(prev[tipo] || []), valor],
+    }));
+    setNuevoModeloPorTipo(prev => ({ ...prev, [tipo]: '' }));
+    setModelosDirty(true);
+  };
+
+  const handleEliminarModelo = (tipo: string, modelo: string) => {
+    if (!esAdminPuro) return;
+    setModelosPorTipo(prev => ({
+      ...prev,
+      [tipo]: (prev[tipo] || []).filter(m => m !== modelo),
+    }));
+    setModelosDirty(true);
+  };
+
+  const handleMoverModelo = (tipo: string, indice: number, direccion: -1 | 1) => {
+    if (!esAdminPuro) return;
+    setModelosPorTipo(prev => {
+      const lista = [...(prev[tipo] || [])];
+      const destino = indice + direccion;
+      if (destino < 0 || destino >= lista.length) return prev;
+      [lista[indice], lista[destino]] = [lista[destino], lista[indice]];
+      return { ...prev, [tipo]: lista };
+    });
+    setModelosDirty(true);
+  };
+
+  const handleGuardarModelos = async () => {
+    if (!esAdminPuro) return;
+    if (!modelosDirty) return;
+    setModelosSaving(true);
+    try {
+      // Solo persistimos las keys que están en `tiposEquipo` actual + las
+      // que ya existían en buffer. Si un tipo fue eliminado de la lista
+      // de tipos, ya no aparece como sección, pero preservamos la entrada
+      // en Firestore por si lo agregan de nuevo.
+      await sincronizarModelosPorTipoEquipo(modelosPorTipo);
+      setModelosDirty(false);
+      toast.success('Catálogo de modelos guardado');
+    } catch (err) {
+      console.error('[Configuracion] Error guardando modelos:', err);
+      toast.error('No se pudo guardar el catálogo. Intenta de nuevo.');
+    } finally {
+      setModelosSaving(false);
+    }
+  };
 
   const [gpsConfig, setGpsConfig] = useState<ConfigGPS>({
     proveedor: 'Dispositivo del técnico',
@@ -519,6 +613,136 @@ export default function Configuracion() {
         <p className="text-xs text-gray-500 mt-3">
           Nota: estos tipos se guardan, pero los formularios de órdenes siguen usando la lista del sistema. Agregar un tipo nuevo aquí no lo hace seleccionable al crear órdenes.
         </p>
+      </div>
+
+      {/* Catálogo de modelos por tipo de equipo */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center gap-2 mb-2">
+          <ListPlus size={20} className="text-[#1a5fa8]" />
+          <h2 className="text-lg font-semibold text-gray-900">Catálogo de modelos por tipo</h2>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">
+          Define las opciones de modelo que aparecen al cliente en{' '}
+          <span className="font-mono">/agendar</span> y al crear órdenes. Si dejas la lista
+          vacía, el campo Modelo será texto libre.
+        </p>
+        {!esAdminPuro && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 mb-4">
+            Solo administradores pueden editar el catálogo. Estás viendo la configuración en modo lectura.
+          </div>
+        )}
+
+        <div className="space-y-4">
+          {tiposEquipo.map(tipo => {
+            const modelos = modelosPorTipo[tipo] || [];
+            return (
+              <div key={tipo} className="border border-gray-200 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm font-semibold text-[#0f3460]">{tipo}</span>
+                  <span className="text-[11px] text-gray-400">
+                    {modelos.length === 0 ? 'sin modelos · texto libre' : `${modelos.length} modelo(s)`}
+                  </span>
+                </div>
+
+                {modelos.length > 0 ? (
+                  <div className="space-y-1.5 mb-3">
+                    {modelos.map((modelo, idx) => (
+                      <div
+                        key={`${tipo}-${modelo}-${idx}`}
+                        className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-1.5"
+                      >
+                        <span className="flex-1 text-sm text-gray-800">{modelo}</span>
+                        {esAdminPuro && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleMoverModelo(tipo, idx, -1)}
+                              disabled={idx === 0}
+                              className="p-1 text-gray-400 hover:text-[#1a5fa8] disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Subir"
+                            >
+                              <ChevronUp size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoverModelo(tipo, idx, 1)}
+                              disabled={idx === modelos.length - 1}
+                              className="p-1 text-gray-400 hover:text-[#1a5fa8] disabled:opacity-30 disabled:cursor-not-allowed"
+                              title="Bajar"
+                            >
+                              <ChevronDown size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEliminarModelo(tipo, modelo)}
+                              className="p-1 text-gray-400 hover:text-red-500"
+                              title="Eliminar"
+                            >
+                              <X size={14} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic mb-3">
+                    Sin modelos definidos — el cliente verá input texto libre.
+                  </p>
+                )}
+
+                {esAdminPuro && (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={nuevoModeloPorTipo[tipo] || ''}
+                      onChange={e =>
+                        setNuevoModeloPorTipo(prev => ({ ...prev, [tipo]: e.target.value }))
+                      }
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAgregarModelo(tipo);
+                        }
+                      }}
+                      placeholder="Nuevo modelo..."
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAgregarModelo(tipo)}
+                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium inline-flex items-center gap-1 transition-colors"
+                    >
+                      <Plus size={14} /> Agregar
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {tiposEquipo.length === 0 && (
+            <p className="text-sm text-gray-400 italic">
+              Agrega tipos de equipo arriba para configurar sus modelos.
+            </p>
+          )}
+        </div>
+
+        {esAdminPuro && (
+          <div className="flex items-center gap-3 mt-5 pt-4 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={handleGuardarModelos}
+              disabled={!modelosDirty || modelosSaving}
+              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {modelosSaving ? 'Guardando...' : modelosDirty ? 'Guardar cambios' : 'Sin cambios'}
+            </button>
+            {modelosDirty && (
+              <span className="text-xs text-amber-700">Hay cambios sin guardar</span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* GPS Vehicular */}

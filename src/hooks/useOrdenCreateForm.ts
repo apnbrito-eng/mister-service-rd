@@ -30,9 +30,12 @@ export interface CreateFormState {
   clienteLng: number | undefined;
   equipoTipo: string;
   equipoMarca: string;
+  /**
+   * Modelo elegido del catálogo configurable. Reemplaza el viejo campo
+   * `equipoTipoMotor` específico de Lavadora — ahora es genérico para
+   * todos los tipos.
+   */
   equipoModelo: string;
-  /** Solo se llena cuando `equipoTipo === 'Lavadora'`. */
-  equipoTipoMotor: '' | 'torre' | 'individual';
   descripcionFalla: string;
   tecnicoId: string;
   tecnicoNombre: string;
@@ -53,7 +56,6 @@ const FORM_INICIAL: CreateFormState = {
   equipoTipo: '',
   equipoMarca: '',
   equipoModelo: '',
-  equipoTipoMotor: '',
   descripcionFalla: '',
   tecnicoId: '',
   tecnicoNombre: '',
@@ -183,6 +185,15 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
     const fechaStr = citaPreset.fechaSolicitada
       ? format(citaPreset.fechaSolicitada, 'yyyy-MM-dd')
       : '';
+    // Compat con citas en flight desde antes del catálogo configurable: si
+    // la cita trae `equipoTipoMotor` legacy en lugar de `equipoModelo`, lo
+    // mapeamos al nombre del catálogo ('torre' -> 'Torre'). Citas nuevas
+    // ya guardan directamente en `equipoModelo`.
+    let equipoModeloPreset = citaPreset.equipoModelo || '';
+    if (!equipoModeloPreset && citaPreset.equipoTipoMotor) {
+      if (citaPreset.equipoTipoMotor === 'torre') equipoModeloPreset = 'Torre';
+      else if (citaPreset.equipoTipoMotor === 'individual') equipoModeloPreset = 'Individual';
+    }
     setForm({
       clienteId: '',
       clienteNombre: citaPreset.clienteNombre || '',
@@ -194,10 +205,7 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       clienteLng: typeof citaPreset.clienteLng === 'number' ? citaPreset.clienteLng : undefined,
       equipoTipo: citaPreset.equipoTipo || '',
       equipoMarca: citaPreset.equipoMarca || '',
-      equipoModelo: citaPreset.equipoModelo || '',
-      equipoTipoMotor: citaPreset.equipoTipoMotor === 'torre' || citaPreset.equipoTipoMotor === 'individual'
-        ? citaPreset.equipoTipoMotor
-        : '',
+      equipoModelo: equipoModeloPreset,
       descripcionFalla: citaPreset.descripcionProblema || citaPreset.falla || citaPreset.servicio || '',
       tecnicoId: '',
       tecnicoNombre: '',
@@ -623,15 +631,11 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       if (operariaIdDerivada) ordenData.operariaId = operariaIdDerivada;
       if (operariaNombreDerivada) ordenData.operariaNombre = operariaNombreDerivada;
 
-      // Configuración Torre/Individual: solo se persiste si el equipo es
-      // Lavadora y el usuario eligió un valor válido. Para otros tipos de
-      // equipo se omite (no se guarda como '' para no contaminar el doc).
-      if (
-        form.equipoTipo === 'Lavadora' &&
-        (form.equipoTipoMotor === 'torre' || form.equipoTipoMotor === 'individual')
-      ) {
-        ordenData.equipoTipoMotor = form.equipoTipoMotor;
-      }
+      // Nota: el campo legacy `equipoTipoMotor` ya NO se escribe. Las
+      // órdenes nuevas guardan la elección del catálogo en `equipoModelo`
+      // directamente (ej: 'Torre', 'Individual', 'French door'). El parser
+      // y `formatearEquipoLabel` siguen leyendo `equipoTipoMotor` como
+      // fallback de compat para órdenes históricas.
 
       // Campos de garantía heredados de la cita (si aplica)
       if (citaPreset?.esGarantia) {

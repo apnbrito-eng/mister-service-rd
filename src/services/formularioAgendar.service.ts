@@ -193,9 +193,12 @@ export interface PayloadEnvioCita {
   clienteSector?: string;
   equipoTipo: string;
   equipoMarca?: string;
+  /**
+   * Modelo elegido del catálogo configurable de
+   * `config_web/sitio.modelosPorTipoEquipo` (ej: 'Torre', 'French door').
+   * Si el tipo no tiene catálogo, viene como texto libre.
+   */
   equipoModelo?: string;
-  /** Configuración del motor cuando `equipoTipo === 'Lavadora'`. */
-  equipoTipoMotor?: 'torre' | 'individual';
   falla: string;
   fechaSolicitada?: string; // YYYY-MM-DD
   horaSolicitada?: string;
@@ -283,9 +286,6 @@ export async function enviarSolicitudCita(
   if (payload.clienteSector?.trim()) data.clienteSector = payload.clienteSector.trim();
   if (payload.equipoMarca?.trim()) data.equipoMarca = payload.equipoMarca.trim();
   if (payload.equipoModelo?.trim()) data.equipoModelo = payload.equipoModelo.trim();
-  if (payload.equipoTipoMotor === 'torre' || payload.equipoTipoMotor === 'individual') {
-    data.equipoTipoMotor = payload.equipoTipoMotor;
-  }
   if (payload.fotoEquipoUrl?.trim()) data.fotoEquipoUrl = payload.fotoEquipoUrl.trim();
   if (payload.citaIdProvisional?.trim()) data.citaIdProvisional = payload.citaIdProvisional.trim();
   if (payload.fechaSolicitada) {

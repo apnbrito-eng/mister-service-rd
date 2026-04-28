@@ -17,6 +17,7 @@ import WhatsAppIcon from '../icons/WhatsAppIcon';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 import LoadingSpinner from '../LoadingSpinner';
 import CampoDireccionConPlaces from '../shared/CampoDireccionConPlaces';
+import { obtenerModelosDeTipo } from '../../utils/modelosEquipo';
 
 /**
  * Fallback hardcoded usado cuando `config_web/sitio.tiposEquipoPublicos`
@@ -51,10 +52,12 @@ interface FormState {
   clienteSector: string;
   equipoTipo: string;
   equipoMarca: string;
-  /** Texto libre para todos los equipos EXCEPTO Lavadora. */
+  /**
+   * Modelo elegido del catálogo configurable (ej: 'Torre', 'Individual',
+   * 'French door', 'Split'). Si el tipo no tiene modelos definidos, se usa
+   * como input texto libre.
+   */
   equipoModelo: string;
-  /** Solo cuando `equipoTipo === 'Lavadora'`: torre o individual. */
-  equipoTipoMotor: '' | 'torre' | 'individual';
   falla: string;
   fechaSolicitada: string;
   horaSolicitada: string;
@@ -75,7 +78,6 @@ const FORM_INITIAL: FormState = {
   equipoTipo: '',
   equipoMarca: '',
   equipoModelo: '',
-  equipoTipoMotor: '',
   falla: '',
   fechaSolicitada: '',
   horaSolicitada: '',
@@ -92,7 +94,6 @@ interface DatosMensajeWhatsApp {
   equipoTipo: string;
   equipoMarca?: string;
   equipoModelo?: string;
-  equipoTipoMotor?: 'torre' | 'individual';
   falla: string;
   fechaSolicitada?: string;
   horaSolicitada?: string;
@@ -110,12 +111,10 @@ function construirMensajeWhatsApp(
   datos: DatosMensajeWhatsApp,
   camposPersonalizados: Record<string, string>,
 ): string {
-  // Sufijo del equipo: para lavadoras se prioriza Torre/Individual; para
-  // otros equipos se usa el modelo de texto libre si existe.
+  // Sufijo del equipo: si el cliente eligió un modelo del catálogo
+  // (ej: 'Torre', 'French door'), lo agregamos entre paréntesis.
   let sufijoEquipo = '';
-  if (datos.equipoTipoMotor) {
-    sufijoEquipo = ` (${datos.equipoTipoMotor === 'torre' ? 'Torre' : 'Individual'})`;
-  } else if (datos.equipoModelo) {
+  if (datos.equipoModelo) {
     sufijoEquipo = ` (${datos.equipoModelo})`;
   }
 
@@ -253,18 +252,21 @@ export default function FormularioAgendarPublico() {
     // queda huérfano y se limpia con un cron eventual si hace falta.
   };
 
-  // Reactivo: si el cliente cambia el tipo de equipo después de elegir
-  // configuración Torre/Individual, limpiamos el campo. Mismo para modelo
-  // texto libre cuando vuelve a Lavadora.
+  // Reactivo: si el cliente cambia el tipo de equipo después de elegir un
+  // modelo, limpiamos `equipoModelo` porque las opciones del catálogo
+  // (o el modo texto libre) cambian con el tipo. Usamos una ref para
+  // detectar el cambio real y NO limpiar en el mount inicial (donde
+  // equipoTipo va de '' a un valor válido — no es una "edición").
+  const tipoEquipoPrevRef = useRef<string>('');
   useEffect(() => {
-    if (form.equipoTipo !== 'Lavadora' && form.equipoTipoMotor) {
-      setForm((prev) => ({ ...prev, equipoTipoMotor: '' }));
+    const prev = tipoEquipoPrevRef.current;
+    const actual = form.equipoTipo;
+    if (prev && prev !== actual && form.equipoModelo) {
+      setForm((p) => ({ ...p, equipoModelo: '' }));
     }
-    if (form.equipoTipo === 'Lavadora' && form.equipoModelo) {
-      setForm((prev) => ({ ...prev, equipoModelo: '' }));
-    }
+    tipoEquipoPrevRef.current = actual;
     // Solo nos interesa reaccionar al cambio de tipo — no incluimos
-    // equipoTipoMotor/equipoModelo para evitar bucles.
+    // equipoModelo para evitar bucles.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.equipoTipo]);
 
@@ -302,6 +304,27 @@ export default function FormularioAgendarPublico() {
     if (Array.isArray(lista) && lista.length > 0) return lista;
     return TIPOS_EQUIPO_FALLBACK;
   }, [configWeb]);
+
+  // Catálogo de modelos por tipo (configurable). Usa defaults sensatos si
+  // el admin nunca tocó la sección — así el form sigue funcionando sin
+  // requerir lazy-init en Firestore.
+  const catalogoModelos = useMemo<{ [tipo: string]: string[] }>(() => {
+    const fromConfig = configWeb?.modelosPorTipoEquipo;
+    if (fromConfig && Object.keys(fromConfig).length > 0) return fromConfig;
+    return {
+      'Lavadora': ['Torre', 'Individual'],
+      'Nevera': ['Side-by-side', 'French door', 'Top freezer', 'Mini bar'],
+      'Estufa': ['Eléctrica', 'Gas', 'Mixta'],
+      'Aire Acondicionado': ['Split', 'Ventana', 'Portátil', 'Cassette'],
+      'Microondas': [],
+      'Secadora': ['Torre', 'Individual'],
+    };
+  }, [configWeb]);
+
+  const modelosDisponibles = useMemo(
+    () => obtenerModelosDeTipo(form.equipoTipo, catalogoModelos),
+    [form.equipoTipo, catalogoModelos],
+  );
 
   // Hoy en formato YYYY-MM-DD para `min` del input date
   const hoy = useMemo(() => {
@@ -393,16 +416,10 @@ export default function FormularioAgendarPublico() {
         }
       }
 
-      // Para lavadoras, el "modelo" en realidad es la configuración del motor
-      // (Torre/Individual). Para otros equipos, sigue siendo texto libre.
-      const equipoModeloFinal =
-        form.equipoTipo === 'Lavadora'
-          ? undefined
-          : form.equipoModelo.trim() || undefined;
-      const equipoTipoMotorFinal: 'torre' | 'individual' | undefined =
-        form.equipoTipo === 'Lavadora' && (form.equipoTipoMotor === 'torre' || form.equipoTipoMotor === 'individual')
-          ? form.equipoTipoMotor
-          : undefined;
+      // El "modelo" se guarda directamente desde el catálogo configurable
+      // (ej: 'Torre', 'Individual', 'French door'). Si el tipo no tenía
+      // modelos definidos, viene como texto libre desde el input.
+      const equipoModeloFinal = form.equipoModelo.trim() || undefined;
 
       const res = await enviarSolicitudCita({
         clienteNombre: nombre,
@@ -417,7 +434,6 @@ export default function FormularioAgendarPublico() {
         equipoTipo: form.equipoTipo,
         equipoMarca: form.equipoMarca.trim() || undefined,
         equipoModelo: equipoModeloFinal,
-        equipoTipoMotor: equipoTipoMotorFinal,
         falla: form.falla.trim(),
         fechaSolicitada: form.fechaSolicitada || undefined,
         horaSolicitada: form.horaSolicitada || undefined,
@@ -467,7 +483,6 @@ export default function FormularioAgendarPublico() {
             equipoTipo: form.equipoTipo,
             equipoMarca: form.equipoMarca.trim() || undefined,
             equipoModelo: equipoModeloFinal,
-            equipoTipoMotor: equipoTipoMotorFinal,
             falla: form.falla.trim(),
             fechaSolicitada: form.fechaSolicitada || undefined,
             horaSolicitada: form.horaSolicitada || undefined,
@@ -739,34 +754,26 @@ export default function FormularioAgendarPublico() {
         </div>
 
         <div className="mt-4">
-          {form.equipoTipo === 'Lavadora' ? (
-            <>
-              <label className={labelClass}>Configuración (opcional)</label>
-              <select
-                className={inputClass}
-                value={form.equipoTipoMotor}
-                onChange={e =>
-                  update({
-                    equipoTipoMotor: e.target.value as '' | 'torre' | 'individual',
-                  })
-                }
-              >
-                <option value="">Selecciona configuración (opcional)</option>
-                <option value="torre">Torre (lavadora-secadora vertical)</option>
-                <option value="individual">Individual (solo lavadora)</option>
-              </select>
-            </>
+          <label className={labelClass}>Modelo</label>
+          {modelosDisponibles.length > 0 ? (
+            <select
+              className={inputClass}
+              value={form.equipoModelo}
+              onChange={e => update({ equipoModelo: e.target.value })}
+            >
+              <option value="">Selecciona configuración (opcional)</option>
+              {modelosDisponibles.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
           ) : (
-            <>
-              <label className={labelClass}>Modelo</label>
-              <input
-                type="text"
-                className={inputClass}
-                value={form.equipoModelo}
-                onChange={e => update({ equipoModelo: e.target.value })}
-                placeholder="Opcional"
-              />
-            </>
+            <input
+              type="text"
+              className={inputClass}
+              value={form.equipoModelo}
+              onChange={e => update({ equipoModelo: e.target.value })}
+              placeholder="Modelo específico (opcional)"
+            />
           )}
         </div>
 

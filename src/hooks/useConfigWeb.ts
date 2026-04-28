@@ -25,6 +25,26 @@ function isCacheFresh(): boolean {
   return cachedConfig !== null && (Date.now() - cacheTimestamp) < CACHE_TTL;
 }
 
+/**
+ * Parsea defensivamente `modelosPorTipoEquipo` desde Firestore en el
+ * listener real-time. Devuelve `undefined` (no defaults) cuando la forma
+ * no calza, para que el caller pueda decidir entre defaults o input libre.
+ */
+function parseModelosPorTipoEquipoLive(
+  raw: unknown,
+): { [tipoEquipo: string]: string[] } | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: { [tipoEquipo: string]: string[] } = {};
+  for (const [tipo, lista] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof tipo !== 'string' || !tipo) continue;
+    if (!Array.isArray(lista)) continue;
+    out[tipo] = lista.filter(
+      (x): x is string => typeof x === 'string' && x.trim().length > 0,
+    );
+  }
+  return out;
+}
+
 // ─── Hook principal ──────────────────────────────────
 
 export function useConfigWeb(): { config: ConfigWeb; loading: boolean } {
@@ -59,6 +79,7 @@ export function useConfigWeb(): { config: ConfigWeb; loading: boolean } {
                   (x): x is string => typeof x === 'string' && !!x,
                 )
               : CONFIG_WEB_DEFAULTS.tiposEquipoPublicos,
+            modelosPorTipoEquipo: parseModelosPorTipoEquipoLive(data.modelosPorTipoEquipo),
             feedbackNPS:
               (data.feedbackNPS as ConfigFeedbackNPS) || CONFIG_WEB_DEFAULTS.feedbackNPS,
             updatedAt: data.updatedAt?.toDate?.() || undefined,

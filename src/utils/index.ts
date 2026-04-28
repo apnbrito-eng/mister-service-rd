@@ -318,14 +318,20 @@ export const TIPOS_EQUIPO = ['Lavadora', 'Secadora', 'Nevera', 'Estufa', 'Aire A
 
 /**
  * Formatea una línea descriptiva del equipo para listar en cards y resúmenes.
- * Usa " · " como separador. Cuando hay `equipoTipoMotor` (lavadoras), se
- * muestra como sufijo en vez del modelo de texto libre.
+ * Usa " · " como separador.
+ *
+ * Después del sprint del catálogo configurable, `equipoModelo` ya guarda la
+ * opción elegida del catálogo (incluyendo "Torre" / "Individual" para
+ * lavadoras). `equipoTipoMotor` queda solo como fallback histórico para
+ * órdenes pre-catálogo que no tienen `equipoModelo` poblado.
  *
  * Ejemplos:
- *   formatearEquipoLabel({ equipoTipo: 'Lavadora', equipoMarca: 'Mabe', equipoTipoMotor: 'torre' })
+ *   formatearEquipoLabel({ equipoTipo: 'Lavadora', equipoMarca: 'Mabe', equipoModelo: 'Torre' })
  *     => 'Lavadora · Mabe · Torre'
- *   formatearEquipoLabel({ equipoTipo: 'Nevera', equipoMarca: 'LG', equipoModelo: 'GR-XXXX' })
- *     => 'Nevera · LG · GR-XXXX'
+ *   formatearEquipoLabel({ equipoTipo: 'Nevera', equipoMarca: 'LG', equipoModelo: 'French door' })
+ *     => 'Nevera · LG · French door'
+ *   formatearEquipoLabel({ equipoTipo: 'Lavadora', equipoMarca: 'Mabe', equipoTipoMotor: 'torre' })
+ *     => 'Lavadora · Mabe · Torre' (orden histórica, fallback a equipoTipoMotor)
  */
 export function formatearEquipoLabel(equipo: {
   equipoTipo?: string;
@@ -336,10 +342,12 @@ export function formatearEquipoLabel(equipo: {
   const partes: string[] = [];
   if (equipo.equipoTipo) partes.push(equipo.equipoTipo);
   if (equipo.equipoMarca) partes.push(equipo.equipoMarca);
-  if (equipo.equipoTipoMotor) {
-    partes.push(equipo.equipoTipoMotor === 'torre' ? 'Torre' : 'Individual');
-  } else if (equipo.equipoModelo) {
+  if (equipo.equipoModelo) {
     partes.push(equipo.equipoModelo);
+  } else if (equipo.equipoTipoMotor) {
+    // Fallback histórico para órdenes pre-catálogo (sprint Parte 2) que
+    // sólo tienen equipoTipoMotor sin equipoModelo poblado.
+    partes.push(equipo.equipoTipoMotor === 'torre' ? 'Torre' : 'Individual');
   }
   return partes.join(' · ');
 }

@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, User, Wrench, Calendar, AlertTriangle, CheckCircle, Loader2, Edit2, Home, ChevronDown, Shield } from 'lucide-react';
 import { Cliente, Personal, OrdenServicio, DireccionCliente, CitaPorConfirmar } from '../../types';
 import {
   TIPOS_EQUIPO, DURACIONES, HORARIOS, HORARIOS_LABEL,
   formatTelefono, faseLabel,
 } from '../../utils';
+import { obtenerModelosDeTipo } from '../../utils/modelosEquipo';
+import { useConfigWeb } from '../../hooks/useConfigWeb';
 import Modal from '../Modal';
 import EditarClienteModal from '../clientes/EditarClienteModal';
 import CampoDireccionConPlaces from '../shared/CampoDireccionConPlaces';
@@ -21,9 +23,11 @@ export interface CreateFormState {
   clienteLng: number | undefined;
   equipoTipo: string;
   equipoMarca: string;
+  /**
+   * Modelo elegido del catálogo configurable (ej: 'Torre', 'Individual',
+   * 'French door'). Si el tipo no tiene modelos definidos, es texto libre.
+   */
   equipoModelo: string;
-  /** Solo se llena cuando `equipoTipo === 'Lavadora'`. */
-  equipoTipoMotor: '' | 'torre' | 'individual';
   descripcionFalla: string;
   tecnicoId: string;
   tecnicoNombre: string;
@@ -152,16 +156,42 @@ export default function OrdenCreateModal({
       (citaPreset.camposPersonalizados && Object.keys(citaPreset.camposPersonalizados).length > 0))
   );
 
-  // Reactivo: si la coord cambia el tipo de equipo (de Lavadora a otra cosa
-  // o viceversa), limpiamos el campo dependiente para evitar persistir
-  // datos inconsistentes (ej: Torre + tipo Nevera).
+  // Catálogo configurable de modelos (vive en `config_web/sitio`). Cuando
+  // el admin guarda cambios desde /admin/configuracion, el listener
+  // re-renderiza este modal con las nuevas opciones.
+  const { config: configWeb } = useConfigWeb();
+  const catalogoModelos = useMemo<{ [tipo: string]: string[] }>(() => {
+    const fromConfig = configWeb?.modelosPorTipoEquipo;
+    if (fromConfig && Object.keys(fromConfig).length > 0) return fromConfig;
+    // Fallback inline: defaults sensatos para que el modal funcione antes
+    // de que el admin haya tocado el editor por primera vez.
+    return {
+      'Lavadora': ['Torre', 'Individual'],
+      'Nevera': ['Side-by-side', 'French door', 'Top freezer', 'Mini bar'],
+      'Estufa': ['Eléctrica', 'Gas', 'Mixta'],
+      'Aire Acondicionado': ['Split', 'Ventana', 'Portátil', 'Cassette'],
+      'Microondas': [],
+      'Secadora': ['Torre', 'Individual'],
+    };
+  }, [configWeb]);
+  const modelosDisponibles = useMemo(
+    () => obtenerModelosDeTipo(form.equipoTipo, catalogoModelos),
+    [form.equipoTipo, catalogoModelos],
+  );
+
+  // Reactivo: si la coord cambia el tipo de equipo, limpiamos
+  // `equipoModelo` porque las opciones del catálogo (o el modo texto
+  // libre) cambian con el tipo. Usamos una ref para detectar el cambio
+  // real y NO limpiar en el mount inicial (donde equipoTipo va de '' a un
+  // valor válido — ej: al abrir el modal con un citaPreset).
+  const tipoEquipoPrevRef = useRef<string>('');
   useEffect(() => {
-    if (form.equipoTipo !== 'Lavadora' && form.equipoTipoMotor) {
-      setForm(f => ({ ...f, equipoTipoMotor: '' }));
-    }
-    if (form.equipoTipo === 'Lavadora' && form.equipoModelo) {
+    const prev = tipoEquipoPrevRef.current;
+    const actual = form.equipoTipo;
+    if (prev && prev !== actual && form.equipoModelo) {
       setForm(f => ({ ...f, equipoModelo: '' }));
     }
+    tipoEquipoPrevRef.current = actual;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.equipoTipo]);
 
@@ -592,35 +622,26 @@ export default function OrdenCreateModal({
                 />
               </div>
               <div>
-                {form.equipoTipo === 'Lavadora' ? (
-                  <>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Configuración</label>
-                    <select
-                      value={form.equipoTipoMotor}
-                      onChange={e =>
-                        setForm(f => ({
-                          ...f,
-                          equipoTipoMotor: e.target.value as '' | 'torre' | 'individual',
-                        }))
-                      }
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
-                    >
-                      <option value="">Selecciona configuración (opcional)</option>
-                      <option value="torre">Torre (lavadora-secadora vertical)</option>
-                      <option value="individual">Individual (solo lavadora)</option>
-                    </select>
-                  </>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Modelo</label>
+                {modelosDisponibles.length > 0 ? (
+                  <select
+                    value={form.equipoModelo}
+                    onChange={e => setForm(f => ({ ...f, equipoModelo: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
+                  >
+                    <option value="">Selecciona configuración (opcional)</option>
+                    {modelosDisponibles.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
                 ) : (
-                  <>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Modelo</label>
-                    <input
-                      type="text"
-                      value={form.equipoModelo}
-                      onChange={e => setForm(f => ({ ...f, equipoModelo: e.target.value }))}
-                      placeholder="Modelo del equipo"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                    />
-                  </>
+                  <input
+                    type="text"
+                    value={form.equipoModelo}
+                    onChange={e => setForm(f => ({ ...f, equipoModelo: e.target.value }))}
+                    placeholder="Modelo del equipo"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  />
                 )}
               </div>
             </div>

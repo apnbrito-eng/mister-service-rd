@@ -80,6 +80,16 @@ export interface ConfigWeb {
    */
   tiposEquipoPublicos?: string[];
   /**
+   * Catálogo configurable de modelos por tipo de equipo. Se usa como
+   * source-of-truth para renderizar dinámicamente el campo "Modelo" del
+   * formulario público `/agendar` y del modal interno "Crear Orden":
+   *   - Si el tipo elegido tiene modelos definidos -> dropdown.
+   *   - Si la lista está vacía o no existe -> input texto libre.
+   * Editado desde `/admin/configuracion`. Lectura pública garantizada por
+   * vivir en este mismo doc.
+   */
+  modelosPorTipoEquipo?: { [tipoEquipo: string]: string[] };
+  /**
    * Configuración del sistema NPS de feedback al cerrar orden (sprint
    * feedback). Lectura pública desde `/tracking/:token`, edición admin
    * desde `/admin/web`.
@@ -131,6 +141,14 @@ export const CONFIG_WEB_DEFAULTS: ConfigWeb = {
     'Secadora',
     'Otro',
   ],
+  modelosPorTipoEquipo: {
+    'Lavadora': ['Torre', 'Individual'],
+    'Nevera': ['Side-by-side', 'French door', 'Top freezer', 'Mini bar'],
+    'Estufa': ['Eléctrica', 'Gas', 'Mixta'],
+    'Aire Acondicionado': ['Split', 'Ventana', 'Portátil', 'Cassette'],
+    'Microondas': [],
+    'Secadora': ['Torre', 'Individual'],
+  },
   feedbackNPS: {
     habilitado: true,
     mensajeAgradecimiento: 'Gracias por tu feedback. Cada respuesta nos ayuda a mejorar.',
@@ -142,6 +160,31 @@ export const CONFIG_WEB_DEFAULTS: ConfigWeb = {
 // ─── Referencia Firestore ────────────────────────────
 
 const CONFIG_DOC = doc(db, 'config_web', 'sitio');
+
+// ─── Helpers internos ────────────────────────────────
+
+/**
+ * Parsea defensivamente el campo `modelosPorTipoEquipo` desde Firestore.
+ * Acepta sólo objects donde cada valor sea array de strings no vacíos.
+ * Retorna `undefined` si la forma no calza; el caller decide si usa
+ * defaults o no para no pisar la edición del admin (puede haber dejado
+ * una key vacía a propósito → input texto libre).
+ */
+function parseModelosPorTipoEquipo(
+  raw: unknown,
+): { [tipoEquipo: string]: string[] } | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const out: { [tipoEquipo: string]: string[] } = {};
+  for (const [tipo, lista] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof tipo !== 'string' || !tipo) continue;
+    if (!Array.isArray(lista)) continue;
+    const limpia = lista.filter(
+      (x): x is string => typeof x === 'string' && x.trim().length > 0,
+    );
+    out[tipo] = limpia;
+  }
+  return out;
+}
 
 // ─── Funciones ───────────────────────────────────────
 
@@ -165,6 +208,7 @@ export async function obtenerConfigWeb(): Promise<ConfigWeb> {
             (x): x is string => typeof x === 'string' && !!x,
           )
         : CONFIG_WEB_DEFAULTS.tiposEquipoPublicos,
+      modelosPorTipoEquipo: parseModelosPorTipoEquipo(data.modelosPorTipoEquipo),
       feedbackNPS:
         (data.feedbackNPS as ConfigFeedbackNPS) || CONFIG_WEB_DEFAULTS.feedbackNPS,
       updatedAt: data.updatedAt?.toDate?.() || undefined,
@@ -203,6 +247,36 @@ export async function sincronizarTiposEquipoPublicos(
     CONFIG_DOC,
     {
       tiposEquipoPublicos: listaLimpia,
+      updatedAt: Timestamp.now(),
+    },
+    { merge: true },
+  );
+}
+
+/**
+ * Persiste el catálogo `modelosPorTipoEquipo` en `config_web/sitio`. Limpia
+ * los valores antes de escribir: cada array se filtra para descartar
+ * strings vacíos y trim. Las keys de tipos vacíos se preservan (significa
+ * "este tipo está en el catálogo pero usa input texto libre"), así que
+ * NO eliminamos arrays vacíos. Llamar desde `/admin/configuracion` cuando
+ * el admin guarda cambios al editor.
+ */
+export async function sincronizarModelosPorTipoEquipo(
+  modelosPorTipoEquipo: { [tipoEquipo: string]: string[] },
+): Promise<void> {
+  const limpio: { [tipoEquipo: string]: string[] } = {};
+  for (const [tipo, lista] of Object.entries(modelosPorTipoEquipo)) {
+    const tipoTrim = tipo.trim();
+    if (!tipoTrim) continue;
+    if (!Array.isArray(lista)) continue;
+    limpio[tipoTrim] = lista
+      .map(m => (typeof m === 'string' ? m.trim() : ''))
+      .filter(m => m.length > 0);
+  }
+  await setDoc(
+    CONFIG_DOC,
+    {
+      modelosPorTipoEquipo: limpio,
       updatedAt: Timestamp.now(),
     },
     { merge: true },

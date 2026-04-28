@@ -184,9 +184,12 @@ export interface OrdenServicio {
   equipoMarca: string;
   equipoModelo?: string;
   /**
-   * Configuración del motor cuando el equipo es Lavadora. Permite distinguir
-   * lavadoras tipo torre (combinadas con secadora) de las individuales.
-   * Solo se llena cuando `equipoTipo === 'Lavadora'`.
+   * @deprecated Migrado a `equipoModelo` desde el sprint del catálogo
+   * configurable. Las nuevas órdenes guardan la elección del catálogo
+   * directamente en `equipoModelo` (ej: 'Torre', 'Individual', 'French door').
+   * Este campo se preserva para compat con órdenes históricas: `parseOrden`
+   * lo rehidrata y `formatearEquipoLabel` lo usa como fallback cuando
+   * `equipoModelo` está vacío.
    */
   equipoTipoMotor?: 'torre' | 'individual';
   descripcionFalla: string;
@@ -539,8 +542,11 @@ export interface CitaPorConfirmar {
   equipoMarca?: string;
   equipoModelo?: string;
   /**
-   * Configuración del motor cuando el equipo es Lavadora (torre/individual).
-   * Capturado desde el formulario público `/agendar` o desde el modal admin.
+   * @deprecated Migrado al catálogo configurable. Las citas nuevas guardan
+   * la elección directamente en `equipoModelo` (ej: 'Torre'). Se conserva
+   * para compat con citas en flight enviadas antes del sprint: el modal
+   * "Confirmar y Agendar" mapea `'torre'/'individual'` a `equipoModelo` al
+   * pre-llenar el form.
    */
   equipoTipoMotor?: 'torre' | 'individual';
   /** UUID generado client-side al montar el form público para trazar la
