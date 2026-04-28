@@ -164,6 +164,18 @@ function Footer({ config }: { config: ConfigWeb }) {
           <div>
             <h3 className="font-semibold text-lg mb-4">Contacto</h3>
             <div className="space-y-3">
+              {config.whatsapp.numeros.some(n => n.activo) && (
+                <a
+                  href={getWhatsAppUrl(config)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-3 bg-green-500 hover:bg-green-600 text-white text-base sm:text-lg font-semibold px-6 py-4 rounded-xl shadow-lg transition w-full mb-4"
+                  aria-label="Abrir WhatsApp para hablar con Mister Service RD"
+                >
+                  <WhatsAppIcon filled={false} className="text-white" size={24} />
+                  Hablar por WhatsApp
+                </a>
+              )}
               <div className="flex items-start gap-2 text-sm text-blue-200">
                 <Phone size={14} className="mt-0.5 shrink-0" />
                 <div>
