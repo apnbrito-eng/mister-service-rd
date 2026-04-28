@@ -1,18 +1,15 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
-  collection, onSnapshot, addDoc, doc, updateDoc, setDoc,
+  collection, onSnapshot, doc, updateDoc,
   Timestamp, getDocs, query, orderBy, arrayUnion
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
-import { siguienteNumeroOrden } from '../services/contadores.service';
-import { normalizarTelefono, buscarClientePorTelefono } from '../services/clientes.service';
-import { OrdenServicio, FaseOrden, EstadoOrdenSimple, Cliente, Personal } from '../types';
+import { OrdenServicio, EstadoOrdenSimple, Cliente, Personal } from '../types';
 import {
-  faseLabel, faseColor, formatFecha, formatHora, tiempoTranscurrido,
-  TIPOS_EQUIPO, DURACIONES, HORARIOS, HORARIOS_LABEL,
+  formatFecha, formatHora,
   estadoSimpleBorder,
-  formatTelefono, googleMapsLink, parseOrden, formatMoneda,
+  parseOrden,
   crearRegistroAuditoria
 } from '../utils';
 import Badge from '../components/Badge';
@@ -20,11 +17,9 @@ import Modal from '../components/Modal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
-import { esOrdenMantenimiento } from '../utils';
-import { buscarPrecioMantenimiento } from '../services/precios.service';
 import {
-  Plus, Search, Clock, Calendar, MapPin, Phone,
-  Wrench, User, FileText, Edit2, CalendarDays, RefreshCw, Eye,
+  Plus, Calendar,
+  User, FileText, CalendarDays, Eye,
   List, LayoutGrid
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -38,9 +33,9 @@ import OrdenDetailModal from '../components/ordenes/OrdenDetailModal';
 import OrdenEditForm from '../components/ordenes/OrdenEditForm';
 import type { EditFormState } from '../components/ordenes/OrdenEditForm';
 import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
-import type { CreateFormState } from '../components/ordenes/OrdenCreateModal';
 import OrdenesTablero from '../components/ordenes/OrdenesTablero';
 import { crearNotificacion } from '../services/notificaciones.service';
+import { useOrdenCreateForm } from '../hooks/useOrdenCreateForm';
 
 const ESTADOS_SIMPLE: EstadoOrdenSimple[] = ['pendiente', 'en_proceso', 'completado', 'cancelado'];
 
@@ -78,11 +73,6 @@ export default function Ordenes() {
   const [deleteMotivo, setDeleteMotivo] = useState('');
   const [deletingOrden, setDeletingOrden] = useState(false);
 
-  const [ordenesActivasCliente, setOrdenesActivasCliente] = useState<OrdenServicio[]>([]);
-  const [buscandoTelefono, setBuscandoTelefono] = useState(false);
-  const [showTelefonoDropdown, setShowTelefonoDropdown] = useState(false);
-  const telefonoSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // Modals
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedOrden, setSelectedOrden] = useState<OrdenServicio | null>(null);
@@ -96,32 +86,6 @@ export default function Ordenes() {
 
   // Vista: lista | tablero
   const [vista, setVista] = useState<'lista' | 'tablero'>('lista');
-
-  // Create form
-  const [clienteBusqueda, setClienteBusqueda] = useState('');
-  const [showClienteDropdown, setShowClienteDropdown] = useState(false);
-  const [isNewCliente, setIsNewCliente] = useState(false);
-  const [form, setForm] = useState<CreateFormState>({
-    clienteId: '',
-    clienteNombre: '',
-    clienteTelefono: '',
-    clienteEmail: '',
-    clienteDireccion: '',
-    clienteReferencia: '',
-    clienteLat: undefined as number | undefined,
-    clienteLng: undefined as number | undefined,
-    equipoTipo: '',
-    equipoMarca: '',
-    equipoModelo: '',
-    descripcionFalla: '',
-    tecnicoId: '',
-    tecnicoNombre: '',
-    duracionMin: 60,
-    fechaCita: '',
-    horaInicio: '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [geoLoading, setGeoLoading] = useState(false);
 
   // Edit form (dentro del modal de detalles)
   const [editForm, setEditForm] = useState<EditFormState>({
@@ -155,10 +119,16 @@ export default function Ordenes() {
   const dirInputRef = useRef<HTMLInputElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const autocompleteRef = useRef<any>(null);
-  // Refs separados para el modal de CREAR orden (Google Places Autocomplete)
-  const dirInputRefCreate = useRef<HTMLInputElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const autocompleteRefCreate = useRef<any>(null);
+
+  // Hook compartido para el form de Crear Orden de Servicio
+  const createForm = useOrdenCreateForm({
+    ordenes,
+    usuarioActual: { id: userProfile?.id, nombre: userProfile?.nombre },
+    onAfterCreate: () => {
+      // Tras crear, cerrar modal. La toast.success la dispara el hook.
+      setShowCreateModal(false);
+    },
+  });
 
   // Listen to real-time updates of the selected orden
   useEffect(() => {
@@ -312,59 +282,6 @@ export default function Ordenes() {
     }
   }, [showEditInDetail]);
 
-  // Carga Google Places Autocomplete cuando se abre el modal de CREAR orden
-  useEffect(() => {
-    if (!showCreateModal) return;
-
-    const initACCreate = () => {
-      if (!dirInputRefCreate.current || !window.google?.maps?.places) return;
-      autocompleteRefCreate.current = new window.google.maps.places.Autocomplete(dirInputRefCreate.current, {
-        componentRestrictions: { country: 'do' },
-        fields: ['formatted_address', 'geometry', 'name'],
-      });
-      autocompleteRefCreate.current.addListener('place_changed', () => {
-        const place = autocompleteRefCreate.current.getPlace();
-        if (!place.geometry) return;
-        // Si el lugar tiene nombre (ej. "Agora Mall"), anteponerlo a la dirección
-        const nombre = place.name || '';
-        const direccion = place.formatted_address || '';
-        const textoFinal = nombre && !direccion.startsWith(nombre)
-          ? `${nombre}, ${direccion}`
-          : direccion;
-        setForm(f => ({
-          ...f,
-          clienteDireccion: textoFinal,
-          clienteLat: place.geometry.location.lat(),
-          clienteLng: place.geometry.location.lng(),
-        }));
-        toast.success('\u{1F4CD} Ubicación de Google capturada');
-      });
-    };
-
-    if (window.google?.maps?.places) {
-      initACCreate();
-      return;
-    }
-
-    if (!document.getElementById('google-places-script')) {
-      const script = document.createElement('script');
-      script.id = 'google-places-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}&libraries=places&language=es`;
-      script.async = true;
-      script.defer = true;
-      script.onload = initACCreate;
-      document.head.appendChild(script);
-    } else {
-      const interval = setInterval(() => {
-        if (window.google?.maps?.places) {
-          clearInterval(interval);
-          initACCreate();
-        }
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [showCreateModal, isNewCliente]);
-
   const handleUsarMiUbicacionEdit = () => {
     if (!navigator.geolocation) {
       toast.error('Geolocalizacion no disponible en este navegador');
@@ -422,39 +339,6 @@ export default function Ordenes() {
       return;
     }
     setEditForm(f => ({ ...f, clienteDireccion: texto }));
-  };
-
-  /** Maneja cambios en el campo direccion del form de CREAR ORDEN, detectando URLs de Maps
-   *  y haciendo reverse geocoding para mostrar dirección legible en vez de URL */
-  const handleCreateDireccionChange = async (texto: string) => {
-    const coords = detectarCoordenadasURL(texto);
-    if (coords) {
-      // Paso 1: Guardar coordenadas inmediatamente, con placeholder en la dirección
-      setForm(f => ({
-        ...f,
-        clienteDireccion: 'Obteniendo dirección...',
-        clienteLat: coords.lat,
-        clienteLng: coords.lng,
-      }));
-      toast.success('\u{1F4CD} Coordenadas exactas guardadas');
-
-      // Paso 2: Reverse geocoding asíncrono para mostrar dirección legible
-      try {
-        const resp = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}&accept-language=es`,
-          { headers: { 'Accept-Language': 'es' } }
-        );
-        const data = await resp.json();
-        const direccionLegible = data.display_name
-          || `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`;
-        setForm(f => ({ ...f, clienteDireccion: direccionLegible }));
-      } catch {
-        // Si falla, al menos mostrar las coordenadas en formato limpio
-        setForm(f => ({ ...f, clienteDireccion: `${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}` }));
-      }
-      return;
-    }
-    setForm(f => ({ ...f, clienteDireccion: texto }));
   };
 
   const handleGuardarEdicion = async () => {
@@ -794,374 +678,8 @@ export default function Ordenes() {
       .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
   }, [editForm.tecnicoId, editForm.tecnicoNombre, editForm.fechaCita, ordenes, selectedOrden?.id]);
 
-  // Horarios ocupados — formulario de CREAR
-  const horariosOcupadosCreate = useMemo(() => {
-    if (!form.tecnicoId || !form.fechaCita) return [];
-    const fechaSeleccionada = new Date(form.fechaCita + 'T00:00:00');
-    return ordenes
-      .filter(o =>
-        (o.tecnicoId === form.tecnicoId || o.tecnicoNombre === form.tecnicoNombre) &&
-        o.fechaCita &&
-        isSameDay(o.fechaCita, fechaSeleccionada) &&
-        o.estado !== 'cancelado'
-      )
-      .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
-  }, [form.tecnicoId, form.tecnicoNombre, form.fechaCita, ordenes]);
-
-  // Client search — busca por nombre (case-insensitive) o por teléfono (normalizado o raw)
-  const clientesFiltrados = useMemo(() => {
-    if (!clienteBusqueda) return [];
-    const searchDigits = clienteBusqueda.replace(/\D/g, '');
-    const searchLower = clienteBusqueda.toLowerCase();
-    return clientes.filter(c => {
-      const cTelDigits = (c.telefono || '').replace(/\D/g, '');
-      const cTelNorm = (c.telefonoNormalizado || '').replace(/\D/g, '');
-      const matchNombre = c.nombre.toLowerCase().includes(searchLower);
-      const matchTelefono = searchDigits.length >= 3 && (
-        cTelDigits.includes(searchDigits) || cTelNorm.includes(searchDigits)
-      );
-      return matchNombre || matchTelefono;
-    }).slice(0, 5);
-  }, [clientes, clienteBusqueda]);
-
-  // Coincidencias por teléfono para el dropdown del campo "Teléfono" del nuevo cliente
-  const clientesFiltradosTelefono = useMemo(() => {
-    const tel = form.clienteTelefono.replace(/\D/g, '');
-    if (!tel || tel.length < 3) return [];
-    return clientes.filter(c => {
-      const cTel = (c.telefono || '').replace(/\D/g, '');
-      const cTelNorm = (c.telefonoNormalizado || '').replace(/\D/g, '');
-      return cTel.includes(tel) || cTelNorm.includes(tel);
-    }).slice(0, 5);
-  }, [clientes, form.clienteTelefono]);
-
-  const handleSelectCliente = (c: Cliente) => {
-    setForm(f => ({
-      ...f,
-      clienteId: c.id,
-      clienteNombre: c.nombre,
-      clienteTelefono: c.telefono,
-      clienteEmail: c.email || '',
-      clienteDireccion: c.direccion || '',
-      clienteReferencia: c.referenciaDireccion || '',
-      clienteLat: c.lat,
-      clienteLng: c.lng,
-    }));
-    setClienteBusqueda(c.nombre);
-    setShowClienteDropdown(false);
-    setIsNewCliente(false);
-    // Cargar órdenes activas de este cliente
-    const activas = ordenes.filter(o =>
-      o.clienteId === c.id &&
-      !['cerrado', 'cancelado'].includes(o.fase)
-    );
-    setOrdenesActivasCliente(activas);
-  };
-
-  /**
-   * Busca automáticamente cliente por teléfono cuando el usuario termina de escribir.
-   * Si encuentra uno existente: auto-llena los datos, marca como existente (no nuevo),
-   * y carga sus órdenes activas para mostrar advertencia.
-   */
-  const handleClienteTelefonoChange = (telefono: string) => {
-    // Actualizar el campo del teléfono inmediatamente
-    setForm(f => ({ ...f, clienteTelefono: telefono }));
-
-    // Mostrar dropdown de coincidencias mientras escribe (al menos 3 dígitos)
-    const digitos = telefono.replace(/\D/g, '');
-    setShowTelefonoDropdown(digitos.length >= 3);
-
-    // Si el usuario ya tiene un cliente existente seleccionado y está editando el teléfono,
-    // desactivar el modo existente para que pueda escribir libremente
-    if (form.clienteId) {
-      setForm(f => ({ ...f, clienteId: '' }));
-      setIsNewCliente(true);
-      setOrdenesActivasCliente([]);
-    }
-
-    // Cancelar búsqueda anterior si hay una pendiente
-    if (telefonoSearchTimeout.current) {
-      clearTimeout(telefonoSearchTimeout.current);
-    }
-
-    const telNorm = normalizarTelefono(telefono);
-    if (telNorm.length < 10) {
-      setOrdenesActivasCliente([]);
-      return;
-    }
-
-    // Debounce: esperar 400ms después de que pare de escribir
-    setBuscandoTelefono(true);
-    telefonoSearchTimeout.current = setTimeout(async () => {
-      try {
-        const existente = await buscarClientePorTelefono(telefono);
-        if (existente) {
-          // Auto-llenar con datos del cliente existente
-          setForm(f => ({
-            ...f,
-            clienteId: existente.id,
-            clienteNombre: existente.data.nombre,
-            clienteTelefono: existente.data.telefono,
-            clienteEmail: existente.data.email || '',
-            clienteDireccion: existente.data.direccion || '',
-            clienteReferencia: existente.data.referenciaDireccion || '',
-            clienteLat: existente.data.lat,
-            clienteLng: existente.data.lng,
-          }));
-          setIsNewCliente(false);
-          setShowTelefonoDropdown(false);
-          // Buscar órdenes activas de este cliente
-          const activas = ordenes.filter(o =>
-            o.clienteId === existente.id &&
-            !['cerrado', 'cancelado'].includes(o.fase)
-          );
-          setOrdenesActivasCliente(activas);
-          toast.success(`Cliente existente: ${existente.data.nombre}`);
-        }
-      } catch (err) {
-        console.error('Error buscando cliente por teléfono:', err);
-      } finally {
-        setBuscandoTelefono(false);
-      }
-    }, 400);
-  };
-
-  const handleGetUbicacion = () => {
-    if (!navigator.geolocation) {
-      toast.error('Geolocalizacion no disponible en este navegador');
-      return;
-    }
-    setGeoLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude, longitude } = pos.coords;
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=es`,
-            { headers: { 'Accept-Language': 'es' } }
-          );
-          const data = await res.json();
-          const raw = (data?.display_name || '').toString();
-          const direccion = raw
-            ? raw.split(',').slice(0, 3).join(',').trim()
-            : '';
-          setForm(f => ({
-            ...f,
-            clienteDireccion: direccion || f.clienteDireccion,
-            clienteLat: latitude,
-            clienteLng: longitude,
-          }));
-          toast.success('Ubicacion capturada');
-        } catch {
-          setForm(f => ({ ...f, clienteLat: latitude, clienteLng: longitude }));
-          toast.success('Coordenadas capturadas');
-        } finally {
-          setGeoLoading(false);
-        }
-      },
-      (err) => {
-        setGeoLoading(false);
-        toast.error('No se pudo obtener la ubicacion: ' + err.message);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  };
-
-  const handleSubmitOrden = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.clienteNombre || !form.equipoTipo || !form.descripcionFalla) {
-      toast.error('Completa los campos requeridos: cliente, equipo y descripcion');
-      return;
-    }
-    // Validación defensiva: evitar double-booking entre apertura del modal y guardado
-    if (form.tecnicoId && form.fechaCita && form.horaInicio) {
-      const fechaSeleccionada = new Date(form.fechaCita + 'T00:00:00');
-      const ocupados = ordenes
-        .filter(o =>
-          (o.tecnicoId === form.tecnicoId || o.tecnicoNombre === form.tecnicoNombre) &&
-          o.fechaCita &&
-          isSameDay(o.fechaCita, fechaSeleccionada) &&
-          o.fase !== 'cerrado' &&
-          o.fase !== 'cancelado'
-        )
-        .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
-      if (ocupados.includes(form.horaInicio)) {
-        toast.error('Ese horario ya está ocupado por el técnico seleccionado');
-        return;
-      }
-    }
-    setSaving(true);
-    try {
-      // Get next number atomically (unified with seedData counter)
-      const numero = await siguienteNumeroOrden();
-
-      // If new client, crear en colección clientes — con normalización y detección de duplicados
-      let clienteId = form.clienteId;
-      let clienteTelefonoFinal = form.clienteTelefono;
-      if (isNewCliente && form.clienteNombre) {
-        const telNorm = normalizarTelefono(form.clienteTelefono);
-        if (telNorm.length < 7) {
-          toast.error('Teléfono inválido. Debe tener al menos 7 dígitos.');
-          setSaving(false);
-          return;
-        }
-
-        // Verificar si ya existe un cliente con ese teléfono normalizado
-        const existente = await buscarClientePorTelefono(form.clienteTelefono);
-        if (existente) {
-          // Reusar cliente existente
-          clienteId = existente.id;
-          clienteTelefonoFinal = existente.data.telefono || form.clienteTelefono;
-          toast.success(`Cliente ya existía: ${existente.data.nombre}. Usando registro existente.`);
-        } else {
-          // Crear cliente nuevo usando teléfono normalizado como ID (consistente con seedData)
-          const clienteData: Record<string, unknown> = {
-            nombre: form.clienteNombre,
-            telefono: form.clienteTelefono,
-            telefonoNormalizado: telNorm,
-            direccion: form.clienteDireccion || '',
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now(),
-          };
-          if (form.clienteEmail) clienteData.email = form.clienteEmail;
-          if (form.clienteReferencia) clienteData.referenciaDireccion = form.clienteReferencia;
-          if (form.clienteLat !== undefined) clienteData.lat = form.clienteLat;
-          if (form.clienteLng !== undefined) clienteData.lng = form.clienteLng;
-
-          await setDoc(doc(db, 'clientes', telNorm), clienteData);
-          clienteId = telNorm;
-          setClientes(prev => [...prev, {
-            id: telNorm,
-            nombre: form.clienteNombre,
-            telefono: form.clienteTelefono,
-            telefonoNormalizado: telNorm,
-            email: form.clienteEmail,
-            direccion: form.clienteDireccion,
-            referenciaDireccion: form.clienteReferencia,
-            lat: form.clienteLat,
-            lng: form.clienteLng,
-            createdAt: new Date(),
-          }]);
-        }
-      }
-
-      // Build fechaCita
-      let fechaCita: Timestamp | null = null;
-      if (form.fechaCita && form.horaInicio) {
-        fechaCita = Timestamp.fromDate(new Date(`${form.fechaCita}T${form.horaInicio}:00`));
-      } else if (form.fechaCita) {
-        fechaCita = Timestamp.fromDate(new Date(`${form.fechaCita}T08:00:00`));
-      }
-
-      // Resolver operaria a partir del técnico asignado
-      const tecnicoElegido = personal.find(p => p.id === form.tecnicoId);
-      const operariaIdDerivada = tecnicoElegido?.operariaId;
-      const operariaNombreDerivada = tecnicoElegido?.operariaNombre;
-
-      const ahora = Timestamp.now();
-      const faseInicial: FaseOrden = 'agendado';
-      const estadoInicial: EstadoOrdenSimple = 'pendiente';
-
-      // Construir orden — omitir campos undefined para que Firestore no los rechace
-      const ordenData: Record<string, unknown> = {
-        numero,
-        clienteId,
-        clienteNombre: form.clienteNombre,
-        clienteTelefono: clienteTelefonoFinal,
-        clienteDireccion: form.clienteDireccion,
-        equipoTipo: form.equipoTipo,
-        equipoMarca: form.equipoMarca,
-        equipoModelo: form.equipoModelo || '',
-        descripcionFalla: form.descripcionFalla,
-        tecnicoId: form.tecnicoId,
-        tecnicoNombre: form.tecnicoNombre,
-        responsableId: userProfile?.id || '',
-        responsableNombre: userProfile?.nombre || '',
-        creadoPor: userProfile?.nombre || 'Sistema',
-        fase: faseInicial,
-        estadoSimple: estadoInicial,
-        estado: 'activo',
-        fechaCita,
-        duracionMin: form.duracionMin,
-        reagendada: false,
-        notas: '',
-        historialFases: [{
-          fase: faseInicial,
-          timestamp: ahora,
-          usuario: userProfile?.nombre || 'Sistema',
-        }],
-        createdAt: ahora,
-        updatedAt: ahora,
-      };
-      if (form.clienteReferencia) ordenData.clienteReferencia = form.clienteReferencia;
-      if (form.clienteLat !== undefined) ordenData.clienteLat = form.clienteLat;
-      if (form.clienteLng !== undefined) ordenData.clienteLng = form.clienteLng;
-      if (operariaIdDerivada) ordenData.operariaId = operariaIdDerivada;
-      if (operariaNombreDerivada) ordenData.operariaNombre = operariaNombreDerivada;
-
-      // Auto-aprobar precio si es mantenimiento (Fase 4B)
-      let precioMantenimientoEncontrado: number | null = null;
-      if (esOrdenMantenimiento(form.descripcionFalla)) {
-        const servicioMant = await buscarPrecioMantenimiento(form.equipoMarca, form.equipoTipo);
-        if (servicioMant) {
-          precioMantenimientoEncontrado = servicioMant.precio;
-          ordenData.precioSugerido = servicioMant.precio;
-          ordenData.precioAprobado = servicioMant.precio;
-          ordenData.precioFinal = servicioMant.precio;
-          ordenData.estadoAprobacion = 'aprobado';
-          ordenData.aprobadoPor = 'Sistema (catálogo de precios)';
-          ordenData.fechaAprobacion = ahora;
-          const registroPreapr = crearRegistroAuditoria(
-            userProfile?.nombre || 'Sistema',
-            'precio_sugerido',
-            `Precio preaprobado automáticamente por ser mantenimiento (catálogo: ${servicioMant.nombre})`,
-            'precioFinal', '', `RD$ ${servicioMant.precio.toLocaleString('es-DO')}`
-          );
-          ordenData.auditoria = [registroPreapr];
-        }
-      }
-
-      await addDoc(collection(db, 'ordenes_servicio'), ordenData);
-      if (precioMantenimientoEncontrado !== null) {
-        toast(`Mantenimiento detectado: precio preaprobado ${formatMoneda(precioMantenimientoEncontrado)} según catálogo. Puedes modificarlo si el técnico detecta otra cosa en sitio.`, {
-          duration: 6000,
-          style: { borderLeft: '4px solid #1a5fa8', background: '#eff6ff', color: '#0f3460' },
-        });
-      }
-      if (form.clienteLat === undefined || form.clienteLng === undefined) {
-        toast('Esta orden no tiene ubicación GPS. El técnico no podrá verla en el mapa. Puedes agregarla después desde la orden.', {
-          duration: 4000,
-          style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
-        });
-      }
-      toast.success(`Orden ${numero} creada exitosamente`);
-      setShowCreateModal(false);
-      resetForm();
-    } catch (err) {
-      console.error(err);
-      toast.error('Error al crear la orden');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const resetForm = () => {
-    setForm({
-      clienteId: '', clienteNombre: '', clienteTelefono: '', clienteEmail: '',
-      clienteDireccion: '', clienteReferencia: '', clienteLat: undefined, clienteLng: undefined,
-      equipoTipo: '', equipoMarca: '', equipoModelo: '', descripcionFalla: '',
-      tecnicoId: '', tecnicoNombre: '', duracionMin: 60, fechaCita: '', horaInicio: '',
-    });
-    setClienteBusqueda('');
-    setShowClienteDropdown(false);
-    setShowTelefonoDropdown(false);
-    setIsNewCliente(false);
-    setOrdenesActivasCliente([]);
-    if (telefonoSearchTimeout.current) {
-      clearTimeout(telefonoSearchTimeout.current);
-      telefonoSearchTimeout.current = null;
-    }
-  };
+  // Nota: el formulario de Crear Orden (state, búsqueda de clientes, submit,
+  // double-booking, etc.) vive ahora en `useOrdenCreateForm` — ver `createForm`.
 
   const fechaHoyTexto = format(hoy, "'Hoy,' EEEE dd 'de' MMMM yyyy", { locale: es });
   const fechaHoyCapitalizada = fechaHoyTexto.charAt(0).toUpperCase() + fechaHoyTexto.slice(1);
@@ -1396,33 +914,29 @@ export default function Ordenes() {
       {/* Create Order Modal */}
       {showCreateModal && (
         <OrdenCreateModal
-          form={form}
-          setForm={setForm}
-          clienteBusqueda={clienteBusqueda}
-          setClienteBusqueda={setClienteBusqueda}
-          showClienteDropdown={showClienteDropdown}
-          setShowClienteDropdown={setShowClienteDropdown}
-          isNewCliente={isNewCliente}
-          setIsNewCliente={setIsNewCliente}
-          saving={saving}
-          geoLoading={geoLoading}
-          clientes={clientes}
-          clientesFiltrados={clientesFiltrados}
-          personal={personal}
-          tecnicos={tecnicos}
-          horariosOcupadosCreate={horariosOcupadosCreate}
-          ordenesActivasCliente={ordenesActivasCliente}
-          buscandoTelefono={buscandoTelefono}
-          showTelefonoDropdown={showTelefonoDropdown}
-          setShowTelefonoDropdown={setShowTelefonoDropdown}
-          clientesFiltradosTelefono={clientesFiltradosTelefono}
-          dirInputRef={dirInputRefCreate}
-          onSubmit={handleSubmitOrden}
-          onClose={() => { setShowCreateModal(false); resetForm(); }}
-          handleGetUbicacion={handleGetUbicacion}
-          handleCreateDireccionChange={handleCreateDireccionChange}
-          handleSelectCliente={handleSelectCliente}
-          handleClienteTelefonoChange={handleClienteTelefonoChange}
+          form={createForm.form}
+          setForm={createForm.setForm}
+          clienteBusqueda={createForm.clienteBusqueda}
+          setClienteBusqueda={createForm.setClienteBusqueda}
+          showClienteDropdown={createForm.showClienteDropdown}
+          setShowClienteDropdown={createForm.setShowClienteDropdown}
+          isNewCliente={createForm.isNewCliente}
+          setIsNewCliente={createForm.setIsNewCliente}
+          saving={createForm.saving}
+          clientes={createForm.clientes.length > 0 ? createForm.clientes : clientes}
+          clientesFiltrados={createForm.clientesFiltrados}
+          tecnicos={createForm.tecnicos.length > 0 ? createForm.tecnicos : tecnicos}
+          horariosOcupadosCreate={createForm.horariosOcupadosCreate}
+          ordenesActivasCliente={createForm.ordenesActivasCliente}
+          buscandoTelefono={createForm.buscandoTelefono}
+          showTelefonoDropdown={createForm.showTelefonoDropdown}
+          setShowTelefonoDropdown={createForm.setShowTelefonoDropdown}
+          clientesFiltradosTelefono={createForm.clientesFiltradosTelefono}
+          onSubmit={createForm.handleSubmit}
+          onClose={() => { setShowCreateModal(false); createForm.resetForm(); }}
+          handleDireccionChange={createForm.handleDireccionChange}
+          handleSelectCliente={createForm.handleSelectCliente}
+          handleClienteTelefonoChange={createForm.handleClienteTelefonoChange}
         />
       )}
 

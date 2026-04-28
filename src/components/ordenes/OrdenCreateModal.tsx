@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Plus, User, Wrench, Calendar, MapPin, AlertTriangle, CheckCircle, Loader2, Edit2, Home, ChevronDown } from 'lucide-react';
-import { Cliente, Personal, OrdenServicio, DireccionCliente } from '../../types';
+import { Plus, User, Wrench, Calendar, AlertTriangle, CheckCircle, Loader2, Edit2, Home, ChevronDown, Shield } from 'lucide-react';
+import { Cliente, Personal, OrdenServicio, DireccionCliente, CitaPorConfirmar } from '../../types';
 import {
   TIPOS_EQUIPO, DURACIONES, HORARIOS, HORARIOS_LABEL,
   formatTelefono, faseLabel,
 } from '../../utils';
 import Modal from '../Modal';
-import MiniMapaCliente from './MiniMapaCliente';
 import EditarClienteModal from '../clientes/EditarClienteModal';
+import CampoDireccionConPlaces from '../shared/CampoDireccionConPlaces';
 
 export interface CreateFormState {
   clienteId: string;
@@ -39,10 +39,8 @@ interface OrdenCreateModalProps {
   isNewCliente: boolean;
   setIsNewCliente: (v: boolean) => void;
   saving: boolean;
-  geoLoading: boolean;
   clientes?: Cliente[];
   clientesFiltrados: Cliente[];
-  personal: Personal[];
   tecnicos: Personal[];
   horariosOcupadosCreate: string[];
   ordenesActivasCliente: OrdenServicio[];
@@ -50,13 +48,26 @@ interface OrdenCreateModalProps {
   showTelefonoDropdown: boolean;
   setShowTelefonoDropdown: (v: boolean) => void;
   clientesFiltradosTelefono: Cliente[];
-  dirInputRef: React.RefObject<HTMLInputElement>;
   onSubmit: (e: React.FormEvent) => void;
   onClose: () => void;
-  handleGetUbicacion: () => void;
-  handleCreateDireccionChange: (texto: string) => void;
+  handleDireccionChange: (datos: { direccion: string; lat?: number; lng?: number }) => void;
   handleSelectCliente: (c: Cliente) => void;
   handleClienteTelefonoChange: (telefono: string) => void;
+  /**
+   * Cita pública desde la que se construyó el preset. Cuando viene:
+   *  - Se muestra un banner identificando el origen.
+   *  - Si la cita es de garantía, se muestra el bloque amarillo con datos
+   *    referenciales (técnico original, conduce, descripción del problema).
+   *  - Si la cita trae `comoNosConocio` o `camposPersonalizados`, se renderiza
+   *    una sección expandible al final del modal.
+   * Esta prop es solo de presentación — la persistencia de los metadatos en
+   * la orden creada la maneja el hook `useOrdenCreateForm`.
+   */
+  citaPreset?: CitaPorConfirmar | null;
+  /** Bloque opcional inyectado al final del form (antes del footer). Útil
+   *  para Citas.tsx que necesita meter la UI de garantía con motivo del
+   *  cambio de técnico. */
+  extraFooterSlot?: React.ReactNode;
 }
 
 export default function OrdenCreateModal({
@@ -69,7 +80,6 @@ export default function OrdenCreateModal({
   isNewCliente,
   setIsNewCliente,
   saving,
-  geoLoading,
   clientesFiltrados,
   tecnicos,
   horariosOcupadosCreate,
@@ -78,39 +88,36 @@ export default function OrdenCreateModal({
   showTelefonoDropdown,
   setShowTelefonoDropdown,
   clientesFiltradosTelefono,
-  dirInputRef,
   onSubmit,
   onClose,
-  handleGetUbicacion,
-  handleCreateDireccionChange,
+  handleDireccionChange,
   handleSelectCliente,
   handleClienteTelefonoChange,
   clientes = [],
+  citaPreset,
+  extraFooterSlot,
 }: OrdenCreateModalProps) {
-  // Es cliente existente si clienteId está set y NO estamos en modo "nuevo cliente"
   const esClienteExistente = !!form.clienteId && !isNewCliente;
-  // Estilo de input readonly (cliente existente: no editable, visual diferente)
   const readonlyInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-blue-50/50 text-gray-700 cursor-not-allowed';
   const editableInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]';
 
-  // Cliente seleccionado (documento completo) para acceder a direcciones alternativas
   const clienteSeleccionado = useMemo<Cliente | undefined>(
     () => (form.clienteId ? clientes.find(c => c.id === form.clienteId) : undefined),
     [form.clienteId, clientes],
   );
-  const direccionesAlternativas = clienteSeleccionado?.direcciones || [];
+  const direccionesAlternativas = useMemo<DireccionCliente[]>(
+    () => clienteSeleccionado?.direcciones || [],
+    [clienteSeleccionado],
+  );
   const tieneAlternativas = direccionesAlternativas.length > 0;
 
   const [showEditarCliente, setShowEditarCliente] = useState(false);
   const [showSelectorDir, setShowSelectorDir] = useState(false);
 
-  /** Determina qué dirección está seleccionada actualmente. */
   const direccionSeleccionada = useMemo(() => {
     if (!clienteSeleccionado) return null;
-    // Si la dirección del form coincide con una alternativa
     const alt = direccionesAlternativas.find(d => d.direccion === form.clienteDireccion);
     if (alt) return { tipo: 'alternativa' as const, etiqueta: alt.etiqueta, direccion: alt.direccion };
-    // Por defecto: principal
     return { tipo: 'principal' as const, etiqueta: 'Principal', direccion: clienteSeleccionado.direccion };
   }, [clienteSeleccionado, direccionesAlternativas, form.clienteDireccion]);
 
@@ -134,14 +141,59 @@ export default function OrdenCreateModal({
     }
     setShowSelectorDir(false);
   };
+
+  // ¿Hay metadatos de la cita pública que mostrar?
+  const tieneInfoAdicional = !!(
+    citaPreset &&
+    (citaPreset.comoNosConocio ||
+      (citaPreset.camposPersonalizados && Object.keys(citaPreset.camposPersonalizados).length > 0))
+  );
+
   return (
     <Modal
       isOpen={true}
       onClose={onClose}
-      title="Crear Orden de Servicio"
+      title={citaPreset ? 'Confirmar y Agendar Cita' : 'Crear Orden de Servicio'}
       size="xl"
     >
       <form onSubmit={onSubmit} className="space-y-6">
+        {/* Banner de origen — solo cuando viene de cita pública */}
+        {citaPreset && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 flex items-start gap-2">
+            <CheckCircle size={14} className="text-blue-700 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-semibold">
+                Datos pre-cargados desde el formulario público
+              </p>
+              <p className="text-blue-700">
+                Edita cualquier campo si el cliente cometió un error. Al confirmar se
+                creará la orden y se borrará la cita.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Banner garantía — si la cita es reasignación */}
+        {citaPreset?.esGarantia && (
+          <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Shield size={16} className="text-amber-700" />
+              <span className="text-sm font-bold text-amber-900">Cita de garantía</span>
+            </div>
+            <div className="text-xs text-amber-900 space-y-0.5">
+              {citaPreset.tecnicoOriginalNombre && (
+                <p><span className="font-semibold">Técnico original:</span> {citaPreset.tecnicoOriginalNombre}</p>
+              )}
+              {citaPreset.referenciaConduce && (
+                <p><span className="font-semibold">Conduce ref:</span> {citaPreset.referenciaConduce}</p>
+              )}
+              {citaPreset.descripcionProblema && (
+                <p><span className="font-semibold">Problema reclamado:</span> {citaPreset.descripcionProblema}</p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Section: Cliente */}
         <div>
           <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 flex items-center gap-2">
@@ -188,7 +240,6 @@ export default function OrdenCreateModal({
               )}
             </div>
 
-            {/* Botón para crear nuevo cliente — visible siempre que no haya cliente seleccionado ni esté creándose uno */}
             {!form.clienteId && !isNewCliente && (
               <button
                 type="button"
@@ -204,7 +255,6 @@ export default function OrdenCreateModal({
               </button>
             )}
 
-            {/* New client fields */}
             {(isNewCliente || form.clienteId) && (
               <div className={`rounded-xl p-4 space-y-3 ${esClienteExistente ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
                 <div className="flex items-center justify-between flex-wrap gap-2">
@@ -249,7 +299,6 @@ export default function OrdenCreateModal({
                   </div>
                 </div>
 
-                {/* Banner advertencia órdenes activas */}
                 {esClienteExistente && ordenesActivasCliente.length > 0 && (
                   <div className="rounded-lg p-3 bg-amber-50 border border-amber-300 flex items-start gap-2">
                     <AlertTriangle size={16} className="text-amber-600 mt-0.5 shrink-0" />
@@ -271,6 +320,7 @@ export default function OrdenCreateModal({
                     </div>
                   </div>
                 )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>
@@ -302,14 +352,12 @@ export default function OrdenCreateModal({
                         }
                       }}
                       onBlur={() => {
-                        // Pequeño delay para permitir click en dropdown
                         setTimeout(() => setShowTelefonoDropdown(false), 200);
                       }}
                       placeholder="8091234567"
                       className={editableInputClass}
                       autoComplete="off"
                     />
-                    {/* Dropdown de coincidencias por teléfono */}
                     {showTelefonoDropdown && !esClienteExistente && clientesFiltradosTelefono.length > 0 && (
                       <div className="absolute z-20 w-full border border-gray-200 rounded-lg mt-1 max-h-40 overflow-y-auto bg-white shadow-lg">
                         <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase bg-gray-50 border-b border-gray-100">
@@ -335,7 +383,6 @@ export default function OrdenCreateModal({
                         ))}
                       </div>
                     )}
-                    {/* Aviso inline: este teléfono ya existe (coincidencia por dígitos) */}
                     {!esClienteExistente && clientesFiltradosTelefono.length > 0 && form.clienteTelefono.replace(/\D/g, '').length >= 3 && (
                       <div className="mt-1.5 p-2 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
                         <AlertTriangle size={12} className="text-amber-600 mt-0.5 shrink-0" />
@@ -395,7 +442,6 @@ export default function OrdenCreateModal({
                       )}
                     </label>
 
-                    {/* Selector de dirección — solo cliente existente con alternativas */}
                     {esClienteExistente && tieneAlternativas && (
                       <div className="relative mb-2">
                         <button
@@ -450,7 +496,6 @@ export default function OrdenCreateModal({
                       </div>
                     )}
 
-                    {/* Botón Agregar dirección — cliente existente sin alternativas */}
                     {esClienteExistente && !tieneAlternativas && (
                       <button
                         type="button"
@@ -461,47 +506,23 @@ export default function OrdenCreateModal({
                       </button>
                     )}
 
-                    <div className="flex gap-2">
+                    {esClienteExistente ? (
+                      // Cliente existente: dirección de solo-lectura, no permitir
+                      // editar — para cambiar usar "Editar datos del cliente".
                       <input
-                        ref={dirInputRef}
                         type="text"
                         value={form.clienteDireccion}
-                        onChange={e => handleCreateDireccionChange(e.target.value)}
-                        placeholder="Escribe un lugar, dirección o pega URL de Google Maps"
-                        readOnly={esClienteExistente}
-                        className={esClienteExistente ? `flex-1 ${readonlyInputClass}` : `flex-1 ${editableInputClass}`}
-                        autoComplete="off"
+                        readOnly
+                        className={readonlyInputClass}
                       />
-                      {!esClienteExistente && (
-                        <button
-                          type="button"
-                          onClick={handleGetUbicacion}
-                          disabled={geoLoading}
-                          className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 shrink-0 disabled:opacity-50"
-                        >
-                          <MapPin size={12} />
-                          {geoLoading ? 'Obteniendo...' : 'Mi ubicacion'}
-                        </button>
-                      )}
-                    </div>
-                    {form.clienteLat && form.clienteLng && (
-                      <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-                        {'\u{2705}'} Coordenadas exactas guardadas {'\u{00B7}'}
-                        <a
-                          href={`https://maps.google.com/?q=${form.clienteLat},${form.clienteLng}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-green-700 hover:underline font-medium"
-                        >
-                          Ver en Maps {'\u{2192}'}
-                        </a>
-                      </p>
-                    )}
-                    {form.clienteLat !== undefined && form.clienteLng !== undefined && (
-                      <MiniMapaCliente
+                    ) : (
+                      <CampoDireccionConPlaces
+                        valor={form.clienteDireccion}
                         lat={form.clienteLat}
                         lng={form.clienteLng}
-                        direccion={form.clienteDireccion}
+                        onChange={handleDireccionChange}
+                        placeholder="Escribe un lugar, dirección o pega URL de Google Maps"
+                        inputClassName={`flex-1 ${editableInputClass}`}
                       />
                     )}
                   </div>
@@ -663,6 +684,30 @@ export default function OrdenCreateModal({
           </div>
         </div>
 
+        {/* Información adicional desde el formulario público (read-only) */}
+        {tieneInfoAdicional && (
+          <details className="border border-gray-200 rounded-lg p-3 bg-gray-50" open>
+            <summary className="cursor-pointer text-sm font-medium text-gray-700">
+              Información adicional del formulario
+            </summary>
+            <div className="mt-2 text-xs text-gray-700 space-y-1">
+              {citaPreset?.comoNosConocio && (
+                <div><strong>¿Cómo nos conoció?</strong> {citaPreset.comoNosConocio}</div>
+              )}
+              {citaPreset?.whatsappAsignadoNombre && (
+                <div><strong>WhatsApp asignado:</strong> {citaPreset.whatsappAsignadoNombre}</div>
+              )}
+              {citaPreset?.camposPersonalizados &&
+                Object.entries(citaPreset.camposPersonalizados).map(([k, v]) => (
+                  <div key={k}><strong>{k}:</strong> {String(v)}</div>
+                ))}
+            </div>
+          </details>
+        )}
+
+        {/* Slot extra inyectado por el caller (ej: garantía con cambio de técnico) */}
+        {extraFooterSlot}
+
         {/* Submit */}
         <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
           <button
@@ -685,26 +730,23 @@ export default function OrdenCreateModal({
             ) : (
               <>
                 <Plus size={16} />
-                Guardar Orden de Servicio
+                {citaPreset ? 'Confirmar y Agendar' : 'Guardar Orden de Servicio'}
               </>
             )}
           </button>
         </div>
       </form>
 
-      {/* Modal para editar el cliente seleccionado y gestionar sus direcciones */}
       {form.clienteId && (
         <EditarClienteModal
           isOpen={showEditarCliente}
           onClose={() => setShowEditarCliente(false)}
           clienteId={form.clienteId}
           onUpdated={c => {
-            // Refrescar el form con los datos actualizados del cliente
             setForm(f => ({
               ...f,
               clienteNombre: c.nombre,
               clienteEmail: c.email || '',
-              // Solo actualizar dirección si la principal está seleccionada actualmente
               ...(direccionSeleccionada?.tipo === 'principal'
                 ? {
                     clienteDireccion: c.direccion,

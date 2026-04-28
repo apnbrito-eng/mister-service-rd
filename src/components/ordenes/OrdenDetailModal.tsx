@@ -399,6 +399,31 @@ export default function OrdenDetailModal({
         </div>
       </div>
 
+      {/* Origen: formulario público — metadatos de la cita pre-confirmada */}
+      {orden.metadatosCita && (
+        orden.metadatosCita.comoNosConocio ||
+        orden.metadatosCita.whatsappAsignadoNombre ||
+        (orden.metadatosCita.camposPersonalizados && Object.keys(orden.metadatosCita.camposPersonalizados).length > 0)
+      ) && (
+        <details className="border border-blue-200 rounded-lg p-3 bg-blue-50">
+          <summary className="cursor-pointer text-sm font-medium text-blue-700">
+            Origen: formulario público
+          </summary>
+          <div className="mt-2 text-xs text-gray-700 space-y-1">
+            {orden.metadatosCita.comoNosConocio && (
+              <div><strong>¿Cómo nos conoció?</strong> {orden.metadatosCita.comoNosConocio}</div>
+            )}
+            {orden.metadatosCita.whatsappAsignadoNombre && (
+              <div><strong>WhatsApp asignado:</strong> {orden.metadatosCita.whatsappAsignadoNombre}</div>
+            )}
+            {orden.metadatosCita.camposPersonalizados &&
+              Object.entries(orden.metadatosCita.camposPersonalizados).map(([k, v]) => (
+                <div key={k}><strong>{k}:</strong> {String(v)}</div>
+              ))}
+          </div>
+        </details>
+      )}
+
       {/* Notas internas de operaciones - solo visibles para operaciones, NO para tecnicos */}
       {orden.notas && (
         <div>

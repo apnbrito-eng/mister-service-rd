@@ -291,6 +291,18 @@ export interface OrdenServicio {
   referenciaConduce?: string;        // número del conduce original (CG-####)
   referenciaFacturaId?: string;      // id del doc factura original
   referenciaOrdenId?: string;        // id de la orden original
+  /**
+   * Metadatos de la cita pública que originó esta orden (cuando la orden se
+   * creó vía "Confirmar y Agendar" desde `citas_por_confirmar`). Permite
+   * trazar el origen del lead aún después de borrar la cita.
+   */
+  metadatosCita?: {
+    comoNosConocio?: string;
+    camposPersonalizados?: Record<string, string>;
+    whatsappAsignado?: string;
+    whatsappAsignadoNombre?: string;
+    citaOrigenId?: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }

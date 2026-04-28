@@ -1,18 +1,17 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, Timestamp, getDoc, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
-import { CitaPorConfirmar, Personal, OrdenServicio, GarantiaOrigen } from '../types';
-import { tiempoTranscurrido, TIPOS_EQUIPO, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, esOrdenMantenimiento, formatMoneda, crearRegistroAuditoria } from '../utils';
-import { buscarPrecioMantenimiento } from '../services/precios.service';
-import { siguienteNumeroOrden } from '../services/contadores.service';
-import { crearOActualizarClienteDesdeCita } from '../services/clientes.service';
+import { CitaPorConfirmar, OrdenServicio, GarantiaOrigen } from '../types';
+import { tiempoTranscurrido, TIPOS_EQUIPO, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, formatMoneda } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
+import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
+import { useOrdenCreateForm } from '../hooks/useOrdenCreateForm';
 import { Phone, Clock, Check, X, Plus, AlertTriangle, MapPin, Camera, Wrench, Shield } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
-import { differenceInMinutes, isSameDay, format } from 'date-fns';
+import { differenceInMinutes, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
@@ -26,7 +25,6 @@ export default function Citas() {
   const [showModal, setShowModal] = useState(false);
   const [showAgendarModal, setShowAgendarModal] = useState(false);
   const [selectedCita, setSelectedCita] = useState<CitaPorConfirmar | null>(null);
-  const [personal, setPersonal] = useState<Personal[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
 
   const [form, setForm] = useState({
@@ -53,11 +51,6 @@ export default function Citas() {
   const dirInputRef = useRef<HTMLInputElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const autocompleteRef = useRef<any>(null);
-
-  const [agendarForm, setAgendarForm] = useState({
-    equipoTipo: '', equipoMarca: '', tecnicoId: '', tecnicoNombre: '',
-    fechaCita: '', horaInicio: '', notas: '',
-  });
 
   const [saving, setSaving] = useState(false);
 
@@ -122,10 +115,6 @@ export default function Citas() {
       }
     );
 
-    getDocs(collection(db, 'personal')).then(snap => {
-      setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
-    });
-
     // Listener de órdenes para validar disponibilidad del técnico al agendar
     const unsubOrdenes = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
       const data = snap.docs.map(d => parseOrden(d.id, d.data() as Record<string, unknown>));
@@ -137,22 +126,6 @@ export default function Citas() {
       unsubOrdenes();
     };
   }, []);
-
-  // Horarios ya tomados por el técnico seleccionado en la fecha de la cita
-  const horariosOcupadosAgendar = useMemo(() => {
-    if (!agendarForm.tecnicoId || !agendarForm.fechaCita) return [];
-    const fechaSeleccionada = new Date(agendarForm.fechaCita + 'T00:00:00');
-    return ordenes
-      .filter(o =>
-        !o.eliminada &&
-        (o.tecnicoId === agendarForm.tecnicoId || o.tecnicoNombre === agendarForm.tecnicoNombre) &&
-        o.fechaCita &&
-        isSameDay(o.fechaCita, fechaSeleccionada) &&
-        o.estado !== 'cancelado' &&
-        o.estado !== 'cerrado'
-      )
-      .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
-  }, [agendarForm.tecnicoId, agendarForm.tecnicoNombre, agendarForm.fechaCita, ordenes]);
 
   // ─── Garantía: cargar comisión original cuando el modal de agendar se abre con una cita de garantía ───
   useEffect(() => {
@@ -203,6 +176,216 @@ export default function Citas() {
       setGarantiaNotas('');
     }
   }, [showAgendarModal]);
+
+  // Hook compartido: maneja el form completo de Crear Orden cuando se abre el
+  // modal "Confirmar y Agendar" con una cita pre-cargada. Incluye búsqueda /
+  // creación de cliente, double-booking, auto-aprobación de mantenimiento, y
+  // persiste la orden + metadatos de la cita pública. Después del addDoc
+  // exitoso, ejecuta `onAfterCreate` que aplica garantía + borra la cita.
+  const createForm = useOrdenCreateForm({
+    ordenes,
+    citaPreset: showAgendarModal ? selectedCita : null,
+    usuarioActual: { id: userProfile?.id, nombre: userProfile?.nombre },
+    onAfterCreate: async (nuevaOrdenId) => {
+      if (!selectedCita) return;
+      const ahoraTs = Timestamp.now();
+      const tecnicoElegidoId = createForm.form.tecnicoId;
+      const tecnicoElegidoNombre = createForm.form.tecnicoNombre;
+      const cambioTecnicoGarantia = !!(
+        selectedCita.esGarantia &&
+        tecnicoElegidoId &&
+        selectedCita.tecnicoOriginalUid &&
+        tecnicoElegidoId !== selectedCita.tecnicoOriginalUid
+      );
+
+      // ─── Garantía: aplicar descuento, actualizar factura y registrar auditoría ───
+      // Si CUALQUIER paso crítico (descuento de comisión o actualización de la
+      // factura) falla, NO borramos la cita: el usuario debe ver la orden
+      // creada y la cita aún pendiente para reintentar la garantía a mano.
+      // Las auditorías no son críticas: si fallan, lo logueamos y seguimos.
+      let garantiaProcesadaOk = true;
+      if (selectedCita.esGarantia) {
+        let descuentoAplicado = false;
+        let descuentoMonto = 0;
+
+        // 1) Descuento a la comisión del técnico original (si cambió de técnico)
+        if (cambioTecnicoGarantia && comisionOriginalId && comisionMontoOriginal !== null && comisionMontoOriginal > 0) {
+          try {
+            const comisionRef = doc(db, 'comisiones', comisionOriginalId);
+            const comisionSnap = await getDoc(comisionRef);
+            if (!comisionSnap.exists()) {
+              toast.error('Comisión original no encontrada. No se aplicó descuento. Verifica manualmente.');
+              garantiaProcesadaOk = false;
+            } else if (comisionSnap.data()?.estaAnulada === true) {
+              toast('Comisión ya fue anulada en una reasignación previa. No se re-descontó.', {
+                duration: 5000,
+                style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
+              });
+              try {
+                const auditOmision: Record<string, unknown> = {
+                  accion: 'descuento_garantia_omitido_idempotencia',
+                  solicitanteUid: userProfile?.id || null,
+                  solicitanteNombre: userProfile?.nombre || null,
+                  objetivoTipo: 'comision',
+                  objetivoId: comisionOriginalId,
+                  ordenIdReasignada: nuevaOrdenId,
+                  facturaId: selectedCita.referenciaFacturaId || null,
+                  conduceNumero: selectedCita.referenciaConduce || null,
+                  motivo: 'Comisión ya anulada previamente',
+                  timestamp: ahoraTs,
+                };
+                await addDoc(collection(db, 'auditoria_admin'),
+                  Object.fromEntries(Object.entries(auditOmision).filter(([, v]) => v !== undefined)),
+                );
+              } catch (errAuditOmision) {
+                console.warn('Audit log descuento_garantia_omitido_idempotencia falló:', errAuditOmision);
+                // Auditoría no crítica: no marcamos garantiaProcesadaOk en false.
+              }
+            } else {
+              const descuentoPayload: Record<string, unknown> = {
+                monto: -comisionMontoOriginal,
+                facturaIdReasignada: selectedCita.referenciaFacturaId || '',
+                conduceNumero: selectedCita.referenciaConduce || '',
+                ordenIdReasignada: nuevaOrdenId,
+                motivo: garantiaMotivo,
+                aplicadoEn: ahoraTs,
+                aplicadoPor: userProfile?.id || '',
+                aplicadoPorNombre: userProfile?.nombre || 'Sistema',
+              };
+              if (garantiaNotas.trim()) descuentoPayload.notas = garantiaNotas.trim();
+              const descuentoLimpio = Object.fromEntries(
+                Object.entries(descuentoPayload).filter(([, v]) => v !== undefined),
+              );
+              await updateDoc(comisionRef, {
+                descuentoPorGarantia: descuentoLimpio,
+                estaAnulada: true,
+                updatedAt: ahoraTs,
+              });
+              descuentoAplicado = true;
+              descuentoMonto = comisionMontoOriginal;
+            }
+          } catch (errDesc) {
+            console.error('No se pudo aplicar el descuento por garantía:', errDesc);
+            toast.error('Error procesando garantía: no se pudo descontar comisión del técnico original.');
+            garantiaProcesadaOk = false;
+          }
+        } else if (cambioTecnicoGarantia && !comisionOriginalId) {
+          toast('No se encontró comisión del técnico original. Descuento no aplicado.', {
+            duration: 5000,
+            style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
+          });
+          // No comisión registrada — no hay nada que descontar. Esto es un
+          // estado válido (orden previa sin comisión), no un fallo: dejamos
+          // garantiaProcesadaOk en true para que la cita se borre normalmente.
+        }
+
+        // 2) Actualizar factura: snapshot del técnico original + ordenGarantiaId + estado reclamada
+        if (selectedCita.referenciaFacturaId) {
+          try {
+            const facturaUpdate: Record<string, unknown> = {
+              'garantia.ordenGarantiaId': nuevaOrdenId,
+              'garantia.estado': 'reclamada',
+            };
+            if (selectedCita.tecnicoOriginalUid) facturaUpdate['garantia.tecnicoOriginalUid'] = selectedCita.tecnicoOriginalUid;
+            if (selectedCita.tecnicoOriginalNombre) facturaUpdate['garantia.tecnicoOriginalNombre'] = selectedCita.tecnicoOriginalNombre;
+            await updateDoc(doc(db, 'facturas', selectedCita.referenciaFacturaId), facturaUpdate);
+          } catch (errFact) {
+            console.error('No se pudo actualizar la factura referenciada:', errFact);
+            toast.error('Error procesando garantía: factura no actualizada.');
+            garantiaProcesadaOk = false;
+          }
+        }
+
+        // 3) Audit log: cambio_tecnico_garantia (no crítico)
+        if (cambioTecnicoGarantia) {
+          try {
+            const auditPayload: Record<string, unknown> = {
+              accion: 'cambio_tecnico_garantia',
+              solicitanteUid: userProfile?.id || null,
+              solicitanteNombre: userProfile?.nombre || null,
+              objetivoTipo: 'orden',
+              objetivoId: nuevaOrdenId,
+              ordenIdReasignada: nuevaOrdenId,
+              ordenIdOriginal: selectedCita.referenciaOrdenId || null,
+              facturaId: selectedCita.referenciaFacturaId || null,
+              conduceNumero: selectedCita.referenciaConduce || null,
+              tecnicoOriginalUid: selectedCita.tecnicoOriginalUid || null,
+              tecnicoOriginalNombre: selectedCita.tecnicoOriginalNombre || null,
+              tecnicoNuevoUid: tecnicoElegidoId,
+              tecnicoNuevoNombre: tecnicoElegidoNombre,
+              motivo: garantiaMotivo,
+              notas: garantiaNotas.trim() || null,
+              montoDescontado: descuentoAplicado ? descuentoMonto : 0,
+              descuentoAplicado,
+              comisionOriginalId: comisionOriginalId || null,
+              timestamp: ahoraTs,
+            };
+            await addDoc(collection(db, 'auditoria_admin'),
+              Object.fromEntries(Object.entries(auditPayload).filter(([, v]) => v !== undefined)),
+            );
+          } catch (errAudit) {
+            console.warn('Audit log cambio_tecnico_garantia falló:', errAudit);
+            // No crítico — no marcamos garantiaProcesadaOk en false.
+          }
+        }
+
+        // 4) Audit log adicional cuando el descuento sí se aplicó (no crítico)
+        if (descuentoAplicado) {
+          try {
+            const auditDesc: Record<string, unknown> = {
+              accion: 'descuento_garantia_tecnico',
+              solicitanteUid: userProfile?.id || null,
+              solicitanteNombre: userProfile?.nombre || null,
+              objetivoTipo: 'comision',
+              objetivoId: comisionOriginalId,
+              tecnicoAfectadoUid: selectedCita.tecnicoOriginalUid || null,
+              tecnicoAfectadoNombre: selectedCita.tecnicoOriginalNombre || null,
+              monto: -descuentoMonto,
+              ordenIdOriginal: selectedCita.referenciaOrdenId || null,
+              ordenIdReasignada: nuevaOrdenId,
+              conduceNumero: selectedCita.referenciaConduce || null,
+              motivo: garantiaMotivo,
+              timestamp: ahoraTs,
+            };
+            await addDoc(collection(db, 'auditoria_admin'),
+              Object.fromEntries(Object.entries(auditDesc).filter(([, v]) => v !== undefined)),
+            );
+          } catch (errAudit) {
+            console.warn('Audit log descuento_garantia_tecnico falló:', errAudit);
+            // No crítico.
+          }
+        }
+      }
+
+      if (garantiaProcesadaOk) {
+        // Camino feliz: borrar la cita por confirmar (esto también limpia el
+        // lock procesando=true, ya que el doc deja de existir).
+        try {
+          await deleteDoc(doc(db, 'citas_por_confirmar', selectedCita.id));
+        } catch (errDel) {
+          console.warn('No se pudo borrar la cita por confirmar:', errDel);
+          toast.error('Orden creada, pero la cita no se eliminó. Bórrala manualmente.');
+        }
+      } else {
+        // La orden ya está creada (no la rolleamos). La cita NO se borra para
+        // que la coord pueda reintentar la lógica de garantía manualmente.
+        // Liberamos el lock para que pueda volver a intentar confirmarla.
+        toast.error('La cita NO fue eliminada porque la garantía no se procesó completamente. Revisa y vuelve a confirmar.');
+        try {
+          await updateDoc(doc(db, 'citas_por_confirmar', selectedCita.id), {
+            procesando: false,
+            procesandoPor: null,
+            procesandoEn: null,
+          });
+        } catch (errUnlock) {
+          console.warn('No se pudo unlockear la cita tras fallo de garantía:', errUnlock);
+        }
+      }
+
+      setShowAgendarModal(false);
+      setSelectedCita(null);
+    },
+  });
 
   // Google Places Autocomplete en el campo de dirección
   useEffect(() => {
@@ -414,316 +597,6 @@ export default function Citas() {
     }
   };
 
-  const handleConfirmarYAgendar = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCita || !agendarForm.equipoTipo || !agendarForm.fechaCita) {
-      toast.error('Completa equipo y fecha');
-      return;
-    }
-    if (!agendarForm.horaInicio) {
-      toast.error('Selecciona una hora');
-      return;
-    }
-    // Validación defensiva: el horario puede haberse ocupado entre que se abrió el modal y este submit
-    if (horariosOcupadosAgendar.includes(agendarForm.horaInicio)) {
-      toast.error('Ese horario ya está ocupado por el técnico seleccionado');
-      return;
-    }
-    // Garantía con cambio de técnico: motivo requerido
-    const cambioTecnicoGarantia = !!(
-      selectedCita.esGarantia &&
-      agendarForm.tecnicoId &&
-      selectedCita.tecnicoOriginalUid &&
-      agendarForm.tecnicoId !== selectedCita.tecnicoOriginalUid
-    );
-    if (cambioTecnicoGarantia && !garantiaMotivo) {
-      toast.error('Selecciona un motivo para el cambio de técnico');
-      return;
-    }
-    setSaving(true);
-    try {
-      // 1) Resolver / crear el cliente a partir del teléfono de la cita.
-      //    Si el teléfono no existe → se crea cliente nuevo con los datos
-      //    capturados en el form público (origen: 'formulario_publico').
-      //    Si existe y la dirección de la cita no estaba registrada, se
-      //    agrega al array `direcciones[]` del cliente.
-      let clienteResolvedId = '';
-      let clienteCreado = false;
-      let direccionAgregada = false;
-      try {
-        const res = await crearOActualizarClienteDesdeCita(selectedCita, {
-          uid: userProfile?.id,
-          nombre: userProfile?.nombre || 'Sistema',
-        });
-        clienteResolvedId = res.clienteId;
-        clienteCreado = res.creado;
-        direccionAgregada = res.direccionAgregada;
-      } catch (errCli) {
-        // No bloqueamos el agendamiento por esto — la orden se crea con
-        // clienteId vacío como antes y se puede vincular manualmente luego.
-        console.warn('No se pudo crear/actualizar el cliente desde la cita:', errCli);
-      }
-
-      const numero = await siguienteNumeroOrden();
-      const ahora = Timestamp.now();
-      const fechaCitaTs = Timestamp.fromDate(
-        new Date(`${agendarForm.fechaCita}T${agendarForm.horaInicio}:00`)
-      );
-      // Resolver operaria a partir del técnico escogido
-      const tecnicoElegido = personal.find(p => p.id === agendarForm.tecnicoId);
-      const ordenData: Record<string, unknown> = {
-        numero,
-        clienteId: clienteResolvedId,
-        clienteNombre: selectedCita.clienteNombre,
-        clienteTelefono: selectedCita.telefono,
-        equipoTipo: agendarForm.equipoTipo,
-        equipoMarca: agendarForm.equipoMarca,
-        descripcionFalla: selectedCita.falla || selectedCita.servicio,
-        tecnicoId: agendarForm.tecnicoId,
-        tecnicoNombre: agendarForm.tecnicoNombre,
-        responsableId: userProfile?.id || '',
-        fase: 'agendado',
-        estadoSimple: 'pendiente',
-        estado: 'activo',
-        creadoPor: userProfile?.nombre || 'Sistema',
-        fechaCita: fechaCitaTs,
-        notas: agendarForm.notas,
-        historialFases: [
-          { fase: 'nuevo_lead', timestamp: Timestamp.fromDate(selectedCita.createdAt), usuario: 'Sistema' },
-          { fase: 'agendado', timestamp: ahora, usuario: userProfile?.nombre || 'Sistema' },
-        ],
-        createdAt: Timestamp.fromDate(selectedCita.createdAt),
-        updatedAt: ahora,
-      };
-      if (tecnicoElegido?.operariaId) ordenData.operariaId = tecnicoElegido.operariaId;
-      if (tecnicoElegido?.operariaNombre) ordenData.operariaNombre = tecnicoElegido.operariaNombre;
-      // Garantía: marcar la nueva orden como reasignación si la cita es de garantía
-      if (selectedCita.esGarantia) {
-        ordenData.esGarantia = true;
-        if (selectedCita.tecnicoOriginalUid) ordenData.tecnicoOriginalUid = selectedCita.tecnicoOriginalUid;
-        if (selectedCita.tecnicoOriginalNombre) ordenData.tecnicoOriginalNombre = selectedCita.tecnicoOriginalNombre;
-        if (selectedCita.referenciaConduce) ordenData.referenciaConduce = selectedCita.referenciaConduce;
-        if (selectedCita.referenciaFacturaId) ordenData.referenciaFacturaId = selectedCita.referenciaFacturaId;
-        if (selectedCita.referenciaOrdenId) ordenData.referenciaOrdenId = selectedCita.referenciaOrdenId;
-        // Usar la descripción del problema reclamado si está
-        if (selectedCita.descripcionProblema) {
-          ordenData.descripcionFalla = selectedCita.descripcionProblema;
-        }
-      }
-      // Copiar datos del cliente capturados en el registro/formulario público (strip undefined)
-      if (selectedCita.clienteEmail) ordenData.clienteEmail = selectedCita.clienteEmail;
-      if (selectedCita.clienteDireccion) ordenData.clienteDireccion = selectedCita.clienteDireccion;
-      if (selectedCita.clienteReferencia) ordenData.clienteReferencia = selectedCita.clienteReferencia;
-      if (typeof selectedCita.clienteLat === 'number') ordenData.clienteLat = selectedCita.clienteLat;
-      if (typeof selectedCita.clienteLng === 'number') ordenData.clienteLng = selectedCita.clienteLng;
-      // Preferir modelo/marca original de la cita si no se editaron al agendar
-      if (!ordenData.equipoMarca && selectedCita.equipoMarca) ordenData.equipoMarca = selectedCita.equipoMarca;
-      if (selectedCita.equipoModelo) ordenData.equipoModelo = selectedCita.equipoModelo;
-      if (selectedCita.fotoEquipoUrl) ordenData.fotoEquipoUrl = selectedCita.fotoEquipoUrl;
-      // Auto-aprobar precio si es mantenimiento (Fase 4B)
-      const descripcion = (selectedCita.falla || selectedCita.servicio || '');
-      let precioMantPreaprobado: number | null = null;
-      if (esOrdenMantenimiento(descripcion)) {
-        const servicioMant = await buscarPrecioMantenimiento(agendarForm.equipoMarca, agendarForm.equipoTipo);
-        if (servicioMant) {
-          precioMantPreaprobado = servicioMant.precio;
-          ordenData.precioSugerido = servicioMant.precio;
-          ordenData.precioAprobado = servicioMant.precio;
-          ordenData.precioFinal = servicioMant.precio;
-          ordenData.estadoAprobacion = 'aprobado';
-          ordenData.aprobadoPor = 'Sistema (catálogo de precios)';
-          ordenData.fechaAprobacion = ahora;
-          const reg = crearRegistroAuditoria(
-            userProfile?.nombre || 'Sistema',
-            'precio_sugerido',
-            `Precio preaprobado automáticamente por ser mantenimiento (catálogo: ${servicioMant.nombre})`,
-            'precioFinal', '', `RD$ ${servicioMant.precio.toLocaleString('es-DO')}`
-          );
-          // Insertar registro al inicio de la auditoría manteniendo historial
-          ordenData.auditoria = [reg];
-        }
-      }
-
-      const nuevaOrdenRef = await addDoc(collection(db, 'ordenes_servicio'), ordenData);
-      if (precioMantPreaprobado !== null) {
-        toast(`Mantenimiento detectado: precio preaprobado ${formatMoneda(precioMantPreaprobado)} según catálogo.`, {
-          duration: 6000,
-          style: { borderLeft: '4px solid #1a5fa8', background: '#eff6ff', color: '#0f3460' },
-        });
-      }
-
-      // ─── Garantía: aplicar descuento, actualizar factura y registrar auditoría ───
-      if (selectedCita.esGarantia) {
-        const ahoraTs = Timestamp.now();
-        let descuentoAplicado = false;
-        let descuentoMonto = 0;
-
-        // 1) Descuento a la comisión del técnico original (si cambió de técnico y existe la comisión)
-        if (cambioTecnicoGarantia && comisionOriginalId && comisionMontoOriginal !== null && comisionMontoOriginal > 0) {
-          try {
-            // Idempotencia: leer el doc de comisión justo antes de aplicar el
-            // descuento. Si ya está anulada (otro flujo previo), NO re-aplicar.
-            const comisionRef = doc(db, 'comisiones', comisionOriginalId);
-            const comisionSnap = await getDoc(comisionRef);
-            if (!comisionSnap.exists()) {
-              toast.error('Comisión original no encontrada. No se aplicó descuento. Verifica manualmente.');
-            } else if (comisionSnap.data()?.estaAnulada === true) {
-              toast('Comisión ya fue anulada en una reasignación previa. No se re-descontó.', {
-                duration: 5000,
-                style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
-              });
-              // Audit log del skip por idempotencia (best-effort)
-              try {
-                const auditOmision: Record<string, unknown> = {
-                  accion: 'descuento_garantia_omitido_idempotencia',
-                  solicitanteUid: userProfile?.id || null,
-                  solicitanteNombre: userProfile?.nombre || null,
-                  objetivoTipo: 'comision',
-                  objetivoId: comisionOriginalId,
-                  ordenIdReasignada: nuevaOrdenRef.id,
-                  facturaId: selectedCita.referenciaFacturaId || null,
-                  conduceNumero: selectedCita.referenciaConduce || null,
-                  motivo: 'Comisión ya anulada previamente',
-                  timestamp: ahoraTs,
-                };
-                await addDoc(collection(db, 'auditoria_admin'),
-                  Object.fromEntries(Object.entries(auditOmision).filter(([, v]) => v !== undefined)),
-                );
-              } catch (errAuditOmision) {
-                console.warn('Audit log descuento_garantia_omitido_idempotencia falló:', errAuditOmision);
-              }
-            } else {
-              const descuentoPayload: Record<string, unknown> = {
-                monto: -comisionMontoOriginal,
-                facturaIdReasignada: selectedCita.referenciaFacturaId || '',
-                conduceNumero: selectedCita.referenciaConduce || '',
-                ordenIdReasignada: nuevaOrdenRef.id,
-                motivo: garantiaMotivo,
-                aplicadoEn: ahoraTs,
-                aplicadoPor: userProfile?.id || '',
-                aplicadoPorNombre: userProfile?.nombre || 'Sistema',
-              };
-              if (garantiaNotas.trim()) descuentoPayload.notas = garantiaNotas.trim();
-              const descuentoLimpio = Object.fromEntries(
-                Object.entries(descuentoPayload).filter(([, v]) => v !== undefined),
-              );
-              await updateDoc(comisionRef, {
-                descuentoPorGarantia: descuentoLimpio,
-                estaAnulada: true,
-                updatedAt: ahoraTs,
-              });
-              descuentoAplicado = true;
-              descuentoMonto = comisionMontoOriginal;
-            }
-          } catch (errDesc) {
-            console.warn('No se pudo aplicar el descuento por garantía:', errDesc);
-            toast('No se pudo aplicar el descuento a la comisión del técnico original. Verifica manualmente.', {
-              duration: 6000,
-              style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
-            });
-          }
-        } else if (cambioTecnicoGarantia && !comisionOriginalId) {
-          toast('No se encontró comisión del técnico original. Descuento no aplicado.', {
-            duration: 5000,
-            style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
-          });
-        }
-
-        // 2) Actualizar factura: snapshot del técnico original + ordenGarantiaId + estado reclamada
-        if (selectedCita.referenciaFacturaId) {
-          try {
-            const facturaUpdate: Record<string, unknown> = {
-              'garantia.ordenGarantiaId': nuevaOrdenRef.id,
-              'garantia.estado': 'reclamada',
-            };
-            if (selectedCita.tecnicoOriginalUid) facturaUpdate['garantia.tecnicoOriginalUid'] = selectedCita.tecnicoOriginalUid;
-            if (selectedCita.tecnicoOriginalNombre) facturaUpdate['garantia.tecnicoOriginalNombre'] = selectedCita.tecnicoOriginalNombre;
-            await updateDoc(doc(db, 'facturas', selectedCita.referenciaFacturaId), facturaUpdate);
-          } catch (errFact) {
-            console.warn('No se pudo actualizar la factura referenciada:', errFact);
-          }
-        }
-
-        // 3) Audit log: cambio_tecnico_garantia
-        if (cambioTecnicoGarantia) {
-          try {
-            const auditPayload: Record<string, unknown> = {
-              accion: 'cambio_tecnico_garantia',
-              solicitanteUid: userProfile?.id || null,
-              solicitanteNombre: userProfile?.nombre || null,
-              objetivoTipo: 'orden',
-              objetivoId: nuevaOrdenRef.id,
-              ordenIdReasignada: nuevaOrdenRef.id,
-              ordenIdOriginal: selectedCita.referenciaOrdenId || null,
-              facturaId: selectedCita.referenciaFacturaId || null,
-              conduceNumero: selectedCita.referenciaConduce || null,
-              tecnicoOriginalUid: selectedCita.tecnicoOriginalUid || null,
-              tecnicoOriginalNombre: selectedCita.tecnicoOriginalNombre || null,
-              tecnicoNuevoUid: agendarForm.tecnicoId,
-              tecnicoNuevoNombre: agendarForm.tecnicoNombre,
-              motivo: garantiaMotivo,
-              notas: garantiaNotas.trim() || null,
-              montoDescontado: descuentoAplicado ? descuentoMonto : 0,
-              descuentoAplicado,
-              comisionOriginalId: comisionOriginalId || null,
-              timestamp: ahoraTs,
-            };
-            await addDoc(collection(db, 'auditoria_admin'),
-              Object.fromEntries(Object.entries(auditPayload).filter(([, v]) => v !== undefined)),
-            );
-          } catch (errAudit) {
-            console.warn('Audit log cambio_tecnico_garantia falló:', errAudit);
-          }
-        }
-
-        // 4) Audit log adicional cuando el descuento sí se aplicó
-        if (descuentoAplicado) {
-          try {
-            const auditDesc: Record<string, unknown> = {
-              accion: 'descuento_garantia_tecnico',
-              solicitanteUid: userProfile?.id || null,
-              solicitanteNombre: userProfile?.nombre || null,
-              objetivoTipo: 'comision',
-              objetivoId: comisionOriginalId,
-              tecnicoAfectadoUid: selectedCita.tecnicoOriginalUid || null,
-              tecnicoAfectadoNombre: selectedCita.tecnicoOriginalNombre || null,
-              monto: -descuentoMonto,
-              ordenIdOriginal: selectedCita.referenciaOrdenId || null,
-              ordenIdReasignada: nuevaOrdenRef.id,
-              conduceNumero: selectedCita.referenciaConduce || null,
-              motivo: garantiaMotivo,
-              timestamp: ahoraTs,
-            };
-            await addDoc(collection(db, 'auditoria_admin'),
-              Object.fromEntries(Object.entries(auditDesc).filter(([, v]) => v !== undefined)),
-            );
-          } catch (errAudit) {
-            console.warn('Audit log descuento_garantia_tecnico falló:', errAudit);
-          }
-        }
-      }
-
-      await deleteDoc(doc(db, 'citas_por_confirmar', selectedCita.id));
-      if (typeof selectedCita.clienteLat !== 'number' || typeof selectedCita.clienteLng !== 'number') {
-        toast('Esta orden no tiene ubicación GPS. El técnico no podrá verla en el mapa. Puedes agregarla después desde la orden.', {
-          duration: 4000,
-          style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
-        });
-      }
-      const sufijoCliente = clienteCreado
-        ? ' (cliente creado)'
-        : direccionAgregada
-          ? ' (dirección agregada al cliente)'
-          : '';
-      toast.success(`Orden ${numero} creada y agendada${sufijoCliente}`);
-      setShowAgendarModal(false);
-      setSelectedCita(null);
-    } catch {
-      toast.error('Error al agendar');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const handleNoAgendar = async (cita: CitaPorConfirmar) => {
     if (!confirm('¿Seguro que deseas eliminar esta cita?')) return;
@@ -735,16 +608,27 @@ export default function Citas() {
     }
   };
 
-  const tecnicos = personal.filter(p => p.rol === 'tecnico' && p.activo);
-
-  // ─── Garantía: derivados para el modal de agendar ───
+  // ─── Garantía: derivados para el modal de agendar (basado en el técnico
+  // seleccionado dentro del modal Crear Orden, que ahora vive en `createForm`) ───
   const esGarantiaConCambioTecnico = !!(
     selectedCita?.esGarantia &&
-    agendarForm.tecnicoId &&
+    createForm.form.tecnicoId &&
     selectedCita.tecnicoOriginalUid &&
-    agendarForm.tecnicoId !== selectedCita.tecnicoOriginalUid
+    createForm.form.tecnicoId !== selectedCita.tecnicoOriginalUid
   );
   const motivoRequeridoIncompleto = esGarantiaConCambioTecnico && !garantiaMotivo;
+
+  // Wrapper del submit: si es garantía con cambio de técnico exigimos motivo
+  // antes de delegar al hook. El hook maneja el resto (validación, double-
+  // booking, addDoc, etc.) y dispara `onAfterCreate` para la garantía + cita.
+  const handleSubmitConGarantiaCheck = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (esGarantiaConCambioTecnico && !garantiaMotivo) {
+      toast.error('Selecciona un motivo para el cambio de técnico');
+      return;
+    }
+    await createForm.handleSubmit(e);
+  };
 
   if (loading) return <LoadingSpinner fullPage text="Cargando citas..." />;
 
@@ -864,19 +748,6 @@ export default function Citas() {
                     <button
                       onClick={() => {
                         setSelectedCita(cita);
-                        // Pre-poblar con los datos capturados al registrar
-                        const fechaStr = cita.fechaSolicitada
-                          ? format(cita.fechaSolicitada, 'yyyy-MM-dd')
-                          : '';
-                        setAgendarForm({
-                          equipoTipo: cita.equipoTipo || '',
-                          equipoMarca: cita.equipoMarca || '',
-                          tecnicoId: '',
-                          tecnicoNombre: '',
-                          fechaCita: fechaStr,
-                          horaInicio: cita.horaSolicitada || '',
-                          notas: '',
-                        });
                         setShowAgendarModal(true);
                       }}
                       className="flex items-center gap-1 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"
@@ -1106,104 +977,37 @@ export default function Citas() {
         </form>
       </Modal>
 
-      {/* Modal agendar */}
-      <Modal isOpen={showAgendarModal} onClose={() => { setShowAgendarModal(false); setSelectedCita(null); }} title="Confirmar y Agendar" size="lg">
-        {selectedCita && (
-          <form onSubmit={handleConfirmarYAgendar} className="space-y-4">
-            <div className="bg-blue-50 rounded-xl p-4">
-              <p className="text-sm font-medium text-blue-900">{selectedCita.clienteNombre} · {selectedCita.telefono}</p>
-              <p className="text-sm text-blue-700">{selectedCita.servicio}</p>
-            </div>
-            {selectedCita.esGarantia && (
-              <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield size={16} className="text-amber-700" />
-                  <span className="text-sm font-bold text-amber-900">Cita de garantía</span>
-                </div>
-                <div className="text-xs text-amber-900 space-y-0.5">
-                  {selectedCita.tecnicoOriginalNombre && (
-                    <p><span className="font-semibold">Técnico original:</span> {selectedCita.tecnicoOriginalNombre}</p>
-                  )}
-                  {selectedCita.referenciaConduce && (
-                    <p><span className="font-semibold">Conduce ref:</span> {selectedCita.referenciaConduce}</p>
-                  )}
-                  {selectedCita.descripcionProblema && (
-                    <p><span className="font-semibold">Problema reclamado:</span> {selectedCita.descripcionProblema}</p>
-                  )}
-                </div>
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de equipo *</label>
-                <select value={agendarForm.equipoTipo} onChange={e => setAgendarForm(f => ({ ...f, equipoTipo: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
-                  <option value="">Seleccionar...</option>
-                  {TIPOS_EQUIPO.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
-                <input type="text" value={agendarForm.equipoMarca} onChange={e => setAgendarForm(f => ({ ...f, equipoMarca: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Técnico</label>
-                <select value={agendarForm.tecnicoId} onChange={e => {
-                  const t = personal.find(p => p.id === e.target.value);
-                  setAgendarForm(f => ({ ...f, tecnicoId: e.target.value, tecnicoNombre: t?.nombre || '' }));
-                }} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
-                  <option value="">Sin asignar</option>
-                  {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha *</label>
-                <input type="date" value={agendarForm.fechaCita} onChange={e => setAgendarForm(f => ({ ...f, fechaCita: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Hora de Inicio *</label>
-              <div className="grid grid-cols-5 gap-1">
-                {HORARIOS.map(h => {
-                  const ocupado = horariosOcupadosAgendar.includes(h);
-                  return (
-                    <button
-                      key={h}
-                      type="button"
-                      onClick={() => !ocupado && setAgendarForm(f => ({ ...f, horaInicio: h }))}
-                      disabled={ocupado}
-                      title={ocupado ? 'Horario ocupado' : ''}
-                      className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                        ocupado
-                          ? 'bg-red-50 text-red-400 border-red-200 cursor-not-allowed line-through'
-                          : agendarForm.horaInicio === h
-                            ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
-                      }`}
-                    >
-                      {HORARIOS_LABEL[h]}
-                    </button>
-                  );
-                })}
-              </div>
-              {agendarForm.tecnicoId && agendarForm.fechaCita && horariosOcupadosAgendar.length > 0 && (
-                <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
-                  <AlertTriangle size={10} /> {horariosOcupadosAgendar.length} horario(s) ocupado(s) ese día
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
-              <textarea value={agendarForm.notas} onChange={e => setAgendarForm(f => ({ ...f, notas: e.target.value }))} rows={2}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-            </div>
-
-            {/* Garantía: advertencia por cambio de técnico */}
-            {esGarantiaConCambioTecnico && (
+      {/* Modal "Confirmar y Agendar" — reusa el modal completo de Crear Orden
+          de Servicio con `citaPreset`. Trae todos los datos pre-cargados desde
+          la cita pública y permite editarlos antes de crear la orden. */}
+      {showAgendarModal && selectedCita && (
+        <OrdenCreateModal
+          form={createForm.form}
+          setForm={createForm.setForm}
+          clienteBusqueda={createForm.clienteBusqueda}
+          setClienteBusqueda={createForm.setClienteBusqueda}
+          showClienteDropdown={createForm.showClienteDropdown}
+          setShowClienteDropdown={createForm.setShowClienteDropdown}
+          isNewCliente={createForm.isNewCliente}
+          setIsNewCliente={createForm.setIsNewCliente}
+          saving={createForm.saving || saving || motivoRequeridoIncompleto}
+          clientes={createForm.clientes}
+          clientesFiltrados={createForm.clientesFiltrados}
+          tecnicos={createForm.tecnicos}
+          horariosOcupadosCreate={createForm.horariosOcupadosCreate}
+          ordenesActivasCliente={createForm.ordenesActivasCliente}
+          buscandoTelefono={createForm.buscandoTelefono}
+          showTelefonoDropdown={createForm.showTelefonoDropdown}
+          setShowTelefonoDropdown={createForm.setShowTelefonoDropdown}
+          clientesFiltradosTelefono={createForm.clientesFiltradosTelefono}
+          onSubmit={handleSubmitConGarantiaCheck}
+          onClose={() => { setShowAgendarModal(false); setSelectedCita(null); createForm.resetForm(); }}
+          handleDireccionChange={createForm.handleDireccionChange}
+          handleSelectCliente={createForm.handleSelectCliente}
+          handleClienteTelefonoChange={createForm.handleClienteTelefonoChange}
+          citaPreset={selectedCita}
+          extraFooterSlot={
+            esGarantiaConCambioTecnico ? (
               <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-2">
                   <AlertTriangle size={18} className="text-red-700" />
@@ -1211,7 +1015,7 @@ export default function Citas() {
                 </div>
                 <div className="text-xs text-red-900 space-y-1">
                   <p><span className="font-semibold">Técnico original:</span> {selectedCita?.tecnicoOriginalNombre || '—'}</p>
-                  <p><span className="font-semibold">Técnico nuevo:</span> {agendarForm.tecnicoNombre || '—'}</p>
+                  <p><span className="font-semibold">Técnico nuevo:</span> {createForm.form.tecnicoNombre || '—'}</p>
                 </div>
                 <div className="bg-white border border-red-200 rounded-lg p-3 text-xs text-red-900">
                   <p>
@@ -1259,23 +1063,10 @@ export default function Citas() {
                   />
                 </div>
               </div>
-            )}
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={() => { setShowAgendarModal(false); setSelectedCita(null); }}
-                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
-              <button type="submit" disabled={saving || motivoRequeridoIncompleto}
-                className={`px-6 py-2 rounded-lg text-sm font-medium disabled:opacity-60 ${
-                  esGarantiaConCambioTecnico
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                    : 'bg-[#0f3460] hover:bg-[#1a5fa8] text-white'
-                }`}>
-                {saving ? 'Agendando...' : esGarantiaConCambioTecnico ? 'Confirmar y Aplicar' : 'Confirmar y Agendar'}
-              </button>
-            </div>
-          </form>
-        )}
-      </Modal>
+            ) : null
+          }
+        />
+      )}
     </div>
   );
 }

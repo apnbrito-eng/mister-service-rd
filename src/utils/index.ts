@@ -575,6 +575,34 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     referenciaConduce: typeof raw.referenciaConduce === 'string' && raw.referenciaConduce.length > 0 ? raw.referenciaConduce : undefined,
     referenciaFacturaId: typeof raw.referenciaFacturaId === 'string' && raw.referenciaFacturaId.length > 0 ? raw.referenciaFacturaId : undefined,
     referenciaOrdenId: typeof raw.referenciaOrdenId === 'string' && raw.referenciaOrdenId.length > 0 ? raw.referenciaOrdenId : undefined,
+    metadatosCita: raw.metadatosCita && typeof raw.metadatosCita === 'object'
+      ? (() => {
+          const m = raw.metadatosCita as Record<string, unknown>;
+          const camposRaw = m.camposPersonalizados;
+          let camposPersonalizados: Record<string, string> | undefined;
+          if (camposRaw && typeof camposRaw === 'object' && !Array.isArray(camposRaw)) {
+            const entries = Object.entries(camposRaw as Record<string, unknown>)
+              .filter(([, v]) => typeof v === 'string' && (v as string).length > 0)
+              .map(([k, v]) => [k, v as string] as const);
+            if (entries.length > 0) camposPersonalizados = Object.fromEntries(entries);
+          }
+          const result: NonNullable<OrdenServicio['metadatosCita']> = {};
+          if (typeof m.comoNosConocio === 'string' && m.comoNosConocio.length > 0) {
+            result.comoNosConocio = m.comoNosConocio;
+          }
+          if (camposPersonalizados) result.camposPersonalizados = camposPersonalizados;
+          if (typeof m.whatsappAsignado === 'string' && m.whatsappAsignado.length > 0) {
+            result.whatsappAsignado = m.whatsappAsignado;
+          }
+          if (typeof m.whatsappAsignadoNombre === 'string' && m.whatsappAsignadoNombre.length > 0) {
+            result.whatsappAsignadoNombre = m.whatsappAsignadoNombre;
+          }
+          if (typeof m.citaOrigenId === 'string' && m.citaOrigenId.length > 0) {
+            result.citaOrigenId = m.citaOrigenId;
+          }
+          return Object.keys(result).length > 0 ? result : undefined;
+        })()
+      : undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden | 'reactivada_post_chequeo') || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),
