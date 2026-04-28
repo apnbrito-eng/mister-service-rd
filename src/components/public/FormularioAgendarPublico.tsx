@@ -190,6 +190,11 @@ export default function FormularioAgendarPublico() {
   const [fotoSubiendo, setFotoSubiendo] = useState(false);
   const fotoInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Ref al contenedor de la pantalla de éxito. Se usa como fallback al
+  // `window.scrollTo` por si algún ancestro tiene `overflow: hidden` o
+  // scroll local que impida que el scroll del window mueva el viewport.
+  const successContainerRef = useRef<HTMLDivElement | null>(null);
+
   const handleFotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     // Reset el value del input para que volver a seleccionar el mismo archivo
@@ -271,6 +276,22 @@ export default function FormularioAgendarPublico() {
     });
     return () => unsub();
   }, []);
+
+  // Al transitar a la pantalla de éxito, scroll al tope del viewport para
+  // que el cliente vea el check verde y el CTA de WhatsApp en mobile (de
+  // otra forma queda en la posición del footer del form). El timeout de
+  // 50ms da tiempo a React a montar el nuevo árbol antes del scrollIntoView.
+  useEffect(() => {
+    if (!success) return;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const t = window.setTimeout(() => {
+      successContainerRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, [success]);
 
   // Tipos de equipo: leemos desde `config_web/sitio.tiposEquipoPublicos`
   // (lectura pública garantizada). El admin sincroniza esta lista cuando
@@ -510,7 +531,10 @@ export default function FormularioAgendarPublico() {
   // Pantalla de éxito
   if (success) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+      <div
+        ref={successContainerRef}
+        className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center"
+      >
         <CheckCircle2 size={56} className="mx-auto text-green-500 mb-4" />
         <h2 className="text-2xl font-bold text-gray-900 mb-3">
           ¡Solicitud recibida!
