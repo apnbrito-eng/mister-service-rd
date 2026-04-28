@@ -9,15 +9,32 @@ import {
   enviarSolicitudCita,
   suscribirConfigFormularioAgendar,
 } from '../../services/formularioAgendar.service';
-import { suscribirTiposEquipo } from '../../services/configTiposEquipo.service';
 import { normalizarTelefono } from '../../services/clientes.service';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 import LoadingSpinner from '../LoadingSpinner';
 import CampoDireccionConPlaces from '../shared/CampoDireccionConPlaces';
 
+/**
+ * Fallback hardcoded usado cuando `config_web/sitio.tiposEquipoPublicos`
+ * no existe todavía (primera carga del sitio o el admin nunca tocó la
+ * lista). Coincide con `CONFIG_WEB_DEFAULTS.tiposEquipoPublicos`.
+ */
+const TIPOS_EQUIPO_FALLBACK = [
+  'Lavadora',
+  'Nevera',
+  'Estufa',
+  'Aire Acondicionado',
+  'Microondas',
+  'Secadora',
+  'Otro',
+];
+
+// Mobile-first: text-base evita el zoom automático de Safari iOS al
+// enfocar inputs (Safari hace zoom si la fuente es <16px). min-h-[44px]
+// cumple el target táctil mínimo de Apple HIG.
 const inputClass =
-  'w-full px-4 py-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition';
+  'w-full px-4 py-3 border border-gray-200 rounded-lg text-base min-h-[44px] focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition';
 const labelClass = 'block text-sm font-medium text-gray-700 mb-1.5';
 
 interface FormState {
@@ -131,13 +148,12 @@ function construirUrlWhatsAppRD(numero: string, mensaje: string): string {
 }
 
 export default function FormularioAgendarPublico() {
-  const { config: configWeb } = useConfigWeb();
+  const { config: configWeb, loading: configWebLoading } = useConfigWeb();
 
   const [config, setConfig] = useState<ConfigFormularioAgendar>({
     ...CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
   });
   const [configLoaded, setConfigLoaded] = useState(false);
-  const [tiposEquipo, setTiposEquipo] = useState<string[]>([]);
   const [form, setForm] = useState<FormState>(FORM_INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -155,11 +171,15 @@ export default function FormularioAgendarPublico() {
     return () => unsub();
   }, []);
 
-  // Suscripción a tipos de equipo (mismo source que el admin)
-  useEffect(() => {
-    const unsub = suscribirTiposEquipo(setTiposEquipo);
-    return () => unsub();
-  }, []);
+  // Tipos de equipo: leemos desde `config_web/sitio.tiposEquipoPublicos`
+  // (lectura pública garantizada). El admin sincroniza esta lista cuando
+  // edita los tipos en /admin/configuracion. Si el doc no tiene aún el
+  // campo (instalación nueva), usamos fallback hardcoded.
+  const tiposEquipo = useMemo<string[]>(() => {
+    const lista = configWeb?.tiposEquipoPublicos;
+    if (Array.isArray(lista) && lista.length > 0) return lista;
+    return TIPOS_EQUIPO_FALLBACK;
+  }, [configWeb]);
 
   // Hoy en formato YYYY-MM-DD para `min` del input date
   const hoy = useMemo(() => {
@@ -432,7 +452,11 @@ export default function FormularioAgendarPublico() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 space-y-5"
+      // pb-20 sm:pb-8: padding inferior defensivo para que el botón submit
+      // no quede tapado por elementos flotantes (botón WhatsApp, barras
+      // del browser en mobile, etc.). En desktop (sm+) reducimos al
+      // espaciado normal.
+      className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 pb-20 sm:pb-8 space-y-5"
       autoComplete="on"
     >
       {/* Honeypot — invisible para humanos, visible para bots */}
@@ -506,7 +530,7 @@ export default function FormularioAgendarPublico() {
         <div>
           <label className={labelClass}>
             Dirección
-            <span className="ml-2 text-[10px] text-gray-400 font-normal">
+            <span className="ml-2 text-xs text-gray-400 font-normal">
               (Busca en Google, pega URL de Maps o usa &quot;Mi ubicación&quot;)
             </span>
           </label>
@@ -555,8 +579,11 @@ export default function FormularioAgendarPublico() {
               value={form.equipoTipo}
               onChange={e => update({ equipoTipo: e.target.value })}
               required
+              disabled={configWebLoading}
             >
-              <option value="">Selecciona...</option>
+              <option value="">
+                {configWebLoading ? 'Cargando...' : 'Selecciona...'}
+              </option>
               {tiposEquipo.map(t => (
                 <option key={t} value={t}>
                   {t}
@@ -630,14 +657,14 @@ export default function FormularioAgendarPublico() {
                 update({ fechaSolicitada: valor });
               }}
             />
-            <p className="text-[10px] text-gray-400 mt-1">
+            <p className="text-xs text-gray-400 mt-1">
               Lunes a sábado. Los domingos no atendemos.
             </p>
           </div>
           <div>
             <label className={labelClass}>Hora preferida</label>
             {bloquesHora.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
                 {bloquesHora.map(bloque => {
                   const seleccionado = form.horaSolicitada === bloque;
                   return (
@@ -645,7 +672,7 @@ export default function FormularioAgendarPublico() {
                       type="button"
                       key={bloque}
                       onClick={() => update({ horaSolicitada: bloque })}
-                      className={`px-4 py-3 rounded-lg border-2 text-sm transition ${
+                      className={`px-4 py-3 rounded-lg border-2 text-sm min-h-[48px] transition ${
                         seleccionado
                           ? 'border-primary bg-primary/10 text-primary font-semibold'
                           : 'border-gray-300 text-gray-700 hover:border-primary/50'
@@ -657,7 +684,7 @@ export default function FormularioAgendarPublico() {
                 })}
               </div>
             ) : (
-              <p className="text-xs text-gray-400 italic">
+              <p className="text-sm text-gray-400 italic">
                 No hay bloques de hora configurados. Te contactaremos para
                 coordinar.
               </p>
@@ -734,12 +761,15 @@ export default function FormularioAgendarPublico() {
         <button
           type="submit"
           disabled={submitting}
-          className="w-full inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary-medium text-white px-6 py-3.5 rounded-xl font-semibold text-base transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          // py-4 px-6 + text-lg en mobile para dar espacio táctil cómodo
+          // y legibilidad. min-h-[52px] asegura el target táctil incluso
+          // si la tipografía base del browser cambia.
+          className="w-full inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary-medium text-white px-6 py-4 min-h-[52px] rounded-xl font-semibold text-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <Send className="w-5 h-5" />
           {submitting ? 'Enviando...' : 'Enviar solicitud'}
         </button>
-        <p className="text-xs text-gray-400 text-center mt-3">
+        <p className="text-sm text-gray-400 text-center mt-3">
           Te contactaremos en menos de 24 horas para coordinar la visita.
         </p>
       </div>

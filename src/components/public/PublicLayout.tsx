@@ -203,6 +203,12 @@ function Footer({ config }: { config: ConfigWeb }) {
 
 export default function PublicLayout() {
   const { config } = useConfigWeb();
+  const location = useLocation();
+
+  // El form `/agendar` ya tiene su propio CTA de WhatsApp (en la pantalla
+  // post-submit y al final del form). El botón flotante tapa el botón
+  // submit en mobile y duplica la acción, así que lo ocultamos aquí.
+  const ocultarWhatsAppFlotante = location.pathname === '/agendar';
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -214,16 +220,19 @@ export default function PublicLayout() {
       </main>
       <Footer config={config} />
 
-      {/* Floating WhatsApp button (mobile) */}
-      <a
-        href={getWhatsAppUrl(config)}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 z-50 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition-colors"
-        aria-label="WhatsApp"
-      >
-        <WhatsAppIcon filled={false} className="text-white" size={24} />
-      </a>
+      {/* Floating WhatsApp button (mobile).
+          z-40 (no z-50) para no chocar con modales/banners del sistema. */}
+      {!ocultarWhatsAppFlotante && (
+        <a
+          href={getWhatsAppUrl(config)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed bottom-6 right-6 z-40 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition-colors"
+          aria-label="WhatsApp"
+        >
+          <WhatsAppIcon filled={false} className="text-white" size={24} />
+        </a>
+      )}
     </div>
   );
 }

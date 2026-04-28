@@ -56,6 +56,14 @@ export interface ConfigWeb {
   marcas: string[];
   /** Configuración del formulario público de agendamiento (`/agendar`). */
   formularioAgendar?: ConfigFormularioAgendar;
+  /**
+   * Tipos de equipo expuestos al formulario público `/agendar`.
+   * Se sincroniza desde `/admin/configuracion` cuando el admin edita la
+   * lista (que vive en `config/tiposEquipo`, doc admin con reglas auth).
+   * Este doc (`config_web/sitio`) tiene lectura pública, así que el form
+   * público lo lee desde aquí sin chocar con PERMISSION_DENIED silencioso.
+   */
+  tiposEquipoPublicos?: string[];
   updatedAt?: Date;
 }
 
@@ -93,6 +101,15 @@ export const CONFIG_WEB_DEFAULTS: ConfigWeb = {
   },
   marcas: ['LG', 'Samsung', 'Whirlpool', 'Mabe', 'GE', 'Frigidaire', 'Electrolux', 'Bosch', 'Daewoo', 'Panasonic', 'Carrier', 'Midea'],
   formularioAgendar: { ...CONFIG_FORMULARIO_AGENDAR_DEFAULTS },
+  tiposEquipoPublicos: [
+    'Lavadora',
+    'Nevera',
+    'Estufa',
+    'Aire Acondicionado',
+    'Microondas',
+    'Secadora',
+    'Otro',
+  ],
 };
 
 // ─── Referencia Firestore ────────────────────────────
@@ -116,6 +133,11 @@ export async function obtenerConfigWeb(): Promise<ConfigWeb> {
       formularioAgendar:
         (data.formularioAgendar as ConfigFormularioAgendar) ||
         CONFIG_WEB_DEFAULTS.formularioAgendar,
+      tiposEquipoPublicos: Array.isArray(data.tiposEquipoPublicos)
+        ? (data.tiposEquipoPublicos as string[]).filter(
+            (x): x is string => typeof x === 'string' && !!x,
+          )
+        : CONFIG_WEB_DEFAULTS.tiposEquipoPublicos,
       updatedAt: data.updatedAt?.toDate?.() || undefined,
     };
   } catch (err) {
@@ -130,6 +152,28 @@ export async function guardarConfigWeb(config: ConfigWeb): Promise<void> {
     CONFIG_DOC,
     {
       ...config,
+      updatedAt: Timestamp.now(),
+    },
+    { merge: true },
+  );
+}
+
+/**
+ * Sincroniza la lista de tipos de equipo al doc público `config_web/sitio`
+ * para que el formulario público `/agendar` pueda leerla sin chocar con
+ * las reglas auth del doc admin `config/tiposEquipo`. Llamar después de
+ * cada `actualizarTiposEquipo` desde la pantalla de configuración.
+ */
+export async function sincronizarTiposEquipoPublicos(
+  lista: string[],
+): Promise<void> {
+  const listaLimpia = lista.filter(
+    (x): x is string => typeof x === 'string' && x.trim().length > 0,
+  );
+  await setDoc(
+    CONFIG_DOC,
+    {
+      tiposEquipoPublicos: listaLimpia,
       updatedAt: Timestamp.now(),
     },
     { merge: true },

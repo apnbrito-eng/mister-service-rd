@@ -53,6 +53,11 @@ export function useConfigWeb(): { config: ConfigWeb; loading: boolean } {
             formularioAgendar:
               (data.formularioAgendar as ConfigFormularioAgendar) ||
               CONFIG_WEB_DEFAULTS.formularioAgendar,
+            tiposEquipoPublicos: Array.isArray(data.tiposEquipoPublicos)
+              ? (data.tiposEquipoPublicos as string[]).filter(
+                  (x): x is string => typeof x === 'string' && !!x,
+                )
+              : CONFIG_WEB_DEFAULTS.tiposEquipoPublicos,
             updatedAt: data.updatedAt?.toDate?.() || undefined,
           };
           cachedConfig = parsed;

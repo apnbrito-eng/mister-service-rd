@@ -7,6 +7,7 @@ import { geocodificarDireccion } from '../services/geocoding.service';
 import { suscribirConfigFiscal, actualizarConfigFiscal, ConfigFiscal } from '../services/configFiscal.service';
 import { suscribirConfigEmpresa, actualizarConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa } from '../services/configEmpresa.service';
 import { suscribirTiposEquipo, actualizarTiposEquipo } from '../services/configTiposEquipo.service';
+import { sincronizarTiposEquipoPublicos } from '../services/configWeb.service';
 import { collection, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { parseOrden, TIPOS_EQUIPO } from '../utils';
@@ -211,6 +212,14 @@ export default function Configuracion() {
     const nuevaLista = [...tiposEquipo, t];
     try {
       await actualizarTiposEquipo(nuevaLista, userProfile?.nombre);
+      // Sincronizar al doc público (`config_web/sitio`) para que el
+      // formulario `/agendar` la vea sin depender de las reglas auth
+      // del doc admin `config/tiposEquipo`.
+      try {
+        await sincronizarTiposEquipoPublicos(nuevaLista);
+      } catch (errSync) {
+        console.warn('[Configuracion] No se pudo sincronizar tiposEquipoPublicos:', errSync);
+      }
       setNuevoTipo('');
       toast.success('Tipo agregado');
     } catch (err) {
@@ -224,6 +233,11 @@ export default function Configuracion() {
     const nuevaLista = tiposEquipo.filter(t => t !== tipo);
     try {
       await actualizarTiposEquipo(nuevaLista, userProfile?.nombre);
+      try {
+        await sincronizarTiposEquipoPublicos(nuevaLista);
+      } catch (errSync) {
+        console.warn('[Configuracion] No se pudo sincronizar tiposEquipoPublicos:', errSync);
+      }
       toast.success('Tipo eliminado');
     } catch (err) {
       console.error('[Configuracion] Error quitando tipo:', err);
