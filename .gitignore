@@ -41,7 +41,8 @@ cors.json
 # Manuales PDF en raíz (no versionar — son artefactos, no fuente)
 /*.pdf
 
-# Claude Code local settings (ignorar todo menos los agentes y comandos del equipo)
+# Claude Code local settings (ignorar todo menos los agentes, comandos y settings compartidos)
 .claude/*
 !.claude/agents/
 !.claude/commands/
+!.claude/settings.json
