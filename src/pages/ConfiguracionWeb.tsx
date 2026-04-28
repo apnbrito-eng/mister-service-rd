@@ -31,6 +31,8 @@ import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import ConfigFormularioAgendarSection from '../components/admin/ConfigFormularioAgendarSection';
 import toast from 'react-hot-toast';
 import { comprimirImagen } from '../utils/imagen';
+import { doc, updateDoc, deleteField } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 export default function ConfiguracionWeb() {
   const [loading, setLoading] = useState(true);
@@ -213,6 +215,23 @@ export default function ConfiguracionWeb() {
     updateHero({
       imagenesCarrusel: actuales.filter((_, i) => i !== index),
     });
+  };
+
+  // Borra la imagen del hero (modo fija) en Firestore. Usa deleteField()
+  // sobre imagenFija e imagenUrl (legacy) para que parseConfigHero no
+  // resucite la imagen vieja desde el campo legacy en la próxima lectura.
+  const handleQuitarImagenHero = async () => {
+    try {
+      await updateDoc(doc(db, 'config_web', 'sitio'), {
+        'hero.imagenFija': deleteField(),
+        'hero.imagenUrl': deleteField(),
+      });
+      updateHero({ imagenFija: '', imagenUrl: '' });
+      toast.success('Imagen del hero eliminada');
+    } catch (err) {
+      console.error('Error al quitar imagen del hero:', err);
+      toast.error('Error al quitar la imagen');
+    }
   };
 
   const guardarHero = async () => {
@@ -627,7 +646,7 @@ export default function ConfiguracionWeb() {
               {config.hero.imagenFija && (
                 <button
                   type="button"
-                  onClick={() => updateHero({ imagenFija: '' })}
+                  onClick={handleQuitarImagenHero}
                   className="text-xs text-red-500 hover:text-red-700 transition"
                 >
                   Quitar imagen

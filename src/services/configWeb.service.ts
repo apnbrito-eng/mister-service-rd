@@ -233,11 +233,12 @@ export function parseConfigHero(raw: unknown): ConfigHero {
   const badge = typeof h.badge === 'string' ? h.badge : def.badge;
 
   const imagenUrl = typeof h.imagenUrl === 'string' ? h.imagenUrl : '';
-  // Compat: si tiene imagenUrl viejo y NO tiene imagenFija, usar el viejo
+  // Compat: solo migramos imagenUrl → imagenFija cuando el campo nuevo
+  // NO existe en absoluto. Si imagenFija === '' (string vacío explícito),
+  // significa que el admin lo borró deliberadamente y NO queremos resucitarlo
+  // desde el campo legacy.
   const imagenFija =
-    typeof h.imagenFija === 'string' && h.imagenFija
-      ? h.imagenFija
-      : imagenUrl;
+    typeof h.imagenFija === 'string' ? h.imagenFija : imagenUrl;
 
   const modo: 'fija' | 'carrusel' = h.modo === 'carrusel' ? 'carrusel' : 'fija';
 
