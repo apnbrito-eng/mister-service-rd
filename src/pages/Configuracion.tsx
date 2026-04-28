@@ -148,6 +148,7 @@ export default function Configuracion() {
   const [empresaSaving, setEmpresaSaving] = useState(false);
   const [tiposEquipo, setTiposEquipo] = useState<string[]>([...TIPOS_EQUIPO]);
   const [nuevoTipo, setNuevoTipo] = useState('');
+  const [savingTipos, setSavingTipos] = useState(false);
 
   // ─── Catálogo de modelos por tipo ─────────────────────
   // Solo el rol `administrador` edita. Coordinadora/secretaria lo ven en
@@ -296,14 +297,25 @@ export default function Configuracion() {
   };
 
   const handleAddTipo = async () => {
-    if (!puedeModificar) return;
-    const t = nuevoTipo.trim();
-    if (!t) return;
-    if (tiposEquipo.includes(t)) {
-      toast.error('Ese tipo ya existe');
+    if (!esAdminPuro) return;
+    const nombreLimpio = nuevoTipo.trim();
+    if (nombreLimpio.length < 2) {
+      toast.error('El nombre debe tener al menos 2 caracteres');
       return;
     }
-    const nuevaLista = [...tiposEquipo, t];
+    if (nombreLimpio.length > 50) {
+      toast.error('El nombre no puede exceder 50 caracteres');
+      return;
+    }
+    const yaExiste = tiposEquipo.some(
+      t => t.toLowerCase() === nombreLimpio.toLowerCase(),
+    );
+    if (yaExiste) {
+      toast.error(`"${nombreLimpio}" ya existe`);
+      return;
+    }
+    const nuevaLista = [...tiposEquipo, nombreLimpio];
+    setSavingTipos(true);
     try {
       await actualizarTiposEquipo(nuevaLista, userProfile?.nombre);
       // Sincronizar al doc público (`config_web/sitio`) para que el
@@ -314,17 +326,52 @@ export default function Configuracion() {
       } catch (errSync) {
         console.warn('[Configuracion] No se pudo sincronizar tiposEquipoPublicos:', errSync);
       }
+      // Auto-init: crea sección vacía en el catálogo de modelos para que
+      // aparezca automáticamente como sección lista para editar abajo.
+      // Lee los modelos persistidos en Firestore (no el buffer local) para
+      // no pisar ediciones en curso del catálogo de modelos.
+      const modelosPersistidos = configWebSnapshot?.modelosPorTipoEquipo || {};
+      if (!(nombreLimpio in modelosPersistidos)) {
+        const nuevosModelos = { ...modelosPersistidos, [nombreLimpio]: [] };
+        try {
+          await sincronizarModelosPorTipoEquipo(nuevosModelos);
+        } catch (errSync) {
+          console.warn('[Configuracion] No se pudo auto-inicializar modelos:', errSync);
+        }
+        // Reflejar el cambio en el buffer local sólo si no hay edición sucia,
+        // para evitar pisar cambios en curso del editor de modelos.
+        if (!modelosDirty) {
+          setModelosPorTipo(prev => ({ ...prev, [nombreLimpio]: [] }));
+        }
+      }
       setNuevoTipo('');
-      toast.success('Tipo agregado');
+      toast.success(`"${nombreLimpio}" agregado`);
     } catch (err) {
       console.error('[Configuracion] Error agregando tipo:', err);
       toast.error('No se pudo guardar. Intenta de nuevo.');
+    } finally {
+      setSavingTipos(false);
     }
   };
 
   const handleRemoveTipo = async (tipo: string) => {
-    if (!puedeModificar) return;
+    if (!esAdminPuro) return;
+    // Source-of-truth para la cascada: modelos persistidos en Firestore.
+    // No usamos el buffer local porque el admin podría tener cambios sin
+    // guardar que no queremos descartar/duplicar al borrar.
+    const modelosPersistidos = configWebSnapshot?.modelosPorTipoEquipo || {};
+    const modelosAsociados = modelosPersistidos[tipo] || [];
+    let mensaje: string;
+    if (modelosAsociados.length === 0) {
+      mensaje = `¿Eliminar "${tipo}"? Las órdenes históricas con este tipo seguirán mostrándolo.`;
+    } else {
+      const lista = modelosAsociados.map(m => `• ${m}`).join('\n');
+      mensaje = `Eliminar "${tipo}" también borrará ${modelosAsociados.length} modelo(s) asociado(s):\n\n${lista}\n\nLas órdenes históricas con este tipo seguirán mostrándolo. ¿Confirmas?`;
+    }
+    if (!window.confirm(mensaje)) return;
+
     const nuevaLista = tiposEquipo.filter(t => t !== tipo);
+    setSavingTipos(true);
     try {
       await actualizarTiposEquipo(nuevaLista, userProfile?.nombre);
       try {
@@ -332,10 +379,52 @@ export default function Configuracion() {
       } catch (errSync) {
         console.warn('[Configuracion] No se pudo sincronizar tiposEquipoPublicos:', errSync);
       }
-      toast.success('Tipo eliminado');
+      // Cascada: si el tipo tenía modelos asociados, los borramos también.
+      if (tipo in modelosPersistidos) {
+        const nuevosModelos = { ...modelosPersistidos };
+        delete nuevosModelos[tipo];
+        try {
+          await sincronizarModelosPorTipoEquipo(nuevosModelos);
+        } catch (errSync) {
+          console.warn('[Configuracion] No se pudo borrar modelos en cascada:', errSync);
+        }
+        // Reflejar cambio en buffer local si no hay edición sucia.
+        if (!modelosDirty) {
+          setModelosPorTipo(prev => {
+            const copia = { ...prev };
+            delete copia[tipo];
+            return copia;
+          });
+        }
+      }
+      toast.success(`"${tipo}" eliminado`);
     } catch (err) {
       console.error('[Configuracion] Error quitando tipo:', err);
       toast.error('No se pudo guardar. Intenta de nuevo.');
+    } finally {
+      setSavingTipos(false);
+    }
+  };
+
+  const handleMoverTipo = async (indice: number, direccion: -1 | 1) => {
+    if (!esAdminPuro) return;
+    const destino = indice + direccion;
+    if (destino < 0 || destino >= tiposEquipo.length) return;
+    const nuevaLista = [...tiposEquipo];
+    [nuevaLista[indice], nuevaLista[destino]] = [nuevaLista[destino], nuevaLista[indice]];
+    setSavingTipos(true);
+    try {
+      await actualizarTiposEquipo(nuevaLista, userProfile?.nombre);
+      try {
+        await sincronizarTiposEquipoPublicos(nuevaLista);
+      } catch (errSync) {
+        console.warn('[Configuracion] No se pudo sincronizar tiposEquipoPublicos:', errSync);
+      }
+    } catch (err) {
+      console.error('[Configuracion] Error reordenando tipos:', err);
+      toast.error('No se pudo reordenar. Intenta de nuevo.');
+    } finally {
+      setSavingTipos(false);
     }
   };
 
@@ -588,31 +677,98 @@ export default function Configuracion() {
 
       {/* Tipos equipo */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-2">
           <Wrench size={20} className="text-[#1a5fa8]" />
           <h2 className="text-lg font-semibold text-gray-900">Tipos de Equipo</h2>
         </div>
-        <div className="flex flex-wrap gap-2 mb-4">
-          {tiposEquipo.map(t => (
-            <span key={t} className="flex items-center gap-1 bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm">
-              {t}
-              <button onClick={() => handleRemoveTipo(t)} className="ml-1 text-gray-400 hover:text-red-500">&times;</button>
-            </span>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <input type="text" value={nuevoTipo} onChange={e => setNuevoTipo(e.target.value)}
-            placeholder="Nuevo tipo de equipo..."
-            onKeyDown={e => e.key === 'Enter' && handleAddTipo()}
-            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-          <button onClick={handleAddTipo}
-            className="px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors">
-            Agregar
-          </button>
-        </div>
-        <p className="text-xs text-gray-500 mt-3">
-          Nota: estos tipos se guardan, pero los formularios de órdenes siguen usando la lista del sistema. Agregar un tipo nuevo aquí no lo hace seleccionable al crear órdenes.
+        <p className="text-xs text-gray-500 mb-4">
+          Define qué tipos de equipo aparecen en el formulario público{' '}
+          <span className="font-mono">/agendar</span> y al crear órdenes. Si agregas
+          uno nuevo, también aparecerá como nueva sección en el catálogo de modelos
+          abajo.
         </p>
+        {!esAdminPuro && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 mb-4">
+            Solo el administrador puede editar tipos de equipo. Estás viendo la
+            configuración en modo lectura.
+          </div>
+        )}
+
+        {tiposEquipo.length === 0 ? (
+          <p className="text-sm text-gray-400 italic mb-4">
+            Sin tipos definidos. Agrega el primero abajo.
+          </p>
+        ) : (
+          <div className="space-y-1.5 mb-4">
+            {tiposEquipo.map((tipo, idx) => (
+              <div
+                key={tipo}
+                className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2"
+              >
+                <span className="flex-1 text-sm text-gray-800">{tipo}</span>
+                {esAdminPuro && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleMoverTipo(idx, -1)}
+                      disabled={idx === 0 || savingTipos}
+                      className="p-1 text-gray-400 hover:text-[#1a5fa8] disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Subir"
+                    >
+                      <ChevronUp size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleMoverTipo(idx, 1)}
+                      disabled={idx === tiposEquipo.length - 1 || savingTipos}
+                      className="p-1 text-gray-400 hover:text-[#1a5fa8] disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Bajar"
+                    >
+                      <ChevronDown size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTipo(tipo)}
+                      disabled={savingTipos}
+                      className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed"
+                      title="Eliminar"
+                    >
+                      <X size={14} />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {esAdminPuro && (
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={nuevoTipo}
+              onChange={e => setNuevoTipo(e.target.value)}
+              placeholder="Nuevo tipo (ej: Calefón, Lavavajillas)..."
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleAddTipo();
+                }
+              }}
+              maxLength={50}
+              disabled={savingTipos}
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+            />
+            <button
+              type="button"
+              onClick={handleAddTipo}
+              disabled={savingTipos}
+              className="px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Plus size={14} /> Agregar tipo
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Catálogo de modelos por tipo de equipo */}
