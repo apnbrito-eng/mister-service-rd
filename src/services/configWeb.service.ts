@@ -24,8 +24,26 @@ export interface ConfigHero {
   titulo: string;
   tituloDestacado: string;
   subtitulo: string;
+  /**
+   * @deprecated Usar `imagenFija`. Se preserva en el schema solo por
+   * compatibilidad con docs viejos en Firestore — el parser
+   * `parseConfigHero` lo migra automáticamente a `imagenFija` en lectura.
+   */
   imagenUrl: string;
   badge: string;
+  /** Modo de visualización del hero. Default `'fija'` para compat. */
+  modo?: 'fija' | 'carrusel';
+  /** URL única usada cuando `modo === 'fija'`. */
+  imagenFija?: string;
+  /**
+   * Lista de URLs usada cuando `modo === 'carrusel'`. Mín 2, máx 6
+   * (validado en el editor admin, defensivo en runtime).
+   */
+  imagenesCarrusel?: string[];
+  /** Intervalo en segundos entre slides del carrusel. Rango 2-10, default 3. */
+  intervaloCarrusel?: number;
+  /** Si true, el carrusel pausa cuando el cursor está encima. Default true. */
+  pausarEnHover?: boolean;
 }
 
 export interface EstadisticaItem {
@@ -116,6 +134,11 @@ export const CONFIG_WEB_DEFAULTS: ConfigWeb = {
     subtitulo: 'Técnicos profesionales a domicilio en Santo Domingo y todo el país. Diagnóstico honesto, precios justos, seguimiento en tiempo real.',
     imagenUrl: '',
     badge: 'Servicio técnico certificado en RD',
+    modo: 'fija',
+    imagenFija: '',
+    imagenesCarrusel: [],
+    intervaloCarrusel: 3,
+    pausarEnHover: true,
   },
   estadisticas: {
     experiencia: { valor: '10+', etiqueta: 'Años de experiencia' },
@@ -186,6 +209,69 @@ function parseModelosPorTipoEquipo(
   return out;
 }
 
+/**
+ * Parsea defensivamente el campo `hero` desde Firestore. Migra el campo
+ * legacy `imagenUrl` a `imagenFija` cuando el doc viejo no tiene la nueva
+ * forma. NO escribe a Firestore: la migración es solo en lectura, y se
+ * persiste cuando el admin guarda con el editor nuevo.
+ *
+ * Defensas:
+ * - `modo` solo acepta `'carrusel'` o (default) `'fija'`.
+ * - `imagenesCarrusel` se filtra a strings no vacíos.
+ * - `intervaloCarrusel` se clampa al rango [2, 10] (default 3 si fuera de rango / NaN).
+ * - `pausarEnHover` default `true`.
+ */
+export function parseConfigHero(raw: unknown): ConfigHero {
+  const def = CONFIG_WEB_DEFAULTS.hero;
+  if (!raw || typeof raw !== 'object') return { ...def };
+  const h = raw as Record<string, unknown>;
+
+  const titulo = typeof h.titulo === 'string' ? h.titulo : def.titulo;
+  const tituloDestacado =
+    typeof h.tituloDestacado === 'string' ? h.tituloDestacado : def.tituloDestacado;
+  const subtitulo = typeof h.subtitulo === 'string' ? h.subtitulo : def.subtitulo;
+  const badge = typeof h.badge === 'string' ? h.badge : def.badge;
+
+  const imagenUrl = typeof h.imagenUrl === 'string' ? h.imagenUrl : '';
+  // Compat: si tiene imagenUrl viejo y NO tiene imagenFija, usar el viejo
+  const imagenFija =
+    typeof h.imagenFija === 'string' && h.imagenFija
+      ? h.imagenFija
+      : imagenUrl;
+
+  const modo: 'fija' | 'carrusel' = h.modo === 'carrusel' ? 'carrusel' : 'fija';
+
+  const imagenesCarrusel = Array.isArray(h.imagenesCarrusel)
+    ? (h.imagenesCarrusel as unknown[]).filter(
+        (u): u is string => typeof u === 'string' && u.length > 0,
+      )
+    : [];
+
+  const intervaloRaw = h.intervaloCarrusel;
+  const intervaloCarrusel =
+    typeof intervaloRaw === 'number' &&
+    Number.isFinite(intervaloRaw) &&
+    intervaloRaw >= 2 &&
+    intervaloRaw <= 10
+      ? intervaloRaw
+      : 3;
+
+  const pausarEnHover = h.pausarEnHover !== false; // default true
+
+  return {
+    titulo,
+    tituloDestacado,
+    subtitulo,
+    imagenUrl,
+    badge,
+    modo,
+    imagenFija,
+    imagenesCarrusel,
+    intervaloCarrusel,
+    pausarEnHover,
+  };
+}
+
 // ─── Funciones ───────────────────────────────────────
 
 /** Lee la config web de Firestore; retorna defaults si no existe */
@@ -196,7 +282,7 @@ export async function obtenerConfigWeb(): Promise<ConfigWeb> {
     const data = snap.data();
     return {
       whatsapp: (data.whatsapp as ConfigWhatsApp) || CONFIG_WEB_DEFAULTS.whatsapp,
-      hero: (data.hero as ConfigHero) || CONFIG_WEB_DEFAULTS.hero,
+      hero: parseConfigHero(data.hero),
       estadisticas: (data.estadisticas as ConfigEstadisticas) || CONFIG_WEB_DEFAULTS.estadisticas,
       contacto: (data.contacto as ConfigContacto) || CONFIG_WEB_DEFAULTS.contacto,
       marcas: Array.isArray(data.marcas) ? (data.marcas as string[]) : CONFIG_WEB_DEFAULTS.marcas,
@@ -221,14 +307,38 @@ export async function obtenerConfigWeb(): Promise<ConfigWeb> {
 
 /** Guarda la config web en Firestore (merge para no pisar campos no incluidos) */
 export async function guardarConfigWeb(config: ConfigWeb): Promise<void> {
-  await setDoc(
-    CONFIG_DOC,
-    {
-      ...config,
-      updatedAt: Timestamp.now(),
-    },
-    { merge: true },
-  );
+  // Firestore rechaza valores `undefined`. Como `ConfigHero` y otros tipos
+  // tienen campos opcionales, hacemos un strip recursivo del payload antes
+  // de escribir. (Convención #1 del proyecto.)
+  const payload: Record<string, unknown> = stripUndefined({
+    ...config,
+    updatedAt: Timestamp.now(),
+  });
+  await setDoc(CONFIG_DOC, payload, { merge: true });
+}
+
+/**
+ * Recursivamente elimina campos `undefined` de un objeto, preservando
+ * arrays, objetos anidados, `Date` y `Timestamp` (Firestore). Necesario
+ * porque Firestore rechaza `undefined` en setDoc.
+ */
+function stripUndefined<T>(value: T): T {
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) {
+    return value.map((v) => stripUndefined(v)) as unknown as T;
+  }
+  // Preservar tipos especiales (Date, Timestamp, otros con prototipo propio)
+  if (value instanceof Date) return value;
+  if (value instanceof Timestamp) return value;
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v === undefined) continue;
+      out[k] = stripUndefined(v);
+    }
+    return out as T;
+  }
+  return value;
 }
 
 /**

@@ -5,11 +5,11 @@ import {
   ConfigWeb,
   CONFIG_WEB_DEFAULTS,
   ConfigWhatsApp,
-  ConfigHero,
   ConfigEstadisticas,
   ConfigContacto,
   ConfigFeedbackNPS,
   getWhatsAppUrl,
+  parseConfigHero,
 } from '../services/configWeb.service';
 import { ConfigFormularioAgendar } from '../types/configFormularioAgendar';
 
@@ -67,7 +67,7 @@ export function useConfigWeb(): { config: ConfigWeb; loading: boolean } {
           const data = snap.data();
           const parsed: ConfigWeb = {
             whatsapp: (data.whatsapp as ConfigWhatsApp) || CONFIG_WEB_DEFAULTS.whatsapp,
-            hero: (data.hero as ConfigHero) || CONFIG_WEB_DEFAULTS.hero,
+            hero: parseConfigHero(data.hero),
             estadisticas: (data.estadisticas as ConfigEstadisticas) || CONFIG_WEB_DEFAULTS.estadisticas,
             contacto: (data.contacto as ConfigContacto) || CONFIG_WEB_DEFAULTS.contacto,
             marcas: Array.isArray(data.marcas) ? (data.marcas as string[]) : CONFIG_WEB_DEFAULTS.marcas,

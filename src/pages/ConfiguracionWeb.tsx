@@ -24,10 +24,13 @@ import {
   Trash2,
   Upload,
   Star,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import ConfigFormularioAgendarSection from '../components/admin/ConfigFormularioAgendarSection';
 import toast from 'react-hot-toast';
+import { comprimirImagen } from '../utils/imagen';
 
 export default function ConfiguracionWeb() {
   const [loading, setLoading] = useState(true);
@@ -122,23 +125,104 @@ export default function ConfiguracionWeb() {
     }));
   };
 
-  const handleHeroImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setUploadingHero(true);
+  /**
+   * Comprime y sube una foto a Storage como JPEG. Reusa el helper
+   * `comprimirImagen` (mismo que el formulario público `/agendar`).
+   * Retorna la URL pública o null si falla.
+   */
+  const comprimirYSubirHero = async (file: File): Promise<string | null> => {
     try {
-      const url = await subirImagenWeb(file, 'hero');
-      updateHero({ imagenUrl: url });
-      toast.success('Imagen subida correctamente');
+      const blob = await comprimirImagen(file, {
+        maxBytes: 1_000_000,
+        maxDim: 1920,
+      });
+      const safeName = file.name.replace(/[^\w.-]/g, '_') || 'hero.jpg';
+      const archivo = new File([blob], safeName, { type: 'image/jpeg' });
+      const url = await subirImagenWeb(archivo, 'hero');
+      return url;
     } catch (err) {
-      console.error(err);
-      toast.error('Error al subir la imagen');
-    } finally {
-      setUploadingHero(false);
+      console.error('Error subiendo imagen del hero:', err);
+      return null;
     }
   };
 
+  /**
+   * Modo fija: reemplaza la imagen actual.
+   */
+  const handleHeroImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecciona un archivo de imagen');
+      return;
+    }
+    setUploadingHero(true);
+    const url = await comprimirYSubirHero(file);
+    setUploadingHero(false);
+    if (!url) {
+      toast.error('Error al subir la imagen');
+      return;
+    }
+    // Persistir en imagenFija (campo nuevo). imagenUrl queda intacto solo
+    // por compat con docs viejos (parser lo migra en lectura).
+    updateHero({ imagenFija: url });
+    toast.success('Imagen subida correctamente');
+  };
+
+  /**
+   * Modo carrusel: agrega una imagen al final de la lista.
+   */
+  const handleAgregarImagenCarrusel = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Selecciona un archivo de imagen');
+      return;
+    }
+    const actuales = config.hero.imagenesCarrusel ?? [];
+    if (actuales.length >= 6) {
+      toast.error('Máximo 6 imágenes en el carrusel');
+      return;
+    }
+    setUploadingHero(true);
+    const url = await comprimirYSubirHero(file);
+    setUploadingHero(false);
+    if (!url) {
+      toast.error('Error al subir la imagen');
+      return;
+    }
+    updateHero({ imagenesCarrusel: [...actuales, url] });
+    toast.success('Imagen agregada al carrusel');
+  };
+
+  const moverImagenCarrusel = (index: number, dir: -1 | 1) => {
+    const actuales = config.hero.imagenesCarrusel ?? [];
+    const target = index + dir;
+    if (target < 0 || target >= actuales.length) return;
+    const copia = [...actuales];
+    [copia[index], copia[target]] = [copia[target], copia[index]];
+    updateHero({ imagenesCarrusel: copia });
+  };
+
+  const eliminarImagenCarrusel = (index: number) => {
+    const actuales = config.hero.imagenesCarrusel ?? [];
+    updateHero({
+      imagenesCarrusel: actuales.filter((_, i) => i !== index),
+    });
+  };
+
   const guardarHero = async () => {
+    // Validación: modo carrusel requiere mínimo 2 imágenes
+    const modo = config.hero.modo ?? 'fija';
+    const imagenes = config.hero.imagenesCarrusel ?? [];
+    if (modo === 'carrusel' && imagenes.length < 2) {
+      toast.error('El modo carrusel requiere mínimo 2 imágenes');
+      return;
+    }
     setSavingHero(true);
     try {
       await guardarConfigWeb(config);
@@ -492,41 +576,209 @@ export default function ConfiguracionWeb() {
           />
         </div>
 
-        {/* Image upload */}
-        <div>
-          <label className={labelClass}>Imagen del Hero</label>
-          <div className="flex items-center gap-4">
-            <label className="inline-flex items-center gap-2 cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium px-4 py-2.5 transition">
-              <Upload className="w-4 h-4" />
-              {uploadingHero ? 'Subiendo...' : 'Seleccionar imagen'}
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleHeroImage}
-                disabled={uploadingHero}
-              />
-            </label>
-            {config.hero.imagenUrl && (
-              <button
-                type="button"
-                onClick={() => updateHero({ imagenUrl: '' })}
-                className="text-xs text-red-500 hover:text-red-700 transition"
-              >
-                Quitar imagen
-              </button>
+        {/* ── Modo de visualización (fija | carrusel) ── */}
+        <div className="border-t border-gray-100 pt-5">
+          <label className={labelClass}>Modo de visualización del fondo</label>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {(
+              [
+                { value: 'fija' as const, label: 'Imagen fija' },
+                { value: 'carrusel' as const, label: 'Carrusel rotativo' },
+              ] as const
+            ).map(({ value, label }) => {
+              const activo = (config.hero.modo ?? 'fija') === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => updateHero({ modo: value })}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium border transition ${
+                    activo
+                      ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-[#1a5fa8]'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-gray-500 mt-2">
+            Si no subes ninguna imagen, el hero conserva el fondo degradado actual.
+          </p>
+        </div>
+
+        {/* ── Modo: imagen fija ── */}
+        {(config.hero.modo ?? 'fija') === 'fija' && (
+          <div>
+            <label className={labelClass}>Imagen fija del hero</label>
+            <div className="flex items-center gap-4">
+              <label className="inline-flex items-center gap-2 cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium px-4 py-2.5 transition">
+                <Upload className="w-4 h-4" />
+                {uploadingHero ? 'Subiendo...' : 'Seleccionar imagen'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleHeroImage}
+                  disabled={uploadingHero}
+                />
+              </label>
+              {config.hero.imagenFija && (
+                <button
+                  type="button"
+                  onClick={() => updateHero({ imagenFija: '' })}
+                  className="text-xs text-red-500 hover:text-red-700 transition"
+                >
+                  Quitar imagen
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1">
+              Mejor calidad: 1920x1080 px, formato JPG. Se comprime automáticamente a máximo 1MB.
+            </p>
+            {config.hero.imagenFija && (
+              <div className="mt-3">
+                <img
+                  src={config.hero.imagenFija}
+                  alt="Hero preview"
+                  className="max-h-48 rounded-lg border border-gray-200 object-cover"
+                />
+              </div>
             )}
           </div>
-          {config.hero.imagenUrl && (
-            <div className="mt-3">
-              <img
-                src={config.hero.imagenUrl}
-                alt="Hero preview"
-                className="max-h-48 rounded-lg border border-gray-200 object-cover"
-              />
+        )}
+
+        {/* ── Modo: carrusel ── */}
+        {(config.hero.modo ?? 'fija') === 'carrusel' && (
+          <div className="space-y-4">
+            <div>
+              <label className={labelClass}>
+                Imágenes del carrusel ({(config.hero.imagenesCarrusel ?? []).length} / 6)
+              </label>
+              <p className="text-[11px] text-gray-500 mb-2">
+                Mínimo 2, máximo 6 imágenes. Recomendado 1920x1080 px JPG. Cada una se comprime a máximo 1MB.
+              </p>
+
+              {(config.hero.imagenesCarrusel ?? []).length === 0 && (
+                <div className="text-sm text-gray-500 italic bg-gray-50 rounded-lg p-4 text-center">
+                  Aún no has agregado imágenes al carrusel.
+                </div>
+              )}
+
+              <ul className="space-y-2">
+                {(config.hero.imagenesCarrusel ?? []).map((url, idx) => (
+                  <li
+                    key={`${idx}-${url}`}
+                    className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-100"
+                  >
+                    <img
+                      src={url}
+                      alt={`Imagen ${idx + 1}`}
+                      className="w-20 h-14 object-cover rounded border border-gray-200 flex-shrink-0"
+                    />
+                    <div className="flex-1 text-xs text-gray-500 truncate font-mono">
+                      Imagen {idx + 1}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => moverImagenCarrusel(idx, -1)}
+                        disabled={idx === 0}
+                        title="Mover arriba"
+                        className="p-1.5 text-gray-500 hover:text-[#0f3460] hover:bg-white rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moverImagenCarrusel(idx, 1)}
+                        disabled={
+                          idx === (config.hero.imagenesCarrusel ?? []).length - 1
+                        }
+                        title="Mover abajo"
+                        className="p-1.5 text-gray-500 hover:text-[#0f3460] hover:bg-white rounded transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => eliminarImagenCarrusel(idx)}
+                        title="Eliminar imagen"
+                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-white rounded transition"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+
+              {(config.hero.imagenesCarrusel ?? []).length < 6 && (
+                <label className="mt-3 inline-flex items-center gap-2 cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium px-4 py-2.5 transition">
+                  <Plus className="w-4 h-4" />
+                  {uploadingHero ? 'Subiendo...' : 'Agregar imagen'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAgregarImagenCarrusel}
+                    disabled={uploadingHero}
+                  />
+                </label>
+              )}
             </div>
-          )}
-        </div>
+
+            {/* Intervalo */}
+            <div>
+              <label className={labelClass}>
+                Intervalo entre imágenes:{' '}
+                <span className="text-[#0f3460] font-semibold">
+                  {config.hero.intervaloCarrusel ?? 3} segundos
+                </span>
+              </label>
+              <input
+                type="range"
+                min={2}
+                max={10}
+                step={1}
+                value={config.hero.intervaloCarrusel ?? 3}
+                onChange={(e) =>
+                  updateHero({ intervaloCarrusel: Number(e.target.value) })
+                }
+                className="w-full max-w-md accent-[#0f3460]"
+              />
+              <div className="flex justify-between text-[11px] text-gray-400 max-w-md">
+                <span>2s</span>
+                <span>10s</span>
+              </div>
+            </div>
+
+            {/* Pausar en hover */}
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium text-gray-700">
+                Pausar cuando el cursor está encima
+              </label>
+              <button
+                type="button"
+                onClick={() =>
+                  updateHero({
+                    pausarEnHover: !(config.hero.pausarEnHover ?? true),
+                  })
+                }
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
+                  (config.hero.pausarEnHover ?? true) ? 'bg-green-500' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                    (config.hero.pausarEnHover ?? true) ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end">
           <button

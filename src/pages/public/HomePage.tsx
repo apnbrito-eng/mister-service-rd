@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import WhatsAppIcon from '../../components/icons/WhatsAppIcon';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
+import HeroCarrusel from '../../components/public/HeroCarrusel';
 
 const SERVICIOS_DESTACADOS = [
   {
@@ -70,18 +71,57 @@ const PASOS_SERVICIO = [
 export default function HomePage() {
   const { config } = useConfigWeb();
 
+  // ─── Hero: detectar si hay imagen de fondo configurada ───
+  // Solo renderizamos la capa de imagen + overlay si:
+  //   - modo 'fija' y hay una URL en imagenFija, o
+  //   - modo 'carrusel' y hay >= 2 imágenes (validado en editor admin
+  //     pero defensivo aquí por si Firestore tiene data stale).
+  // Sin imagen, el hero queda exactamente como antes (gradient + shapes).
+  const heroConfig = config.hero;
+  const heroModo = heroConfig.modo ?? 'fija';
+  const heroImagenFija = heroConfig.imagenFija ?? '';
+  const heroImagenes = heroConfig.imagenesCarrusel ?? [];
+  const heroTieneFondo =
+    (heroModo === 'fija' && !!heroImagenFija) ||
+    (heroModo === 'carrusel' && heroImagenes.length >= 2);
+
   return (
     <div>
       {/* ══════════ HERO ══════════ */}
       <section className="relative bg-gradient-to-br from-primary via-primary to-primary-medium overflow-hidden">
-        {/* Decorative shapes */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-24 -right-24 w-96 h-96 bg-white/5 rounded-full" />
-          <div className="absolute bottom-0 -left-12 w-72 h-72 bg-white/5 rounded-full" />
-          <div className="absolute top-1/2 right-1/4 w-48 h-48 bg-primary-light/20 rounded-full blur-3xl" />
-        </div>
+        {/* Capa de imagen / carrusel (debajo del overlay) */}
+        {heroTieneFondo && (
+          heroModo === 'carrusel' ? (
+            <HeroCarrusel
+              imagenes={heroImagenes}
+              intervalo={heroConfig.intervaloCarrusel ?? 3}
+              pausarEnHover={heroConfig.pausarEnHover ?? true}
+            />
+          ) : (
+            <img
+              src={heroImagenFija}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          )
+        )}
 
-        <div className="relative max-w-6xl mx-auto px-4 py-20 md:py-28">
+        {/* Overlay oscuro: solo cuando hay fondo, para asegurar contraste */}
+        {heroTieneFondo && (
+          <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
+        )}
+
+        {/* Decorative shapes — solo cuando NO hay imagen de fondo, para no
+            entorpecer la lectura visual de la foto. */}
+        {!heroTieneFondo && (
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute -top-24 -right-24 w-96 h-96 bg-white/5 rounded-full" />
+            <div className="absolute bottom-0 -left-12 w-72 h-72 bg-white/5 rounded-full" />
+            <div className="absolute top-1/2 right-1/4 w-48 h-48 bg-primary-light/20 rounded-full blur-3xl" />
+          </div>
+        )}
+
+        <div className="relative z-10 max-w-6xl mx-auto px-4 py-20 md:py-28">
           <div className="grid md:grid-cols-2 gap-10 items-center">
             <div>
               <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full text-white/90 text-xs font-medium mb-6">
