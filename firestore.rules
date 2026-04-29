@@ -1,0 +1,398 @@
+rules_version = '2';
+
+// ════════════════════════════════════════════════════════════════════
+// Mister Service RD — Reglas Firestore
+//
+// Estructura:
+//   1. Helpers (rol, staff, owner)
+//   2. Colecciones públicas (read sin auth — sitio, formularios, tracking)
+//   3. Submits públicos (write sin auth — formulario /agendar, /f/:slug)
+//   4. Colecciones por usuario (conversaciones_ia, ponches)
+//   5. Colecciones admin / staff (todo lo financiero y operativo)
+//   6. Auditoría (append-only)
+//
+// Convenciones de rol (campo `usuarios/{uid}.rol`):
+//   - administrador  : acceso total, único que puede borrar histórico
+//   - coordinadora   : confirma citas, asigna técnicos, edita órdenes
+//   - secretaria     : crea órdenes, confirma citas, recibe notificaciones
+//   - operaria       : registra pagos, emite conduces (CG-####)
+//   - tecnico        : vista mobile dedicada, solo sus propias órdenes
+//   - ayudante       : asiste al técnico, write a sus órdenes
+//
+// Notas de seguridad:
+//   - El catch-all `/{collection}/{docId}` que existía antes permitía
+//     write a CUALQUIER user autenticado. Esto fue un agujero crítico
+//     identificado por audit. Reemplazado por reglas explícitas por
+//     colección con gates por rol.
+//   - Endpoints serverless (`/api/*`) usan Firebase Admin SDK que
+//     bypassa estas rules. Las validaciones server-side viven en el
+//     handler. Estas rules son defense-in-depth para writes directos
+//     desde cliente.
+//   - R4 (gate aprobación oficina antes de Trabajo Realizado) NO está
+//     enforced acá todavía — eso es C2 del Sprint 3. Hoy lo enforcea
+//     solo el frontend (TecnicoVista).
+// ════════════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─────────────────────────────────────────────────────────────
+    // 1. Helpers
+    // ─────────────────────────────────────────────────────────────
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function userExists() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    function userData() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function rolUsuario() {
+      return userExists() ? userData().rol : null;
+    }
+
+    function tieneRol(r) {
+      return rolUsuario() == r;
+    }
+
+    function esAdmin()       { return tieneRol('administrador'); }
+    function esCoord()       { return tieneRol('coordinadora'); }
+    function esSecretaria()  { return tieneRol('secretaria'); }
+    function esOperaria()    { return tieneRol('operaria'); }
+    function esTecnico()     { return tieneRol('tecnico'); }
+    function esAyudante()    { return tieneRol('ayudante'); }
+
+    // Cualquier rol válido del staff (admin a ayudante)
+    function esStaff() {
+      return userExists() && rolUsuario() in [
+        'administrador', 'coordinadora', 'secretaria',
+        'operaria', 'tecnico', 'ayudante'
+      ];
+    }
+
+    // Roles que trabajan desde la oficina (no técnico/ayudante en campo)
+    function esStaffOficina() {
+      return userExists() && rolUsuario() in [
+        'administrador', 'coordinadora', 'secretaria', 'operaria'
+      ];
+    }
+
+    function esAdminOCoord() {
+      return userExists() && rolUsuario() in ['administrador', 'coordinadora'];
+    }
+
+    // El técnico que es dueño del recurso (asignado a la orden)
+    function esTecnicoDe(uid) {
+      return esTecnico() && request.auth.uid == uid;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 2. Colecciones públicas (read sin auth)
+    // ─────────────────────────────────────────────────────────────
+
+    // Configuración del sitio público (textos, imágenes, formulario,
+    // catálogo de tipos, modelos, servicios, etc.)
+    match /config_web/{docId} {
+      allow read: if true;
+      allow write: if esAdminOCoord();
+    }
+
+    // Formularios dinámicos publicados (/f/:slug los lee por slug)
+    match /formularios/{docId} {
+      allow read: if true;
+      allow write: if esAdminOCoord();
+    }
+
+    // Empresas aliadas mostradas en marketing
+    match /empresas_aliadas/{docId} {
+      allow read: if true;
+      allow write: if esAdminOCoord();
+    }
+
+    // Calendarios de citas públicas (/cita/:calendarId los lee)
+    match /calendarios/{docId} {
+      allow read: if true;
+      allow write: if esStaffOficina();
+    }
+
+    // Ubicaciones GPS de vehículos — read público para tracking del
+    // cliente (/tracking/:token usa esto vía proxy serverless o directo).
+    match /ubicaciones_vehiculos/{docId} {
+      allow read: if true;
+      allow write: if esStaff();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. Submits públicos (write sin auth)
+    // ─────────────────────────────────────────────────────────────
+
+    // Cita pública desde /agendar y /cita/:calendarId
+    match /citas_por_confirmar/{docId} {
+      allow create: if true;
+      allow read, update, delete: if esStaff();
+    }
+
+    // Solicitud pública desde /f/:slug (formulario dinámico).
+    // OJO: la colección real es `solicitudes_servicio`, no `solicitudes`.
+    // El servicio src/services/solicitudes.service.ts usa COL='solicitudes_servicio'.
+    match /solicitudes_servicio/{docId} {
+      allow create: if true;
+      allow read, update, delete: if esStaff();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 4. Colecciones por usuario
+    // ─────────────────────────────────────────────────────────────
+
+    // Conversaciones con la IA — solo el dueño o admin lee
+    match /conversaciones_ia/{docId} {
+      allow read: if isAuth() && (
+        resource.data.usuarioId == request.auth.uid || esAdmin()
+      );
+      allow create: if isAuth() &&
+        request.resource.data.usuarioId == request.auth.uid;
+      allow update: if isAuth() && resource.data.usuarioId == request.auth.uid;
+      allow delete: if esAdmin();
+    }
+
+    // Ponches de entrada/salida del personal
+    match /ponches/{docId} {
+      allow create: if isAuth() &&
+        request.resource.data.personalUid == request.auth.uid;
+      allow read: if isAuth() && (
+        resource.data.personalUid == request.auth.uid ||
+        esAdmin() || esCoord()
+      );
+      allow update, delete: if esAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 5. Colecciones admin / staff
+    // ─────────────────────────────────────────────────────────────
+
+    // Órdenes de servicio — el corazón del sistema.
+    // Read: staff + público condicional (tracking GPS activo).
+    // Write: staff oficina + técnico/ayudante para sus órdenes.
+    match /ordenes_servicio/{docId} {
+      // Public read solo si el tracking GPS está activo (legacy /tracking).
+      // Sin esto se rompe el link de seguimiento del cliente.
+      allow read: if (
+        resource.data.trackingGPS != null &&
+        resource.data.trackingGPS.activo == true
+      ) || esStaff();
+
+      allow create: if esStaffOficina();
+
+      // Update: oficina total; técnico/ayudante solo si es la orden
+      // que tienen asignada. R4 (precioFinal/fase=trabajo_realizado solo
+      // tras estadoAprobacion=aprobado) lo agregamos en C2/Sprint 3.
+      allow update: if esStaffOficina() ||
+        (esTecnico() && resource.data.tecnicoId == request.auth.uid) ||
+        (esAyudante() && resource.data.ayudanteId == request.auth.uid);
+
+      // Delete: solo admin/coord (en práctica usan soft-delete con
+      // eliminada=true, pero permitimos hard delete para casos extremos).
+      allow delete: if esAdminOCoord();
+    }
+
+    // Clientes
+    match /clientes/{docId} {
+      allow read: if esStaff();
+      allow create, update: if esStaffOficina();
+      allow delete: if esAdminOCoord();
+    }
+
+    // Personal (empleados)
+    match /personal/{docId} {
+      // Staff puede leer la lista (para asignación de técnicos, etc.)
+      allow read: if esStaff();
+      allow write: if esAdminOCoord();
+    }
+
+    // Usuarios (linkea uid de auth con personal/rol)
+    match /usuarios/{docId} {
+      // Cualquier usuario autenticado puede leer su propio doc + admin/coord
+      allow read: if isAuth() && (
+        request.auth.uid == docId || esAdminOCoord()
+      );
+      allow write: if esAdminOCoord();
+    }
+
+    // Conduces (alias interno: facturas) — CG-####
+    match /facturas/{docId} {
+      allow read: if esStaff();
+      allow create, update: if esStaffOficina();
+      allow delete: if esAdmin();
+    }
+
+    // Cotizaciones (QT-#####)
+    match /cotizaciones/{docId} {
+      allow read: if esStaff();
+      allow create, update: if esStaffOficina() ||
+        (esTecnico() && request.resource.data.tecnicoId == request.auth.uid);
+      allow delete: if esAdminOCoord();
+    }
+
+    // Comisiones — write solo admin/coord. Técnico solo lee las suyas.
+    match /comisiones/{docId} {
+      allow read: if esAdminOCoord() || (
+        esTecnico() && resource.data.tecnicoId == request.auth.uid
+      );
+      allow write: if esAdminOCoord();
+    }
+
+    // Liquidaciones de nómina (quincenas)
+    match /liquidaciones_nomina/{docId} {
+      allow read: if esAdminOCoord() || (
+        esTecnico() && resource.data.tecnicoId == request.auth.uid
+      );
+      allow write: if esAdminOCoord();
+    }
+
+    // Avances a empleados (descuento automático en nómina).
+    // Read: cualquier staff (info administrativa). Write: oficina.
+    // Delete: solo admin (auditoría financiera).
+    match /avances/{docId} {
+      allow read: if esStaff();
+      allow create, update: if esStaffOficina();
+      allow delete: if esAdmin();
+    }
+
+    // Gastos (administrativos)
+    match /gastos/{docId} {
+      allow read: if esStaffOficina();
+      allow write: if esAdminOCoord();
+    }
+
+    // Bancos / cuentas
+    match /bancos/{docId} {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
+    // Productos (catálogo de venta)
+    match /productos/{docId} {
+      allow read: if esStaff();
+      allow write: if esAdminOCoord();
+    }
+
+    // Precios de servicios (catálogo)
+    match /precios_servicios/{docId} {
+      allow read: if esStaff();
+      allow write: if esAdminOCoord();
+    }
+
+    // Piezas de inventario
+    match /piezas_inventario/{docId} {
+      allow read: if esStaff();
+      allow write: if esStaffOficina();
+    }
+
+    // Movimientos de inventario / piezas (ledger)
+    match /movimientos_inventario/{docId} {
+      allow read: if esStaffOficina();
+      allow create: if esStaffOficina();
+      allow update, delete: if esAdmin();
+    }
+    match /movimientos_piezas/{docId} {
+      allow read: if esStaffOficina();
+      allow create: if esStaffOficina();
+      allow update, delete: if esAdmin();
+    }
+
+    // Standby de piezas (orden esperando pieza)
+    match /standby_piezas/{docId} {
+      allow read: if esStaff();
+      allow write: if esStaffOficina();
+    }
+
+    // Equipos en taller (recepción de equipos)
+    match /equipos_taller/{docId} {
+      allow read: if esStaff();
+      allow write: if esStaffOficina();
+    }
+
+    // Mantenimientos preventivos
+    match /mantenimiento/{docId} {
+      allow read: if esStaff();
+      allow write: if esStaffOficina();
+    }
+    match /mantenimientos/{docId} {
+      // Compat — si existe la colección plural en datos viejos
+      allow read: if esStaff();
+      allow write: if esStaffOficina();
+    }
+
+    // Notificaciones internas
+    match /notificaciones/{docId} {
+      allow read: if isAuth() && (
+        resource.data.userId == request.auth.uid || esStaff()
+      );
+      allow create: if esStaff();
+      allow update, delete: if isAuth() && (
+        resource.data.userId == request.auth.uid || esAdminOCoord()
+      );
+    }
+
+    // Cierres del día
+    match /cierres_dia/{docId} {
+      allow read: if esStaffOficina();
+      allow write: if esStaffOficina();
+    }
+
+    // Recordatorios diarios
+    match /recordatorios_diarios/{docId} {
+      allow read: if esStaff();
+      allow write: if esStaffOficina();
+    }
+
+    // Counters legacy (parallelo a config/contadores).
+    // Facturas.tsx usa `counters/facturas` para generar números FAC vía
+    // runTransaction. Mantener accesible a staff (read+write para tx).
+    match /counters/{docId} {
+      allow read: if esStaff();
+      allow write: if esStaff();
+    }
+
+    // Configuración (counters, empresa, fiscal, tiposEquipo, etc.)
+    match /config/{docId} {
+      // Public read SOLO para tipos que el form público lee (tiposEquipo).
+      // Hoy se sincroniza a config_web/sitio.tiposEquipoPublicos para
+      // evitar exponer este doc — mantenemos read solo a staff.
+      allow read: if esStaff();
+      // Counters (config/contadores) requieren write desde transactions
+      // del cliente al crear orden/cotización/factura. Permitimos write a
+      // staff oficina (admin/coord/secretaria/operaria) + tecnico (que
+      // crea cotizaciones) + ayudante.
+      allow write: if esStaff();
+    }
+
+    // Configuración del sistema GPS
+    match /config_gps/{docId} {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 6. Auditoría (append-only)
+    // ─────────────────────────────────────────────────────────────
+
+    match /auditoria_admin/{docId} {
+      allow create: if isAuth();
+      allow read:   if esAdmin();
+      allow update, delete: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Default deny — cualquier colección no listada arriba está
+    // bloqueada. Esto incluye colecciones nuevas que se creen sin
+    // antes agregar su rule explícita.
+    // ─────────────────────────────────────────────────────────────
+  }
+}

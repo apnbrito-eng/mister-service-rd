@@ -17,13 +17,24 @@ Language/UI is Spanish (`date-fns/locale/es`, `RD$` currency). All user-facing s
 ## Commands
 
 ```bash
-npm run dev       # Vite dev server at http://localhost:5173
-npm run build     # tsc (typecheck) + vite build  — use to verify before commits
-npm run lint      # eslint with --max-warnings 0
-npm run preview   # preview production build
+npm run dev             # Vite dev server at http://localhost:5173
+npm run build           # tsc (typecheck) + vite build  — use to verify before commits
+npm run lint            # eslint with --max-warnings 0
+npm run preview         # preview production build
+npm run deploy:rules    # firebase deploy --only firestore:rules
+npm run deploy:indexes  # firebase deploy --only firestore:indexes
 ```
 
 There is **no test suite**. Do not invent `npm test`.
+
+**Firestore rules versionadas**: el archivo `firestore.rules` en la raíz del repo es la fuente de verdad. Para deployar cambios:
+
+```bash
+npx firebase login   # primera vez en la máquina, abre OAuth en browser
+npm run deploy:rules # despliega firestore.rules al proyecto mister-service-app-cloude
+```
+
+El `.firebaserc` ya tiene el projectId configurado. Si querés usar otro proyecto: `npx firebase use <projectId>`. **Nunca edites las rules desde Firebase Console** — siempre commitealas acá primero, hacé PR, y despliega vía npm script. La rule de R4 (gate aprobación oficina) está pendiente de agregar — ver C2 del audit.
 
 Environment variables live in `.env` (see `.env.example`). `src/firebase/config.ts` includes hardcoded fallback credentials for the `mister-service-app-cloude` project, so the app boots without `.env` — be aware this means missing env vars don't fail loudly.
 
