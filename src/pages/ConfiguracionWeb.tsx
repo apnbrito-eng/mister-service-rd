@@ -7,11 +7,13 @@ import {
   ConfigContacto,
   ConfigFeedbackNPS,
   NumeroWhatsApp,
+  GradientPreset,
   obtenerConfigWeb,
   guardarConfigWeb,
   subirImagenWeb,
   CONFIG_WEB_DEFAULTS,
 } from '../services/configWeb.service';
+import { obtenerColoresGradient } from '../utils/heroGradient';
 import LoadingSpinner from '../components/LoadingSpinner';
 import {
   Globe,
@@ -34,6 +36,21 @@ import toast from 'react-hot-toast';
 import { comprimirImagen } from '../utils/imagen';
 import { doc, updateDoc, deleteField } from 'firebase/firestore';
 import { db } from '../firebase/config';
+
+/**
+ * Lista de presets visibles en el editor admin. El orden define cómo se
+ * muestran los radios. Cada label es lo que ve el admin; el `value` es el
+ * key persistido en `config_web/sitio.hero.gradientPreset`.
+ */
+const PRESETS_EDITOR: { value: GradientPreset; label: string }[] = [
+  { value: 'navy', label: 'Azul Navy (original)' },
+  { value: 'azul-profesional', label: 'Azul Profesional' },
+  { value: 'verde-corporate', label: 'Verde Corporate' },
+  { value: 'negro-elegante', label: 'Negro Elegante' },
+  { value: 'rojo-energy', label: 'Rojo Energy' },
+  { value: 'gris-minimalista', label: 'Gris Minimalista' },
+  { value: 'personalizado', label: 'Personalizado' },
+];
 
 export default function ConfiguracionWeb() {
   const [loading, setLoading] = useState(true);
@@ -799,6 +816,132 @@ export default function ConfiguracionWeb() {
             </div>
           </div>
         )}
+
+        {/* ── Paleta de colores del fondo (cuando no hay imagen) ── */}
+        <div className="border-t border-gray-100 pt-5 space-y-4">
+          <div>
+            <label className={labelClass}>
+              🎨 Color de fondo (cuando no hay imagen)
+            </label>
+            <p className="text-[11px] text-gray-500">
+              Si no subes imágenes al hero, el banner usa este gradient.
+              Útil para experimentar con paletas sin diseñar imágenes
+              (ej. rojo en Black Friday, verde en Navidad).
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            {PRESETS_EDITOR.map(({ value, label }) => {
+              const presetActual = config.hero.gradientPreset ?? 'navy';
+              const checked = presetActual === value;
+              const colores =
+                value === 'personalizado'
+                  ? obtenerColoresGradient(
+                      'personalizado',
+                      config.hero.gradientCustomFrom,
+                      config.hero.gradientCustomTo,
+                    )
+                  : obtenerColoresGradient(value);
+              return (
+                <label
+                  key={value}
+                  className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer border transition ${
+                    checked
+                      ? 'border-[#0f3460] bg-[#0f3460]/5'
+                      : 'border-gray-200 hover:border-[#1a5fa8]/50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="gradientPreset"
+                    value={value}
+                    checked={checked}
+                    onChange={() => updateHero({ gradientPreset: value })}
+                    className="accent-[#0f3460]"
+                  />
+                  <span className="text-sm font-medium text-gray-700 min-w-[170px]">
+                    {label}
+                  </span>
+                  <div
+                    className="flex-1 rounded"
+                    style={{
+                      backgroundImage: `linear-gradient(to right, ${colores.from}, ${colores.via}, ${colores.to})`,
+                      height: '40px',
+                    }}
+                  />
+                </label>
+              );
+            })}
+          </div>
+
+          {/* Inputs de color sólo en modo personalizado */}
+          {(config.hero.gradientPreset ?? 'navy') === 'personalizado' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 bg-gray-50 rounded-lg">
+              <div>
+                <label className={labelClass}>Color desde</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={config.hero.gradientCustomFrom ?? '#0f3460'}
+                    onChange={(e) =>
+                      updateHero({ gradientCustomFrom: e.target.value })
+                    }
+                    className="w-12 h-10 border border-gray-200 rounded cursor-pointer"
+                  />
+                  <span className="text-xs font-mono text-gray-600">
+                    {config.hero.gradientCustomFrom ?? '#0f3460'}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Color hasta</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={config.hero.gradientCustomTo ?? '#1a5fa8'}
+                    onChange={(e) =>
+                      updateHero({ gradientCustomTo: e.target.value })
+                    }
+                    className="w-12 h-10 border border-gray-200 rounded cursor-pointer"
+                  />
+                  <span className="text-xs font-mono text-gray-600">
+                    {config.hero.gradientCustomTo ?? '#1a5fa8'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Vista previa grande del gradient elegido */}
+          <div>
+            <label className={labelClass}>Vista previa</label>
+            {(() => {
+              const preset = config.hero.gradientPreset ?? 'navy';
+              const colores = obtenerColoresGradient(
+                preset,
+                config.hero.gradientCustomFrom,
+                config.hero.gradientCustomTo,
+              );
+              return (
+                <div
+                  className="rounded-lg border border-gray-200 relative overflow-hidden"
+                  style={{
+                    backgroundImage: `linear-gradient(to bottom right, ${colores.from}, ${colores.via}, ${colores.to})`,
+                    height: '150px',
+                  }}
+                >
+                  <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/5 rounded-full" />
+                  <div className="absolute bottom-0 -left-6 w-36 h-36 bg-white/5 rounded-full" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-white/80 text-xs font-medium tracking-wide">
+                      Así se verá el banner sin imagen
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
 
         <div className="flex justify-end">
           <button

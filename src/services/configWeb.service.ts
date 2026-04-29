@@ -44,7 +44,39 @@ export interface ConfigHero {
   intervaloCarrusel?: number;
   /** Si true, el carrusel pausa cuando el cursor está encima. Default true. */
   pausarEnHover?: boolean;
+  /**
+   * Preset del gradient de fondo cuando NO hay imagen configurada.
+   * Default `'navy'` (mantiene el azul corporativo original).
+   */
+  gradientPreset?:
+    | 'navy'
+    | 'azul-profesional'
+    | 'verde-corporate'
+    | 'negro-elegante'
+    | 'rojo-energy'
+    | 'gris-minimalista'
+    | 'personalizado';
+  /** Color hex inicial del gradient (sólo si `gradientPreset === 'personalizado'`). */
+  gradientCustomFrom?: string;
+  /** Color hex final del gradient (sólo si `gradientPreset === 'personalizado'`). */
+  gradientCustomTo?: string;
 }
+
+/** Set de presets válidos para validación defensiva en runtime. */
+export const GRADIENT_PRESETS_VALIDOS = [
+  'navy',
+  'azul-profesional',
+  'verde-corporate',
+  'negro-elegante',
+  'rojo-energy',
+  'gris-minimalista',
+  'personalizado',
+] as const;
+
+export type GradientPreset = (typeof GRADIENT_PRESETS_VALIDOS)[number];
+
+/** Regex de validación para colores hex de 6 dígitos (`#rrggbb`). */
+const HEX_COLOR_REGEX = /^#[0-9a-fA-F]{6}$/;
 
 export interface EstadisticaItem {
   valor: string;
@@ -193,6 +225,9 @@ export const CONFIG_WEB_DEFAULTS: ConfigWeb = {
     imagenesCarrusel: [],
     intervaloCarrusel: 3,
     pausarEnHover: true,
+    gradientPreset: 'navy',
+    gradientCustomFrom: '#0f3460',
+    gradientCustomTo: '#1a5fa8',
   },
   estadisticas: {
     experiencia: { valor: '10+', etiqueta: 'Años de experiencia' },
@@ -561,6 +596,25 @@ export function parseConfigHero(raw: unknown): ConfigHero {
 
   const pausarEnHover = h.pausarEnHover !== false; // default true
 
+  // ─── Gradient preset defensivo ───
+  // Sólo aceptamos valores del set conocido. Cualquier otra cosa (undefined,
+  // null, string desconocida, número) cae al default 'navy' para que el hero
+  // sin imagen tenga siempre un fondo válido.
+  const gradientPreset: GradientPreset =
+    typeof h.gradientPreset === 'string' &&
+    (GRADIENT_PRESETS_VALIDOS as readonly string[]).includes(h.gradientPreset)
+      ? (h.gradientPreset as GradientPreset)
+      : 'navy';
+
+  const gradientCustomFrom =
+    typeof h.gradientCustomFrom === 'string' && HEX_COLOR_REGEX.test(h.gradientCustomFrom)
+      ? h.gradientCustomFrom
+      : '#0f3460';
+  const gradientCustomTo =
+    typeof h.gradientCustomTo === 'string' && HEX_COLOR_REGEX.test(h.gradientCustomTo)
+      ? h.gradientCustomTo
+      : '#1a5fa8';
+
   return {
     titulo,
     tituloDestacado,
@@ -572,6 +626,9 @@ export function parseConfigHero(raw: unknown): ConfigHero {
     imagenesCarrusel,
     intervaloCarrusel,
     pausarEnHover,
+    gradientPreset,
+    gradientCustomFrom,
+    gradientCustomTo,
   };
 }
 

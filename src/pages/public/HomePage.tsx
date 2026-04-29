@@ -7,6 +7,7 @@ import {
 import WhatsAppIcon from '../../components/icons/WhatsAppIcon';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 import HeroCarrusel from '../../components/public/HeroCarrusel';
+import HeroConGradient from '../../components/public/HeroConGradient';
 
 // Mapa de tipo de equipo → icono Lucide para usar como fallback cuando un
 // servicio no tiene `imagenCard` configurada.
@@ -62,13 +63,82 @@ export default function HomePage() {
     (heroModo === 'fija' && !!heroImagenFija) ||
     (heroModo === 'carrusel' && heroImagenes.length >= 2);
 
+  // ─── Hero: contenido (texto + stats card) ───
+  // Se reusa entre la rama "con imagen" (sigue inline aquí con su <section>
+  // y overlay oscuro) y la rama "sin imagen" (delegada al componente
+  // HeroConGradient, que aplica el gradient configurable y los shapes).
+  const heroContenido = (
+    <div className="relative z-10 max-w-6xl mx-auto px-4 py-20 md:py-28">
+      <div className="grid md:grid-cols-2 gap-10 items-center">
+        <div>
+          <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full text-white/90 text-xs font-medium mb-6">
+            <Shield size={14} /> {config.hero.badge}
+          </div>
+          <h1 className="text-4xl md:text-5xl font-extrabold text-white leading-tight mb-5">
+            {config.hero.titulo}{' '}
+            <span className="text-blue-300">{config.hero.tituloDestacado}</span>
+          </h1>
+          <p className="text-blue-200 text-lg mb-8 leading-relaxed max-w-lg">
+            {config.hero.subtitulo}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Link
+              to="/agendar"
+              className="flex items-center justify-center gap-2 bg-white text-primary px-6 py-3.5 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors shadow-lg shadow-black/20"
+            >
+              <Calendar size={18} /> Agendar Cita Online
+            </Link>
+            <a
+              href={getWhatsAppUrl(config)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 bg-green-500 text-white px-6 py-3.5 rounded-xl font-bold text-sm hover:bg-green-600 transition-colors"
+            >
+              <WhatsAppIcon filled={false} className="text-white" size={18} /> WhatsApp
+            </a>
+          </div>
+        </div>
+
+        {/* Stats card */}
+        <div className="hidden md:block">
+          <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20">
+            <div className="grid grid-cols-2 gap-6">
+              <div className="text-center">
+                <div className="text-4xl font-extrabold text-white">{config.estadisticas.experiencia.valor}</div>
+                <div className="text-blue-200 text-sm mt-1">{config.estadisticas.experiencia.etiqueta}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-extrabold text-white">{config.estadisticas.servicios.valor}</div>
+                <div className="text-blue-200 text-sm mt-1">{config.estadisticas.servicios.etiqueta}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-extrabold text-white">{config.estadisticas.satisfaccion.valor}</div>
+                <div className="text-blue-200 text-sm mt-1">{config.estadisticas.satisfaccion.etiqueta}</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-extrabold text-white">{config.estadisticas.respuesta.valor}</div>
+                <div className="text-blue-200 text-sm mt-1">{config.estadisticas.respuesta.etiqueta}</div>
+              </div>
+            </div>
+            <div className="mt-6 pt-6 border-t border-white/20 flex items-center justify-center gap-1.5">
+              {[1, 2, 3, 4, 5].map(i => (
+                <Star key={i} size={18} className="text-yellow-400 fill-yellow-400" />
+              ))}
+              <span className="text-white text-sm ml-2 font-medium">{config.estadisticas.rating} / 5.0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div>
       {/* ══════════ HERO ══════════ */}
-      <section className="relative bg-gradient-to-br from-primary via-primary to-primary-medium overflow-hidden">
-        {/* Capa de imagen / carrusel (debajo del overlay) */}
-        {heroTieneFondo && (
-          heroModo === 'carrusel' ? (
+      {heroTieneFondo ? (
+        <section className="relative bg-gradient-to-br from-primary via-primary to-primary-medium overflow-hidden">
+          {/* Capa de imagen / carrusel (debajo del overlay) */}
+          {heroModo === 'carrusel' ? (
             <HeroCarrusel
               imagenes={heroImagenes}
               intervalo={heroConfig.intervaloCarrusel ?? 3}
@@ -80,87 +150,22 @@ export default function HomePage() {
               alt=""
               className="absolute inset-0 w-full h-full object-cover"
             />
-          )
-        )}
+          )}
 
-        {/* Overlay oscuro: solo cuando hay fondo, para asegurar contraste */}
-        {heroTieneFondo && (
+          {/* Overlay oscuro: solo cuando hay fondo, para asegurar contraste */}
           <div className="absolute inset-0 bg-black/50" aria-hidden="true" />
-        )}
 
-        {/* Decorative shapes — solo cuando NO hay imagen de fondo, para no
-            entorpecer la lectura visual de la foto. */}
-        {!heroTieneFondo && (
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute -top-24 -right-24 w-96 h-96 bg-white/5 rounded-full" />
-            <div className="absolute bottom-0 -left-12 w-72 h-72 bg-white/5 rounded-full" />
-            <div className="absolute top-1/2 right-1/4 w-48 h-48 bg-primary-light/20 rounded-full blur-3xl" />
-          </div>
-        )}
-
-        <div className="relative z-10 max-w-6xl mx-auto px-4 py-20 md:py-28">
-          <div className="grid md:grid-cols-2 gap-10 items-center">
-            <div>
-              <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm px-4 py-2 rounded-full text-white/90 text-xs font-medium mb-6">
-                <Shield size={14} /> {config.hero.badge}
-              </div>
-              <h1 className="text-4xl md:text-5xl font-extrabold text-white leading-tight mb-5">
-                {config.hero.titulo}{' '}
-                <span className="text-blue-300">{config.hero.tituloDestacado}</span>
-              </h1>
-              <p className="text-blue-200 text-lg mb-8 leading-relaxed max-w-lg">
-                {config.hero.subtitulo}
-              </p>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Link
-                  to="/agendar"
-                  className="flex items-center justify-center gap-2 bg-white text-primary px-6 py-3.5 rounded-xl font-bold text-sm hover:bg-blue-50 transition-colors shadow-lg shadow-black/20"
-                >
-                  <Calendar size={18} /> Agendar Cita Online
-                </Link>
-                <a
-                  href={getWhatsAppUrl(config)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 bg-green-500 text-white px-6 py-3.5 rounded-xl font-bold text-sm hover:bg-green-600 transition-colors"
-                >
-                  <WhatsAppIcon filled={false} className="text-white" size={18} /> WhatsApp
-                </a>
-              </div>
-            </div>
-
-            {/* Stats card */}
-            <div className="hidden md:block">
-              <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="text-center">
-                    <div className="text-4xl font-extrabold text-white">{config.estadisticas.experiencia.valor}</div>
-                    <div className="text-blue-200 text-sm mt-1">{config.estadisticas.experiencia.etiqueta}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-4xl font-extrabold text-white">{config.estadisticas.servicios.valor}</div>
-                    <div className="text-blue-200 text-sm mt-1">{config.estadisticas.servicios.etiqueta}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-4xl font-extrabold text-white">{config.estadisticas.satisfaccion.valor}</div>
-                    <div className="text-blue-200 text-sm mt-1">{config.estadisticas.satisfaccion.etiqueta}</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-4xl font-extrabold text-white">{config.estadisticas.respuesta.valor}</div>
-                    <div className="text-blue-200 text-sm mt-1">{config.estadisticas.respuesta.etiqueta}</div>
-                  </div>
-                </div>
-                <div className="mt-6 pt-6 border-t border-white/20 flex items-center justify-center gap-1.5">
-                  {[1, 2, 3, 4, 5].map(i => (
-                    <Star key={i} size={18} className="text-yellow-400 fill-yellow-400" />
-                  ))}
-                  <span className="text-white text-sm ml-2 font-medium">{config.estadisticas.rating} / 5.0</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+          {heroContenido}
+        </section>
+      ) : (
+        <HeroConGradient
+          preset={heroConfig.gradientPreset ?? 'navy'}
+          customFrom={heroConfig.gradientCustomFrom}
+          customTo={heroConfig.gradientCustomTo}
+        >
+          {heroContenido}
+        </HeroConGradient>
+      )}
 
       {/* ══════════ SERVICIOS ══════════ */}
       <section className="py-16 md:py-20 bg-white">
