@@ -724,8 +724,17 @@ export default function FormularioAgendarPublico() {
             <label className={labelClass}>
               Tipo de equipo <span className="text-red-500">*</span>
             </label>
+            {/*
+              autoComplete="off" + name no-estandar evita que Chrome pre-
+              seleccione un tipo via autofill heuristic (Chrome matchea por
+              label text aunque el form tenga autoComplete="on" arriba).
+              Sintoma observado: el select arrancaba preseleccionado en
+              "Microondas" en incognito antes de este fix.
+            */}
             <select
               className={inputClass}
+              name="cita-equipo-tipo-no-autofill"
+              autoComplete="off"
               value={form.equipoTipo}
               onChange={e => update({ equipoTipo: e.target.value })}
               required
