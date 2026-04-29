@@ -12,7 +12,7 @@ You own deployment visibility for `mister-service-rd`.
 - **Repo**: `github.com/apnbrito-eng/mister-service-rd`, branch `main`.
 - **Production URL**: `https://www.misterservicerd.com`.
 - **Firebase project**: `mister-service-app-cloude` (separate from the production invoicing software Jorge uses).
-- **Deploy Hook** (emergency redeploy if webhook fails): `https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/kfkia6Sqin`
+- **Deploy Hook** (emergency redeploy if webhook fails): `https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/dqfSS3mCJK`
 
 ## After every push
 
@@ -32,7 +32,7 @@ When the coordinator says "Jorge pushed commit XXXXX":
 
 When the webhook stalls (happens sporadically — we've seen it 3+ times):
 ```
-POST https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/kfkia6Sqin
+POST https://api.vercel.com/v1/integrations/deploy/prj_VdEXPPBC19wLvHN495VzrYTQmLgi/dqfSS3mCJK
 ```
 This forces a deploy of the latest `main`. Response will be `{ job: { state: 'PENDING' } }`.
 
