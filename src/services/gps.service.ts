@@ -1,5 +1,5 @@
 import { doc, getDoc, setDoc, Timestamp, collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, auth } from '../firebase/config';
 import { ConfigGPS, UbicacionVehiculo } from '../types';
 
 const CONFIG_DOC = doc(db, 'config_gps', 'sistema');
@@ -89,9 +89,20 @@ export async function obtenerUbicacionAPI(vehiculoId: string): Promise<Ubicacion
   if (config.proveedor === 'Dispositivo del técnico') return null; // No usa API externa
 
   try {
+    // El proxy GPS requiere auth (anti-SSRF). Si no hay usuario, abortar.
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      console.warn('GPS API: usuario no autenticado, omitiendo fetch al proxy');
+      return null;
+    }
+    const idToken = await currentUser.getIdToken();
+
     const response = await fetch('/api/gps/ubicacion', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
+      },
       body: JSON.stringify({
         vehiculoId,
         apiUrl: config.apiUrl,
