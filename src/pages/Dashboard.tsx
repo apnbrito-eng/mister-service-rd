@@ -290,7 +290,7 @@ export default function Dashboard() {
     [ordenes]
   );
 
-  // KPI 3 - Facturas emitidas
+  // KPI 3 - Conduces emitidos
   const facturasEmitidas = useMemo(
     () => facturas.filter(f => f.estado === 'emitida'),
     [facturas]
@@ -603,9 +603,9 @@ export default function Dashboard() {
           onClick={() => navigate('/admin/ordenes')}
         />
         <KpiCard
-          title="Facturas Emitidas"
+          title="Conduces Emitidos"
           value={formatMoneda(totalFacturasEmitidas)}
-          subtitle={`${facturasEmitidas.length} factura${facturasEmitidas.length !== 1 ? 's' : ''}`}
+          subtitle={`${facturasEmitidas.length} conduce${facturasEmitidas.length !== 1 ? 's' : ''}`}
           icon={<Receipt size={22} />}
           color="bg-purple-500"
           onClick={() => navigate('/admin/facturas')}
@@ -613,7 +613,7 @@ export default function Dashboard() {
         <KpiCard
           title="Ingresos del Mes"
           value={formatMoneda(ingresosMes)}
-          subtitle={`${facturasPagadasMes.length} pagada${facturasPagadasMes.length !== 1 ? 's' : ''}`}
+          subtitle={`${facturasPagadasMes.length} conduce${facturasPagadasMes.length !== 1 ? 's' : ''} pagado${facturasPagadasMes.length !== 1 ? 's' : ''}`}
           icon={<DollarSign size={22} />}
           color="bg-green-500"
           onClick={() => navigate('/admin/facturas')}
@@ -944,7 +944,7 @@ export default function Dashboard() {
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Facturado: <span className="font-semibold text-gray-700">{formatMoneda(montoFacturado)}</span>
+                    Emitido: <span className="font-semibold text-gray-700">{formatMoneda(montoFacturado)}</span>
                   </p>
                 </div>
               ))}
