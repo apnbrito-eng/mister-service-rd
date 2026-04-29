@@ -314,7 +314,16 @@ export function generateNumeroFactura(count: number): string {
   return `FAC-${String(count + 1).padStart(5, '0')}`;
 }
 
-export const TIPOS_EQUIPO = ['Lavadora', 'Secadora', 'Nevera', 'Estufa', 'Aire Acondicionado', 'Microondas', 'Lavavajillas', 'Otro'];
+/**
+ * @deprecated Usa `useTiposEquipo()` de `src/hooks/useTiposEquipo.ts` para
+ * leer la lista en vivo desde el catálogo admin. Esta constante se
+ * preserva solo para componentes que aún no se migraron al hook.
+ *
+ * NO incluye 'Microondas' ni 'Lavavajillas' (legacy del primer prototipo).
+ * Si necesitas la lista de fallback con tipos default, importa
+ * `TIPOS_EQUIPO_FALLBACK` desde `./tiposEquipoFallback`.
+ */
+export const TIPOS_EQUIPO = ['Lavadora', 'Secadora', 'Nevera', 'Estufa', 'Aire Acondicionado', 'Otro'];
 
 /**
  * Formatea una línea descriptiva del equipo para listar en cards y resúmenes.

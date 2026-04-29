@@ -246,11 +246,10 @@ export const CONFIG_WEB_DEFAULTS: ConfigWeb = {
   formularioAgendar: { ...CONFIG_FORMULARIO_AGENDAR_DEFAULTS },
   tiposEquipoPublicos: [
     'Lavadora',
+    'Secadora',
     'Nevera',
     'Estufa',
     'Aire Acondicionado',
-    'Microondas',
-    'Secadora',
     'Otro',
   ],
   modelosPorTipoEquipo: {
@@ -258,7 +257,6 @@ export const CONFIG_WEB_DEFAULTS: ConfigWeb = {
     'Nevera': ['Side-by-side', 'French door', 'Top freezer', 'Mini bar'],
     'Estufa': ['Eléctrica', 'Gas', 'Mixta'],
     'Aire Acondicionado': ['Split', 'Ventana', 'Portátil', 'Cassette'],
-    'Microondas': [],
     'Secadora': ['Torre', 'Individual'],
   },
   feedbackNPS: {

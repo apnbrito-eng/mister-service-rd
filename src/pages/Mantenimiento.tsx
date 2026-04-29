@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Mantenimiento as MantenimientoType, Personal } from '../types';
-import { formatFechaCorta, TIPOS_EQUIPO } from '../utils';
+import { formatFechaCorta } from '../utils';
+import { useTiposEquipo } from '../hooks/useTiposEquipo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Plus, Calendar, Check, X, RefreshCw } from 'lucide-react';
@@ -17,6 +18,7 @@ const FRECUENCIA_LABELS: Record<string, string> = {
 };
 
 export default function Mantenimiento() {
+  const tiposEquipo = useTiposEquipo();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<MantenimientoType[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
@@ -184,7 +186,7 @@ export default function Mantenimiento() {
               <select value={form.equipoTipo} onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
                 <option value="">Seleccionar...</option>
-                {TIPOS_EQUIPO.map(t => <option key={t} value={t}>{t}</option>)}
+                {tiposEquipo.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div>

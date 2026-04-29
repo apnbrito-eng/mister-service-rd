@@ -18,21 +18,7 @@ import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 import LoadingSpinner from '../LoadingSpinner';
 import CampoDireccionConPlaces from '../shared/CampoDireccionConPlaces';
 import { obtenerModelosDeTipo } from '../../utils/modelosEquipo';
-
-/**
- * Fallback hardcoded usado cuando `config_web/sitio.tiposEquipoPublicos`
- * no existe todavía (primera carga del sitio o el admin nunca tocó la
- * lista). Coincide con `CONFIG_WEB_DEFAULTS.tiposEquipoPublicos`.
- */
-const TIPOS_EQUIPO_FALLBACK = [
-  'Lavadora',
-  'Nevera',
-  'Estufa',
-  'Aire Acondicionado',
-  'Microondas',
-  'Secadora',
-  'Otro',
-];
+import { TIPOS_EQUIPO_FALLBACK } from '../../utils/tiposEquipoFallback';
 
 // Mobile-first: text-base evita el zoom automático de Safari iOS al
 // enfocar inputs (Safari hace zoom si la fuente es <16px). min-h-[44px]
@@ -316,7 +302,6 @@ export default function FormularioAgendarPublico() {
       'Nevera': ['Side-by-side', 'French door', 'Top freezer', 'Mini bar'],
       'Estufa': ['Eléctrica', 'Gas', 'Mixta'],
       'Aire Acondicionado': ['Split', 'Ventana', 'Portátil', 'Cassette'],
-      'Microondas': [],
       'Secadora': ['Torre', 'Individual'],
     };
   }, [configWeb]);

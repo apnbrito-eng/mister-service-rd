@@ -3,7 +3,8 @@ import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, Timestamp, g
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 import { CitaPorConfirmar, OrdenServicio, GarantiaOrigen } from '../types';
-import { tiempoTranscurrido, TIPOS_EQUIPO, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, formatMoneda, labelTipoMotor } from '../utils';
+import { tiempoTranscurrido, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, formatMoneda, labelTipoMotor } from '../utils';
+import { useTiposEquipo } from '../hooks/useTiposEquipo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
@@ -21,6 +22,7 @@ const MARCAS_SUGERIDAS = ['LG', 'Samsung', 'Mabe', 'Whirlpool', 'GE', 'Frigidair
 
 export default function Citas() {
   const { userProfile } = useApp();
+  const tiposEquipo = useTiposEquipo();
   const [loading, setLoading] = useState(true);
   const [citas, setCitas] = useState<CitaPorConfirmar[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -880,7 +882,7 @@ export default function Citas() {
                     placeholder="Lavadora, Nevera..."
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
                   <datalist id="cita-tipos-equipo">
-                    {TIPOS_EQUIPO.map(t => <option key={t} value={t} />)}
+                    {tiposEquipo.map(t => <option key={t} value={t} />)}
                   </datalist>
                 </div>
                 <div>

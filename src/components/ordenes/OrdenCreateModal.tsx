@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Plus, User, Wrench, Calendar, AlertTriangle, CheckCircle, Loader2, Edit2, Home, ChevronDown, Shield } from 'lucide-react';
 import { Cliente, Personal, OrdenServicio, DireccionCliente, CitaPorConfirmar } from '../../types';
 import {
-  TIPOS_EQUIPO, DURACIONES, HORARIOS, HORARIOS_LABEL,
+  DURACIONES, HORARIOS, HORARIOS_LABEL,
   formatTelefono, faseLabel,
 } from '../../utils';
 import { obtenerModelosDeTipo } from '../../utils/modelosEquipo';
 import { useConfigWeb } from '../../hooks/useConfigWeb';
+import { useTiposEquipo } from '../../hooks/useTiposEquipo';
 import Modal from '../Modal';
 import EditarClienteModal from '../clientes/EditarClienteModal';
 import CampoDireccionConPlaces from '../shared/CampoDireccionConPlaces';
@@ -160,6 +161,7 @@ export default function OrdenCreateModal({
   // el admin guarda cambios desde /admin/configuracion, el listener
   // re-renderiza este modal con las nuevas opciones.
   const { config: configWeb } = useConfigWeb();
+  const tiposEquipo = useTiposEquipo();
   const catalogoModelos = useMemo<{ [tipo: string]: string[] }>(() => {
     const fromConfig = configWeb?.modelosPorTipoEquipo;
     if (fromConfig && Object.keys(fromConfig).length > 0) return fromConfig;
@@ -170,7 +172,6 @@ export default function OrdenCreateModal({
       'Nevera': ['Side-by-side', 'French door', 'Top freezer', 'Mini bar'],
       'Estufa': ['Eléctrica', 'Gas', 'Mixta'],
       'Aire Acondicionado': ['Split', 'Ventana', 'Portátil', 'Cassette'],
-      'Microondas': [],
       'Secadora': ['Torre', 'Individual'],
     };
   }, [configWeb]);
@@ -608,7 +609,7 @@ export default function OrdenCreateModal({
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
                 />
                 <datalist id="tipos-equipo-list">
-                  {TIPOS_EQUIPO.map(t => <option key={t} value={t} />)}
+                  {tiposEquipo.map(t => <option key={t} value={t} />)}
                 </datalist>
               </div>
               <div>

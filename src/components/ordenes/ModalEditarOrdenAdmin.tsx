@@ -11,7 +11,8 @@ import toast from 'react-hot-toast';
 import { AlertTriangle, Loader2 } from 'lucide-react';
 import { db } from '../../firebase/config';
 import { useApp } from '../../context/AppContext';
-import { crearRegistroAuditoria, TIPOS_EQUIPO } from '../../utils';
+import { crearRegistroAuditoria } from '../../utils';
+import { useTiposEquipo } from '../../hooks/useTiposEquipo';
 import { suscribirBancos } from '../../services/bancos.service';
 import type {
   Banco,
@@ -142,6 +143,7 @@ function ordenToForm(o: OrdenServicio): FormState {
 
 export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: Props) {
   const { userProfile } = useApp();
+  const tiposEquipo = useTiposEquipo();
   const [form, setForm] = useState<FormState>(() => ordenToForm(orden));
   const [original] = useState<FormState>(() => ordenToForm(orden));
   const [modificados, setModificados] = useState<Set<string>>(new Set());
@@ -545,7 +547,7 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
                   title={TOOLTIP_SENSIBLE}
                 >
                   <option value="">Selecciona...</option>
-                  {TIPOS_EQUIPO.map(t => (
+                  {tiposEquipo.map(t => (
                     <option key={t} value={t}>{t}</option>
                   ))}
                 </select>

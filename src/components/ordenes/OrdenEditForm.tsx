@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { MapPin, User, Wrench, Calendar, Camera, X as XIcon } from 'lucide-react';
 import { OrdenServicio, Personal } from '../../types';
-import { HORARIOS, HORARIOS_LABEL, TIPOS_EQUIPO, DURACIONES } from '../../utils';
+import { HORARIOS, HORARIOS_LABEL, DURACIONES } from '../../utils';
+import { useTiposEquipo } from '../../hooks/useTiposEquipo';
 import MiniMapaCliente from './MiniMapaCliente';
 
 const MARCAS_SUGERIDAS = ['LG', 'Samsung', 'Mabe', 'Whirlpool', 'GE', 'Frigidaire'];
@@ -67,6 +68,7 @@ export default function OrdenEditForm({
   onPickFoto,
   onQuitarFoto,
 }: OrdenEditFormProps) {
+  const tiposEquipo = useTiposEquipo();
   // Derivar operaria del técnico actualmente elegido
   const tecnicoElegido = tecnicos.find(t => t.id === editForm.tecnicoId);
   const operariaNuevaNombre = tecnicoElegido?.operariaNombre;
@@ -191,7 +193,7 @@ export default function OrdenEditForm({
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
               />
               <datalist id="edit-tipos-equipo">
-                {TIPOS_EQUIPO.map(t => <option key={t} value={t} />)}
+                {tiposEquipo.map(t => <option key={t} value={t} />)}
               </datalist>
             </div>
             <div>

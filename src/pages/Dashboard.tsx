@@ -19,7 +19,7 @@ import { calcularQuincenaActual } from '../utils/comisiones';
 import {
   faseLabel, faseBgColor, faseColor, formatMoneda, formatHora,
   getAlertasFromOrdenes, getStandbyAlertas, tiempoTranscurrido,
-  estadoSimpleLabel, parseOrden, getTecnicoColor, TIPOS_EQUIPO,
+  estadoSimpleLabel, parseOrden, getTecnicoColor,
   FASES_ORDENADAS
 } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';

@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { EquipoTaller, EstadoEquipo } from '../types';
-import { formatFechaCorta, formatMoneda, TIPOS_EQUIPO, whatsappLink } from '../utils';
+import { formatFechaCorta, formatMoneda, whatsappLink } from '../utils';
+import { useTiposEquipo } from '../hooks/useTiposEquipo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Plus, Package, Clock } from 'lucide-react';
@@ -21,6 +22,7 @@ const ESTADO_COLORS: Record<EstadoEquipo, string> = {
 };
 
 export default function EquiposTaller() {
+  const tiposEquipo = useTiposEquipo();
   const [loading, setLoading] = useState(true);
   const [equipos, setEquipos] = useState<EquipoTaller[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -229,7 +231,7 @@ export default function EquiposTaller() {
               <select value={form.equipoTipo} onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
                 <option value="">Seleccionar...</option>
-                {TIPOS_EQUIPO.map(t => <option key={t} value={t}>{t}</option>)}
+                {tiposEquipo.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div>

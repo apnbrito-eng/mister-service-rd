@@ -176,7 +176,6 @@ export default function Configuracion() {
         'Nevera': ['Side-by-side', 'French door', 'Top freezer', 'Mini bar'],
         'Estufa': ['Eléctrica', 'Gas', 'Mixta'],
         'Aire Acondicionado': ['Split', 'Ventana', 'Portátil', 'Cassette'],
-        'Microondas': [],
         'Secadora': ['Torre', 'Individual'],
       });
     }
