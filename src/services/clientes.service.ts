@@ -187,6 +187,15 @@ export async function crearOActualizarClienteDesdeCita(
   cita: CitaPorConfirmar,
   usuarioActual: { uid?: string; nombre: string },
 ): Promise<{ clienteId: string; creado: boolean; direccionAgregada: boolean }> {
+  // NOTA: aceptamos race condition tolerable aquí. Si dos confirmaciones
+  // simultáneas (dos coords presionando "Confirmar" sobre la misma cita en
+  // el mismo segundo) crean duplicado, se detecta visualmente en
+  // /admin/clientes (mismo telefonoNormalizado) y se mergea manualmente.
+  // La probabilidad real es baja porque el flujo natural impide que dos
+  // coords confirmen la misma cita al mismo tiempo (la cita desaparece de
+  // /admin/citas en cuanto la primera la confirma). Un fix robusto requiere
+  // setDoc(merge:true) con ID = telefonoNormalizado, pero eso choca con
+  // clientes preexistentes que tienen IDs auto-generados.
   const dirNueva = (cita.clienteDireccion || '').trim();
   const referenciaCompleta = [
     cita.clienteSector ? `Sector: ${cita.clienteSector}` : null,
@@ -222,9 +231,11 @@ export async function crearOActualizarClienteDesdeCita(
       return { clienteId: existente.id, creado: false, direccionAgregada: false };
     }
 
-    // Construir DireccionCliente sin undefineds (Firestore los rechaza)
+    // Construir DireccionCliente sin undefineds (Firestore los rechaza).
+    // El id se genera con el helper compartido `genDireccionId()` para
+    // mantener un solo formato en todo el módulo de clientes.
     const nuevaDir: DireccionCliente = {
-      id: `dir_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      id: genDireccionId(),
       etiqueta: 'Captada del formulario público',
       direccion: dirNueva,
     };

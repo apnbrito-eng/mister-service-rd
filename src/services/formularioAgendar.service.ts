@@ -23,6 +23,7 @@ import { Personal } from '../types';
 import { normalizarTelefono } from './clientes.service';
 import { crearNotificacion } from './notificaciones.service';
 import { crearRegistroAuditoria } from '../utils';
+import { stripUndefined } from '../utils/firestore';
 
 const CONFIG_DOC = doc(db, 'config_web', 'sitio');
 const CONTADORES_DOC = doc(db, 'config_web', 'contadores');
@@ -78,10 +79,10 @@ export async function guardarConfigFormularioAgendar(
   config: ConfigFormularioAgendar,
   usuario?: { id?: string; nombre?: string },
 ): Promise<void> {
-  // Strip undefined antes de persistir (Firestore los rechaza)
-  const limpio = Object.fromEntries(
-    Object.entries(config).filter(([, v]) => v !== undefined),
-  );
+  // Strip undefined recursivo antes de persistir (Firestore los rechaza
+  // a cualquier nivel de anidamiento, ej. dentro de
+  // `camposPersonalizados[i].opciones`).
+  const limpio = stripUndefined(config) as ConfigFormularioAgendar;
 
   await setDoc(
     CONFIG_DOC,
@@ -372,13 +373,22 @@ export async function enviarSolicitudCita(
     };
   }
 
-  // Notificar al staff (best-effort — si falla, la cita ya quedó guardada)
+  // Notificar al staff (best-effort — si falla, la cita ya quedó guardada).
+  // Los roles destinatarios se leen de la config (`notificarA`) para que el
+  // admin pueda ajustar quién recibe el ping desde /admin/web. Si la config
+  // viene vacía o no existe, se usa el default histórico del proyecto.
   try {
+    const cfg = await obtenerConfigFormularioAgendar();
+    const rolesConfig =
+      cfg.notificarA && cfg.notificarA.length > 0
+        ? cfg.notificarA
+        : CONFIG_FORMULARIO_AGENDAR_DEFAULTS.notificarA;
     await notificarStaffNuevaCita({
       citaId,
       nombre,
       telefono: payload.telefono.trim(),
       equipoTipo,
+      roles: rolesConfig,
     });
   } catch (err) {
     console.warn('Notificación a staff falló:', err);
@@ -393,21 +403,22 @@ export async function enviarSolicitudCita(
 }
 
 /**
- * Crea notificaciones in-app para coordinadora, secretaria y administradores
- * activos, avisándoles de una nueva cita pública. Usa el tipo existente
+ * Crea notificaciones in-app para los roles especificados (activos),
+ * avisándoles de una nueva cita pública. Usa el tipo existente
  * `nueva_cita` (no extiende el union de `TipoNotificacion`).
+ *
+ * `roles` es la lista de roles destinatarios. Por defecto histórico:
+ * coordinadora, secretaria y administrador. Configurable desde
+ * `config_web/sitio.formularioAgendar.notificarA`.
  */
 async function notificarStaffNuevaCita(args: {
   citaId: string;
   nombre: string;
   telefono: string;
   equipoTipo: string;
+  roles: Personal['rol'][];
 }): Promise<void> {
-  const rolesObjetivo: Personal['rol'][] = [
-    'coordinadora',
-    'secretaria',
-    'administrador',
-  ];
+  const rolesObjetivo: Personal['rol'][] = args.roles;
 
   // Una sola query por rol para no bajar todo `personal`
   const destinatariosVistos = new Set<string>();

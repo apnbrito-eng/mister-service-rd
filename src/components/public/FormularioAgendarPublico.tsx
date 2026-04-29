@@ -86,38 +86,73 @@ interface DatosMensajeWhatsApp {
 }
 
 /**
+ * Sanitiza un texto del cliente reemplazando los caracteres que WhatsApp
+ * interpreta como markdown (`*`, `_`, `~`, `` ` ``) por un espacio. Si el
+ * cliente escribe `*urgente*` en su nombre o falla, esos asteriscos
+ * romperían el formato del mensaje pre-llenado (WhatsApp lo renderizaría
+ * como negrita y partiría las etiquetas que ponemos nosotros). Reemplazar
+ * por espacio en vez de escapar mantiene el texto legible y evita ruido
+ * visual con caracteres `\`.
+ *
+ * IMPORTANTE: aplicar SOLO a valores que vienen del cliente (nombre,
+ * dirección, falla, etc.). Las etiquetas fijas que escribimos nosotros
+ * (`*Teléfono:*`, `*Equipo:*`, ...) se quedan como están porque ahí sí
+ * queremos que WhatsApp aplique formato.
+ */
+function escaparWhatsAppMarkdown(texto: string | undefined): string {
+  if (!texto) return '';
+  return texto.replace(/([*_~`])/g, ' ');
+}
+
+/**
  * Construye el mensaje pre-llenado de WhatsApp con toda la info del form
  * para que el agente que recibe pueda ir directo a confirmar la cita en
  * /admin/citas sin pedirle datos al cliente.
  *
  * Usa formato `*bold*` que WhatsApp renderiza, viñetas Unicode `•`, y
  * sin emojis literales (consistente con la convención del proyecto).
+ *
+ * Todos los valores que provienen del cliente se pasan por
+ * `escaparWhatsAppMarkdown` para que `*`, `_`, `~`, `` ` `` no rompan el
+ * render del mensaje.
  */
 function construirMensajeWhatsApp(
   datos: DatosMensajeWhatsApp,
   camposPersonalizados: Record<string, string>,
 ): string {
+  // Sanitizamos cada campo del cliente UNA sola vez para no repetir el
+  // helper en cada interpolación. Las etiquetas fijas (negrita) NO se
+  // sanitizan — esas las controlamos nosotros.
+  const sNombre = escaparWhatsAppMarkdown(datos.nombre);
+  const sTelefono = escaparWhatsAppMarkdown(datos.telefono);
+  const sEmail = escaparWhatsAppMarkdown(datos.email);
+  const sDireccion = escaparWhatsAppMarkdown(datos.direccion);
+  const sSector = escaparWhatsAppMarkdown(datos.sector);
+  const sEquipoTipo = escaparWhatsAppMarkdown(datos.equipoTipo);
+  const sEquipoMarca = escaparWhatsAppMarkdown(datos.equipoMarca);
+  const sEquipoModelo = escaparWhatsAppMarkdown(datos.equipoModelo);
+  const sFalla = escaparWhatsAppMarkdown(datos.falla);
+  const sFecha = escaparWhatsAppMarkdown(datos.fechaSolicitada);
+  const sHora = escaparWhatsAppMarkdown(datos.horaSolicitada);
+
   // Sufijo del equipo: si el cliente eligió un modelo del catálogo
   // (ej: 'Torre', 'French door'), lo agregamos entre paréntesis.
-  let sufijoEquipo = '';
-  if (datos.equipoModelo) {
-    sufijoEquipo = ` (${datos.equipoModelo})`;
-  }
+  const sufijoEquipo = sEquipoModelo ? ` (${sEquipoModelo})` : '';
 
   const lineas: (string | null)[] = [
-    `Hola, soy *${datos.nombre}* y acabo de enviar una solicitud de cita por la web.`,
+    `Hola, soy *${sNombre}* y acabo de enviar una solicitud de cita por la web.`,
     ``,
-    `*Teléfono:* ${datos.telefono}`,
-    datos.email ? `*Email:* ${datos.email}` : null,
+    `*Teléfono:* ${sTelefono}`,
+    sEmail ? `*Email:* ${sEmail}` : null,
     ``,
-    datos.direccion ? `*Dirección:* ${datos.direccion}` : null,
-    datos.sector ? `*Sector:* ${datos.sector}` : null,
+    sDireccion ? `*Dirección:* ${sDireccion}` : null,
+    sSector ? `*Sector:* ${sSector}` : null,
     ``,
-    `*Equipo:* ${datos.equipoTipo}${datos.equipoMarca ? ' ' + datos.equipoMarca : ''}${sufijoEquipo}`,
-    `*Falla reportada:* ${datos.falla}`,
+    `*Equipo:* ${sEquipoTipo}${sEquipoMarca ? ' ' + sEquipoMarca : ''}${sufijoEquipo}`,
+    `*Falla reportada:* ${sFalla}`,
     ``,
-    `*Fecha preferida:* ${datos.fechaSolicitada || 'No especificada'}`,
-    `*Hora preferida:* ${datos.horaSolicitada || 'No especificada'}`,
+    `*Fecha preferida:* ${sFecha || 'No especificada'}`,
+    `*Hora preferida:* ${sHora || 'No especificada'}`,
   ];
 
   if (
@@ -126,7 +161,10 @@ function construirMensajeWhatsApp(
   ) {
     lineas.push('', '*Información adicional:*');
     for (const [key, value] of Object.entries(camposPersonalizados)) {
-      lineas.push(`• ${key}: ${value}`);
+      // El `key` es el label del campo (lo escribió el admin, no el
+      // cliente) — no necesita sanitización. El `value` SÍ viene del
+      // cliente.
+      lineas.push(`• ${key}: ${escaparWhatsAppMarkdown(value)}`);
     }
   }
 
@@ -323,8 +361,20 @@ export default function FormularioAgendarPublico() {
   const habilitado = config.habilitado ?? true;
   const mostrarSector = config.mostrarCampoSector ?? true;
   const camposPersonalizados = config.camposPersonalizados ?? [];
-  const bloquesHora =
-    config.bloquesHora ?? CONFIG_FORMULARIO_AGENDAR_DEFAULTS.bloquesHora;
+  // Defensivo: si alguien edita el doc directo en Firestore Console y deja
+  // `bloquesHora` como array vacío, la UI no debe romperse. La validación
+  // del editor (admin) impide guardar vacío, pero esto es defense-in-depth.
+  // Logueamos un warn para que devops note la inconsistencia.
+  const bloquesHora = useMemo<string[]>(() => {
+    const desdeConfig = config.bloquesHora;
+    if (Array.isArray(desdeConfig) && desdeConfig.length > 0) return desdeConfig;
+    if (configLoaded) {
+      console.warn(
+        '[FormularioAgendarPublico] bloquesHora vino vacío o ausente — usando default.',
+      );
+    }
+    return CONFIG_FORMULARIO_AGENDAR_DEFAULTS.bloquesHora;
+  }, [config.bloquesHora, configLoaded]);
 
   const update = (partial: Partial<FormState>) => {
     setForm(prev => ({ ...prev, ...partial }));
@@ -392,11 +442,21 @@ export default function FormularioAgendarPublico() {
         }
       }
 
-      // Construir map de personalizados con label como key (más útil para staff)
+      // Construir map de personalizados con `id` permanente como key. Si el
+      // admin renombra el label de un campo (ej: "Marca preferida" →
+      // "Marca favorita"), los datos históricos siguen ligados a su campo
+      // gracias al id estable. El render en /admin/citas y los modales de
+      // orden buscan el `label` actual en config a partir del id (ver
+      // `OrdenCreateModal.tsx` y `OrdenDetailModal.tsx`).
+      const customPorId: Record<string, string> = {};
+      // Versión con label-as-key para el mensaje de WhatsApp, donde el
+      // staff que recibe NO tiene acceso a la config y necesita ver la
+      // etiqueta humana.
       const customConLabels: Record<string, string> = {};
       for (const c of camposPersonalizados) {
         const v = form.custom[c.id];
         if (typeof v === 'string' && v.trim().length > 0) {
+          customPorId[c.id] = v.trim();
           customConLabels[c.label] = v.trim();
         }
       }
@@ -423,9 +483,7 @@ export default function FormularioAgendarPublico() {
         fechaSolicitada: form.fechaSolicitada || undefined,
         horaSolicitada: form.horaSolicitada || undefined,
         camposPersonalizados:
-          Object.keys(customConLabels).length > 0
-            ? customConLabels
-            : undefined,
+          Object.keys(customPorId).length > 0 ? customPorId : undefined,
         honeypot: form.hp,
         fotoEquipoUrl: fotoEquipoUrl || undefined,
         citaIdProvisional,

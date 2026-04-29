@@ -13,6 +13,7 @@ import {
   CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
   CampoPersonalizado,
   CampoPersonalizadoTipo,
+  ROLES_NOTIFICACION_AGENDAR,
 } from '../../types/configFormularioAgendar';
 import {
   obtenerConfigFormularioAgendar,
@@ -395,6 +396,51 @@ export default function ConfigFormularioAgendarSection() {
             <Plus className="w-4 h-4" />
             Agregar bloque
           </button>
+        </div>
+      </div>
+
+      {/* Notificaciones de nueva cita */}
+      <div className="space-y-3 border-t border-gray-100 pt-4">
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700">
+            Notificaciones de nueva cita
+          </h3>
+          <p className="text-xs text-gray-500 mt-1">
+            Roles del staff que reciben una notificación in-app cuando entra
+            una solicitud nueva desde el formulario público. Si dejas todos
+            sin marcar, se usa el set por defecto (secretaria, coordinadora,
+            administrador).
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {ROLES_NOTIFICACION_AGENDAR.map(rol => {
+            const seleccionados =
+              config.notificarA ??
+              CONFIG_FORMULARIO_AGENDAR_DEFAULTS.notificarA;
+            const marcado = seleccionados.includes(rol);
+            return (
+              <label
+                key={rol}
+                className="flex items-center gap-2 text-sm text-gray-700 capitalize bg-gray-50 border border-gray-100 rounded-lg px-3 py-2"
+              >
+                <input
+                  type="checkbox"
+                  checked={marcado}
+                  onChange={e => {
+                    const actuales =
+                      config.notificarA ??
+                      CONFIG_FORMULARIO_AGENDAR_DEFAULTS.notificarA;
+                    const nuevo = e.target.checked
+                      ? Array.from(new Set([...actuales, rol]))
+                      : actuales.filter(r => r !== rol);
+                    update({ notificarA: nuevo });
+                  }}
+                  className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+                />
+                {rol}
+              </label>
+            );
+          })}
         </div>
       </div>
 

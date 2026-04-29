@@ -19,6 +19,7 @@ import RegistrarPagoModal from './RegistrarPagoModal';
 import EnviarFacturacionButton from './EnviarFacturacionButton';
 import { Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
 import { reactivarOrdenPostChequeo } from '../../services/ordenes.service';
+import { useConfigWeb } from '../../hooks/useConfigWeb';
 import toast from 'react-hot-toast';
 
 interface OrdenDetailModalProps {
@@ -44,6 +45,7 @@ export default function OrdenDetailModal({
   aprobandoPrecio,
   standbyItems = [],
 }: OrdenDetailModalProps) {
+  const { config: configWeb } = useConfigWeb();
   const puedeModificar = puede(userProfile, 'ordenesModificar');
   const puedeRegistrarPago = puede(userProfile, 'pagosRegistrar');
   const puedeEnviarAFacturacion = puede(userProfile, 'ordenesEnviarAFacturacion');
@@ -431,9 +433,19 @@ export default function OrdenDetailModal({
               <div><strong>WhatsApp asignado:</strong> {orden.metadatosCita.whatsappAsignadoNombre}</div>
             )}
             {orden.metadatosCita.camposPersonalizados &&
-              Object.entries(orden.metadatosCita.camposPersonalizados).map(([k, v]) => (
-                <div key={k}><strong>{k}:</strong> {String(v)}</div>
-              ))}
+              Object.entries(orden.metadatosCita.camposPersonalizados).map(([k, v]) => {
+                // Las citas nuevas guardan la key como `id` permanente del
+                // campo; las históricas la guardan como `label` directo.
+                // Buscamos label actual en config — si no aparece (cita
+                // antigua), mostramos `k` tal cual.
+                const labelActual =
+                  configWeb?.formularioAgendar?.camposPersonalizados?.find(
+                    c => c.id === k,
+                  )?.label || k;
+                return (
+                  <div key={k}><strong>{labelActual}:</strong> {String(v)}</div>
+                );
+              })}
           </div>
         </details>
       )}

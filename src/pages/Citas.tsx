@@ -120,6 +120,16 @@ export default function Citas() {
             origenGarantia: raw.origenGarantia as GarantiaOrigen | undefined,
             whatsappAsignado: raw.whatsappAsignado,
             whatsappAsignadoNombre: raw.whatsappAsignadoNombre,
+            telefonoNormalizado:
+              typeof raw.telefonoNormalizado === 'string' && raw.telefonoNormalizado.length > 0
+                ? raw.telefonoNormalizado
+                : undefined,
+            camposPersonalizados:
+              raw.camposPersonalizados &&
+              typeof raw.camposPersonalizados === 'object' &&
+              !Array.isArray(raw.camposPersonalizados)
+                ? (raw.camposPersonalizados as Record<string, string>)
+                : undefined,
             createdAt: raw.createdAt?.toDate?.() || new Date(),
           } as CitaPorConfirmar;
         }));

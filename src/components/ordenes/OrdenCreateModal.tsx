@@ -768,9 +768,19 @@ export default function OrdenCreateModal({
                 <div><strong>WhatsApp asignado:</strong> {citaPreset.whatsappAsignadoNombre}</div>
               )}
               {citaPreset?.camposPersonalizados &&
-                Object.entries(citaPreset.camposPersonalizados).map(([k, v]) => (
-                  <div key={k}><strong>{k}:</strong> {String(v)}</div>
-                ))}
+                Object.entries(citaPreset.camposPersonalizados).map(([k, v]) => {
+                  // El form público nuevo guarda la key como `id` permanente
+                  // del campo; las citas históricas la guardan como `label`.
+                  // Buscamos el label actual en la config — si no aparece (es
+                  // una cita vieja con label-as-key), mostramos `k` directo.
+                  const labelActual =
+                    configWeb?.formularioAgendar?.camposPersonalizados?.find(
+                      c => c.id === k,
+                    )?.label || k;
+                  return (
+                    <div key={k}><strong>{labelActual}:</strong> {String(v)}</div>
+                  );
+                })}
             </div>
           </details>
         )}

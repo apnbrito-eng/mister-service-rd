@@ -5,6 +5,7 @@ import {
   ConfigFormularioAgendar,
   CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
 } from '../types/configFormularioAgendar';
+import { stripUndefined } from '../utils/firestore';
 
 // ─── Tipos ───────────────────────────────────────────
 
@@ -789,30 +790,6 @@ export async function guardarConfigWeb(config: ConfigWeb): Promise<void> {
     updatedAt: Timestamp.now(),
   });
   await setDoc(CONFIG_DOC, payload, { merge: true });
-}
-
-/**
- * Recursivamente elimina campos `undefined` de un objeto, preservando
- * arrays, objetos anidados, `Date` y `Timestamp` (Firestore). Necesario
- * porque Firestore rechaza `undefined` en setDoc.
- */
-function stripUndefined<T>(value: T): T {
-  if (value === null || value === undefined) return value;
-  if (Array.isArray(value)) {
-    return value.map((v) => stripUndefined(v)) as unknown as T;
-  }
-  // Preservar tipos especiales (Date, Timestamp, otros con prototipo propio)
-  if (value instanceof Date) return value;
-  if (value instanceof Timestamp) return value;
-  if (typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (v === undefined) continue;
-      out[k] = stripUndefined(v);
-    }
-    return out as T;
-  }
-  return value;
 }
 
 /**

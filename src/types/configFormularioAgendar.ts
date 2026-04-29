@@ -60,7 +60,23 @@ export interface ConfigFormularioAgendar {
    *  Texto libre (ej: "9:00 AM", "11:00 AM"). Se guarda tal cual en
    *  `citas_por_confirmar.horaSolicitada`. */
   bloquesHora?: string[];
+  /**
+   * Roles del staff que reciben la notificación in-app cuando entra una
+   * nueva cita pública. El admin puede ajustar esto desde el editor del
+   * formulario en `/admin/web`. Si la lista está vacía o no existe,
+   * se usa el default (`secretaria`, `coordinadora`, `administrador`).
+   */
+  notificarA?: ('administrador' | 'coordinadora' | 'secretaria' | 'operaria')[];
 }
+
+/**
+ * Roles válidos para `ConfigFormularioAgendar.notificarA`. Se exporta para
+ * que la UI del editor renderice un checkbox por cada rol sin tener que
+ * duplicar la lista.
+ */
+export const ROLES_NOTIFICACION_AGENDAR: readonly (
+  'administrador' | 'coordinadora' | 'secretaria' | 'operaria'
+)[] = ['administrador', 'coordinadora', 'secretaria', 'operaria'];
 
 /**
  * Defaults razonables si la config no existe en Firestore.
@@ -88,4 +104,5 @@ export const CONFIG_FORMULARIO_AGENDAR_DEFAULTS: Required<
   mostrarCampoSector: true,
   camposPersonalizados: [],
   bloquesHora: ['9:00 AM', '11:00 AM', '1:00 PM', '3:00 PM', '5:00 PM'],
+  notificarA: ['secretaria', 'coordinadora', 'administrador'],
 };
