@@ -55,6 +55,7 @@ import BannerNuevaVersion from './components/BannerNuevaVersion';
 import PublicLayout from './components/public/PublicLayout';
 import HomePage from './pages/public/HomePage';
 import ServiciosPage from './pages/public/ServiciosPage';
+import ServicioDetalle from './pages/public/ServicioDetalle';
 import AgendarPage from './pages/public/AgendarPage';
 import GarantiaCliente from './pages/public/GarantiaCliente';
 
@@ -136,6 +137,7 @@ function AppRoutes() {
       <Route element={<PublicLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/servicios" element={<ServiciosPage />} />
+        <Route path="/servicios/:slug" element={<ServicioDetalle />} />
         <Route path="/agendar" element={<AgendarPage />} />
       </Route>
 

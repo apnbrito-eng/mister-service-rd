@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Sitemap generado manualmente.
+  Lista los 6 servicios canónicos pre-poblados en CONFIG_WEB_DEFAULTS.servicios.
+  IMPORTANTE: servicios nuevos creados desde el admin (/admin/web → Servicios)
+  NO se agregan automáticamente aquí. Si se agregan tipos nuevos al catálogo y
+  se publican páginas dedicadas, hay que actualizar este archivo manualmente.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://misterservicerd.com/</loc></url>
+  <url><loc>https://misterservicerd.com/servicios</loc></url>
+  <url><loc>https://misterservicerd.com/agendar</loc></url>
+  <url><loc>https://misterservicerd.com/servicios/lavadoras</loc></url>
+  <url><loc>https://misterservicerd.com/servicios/neveras</loc></url>
+  <url><loc>https://misterservicerd.com/servicios/aires-acondicionados</loc></url>
+  <url><loc>https://misterservicerd.com/servicios/estufas-y-hornos</loc></url>
+  <url><loc>https://misterservicerd.com/servicios/secadoras</loc></url>
+  <url><loc>https://misterservicerd.com/servicios/otros-equipos</loc></url>
+</urlset>

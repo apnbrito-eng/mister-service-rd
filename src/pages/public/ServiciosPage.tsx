@@ -14,6 +14,8 @@ interface Servicio {
   problemas: string[];
   color: string;
   bgColor: string;
+  /** Slug de la página dedicada `/servicios/:slug`. */
+  slug: string;
 }
 
 const SERVICIOS: Servicio[] = [
@@ -33,6 +35,7 @@ const SERVICIOS: Servicio[] = [
     ],
     color: 'text-blue-600',
     bgColor: 'bg-blue-50',
+    slug: 'lavadoras',
   },
   {
     icon: Thermometer,
@@ -50,6 +53,7 @@ const SERVICIOS: Servicio[] = [
     ],
     color: 'text-cyan-600',
     bgColor: 'bg-cyan-50',
+    slug: 'neveras',
   },
   {
     icon: Wind,
@@ -67,6 +71,7 @@ const SERVICIOS: Servicio[] = [
     ],
     color: 'text-indigo-600',
     bgColor: 'bg-indigo-50',
+    slug: 'aires-acondicionados',
   },
   {
     icon: Flame,
@@ -84,6 +89,7 @@ const SERVICIOS: Servicio[] = [
     ],
     color: 'text-orange-600',
     bgColor: 'bg-orange-50',
+    slug: 'estufas-y-hornos',
   },
   {
     icon: Refrigerator,
@@ -101,6 +107,7 @@ const SERVICIOS: Servicio[] = [
     ],
     color: 'text-purple-600',
     bgColor: 'bg-purple-50',
+    slug: 'secadoras',
   },
   {
     icon: Zap,
@@ -117,6 +124,7 @@ const SERVICIOS: Servicio[] = [
     ],
     color: 'text-yellow-600',
     bgColor: 'bg-yellow-50',
+    slug: 'otros-equipos',
   },
 ];
 
@@ -178,7 +186,7 @@ export default function ServiciosPage() {
       {/* ══════════ SERVICIOS DETALLADOS ══════════ */}
       <section className="py-16 bg-gray-bg">
         <div className="max-w-6xl mx-auto px-4 space-y-8">
-          {SERVICIOS.map((servicio, idx) => (
+          {SERVICIOS.map((servicio) => (
             <div
               key={servicio.titulo}
               className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
@@ -187,17 +195,36 @@ export default function ServiciosPage() {
                 <div className="flex flex-col md:flex-row md:items-start gap-6">
                   {/* Icon + Title */}
                   <div className="md:w-1/3">
-                    <div className={`w-14 h-14 rounded-2xl ${servicio.bgColor} ${servicio.color} flex items-center justify-center mb-3`}>
-                      <servicio.icon size={28} />
-                    </div>
-                    <h3 className="text-2xl font-extrabold text-gray-900 mb-2">{servicio.titulo}</h3>
-                    <p className="text-gray-500 text-sm leading-relaxed mb-4">{servicio.descripcion}</p>
                     <Link
-                      to="/agendar"
-                      className="inline-flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary-medium transition-colors"
+                      to={`/servicios/${servicio.slug}`}
+                      className="inline-block group"
                     >
-                      <Calendar size={14} /> Agendar servicio
+                      <div
+                        className={`w-14 h-14 rounded-2xl ${servicio.bgColor} ${servicio.color} flex items-center justify-center mb-3 group-hover:scale-105 transition-transform`}
+                      >
+                        <servicio.icon size={28} />
+                      </div>
+                      <h3 className="text-2xl font-extrabold text-gray-900 mb-2 group-hover:text-primary transition-colors">
+                        {servicio.titulo}
+                      </h3>
                     </Link>
+                    <p className="text-gray-500 text-sm leading-relaxed mb-4">
+                      {servicio.descripcion}
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Link
+                        to={`/servicios/${servicio.slug}`}
+                        className="inline-flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-primary-medium transition-colors"
+                      >
+                        Ver detalles <ArrowRight size={14} />
+                      </Link>
+                      <Link
+                        to="/agendar"
+                        className="inline-flex items-center gap-2 bg-gray-100 text-gray-700 px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-gray-200 transition-colors"
+                      >
+                        <Calendar size={14} /> Agendar
+                      </Link>
+                    </div>
                   </div>
 
                   {/* Problems list */}

@@ -10,6 +10,7 @@ import {
   ConfigFeedbackNPS,
   getWhatsAppUrl,
   parseConfigHero,
+  parseConfigServicios,
 } from '../services/configWeb.service';
 import { ConfigFormularioAgendar } from '../types/configFormularioAgendar';
 
@@ -82,6 +83,7 @@ export function useConfigWeb(): { config: ConfigWeb; loading: boolean } {
             modelosPorTipoEquipo: parseModelosPorTipoEquipoLive(data.modelosPorTipoEquipo),
             feedbackNPS:
               (data.feedbackNPS as ConfigFeedbackNPS) || CONFIG_WEB_DEFAULTS.feedbackNPS,
+            servicios: parseConfigServicios(data.servicios),
             updatedAt: data.updatedAt?.toDate?.() || undefined,
           };
           cachedConfig = parsed;

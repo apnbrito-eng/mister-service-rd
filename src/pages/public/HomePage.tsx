@@ -1,51 +1,28 @@
 import { Link } from 'react-router-dom';
 import {
   Wrench, Shield, Clock, Phone, Star, ChevronRight,
-  Thermometer, Waves, Wind, Flame, Refrigerator, Zap,
+  Thermometer, Waves, Wind, Flame, Refrigerator,
   CheckCircle, ArrowRight, Users, MapPin, Calendar
 } from 'lucide-react';
 import WhatsAppIcon from '../../components/icons/WhatsAppIcon';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 import HeroCarrusel from '../../components/public/HeroCarrusel';
 
-const SERVICIOS_DESTACADOS = [
-  {
-    icon: Waves,
-    titulo: 'Lavadoras',
-    descripcion: 'Reparación de todo tipo de lavadoras: no centrifuga, no drena, hace ruido, no enciende.',
-    color: 'bg-blue-50 text-blue-600',
-  },
-  {
-    icon: Thermometer,
-    titulo: 'Neveras y Refrigeradores',
-    descripcion: 'No enfría, hace hielo excesivo, ruido extraño, fuga de agua. Todas las marcas.',
-    color: 'bg-cyan-50 text-cyan-600',
-  },
-  {
-    icon: Wind,
-    titulo: 'Aires Acondicionados',
-    descripcion: 'Instalación, mantenimiento preventivo, recarga de gas, limpieza profunda.',
-    color: 'bg-indigo-50 text-indigo-600',
-  },
-  {
-    icon: Flame,
-    titulo: 'Estufas y Hornos',
-    descripcion: 'Quemadores, hornos, encendido electrónico, válvulas de gas, resistencias.',
-    color: 'bg-orange-50 text-orange-600',
-  },
-  {
-    icon: Refrigerator,
-    titulo: 'Secadoras',
-    descripcion: 'No calienta, no gira, hace ruido, no seca correctamente. Servicio completo.',
-    color: 'bg-purple-50 text-purple-600',
-  },
-  {
-    icon: Zap,
-    titulo: 'Otros Equipos',
-    descripcion: 'Microondas, dispensadores de agua, extractores y más. Consúltenos.',
-    color: 'bg-yellow-50 text-yellow-600',
-  },
-];
+// Mapa de tipo de equipo → icono Lucide para usar como fallback cuando un
+// servicio no tiene `imagenCard` configurada.
+const ICONO_POR_TIPO: { [tipo: string]: { icon: React.ElementType; color: string } } = {
+  'Lavadora': { icon: Waves, color: 'bg-blue-50 text-blue-600' },
+  'Nevera': { icon: Thermometer, color: 'bg-cyan-50 text-cyan-600' },
+  'Aire Acondicionado': { icon: Wind, color: 'bg-indigo-50 text-indigo-600' },
+  'Estufa': { icon: Flame, color: 'bg-orange-50 text-orange-600' },
+  'Secadora': { icon: Refrigerator, color: 'bg-purple-50 text-purple-600' },
+  'Microondas': { icon: Wrench, color: 'bg-yellow-50 text-yellow-600' },
+  'Otro': { icon: Wrench, color: 'bg-yellow-50 text-yellow-600' },
+};
+
+function iconoParaTipo(tipo: string): { icon: React.ElementType; color: string } {
+  return ICONO_POR_TIPO[tipo] || { icon: Wrench, color: 'bg-gray-100 text-gray-600' };
+}
 
 const PASOS_SERVICIO = [
   {
@@ -196,18 +173,41 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {SERVICIOS_DESTACADOS.map((s) => (
-              <div
-                key={s.titulo}
-                className="group bg-gray-bg rounded-2xl p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-gray-200"
-              >
-                <div className={`w-12 h-12 rounded-xl ${s.color} flex items-center justify-center mb-4`}>
-                  <s.icon size={24} />
-                </div>
-                <h3 className="font-bold text-gray-900 text-lg mb-2">{s.titulo}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{s.descripcion}</p>
-              </div>
-            ))}
+            {Object.values(config.servicios ?? {})
+              .filter((s) => s.habilitado)
+              .sort((a, b) => (a.orden ?? 999) - (b.orden ?? 999))
+              .map((s) => {
+                const fallback = iconoParaTipo(s.tipoEquipo);
+                const FallbackIcon = fallback.icon;
+                return (
+                  <Link
+                    key={s.slug}
+                    to={`/servicios/${s.slug}`}
+                    className="group bg-gray-bg rounded-2xl p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-gray-200 block"
+                  >
+                    {s.imagenCard ? (
+                      <img
+                        src={s.imagenCard}
+                        alt={s.titulo}
+                        className="w-full h-40 object-cover rounded-xl mb-4"
+                      />
+                    ) : (
+                      <div className={`w-12 h-12 rounded-xl ${fallback.color} flex items-center justify-center mb-4`}>
+                        <FallbackIcon size={24} />
+                      </div>
+                    )}
+                    <h3 className="font-bold text-gray-900 text-lg mb-2">
+                      {s.tipoEquipo || s.titulo}
+                    </h3>
+                    <p className="text-gray-500 text-sm leading-relaxed">
+                      {s.descripcionCorta}
+                    </p>
+                    <span className="inline-flex items-center gap-1 text-primary text-sm font-semibold mt-3 group-hover:gap-2 transition-all">
+                      Ver detalles <ArrowRight size={14} />
+                    </span>
+                  </Link>
+                );
+              })}
           </div>
 
           <div className="text-center mt-10">

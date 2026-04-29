@@ -67,6 +67,53 @@ export interface ConfigContacto {
 }
 
 /**
+ * Pregunta y respuesta de FAQ asociada a una página dedicada de servicio
+ * (`/servicios/:slug`).
+ */
+export interface ServicioFAQ {
+  pregunta: string;
+  respuesta: string;
+}
+
+/**
+ * Detalle de un servicio dedicado. Cada uno se publica en
+ * `/servicios/:slug` y se renderiza también en la card de la home.
+ *
+ * Las páginas se editan desde `/admin/web` → sección Servicios.
+ * Los 6 slugs canónicos (`lavadoras`, `neveras`, `aires-acondicionados`,
+ * `estufas-y-hornos`, `secadoras`, `otros-equipos`) vienen pre-poblados
+ * en `CONFIG_WEB_DEFAULTS.servicios`.
+ */
+export interface ServicioDetalle {
+  /** Slug canónico (sólo `[a-z0-9-]+`). Usado en la URL. */
+  slug: string;
+  /** Tipo de equipo asociado — matchea con `tiposEquipoPublicos`. */
+  tipoEquipo: string;
+  /** Título largo: ej "Reparación de Lavadoras a Domicilio". */
+  titulo: string;
+  /** Descripción corta para la card de home. Recomendado max 100 chars. */
+  descripcionCorta: string;
+  /** Descripción extendida (texto plano / markdown ligero) para la página. */
+  descripcionLarga?: string;
+  /** Imagen recortada para la card de home. */
+  imagenCard?: string;
+  /** Imagen wide para el hero de `/servicios/:slug`. */
+  imagenHero?: string;
+  /** Lista de problemas comunes que se reparan. */
+  problemasComunes: string[];
+  /** Marcas que se reparan (chips). */
+  marcasReparadas: string[];
+  /** Preguntas frecuentes específicas del servicio. */
+  faqs: ServicioFAQ[];
+  /** Tiempo estimado de reparación (texto libre). Ej "1-3 horas". */
+  tiempoEstimadoReparacion?: string;
+  /** Toggle visible en home + página dedicada. */
+  habilitado: boolean;
+  /** Orden numérico para la grilla de la home. */
+  orden: number;
+}
+
+/**
  * Configuración del sistema NPS de feedback en `/tracking/:token` cuando una
  * orden se cierra (sprint feedback).
  */
@@ -113,6 +160,13 @@ export interface ConfigWeb {
    * desde `/admin/web`.
    */
   feedbackNPS?: ConfigFeedbackNPS;
+  /**
+   * Catálogo de páginas dedicadas por servicio. Indexado por slug. Las
+   * cards de la home iteran sobre los servicios habilitados ordenados
+   * por `orden`. Las páginas viven en `/servicios/:slug`. Se pre-puebla
+   * con 6 servicios canónicos en `CONFIG_WEB_DEFAULTS.servicios`.
+   */
+  servicios?: { [slug: string]: ServicioDetalle };
   updatedAt?: Date;
 }
 
@@ -177,6 +231,254 @@ export const CONFIG_WEB_DEFAULTS: ConfigWeb = {
     mensajeAgradecimiento: 'Gracias por tu feedback. Cada respuesta nos ayuda a mejorar.',
     mensajeWhatsAppDetractor:
       'Hola, tuve un servicio recientemente y quiero compartirles mi experiencia.',
+  },
+  servicios: {
+    'lavadoras': {
+      slug: 'lavadoras',
+      tipoEquipo: 'Lavadora',
+      titulo: 'Reparación de Lavadoras a Domicilio',
+      descripcionCorta:
+        'Reparación de todo tipo de lavadoras: no centrifuga, no drena, hace ruido, no enciende.',
+      descripcionLarga:
+        'Reparamos lavadoras de carga frontal, superior, automáticas y semiautomáticas, todas las marcas. Diagnóstico honesto, repuestos de calidad y garantía por escrito en cada servicio.',
+      problemasComunes: [
+        'No centrifuga / no escurre',
+        'Hace ruido fuerte al lavar',
+        'No drena el agua',
+        'Pierde agua / gotea',
+        'No enciende / no responde',
+        'Marca código de error',
+        'Vibra excesivamente',
+        'Puerta no abre / no cierra',
+      ],
+      marcasReparadas: ['LG', 'Samsung', 'Whirlpool', 'Mabe', 'GE', 'Frigidaire'],
+      faqs: [
+        {
+          pregunta: '¿Cuánto cuesta una reparación de lavadora?',
+          respuesta:
+            'El chequeo a domicilio es RD$2,000. Si decides reparar, se descuenta del costo total. La reparación varía según la falla.',
+        },
+        {
+          pregunta: '¿Cuánto tarda?',
+          respuesta:
+            'La mayoría de reparaciones se hacen el mismo día en 1-3 horas.',
+        },
+        {
+          pregunta: '¿Qué garantía dan?',
+          respuesta:
+            'Todas las reparaciones tienen Conduce de Garantía por escrito. Cubre repuestos y mano de obra.',
+        },
+      ],
+      tiempoEstimadoReparacion: '1-3 horas',
+      habilitado: true,
+      orden: 1,
+    },
+    'neveras': {
+      slug: 'neveras',
+      tipoEquipo: 'Nevera',
+      titulo: 'Reparación de Neveras y Refrigeradores',
+      descripcionCorta:
+        'No enfría, hace hielo excesivo, ruido extraño, fuga de agua. Todas las marcas.',
+      descripcionLarga:
+        'Diagnóstico y reparación de neveras, refrigeradores, side-by-side y congeladores de todas las marcas. Servicio a domicilio o recogida para reparaciones complejas en taller.',
+      problemasComunes: [
+        'No enfría correctamente',
+        'Forma hielo excesivo',
+        'Hace ruido extraño',
+        'Fuga de agua interior',
+        'Compresor no arranca',
+        'Termostato defectuoso',
+        'Luz interior no enciende',
+        'Puerta no sella bien',
+      ],
+      marcasReparadas: ['LG', 'Samsung', 'Whirlpool', 'Mabe', 'GE', 'Frigidaire'],
+      faqs: [
+        {
+          pregunta: '¿Atienden neveras side-by-side y french door?',
+          respuesta:
+            'Sí, tenemos experiencia en todas las configuraciones: top freezer, bottom freezer, side-by-side y french door.',
+        },
+        {
+          pregunta: '¿Recargan gas refrigerante?',
+          respuesta:
+            'Sí, recargamos gas R-134a y R-600a. Antes verificamos que no haya fuga, porque sin sellado la recarga dura poco.',
+        },
+        {
+          pregunta: '¿Qué garantía dan?',
+          respuesta:
+            'Cada reparación lleva Conduce de Garantía CG-#### por escrito que cubre repuestos y mano de obra.',
+        },
+      ],
+      tiempoEstimadoReparacion: '1-3 horas',
+      habilitado: true,
+      orden: 2,
+    },
+    'aires-acondicionados': {
+      slug: 'aires-acondicionados',
+      tipoEquipo: 'Aire Acondicionado',
+      titulo: 'Reparación e Instalación de Aires Acondicionados',
+      descripcionCorta:
+        'Instalación, mantenimiento preventivo, recarga de gas, limpieza profunda.',
+      descripcionLarga:
+        'Servicio técnico completo de aires acondicionados split, inverter, ventana, portátil y cassette. Instalación, mantenimiento preventivo, recarga de gas y limpieza profunda.',
+      problemasComunes: [
+        'No enfría suficiente',
+        'Gotea agua dentro de la casa',
+        'Hace ruido o vibración',
+        'No enciende',
+        'Recarga de gas refrigerante',
+        'Limpieza profunda de equipos',
+        'Instalación de equipos nuevos',
+        'Mantenimiento preventivo',
+      ],
+      marcasReparadas: [
+        'LG',
+        'Samsung',
+        'Carrier',
+        'Midea',
+        'Daewoo',
+        'Whirlpool',
+      ],
+      faqs: [
+        {
+          pregunta: '¿Hacen instalación de aires nuevos?',
+          respuesta:
+            'Sí, instalamos splits y ventanas. El cliente puede traer su equipo o pedirnos cotización con todo incluido.',
+        },
+        {
+          pregunta: '¿Cada cuánto se debe limpiar un split?',
+          respuesta:
+            'Recomendamos limpieza profunda cada 6 meses. Mantiene la eficiencia y evita problemas respiratorios.',
+        },
+        {
+          pregunta: '¿Trabajan en oficinas y comercios?',
+          respuesta:
+            'Sí, atendemos hogares, oficinas y comercios. Para volumen alto coordinamos visitas mensuales programadas.',
+        },
+      ],
+      tiempoEstimadoReparacion: '1-2 horas',
+      habilitado: true,
+      orden: 3,
+    },
+    'estufas-y-hornos': {
+      slug: 'estufas-y-hornos',
+      tipoEquipo: 'Estufa',
+      titulo: 'Reparación de Estufas y Hornos',
+      descripcionCorta:
+        'Quemadores, hornos, encendido electrónico, válvulas de gas, resistencias.',
+      descripcionLarga:
+        'Servicio técnico de estufas de gas, eléctricas, mixtas, hornos y cooktops. Diagnóstico de seguridad cuando hay olor a gas, encendido electrónico, válvulas y resistencias.',
+      problemasComunes: [
+        'Quemador no enciende',
+        'Horno no calienta',
+        'Olor a gas',
+        'Encendido electrónico dañado',
+        'Válvula de gas defectuosa',
+        'Resistencia quemada',
+        'Termostato no regula',
+        'Perillas dañadas',
+      ],
+      marcasReparadas: ['Whirlpool', 'Mabe', 'GE', 'Frigidaire', 'Samsung', 'LG'],
+      faqs: [
+        {
+          pregunta: 'Tengo olor a gas, ¿qué hago?',
+          respuesta:
+            'Cierra la válvula principal del cilindro, ventila el área y NO enciendas nada eléctrico. Llámanos por WhatsApp para coordinar visita urgente.',
+        },
+        {
+          pregunta: '¿Atienden estufas industriales?',
+          respuesta:
+            'Sí, también reparamos estufas comerciales. Pídenos cotización con marca y modelo del equipo.',
+        },
+        {
+          pregunta: '¿Qué garantía dan?',
+          respuesta:
+            'Cada reparación lleva Conduce de Garantía CG-#### por escrito que cubre repuestos y mano de obra.',
+        },
+      ],
+      tiempoEstimadoReparacion: '1-2 horas',
+      habilitado: true,
+      orden: 4,
+    },
+    'secadoras': {
+      slug: 'secadoras',
+      tipoEquipo: 'Secadora',
+      titulo: 'Reparación de Secadoras',
+      descripcionCorta:
+        'No calienta, no gira, hace ruido, no seca correctamente. Servicio completo.',
+      descripcionLarga:
+        'Reparación de secadoras de ropa a gas y eléctricas, todas las marcas. Diagnóstico de resistencia, sensor de humedad, correa, motor y ventilación obstruida.',
+      problemasComunes: [
+        'No calienta',
+        'No gira el tambor',
+        'Hace ruido fuerte',
+        'No seca la ropa',
+        'Se apaga sola',
+        'Correa rota',
+        'Sensor de humedad dañado',
+        'Ventilación obstruida',
+      ],
+      marcasReparadas: ['LG', 'Samsung', 'Whirlpool', 'Mabe', 'GE', 'Frigidaire'],
+      faqs: [
+        {
+          pregunta: '¿Reparan secadoras a gas?',
+          respuesta:
+            'Sí, atendemos secadoras a gas y eléctricas. Si la falla está en la línea de gas hacemos diagnóstico de seguridad antes.',
+        },
+        {
+          pregunta: '¿Por qué mi secadora no seca aunque calienta?',
+          respuesta:
+            'Generalmente es ventilación obstruida o sensor de humedad. Lo verificamos en la visita.',
+        },
+        {
+          pregunta: '¿Qué garantía dan?',
+          respuesta:
+            'Cada reparación lleva Conduce de Garantía CG-#### por escrito que cubre repuestos y mano de obra.',
+        },
+      ],
+      tiempoEstimadoReparacion: '1-3 horas',
+      habilitado: true,
+      orden: 5,
+    },
+    'otros-equipos': {
+      slug: 'otros-equipos',
+      tipoEquipo: 'Otro',
+      titulo: 'Otros Electrodomésticos',
+      descripcionCorta:
+        'Microondas, dispensadores de agua, extractores y más. Consúltenos.',
+      descripcionLarga:
+        'También reparamos microondas, dispensadores de agua, extractores de grasa, lavavajillas y más. Si tu equipo no aparece en otra categoría, escríbenos por WhatsApp con marca y modelo y te decimos si lo atendemos.',
+      problemasComunes: [
+        'Microondas no calienta',
+        'Dispensador no enfría agua',
+        'Extractor no succiona',
+        'Lavavajillas no lava bien',
+        'Licuadora industrial',
+        'Batidora profesional',
+        'Otros equipos — consúltenos',
+      ],
+      marcasReparadas: ['LG', 'Samsung', 'Whirlpool', 'Mabe', 'GE', 'Panasonic'],
+      faqs: [
+        {
+          pregunta: '¿Cómo sé si reparan mi equipo?',
+          respuesta:
+            'Escríbenos por WhatsApp con marca, modelo y la falla. Te confirmamos en pocas horas si podemos atenderlo.',
+        },
+        {
+          pregunta: '¿Reparan equipos comerciales?',
+          respuesta:
+            'En muchos casos sí. Depende del equipo y disponibilidad de repuestos. Pídenos cotización primero.',
+        },
+        {
+          pregunta: '¿Qué garantía dan?',
+          respuesta:
+            'Cada reparación lleva Conduce de Garantía CG-#### por escrito que cubre repuestos y mano de obra.',
+        },
+      ],
+      tiempoEstimadoReparacion: '1-3 horas',
+      habilitado: true,
+      orden: 6,
+    },
   },
 };
 
@@ -273,6 +575,121 @@ export function parseConfigHero(raw: unknown): ConfigHero {
   };
 }
 
+/**
+ * Convierte texto libre a un slug válido para URL: lowercase, sin tildes,
+ * espacios → guiones, descarta cualquier carácter que no sea `[a-z0-9-]`.
+ * No agrega números mágicos: si dos servicios producen el mismo slug, el
+ * caller debe deduplicar (el editor admin avisa).
+ */
+export function slugify(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // quitar diacríticos
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+/**
+ * Parsea defensivamente una FAQ desde Firestore. Acepta sólo objetos con
+ * `pregunta` y `respuesta` strings; cae al "default vacío" si la forma no
+ * calza.
+ */
+function parseServicioFAQ(raw: unknown): ServicioFAQ | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const f = raw as Record<string, unknown>;
+  const pregunta = typeof f.pregunta === 'string' ? f.pregunta : '';
+  const respuesta = typeof f.respuesta === 'string' ? f.respuesta : '';
+  if (!pregunta && !respuesta) return null;
+  return { pregunta, respuesta };
+}
+
+/**
+ * Parsea defensivamente un único `ServicioDetalle` desde Firestore.
+ * Si `raw` no es un objeto válido, retorna null y el caller usa defaults.
+ * Filtra arrays a strings no vacíos. Los campos opcionales se preservan
+ * como `undefined` cuando no existen (lo que `stripUndefined` luego
+ * limpia antes de escribir).
+ */
+function parseServicioDetalle(slug: string, raw: unknown): ServicioDetalle | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const s = raw as Record<string, unknown>;
+
+  const titulo = typeof s.titulo === 'string' ? s.titulo : '';
+  const tipoEquipo = typeof s.tipoEquipo === 'string' ? s.tipoEquipo : '';
+  const descripcionCorta =
+    typeof s.descripcionCorta === 'string' ? s.descripcionCorta : '';
+  const descripcionLarga =
+    typeof s.descripcionLarga === 'string' ? s.descripcionLarga : undefined;
+  const imagenCard = typeof s.imagenCard === 'string' ? s.imagenCard : undefined;
+  const imagenHero = typeof s.imagenHero === 'string' ? s.imagenHero : undefined;
+  const tiempoEstimadoReparacion =
+    typeof s.tiempoEstimadoReparacion === 'string'
+      ? s.tiempoEstimadoReparacion
+      : undefined;
+
+  const problemasComunes = Array.isArray(s.problemasComunes)
+    ? (s.problemasComunes as unknown[]).filter(
+        (x): x is string => typeof x === 'string' && x.trim().length > 0,
+      )
+    : [];
+
+  const marcasReparadas = Array.isArray(s.marcasReparadas)
+    ? (s.marcasReparadas as unknown[]).filter(
+        (x): x is string => typeof x === 'string' && x.trim().length > 0,
+      )
+    : [];
+
+  const faqs = Array.isArray(s.faqs)
+    ? (s.faqs as unknown[])
+        .map(parseServicioFAQ)
+        .filter((f): f is ServicioFAQ => f !== null)
+    : [];
+
+  const habilitado = s.habilitado !== false; // default true para no romper docs viejos
+  const ordenRaw = typeof s.orden === 'number' && Number.isFinite(s.orden) ? s.orden : 999;
+
+  return {
+    slug,
+    tipoEquipo,
+    titulo,
+    descripcionCorta,
+    descripcionLarga,
+    imagenCard,
+    imagenHero,
+    problemasComunes,
+    marcasReparadas,
+    faqs,
+    tiempoEstimadoReparacion,
+    habilitado,
+    orden: ordenRaw,
+  };
+}
+
+/**
+ * Parsea defensivamente el campo `servicios` (mapa de slug → ServicioDetalle)
+ * desde Firestore. Si el campo no existe o tiene forma inválida, retorna
+ * los defaults (los 6 servicios canónicos). Patrón análogo al de
+ * `tiposEquipoPublicos`: el cliente nunca escribe en lectura.
+ */
+export function parseConfigServicios(
+  raw: unknown,
+): { [slug: string]: ServicioDetalle } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ...(CONFIG_WEB_DEFAULTS.servicios ?? {}) };
+  }
+  const out: { [slug: string]: ServicioDetalle } = {};
+  for (const [slug, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof slug !== 'string' || !slug) continue;
+    const parsed = parseServicioDetalle(slug, v);
+    if (parsed) out[slug] = parsed;
+  }
+  return out;
+}
+
 // ─── Funciones ───────────────────────────────────────
 
 /** Lee la config web de Firestore; retorna defaults si no existe */
@@ -298,6 +715,7 @@ export async function obtenerConfigWeb(): Promise<ConfigWeb> {
       modelosPorTipoEquipo: parseModelosPorTipoEquipo(data.modelosPorTipoEquipo),
       feedbackNPS:
         (data.feedbackNPS as ConfigFeedbackNPS) || CONFIG_WEB_DEFAULTS.feedbackNPS,
+      servicios: parseConfigServicios(data.servicios),
       updatedAt: data.updatedAt?.toDate?.() || undefined,
     };
   } catch (err) {

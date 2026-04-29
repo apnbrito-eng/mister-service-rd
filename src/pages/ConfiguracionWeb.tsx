@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import ConfigFormularioAgendarSection from '../components/admin/ConfigFormularioAgendarSection';
+import ConfigServiciosSection from '../components/admin/ConfigServiciosSection';
 import toast from 'react-hot-toast';
 import { comprimirImagen } from '../utils/imagen';
 import { doc, updateDoc, deleteField } from 'firebase/firestore';
@@ -811,6 +812,9 @@ export default function ConfiguracionWeb() {
           </button>
         </div>
       </div>
+
+      {/* ────── Section 2.5: Servicios dedicados ────── */}
+      <ConfigServiciosSection config={config} setConfig={setConfig} />
 
       {/* ────── Section 3: Estadísticas ────── */}
       <div className={cardClass}>
