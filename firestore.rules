@@ -28,9 +28,12 @@ rules_version = '2';
 //     bypassa estas rules. Las validaciones server-side viven en el
 //     handler. Estas rules son defense-in-depth para writes directos
 //     desde cliente.
-//   - R4 (gate aprobación oficina antes de Trabajo Realizado) NO está
-//     enforced acá todavía — eso es C2 del Sprint 3. Hoy lo enforcea
-//     solo el frontend (TecnicoVista).
+//   - R4 (gate aprobación oficina antes de Trabajo Realizado) ESTÁ
+//     enforced acá: técnico/ayudante NO pueden avanzar fase a
+//     'trabajo_realizado' ni cambiar precioFinal salvo que la orden
+//     tenga estadoAprobacion='aprobado'. Frontend (TecnicoVista) lo
+//     valida también; estas rules son la línea de defensa contra
+//     writes directos al cliente Firestore. Ver C2 del Sprint 3.
 // ════════════════════════════════════════════════════════════════════
 
 service cloud.firestore {
@@ -90,6 +93,67 @@ service cloud.firestore {
     // El técnico que es dueño del recurso (asignado a la orden)
     function esTecnicoDe(uid) {
       return esTecnico() && request.auth.uid == uid;
+    }
+
+    // Detecta si el update intenta poner fase=trabajo_realizado
+    // (transición desde otra fase). Se usa en R4 para gatear que solo
+    // pase tras aprobación de oficina.
+    function intentaTrabajoRealizado() {
+      return request.resource.data.fase == 'trabajo_realizado' &&
+             resource.data.fase != 'trabajo_realizado';
+    }
+
+    // Detecta si el update modifica precioFinal (campo que afecta
+    // comisión). Si el campo no cambia, OK. Si cambia, requiere
+    // aprobación previa de oficina.
+    function modificaPrecioFinal() {
+      return request.resource.data.precioFinal != resource.data.precioFinal;
+    }
+
+    // R4 (audit C2 — fix BLOCKER 2): el flujo "solo chequeo" del
+    // técnico setea precioFinal con el monto del chequeo SIN pasar por
+    // aprobación de oficina (es un cierre alternativo, no requiere
+    // R4). Por eso modificaPrecioFinal aislado bloquearía un flujo
+    // legítimo. Esta variante exige que el cambio de precio venga
+    // acompañado del marcador soloChequeo=true. Decisión Opción A
+    // sobre B: el flag `soloChequeo` está presente en TODOS los paths
+    // de chequeo verificados (TecnicoVista.tsx:528, OrdenDetalle.tsx:379,
+    // AgendaDia.tsx:165) — más explícita que gatear por transición de
+    // fase. `tipoCierre` no es 100% confiable (OrdenDetalle no lo setea).
+    function modificaPrecioSinSerChequeo() {
+      return modificaPrecioFinal() &&
+             !(request.resource.data.soloChequeo == true);
+    }
+
+    // R4 (audit C2 — fix BLOCKER 1): los campos de aprobación son
+    // INMUTABLES desde la rama técnico/ayudante en TODA condición
+    // (incluso si la orden ya está aprobada — el técnico no puede
+    // re-tocar el sello de aprobación). Solo esStaffOficina() puede
+    // setearlos o modificarlos. Sin esto, un técnico podría:
+    //   1. updateDoc({estadoAprobacion: 'aprobado'})
+    //   2. updateDoc({precioFinal: X, fase: 'trabajo_realizado'})
+    // y la rule de R4 se evaluaría contra el estado ya bypassed.
+    function noTocaCamposAprobacion() {
+      return request.resource.data.estadoAprobacion == resource.data.estadoAprobacion &&
+             request.resource.data.precioAprobado == resource.data.precioAprobado &&
+             request.resource.data.aprobadoPor == resource.data.aprobadoPor &&
+             request.resource.data.fechaAprobacion == resource.data.fechaAprobacion;
+    }
+
+    // R4 (audit C2 — fix IMPORTANTE): los campos de asignación
+    // (tecnicoId/ayudanteId) son INMUTABLES desde la rama
+    // técnico/ayudante. Sin esto un técnico podría reasignar la orden
+    // a otro técnico (robo de comisión, desligarse de
+    // responsabilidad). Solo esStaffOficina() puede reasignar.
+    function noTocaAsignacion() {
+      return request.resource.data.tecnicoId == resource.data.tecnicoId &&
+             request.resource.data.ayudanteId == resource.data.ayudanteId;
+    }
+
+    // Helper: la orden ya tiene aprobación de oficina.
+    // Si el campo no existe (orden vieja o recién creada), evalúa false.
+    function ordenAprobada() {
+      return resource.data.estadoAprobacion == 'aprobado';
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -190,11 +254,36 @@ service cloud.firestore {
       allow create: if esStaffOficina();
 
       // Update: oficina total; técnico/ayudante solo si es la orden
-      // que tienen asignada. R4 (precioFinal/fase=trabajo_realizado solo
-      // tras estadoAprobacion=aprobado) lo agregamos en C2/Sprint 3.
+      // que tienen asignada.
+      // R4 (audit C2): técnico/ayudante puede actualizar su propia orden
+      // EXCEPTO avanzar a fase=trabajo_realizado o cambiar precioFinal sin
+      // que la oficina haya aprobado previamente (estadoAprobacion=aprobado).
+      // Defense-in-depth contra:
+      //   - inflación de precio (afecta comisión)
+      //   - skip de revisión de oficina antes de cobro
+      //   - bypass del gate vía writes secuenciales (BLOCKER 1):
+      //     los campos de aprobación son INMUTABLES desde técnico/ayudante,
+      //     incluso si la orden ya está aprobada.
+      //   - reasignación maliciosa (IMPORTANTE): tecnicoId/ayudanteId
+      //     también inmutables desde técnico/ayudante.
+      //   - cierre legítimo "solo chequeo" (BLOCKER 2): el técnico SÍ
+      //     puede setear precioFinal cuando cierra como soloChequeo=true,
+      //     ese flujo no requiere aprobación previa.
+      // La oficina (esStaffOficina) corto-circuita TODA la rama y no
+      // tiene ninguna de estas restricciones.
       allow update: if esStaffOficina() ||
-        (esTecnico() && resource.data.tecnicoId == request.auth.uid) ||
-        (esAyudante() && resource.data.ayudanteId == request.auth.uid);
+        (
+          (
+            (esTecnico() && resource.data.tecnicoId == request.auth.uid) ||
+            (esAyudante() && resource.data.ayudanteId == request.auth.uid)
+          ) &&
+          noTocaCamposAprobacion() &&
+          noTocaAsignacion() &&
+          (
+            ordenAprobada() ||
+            (!intentaTrabajoRealizado() && !modificaPrecioSinSerChequeo())
+          )
+        );
 
       // Delete: solo admin/coord (en práctica usan soft-delete con
       // eliminada=true, pero permitimos hard delete para casos extremos).
