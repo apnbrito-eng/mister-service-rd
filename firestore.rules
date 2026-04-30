@@ -34,6 +34,13 @@ rules_version = '2';
 //     tenga estadoAprobacion='aprobado'. Frontend (TecnicoVista) lo
 //     valida también; estas rules son la línea de defensa contra
 //     writes directos al cliente Firestore. Ver C2 del Sprint 3.
+//   - R4 ENDURECIDA (sprint sugerencia-solo-chequeo): el técnico ya
+//     no puede setear `soloChequeo: true` ni `precioFinal` directos.
+//     El flujo es: técnico crea sugerenciaSoloChequeo (estado=pendiente)
+//     → oficina aprueba/rechaza desde /admin/sugerencias-chequeo. Solo
+//     `esStaffOficina()` puede setear soloChequeo, precioFinal y
+//     estadoAprobacion. Los helpers `noTocaSoloChequeo()` y
+//     `respetaSugerenciaSoloChequeo()` enforcen la nueva regla.
 // ════════════════════════════════════════════════════════════════════
 
 service cloud.firestore {
@@ -110,19 +117,62 @@ service cloud.firestore {
       return request.resource.data.precioFinal != resource.data.precioFinal;
     }
 
-    // R4 (audit C2 — fix BLOCKER 2): el flujo "solo chequeo" del
-    // técnico setea precioFinal con el monto del chequeo SIN pasar por
-    // aprobación de oficina (es un cierre alternativo, no requiere
-    // R4). Por eso modificaPrecioFinal aislado bloquearía un flujo
-    // legítimo. Esta variante exige que el cambio de precio venga
-    // acompañado del marcador soloChequeo=true. Decisión Opción A
-    // sobre B: el flag `soloChequeo` está presente en TODOS los paths
-    // de chequeo verificados (TecnicoVista.tsx:528, OrdenDetalle.tsx:379,
-    // AgendaDia.tsx:165) — más explícita que gatear por transición de
-    // fase. `tipoCierre` no es 100% confiable (OrdenDetalle no lo setea).
-    function modificaPrecioSinSerChequeo() {
-      return modificaPrecioFinal() &&
-             !(request.resource.data.soloChequeo == true);
+    // R4 ENDURECIDA (sprint sugerencia-solo-chequeo): el técnico ya
+    // no tiene excepción para setear precioFinal con soloChequeo=true.
+    // Cualquier modificación de precioFinal por técnico/ayudante
+    // requiere `ordenAprobada()` previamente seteado por oficina (al
+    // aprobar la sugerencia o aprobar precio normal).
+    //
+    // El helper `modificaPrecioSinSerChequeo()` (anterior) queda
+    // eliminado — su única función era darle al técnico una vía de
+    // escape vía soloChequeo=true. Ahora el técnico nunca puede setear
+    // soloChequeo (ver `noTocaSoloChequeo()` abajo).
+
+    // Sprint sugerencia-solo-chequeo: `soloChequeo` es un flag operativo
+    // que solo oficina puede tocar. El técnico que quiera marcar la
+    // orden como "solo chequeo" debe crear una sugerencia
+    // (sugerenciasSoloChequeo[]) con estado=pendiente y esperar
+    // aprobación. Esto cierra el agujero donde un técnico se auto-aprobaba
+    // un cierre alternativo evitando R4.
+    function noTocaSoloChequeo() {
+      return request.resource.data.soloChequeo == resource.data.soloChequeo;
+    }
+
+    // Sprint sugerencia-solo-chequeo: el técnico puede AGREGAR
+    // sugerencias al array (arrayUnion), pero no puede:
+    //   - Quitar elementos del array (size no decrece).
+    //   - Modificar entries existentes (mutación in-place del estado, ej.
+    //     flippear 'pendiente' → 'aprobada' en su propia sugerencia).
+    //
+    // Defense-in-depth: además del check de tamaño, validamos que TODAS
+    // las entries previas sigan presentes en el nuevo array usando
+    // `hasAll()` sobre listas (CEL List membership). Esto bloquea la
+    // mutación in-place: si una entry vieja cambió un solo campo, ya no
+    // matcheará bit-a-bit con el original y `hasAll` retornará false.
+    //
+    // Limitaciones conocidas:
+    //   - `hasAll()` compara por igualdad estructural completa, así que
+    //     SIN cambios el original sigue presente. Si un atacante intenta
+    //     mutar un elemento, el original se considera "ausente" → bloquea.
+    //   - El último elemento agregado puede tener cualquier `estado`
+    //     porque el técnico es quien lo crea (UI lo setea a 'pendiente',
+    //     pero un cliente malicioso podría enviar otro valor). Esa
+    //     defensa la hace `noTocaSoloChequeo` + `noTocaCamposAprobacion`:
+    //     aunque el array tenga estado='aprobada' falso, el técnico no
+    //     puede tocar los campos operativos `soloChequeo`, `precioFinal`,
+    //     `estadoAprobacion` que son los que importan para el cobro.
+    //   - Si Firestore Rules NO soporta `hasAll` sobre objetos anidados
+    //     en algún ambiente futuro, la rule fallaría conservadoramente
+    //     (rechaza el write). El admin puede ajustar manualmente.
+    function respetaSugerenciaSoloChequeo() {
+      return !('sugerenciasSoloChequeo' in request.resource.data) ||
+             !('sugerenciasSoloChequeo' in resource.data) ||
+             (
+               request.resource.data.sugerenciasSoloChequeo.size() >=
+                 resource.data.sugerenciasSoloChequeo.size() &&
+               request.resource.data.sugerenciasSoloChequeo
+                 .hasAll(resource.data.sugerenciasSoloChequeo)
+             );
     }
 
     // R4 (audit C2 — fix BLOCKER 1): los campos de aprobación son
@@ -255,20 +305,28 @@ service cloud.firestore {
 
       // Update: oficina total; técnico/ayudante solo si es la orden
       // que tienen asignada.
-      // R4 (audit C2): técnico/ayudante puede actualizar su propia orden
-      // EXCEPTO avanzar a fase=trabajo_realizado o cambiar precioFinal sin
-      // que la oficina haya aprobado previamente (estadoAprobacion=aprobado).
+      // R4 (audit C2 + sprint sugerencia-solo-chequeo):
+      //   técnico/ayudante puede actualizar su propia orden EXCEPTO
+      //   avanzar a fase=trabajo_realizado o cambiar precioFinal sin que
+      //   la oficina haya aprobado previamente (estadoAprobacion=aprobado).
+      //   El sprint sugerencia-solo-chequeo ENDURECIÓ la rule:
+      //   - Eliminó la excepción de `modificaPrecioSinSerChequeo()` que
+      //     permitía al técnico setear precioFinal cuando soloChequeo=true.
+      //   - Agregó `noTocaSoloChequeo()`: técnico nunca puede tocar el
+      //     flag `soloChequeo`. Solo oficina lo setea al aprobar la
+      //     sugerencia.
+      //   - Agregó `respetaSugerenciaSoloChequeo()`: el técnico solo puede
+      //     agregar sugerencias al array (arrayUnion), no quitar/modificar.
       // Defense-in-depth contra:
       //   - inflación de precio (afecta comisión)
       //   - skip de revisión de oficina antes de cobro
-      //   - bypass del gate vía writes secuenciales (BLOCKER 1):
-      //     los campos de aprobación son INMUTABLES desde técnico/ayudante,
-      //     incluso si la orden ya está aprobada.
-      //   - reasignación maliciosa (IMPORTANTE): tecnicoId/ayudanteId
-      //     también inmutables desde técnico/ayudante.
-      //   - cierre legítimo "solo chequeo" (BLOCKER 2): el técnico SÍ
-      //     puede setear precioFinal cuando cierra como soloChequeo=true,
-      //     ese flujo no requiere aprobación previa.
+      //   - bypass del gate vía writes secuenciales: los campos de
+      //     aprobación son INMUTABLES desde técnico/ayudante, incluso
+      //     si la orden ya está aprobada.
+      //   - reasignación maliciosa: tecnicoId/ayudanteId inmutables
+      //     desde técnico/ayudante.
+      //   - cierre unilateral como "solo chequeo" sin validación de
+      //     oficina: ahora requiere flujo sugerencia → aprobación.
       // La oficina (esStaffOficina) corto-circuita TODA la rama y no
       // tiene ninguna de estas restricciones.
       allow update: if esStaffOficina() ||
@@ -279,9 +337,11 @@ service cloud.firestore {
           ) &&
           noTocaCamposAprobacion() &&
           noTocaAsignacion() &&
+          noTocaSoloChequeo() &&
+          respetaSugerenciaSoloChequeo() &&
           (
             ordenAprobada() ||
-            (!intentaTrabajoRealizado() && !modificaPrecioSinSerChequeo())
+            (!intentaTrabajoRealizado() && !modificaPrecioFinal())
           )
         );
 

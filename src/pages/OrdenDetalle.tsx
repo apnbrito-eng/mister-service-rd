@@ -3,7 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { collection, doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, FaseOrden, MetodoPago, StandbyPieza } from '../types';
-import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, googleMapsLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby } from '../utils';
+import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, googleMapsLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente } from '../utils';
+import ModalSugerirSoloChequeo from '../components/cierre/ModalSugerirSoloChequeo';
+import BannerEstadoSugerenciaSoloChequeo from '../components/cierre/BannerEstadoSugerenciaSoloChequeo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import Badge from '../components/Badge';
@@ -227,6 +229,11 @@ export default function OrdenDetalle() {
     });
   };
 
+  // Sprint R4 endurecida: el técnico ya NO marca soloChequeo directo.
+  // Si es técnico, abre ModalSugerirSoloChequeo; si es oficina, abre el
+  // modal existente de cierre directo. `puedeMarcarChequeo` queda solo
+  // para gating de visibilidad del bloque (cualquiera de los dos puede
+  // accionar).
   const puedeMarcarChequeo = (): boolean => {
     if (!orden || !userProfile) return false;
     if (orden.soloChequeo) return false;
@@ -236,6 +243,15 @@ export default function OrdenDetalle() {
     if (userProfile.rol === 'tecnico' && orden.tecnicoId === userProfile.id) return true;
     return false;
   };
+
+  /** True cuando el usuario actual es el técnico asignado (no oficina). */
+  const esTecnicoAsignado = (): boolean => {
+    if (!orden || !userProfile) return false;
+    return userProfile.rol === 'tecnico' && orden.tecnicoId === userProfile.id;
+  };
+
+  // Modal "Sugerir solo chequeo" (técnico) — sprint R4 endurecida
+  const [showSugerirChequeoModal, setShowSugerirChequeoModal] = useState(false);
 
   // Stand-by — modal state
   const [showStandbyModal, setShowStandbyModal] = useState(false);
@@ -396,9 +412,22 @@ export default function OrdenDetalle() {
       toast.success('Orden marcada como solo chequeo');
       setShowChequeoModal(false);
       resetChequeoForm();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error('Error al marcar como solo chequeo');
+      // Defensa para sesiones de técnico desactualizadas (sprint R4
+      // endurecida): este path siempre setea soloChequeo. Un
+      // permission-denied indica una sesión vieja chocando con la rule
+      // nueva (o un técnico que llegó a este modal por bug).
+      const codeRaw = (err as { code?: unknown })?.code;
+      const code = typeof codeRaw === 'string' ? codeRaw : '';
+      if (code === 'permission-denied') {
+        toast.error(
+          'Tu app está desactualizada. Recargá con Cmd+Shift+R o cierra y abre el navegador.',
+          { duration: 8000 },
+        );
+      } else {
+        toast.error('Error al marcar como solo chequeo');
+      }
     } finally {
       setSavingChequeo(false);
     }
@@ -483,6 +512,15 @@ export default function OrdenDetalle() {
           )}
         </div>
       )}
+
+      {/* Banner de estado de sugerencia "solo chequeo" (sprint R4 endurecida).
+          Visible para todos los roles en el detalle — para el técnico es el
+          gate de cierre, para oficina es info adicional al panel admin. */}
+      {!orden.soloChequeo && (() => {
+        const ultimaSug = obtenerUltimaSugerenciaSoloChequeo(orden);
+        if (!ultimaSug) return null;
+        return <BannerEstadoSugerenciaSoloChequeo sugerencia={ultimaSug} />;
+      })()}
 
       {/* Banner solo chequeo */}
       {orden.soloChequeo && (
@@ -1283,20 +1321,43 @@ export default function OrdenDetalle() {
             </div>
           )}
 
-          {/* Marcar solo chequeo */}
-          {puedeMarcarChequeo() && (
+          {/* Marcar / sugerir solo chequeo. Sprint R4 endurecida:
+              - Técnico → abre ModalSugerirSoloChequeo (oficina aprueba después).
+              - Oficina (admin/coord/operaria con cotizacionesAprobarPrecio) →
+                abre el modal existente que cobra y cierra directo.
+              Si ya hay sugerencia pendiente del técnico, el botón se oculta
+              y mostramos el banner de estado más arriba. */}
+          {puedeMarcarChequeo() && !obtenerSugerenciaSoloChequeoPendiente(orden) && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Cliente no procede</h3>
-              <p className="text-xs text-gray-500 mb-3">
-                Si el cliente decidió no reparar, registra solo el costo del chequeo y cierra la orden.
-              </p>
-              <button
-                type="button"
-                onClick={() => { resetChequeoForm(); setShowChequeoModal(true); }}
-                className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"
-              >
-                <ClipboardCheck size={14} /> Marcar solo chequeo
-              </button>
+              {esTecnicoAsignado() ? (
+                <>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Si el cliente decidió no reparar, sugerí cerrar como solo
+                    chequeo. La oficina aprobará y luego podrás cerrar la orden.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowSugerirChequeoModal(true)}
+                    className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <ClipboardCheck size={14} /> Sugerir solo chequeo
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Si el cliente decidió no reparar, registra solo el costo del chequeo y cierra la orden.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { resetChequeoForm(); setShowChequeoModal(true); }}
+                    className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <ClipboardCheck size={14} /> Marcar solo chequeo
+                  </button>
+                </>
+              )}
             </div>
           )}
 
@@ -1484,6 +1545,15 @@ export default function OrdenDetalle() {
           </div>
         </div>
       </Modal>
+
+      {/* Modal "Sugerir solo chequeo" (técnico) — sprint R4 endurecida */}
+      {orden && (
+        <ModalSugerirSoloChequeo
+          isOpen={showSugerirChequeoModal}
+          onClose={() => setShowSugerirChequeoModal(false)}
+          orden={orden}
+        />
+      )}
 
       {/* Modal stand-by */}
       <Modal

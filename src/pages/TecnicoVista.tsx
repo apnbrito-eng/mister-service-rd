@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, Cliente, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, FaseOrden, StandbyPieza, MetodoPago } from '../types';
-import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria, formatMoneda, tieneStandby, formatearEquipoLabel } from '../utils';
+import { OrdenServicio, Cliente, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, StandbyPieza } from '../types';
+import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria, formatMoneda, tieneStandby, formatearEquipoLabel, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente } from '../utils';
+import ModalSugerirSoloChequeo from '../components/cierre/ModalSugerirSoloChequeo';
+import BannerEstadoSugerenciaSoloChequeo from '../components/cierre/BannerEstadoSugerenciaSoloChequeo';
 import FotoEquipoDisplay from '../components/shared/FotoEquipoDisplay';
 import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
 import { calcularQuincenaActual, rangoQuincena } from '../utils/comisiones';
@@ -94,15 +96,11 @@ export default function TecnicoVista() {
   const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
   const [empresaConfig, setEmpresaConfig] = useState<ConfigEmpresa>({ ...CONFIG_EMPRESA_DEFAULT });
 
-  // Solo chequeo desde técnico
-  const [showChequeoModal, setShowChequeoModal] = useState(false);
-  const [ordenChequeo, setOrdenChequeo] = useState<OrdenServicio | null>(null);
-  const [chequeoForm, setChequeoForm] = useState<{ precio: string; motivo: string; metodoPago: MetodoPago | '' }>({
-    precio: '',
-    motivo: '',
-    metodoPago: '',
-  });
-  const [savingChequeo, setSavingChequeo] = useState(false);
+  // Sugerencia de "solo chequeo" desde técnico (sprint R4 endurecida).
+  // Antes el técnico podía marcar `soloChequeo: true` directo. Ahora abre
+  // ModalSugerirSoloChequeo y queda pendiente de aprobación de oficina.
+  const [showSugerirChequeoModal, setShowSugerirChequeoModal] = useState(false);
+  const [ordenSugerirChequeo, setOrdenSugerirChequeo] = useState<OrdenServicio | null>(null);
 
   // Stand-by desde técnico
   const [showStandbyModal, setShowStandbyModal] = useState(false);
@@ -440,130 +438,16 @@ export default function TecnicoVista() {
     navigate('/login');
   };
 
-  const abrirChequeo = (orden: OrdenServicio) => {
-    setOrdenChequeo(orden);
-    setChequeoForm({
-      precio: String(precioChequeoSugerido),
-      motivo: '',
-      metodoPago: '',
-    });
-    setShowChequeoModal(true);
+  // Sprint R4 endurecida: el técnico ya NO cierra como solo chequeo
+  // unilateralmente. Solo abre el modal de sugerencia → oficina aprueba.
+  const abrirSugerirChequeo = (orden: OrdenServicio) => {
+    setOrdenSugerirChequeo(orden);
+    setShowSugerirChequeoModal(true);
   };
 
-  const cerrarChequeoModal = () => {
-    setShowChequeoModal(false);
-    setOrdenChequeo(null);
-    setChequeoForm({ precio: String(precioChequeoSugerido), motivo: '', metodoPago: '' });
-  };
-
-  const handleConfirmarChequeo = async () => {
-    if (!ordenChequeo) return;
-    const precio = Number(chequeoForm.precio);
-    if (isNaN(precio) || precio <= 0) {
-      toast.error('Ingresa un precio de chequeo válido');
-      return;
-    }
-    if (!chequeoForm.motivo.trim()) {
-      toast.error('Escribe el motivo por el que el cliente no procedió');
-      return;
-    }
-    setSavingChequeo(true);
-    try {
-      const ahora = Timestamp.now();
-      const usuario = userProfile?.nombre || 'Técnico';
-      const nuevoHistorial = [
-        ...ordenChequeo.historialFases.map(h => ({
-          fase: h.fase,
-          timestamp: Timestamp.fromDate(h.timestamp instanceof Date ? h.timestamp : new Date()),
-          usuario: h.usuario || '',
-          ...(h.nota ? { nota: h.nota } : {}),
-        })),
-        {
-          fase: 'cerrado' as FaseOrden,
-          timestamp: ahora,
-          usuario,
-          nota: `Solo chequeo — ${chequeoForm.motivo.trim()}`,
-        },
-      ];
-      const registroAuditoria = crearRegistroAuditoria(
-        usuario,
-        'marcar_chequeo',
-        `Marcó orden como solo chequeo (RD$ ${precio.toLocaleString('es-DO')}) — ${chequeoForm.motivo.trim()}`,
-        'soloChequeo',
-        'false',
-        'true'
-      );
-      // Registrar el pago del chequeo y enviar a facturación si hay método.
-      // Esto hace aparecer la orden en /admin/facturacion-pendiente para que
-      // admin/coord emita el conduce CG-#####.
-      const pagosPrev = Array.isArray(ordenChequeo.pagos) ? ordenChequeo.pagos : [];
-      const nuevoPago = chequeoForm.metodoPago ? {
-        id: `pago_chequeo_${Date.now()}`,
-        metodo: chequeoForm.metodoPago,
-        monto: precio,
-        fecha: ahora,
-        registradoPorId: userProfile?.id || '',
-        registradoPorNombre: usuario,
-      } : null;
-      const pagosTotal = [
-        ...pagosPrev.map(p => ({
-          id: p.id,
-          metodo: p.metodo,
-          monto: p.monto,
-          fecha: p.fecha instanceof Date ? Timestamp.fromDate(p.fecha) : p.fecha,
-          ...(p.recibidoPorId ? { recibidoPorId: p.recibidoPorId } : {}),
-          ...(p.recibidoPorNombre ? { recibidoPorNombre: p.recibidoPorNombre } : {}),
-          ...(p.bancoId ? { bancoId: p.bancoId } : {}),
-          ...(p.bancoNombre ? { bancoNombre: p.bancoNombre } : {}),
-          ...(p.referencia ? { referencia: p.referencia } : {}),
-          ...(p.notas ? { notas: p.notas } : {}),
-          registradoPorId: p.registradoPorId,
-          registradoPorNombre: p.registradoPorNombre,
-        })),
-        ...(nuevoPago ? [nuevoPago] : []),
-      ];
-      const montoPagadoTotal = pagosTotal.reduce((sum, p) => sum + Number(p.monto || 0), 0);
-
-      const updateData: Record<string, unknown> = {
-        soloChequeo: true,
-        tipoCierre: 'solo_chequeo',
-        precioChequeo: precio,
-        precioFinal: precio,
-        motivoChequeo: chequeoForm.motivo.trim(),
-        fase: 'cerrado',
-        estadoSimple: 'completado',
-        estado: 'cerrado',
-        historialFases: nuevoHistorial,
-        auditoria: arrayUnion(registroAuditoria),
-        updatedAt: ahora,
-      };
-      if (chequeoForm.metodoPago) {
-        updateData.metodoPagoCierre = chequeoForm.metodoPago;
-      }
-      if (nuevoPago) {
-        updateData.pagos = pagosTotal;
-        updateData.montoPagado = montoPagadoTotal;
-        updateData.estadoPago = montoPagadoTotal >= precio ? 'completo' : 'parcial';
-        updateData.enviadaAFacturacion = true;
-        updateData.enviadaAFacturacionAt = ahora;
-        if (userProfile?.id) updateData.enviadaAFacturacionPorId = userProfile.id;
-        updateData.enviadaAFacturacionPorNombre = usuario;
-      }
-      await updateDoc(doc(db, 'ordenes_servicio', ordenChequeo.id), updateData);
-
-      // El chequeo NO genera comisión para el técnico (regla de negocio).
-      // Si el cliente regresa para reparar, oficina reactiva la orden vía
-      // `reactivarOrdenPostChequeo` y la comisión se paga sobre el monto de
-      // la reparación, no incluye los RD$2,000 del chequeo previo.
-
-      toast.success('Orden cerrada como solo chequeo');
-      cerrarChequeoModal();
-    } catch (err) {
-      console.error(err);
-      toast.error('Error al cerrar como solo chequeo');
-    } finally {
-      setSavingChequeo(false);
-    }
+  const cerrarSugerirChequeoModal = () => {
+    setShowSugerirChequeoModal(false);
+    setOrdenSugerirChequeo(null);
   };
 
   const abrirStandby = (orden: OrdenServicio) => {
@@ -1177,15 +1061,39 @@ export default function TecnicoVista() {
                       </div>
                     )}
 
+                    {/* Banner de estado de sugerencia "solo chequeo" (sprint R4 endurecida) */}
+                    {!completado && !orden.enStandby && (() => {
+                      const ultimaSug = obtenerUltimaSugerenciaSoloChequeo(orden);
+                      // Si está aprobada y la orden ya tiene soloChequeo:true, no mostramos
+                      // (el cierre normal seguirá su flujo). Si rechazada o pendiente, sí.
+                      if (!ultimaSug) return null;
+                      if (ultimaSug.estado === 'aprobada' && orden.soloChequeo === true && orden.fase === 'cerrado') {
+                        return null;
+                      }
+                      return (
+                        <div className="mt-3">
+                          <BannerEstadoSugerenciaSoloChequeo sugerencia={ultimaSug} />
+                        </div>
+                      );
+                    })()}
+
                     {/* Actions (orden activa, no en stand-by) */}
                     {!completado && !orden.enStandby && (
                       <div className="mt-4 flex flex-wrap gap-2">
                         {/* Iniciar chequeo (foto + GPS, solo el día de la cita) */}
                         <IniciarChequeoButton orden={orden} userProfile={userProfile} size="sm" />
                         {permisos.puedeMarcarCompletado && (() => {
+                          const sugerenciaPendiente = obtenerSugerenciaSoloChequeoPendiente(orden);
                           const necesitaAprobacion =
                             orden.precioSugerido !== undefined &&
                             orden.estadoAprobacion !== 'aprobado';
+                          if (sugerenciaPendiente) {
+                            return (
+                              <div className="w-full bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-800 flex items-center gap-1">
+                                ⏳ Solo chequeo enviado a oficina — esperando aprobación
+                              </div>
+                            );
+                          }
                           if (necesitaAprobacion) {
                             return (
                               <div className="w-full bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs text-yellow-800 flex items-center gap-1">
@@ -1200,16 +1108,18 @@ export default function TecnicoVista() {
                             </button>
                           );
                         })()}
-                        {/* Cerrar como solo chequeo (cliente no procede) */}
+                        {/* Sugerir solo chequeo (cliente no procede) — sprint R4 endurecida.
+                            El técnico envía sugerencia, oficina aprueba. */}
                         {permisos.puedeMarcarCompletado &&
                           !orden.soloChequeo &&
+                          !obtenerSugerenciaSoloChequeoPendiente(orden) &&
                           ['en_diagnostico', 'en_cotizacion', 'aprobado'].includes(orden.fase) && (
                           <button
-                            onClick={() => abrirChequeo(orden)}
+                            onClick={() => abrirSugerirChequeo(orden)}
                             className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-medium"
-                            title={`Cerrar como solo chequeo (RD$${precioChequeoSugerido.toLocaleString('es-DO')})`}
+                            title={`Sugerir solo chequeo (default RD$${precioChequeoSugerido.toLocaleString('es-DO')}) — requiere aprobación de oficina`}
                           >
-                            <ClipboardCheck size={12} /> 🔍 Solo chequeo
+                            <ClipboardCheck size={12} /> Sugerir solo chequeo
                           </button>
                         )}
                         {/* Poner en stand-by */}
@@ -1422,88 +1332,15 @@ export default function TecnicoVista() {
         </Modal>
       )}
 
-      {/* Modal solo chequeo (técnico) */}
-      <Modal
-        isOpen={showChequeoModal}
-        onClose={cerrarChequeoModal}
-        title="Cerrar como solo chequeo"
-      >
-        <div className="space-y-4">
-          {ordenChequeo && (
-            <div className="bg-gray-50 rounded-lg p-3 text-xs">
-              <p className="font-semibold">{ordenChequeo.clienteNombre}</p>
-              <p>{ordenChequeo.equipoTipo}{ordenChequeo.equipoMarca ? ` · ${ordenChequeo.equipoMarca}` : ''}</p>
-              <p className="text-gray-500 mt-0.5">{ordenChequeo.numero || ''}</p>
-            </div>
-          )}
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
-            ¿El cliente decidió NO proceder con la reparación? Se cerrará la orden como solo chequeo.
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Precio del chequeo (RD$) *
-            </label>
-            <input
-              type="number"
-              min={0}
-              step={50}
-              value={chequeoForm.precio}
-              onChange={e => setChequeoForm(f => ({ ...f, precio: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-            />
-            <p className="text-[11px] text-gray-400 mt-1">
-              Sugerido: RD${precioChequeoSugerido.toLocaleString('es-DO')}
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Método de pago</label>
-            <select
-              value={chequeoForm.metodoPago}
-              onChange={e => setChequeoForm(f => ({ ...f, metodoPago: e.target.value as MetodoPago | '' }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-            >
-              <option value="">Sin especificar</option>
-              <option value="efectivo">Efectivo</option>
-              <option value="transferencia">Transferencia</option>
-              <option value="tarjeta">Tarjeta</option>
-              <option value="link">Link</option>
-              <option value="otro">Otro</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Motivo *</label>
-            <textarea
-              rows={3}
-              value={chequeoForm.motivo}
-              onChange={e => setChequeoForm(f => ({ ...f, motivo: e.target.value }))}
-              placeholder="Ej: El cliente consideró muy costosa la reparación..."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={cerrarChequeoModal}
-              disabled={savingChequeo}
-              className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={handleConfirmarChequeo}
-              disabled={savingChequeo}
-              className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
-            >
-              {savingChequeo ? 'Guardando...' : 'Confirmar chequeo'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* Modal "Sugerir solo chequeo" (técnico) — sprint R4 endurecida.
+          El técnico envía sugerencia, oficina aprueba/rechaza. */}
+      {ordenSugerirChequeo && (
+        <ModalSugerirSoloChequeo
+          isOpen={showSugerirChequeoModal}
+          onClose={cerrarSugerirChequeoModal}
+          orden={ordenSugerirChequeo}
+        />
+      )}
 
       {/* Modal stand-by (técnico) */}
       <Modal

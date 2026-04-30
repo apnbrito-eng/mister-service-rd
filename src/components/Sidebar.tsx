@@ -68,6 +68,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [citasCount, setCitasCount] = useState(0);
   const [solicitudesCount, setSolicitudesCount] = useState(0);
   const [facturacionPendienteCount, setFacturacionPendienteCount] = useState(0);
+  const [sugerenciasChequeoCount, setSugerenciasChequeoCount] = useState(0);
   const [sectionsState, setSectionsState] = useState<Record<string, boolean>>(loadState);
 
   useEffect(() => {
@@ -96,6 +97,33 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     });
 
     return () => { unsub1(); unsub1b(); unsub2(); unsub3(); unsub4(); };
+  }, []);
+
+  // Sugerencias de "solo chequeo" pendientes (sprint R4 endurecida).
+  // El badge solo se renderiza para admin/coord; gateamos el listener al
+  // mismo set de roles para evitar leer toda `ordenes_servicio` con
+  // técnico/ayudante/secretaria/operaria. No hay índice compuesto;
+  // filtramos client-side.
+  useEffect(() => {
+    if (
+      userProfile?.rol !== 'administrador' &&
+      userProfile?.rol !== 'coordinadora'
+    ) {
+      setSugerenciasChequeoCount(0);
+      return;
+    }
+    const unsub = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
+      let count = 0;
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (data.eliminada) return;
+        const lista = data.sugerenciasSoloChequeo;
+        if (!Array.isArray(lista)) return;
+        if (lista.some(s => s && s.estado === 'pendiente')) count++;
+      });
+      setSugerenciasChequeoCount(count);
+    });
+    return () => unsub();
   }, [userProfile?.rol]);
 
   const handleLogout = async () => {
@@ -141,6 +169,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
           { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
           { to: '/admin/feedback', icon: Star, label: 'Feedback NPS', show: esAdminOCoord },
+          { to: '/admin/sugerencias-chequeo', icon: ClipboardCheck, label: 'Sugerencias chequeo', badge: sugerenciasChequeoCount, show: esAdminOCoord },
           { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: isAdmin || userProfile?.rol === 'coordinadora' || p('ordenesVerEliminadas') },
         ],
       },

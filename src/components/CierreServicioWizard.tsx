@@ -253,11 +253,11 @@ export default function CierreServicioWizard({
       const ordenUpdate: Record<string, unknown> = {
         fase: 'trabajo_realizado',
         estadoSimple: 'completado',
-        // El cierre vía wizard es siempre reparación completa. Defensivo:
-        // si la orden venía de un reactivar (donde ya se setea), reescribir
-        // 'reparacion_completa' es idempotente y previene quedar 'solo_chequeo'
-        // por error.
-        tipoCierre: 'reparacion_completa',
+        // El cierre vía wizard es generalmente reparación completa. Pero
+        // si oficina aprobó una sugerencia de solo chequeo (sprint R4
+        // endurecida), `soloChequeo: true` y `tipoCierre: 'solo_chequeo'`
+        // ya están seteados — no los pisamos.
+        tipoCierre: orden.soloChequeo === true ? 'solo_chequeo' : 'reparacion_completa',
         cierreServicio: cierrePayload,
         historialFases: nuevoHistorial,
         auditoria: arrayUnion(registroAuditoria),
@@ -279,7 +279,23 @@ export default function CierreServicioWizard({
     } catch (err: unknown) {
       console.error('Error cierre servicio:', err);
       const errMsg = err instanceof Error ? err.message : 'Error desconocido';
-      if (errMsg.includes('Timeout')) {
+      // Catch específico para `permission-denied` (sprint R4 endurecida).
+      //
+      // El payload del wizard NO toca `soloChequeo` ni `precioFinal` (son
+      // campos de oficina, ver `ordenUpdate` arriba). Por eso un
+      // permission-denied acá NO es por sesión desactualizada chocando con
+      // el gate de R4 — es otro motivo (ej: técnico intentó cerrar una
+      // orden no asignada, rule de noTocaAsignacion bloqueó algún campo,
+      // etc.). Mostramos un mensaje genérico en lugar del toast de "app
+      // desactualizada", que confundiría al técnico.
+      const codeRaw = (err as { code?: unknown })?.code;
+      const code = typeof codeRaw === 'string' ? codeRaw : '';
+      if (code === 'permission-denied') {
+        toast.error(
+          'Error de permisos al cerrar la orden. Verificá con admin.',
+          { duration: 6000 },
+        );
+      } else if (errMsg.includes('Timeout')) {
         toast.error('La foto tardó mucho en subir. Verifica tu conexión a internet e intenta de nuevo.');
       } else if (errMsg.includes('storage') || errMsg.includes('403') || errMsg.includes('unauthorized') || errMsg.includes('does not have permission')) {
         toast.error('Error de permisos al subir la foto. Contacta al administrador.');

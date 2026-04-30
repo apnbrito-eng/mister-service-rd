@@ -355,8 +355,52 @@ export interface OrdenServicio {
    * contra-propone. En Hito 1 se modela el campo pero no hay flujo activo.
    */
   propuestasReprogramacion?: PropuestaReprogramacion[];
+  /**
+   * Historial de sugerencias de "solo chequeo" enviadas por el técnico a
+   * oficina. Mismo patrón que `propuestasReprogramacion[]`: la más reciente
+   * con `estado === 'pendiente'` representa el estado activo. Cuando oficina
+   * aprueba, recién ahí se setea `soloChequeo: true`, `precioFinal` y
+   * `estadoAprobacion: 'aprobado'` (el técnico nunca puede tocar esos
+   * campos directamente — las rules de R4 lo bloquean).
+   */
+  sugerenciasSoloChequeo?: SugerenciaSoloChequeo[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+/**
+ * Sugerencia del técnico de cerrar la orden como "solo chequeo" (cliente
+ * paga el diagnóstico ~RD$2,000 y no procede con la reparación). Vive en
+ * `OrdenServicio.sugerenciasSoloChequeo[]` como historial. La sugerencia
+ * más reciente con `estado === 'pendiente'` representa el estado activo.
+ *
+ * Antes del sprint el técnico podía marcar `soloChequeo: true`
+ * unilateralmente. Ahora requiere aprobación de oficina (admin/coord) para
+ * cerrar el cobro.
+ */
+export interface SugerenciaSoloChequeo {
+  /** UUID local generado al crear (crypto.randomUUID). */
+  id: string;
+  /** Estado actual de la sugerencia. */
+  estado: 'pendiente' | 'aprobada' | 'rechazada';
+  /** uid del técnico que originó la sugerencia. */
+  sugeridaPor: string;
+  /** Snapshot del nombre del técnico al momento de sugerir. */
+  sugeridaPorNombre: string;
+  /** Cuándo se hizo la sugerencia. */
+  fechaSugerencia: Timestamp | Date;
+  /** Motivo libre (mín 10 chars validados en UI). */
+  motivo: string;
+  /** Monto del chequeo propuesto (RD$). Default config_empresa.precioChequeoDefault. */
+  montoChequeo: number;
+
+  // Resolución por oficina ─────────────────────────────────────────────
+  /** uid del admin/coord que resolvió la sugerencia. */
+  resueltaPor?: string;
+  resueltaPorNombre?: string;
+  resueltaEn?: Timestamp | Date;
+  /** Nota opcional al resolver. Obligatoria al rechazar (mín 10 chars). */
+  notaResolucion?: string;
 }
 
 /**
@@ -1292,6 +1336,8 @@ export type TipoNotificacion =
   | 'chequeo_iniciado'
   | 'reclamo_garantia'
   | 'feedback_detractor'
+  | 'sugerencia_solo_chequeo'
+  | 'sugerencia_solo_chequeo_resuelta'
   | 'otro';
 
 export interface Notificacion {

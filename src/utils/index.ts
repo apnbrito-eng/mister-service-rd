@@ -1,7 +1,7 @@
 import { format, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
-import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria, PiezaUsada, CondicionPieza, OrigenPieza, Factura, EstadoFactura, GarantiaInfo, GarantiaEstado, GarantiaOrigen, ItemCotizacion, MetodoPago, PropuestaReprogramacion } from '../types';
+import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria, PiezaUsada, CondicionPieza, OrigenPieza, Factura, EstadoFactura, GarantiaInfo, GarantiaEstado, GarantiaOrigen, ItemCotizacion, MetodoPago, PropuestaReprogramacion, SugerenciaSoloChequeo } from '../types';
 
 /** Orden visual del ciclo de fases (agendado va antes de diagnostico) */
 export const FASES_ORDENADAS: FaseOrden[] = [
@@ -344,6 +344,45 @@ export function obtenerPropuestaReprogramacionPendiente(
     return bt - at;
   });
   return pendientes[0];
+}
+
+/**
+ * Devuelve la sugerencia de "solo chequeo" pendiente más reciente, o null si
+ * no hay ninguna esperando aprobación de oficina. Defensiva: si por algún
+ * motivo hay múltiples pendientes (no debería ocurrir, el frontend gateaa),
+ * elige la más reciente por `fechaSugerencia`.
+ */
+export function obtenerSugerenciaSoloChequeoPendiente(
+  orden: { sugerenciasSoloChequeo?: SugerenciaSoloChequeo[] },
+): SugerenciaSoloChequeo | null {
+  const lista = orden.sugerenciasSoloChequeo;
+  if (!Array.isArray(lista) || lista.length === 0) return null;
+  const pendientes = lista.filter(s => s.estado === 'pendiente');
+  if (pendientes.length === 0) return null;
+  pendientes.sort((a, b) => {
+    const at = parseFirestoreDate(a.fechaSugerencia as unknown)?.getTime() ?? 0;
+    const bt = parseFirestoreDate(b.fechaSugerencia as unknown)?.getTime() ?? 0;
+    return bt - at;
+  });
+  return pendientes[0];
+}
+
+/**
+ * Devuelve la sugerencia de "solo chequeo" más reciente sin importar el
+ * estado. Útil para renderizar el banner verde/rojo después de que oficina
+ * resuelve (aprueba/rechaza), aunque ya no esté `pendiente`.
+ */
+export function obtenerUltimaSugerenciaSoloChequeo(
+  orden: { sugerenciasSoloChequeo?: SugerenciaSoloChequeo[] },
+): SugerenciaSoloChequeo | null {
+  const lista = orden.sugerenciasSoloChequeo;
+  if (!Array.isArray(lista) || lista.length === 0) return null;
+  const ordenadas = [...lista].sort((a, b) => {
+    const at = parseFirestoreDate(a.fechaSugerencia as unknown)?.getTime() ?? 0;
+    const bt = parseFirestoreDate(b.fechaSugerencia as unknown)?.getTime() ?? 0;
+    return bt - at;
+  });
+  return ordenadas[0] ?? null;
 }
 
 export function generateNumeroOrden(count: number): string {
@@ -746,6 +785,36 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
             metodo,
           };
         })()
+      : undefined,
+    sugerenciasSoloChequeo: Array.isArray(raw.sugerenciasSoloChequeo)
+      ? (raw.sugerenciasSoloChequeo as Array<Record<string, unknown>>)
+          .map((s): SugerenciaSoloChequeo | null => {
+            // Filtrar entries inválidas defensivamente: id, estado y
+            // fechaSugerencia son obligatorios. Las rules permiten que el
+            // técnico haga arrayUnion sin validación granular del shape.
+            const idVal = typeof s.id === 'string' && s.id.length > 0 ? s.id : null;
+            const estadoVal = s.estado === 'pendiente' || s.estado === 'aprobada' || s.estado === 'rechazada'
+              ? s.estado
+              : null;
+            const fechaSugerencia = parseFirestoreDate(s.fechaSugerencia);
+            if (!idVal || !estadoVal || !fechaSugerencia) return null;
+            const out: SugerenciaSoloChequeo = {
+              id: idVal,
+              estado: estadoVal,
+              sugeridaPor: typeof s.sugeridaPor === 'string' ? s.sugeridaPor : '',
+              sugeridaPorNombre: typeof s.sugeridaPorNombre === 'string' ? s.sugeridaPorNombre : '',
+              fechaSugerencia,
+              motivo: typeof s.motivo === 'string' ? s.motivo : '',
+              montoChequeo: typeof s.montoChequeo === 'number' ? s.montoChequeo : 0,
+            };
+            if (typeof s.resueltaPor === 'string' && s.resueltaPor.length > 0) out.resueltaPor = s.resueltaPor;
+            if (typeof s.resueltaPorNombre === 'string' && s.resueltaPorNombre.length > 0) out.resueltaPorNombre = s.resueltaPorNombre;
+            const resueltaEn = parseFirestoreDate(s.resueltaEn);
+            if (resueltaEn) out.resueltaEn = resueltaEn;
+            if (typeof s.notaResolucion === 'string' && s.notaResolucion.length > 0) out.notaResolucion = s.notaResolucion;
+            return out;
+          })
+          .filter((s): s is SugerenciaSoloChequeo => s !== null)
       : undefined,
     propuestasReprogramacion: Array.isArray(raw.propuestasReprogramacion)
       ? (raw.propuestasReprogramacion as Array<Record<string, unknown>>)

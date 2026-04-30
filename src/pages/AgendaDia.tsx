@@ -194,9 +194,22 @@ export default function AgendaDia() {
 
       toast.success('Orden cerrada como solo chequeo');
       cerrarChequeoModal();
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error('Error al cerrar como solo chequeo');
+      // Defensa para sesiones de técnico desactualizadas (sprint R4
+      // endurecida): este path siempre setea soloChequeo+precioFinal, así
+      // que un permission-denied indica una sesión vieja chocando con la
+      // rule nueva.
+      const codeRaw = (err as { code?: unknown })?.code;
+      const code = typeof codeRaw === 'string' ? codeRaw : '';
+      if (code === 'permission-denied') {
+        toast.error(
+          'Tu app está desactualizada. Recargá con Cmd+Shift+R o cierra y abre el navegador.',
+          { duration: 8000 },
+        );
+      } else {
+        toast.error('Error al cerrar como solo chequeo');
+      }
     } finally {
       setSavingChequeo(false);
     }
