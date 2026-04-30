@@ -7,6 +7,7 @@ import {
 import {
   faseLabel, faseBgColor, formatMoneda, formatHora, formatFecha,
   crearRegistroAuditoria, FASES_ORDENADAS, tieneStandby,
+  generarTokenPortalCliente,
 } from '../../utils';
 import { useApp } from '../../context/AppContext';
 import { registrarComisionPorOrden } from '../../utils/comisiones';
@@ -118,6 +119,11 @@ export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Prop
     // pueda distinguir la factura del chequeo previo (en órdenes reactivadas).
     if (faseDestino === 'cerrado' && !orden.soloChequeo) {
       updatePayload.tipoCierre = 'reparacion_completa';
+    }
+    // Portal del Cliente: al pasar a `agendado`, si la orden no tiene token,
+    // generarlo. Idempotente: nunca pisamos uno existente.
+    if (faseDestino === 'agendado' && !orden.tokenPortalCliente) {
+      updatePayload.tokenPortalCliente = generarTokenPortalCliente();
     }
     await updateDoc(doc(db, 'ordenes_servicio', orden.id), updatePayload);
 

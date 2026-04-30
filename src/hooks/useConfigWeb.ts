@@ -84,6 +84,11 @@ export function useConfigWeb(): { config: ConfigWeb; loading: boolean } {
             feedbackNPS:
               (data.feedbackNPS as ConfigFeedbackNPS) || CONFIG_WEB_DEFAULTS.feedbackNPS,
             servicios: parseConfigServicios(data.servicios),
+            numeroCoordinacionWhatsApp:
+              typeof data.numeroCoordinacionWhatsApp === 'string' &&
+              data.numeroCoordinacionWhatsApp.trim().length > 0
+                ? data.numeroCoordinacionWhatsApp.trim()
+                : undefined,
             updatedAt: data.updatedAt?.toDate?.() || undefined,
           };
           cachedConfig = parsed;

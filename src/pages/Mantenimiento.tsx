@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Mantenimiento as MantenimientoType, Personal } from '../types';
-import { formatFechaCorta } from '../utils';
+import { formatFechaCorta, generarTokenPortalCliente } from '../utils';
 import { useTiposEquipo } from '../hooks/useTiposEquipo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
@@ -94,6 +94,8 @@ export default function Mantenimiento() {
         fechaCita: Timestamp.fromDate(item.proximaFecha),
         notas: 'Generada automáticamente por mantenimiento programado',
         historialFases: [{ fase: 'agendado', timestamp: ahora, usuario: 'Sistema' }],
+        // Portal del Cliente: orden nace en `agendado`, generar token.
+        tokenPortalCliente: generarTokenPortalCliente(),
         createdAt: ahora,
         updatedAt: ahora,
       });

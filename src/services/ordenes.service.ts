@@ -1,6 +1,6 @@
 import { runTransaction, doc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { crearRegistroAuditoria } from '../utils';
+import { crearRegistroAuditoria, generarTokenPortalCliente } from '../utils';
 
 /**
  * Resultado de `reactivarOrdenPostChequeo`. Devuelve `ok=false` cuando la
@@ -86,6 +86,12 @@ export async function reactivarOrdenPostChequeo(
 
       // Limpiar campos de cierre con `null` (Firestore no acepta `undefined`).
       // El parser ya tolera ambos (parseFirestoreDate retorna null/undefined).
+      // Portal del Cliente: la reparación reactivada vuelve a `agendado`. Si
+      // el chequeo previo no tenía token (orden vieja), generarlo ahora.
+      const tokenExistente = typeof data.tokenPortalCliente === 'string' && data.tokenPortalCliente.length > 0
+        ? (data.tokenPortalCliente as string)
+        : null;
+
       const updates: Record<string, unknown> = {
         fase: 'agendado',
         estadoSimple: 'pendiente',
@@ -134,6 +140,10 @@ export async function reactivarOrdenPostChequeo(
         auditoria: [...auditoriaPrev, auditoriaEntry],
         updatedAt: serverTimestamp(),
       };
+
+      if (!tokenExistente) {
+        updates.tokenPortalCliente = generarTokenPortalCliente();
+      }
 
       tx.update(ordenRef, updates);
       return { ok: true };

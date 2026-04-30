@@ -200,6 +200,13 @@ export interface ConfigWeb {
    * con 6 servicios canónicos en `CONFIG_WEB_DEFAULTS.servicios`.
    */
   servicios?: { [slug: string]: ServicioDetalle };
+  /**
+   * Número de WhatsApp que el portal del cliente usa para "Contactar a
+   * coordinación" (sprint Portal Cliente). 10 dígitos RD sin prefijo `1`.
+   * Si está vacío, el portal cae al fallback hardcoded `'8092809601'`.
+   * Editable desde `/admin/web`.
+   */
+  numeroCoordinacionWhatsApp?: string;
   updatedAt?: Date;
 }
 
@@ -772,6 +779,11 @@ export async function obtenerConfigWeb(): Promise<ConfigWeb> {
       feedbackNPS:
         (data.feedbackNPS as ConfigFeedbackNPS) || CONFIG_WEB_DEFAULTS.feedbackNPS,
       servicios: parseConfigServicios(data.servicios),
+      numeroCoordinacionWhatsApp:
+        typeof data.numeroCoordinacionWhatsApp === 'string' &&
+        data.numeroCoordinacionWhatsApp.trim().length > 0
+          ? data.numeroCoordinacionWhatsApp.trim()
+          : undefined,
       updatedAt: data.updatedAt?.toDate?.() || undefined,
     };
   } catch (err) {

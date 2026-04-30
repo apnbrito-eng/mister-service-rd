@@ -1,7 +1,7 @@
 import { format, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
-import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria, PiezaUsada, CondicionPieza, OrigenPieza, Factura, EstadoFactura, GarantiaInfo, GarantiaEstado, GarantiaOrigen, ItemCotizacion, MetodoPago } from '../types';
+import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria, PiezaUsada, CondicionPieza, OrigenPieza, Factura, EstadoFactura, GarantiaInfo, GarantiaEstado, GarantiaOrigen, ItemCotizacion, MetodoPago, PropuestaReprogramacion } from '../types';
 
 /** Orden visual del ciclo de fases (agendado va antes de diagnostico) */
 export const FASES_ORDENADAS: FaseOrden[] = [
@@ -300,6 +300,50 @@ export function getStandbyAlertas(standbyItems: StandbyPieza[]): AlertaItem[] {
     }
   }
   return alertas;
+}
+
+/**
+ * Genera un token único para el Portal del Cliente. 32 chars hex sin
+ * guiones (usa `crypto.randomUUID()` y elimina los `-`). Llamar al
+ * confirmar la cita (transición a `fase: 'agendado'`). Idempotente desde
+ * el caller: si la orden ya tiene `tokenPortalCliente`, no se regenera.
+ *
+ * IMPORTANTE: el token NUNCA debe loguearse. Cualquier error que se
+ * propague al cliente debe ser genérico, sin incluir el token en el body.
+ */
+export function generarTokenPortalCliente(): string {
+  // crypto.randomUUID está disponible en navegadores modernos y en Node 19+.
+  // Con TS lib > es2022 ya está tipado en `globalThis.crypto`.
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '');
+  }
+  // Fallback ultra-defensivo (no debería usarse en runtime real). 32 chars hex.
+  let out = '';
+  for (let i = 0; i < 32; i++) {
+    out += Math.floor(Math.random() * 16).toString(16);
+  }
+  return out;
+}
+
+/**
+ * Devuelve la propuesta de reprogramación pendiente más reciente (la que
+ * está esperando resolución de admin/coord), o null si no hay ninguna.
+ * Defensiva: la fecha de propuesta puede venir como Timestamp o Date.
+ */
+export function obtenerPropuestaReprogramacionPendiente(
+  orden: { propuestasReprogramacion?: PropuestaReprogramacion[] },
+): PropuestaReprogramacion | null {
+  const lista = orden.propuestasReprogramacion;
+  if (!Array.isArray(lista) || lista.length === 0) return null;
+  const pendientes = lista.filter(p => p.estado === 'pendiente');
+  if (pendientes.length === 0) return null;
+  // Ordenar por `fechaPropuesta` desc (la más reciente primero).
+  pendientes.sort((a, b) => {
+    const at = parseFirestoreDate(a.fechaPropuesta as unknown)?.getTime() ?? 0;
+    const bt = parseFirestoreDate(b.fechaPropuesta as unknown)?.getTime() ?? 0;
+    return bt - at;
+  });
+  return pendientes[0];
 }
 
 export function generateNumeroOrden(count: number): string {
@@ -679,6 +723,60 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
           }
           return Object.keys(result).length > 0 ? result : undefined;
         })()
+      : undefined,
+    // Portal del Cliente — token + tracking de envío + propuestas reprogramación.
+    // Defensivos: las órdenes viejas (pre-sprint) no tienen estos campos. El
+    // parser devuelve `undefined` cuando no existen, y `Object.fromEntries`
+    // de stripUndefined los elimina antes de cualquier write.
+    tokenPortalCliente: typeof raw.tokenPortalCliente === 'string' && raw.tokenPortalCliente.length > 0
+      ? raw.tokenPortalCliente
+      : undefined,
+    portalClienteEnviado: raw.portalClienteEnviado && typeof raw.portalClienteEnviado === 'object'
+      ? (() => {
+          const pe = raw.portalClienteEnviado as Record<string, unknown>;
+          const enviadoEn = parseFirestoreDate(pe.enviadoEn);
+          if (!enviadoEn) return undefined;
+          const metodo = pe.metodo === 'whatsapp' || pe.metodo === 'email' || pe.metodo === 'manual'
+            ? pe.metodo
+            : 'whatsapp';
+          return {
+            enviadoEn,
+            enviadoPor: typeof pe.enviadoPor === 'string' ? pe.enviadoPor : '',
+            enviadoPorNombre: typeof pe.enviadoPorNombre === 'string' ? pe.enviadoPorNombre : '',
+            metodo,
+          };
+        })()
+      : undefined,
+    propuestasReprogramacion: Array.isArray(raw.propuestasReprogramacion)
+      ? (raw.propuestasReprogramacion as Array<Record<string, unknown>>)
+          .map((p): PropuestaReprogramacion | null => {
+            const fechaPropuesta = parseFirestoreDate(p.fechaPropuesta);
+            const fechaActualOrden = parseFirestoreDate(p.fechaActualOrden);
+            const fechaNuevaPropuesta = parseFirestoreDate(p.fechaNuevaPropuesta);
+            if (!fechaPropuesta || !fechaActualOrden || !fechaNuevaPropuesta) return null;
+            const estado = p.estado === 'pendiente' || p.estado === 'aceptada' || p.estado === 'rechazada' || p.estado === 'contrapropuesta'
+              ? p.estado
+              : 'pendiente';
+            const propuestaPor = p.propuestaPor === 'admin' ? 'admin' : 'cliente';
+            const out: PropuestaReprogramacion = {
+              id: typeof p.id === 'string' && p.id.length > 0 ? p.id : `prop_${Math.random().toString(36).slice(2)}`,
+              propuestaPor,
+              fechaPropuesta,
+              fechaActualOrden,
+              fechaNuevaPropuesta,
+              motivo: typeof p.motivo === 'string' ? p.motivo : '',
+              estado,
+            };
+            if (typeof p.resueltaPor === 'string' && p.resueltaPor.length > 0) out.resueltaPor = p.resueltaPor;
+            if (typeof p.resueltaPorNombre === 'string' && p.resueltaPorNombre.length > 0) out.resueltaPorNombre = p.resueltaPorNombre;
+            const resueltaEn = parseFirestoreDate(p.resueltaEn);
+            if (resueltaEn) out.resueltaEn = resueltaEn;
+            if (typeof p.notaResolucion === 'string' && p.notaResolucion.length > 0) out.notaResolucion = p.notaResolucion;
+            const contrapropuestaFecha = parseFirestoreDate(p.contrapropuestaFecha);
+            if (contrapropuestaFecha) out.contrapropuestaFecha = contrapropuestaFecha;
+            return out;
+          })
+          .filter((p): p is PropuestaReprogramacion => p !== null)
       : undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden | 'reactivada_post_chequeo') || 'nuevo_lead',

@@ -1084,6 +1084,31 @@ export default function ConfiguracionWeb() {
               placeholder="Lun - Sáb: 8:00 AM - 6:00 PM"
             />
           </div>
+          <div className="md:col-span-2">
+            <label className={labelClass}>
+              Número de coordinación (WhatsApp)
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={10}
+              className={inputClass}
+              value={config.numeroCoordinacionWhatsApp || ''}
+              onChange={(e) => {
+                // Sólo dígitos, máximo 10 chars (RD)
+                const soloDigitos = e.target.value.replace(/\D/g, '').slice(0, 10);
+                setConfig((prev) => ({
+                  ...prev,
+                  numeroCoordinacionWhatsApp: soloDigitos.length > 0 ? soloDigitos : undefined,
+                }));
+              }}
+              placeholder="8092809601"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Si está vacío, se usará el número por defecto (8092809601). Lo
+              usa el portal del cliente cuando toca "WhatsApp con coordinación".
+            </p>
+          </div>
         </div>
 
         <div className="flex justify-end">

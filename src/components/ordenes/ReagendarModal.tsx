@@ -4,6 +4,7 @@ import { db } from '../../firebase/config';
 import { OrdenServicio } from '../../types';
 import {
   crearRegistroAuditoria, faseLabel, formatFecha, HORARIOS, HORARIOS_LABEL,
+  generarTokenPortalCliente,
 } from '../../utils';
 import { useApp } from '../../context/AppContext';
 import Modal from '../Modal';
@@ -71,7 +72,9 @@ export default function ReagendarModal({ isOpen, onClose, orden, onSuccess }: Pr
         orden.fechaCita ? formatFecha(orden.fechaCita) : '',
         formatFecha(nuevaFechaCita),
       );
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+      // Portal del Cliente: si la orden nunca pasó por agendado y no tiene
+      // token aún, generarlo acá. Idempotente: si ya existe, lo conservamos.
+      const updatePayload: Record<string, unknown> = {
         fase: 'agendado',
         estadoSimple: 'pendiente',
         estado: 'activo',
@@ -80,7 +83,11 @@ export default function ReagendarModal({ isOpen, onClose, orden, onSuccess }: Pr
         historialFases: nuevoHistorial,
         auditoria: arrayUnion(registro),
         updatedAt: ahora,
-      });
+      };
+      if (!orden.tokenPortalCliente) {
+        updatePayload.tokenPortalCliente = generarTokenPortalCliente();
+      }
+      await updateDoc(doc(db, 'ordenes_servicio', orden.id), updatePayload);
       toast.success(`Orden reagendada para ${formatFecha(nuevaFechaCita)}`);
       onSuccess?.();
       onClose();

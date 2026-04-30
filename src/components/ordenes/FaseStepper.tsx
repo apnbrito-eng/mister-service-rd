@@ -2,7 +2,10 @@ import { useState } from 'react';
 import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, FaseOrden, EstadoOrdenSimple } from '../../types';
-import { crearRegistroAuditoria, faseLabel, FASES_ORDENADAS } from '../../utils';
+import {
+  crearRegistroAuditoria, faseLabel, FASES_ORDENADAS,
+  generarTokenPortalCliente,
+} from '../../utils';
 import { useApp } from '../../context/AppContext';
 import { puede } from '../../utils/permisos';
 import { registrarComisionPorOrden } from '../../utils/comisiones';
@@ -95,6 +98,11 @@ export default function FaseStepper({
     // del chequeo previo (relevante en órdenes reactivadas post-chequeo).
     if (nuevaFase === 'cerrado' && !orden.soloChequeo) {
       updatePayload.tipoCierre = 'reparacion_completa';
+    }
+    // Portal del Cliente: al pasar a `agendado` (manualmente desde el
+    // stepper), generar token si no existe. Idempotente.
+    if (nuevaFase === 'agendado' && !orden.tokenPortalCliente) {
+      updatePayload.tokenPortalCliente = generarTokenPortalCliente();
     }
     await updateDoc(doc(db, 'ordenes_servicio', orden.id), updatePayload);
 

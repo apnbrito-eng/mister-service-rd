@@ -331,8 +331,62 @@ export interface OrdenServicio {
     /** True si el detractor abrió el botón de WhatsApp para contactar coordinador */
     whatsappContactClicked?: boolean;
   };
+  /**
+   * Token único del Portal del Cliente (32 chars hex sin guiones). Generado
+   * al confirmar la cita (transición a `fase: 'agendado'`). Sirve para
+   * autenticar al cliente en `/cliente/:token` y en los endpoints
+   * `/api/portal-cliente/*`. Idempotente: si ya existe, no se regenera.
+   */
+  tokenPortalCliente?: string;
+  /**
+   * Marca cuándo y por quién se envió el WhatsApp con el link al portal del
+   * cliente. Se setea cuando el staff toca el botón "Enviar portal al cliente"
+   * en el modal de orden. Se sobrescribe cuando se reenvía.
+   */
+  portalClienteEnviado?: {
+    enviadoEn: Timestamp | Date;
+    enviadoPor: string;            // uid del staff que envió
+    enviadoPorNombre: string;
+    metodo: 'whatsapp' | 'email' | 'manual';
+  };
+  /**
+   * Historial de propuestas de reprogramación (cliente o admin). Se llena
+   * en Hito 2 cuando el cliente pide posponer desde el portal o admin
+   * contra-propone. En Hito 1 se modela el campo pero no hay flujo activo.
+   */
+  propuestasReprogramacion?: PropuestaReprogramacion[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+/**
+ * Propuesta de reprogramación de cita asociada a una orden. Vive en
+ * `OrdenServicio.propuestasReprogramacion[]` como historial. La propuesta
+ * más reciente con `estado === 'pendiente'` representa el estado activo.
+ */
+export interface PropuestaReprogramacion {
+  /** UUID local generado al crear (crypto.randomUUID). */
+  id: string;
+  /** Quién originó la propuesta. */
+  propuestaPor: 'cliente' | 'admin';
+  /** Cuándo se hizo la propuesta. */
+  fechaPropuesta: Timestamp | Date;
+  /** Fecha de cita al momento de proponer (snapshot). */
+  fechaActualOrden: Timestamp | Date;
+  /** Nueva fecha que se propone. */
+  fechaNuevaPropuesta: Timestamp | Date;
+  /** Motivo libre (puede ser vacío). */
+  motivo: string;
+  /** Estado actual de la propuesta. */
+  estado: 'pendiente' | 'aceptada' | 'rechazada' | 'contrapropuesta';
+  /** uid del admin/coordinadora que resolvió la propuesta. */
+  resueltaPor?: string;
+  resueltaPorNombre?: string;
+  resueltaEn?: Timestamp | Date;
+  /** Nota opcional al resolver (ej: "técnico no disponible ese día"). */
+  notaResolucion?: string;
+  /** Fecha alternativa cuando admin contra-propone. */
+  contrapropuestaFecha?: Timestamp | Date;
 }
 
 export interface ComisionRegistro {

@@ -17,6 +17,7 @@ import {
 } from '../types';
 import {
   esOrdenMantenimiento, formatMoneda, crearRegistroAuditoria,
+  generarTokenPortalCliente,
 } from '../utils';
 
 export interface CreateFormState {
@@ -589,6 +590,11 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       const faseInicial: FaseOrden = 'agendado';
       const estadoInicial: EstadoOrdenSimple = 'pendiente';
 
+      // Portal del Cliente: la orden nace directamente en `agendado`, así
+      // que generamos el token acá. Idempotente: el caller no podría tener
+      // un token previo (esta es la creación), pero seguimos el patrón.
+      const tokenPortalCliente = generarTokenPortalCliente();
+
       const ordenData: Record<string, unknown> = {
         numero,
         clienteId,
@@ -623,6 +629,7 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
             }],
         createdAt: citaPreset ? Timestamp.fromDate(citaPreset.createdAt) : ahora,
         updatedAt: ahora,
+        tokenPortalCliente,
       };
       if (form.clienteEmail) ordenData.clienteEmail = form.clienteEmail;
       if (form.clienteReferencia) ordenData.clienteReferencia = form.clienteReferencia;

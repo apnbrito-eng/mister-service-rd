@@ -32,10 +32,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: `Error inicializando Firebase Admin: ${m}` });
   }
 
-  // Helper: encuentra la orden por trackingGPS.token. Reusamos el mismo token
-  // que ya genera el sistema de tracking GPS — no creamos otro.
+  // Helper: encuentra la orden por `tokenPortalCliente` (preferido, sprint
+  // Portal Cliente) o `trackingGPS.token` (legacy, links viejos). Un solo
+  // token sirve para todo el ciclo: tracking, feedback, garantía, portal.
   async function buscarOrden() {
-    const snap = await db
+    // 1) Preferido: token unificado del Portal del Cliente
+    let snap = await db
+      .collection('ordenes_servicio')
+      .where('tokenPortalCliente', '==', token)
+      .limit(1)
+      .get();
+    if (!snap.empty) return snap.docs[0];
+    // 2) Compat: token GPS legacy
+    snap = await db
       .collection('ordenes_servicio')
       .where('trackingGPS.token', '==', token)
       .limit(1)

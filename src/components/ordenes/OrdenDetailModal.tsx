@@ -17,6 +17,7 @@ import CancelarOrdenModal from './CancelarOrdenModal';
 import ReagendarModal from './ReagendarModal';
 import RegistrarPagoModal from './RegistrarPagoModal';
 import EnviarFacturacionButton from './EnviarFacturacionButton';
+import EnviarPortalButton from './EnviarPortalButton';
 import { Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
 import { reactivarOrdenPostChequeo } from '../../services/ordenes.service';
 import { useConfigWeb } from '../../hooks/useConfigWeb';
@@ -345,6 +346,12 @@ export default function OrdenDetailModal({
                 WhatsApp
               </a>
             </div>
+          )}
+          {/* Portal del Cliente: visible sólo cuando la orden tiene token
+              (es decir, ya pasó por agendado). El botón maneja su propio
+              estado de envío y muestra "Reenviar..." si ya se envió antes. */}
+          {!orden.eliminada && orden.fase !== 'cancelado' && (
+            <EnviarPortalButton orden={orden} userProfile={userProfile} />
           )}
           {orden.clienteDireccion && (
             <a

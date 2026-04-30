@@ -25,19 +25,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: `Error inicializando Firebase Admin: ${m}` });
   }
 
-  if (req.method === 'GET') {
-    try {
-      const snap = await db
-        .collection('facturas')
-        .where('garantia.token', '==', token)
+  /**
+   * Busca la factura asociada al token. Estrategia:
+   *  1. `facturas.garantia.token == token` (token de garantía emitido al
+   *     emitir el conduce — comportamiento original).
+   *  2. Fallback Portal Cliente: si el token es el `tokenPortalCliente` o
+   *     `trackingGPS.token` de una orden cerrada con factura, devolver la
+   *     factura asociada. Esto unifica los links del cliente.
+   */
+  async function buscarFactura() {
+    // 1) Lookup directo (comportamiento original)
+    let snap = await db
+      .collection('facturas')
+      .where('garantia.token', '==', token)
+      .limit(1)
+      .get();
+    if (!snap.empty) return snap.docs[0];
+    // 2) Fallback portal cliente: buscar la orden por token y su factura
+    let ordenSnap = await db
+      .collection('ordenes_servicio')
+      .where('tokenPortalCliente', '==', token)
+      .limit(1)
+      .get();
+    if (ordenSnap.empty) {
+      ordenSnap = await db
+        .collection('ordenes_servicio')
+        .where('trackingGPS.token', '==', token)
         .limit(1)
         .get();
+    }
+    if (ordenSnap.empty) return null;
+    const ordenData = ordenSnap.docs[0].data() as Record<string, unknown>;
+    const facturaId = typeof ordenData.facturaId === 'string' && ordenData.facturaId.length > 0
+      ? ordenData.facturaId
+      : null;
+    if (!facturaId) return null;
+    const facSnap = await db.collection('facturas').doc(facturaId).get();
+    if (!facSnap.exists) return null;
+    return facSnap;
+  }
 
-      if (snap.empty) {
+  if (req.method === 'GET') {
+    try {
+      const facturaDoc = await buscarFactura();
+
+      if (!facturaDoc) {
         return res.status(404).json({ error: 'Garantía no encontrada' });
       }
 
-      const facturaDoc = snap.docs[0];
       const data = facturaDoc.data() as Record<string, unknown>;
       const garantiaRaw = (data.garantia as Record<string, unknown>) || {};
 
@@ -94,17 +129,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-      const snap = await db
-        .collection('facturas')
-        .where('garantia.token', '==', token)
-        .limit(1)
-        .get();
-
-      if (snap.empty) {
+      const facturaDoc = await buscarFactura();
+      if (!facturaDoc) {
         return res.status(404).json({ error: 'Garantía no encontrada' });
       }
 
-      const facturaDoc = snap.docs[0];
       const data = facturaDoc.data() as Record<string, unknown>;
       const garantiaRaw = (data.garantia as Record<string, unknown>) || {};
 
