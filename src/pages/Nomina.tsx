@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { LiquidacionNomina, LiquidacionEmpleado, ComisionRegistro } from '../types';
+import { LiquidacionNomina, LiquidacionEmpleado, ComisionRegistro, AvanceEmpleado } from '../types';
 import { formatMoneda, formatFecha } from '../utils';
 import { calcularQuincenaActual, listarUltimasQuincenas } from '../utils/comisiones';
 import { generarLiquidacion, cerrarLiquidacion, marcarEmpleadoPagado, parseLiquidacion } from '../services/nomina.service';
+import { suscribirAvances } from '../services/avances.service';
 import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
@@ -20,6 +21,7 @@ export default function Nomina() {
   const [loading, setLoading] = useState(true);
   const [liquidaciones, setLiquidaciones] = useState<LiquidacionNomina[]>([]);
   const [comisionesAll, setComisionesAll] = useState<ComisionRegistro[]>([]);
+  const [avancesAll, setAvancesAll] = useState<AvanceEmpleado[]>([]);
   const [filtroQuincena, setFiltroQuincena] = useState<string>(calcularQuincenaActual(new Date()));
   const [generando, setGenerando] = useState(false);
   const [cerrando, setCerrando] = useState(false);
@@ -66,13 +68,22 @@ export default function Nomina() {
         } as ComisionRegistro;
       }));
     });
-    return () => { unsub(); unsubC(); };
+    const unsubA = suscribirAvances(items => setAvancesAll(items));
+    return () => { unsub(); unsubC(); unsubA(); };
   }, []);
 
   const quincenasDisponibles = useMemo(() => listarUltimasQuincenas(12), []);
   const liqActual = useMemo(
     () => liquidaciones.find(l => l.quincena === filtroQuincena) || null,
     [liquidaciones, filtroQuincena]
+  );
+  const hayAvances = useMemo(
+    () => !!liqActual?.empleados.some(e => (e.totalAvances ?? 0) > 0),
+    [liqActual]
+  );
+  const netoTotal = useMemo(
+    () => liqActual?.empleados.reduce((s, e) => s + (e.totalNeto ?? e.totalDevengado), 0) ?? 0,
+    [liqActual]
   );
 
   const handleGenerar = async () => {
@@ -147,7 +158,7 @@ export default function Nomina() {
 
   const exportarCSV = () => {
     if (!liqActual) return;
-    const headers = 'Personal,Rol,Sueldo Base,Comisiones,Bono,Total Devengado,Pagado,Método de Pago\n';
+    const headers = 'Personal,Rol,Sueldo Base,Comisiones,Bono,Avances,Total Devengado,Total Neto,Pagado,Método de Pago\n';
     const rows = liqActual.empleados.map(e =>
       [
         `"${e.personalNombre}"`,
@@ -155,7 +166,9 @@ export default function Nomina() {
         e.sueldoBase,
         e.totalComisiones,
         e.bono || 0,
+        e.totalAvances ?? 0,
         e.totalDevengado,
+        e.totalNeto ?? e.totalDevengado,
         e.pagado ? 'Sí' : 'No',
         e.metodoPago || '',
       ].join(',')
@@ -232,7 +245,16 @@ export default function Nomina() {
                 <p>Cerrada por {liqActual.cerradaPor}{liqActual.fechaCierre ? ` · ${formatFecha(liqActual.fechaCierre)}` : ''}</p>
               )}
             </div>
-            <p className="ml-auto text-xl font-bold text-[#0f3460]">{formatMoneda(liqActual.totalNomina)}</p>
+            {hayAvances ? (
+              <div className="ml-auto text-right">
+                <p className="text-[10px] uppercase tracking-wide text-gray-500">Devengado</p>
+                <p className="text-base font-semibold text-gray-700">{formatMoneda(liqActual.totalNomina)}</p>
+                <p className="text-[10px] uppercase tracking-wide text-blue-600 mt-1">Neto a pagar</p>
+                <p className="text-xl font-bold text-blue-600">{formatMoneda(netoTotal)}</p>
+              </div>
+            ) : (
+              <p className="ml-auto text-xl font-bold text-[#0f3460]">{formatMoneda(liqActual.totalNomina)}</p>
+            )}
           </div>
 
           {/* Tabla empleados */}
@@ -246,7 +268,9 @@ export default function Nomina() {
                     <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Sueldo base</th>
                     <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Comisiones</th>
                     <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Bono</th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Avances</th>
                     <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Total devengado</th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Total neto</th>
                     <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Pago</th>
                     <th className="px-3 py-3"></th>
                   </tr>
@@ -255,13 +279,17 @@ export default function Nomina() {
                   {liqActual.empleados.map(emp => {
                     const expand = empleadosExpandidos.has(emp.personalId);
                     const sueldoSolo = emp.totalDevengado === 0;
+                    const tieneAvances = (emp.totalAvances ?? 0) > 0;
+                    const montoNeto = emp.totalNeto ?? emp.totalDevengado;
+                    const cantidadAvances = emp.avancesIds?.length ?? 0;
+                    const tieneDetalleExpandible = emp.comisionesIds.length > 0 || cantidadAvances > 0;
                     return (
                       <Fragment key={emp.personalId}>
                         <tr className={`border-b border-gray-50 hover:bg-gray-50 ${sueldoSolo && emp.sueldoBase === 0 ? 'opacity-60' : ''}`}>
                           <td className="px-3 py-3">
                             <button type="button" onClick={() => toggleEmpleado(emp.personalId)}
                               className="flex items-center gap-2 text-left hover:text-[#1a5fa8]">
-                              {emp.comisionesIds.length > 0
+                              {tieneDetalleExpandible
                                 ? (expand ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />)
                                 : <span className="w-[14px]" />}
                               <span className="font-medium text-gray-900">{emp.personalNombre}</span>
@@ -304,7 +332,22 @@ export default function Nomina() {
                               </span>
                             ) : <span className="text-gray-400">—</span>}
                           </td>
-                          <td className="px-3 py-3 text-right font-bold text-[#0f3460]">{formatMoneda(emp.totalDevengado)}</td>
+                          <td className="px-3 py-3 text-right">
+                            {tieneAvances ? (
+                              <div>
+                                <p className="font-semibold text-red-600">-{formatMoneda(emp.totalAvances ?? 0)}</p>
+                                <p className="text-[10px] text-gray-400">{cantidadAvances} avance(s)</p>
+                              </div>
+                            ) : <span className="text-gray-400">—</span>}
+                          </td>
+                          <td className="px-3 py-3 text-right font-semibold text-gray-700">{formatMoneda(emp.totalDevengado)}</td>
+                          <td className="px-3 py-3 text-right">
+                            {tieneAvances ? (
+                              <span className="font-bold text-blue-600">{formatMoneda(montoNeto)}</span>
+                            ) : (
+                              <span className="font-bold text-[#0f3460]">{formatMoneda(emp.totalDevengado)}</span>
+                            )}
+                          </td>
                           <td className="px-3 py-3 text-center">
                             {emp.pagado ? (
                               <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
@@ -317,7 +360,7 @@ export default function Nomina() {
                             )}
                           </td>
                           <td className="px-3 py-3 text-right">
-                            {!emp.pagado && emp.totalDevengado > 0 && (
+                            {!emp.pagado && montoNeto > 0 && (
                               <button type="button" onClick={() => abrirPago(liqActual.id, emp)}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
                                 <DollarSign size={12} /> Marcar pagado
@@ -325,24 +368,42 @@ export default function Nomina() {
                             )}
                           </td>
                         </tr>
-                        {expand && emp.comisionesIds.length > 0 && (
+                        {expand && tieneDetalleExpandible && (
                           <tr className="bg-gray-50/50">
-                            <td colSpan={8} className="px-3 py-3">
-                              <div className="space-y-1">
-                                <p className="text-[11px] font-semibold text-gray-600 uppercase mb-1">Comisiones incluidas</p>
-                                {comisionesAll
-                                  .filter(c => emp.comisionesIds.includes(c.id))
-                                  .map(c => (
-                                    <div key={c.id} className="flex items-center justify-between text-xs px-3 py-1.5 bg-white rounded border border-gray-100">
-                                      <div className="flex items-center gap-3">
-                                        <span className="font-mono font-semibold text-[#0f3460]">{c.ordenNumero}</span>
-                                        <span className="text-gray-700">{c.clienteNombre}</span>
-                                        <span className="text-gray-400">{formatFecha(c.fechaCobro)}</span>
+                            <td colSpan={10} className="px-3 py-3">
+                              {emp.comisionesIds.length > 0 && (
+                                <div className="space-y-1">
+                                  <p className="text-[11px] font-semibold text-gray-600 uppercase mb-1">Comisiones incluidas</p>
+                                  {comisionesAll
+                                    .filter(c => emp.comisionesIds.includes(c.id))
+                                    .map(c => (
+                                      <div key={c.id} className="flex items-center justify-between text-xs px-3 py-1.5 bg-white rounded border border-gray-100">
+                                        <div className="flex items-center gap-3">
+                                          <span className="font-mono font-semibold text-[#0f3460]">{c.ordenNumero}</span>
+                                          <span className="text-gray-700">{c.clienteNombre}</span>
+                                          <span className="text-gray-400">{formatFecha(c.fechaCobro)}</span>
+                                        </div>
+                                        <span className="font-semibold text-emerald-700">{formatMoneda(c.comisionMonto)}</span>
                                       </div>
-                                      <span className="font-semibold text-emerald-700">{formatMoneda(c.comisionMonto)}</span>
-                                    </div>
-                                  ))}
-                              </div>
+                                    ))}
+                                </div>
+                              )}
+                              {emp.avancesIds && emp.avancesIds.length > 0 && (
+                                <div className={`space-y-1 ${emp.comisionesIds.length > 0 ? 'mt-3' : ''}`}>
+                                  <p className="text-[11px] font-semibold text-gray-600 uppercase mb-1">Avances descontados</p>
+                                  {avancesAll
+                                    .filter(a => emp.avancesIds!.includes(a.id))
+                                    .map(a => (
+                                      <div key={a.id} className="flex items-center justify-between text-xs px-3 py-1.5 bg-white rounded border border-gray-100">
+                                        <div className="flex items-center gap-3">
+                                          <span className="text-gray-400">{formatFecha(a.fecha)}</span>
+                                          <span className="text-gray-700">{a.motivo || '(sin motivo)'}</span>
+                                        </div>
+                                        <span className="font-semibold text-red-600">-{formatMoneda(a.monto)}</span>
+                                      </div>
+                                    ))}
+                                </div>
+                              )}
                             </td>
                           </tr>
                         )}
@@ -352,8 +413,9 @@ export default function Nomina() {
                 </tbody>
                 <tfoot>
                   <tr className="bg-gray-50 border-t-2 border-gray-200">
-                    <td colSpan={5} className="px-3 py-3 text-right text-sm font-semibold text-gray-700">TOTAL</td>
-                    <td className="px-3 py-3 text-right text-lg font-bold text-[#0f3460]">{formatMoneda(liqActual.totalNomina)}</td>
+                    <td colSpan={6} className="px-3 py-3 text-right text-sm font-semibold text-gray-700">TOTAL</td>
+                    <td className="px-3 py-3 text-right text-base font-semibold text-gray-700">{formatMoneda(liqActual.totalNomina)}</td>
+                    <td className="px-3 py-3 text-right text-lg font-bold text-blue-600">{formatMoneda(netoTotal)}</td>
                     <td colSpan={2}></td>
                   </tr>
                 </tfoot>
@@ -376,8 +438,27 @@ export default function Nomina() {
         title={pagoTarget ? `Marcar pago: ${pagoTarget.emp.personalNombre}` : 'Marcar pago'}>
         {pagoTarget && (
           <div className="space-y-4">
-            <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-900">
-              Total a pagar: <span className="font-bold">{formatMoneda(pagoTarget.emp.totalDevengado)}</span>
+            <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-900 space-y-1">
+              {(pagoTarget.emp.totalAvances ?? 0) > 0 ? (
+                <>
+                  <div className="flex justify-between">
+                    <span>Total devengado:</span>
+                    <span className="font-semibold">{formatMoneda(pagoTarget.emp.totalDevengado)}</span>
+                  </div>
+                  <div className="flex justify-between text-red-600">
+                    <span>Avances descontados:</span>
+                    <span className="font-semibold">-{formatMoneda(pagoTarget.emp.totalAvances ?? 0)}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-blue-200 pt-1 mt-1">
+                    <span className="font-semibold">Total a pagar (neto):</span>
+                    <span className="font-bold">{formatMoneda(pagoTarget.emp.totalNeto ?? pagoTarget.emp.totalDevengado)}</span>
+                  </div>
+                </>
+              ) : (
+                <div>
+                  Total a pagar: <span className="font-bold">{formatMoneda(pagoTarget.emp.totalDevengado)}</span>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Método de pago *</label>
