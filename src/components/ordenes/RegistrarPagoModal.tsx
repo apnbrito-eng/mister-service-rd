@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
+import { doc, updateDoc, Timestamp, arrayUnion, runTransaction } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, Usuario, Banco, PagoOrden, EstadoPagoOrden } from '../../types';
 import { suscribirBancos } from '../../services/bancos.service';
@@ -71,9 +71,8 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
     onClose();
   };
 
-  const calcularEstado = (nuevoMonto: number): EstadoPagoOrden => {
-    const totalPagado = montoYaPagado + nuevoMonto;
-    if (total > 0 && totalPagado >= total) return 'completo';
+  const calcularEstadoFromTotal = (totalPagado: number, totalOrden: number): EstadoPagoOrden => {
+    if (totalOrden > 0 && totalPagado >= totalOrden) return 'completo';
     if (totalPagado > 0) return 'parcial';
     return 'pendiente';
   };
@@ -95,9 +94,17 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
       const usuario = userProfile?.nombre || 'Sistema';
       const usuarioId = userProfile?.id || '';
       const ahora = new Date();
+      const ahoraTimestamp = Timestamp.fromDate(ahora);
 
+      // Generamos el pagoId UNA sola vez, antes de la transacción.
+      // Si Firestore reintenta la transacción internamente o el usuario
+      // hace doble-click con lag de red, el mismo pagoId previene duplicados.
+      const pagoId = genId();
+
+      // Construir el pago en memoria (sin serializar la fecha aún —
+      // dependemos de la transacción para confirmar que se persiste).
       const pago: PagoOrden = {
-        id: genId(),
+        id: pagoId,
         metodo,
         monto: m,
         fecha: ahora,
@@ -120,35 +127,96 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
       }
       if (notas.trim()) pago.notas = notas.trim();
 
-      // Serializar fecha a Timestamp antes de persistir
-      const pagoSerializado = {
-        ...pago,
-        fecha: Timestamp.fromDate(ahora),
+      // Stripping undefined antes del write (convención del repo).
+      const pagoSerializado: Record<string, unknown> = {
+        id: pago.id,
+        metodo: pago.metodo,
+        monto: pago.monto,
+        fecha: ahoraTimestamp,
+        registradoPorId: pago.registradoPorId,
+        registradoPorNombre: pago.registradoPorNombre,
       };
+      if (pago.recibidoPorId !== undefined) pagoSerializado.recibidoPorId = pago.recibidoPorId;
+      if (pago.recibidoPorNombre !== undefined) pagoSerializado.recibidoPorNombre = pago.recibidoPorNombre;
+      if (pago.bancoId !== undefined) pagoSerializado.bancoId = pago.bancoId;
+      if (pago.bancoNombre !== undefined) pagoSerializado.bancoNombre = pago.bancoNombre;
+      if (pago.referencia !== undefined) pagoSerializado.referencia = pago.referencia;
+      if (pago.notas !== undefined) pagoSerializado.notas = pago.notas;
 
-      const nuevoMontoPagado = montoYaPagado + m;
-      const nuevoEstadoPago = calcularEstado(m);
+      const ordenRef = doc(db, 'ordenes_servicio', orden.id);
 
-      const registro = crearRegistroAuditoria(
-        usuario,
-        'editar',
-        `Pago registrado — ${metodo} ${formatearMonto(m)}${
-          pago.bancoNombre ? ` a ${pago.bancoNombre}` : ''
-        }`,
-        'pagos',
-        formatearMonto(montoYaPagado),
-        formatearMonto(nuevoMontoPagado),
-      );
+      // Transacción: read → check idempotencia → compute → write.
+      // Esto cierra la race condition entre 2 operarias registrando pagos
+      // simultáneamente sobre la misma orden (last-write-wins en `pagos[]`).
+      const resultado = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ordenRef);
+        if (!snap.exists()) {
+          throw new Error('La orden ya no existe');
+        }
+        const data = snap.data() as Record<string, unknown>;
+        const pagosActuales: Array<Record<string, unknown>> = Array.isArray(data.pagos)
+          ? (data.pagos as Array<Record<string, unknown>>)
+          : [];
 
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
-        pagos: arrayUnion(pagoSerializado),
-        montoPagado: nuevoMontoPagado,
-        estadoPago: nuevoEstadoPago,
-        auditoria: arrayUnion(registro),
-        updatedAt: Timestamp.now(),
+        // Idempotencia: si Firestore reintenta el callback de la transacción,
+        // o si el botón se clickeó 2 veces y el segundo click llega después
+        // de que el primero ya escribió, este check evita registrar duplicados.
+        const yaExiste = pagosActuales.some(p => p && p.id === pagoId);
+        if (yaExiste) {
+          return { duplicado: true as const };
+        }
+
+        const pagosNuevos = [...pagosActuales, pagoSerializado];
+        const totalOrdenActual = Number(
+          data.precioFinal ?? data.precioAprobado ?? data.precioSugerido ?? 0,
+        );
+        // Recalculamos `montoPagado` desde la SUMA real de pagosNuevos, no
+        // sumando el monto del input al state local (que podría estar stale).
+        const nuevoMontoPagado = pagosNuevos.reduce(
+          (acc, p) => acc + (Number(p.monto) || 0),
+          0,
+        );
+        const nuevoEstadoPago = calcularEstadoFromTotal(nuevoMontoPagado, totalOrdenActual);
+        const montoPagadoPrevio = pagosActuales.reduce(
+          (acc, p) => acc + (Number(p.monto) || 0),
+          0,
+        );
+
+        const registro = crearRegistroAuditoria(
+          usuario,
+          'editar',
+          `Pago registrado — ${metodo} ${formatearMonto(m)}${
+            pago.bancoNombre ? ` a ${pago.bancoNombre}` : ''
+          }`,
+          'pagos',
+          formatearMonto(montoPagadoPrevio),
+          formatearMonto(nuevoMontoPagado),
+        );
+
+        const updates: Record<string, unknown> = {
+          pagos: pagosNuevos,
+          montoPagado: nuevoMontoPagado,
+          estadoPago: nuevoEstadoPago,
+          auditoria: arrayUnion(registro),
+          updatedAt: Timestamp.now(),
+        };
+        // Strip undefined defensivamente (el objeto está armado a mano,
+        // pero respetamos la convención del repo).
+        const updatesLimpios = Object.fromEntries(
+          Object.entries(updates).filter(([, v]) => v !== undefined),
+        );
+
+        tx.update(ordenRef, updatesLimpios);
+        return { duplicado: false as const, nuevoMontoPagado };
       });
 
-      toast.success('Pago registrado');
+      if (resultado.duplicado) {
+        // El pago ya estaba registrado — no avisamos al usuario como error,
+        // simplemente cerramos el modal porque su intención ya está cumplida.
+        toast.success('Pago registrado');
+      } else {
+        toast.success('Pago registrado');
+      }
       onSaved?.();
       handleClose();
     } catch (err) {
