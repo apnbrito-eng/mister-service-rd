@@ -326,16 +326,24 @@ export function generarTokenPortalCliente(): string {
 }
 
 /**
- * Devuelve la propuesta de reprogramación pendiente más reciente (la que
- * está esperando resolución de admin/coord), o null si no hay ninguna.
- * Defensiva: la fecha de propuesta puede venir como Timestamp o Date.
+ * Devuelve la propuesta de reprogramación pendiente del CLIENTE más
+ * reciente — la que está esperando resolución de admin/coord — o null
+ * si no hay ninguna. Defensiva: la fecha de propuesta puede venir como
+ * Timestamp o Date.
+ *
+ * Filtramos por `propuestaPor === 'cliente'` deliberadamente: las
+ * contrapropuestas del propio admin (`propuestaPor === 'admin'`) no
+ * aparecen en el panel admin como "pendientes de revisar" — quedan en
+ * `auditoria` y se confirman manualmente vía WhatsApp con el cliente.
  */
 export function obtenerPropuestaReprogramacionPendiente(
   orden: { propuestasReprogramacion?: PropuestaReprogramacion[] },
 ): PropuestaReprogramacion | null {
   const lista = orden.propuestasReprogramacion;
   if (!Array.isArray(lista) || lista.length === 0) return null;
-  const pendientes = lista.filter(p => p.estado === 'pendiente');
+  const pendientes = lista.filter(
+    p => p.estado === 'pendiente' && p.propuestaPor === 'cliente',
+  );
   if (pendientes.length === 0) return null;
   // Ordenar por `fechaPropuesta` desc (la más reciente primero).
   pendientes.sort((a, b) => {
@@ -820,9 +828,14 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
       ? (raw.propuestasReprogramacion as Array<Record<string, unknown>>)
           .map((p): PropuestaReprogramacion | null => {
             const fechaPropuesta = parseFirestoreDate(p.fechaPropuesta);
+            // `fechaActualOrden` puede ser null si la propuesta se hizo sobre
+            // una orden no agendada (defensivo — el endpoint hoy bloquea ese
+            // caso) o si la orden mutó después. NO la requerimos para
+            // hidratar la propuesta — sólo la mostramos como "Sin agendar
+            // previamente" en el panel admin.
             const fechaActualOrden = parseFirestoreDate(p.fechaActualOrden);
             const fechaNuevaPropuesta = parseFirestoreDate(p.fechaNuevaPropuesta);
-            if (!fechaPropuesta || !fechaActualOrden || !fechaNuevaPropuesta) return null;
+            if (!fechaPropuesta || !fechaNuevaPropuesta) return null;
             const estado = p.estado === 'pendiente' || p.estado === 'aceptada' || p.estado === 'rechazada' || p.estado === 'contrapropuesta'
               ? p.estado
               : 'pendiente';
@@ -831,7 +844,7 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
               id: typeof p.id === 'string' && p.id.length > 0 ? p.id : `prop_${Math.random().toString(36).slice(2)}`,
               propuestaPor,
               fechaPropuesta,
-              fechaActualOrden,
+              fechaActualOrden: fechaActualOrden ?? null,
               fechaNuevaPropuesta,
               motivo: typeof p.motivo === 'string' ? p.motivo : '',
               estado,

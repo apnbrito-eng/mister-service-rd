@@ -4,7 +4,7 @@ import {
   Users, UserCog, FileText, Settings, LogOut, Wrench,
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight, ChevronDown,
   Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
-  CalendarCheck, Sparkles, History, Star,
+  CalendarCheck, Sparkles, History, Star, RefreshCw,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { signOut } from 'firebase/auth';
@@ -69,6 +69,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [solicitudesCount, setSolicitudesCount] = useState(0);
   const [facturacionPendienteCount, setFacturacionPendienteCount] = useState(0);
   const [sugerenciasChequeoCount, setSugerenciasChequeoCount] = useState(0);
+  const [reprogramacionesCount, setReprogramacionesCount] = useState(0);
   const [sectionsState, setSectionsState] = useState<Record<string, boolean>>(loadState);
 
   useEffect(() => {
@@ -126,6 +127,33 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     return () => unsub();
   }, [userProfile?.rol]);
 
+  // Reprogramaciones pendientes (Hito 2 Portal Cliente). Mismo patrón que
+  // SugerenciasChequeo: gateamos por rol para no desperdiciar lecturas
+  // y filtramos client-side para evitar índice compuesto sobre arrays.
+  useEffect(() => {
+    if (
+      userProfile?.rol !== 'administrador' &&
+      userProfile?.rol !== 'coordinadora'
+    ) {
+      setReprogramacionesCount(0);
+      return;
+    }
+    const unsub = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
+      let count = 0;
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (data.eliminada) return;
+        const lista = data.propuestasReprogramacion;
+        if (!Array.isArray(lista)) return;
+        // Solo contar propuestas del CLIENTE pendientes — las
+        // contrapropuestas del propio admin no incrementan el badge.
+        if (lista.some(p => p && p.estado === 'pendiente' && p.propuestaPor === 'cliente')) count++;
+      });
+      setReprogramacionesCount(count);
+    });
+    return () => unsub();
+  }, [userProfile?.rol]);
+
   const handleLogout = async () => {
     await signOut(auth);
     navigate('/login');
@@ -170,6 +198,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
           { to: '/admin/feedback', icon: Star, label: 'Feedback NPS', show: esAdminOCoord },
           { to: '/admin/sugerencias-chequeo', icon: ClipboardCheck, label: 'Sugerencias chequeo', badge: sugerenciasChequeoCount, show: esAdminOCoord },
+          { to: '/admin/reprogramaciones', icon: RefreshCw, label: 'Reprogramaciones', badge: reprogramacionesCount, show: esAdminOCoord },
           { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: isAdmin || userProfile?.rol === 'coordinadora' || p('ordenesVerEliminadas') },
         ],
       },

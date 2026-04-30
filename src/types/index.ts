@@ -415,8 +415,13 @@ export interface PropuestaReprogramacion {
   propuestaPor: 'cliente' | 'admin';
   /** Cuándo se hizo la propuesta. */
   fechaPropuesta: Timestamp | Date;
-  /** Fecha de cita al momento de proponer (snapshot). */
-  fechaActualOrden: Timestamp | Date;
+  /**
+   * Fecha de cita al momento de proponer (snapshot). Puede ser null si la
+   * orden no estaba agendada cuando se hizo la propuesta, o si la propuesta
+   * es vieja y la orden mutó. NO es crítico para mostrar la propuesta —
+   * el admin igual la puede resolver.
+   */
+  fechaActualOrden: Timestamp | Date | null;
   /** Nueva fecha que se propone. */
   fechaNuevaPropuesta: Timestamp | Date;
   /** Motivo libre (puede ser vacío). */
@@ -1338,6 +1343,8 @@ export type TipoNotificacion =
   | 'feedback_detractor'
   | 'sugerencia_solo_chequeo'
   | 'sugerencia_solo_chequeo_resuelta'
+  | 'reprogramacion_solicitada'
+  | 'reprogramacion_resuelta'
   | 'otro';
 
 export interface Notificacion {

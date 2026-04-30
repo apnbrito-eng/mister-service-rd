@@ -1,10 +1,10 @@
 import {
   runTransaction, doc, serverTimestamp, Timestamp,
-  updateDoc, arrayUnion, collection, query, where, getDocs,
+  updateDoc, arrayUnion, collection, query, where, getDocs, onSnapshot,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { crearRegistroAuditoria, generarTokenPortalCliente } from '../utils';
-import type { OrdenServicio, Personal, SugerenciaSoloChequeo } from '../types';
+import { crearRegistroAuditoria, generarTokenPortalCliente, parseOrden } from '../utils';
+import type { OrdenServicio, Personal, PropuestaReprogramacion, SugerenciaSoloChequeo } from '../types';
 import { crearNotificacion } from './notificaciones.service';
 
 /**
@@ -398,4 +398,271 @@ export async function resolverSugerenciaSoloChequeoConNotif(
       console.warn('No se pudo notificar al técnico:', err);
     }
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Reprogramaciones — flujo cliente → admin/coord (Hito 2 Portal Cliente)
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Acción que admin/coord aplica a una propuesta de reprogramación pendiente.
+ *  - 'aprobar': acepta la fecha del cliente, mueve `fechaCita` a la nueva
+ *    fecha y marca la propuesta como `aceptada`.
+ *  - 'rechazar': rechaza la propuesta. NO toca `fechaCita`. Requiere nota.
+ *  - 'contraproponer': marca la propuesta del cliente como `contrapropuesta`
+ *    y crea una nueva propuesta con `propuestaPor: 'admin'` en estado
+ *    pendiente. NO toca `fechaCita` (el admin no aplica unilateralmente —
+ *    espera que el cliente confirme por WhatsApp o desde el portal).
+ */
+export type AccionReprogramacion = 'aprobar' | 'rechazar' | 'contraproponer';
+
+export interface ResolverPropuestaArgs {
+  resueltaPor: string;
+  resueltaPorNombre: string;
+  /** Nota libre (admin la usa para WhatsApp). Obligatoria al rechazar. */
+  notaResolucion?: string;
+  /** Solo cuando `accion === 'contraproponer'`. Date en zona local. */
+  contrapropuestaFecha?: Date;
+}
+
+/**
+ * Convierte un Date a Timestamp Firestore con strip-undefined defensivo.
+ * Si recibe un Timestamp ya hidratado lo devuelve tal cual.
+ */
+function toTimestamp(value: Date | Timestamp): Timestamp {
+  return value instanceof Timestamp ? value : Timestamp.fromDate(value);
+}
+
+/**
+ * Resuelve una propuesta de reprogramación dentro de una orden.
+ *
+ * Implementación: lee la orden, encuentra la propuesta por `id`, la
+ * reescribe con el estado nuevo y persiste el array completo (NO usamos
+ * arrayUnion porque modificamos una entry existente — arrayUnion sólo
+ * agrega). Usamos transacción para evitar race con un cliente que podría
+ * estar agregando otra propuesta al mismo tiempo.
+ *
+ * Idempotente: si la propuesta ya está resuelta, lanza un error claro
+ * `'Esta propuesta ya fue resuelta'`. El caller debe manejarlo.
+ */
+export async function resolverPropuestaReprogramacion(
+  ordenId: string,
+  propuestaId: string,
+  accion: AccionReprogramacion,
+  data: ResolverPropuestaArgs,
+): Promise<void> {
+  const ordenRef = doc(db, 'ordenes_servicio', ordenId);
+  const ahora = Timestamp.now();
+
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ordenRef);
+    if (!snap.exists()) throw new Error('Orden no existe');
+    const orden = snap.data() as Record<string, unknown>;
+
+    const lista = Array.isArray(orden.propuestasReprogramacion)
+      ? (orden.propuestasReprogramacion as Array<Record<string, unknown>>)
+      : [];
+    const idx = lista.findIndex(p => p.id === propuestaId);
+    if (idx === -1) throw new Error('Propuesta no encontrada');
+    const propuesta = { ...lista[idx] };
+    if (propuesta.estado !== 'pendiente') {
+      throw new Error('Esta propuesta ya fue resuelta');
+    }
+
+    // Comunes: trazabilidad
+    propuesta.resueltaPor = data.resueltaPor;
+    propuesta.resueltaPorNombre = data.resueltaPorNombre;
+    propuesta.resueltaEn = ahora;
+    if (data.notaResolucion && data.notaResolucion.trim().length > 0) {
+      propuesta.notaResolucion = data.notaResolucion.trim();
+    }
+
+    const nuevaLista = [...lista];
+
+    const auditoriaPrev = Array.isArray(orden.auditoria) ? orden.auditoria : [];
+    const updates: Record<string, unknown> = {
+      updatedAt: ahora,
+    };
+
+    if (accion === 'aprobar') {
+      propuesta.estado = 'aceptada';
+      nuevaLista[idx] = propuesta;
+
+      // Aplicar la nueva fecha a la orden. NO tocamos `historialFases`:
+      // ese array refleja transiciones de fase reales, y reprogramar NO
+      // cambia la fase (la orden sigue en `agendado` o donde estuviera).
+      // Si pusiéramos otra entry `agendado` con timestamp posterior a una
+      // entry intermedia (ej `en_diagnostico`), el historial del cliente
+      // quedaría cronológicamente raro. La traza queda en `auditoria`
+      // con detalle textual de la reprogramación.
+      const fechaNuevaTs = propuesta.fechaNuevaPropuesta as Timestamp | Date | undefined;
+      const fechaActualOrdenSnap = propuesta.fechaActualOrden as Timestamp | Date | null | undefined;
+      if (fechaNuevaTs) {
+        updates.fechaCita = toTimestamp(fechaNuevaTs);
+      }
+
+      // Construir detalle más informativo (de → a) cuando tenemos las dos fechas
+      const fechaAntesDate =
+        fechaActualOrdenSnap instanceof Timestamp
+          ? fechaActualOrdenSnap.toDate()
+          : fechaActualOrdenSnap instanceof Date
+            ? fechaActualOrdenSnap
+            : null;
+      const fechaNuevaDate =
+        fechaNuevaTs instanceof Timestamp
+          ? fechaNuevaTs.toDate()
+          : fechaNuevaTs instanceof Date
+            ? fechaNuevaTs
+            : null;
+      const detalle = fechaAntesDate && fechaNuevaDate
+        ? `Reprogramada de ${fechaAntesDate.toISOString()} a ${fechaNuevaDate.toISOString()} (propuesta del cliente aprobada)`
+        : 'Aprobó propuesta de reprogramación del cliente';
+      updates.auditoria = [
+        ...auditoriaPrev,
+        crearRegistroAuditoria(
+          data.resueltaPorNombre,
+          'editar',
+          detalle,
+          'fechaCita',
+          undefined,
+          undefined,
+        ),
+      ];
+    } else if (accion === 'rechazar') {
+      if (!data.notaResolucion || data.notaResolucion.trim().length < 10) {
+        throw new Error('La nota de rechazo es obligatoria (mínimo 10 caracteres)');
+      }
+      propuesta.estado = 'rechazada';
+      nuevaLista[idx] = propuesta;
+
+      const detalle = `Rechazó propuesta de reprogramación: ${data.notaResolucion.trim()}`;
+      updates.auditoria = [
+        ...auditoriaPrev,
+        crearRegistroAuditoria(
+          data.resueltaPorNombre,
+          'editar',
+          detalle,
+        ),
+      ];
+    } else if (accion === 'contraproponer') {
+      if (!data.contrapropuestaFecha) {
+        throw new Error('Falta la fecha de contrapropuesta');
+      }
+      propuesta.estado = 'contrapropuesta';
+      propuesta.contrapropuestaFecha = Timestamp.fromDate(data.contrapropuestaFecha);
+      nuevaLista[idx] = propuesta;
+
+      // Crear nueva propuesta del admin como pendiente. El cliente la verá
+      // y deberá confirmarla (o el admin la marca aceptada vía WhatsApp manual).
+      const fechaActualOrdenSnapshot = orden.fechaCita ?? null;
+      const nuevaPropAdmin: Record<string, unknown> = {
+        id:
+          typeof globalThis.crypto?.randomUUID === 'function'
+            ? globalThis.crypto.randomUUID()
+            : `prop_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
+        propuestaPor: 'admin',
+        fechaPropuesta: ahora,
+        fechaActualOrden: fechaActualOrdenSnapshot,
+        fechaNuevaPropuesta: Timestamp.fromDate(data.contrapropuestaFecha),
+        motivo: data.notaResolucion?.trim() || '',
+        estado: 'pendiente',
+      };
+      const nuevaPropLimpia = Object.fromEntries(
+        Object.entries(nuevaPropAdmin).filter(([, v]) => v !== undefined),
+      );
+      nuevaLista.push(nuevaPropLimpia);
+
+      const detalle = `Contrapropuso fecha alternativa al cliente`;
+      updates.auditoria = [
+        ...auditoriaPrev,
+        crearRegistroAuditoria(
+          data.resueltaPorNombre,
+          'editar',
+          detalle,
+        ),
+      ];
+    }
+
+    updates.propuestasReprogramacion = nuevaLista;
+    tx.update(ordenRef, updates);
+  });
+}
+
+/**
+ * Wrapper: resuelve la propuesta y crea una notificación interna de
+ * auditoría al admin que la resolvió. La notificación al cliente NO se
+ * crea como doc Firestore (el cliente no tiene cuenta) — se envía por
+ * WhatsApp manual desde la UI del panel admin.
+ *
+ * Recibe la orden ya cargada para enriquecer la notif sin re-leer Firestore.
+ */
+export async function resolverPropuestaReprogramacionConNotif(
+  orden: OrdenServicio,
+  propuesta: PropuestaReprogramacion,
+  accion: AccionReprogramacion,
+  data: ResolverPropuestaArgs,
+): Promise<void> {
+  await resolverPropuestaReprogramacion(orden.id, propuesta.id, accion, data);
+
+  // Notif interna al admin/coord que resolvió (auditoría — feed personal).
+  // No bloqueamos si falla.
+  try {
+    const tituloMap: Record<AccionReprogramacion, string> = {
+      aprobar: 'Reprogramación aprobada',
+      rechazar: 'Reprogramación rechazada',
+      contraproponer: 'Contrapropuesta enviada',
+    };
+    const mensajeMap: Record<AccionReprogramacion, string> = {
+      aprobar: `Aprobaste la reprogramación de ${orden.numero || orden.id}.`,
+      rechazar: `Rechazaste la reprogramación de ${orden.numero || orden.id}.`,
+      contraproponer: `Enviaste contrapropuesta para ${orden.numero || orden.id}.`,
+    };
+    await crearNotificacion({
+      destinatarioId: data.resueltaPor,
+      destinatarioNombre: data.resueltaPorNombre,
+      tipo: 'reprogramacion_resuelta',
+      titulo: tituloMap[accion],
+      mensaje: mensajeMap[accion],
+      ordenId: orden.id,
+      ordenNumero: orden.numero,
+    });
+  } catch (err) {
+    console.warn('No se pudo crear notif de reprogramación resuelta:', err);
+  }
+}
+
+/**
+ * Subscribe a todas las órdenes y filtra client-side las que tienen al menos
+ * una propuesta de reprogramación con `estado: 'pendiente'`. Mismo patrón
+ * que `SugerenciasChequeo` — evita índice compuesto sobre arrays.
+ *
+ * Pensado para usarse desde el panel admin `/admin/reprogramaciones` y
+ * desde el sidebar (badge live count).
+ *
+ * Devuelve una función para des-suscribir.
+ */
+export function suscribirOrdenesConPropuestaReprogramacionPendiente(
+  callback: (ordenes: OrdenServicio[]) => void,
+): () => void {
+  return onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
+    const ordenes: OrdenServicio[] = [];
+    for (const d of snap.docs) {
+      const data = d.data();
+      if (data.eliminada) continue;
+      const lista = data.propuestasReprogramacion;
+      if (!Array.isArray(lista)) continue;
+      // Solo traer órdenes con propuesta del CLIENTE pendiente — las
+      // contrapropuestas del admin no aparecen en el panel.
+      if (
+        !lista.some(
+          (p: Record<string, unknown>) =>
+            p && p.estado === 'pendiente' && p.propuestaPor === 'cliente',
+        )
+      ) {
+        continue;
+      }
+      ordenes.push(parseOrden(d.id, data));
+    }
+    callback(ordenes);
+  });
 }

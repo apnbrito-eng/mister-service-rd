@@ -50,6 +50,7 @@ import Ponche from './pages/Ponche';
 import AdminPonches from './pages/AdminPonches';
 import Feedback from './pages/Feedback';
 import SugerenciasChequeo from './pages/SugerenciasChequeo';
+import Reprogramaciones from './pages/Reprogramaciones';
 import BannerNuevaVersion from './components/BannerNuevaVersion';
 
 // Public website pages
@@ -220,6 +221,7 @@ function AppRoutes() {
         <Route path="ponches" element={<RolRoute roles={['administrador', 'coordinadora']}><AdminPonches /></RolRoute>} />
         <Route path="feedback" element={<RolRoute roles={['administrador', 'coordinadora']}><Feedback /></RolRoute>} />
         <Route path="sugerencias-chequeo" element={<RolRoute roles={['administrador', 'coordinadora']}><SugerenciasChequeo /></RolRoute>} />
+        <Route path="reprogramaciones" element={<RolRoute roles={['administrador', 'coordinadora']}><Reprogramaciones /></RolRoute>} />
       </Route>
 
       {/* Legacy redirects — old /dashboard, /ordenes etc. now under /admin */}

@@ -19,6 +19,7 @@ import {
 import LoadingSpinner from '../../components/LoadingSpinner';
 import Logo from '../../components/Logo';
 import FeedbackNPS, { FeedbackYaEnviado } from '../../components/public/FeedbackNPS';
+import ModalPosponer from '../../components/public/ModalPosponer';
 import { useConfigWeb } from '../../hooks/useConfigWeb';
 import { faseColor, faseLabel, FASES_ORDENADAS } from '../../utils';
 import type { FaseOrden, OrdenServicio } from '../../types';
@@ -178,8 +179,11 @@ export default function PortalCliente() {
   const [estado, setEstado] = useState<CargaEstado>({ tipo: 'loading' });
   const [descripcionExpandida, setDescripcionExpandida] = useState(false);
   const [historialAbierto, setHistorialAbierto] = useState(false);
+  const [modalPosponerAbierto, setModalPosponerAbierto] = useState(false);
   const intervalRef = useRef<number | null>(null);
   const reintentoRef = useRef(0);
+  // Refetch callable desde fuera del useEffect (ej: tras submit del modal posponer).
+  const refetchRef = useRef<() => void>(() => {});
 
   // ─── Fetch loop ───
   useEffect(() => {
@@ -236,6 +240,10 @@ export default function PortalCliente() {
         }
       }
     }
+
+    // Exponer la función de carga vía ref para que el modal pueda forzar
+    // refetch tras submit exitoso.
+    refetchRef.current = () => { cargar(); };
 
     // Carga inicial + polling
     cargar();
@@ -497,19 +505,30 @@ export default function PortalCliente() {
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
             ¿Necesitas algo?
           </h3>
-          {/* Botón posponer (deshabilitado en Hito 1) */}
+          {/* Botón posponer cita (Hito 2) */}
           <div>
-            <button
-              type="button"
-              disabled
-              title="Disponible próximamente"
-              className="w-full inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-400 rounded-lg text-sm font-medium py-2.5 cursor-not-allowed"
-            >
-              <Calendar size={14} /> Pedir posponer mi cita
-            </button>
-            <p className="text-[10px] text-gray-500 mt-1 text-center">
-              Próximamente
-            </p>
+            {propuesta ? (
+              <>
+                <button
+                  type="button"
+                  disabled
+                  className="w-full inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-400 rounded-lg text-sm font-medium py-2.5 cursor-not-allowed"
+                >
+                  <Calendar size={14} /> Pedir posponer mi cita
+                </button>
+                <p className="text-[10px] text-gray-500 mt-1 text-center">
+                  Tu propuesta está siendo revisada — esperá la respuesta del taller.
+                </p>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setModalPosponerAbierto(true)}
+                className="w-full inline-flex items-center justify-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium py-2.5 transition-colors"
+              >
+                <Calendar size={14} /> Pedir posponer mi cita
+              </button>
+            )}
           </div>
           {/* Botón WhatsApp coordinación */}
           <a
@@ -604,6 +623,20 @@ export default function PortalCliente() {
           Mister Service RD · Gracias por confiar en nosotros
         </p>
       </div>
+
+      {/* Modal posponer cita (Hito 2) */}
+      {modalPosponerAbierto && token && (
+        <ModalPosponer
+          token={token}
+          onClose={() => setModalPosponerAbierto(false)}
+          onSubmitted={() => {
+            // Forzar refetch inmediato del endpoint para reflejar la nueva
+            // propuesta. El polling cada 30s también la traería, pero la
+            // UX es mejor con feedback inmediato.
+            refetchRef.current();
+          }}
+        />
+      )}
     </div>
   );
 }
