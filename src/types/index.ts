@@ -786,6 +786,16 @@ export interface Factura {
   tipoCierre?: 'solo_chequeo' | 'reparacion_completa';
   /** Información de garantía cuando se emite el conduce */
   garantia?: GarantiaInfo;
+  /**
+   * Origen del conduce. Reemplaza la antigua distinción visual entre
+   * prefijos `FAC-` y `CG-` (ahora ambos flujos emiten `CG-####` con un
+   * único counter oficial). Opcional porque conduces históricos no lo
+   * tienen poblado.
+   *  - 'manual': creado desde `/admin/facturas` (Facturas.tsx).
+   *  - 'post-cierre': creado desde `/admin/facturacion-pendiente`
+   *    (FacturacionPendiente.tsx) al cerrar una orden.
+   */
+  origen?: 'manual' | 'post-cierre';
   createdAt: Date;
 }
 

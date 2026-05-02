@@ -46,3 +46,5 @@ cors.json
 !.claude/agents/
 !.claude/commands/
 !.claude/settings.json
+.env*.local
+service-account.json

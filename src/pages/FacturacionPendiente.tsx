@@ -512,6 +512,9 @@ function ProcesarFacturacionModal({ orden, userProfile, currentUserUid, onClose 
         createdAt: ahora,
         emitidaPorId: usuarioId,
         emitidaPorNombre: usuario,
+        // Origen: distingue conduces emitidos automáticamente al cerrar
+        // una orden de los conduces manuales creados desde /admin/facturas.
+        origen: 'post-cierre' as const,
       };
       if (metodoPagoPrincipal) facturaPayload.metodoPago = metodoPagoPrincipal;
       if (bancoPrincipal) facturaPayload.bancoDestino = bancoPrincipal;

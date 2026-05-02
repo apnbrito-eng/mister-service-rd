@@ -1,152 +1,180 @@
-# Sprint: consolidar counters de facturas — PRIORIDAD ALTA
+# Sprint: consolidar counters de facturas — eliminar duplicación interna
 
-## Riesgo (por qué es alta prioridad)
+## Contexto actualizado (2026-04-30)
 
-Existen **dos sistemas paralelos** generando números de conduce/factura
-contra **dos colecciones distintas**:
+Jorge aclaró que el conduce de garantía es **registro contable INTERNO**, NO DGII. Los reportes 606/607 (sprint #68) van por otro lado. Entonces NO hay riesgo fiscal, solo riesgo de **trazabilidad interna** y deuda técnica.
 
-| Sistema | Archivo | Colección counter | Campo | Prefijo emitido |
+## Riesgo (descripción correcta del bug)
+
+Existen **dos páginas activas** generando "Conduces de Garantía" con sistemas distintos:
+
+| Página | Ruta | Counter | Prefijo emitido | Estado |
 |---|---|---|---|---|
-| **Oficial** | `src/services/contadores.service.ts:38-50` | `config/contadores` | `ultimaFactura` | `CG-####` (conduce de garantía) |
-| **Legacy** | `src/pages/Facturas.tsx:173-187` | `counters/facturas` | `count` | `FAC-####` (factura) |
+| **`Facturas.tsx`** | `/admin/facturas` | `counters/facturas.count` | `FAC-####` | Activa (sidebar muestra "Conduces de Garantía") |
+| **`FacturacionPendiente.tsx`** | `/admin/facturacion-pendiente` | `config/contadores.ultimaFactura` | `CG-####` | Activa (flujo principal post-cierre orden) |
 
-Ambos usan `runTransaction` correctamente, pero **operan en counters
-divergentes**. Si `Facturas.tsx` y `FacturacionPendiente.tsx` emiten
-documentos al mismo tiempo, los rangos numéricos pueden colisionar:
-ambas pueden producir `CG-0042` y `FAC-0042` como números distintos
-referidos a operaciones distintas.
+Ambas activas. Ambas con permisos (`facturasVer/Crear/Modificar/Eliminar`). Ambas siguiendo `runTransaction` correctamente, **pero contra counters distintos**.
 
-## Impacto fiscal / DGII
+**Impacto:**
 
-Esto **rompe trazabilidad fiscal**:
+1. **Inconsistencia visual**: Sidebar dice "Conduces de Garantía" pero `Facturas.tsx` emite `FAC-####` y `FacturacionPendiente.tsx` emite `CG-####`. Documentos del mismo tipo, prefijos distintos. Confunde a admin.
+2. **Colisión numérica**: ambos sistemas pueden emitir simultáneamente `FAC-0042` y `CG-0042` (mismo número, prefijos distintos). En reportes internos cruzados, parece duplicado.
+3. **Mantenimiento**: dos counters significa que hay que sincronizar manualmente si se quiere unificar después.
+4. **Reportes internos rotos**: si Jorge exporta a Excel/contador externo, los `FAC-` y `CG-` quedan como series independientes, confundiendo el control contable.
 
-- Si dos sistemas pueden emitir el mismo número con prefijos distintos,
-  cualquier auditoría externa (DGII, contador externo) ve duplicados
-  aparentes.
-- Si el sistema migra todo a un único prefijo en el futuro (ej: `CG-`
-  unificado), las series quedan colisionando entre sí.
-- Si se exporta a contabilidad externa (xls, ERP), los números
-  duplicados causan referencias rotas.
+**No es bloqueante hoy** (los flujos no se cruzan operativamente — `Facturas.tsx` parece usarse para casos especiales mientras `FacturacionPendiente.tsx` es el flujo automático post-cierre). Pero es deuda técnica que crece.
 
-**No es bloqueante hoy** porque los prefijos son distintos (`CG-` vs
-`FAC-`) y los flujos no se cruzan operativamente, pero es deuda que
-crece — cada nueva factura legacy emitida desde `Facturas.tsx` aleja
-la posibilidad de unificar.
+## Investigación previa (ya hecha desde Cowork 2026-04-30)
 
-## Investigación previa
+Confirmado:
 
-Antes de tocar código:
+- ✅ `Facturas.tsx` ESTÁ en uso (Sidebar.tsx:192, App.tsx:192, permisos activos en types/index.ts).
+- ✅ `getNextNumero()` (Facturas.tsx:173-187) usa `counters/facturas.count` — counter legacy.
+- ✅ `FacturacionPendiente.tsx` consume `siguienteNumeroFactura()` del servicio oficial (`contadores.service.ts:38-50`).
+- ✅ Existe `Cotizaciones.tsx:33` con `puedeFacturar = puede(userProfile, 'facturasCrear')` — algunos usuarios pueden facturar desde cotización (otro flujo más).
+- ⚠️ El servicio oficial emite `CG-####` (línea 49). El legacy en `utils/index.ts:397` emite `FAC-####`. Cambiar el legacy implica cambiar el prefijo emitido.
 
-1. **Leer `src/pages/Facturas.tsx`** completo. ¿Sigue en uso? ¿O fue
-   reemplazado por `FacturacionPendiente.tsx`? (commit `43f2ef2`
-   renombró "Facturas Emitidas" a "Conduces Emitidos" — sugiere que
-   el flujo oficial es CG, no FAC).
-2. **¿Quién consume `Facturas.tsx`?** Buscar links/rutas que apunten
-   ahí. Si la página está deprecada y nadie la usa en prod, la fix
-   más simple es **borrar `Facturas.tsx` y la ruta**.
-3. **`counters/facturas`** ¿tiene data legacy? ¿Cuál es el último número
-   emitido? Compararlo contra `config/contadores.ultimaFactura`. Si
-   están desincronizados, hay que alinearlos.
-4. **¿Hay facturas históricas con prefijo `FAC-` en la colección
-   `facturas`?** Si sí, son docs legítimos que no se deben tocar.
-   Solo el flujo de generación tiene que consolidarse.
+## Fix recomendado: refactor `Facturas.tsx` para usar counter oficial
 
-## Fix recomendado
+**No eliminar la página** (está en uso). En vez:
 
-**Opción A — Eliminar `Facturas.tsx` (si está deprecada):**
-- Borrar la página y la ruta en `App.tsx`.
-- Borrar la rule de `counters` en `firestore.rules` si no la usa nadie
-  más (líneas 358-361 son para esto). Verificar no haya otros consumers.
-- Migrar el counter `counters/facturas.count` a `config/contadores.ultimaFactura`
-  tomando el max de ambos.
+### Cambios en `src/pages/Facturas.tsx`
 
-**Opción B — Si `Facturas.tsx` está en uso:**
-- Reemplazar `getNextNumero()` (líneas 173-187) por una llamada a
-  `siguienteNumeroFactura()` del servicio oficial.
-- Eliminar la lectura/escritura a `counters/facturas`.
-- Si los prefijos son intencionalmente distintos (`FAC-` vs `CG-`),
-  agregar una función separada en el servicio (ej:
-  `siguienteNumeroFacturaLegacy()`) que use el mismo doc oficial pero
-  emita prefijo distinto. Pero **la fuente del número debe ser una sola**.
+1. **Importar `siguienteNumeroFactura()`** de `contadores.service.ts`.
+2. **Eliminar `getNextNumero()`** (líneas 173-187) y la función helper en `utils/index.ts:397`.
+3. **Reemplazar la llamada local por `await siguienteNumeroFactura()`**.
+4. **El número devuelto ahora viene como `CG-####`** (no `FAC-####`). Eso es lo correcto — la sidebar dice "Conduces de Garantía" así que el prefijo debe ser `CG-`.
 
-**Opción C — Mantener ambos pero documentar:**
-- Agregar comment grande en ambos archivos explicando que son sistemas
-  paralelos por razón histórica.
-- Garantizar que nunca emitan docs simultáneamente (ej: feature flag).
+### Cambios en `firestore.rules`
 
-Recomendación fuerte: **A o B**. C es deuda que se pudre.
+Si `counters/facturas` queda sin lectores ni escritores después del refactor, eliminar la rule `match /counters/{docId}` (líneas 358-361). Cleanup de superficie de ataque.
+
+Verificar antes de borrar:
+
+```bash
+grep -rn "'counters'" src/ api/
+grep -rn "\"counters\"" src/ api/
+```
+
+Si retorna solo `Facturas.tsx` (que ya estará refactorizado), borrar la rule.
+
+### Migración del counter (script one-shot)
+
+Antes de switchear el flujo, alinear `config/contadores.ultimaFactura` al máximo de ambos para que los nuevos números no choquen con ningún CG- ni FAC- ya emitido.
+
+```typescript
+// scripts/consolidar-counter-facturas.ts
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { db } from '../src/firebase/config';
+
+async function main() {
+  const legacyRef = doc(db, 'counters', 'facturas');
+  const oficialRef = doc(db, 'config', 'contadores');
+
+  const legacy = await getDoc(legacyRef);
+  const oficial = await getDoc(oficialRef);
+
+  const maxLegacy = legacy.exists() ? (legacy.data().count ?? 0) : 0;
+  const maxOficial = oficial.exists() ? (oficial.data().ultimaFactura ?? 0) : 0;
+  const consolidado = Math.max(maxLegacy, maxOficial);
+
+  if (consolidado > maxOficial) {
+    await updateDoc(oficialRef, { ultimaFactura: consolidado });
+    console.log(`Consolidado: ${maxOficial} → ${consolidado} (legacy era ${maxLegacy})`);
+  } else {
+    console.log(`No requiere ajuste. Oficial=${maxOficial}, Legacy=${maxLegacy}`);
+  }
+}
+
+main().catch(console.error);
+```
+
+Idempotente. Correr **antes** del refactor. Output esperado:
+
+```
+Consolidado: 47 → 73 (legacy era 73)
+```
+
+O `No requiere ajuste` si `oficial >= legacy`.
+
+### Documentos históricos con `FAC-####` en colección `facturas`
+
+**No tocar.** Son legítimos. Solo el flujo de **generación nueva** se consolida. Reportes y vistas siguen mostrando los `FAC-####` viejos junto con los `CG-####` nuevos. Eso es esperado.
+
+Si querés normalizar visualmente (todos como CG-), eso es un sprint separado de migración de data — costoso y arriesgado, no recomendado.
 
 ## Verificación
 
-Tester:
-- Si Opción A: confirmar que `/facturas` o ruta equivalente devuelve 404
-  o redirige a `/admin/facturacion-pendiente`.
-- Si Opción B: emitir factura desde Facturas.tsx, emitir conduce desde
-  FacturacionPendiente.tsx, confirmar que los números son secuenciales
-  (no se repiten) y que ambos vienen del counter oficial.
-- En ambos casos: correr `siguienteNumeroFactura()` 5 veces consecutivas
-  desde la consola y verificar que devuelve `N, N+1, N+2, N+3, N+4`.
+**Tester:**
 
-Reviewer:
-- Si Opción A: verificar que no quedan referencias huérfanas a
-  `Facturas.tsx`, `getNextNumero`, o `counters/facturas`.
-- Si Opción B: la nueva función del servicio pasa por `runTransaction`
-  y mantiene el patrón existente.
-- En ambos: la rule `match /counters/{docId}` puede borrarse si la
-  colección queda sin uso (cleanup de superficie de ataque).
+1. Correr el script de consolidación. Verificar que el counter oficial es ≥ al legacy.
+2. Abrir `/admin/facturas` → crear nuevo conduce → verificar que el número generado es `CG-####` (no `FAC-####`).
+3. Abrir `/admin/facturacion-pendiente` → emitir conduce desde una orden → verificar que el número es secuencial al anterior (no se repite).
+4. Crear 5 conduces consecutivos alternando entre las 2 páginas → verificar números secuenciales.
+5. Test de concurrencia: 2 tabs abiertas, una en cada página, click "emitir" al mismo segundo → verificar que generan 2 números distintos secuenciales (la transacción del servicio oficial garantiza esto).
+6. Verificar que documentos viejos con `FAC-####` siguen visibles y no se modifican.
 
-## Migración del counter (si aplica)
+**Reviewer:**
 
-Si `counters/facturas.count > config/contadores.ultimaFactura`, hay
-que sincronizar antes de cortar el sistema legacy para no emitir
-números menores que los ya emitidos:
-
-```typescript
-// Script one-shot scripts/consolidar-counter-facturas.ts
-const legacy = await getDoc(doc(db, 'counters', 'facturas'));
-const oficial = await getDoc(doc(db, 'config', 'contadores'));
-
-const maxLegacy = legacy.exists() ? legacy.data().count : 0;
-const maxOficial = oficial.exists() ? oficial.data().ultimaFactura : 0;
-const consolidado = Math.max(maxLegacy, maxOficial);
-
-await updateDoc(doc(db, 'config', 'contadores'), {
-  ultimaFactura: consolidado,
-});
-
-console.log(`Counter consolidado en ${consolidado} (legacy=${maxLegacy}, oficial=${maxOficial})`);
-```
-
-Idempotente. Correr una vez antes del fix.
+- `Facturas.tsx` no tiene código muerto post-refactor (no quedan referencias a `counters/facturas`, `getNextNumero`, `generateNumeroFactura`).
+- `firestore.rules` no expone `match /counters` si la colección queda sin uso.
+- `utils/index.ts:397` borrado o documentado como deprecated.
+- El refactor preserva la UX existente — el usuario admin no nota cambio en la página, solo el prefijo del número emitido.
+- Strip undefined antes de Firestore writes (defensivo).
 
 ## Alcance
 
-- Investigación previa: 30 min.
-- Fix Opción A: ~30 min (eliminar página + ruta + rule + migración).
-- Fix Opción B: ~1 hora (refactor a servicio + migración).
+- Refactor `Facturas.tsx` + helper `utils/index.ts`: ~30 min.
+- Script consolidación: ~15 min (corre 1 vez).
+- Cleanup `firestore.rules`: ~5 min.
 - Tester + Reviewer: 30 min cada uno.
 
-Total estimado: 2-3 horas.
+Total estimado: **~2 horas**.
 
-## Commit message sugerido (Opción A)
+## Commit message sugerido
 
 ```
-fix(audit): consolidar counters de facturas y eliminar Facturas.tsx legacy
+fix(audit): consolidar counters de facturas en sistema oficial CG-
 
-Eliminamos el flujo legacy de Facturas.tsx que generaba numeros FAC-
-contra counters/facturas.count, paralelo al sistema oficial CG- de
-FacturacionPendiente.tsx contra config/contadores.ultimaFactura.
+Antes habia dos paginas activas generando "Conduces de Garantia" con
+counters distintos:
 
-Riesgo cerrado: dos sistemas emitiendo numeros independientes podian
-colisionar fiscalmente (DGII, auditorias externas, ERPs).
+- Facturas.tsx: counters/facturas.count, prefijo FAC-####
+- FacturacionPendiente.tsx: config/contadores.ultimaFactura, prefijo CG-####
+
+Ambas activas, ambas con permisos. Si dos admins emitian
+simultaneamente desde rutas distintas, los numeros podian colisionar
+internamente (FAC-0042 y CG-0042 distintos). El sidebar mostraba
+"Conduces de Garantia" para ambas, lo que era inconsistente con el
+prefijo FAC- emitido por una de ellas.
 
 Cambios:
-- Borrada src/pages/Facturas.tsx y su ruta en App.tsx.
-- Borrada rule match /counters en firestore.rules (la coleccion queda
-  vacia, sin lectores ni escritores).
-- Script one-shot scripts/consolidar-counter-facturas.ts ejecutado:
-  alinea config/contadores.ultimaFactura al max(legacy, oficial).
+- Facturas.tsx ahora usa siguienteNumeroFactura() del servicio oficial,
+  emitiendo CG-#### consistente con el resto del sistema.
+- Eliminada la funcion local getNextNumero() y el helper
+  generateNumeroFactura() en utils/index.ts.
+- Eliminada la rule match /counters en firestore.rules (la coleccion
+  queda sin uso, cleanup de superficie de ataque).
+- Script one-shot scripts/consolidar-counter-facturas.ts ejecutado
+  antes del refactor: alinea config/contadores.ultimaFactura al max
+  entre legacy y oficial para evitar emision de numeros menores.
 
 Documentos historicos con prefijo FAC- en la coleccion facturas se
-preservan tal cual (no se modifican, son legitimos).
+preservan (no se modifican, son legitimos pre-refactor).
+
+Sin cambios visibles para admin/coord salvo que los nuevos numeros
+emitidos desde /admin/facturas ahora son CG- en vez de FAC-.
+
+NO hay impacto DGII (los conduces son registro contable interno, no
+fiscal). Los reportes 606/607 leen desde otra fuente.
 ```
+
+## Ante cualquier ambigüedad
+
+- Si admin/coord prefiere mantener prefijo FAC- en `/admin/facturas` (porque es un flujo distinto a `/admin/facturacion-pendiente`), agregar parámetro al servicio oficial:
+  ```typescript
+  siguienteNumeroFactura(prefijo: 'CG' | 'FAC' = 'CG'): Promise<string>
+  ```
+  Pero **mantener un solo counter** (`config/contadores.ultimaFactura`). Eso resuelve la colisión sin perder distinción visual entre flujos. Validar con Jorge si lo prefiere así.
+- Si `counters/facturas` tiene data antigua que nadie consulta, dejar la colección como está (no hace falta borrar el doc — solo dejar de escribirla). La rule sí se puede borrar.
+- Si después de unificar se quiere distinguir el origen del conduce (página `/facturas` vs flujo automático post-cierre), usar un campo separado en el doc `facturas` (`origen: 'manual' | 'auto-cierre'`) en vez de prefijos distintos.

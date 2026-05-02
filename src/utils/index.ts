@@ -401,10 +401,6 @@ export function generateNumeroCotizacion(count: number): string {
   return `QT-${String(count + 1).padStart(5, '0')}`;
 }
 
-export function generateNumeroFactura(count: number): string {
-  return `FAC-${String(count + 1).padStart(5, '0')}`;
-}
-
 /**
  * @deprecated Usa `useTiposEquipo()` de `src/hooks/useTiposEquipo.ts` para
  * leer la lista en vivo desde el catálogo admin. Esta constante se
@@ -961,6 +957,9 @@ export function parseFactura(id: string, raw: Record<string, unknown>): Factura 
       ? raw.tipoCierre
       : undefined,
     garantia,
+    origen: raw.origen === 'manual' || raw.origen === 'post-cierre'
+      ? raw.origen
+      : undefined,
     createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
   };
 }

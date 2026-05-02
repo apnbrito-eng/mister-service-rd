@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, Timestamp, query, orderBy, runTransaction } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, query, orderBy, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Factura, EstadoFactura, ItemCotizacion, MetodoPago, OrdenServicio } from '../types';
-import { formatMoneda, formatFechaCorta, generateNumeroFactura, parseOrden, parseFactura } from '../utils';
+import { formatMoneda, formatFechaCorta, parseOrden, parseFactura } from '../utils';
+import { siguienteNumeroFactura } from '../services/contadores.service';
 import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
@@ -169,23 +170,6 @@ export default function Facturas() {
     items: [{ descripcion: '', cantidad: 1, precio: 0 }],
   });
 
-  // Generate unique number via Firestore counter
-  const getNextNumero = async (): Promise<string> => {
-    const counterRef = doc(db, 'counters', 'facturas');
-    let newCount = 0;
-    await runTransaction(db, async (transaction) => {
-      const counterDoc = await transaction.get(counterRef);
-      if (counterDoc.exists()) {
-        newCount = (counterDoc.data().count || 0) + 1;
-        transaction.update(counterRef, { count: newCount });
-      } else {
-        newCount = 1;
-        transaction.set(counterRef, { count: newCount });
-      }
-    });
-    return generateNumeroFactura(newCount - 1);
-  };
-
   // Create factura
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -195,25 +179,34 @@ export default function Facturas() {
 
     setSaving(true);
     try {
-      const numero = await getNextNumero();
+      // Counter oficial: emite `CG-####` con transacción atómica (mismo
+      // counter que usa FacturacionPendiente.tsx, evita colisiones).
+      const numero = await siguienteNumeroFactura();
       const docData: Record<string, unknown> = {
         numero,
         clienteNombre: form.clienteNombre.trim(),
-        ordenNumero: form.ordenNumero.trim() || null,
         items: form.items,
         total,
         estado: 'emitida' as EstadoFactura,
         fechaEmision: Timestamp.now(),
-        notas: form.notas.trim() || null,
         createdAt: Timestamp.now(),
         // Conduces manuales se asumen como reparación completa (no chequeo).
         tipoCierre: 'reparacion_completa',
+        // Origen: distingue conduces creados manualmente desde /admin/facturas
+        // de los emitidos automáticamente al cerrar una orden.
+        origen: 'manual' as const,
       };
+      if (form.ordenNumero.trim()) docData.ordenNumero = form.ordenNumero.trim();
+      if (form.notas.trim()) docData.notas = form.notas.trim();
       if (form.metodoPago) docData.metodoPago = form.metodoPago;
       if (form.metodoPago === 'transferencia' && form.bancoDestino.trim()) {
         docData.bancoDestino = form.bancoDestino.trim();
       }
-      await addDoc(collection(db, 'facturas'), docData);
+      // Strip undefined defensivo (Firestore rechaza undefined).
+      const docLimpio = Object.fromEntries(
+        Object.entries(docData).filter(([, v]) => v !== undefined),
+      );
+      await addDoc(collection(db, 'facturas'), docLimpio);
       toast.success(`Conduce ${numero} creado`);
       setShowModal(false);
       resetForm();

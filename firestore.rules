@@ -501,14 +501,6 @@ service cloud.firestore {
       allow write: if esStaffOficina();
     }
 
-    // Counters legacy (parallelo a config/contadores).
-    // Facturas.tsx usa `counters/facturas` para generar números FAC vía
-    // runTransaction. Mantener accesible a staff (read+write para tx).
-    match /counters/{docId} {
-      allow read: if esStaff();
-      allow write: if esStaff();
-    }
-
     // Configuración (counters, empresa, fiscal, tiposEquipo, etc.)
     match /config/{docId} {
       // Public read SOLO para tipos que el form público lee (tiposEquipo).
