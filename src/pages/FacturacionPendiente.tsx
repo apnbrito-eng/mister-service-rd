@@ -26,6 +26,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import ModalEditarPiezasOrden from '../components/cierre/ModalEditarPiezasOrden';
 import ModalEditarOrdenAdmin from '../components/ordenes/ModalEditarOrdenAdmin';
+import FiltroRangoFechas, { formatYYYYMMDDLocal } from '../components/admin/FiltroRangoFechas';
 import {
   Inbox, Receipt, ArrowRight, Banknote, ArrowRightLeft, CreditCard, Trash2, Plus, Check,
   ChevronDown, ChevronUp, Pencil, Package,
@@ -49,6 +50,13 @@ export default function FacturacionPendiente() {
   const [editandoPiezasOrden, setEditandoPiezasOrden] = useState<OrdenServicio | null>(null);
   const [editandoOrdenAdmin, setEditandoOrdenAdmin] = useState<OrdenServicio | null>(null);
   const [aprobandoPiezasId, setAprobandoPiezasId] = useState<string | null>(null);
+
+  // Filtro de rango de fechas sobre `enviadaAFacturacionAt`. Default: mes corriente.
+  const [fechaDesde, setFechaDesde] = useState<string>(() => {
+    const hoy = new Date();
+    return formatYYYYMMDDLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+  });
+  const [fechaHasta, setFechaHasta] = useState<string>(() => formatYYYYMMDDLocal(new Date()));
 
   const esAdmin = userProfile?.rol === 'administrador';
 
@@ -79,6 +87,25 @@ export default function FacturacionPendiente() {
     });
     return () => unsub();
   }, []);
+
+  const ordenesFiltradas = useMemo(() => {
+    if (!fechaDesde && !fechaHasta) return ordenes;
+    const desdeMs = fechaDesde ? new Date(fechaDesde + 'T00:00:00').getTime() : null;
+    const hastaMs = fechaHasta ? new Date(fechaHasta + 'T23:59:59').getTime() : null;
+    return ordenes.filter(o => {
+      const fecha = o.enviadaAFacturacionAt;
+      if (!(fecha instanceof Date)) return false;
+      const t = fecha.getTime();
+      if (desdeMs !== null && t < desdeMs) return false;
+      if (hastaMs !== null && t > hastaMs) return false;
+      return true;
+    });
+  }, [ordenes, fechaDesde, fechaHasta]);
+
+  const limpiarFiltroFechas = () => {
+    setFechaDesde('');
+    setFechaHasta('');
+  };
 
   const togglePiezas = (ordenId: string) => {
     setPiezasExpandidas(prev => {
@@ -143,20 +170,34 @@ export default function FacturacionPendiente() {
           </p>
         </div>
         <span className="ml-auto inline-flex items-center gap-1.5 bg-blue-50 text-[#0f3460] px-3 py-1 rounded-full text-sm font-semibold">
-          {ordenes.length} pendientes
+          {ordenesFiltradas.length === ordenes.length
+            ? `${ordenes.length} pendientes`
+            : `${ordenesFiltradas.length} de ${ordenes.length} pendientes`}
         </span>
       </div>
 
-      {ordenes.length === 0 ? (
+      <FiltroRangoFechas
+        fechaDesde={fechaDesde}
+        fechaHasta={fechaHasta}
+        onChange={(d, h) => { setFechaDesde(d); setFechaHasta(h); }}
+        onLimpiar={limpiarFiltroFechas}
+        totalSinFiltrar={ordenes.length}
+        totalFiltrado={ordenesFiltradas.length}
+        etiqueta="Enviadas a facturación:"
+      />
+
+      {ordenesFiltradas.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
           <Receipt size={40} className="mx-auto text-gray-300 mb-3" />
           <p className="text-gray-500 text-sm">
-            No hay órdenes pendientes. Cuando una operaria envíe una orden para conduce de garantía, aparecerá aquí.
+            {ordenes.length === 0
+              ? 'No hay órdenes pendientes. Cuando una operaria envíe una orden para conduce de garantía, aparecerá aquí.'
+              : 'No hay órdenes pendientes en el rango de fechas seleccionado.'}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {ordenes.map(o => {
+          {ordenesFiltradas.map(o => {
             const total = Number(o.precioFinal || o.precioAprobado || o.precioSugerido || 0);
             const pagado = Number(o.montoPagado || 0);
             const pendiente = Math.max(0, total - pagado);

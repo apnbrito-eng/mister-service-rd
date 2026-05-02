@@ -11,6 +11,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import CatalogoSelectorModal, { type SeleccionCatalogo } from '../components/CatalogoSelectorModal';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
+import FiltroRangoFechas, { formatYYYYMMDDLocal } from '../components/admin/FiltroRangoFechas';
 import { Plus, FileText, Trash2, Edit, Check, Printer, X, Copy, Receipt, Search, Boxes, Tag } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -125,6 +126,13 @@ export default function Cotizaciones() {
 
   const [filtroEstado, setFiltroEstado] = useState('');
   const [busqueda, setBusqueda] = useState('');
+
+  // Filtro de rango de fechas sobre `createdAt`. Default: mes corriente.
+  const [fechaDesde, setFechaDesde] = useState<string>(() => {
+    const hoy = new Date();
+    return formatYYYYMMDDLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+  });
+  const [fechaHasta, setFechaHasta] = useState<string>(() => formatYYYYMMDDLocal(new Date()));
   const [form, setForm] = useState<{
     clienteNombre: string;
     tecnicoNombre: string;
@@ -376,11 +384,26 @@ export default function Cotizaciones() {
     win.print();
   };
 
+  const desdeMs = fechaDesde ? new Date(fechaDesde + 'T00:00:00').getTime() : null;
+  const hastaMs = fechaHasta ? new Date(fechaHasta + 'T23:59:59').getTime() : null;
   const cotizacionesFiltradas = cotizaciones.filter(c => {
     const matchEstado = !filtroEstado || c.estado === filtroEstado;
     const matchBusqueda = !busqueda || c.clienteNombre.toLowerCase().includes(busqueda.toLowerCase()) || c.numero.toLowerCase().includes(busqueda.toLowerCase());
-    return matchEstado && matchBusqueda;
+    if (!matchEstado || !matchBusqueda) return false;
+    if (desdeMs !== null || hastaMs !== null) {
+      const fecha = c.createdAt;
+      if (!(fecha instanceof Date)) return false;
+      const t = fecha.getTime();
+      if (desdeMs !== null && t < desdeMs) return false;
+      if (hastaMs !== null && t > hastaMs) return false;
+    }
+    return true;
   });
+
+  const limpiarFiltroFechas = () => {
+    setFechaDesde('');
+    setFechaHasta('');
+  };
 
   if (loading) return <LoadingSpinner fullPage text="Cargando cotizaciones..." />;
 
@@ -389,7 +412,11 @@ export default function Cotizaciones() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0f3460]">Cotizaciones</h1>
-          <p className="text-gray-500 text-sm">{cotizaciones.length} cotizaciones</p>
+          <p className="text-gray-500 text-sm">
+            {cotizacionesFiltradas.length === cotizaciones.length
+              ? `${cotizaciones.length} cotizaciones`
+              : `Mostrando ${cotizacionesFiltradas.length} de ${cotizaciones.length} cotizaciones`}
+          </p>
         </div>
         {puedeCrear && (
           <button onClick={() => { resetForm(); setEditingId(null); setShowModal(true); }}
@@ -400,20 +427,30 @@ export default function Cotizaciones() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap items-center">
-        <div className="flex gap-2 flex-wrap">
-          {['', 'borrador', 'enviada', 'aceptada', 'rechazada'].map(e => (
-            <button key={e} onClick={() => setFiltroEstado(e)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroEstado === e ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              {e === '' ? 'Todas' : ESTADO_LABELS[e as EstadoCotizacion]}
-            </button>
-          ))}
+      <div>
+        <div className="flex gap-3 flex-wrap items-center">
+          <div className="flex gap-2 flex-wrap">
+            {['', 'borrador', 'enviada', 'aceptada', 'rechazada'].map(e => (
+              <button key={e} onClick={() => setFiltroEstado(e)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroEstado === e ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                {e === '' ? 'Todas' : ESTADO_LABELS[e as EstadoCotizacion]}
+              </button>
+            ))}
+          </div>
+          <div className="relative flex-1 min-w-[200px]">
+            <input type="text" placeholder="Buscar por cliente o número..."
+              value={busqueda} onChange={e => setBusqueda(e.target.value)}
+              className="w-full pl-3 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+          </div>
         </div>
-        <div className="relative flex-1 min-w-[200px]">
-          <input type="text" placeholder="Buscar por cliente o número..."
-            value={busqueda} onChange={e => setBusqueda(e.target.value)}
-            className="w-full pl-3 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-        </div>
+        <FiltroRangoFechas
+          fechaDesde={fechaDesde}
+          fechaHasta={fechaHasta}
+          onChange={(d, h) => { setFechaDesde(d); setFechaHasta(h); }}
+          onLimpiar={limpiarFiltroFechas}
+          totalSinFiltrar={cotizaciones.length}
+          totalFiltrado={cotizacionesFiltradas.length}
+        />
       </div>
 
       {cotizacionesFiltradas.length === 0 ? (

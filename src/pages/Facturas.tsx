@@ -8,6 +8,7 @@ import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
+import FiltroRangoFechas, { formatYYYYMMDDLocal } from '../components/admin/FiltroRangoFechas';
 import { Plus, FileText, Trash2, Check, Printer, Search, Filter, DollarSign, CalendarDays, TrendingUp, X, ChevronDown, Shield } from 'lucide-react';
 import { startOfMonth, startOfDay, endOfDay, startOfYear, endOfYear, isWithinInterval, format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -67,6 +68,15 @@ export default function Facturas() {
   const [busqueda, setBusqueda] = useState('');
   const [yearSelected, setYearSelected] = useState(new Date().getFullYear());
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Filtro de rango de fechas. Default: primer día del mes corriente → hoy.
+  // Cuando ambos quedan en '', se desactiva y muestra todo el histórico.
+  const [fechaDesde, setFechaDesde] = useState<string>(() => {
+    const hoy = new Date();
+    return formatYYYYMMDDLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
+  });
+  const [fechaHasta, setFechaHasta] = useState<string>(() => formatYYYYMMDDLocal(new Date()));
+  const [campoFecha, setCampoFecha] = useState<'emision' | 'pago'>('emision');
 
   const [form, setForm] = useState({
     clienteNombre: '',
@@ -149,8 +159,25 @@ export default function Facturas() {
         f.numero.toLowerCase().includes(q)
       );
     }
+    if (fechaDesde || fechaHasta) {
+      const desdeMs = fechaDesde ? new Date(fechaDesde + 'T00:00:00').getTime() : null;
+      const hastaMs = fechaHasta ? new Date(fechaHasta + 'T23:59:59').getTime() : null;
+      lista = lista.filter(f => {
+        const campo = campoFecha === 'emision' ? f.fechaEmision : f.fechaPago;
+        if (!campo) return false;
+        const t = campo instanceof Date ? campo.getTime() : new Date(campo).getTime();
+        if (desdeMs !== null && t < desdeMs) return false;
+        if (hastaMs !== null && t > hastaMs) return false;
+        return true;
+      });
+    }
     return lista;
-  }, [facturas, filtro, busqueda]);
+  }, [facturas, filtro, busqueda, fechaDesde, fechaHasta, campoFecha]);
+
+  const limpiarFiltroFechas = () => {
+    setFechaDesde('');
+    setFechaHasta('');
+  };
 
   // Form helpers
   const total = form.items.reduce((sum, item) => sum + item.cantidad * item.precio, 0);
@@ -473,7 +500,11 @@ export default function Facturas() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[#0f3460]">Conduces de Garantía</h1>
-          <p className="text-gray-500 text-sm">{facturas.length} facturas</p>
+          <p className="text-gray-500 text-sm">
+            {facturasFiltradas.length === facturas.length
+              ? `${facturas.length} facturas`
+              : `Mostrando ${facturasFiltradas.length} de ${facturas.length} facturas`}
+          </p>
         </div>
         {puedeCrear && (
         <button
@@ -545,32 +576,48 @@ export default function Facturas() {
       </div>
 
       {/* Filters + Search */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-        <div className="flex gap-1.5 flex-wrap">
-          {FILTROS.map(f => (
-            <button
-              key={f.value}
-              onClick={() => setFiltro(f.value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                filtro === f.value
-                  ? 'bg-[#0f3460] text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+      <div>
+        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+          <div className="flex gap-1.5 flex-wrap">
+            {FILTROS.map(f => (
+              <button
+                key={f.value}
+                onClick={() => setFiltro(f.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  filtro === f.value
+                    ? 'bg-[#0f3460] text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <div className="relative w-full sm:w-64">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar por cliente..."
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
+          </div>
         </div>
-        <div className="relative w-full sm:w-64">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Buscar por cliente..."
-            value={busqueda}
-            onChange={e => setBusqueda(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-          />
-        </div>
+        <FiltroRangoFechas
+          fechaDesde={fechaDesde}
+          fechaHasta={fechaHasta}
+          onChange={(d, h) => { setFechaDesde(d); setFechaHasta(h); }}
+          onLimpiar={limpiarFiltroFechas}
+          totalSinFiltrar={facturas.length}
+          totalFiltrado={facturasFiltradas.length}
+          campoFecha={campoFecha}
+          onChangeCampo={v => setCampoFecha(v as 'emision' | 'pago')}
+          opcionesCampoFecha={[
+            { value: 'emision', label: 'Por emisión' },
+            { value: 'pago', label: 'Por pago' },
+          ]}
+        />
       </div>
 
       {/* Table */}
