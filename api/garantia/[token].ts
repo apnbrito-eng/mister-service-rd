@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getAdminFirestore } from '../_lib/firebaseAdmin.js';
+import { getAdminFirestore, verificarAppCheck } from '../_lib/firebaseAdmin.js';
 
 /**
  * Endpoint público (sin auth) para consultar y reclamar la garantía de un
@@ -16,6 +16,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (typeof token !== 'string' || !token) {
     return res.status(400).json({ error: 'Token requerido' });
   }
+
+  // Audit C3 fase A: soft enforcement. Loggeamos resultado pero NO bloqueamos.
+  const appCheckResult = await verificarAppCheck(req);
+  console.log(JSON.stringify({
+    endpoint: 'garantia',
+    app_check: appCheckResult,
+    token_orden: token.substring(0, 8) + '...',
+  }));
 
   let db: ReturnType<typeof getAdminFirestore>;
   try {

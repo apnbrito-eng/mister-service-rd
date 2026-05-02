@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { getAdminFirestore } from '../../_lib/firebaseAdmin.js';
+import { getAdminFirestore, verificarAppCheck } from '../../_lib/firebaseAdmin.js';
 
 /**
  * Endpoint público (sin auth) para que el cliente proponga una nueva fecha de
@@ -44,6 +44,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (typeof token !== 'string' || token.length < 16) {
     return res.status(400).json({ error: 'token_invalido' });
   }
+
+  // Audit C3 fase A: soft enforcement. Loggeamos resultado pero NO bloqueamos.
+  const appCheckResult = await verificarAppCheck(req);
+  console.log(JSON.stringify({
+    endpoint: 'portal-cliente/posponer',
+    app_check: appCheckResult,
+    token_orden: token.substring(0, 8) + '...',
+  }));
 
   // ─── Body parsing y validaciones de forma ───
   const body = (req.body ?? {}) as {

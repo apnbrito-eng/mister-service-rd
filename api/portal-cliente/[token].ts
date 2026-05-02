@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getAdminFirestore } from '../_lib/firebaseAdmin.js';
+import { getAdminFirestore, verificarAppCheck } from '../_lib/firebaseAdmin.js';
 
 /**
  * Endpoint público (sin auth) que sirve datos de la orden al Portal del
@@ -38,6 +38,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (typeof token !== 'string' || token.length < 16) {
     return res.status(400).json({ error: 'token_invalido' });
   }
+
+  // Audit C3 fase A: soft enforcement. Loggeamos resultado pero NO bloqueamos.
+  const appCheckResult = await verificarAppCheck(req);
+  console.log(JSON.stringify({
+    endpoint: 'portal-cliente',
+    app_check: appCheckResult,
+    token_orden: token.substring(0, 8) + '...',
+  }));
 
   let db: ReturnType<typeof getAdminFirestore>;
   try {

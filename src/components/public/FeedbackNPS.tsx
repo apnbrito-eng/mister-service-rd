@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CheckCircle, MessageCircle, Star, AlertTriangle } from 'lucide-react';
 import type { ConfigFeedbackNPS } from '../../services/configWeb.service';
+import { obtenerAppCheckToken } from '../../lib/appCheck';
 
 type RatingTipo = 'detractor' | 'pasivo' | 'promotor';
 
@@ -82,9 +83,12 @@ export default function FeedbackNPS({
       if (opts?.googleReviewClicked) payload.googleReviewClicked = true;
       if (opts?.whatsappContactClicked) payload.whatsappContactClicked = true;
 
+      const appCheckToken = await obtenerAppCheckToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
       const res = await fetch(`/api/feedback/${encodeURIComponent(token)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       });
       if (res.status === 409) {
@@ -124,9 +128,12 @@ export default function FeedbackNPS({
       if (flags.googleReviewClicked) payload.googleReviewClicked = true;
       if (flags.whatsappContactClicked) payload.whatsappContactClicked = true;
       if (Object.keys(payload).length === 0) return;
+      const appCheckToken = await obtenerAppCheckToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
       await fetch(`/api/feedback/${encodeURIComponent(token)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(payload),
       });
     } catch (err) {

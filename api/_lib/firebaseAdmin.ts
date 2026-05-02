@@ -1,4 +1,6 @@
+import type { VercelRequest } from '@vercel/node';
 import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
+import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
@@ -51,4 +53,38 @@ export function getAdminAuth(): Auth {
 
 export function getAdminFirestore(): Firestore {
   return getFirestore(getAdminApp());
+}
+
+export interface VerificarAppCheckResult {
+  ok: boolean;
+  appId?: string;
+  reason?: 'no-token' | 'invalid-token';
+}
+
+/**
+ * Verifica el header `X-Firebase-AppCheck` del request.
+ *
+ * Fase A del audit C3: el caller NO bloquea — solo loggea el resultado para
+ * medir 24-48h de tráfico legítimo vs anónimo antes de pasar a hard
+ * enforcement (fase B). Por eso esta función jamás throwa: cualquier fallo
+ * vuelve como `ok: false` con el motivo.
+ *
+ * Importante: nunca loguear el token mismo (es un JWT con info de la app);
+ * solo el `appId` cuando es válido o el `reason` cuando falla.
+ */
+export async function verificarAppCheck(
+  req: VercelRequest,
+): Promise<VerificarAppCheckResult> {
+  const headerRaw = req.headers['x-firebase-appcheck'];
+  const headerValue = Array.isArray(headerRaw) ? headerRaw[0] : headerRaw;
+  if (typeof headerValue !== 'string' || headerValue.length === 0) {
+    return { ok: false, reason: 'no-token' };
+  }
+  try {
+    getAdminApp();
+    const result = await getAppCheck().verifyToken(headerValue);
+    return { ok: true, appId: result.appId };
+  } catch {
+    return { ok: false, reason: 'invalid-token' };
+  }
 }

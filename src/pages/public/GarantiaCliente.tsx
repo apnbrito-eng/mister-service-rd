@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import Logo from '../../components/Logo';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { Shield, ShieldAlert, ShieldCheck, ShieldOff, Clock, Wrench, User, Calendar, AlertCircle, Send, X } from 'lucide-react';
+import { obtenerAppCheckToken } from '../../lib/appCheck';
 
 interface GarantiaApiInfo {
   conduceNumero: string | null;
@@ -50,7 +51,10 @@ export default function GarantiaCliente() {
     setCargando(true);
     setError(null);
     try {
-      const res = await fetch(`/api/garantia/${encodeURIComponent(token)}`);
+      const appCheckToken = await obtenerAppCheckToken();
+      const headers: Record<string, string> = {};
+      if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
+      const res = await fetch(`/api/garantia/${encodeURIComponent(token)}`, { headers });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setError((data as { error?: string }).error || 'No se pudo cargar la garantía');
@@ -81,9 +85,12 @@ export default function GarantiaCliente() {
     setEnviando(true);
     setError(null);
     try {
+      const appCheckToken = await obtenerAppCheckToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
       const res = await fetch(`/api/garantia/${encodeURIComponent(token)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ problemaDescripcion: problema.trim() }),
       });
       const data = await res.json().catch(() => ({}));

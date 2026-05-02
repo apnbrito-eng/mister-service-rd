@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertCircle, Calendar, Loader2, X } from 'lucide-react';
 import { SLOTS_HORARIOS, MAX_DIAS_FUTURO } from '../../utils/agenda';
+import { obtenerAppCheckToken } from '../../lib/appCheck';
 
 /** Mensajes de error UI ↔ código de error del backend. */
 const MENSAJES_ERROR: Record<string, string> = {
@@ -117,9 +118,12 @@ export default function ModalPosponer({ token, onClose, onSubmitted }: Props) {
       const fechaInstante = new Date(y, m - 1, d, slot.hour, 0, 0, 0);
       const isoString = fechaInstante.toISOString();
 
+      const appCheckToken = await obtenerAppCheckToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
       const resp = await fetch(`/api/portal-cliente/${token}/posponer`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           fechaNuevaPropuesta: isoString,
           motivo: motivo.trim(),

@@ -22,6 +22,7 @@ import FeedbackNPS, { FeedbackYaEnviado } from '../../components/public/Feedback
 import ModalPosponer from '../../components/public/ModalPosponer';
 import { useConfigWeb } from '../../hooks/useConfigWeb';
 import { faseColor, faseLabel, FASES_ORDENADAS } from '../../utils';
+import { obtenerAppCheckToken } from '../../lib/appCheck';
 import type { FaseOrden, OrdenServicio } from '../../types';
 
 /**
@@ -196,7 +197,10 @@ export default function PortalCliente() {
 
     async function cargar() {
       try {
-        const resp = await fetch(`/api/portal-cliente/${token}`);
+        const appCheckToken = await obtenerAppCheckToken();
+        const headers: Record<string, string> = {};
+        if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
+        const resp = await fetch(`/api/portal-cliente/${token}`, { headers });
         if (cancelado) return;
 
         if (resp.status === 404) {
@@ -663,17 +667,21 @@ function FeedbackNPSWrapper(props: {
 
   useEffect(() => {
     let cancelado = false;
-    fetch(`/api/feedback/${token}`)
-      .then(r => r.json())
-      .then((body: {
-        yaEnviado?: boolean;
-        feedback?: {
-          nps?: number;
-          ratingTipo?: string;
-          comentario?: string;
-          fechaFeedback?: string;
+    (async () => {
+      try {
+        const appCheckToken = await obtenerAppCheckToken();
+        const headers: Record<string, string> = {};
+        if (appCheckToken) headers['X-Firebase-AppCheck'] = appCheckToken;
+        const r = await fetch(`/api/feedback/${token}`, { headers });
+        const body = (await r.json()) as {
+          yaEnviado?: boolean;
+          feedback?: {
+            nps?: number;
+            ratingTipo?: string;
+            comentario?: string;
+            fechaFeedback?: string;
+          };
         };
-      }) => {
         if (cancelado) return;
         const npsRaw = body.feedback?.nps;
         if (body.yaEnviado && body.feedback && typeof npsRaw === 'number') {
@@ -694,11 +702,11 @@ function FeedbackNPSWrapper(props: {
         } else {
           setEstado({ tipo: 'pendiente' });
         }
-      })
-      .catch(() => {
+      } catch {
         if (cancelado) return;
         setEstado({ tipo: 'pendiente' });
-      });
+      }
+    })();
     return () => {
       cancelado = true;
     };
