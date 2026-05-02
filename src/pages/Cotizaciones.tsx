@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, Timestamp, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -11,8 +11,8 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import CatalogoSelectorModal, { type SeleccionCatalogo } from '../components/CatalogoSelectorModal';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
-import FiltroRangoFechas, { formatYYYYMMDDLocal } from '../components/admin/FiltroRangoFechas';
-import { Plus, FileText, Trash2, Edit, Check, Printer, X, Copy, Receipt, Search, Boxes, Tag } from 'lucide-react';
+import FiltroAvanzadoFinanzas from '../components/admin/FiltroAvanzadoFinanzas';
+import { Plus, FileText, Trash2, Edit, Check, Printer, X, Copy, Receipt, Boxes, Tag, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const ESTADO_COLORS: Record<EstadoCotizacion, string> = {
@@ -124,15 +124,8 @@ export default function Cotizaciones() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const [filtroEstado, setFiltroEstado] = useState('');
-  const [busqueda, setBusqueda] = useState('');
+  const [cotizacionesFiltradas, setCotizacionesFiltradas] = useState<Cotizacion[]>([]);
 
-  // Filtro de rango de fechas sobre `createdAt`. Default: mes corriente.
-  const [fechaDesde, setFechaDesde] = useState<string>(() => {
-    const hoy = new Date();
-    return formatYYYYMMDDLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
-  });
-  const [fechaHasta, setFechaHasta] = useState<string>(() => formatYYYYMMDDLocal(new Date()));
   const [form, setForm] = useState<{
     clienteNombre: string;
     tecnicoNombre: string;
@@ -384,26 +377,30 @@ export default function Cotizaciones() {
     win.print();
   };
 
-  const desdeMs = fechaDesde ? new Date(fechaDesde + 'T00:00:00').getTime() : null;
-  const hastaMs = fechaHasta ? new Date(fechaHasta + 'T23:59:59').getTime() : null;
-  const cotizacionesFiltradas = cotizaciones.filter(c => {
-    const matchEstado = !filtroEstado || c.estado === filtroEstado;
-    const matchBusqueda = !busqueda || c.clienteNombre.toLowerCase().includes(busqueda.toLowerCase()) || c.numero.toLowerCase().includes(busqueda.toLowerCase());
-    if (!matchEstado || !matchBusqueda) return false;
-    if (desdeMs !== null || hastaMs !== null) {
-      const fecha = c.createdAt;
-      if (!(fecha instanceof Date)) return false;
-      const t = fecha.getTime();
-      if (desdeMs !== null && t < desdeMs) return false;
-      if (hastaMs !== null && t > hastaMs) return false;
-    }
-    return true;
-  });
+  // Items adaptados al shape ItemFiltrable: el componente filtra por
+  // `fechaEmision` (acá representada por `createdAt`) y enriquece desde la
+  // orden vinculada para tipo/marca/teléfono.
+  const cotizacionesFiltrables = useMemo(() => {
+    return cotizaciones.map(c => {
+      const orden = c.ordenId ? ordenesVinculadas[c.ordenId] : undefined;
+      return {
+        ...c,
+        fechaEmision: c.createdAt,
+        equipoTipo: orden?.equipoTipo,
+        equipoMarca: orden?.equipoMarca,
+        clienteTelefono: orden?.clienteTelefono,
+        ordenNumero: orden?.numero,
+      };
+    });
+  }, [cotizaciones, ordenesVinculadas]);
 
-  const limpiarFiltroFechas = () => {
-    setFechaDesde('');
-    setFechaHasta('');
-  };
+  const estadosFiltro = useMemo(() => ([
+    { value: 'Todas', label: 'Todas' },
+    { value: 'borrador', label: 'Borrador' },
+    { value: 'enviada', label: 'Enviada' },
+    { value: 'aceptada', label: 'Aceptada' },
+    { value: 'rechazada', label: 'Rechazada' },
+  ]), []);
 
   if (loading) return <LoadingSpinner fullPage text="Cargando cotizaciones..." />;
 
@@ -426,32 +423,15 @@ export default function Cotizaciones() {
         )}
       </div>
 
-      {/* Filters */}
-      <div>
-        <div className="flex gap-3 flex-wrap items-center">
-          <div className="flex gap-2 flex-wrap">
-            {['', 'borrador', 'enviada', 'aceptada', 'rechazada'].map(e => (
-              <button key={e} onClick={() => setFiltroEstado(e)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroEstado === e ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                {e === '' ? 'Todas' : ESTADO_LABELS[e as EstadoCotizacion]}
-              </button>
-            ))}
-          </div>
-          <div className="relative flex-1 min-w-[200px]">
-            <input type="text" placeholder="Buscar por cliente o número..."
-              value={busqueda} onChange={e => setBusqueda(e.target.value)}
-              className="w-full pl-3 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-          </div>
-        </div>
-        <FiltroRangoFechas
-          fechaDesde={fechaDesde}
-          fechaHasta={fechaHasta}
-          onChange={(d, h) => { setFechaDesde(d); setFechaHasta(h); }}
-          onLimpiar={limpiarFiltroFechas}
-          totalSinFiltrar={cotizaciones.length}
-          totalFiltrado={cotizacionesFiltradas.length}
-        />
-      </div>
+      {/* Filtros */}
+      <FiltroAvanzadoFinanzas
+        pagina="cotizaciones"
+        items={cotizacionesFiltrables}
+        estados={estadosFiltro}
+        onChange={(filtrados) => {
+          setCotizacionesFiltradas(filtrados);
+        }}
+      />
 
       {cotizacionesFiltradas.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">

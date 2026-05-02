@@ -26,7 +26,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import ModalEditarPiezasOrden from '../components/cierre/ModalEditarPiezasOrden';
 import ModalEditarOrdenAdmin from '../components/ordenes/ModalEditarOrdenAdmin';
-import FiltroRangoFechas, { formatYYYYMMDDLocal } from '../components/admin/FiltroRangoFechas';
+import FiltroAvanzadoFinanzas from '../components/admin/FiltroAvanzadoFinanzas';
 import {
   Inbox, Receipt, ArrowRight, Banknote, ArrowRightLeft, CreditCard, Trash2, Plus, Check,
   ChevronDown, ChevronUp, Pencil, Package,
@@ -51,12 +51,7 @@ export default function FacturacionPendiente() {
   const [editandoOrdenAdmin, setEditandoOrdenAdmin] = useState<OrdenServicio | null>(null);
   const [aprobandoPiezasId, setAprobandoPiezasId] = useState<string | null>(null);
 
-  // Filtro de rango de fechas sobre `enviadaAFacturacionAt`. Default: mes corriente.
-  const [fechaDesde, setFechaDesde] = useState<string>(() => {
-    const hoy = new Date();
-    return formatYYYYMMDDLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
-  });
-  const [fechaHasta, setFechaHasta] = useState<string>(() => formatYYYYMMDDLocal(new Date()));
+  const [ordenesFiltradas, setOrdenesFiltradas] = useState<OrdenServicio[]>([]);
 
   const esAdmin = userProfile?.rol === 'administrador';
 
@@ -88,24 +83,16 @@ export default function FacturacionPendiente() {
     return () => unsub();
   }, []);
 
-  const ordenesFiltradas = useMemo(() => {
-    if (!fechaDesde && !fechaHasta) return ordenes;
-    const desdeMs = fechaDesde ? new Date(fechaDesde + 'T00:00:00').getTime() : null;
-    const hastaMs = fechaHasta ? new Date(fechaHasta + 'T23:59:59').getTime() : null;
-    return ordenes.filter(o => {
-      const fecha = o.enviadaAFacturacionAt;
-      if (!(fecha instanceof Date)) return false;
-      const t = fecha.getTime();
-      if (desdeMs !== null && t < desdeMs) return false;
-      if (hastaMs !== null && t > hastaMs) return false;
-      return true;
-    });
-  }, [ordenes, fechaDesde, fechaHasta]);
-
-  const limpiarFiltroFechas = () => {
-    setFechaDesde('');
-    setFechaHasta('');
-  };
+  // Adapta órdenes al shape ItemFiltrable: usa `enviadaAFacturacionAt`
+  // como fecha de "emisión" (la única fecha relevante en esta vista).
+  const ordenesFiltrables = useMemo(() => {
+    return ordenes.map(o => ({
+      ...o,
+      fechaEmision: o.enviadaAFacturacionAt instanceof Date
+        ? o.enviadaAFacturacionAt
+        : null,
+    }));
+  }, [ordenes]);
 
   const togglePiezas = (ordenId: string) => {
     setPiezasExpandidas(prev => {
@@ -176,14 +163,13 @@ export default function FacturacionPendiente() {
         </span>
       </div>
 
-      <FiltroRangoFechas
-        fechaDesde={fechaDesde}
-        fechaHasta={fechaHasta}
-        onChange={(d, h) => { setFechaDesde(d); setFechaHasta(h); }}
-        onLimpiar={limpiarFiltroFechas}
-        totalSinFiltrar={ordenes.length}
-        totalFiltrado={ordenesFiltradas.length}
-        etiqueta="Enviadas a facturación:"
+      <FiltroAvanzadoFinanzas
+        pagina="facturacion-pendiente"
+        items={ordenesFiltrables}
+        etiquetaFechas="Enviadas a facturación"
+        onChange={(filtrados) => {
+          setOrdenesFiltradas(filtrados);
+        }}
       />
 
       {ordenesFiltradas.length === 0 ? (

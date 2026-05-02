@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, query, orderBy, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Factura, EstadoFactura, ItemCotizacion, MetodoPago, OrdenServicio } from '../types';
@@ -8,8 +8,11 @@ import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
-import FiltroRangoFechas, { formatYYYYMMDDLocal } from '../components/admin/FiltroRangoFechas';
-import { Plus, FileText, Trash2, Check, Printer, Search, Filter, DollarSign, CalendarDays, TrendingUp, X, ChevronDown, Shield } from 'lucide-react';
+import FiltroAvanzadoFinanzas, {
+  type FiltroAvanzadoFinanzasRef,
+  type FiltroActivo,
+} from '../components/admin/FiltroAvanzadoFinanzas';
+import { Plus, FileText, Trash2, Check, Printer, DollarSign, CalendarDays, TrendingUp, X, ChevronDown, Shield } from 'lucide-react';
 import { startOfMonth, startOfDay, endOfDay, startOfYear, endOfYear, isWithinInterval, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -46,14 +49,6 @@ const METODO_PAGO_COLORS: Record<MetodoPago, string> = {
   otro: 'bg-gray-100 text-gray-700',
 };
 
-const FILTROS: { label: string; value: EstadoFactura | 'todas' }[] = [
-  { label: 'Todas', value: 'todas' },
-  { label: 'Emitida', value: 'emitida' },
-  { label: 'Pagada', value: 'pagada' },
-  { label: 'Vencida', value: 'vencida' },
-  { label: 'Anulada', value: 'anulada' },
-];
-
 export default function Facturas() {
   const { userProfile } = useApp();
   const puedeCrear = puede(userProfile, 'facturasCrear');
@@ -64,19 +59,14 @@ export default function Facturas() {
   const [ordenesVinculadas, setOrdenesVinculadas] = useState<Record<string, OrdenServicio>>({});
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [filtro, setFiltro] = useState<EstadoFactura | 'todas'>('todas');
-  const [busqueda, setBusqueda] = useState('');
   const [yearSelected, setYearSelected] = useState(new Date().getFullYear());
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Filtro de rango de fechas. Default: primer día del mes corriente → hoy.
-  // Cuando ambos quedan en '', se desactiva y muestra todo el histórico.
-  const [fechaDesde, setFechaDesde] = useState<string>(() => {
-    const hoy = new Date();
-    return formatYYYYMMDDLocal(new Date(hoy.getFullYear(), hoy.getMonth(), 1));
-  });
-  const [fechaHasta, setFechaHasta] = useState<string>(() => formatYYYYMMDDLocal(new Date()));
-  const [campoFecha, setCampoFecha] = useState<'emision' | 'pago'>('emision');
+  // Filtro avanzado: el componente maneja estado, persistencia y URL sync.
+  // Acá solo recibimos los items filtrados via callback.
+  const filtroRef = useRef<FiltroAvanzadoFinanzasRef>(null);
+  const [facturasFiltradas, setFacturasFiltradas] = useState<Factura[]>([]);
+  const [filtroActivo, setFiltroActivo] = useState<FiltroActivo | null>(null);
 
   const [form, setForm] = useState({
     clienteNombre: '',
@@ -146,38 +136,14 @@ export default function Facturas() {
     return { totalCobradoAnual, emitidasHoy, emitidasMes, pagadasMesCount: pagadasMes.length, totalPagadasMes };
   }, [facturas, yearSelected]);
 
-  // Filtered list
-  const facturasFiltradas = useMemo(() => {
-    let lista = facturas;
-    if (filtro !== 'todas') {
-      lista = lista.filter(f => f.estado === filtro);
-    }
-    if (busqueda.trim()) {
-      const q = busqueda.toLowerCase().trim();
-      lista = lista.filter(f =>
-        f.clienteNombre.toLowerCase().includes(q) ||
-        f.numero.toLowerCase().includes(q)
-      );
-    }
-    if (fechaDesde || fechaHasta) {
-      const desdeMs = fechaDesde ? new Date(fechaDesde + 'T00:00:00').getTime() : null;
-      const hastaMs = fechaHasta ? new Date(fechaHasta + 'T23:59:59').getTime() : null;
-      lista = lista.filter(f => {
-        const campo = campoFecha === 'emision' ? f.fechaEmision : f.fechaPago;
-        if (!campo) return false;
-        const t = campo instanceof Date ? campo.getTime() : new Date(campo).getTime();
-        if (desdeMs !== null && t < desdeMs) return false;
-        if (hastaMs !== null && t > hastaMs) return false;
-        return true;
-      });
-    }
-    return lista;
-  }, [facturas, filtro, busqueda, fechaDesde, fechaHasta, campoFecha]);
-
-  const limpiarFiltroFechas = () => {
-    setFechaDesde('');
-    setFechaHasta('');
-  };
+  // Estados de la lista para los tabs (live).
+  const estadosFiltro = useMemo(() => ([
+    { value: 'Todas', label: 'Todas' },
+    { value: 'emitida', label: 'Emitida' },
+    { value: 'pagada', label: 'Pagada' },
+    { value: 'vencida', label: 'Vencida' },
+    { value: 'anulada', label: 'Anulada' },
+  ]), []);
 
   // Form helpers
   const total = form.items.reduce((sum, item) => sum + item.cantidad * item.precio, 0);
@@ -516,10 +482,15 @@ export default function Facturas() {
         )}
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards (clickeables: drilldown a filtro) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total cobrado anual */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <button
+          type="button"
+          onClick={() => filtroRef.current?.aplicarPreset('cobradoAnual')}
+          title="Click para filtrar por pagadas del año seleccionado"
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-[#1a5fa8] hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+        >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-green-50 rounded-lg">
@@ -530,6 +501,7 @@ export default function Facturas() {
             <select
               value={yearSelected}
               onChange={e => setYearSelected(Number(e.target.value))}
+              onClick={e => e.stopPropagation()}
               className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#1a5fa8]"
             >
               {yearOptions.map(y => (
@@ -538,10 +510,15 @@ export default function Facturas() {
             </select>
           </div>
           <p className="text-xl font-bold text-[#0f3460]">{formatMoneda(stats.totalCobradoAnual)}</p>
-        </div>
+        </button>
 
         {/* Emitidas hoy */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <button
+          type="button"
+          onClick={() => filtroRef.current?.aplicarPreset('emitidasHoy')}
+          title="Click para filtrar emitidas hoy"
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-[#1a5fa8] hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+        >
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-blue-50 rounded-lg">
               <CalendarDays size={18} className="text-blue-600" />
@@ -549,10 +526,15 @@ export default function Facturas() {
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Emitidas Hoy</span>
           </div>
           <p className="text-xl font-bold text-[#0f3460]">{stats.emitidasHoy}</p>
-        </div>
+        </button>
 
         {/* Emitidas mes */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <button
+          type="button"
+          onClick={() => filtroRef.current?.aplicarPreset('emitidasMes')}
+          title="Click para filtrar emitidas del mes"
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-[#1a5fa8] hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+        >
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-purple-50 rounded-lg">
               <FileText size={18} className="text-purple-600" />
@@ -560,10 +542,15 @@ export default function Facturas() {
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Emitidas Mes</span>
           </div>
           <p className="text-xl font-bold text-[#0f3460]">{stats.emitidasMes}</p>
-        </div>
+        </button>
 
         {/* Pagadas mes */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <button
+          type="button"
+          onClick={() => filtroRef.current?.aplicarPreset('pagadasMes')}
+          title="Click para filtrar pagadas del mes"
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-[#1a5fa8] hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+        >
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-emerald-50 rounded-lg">
               <TrendingUp size={18} className="text-emerald-600" />
@@ -572,60 +559,31 @@ export default function Facturas() {
           </div>
           <p className="text-xl font-bold text-[#0f3460]">{stats.pagadasMesCount}</p>
           <p className="text-xs text-gray-500 mt-0.5">{formatMoneda(stats.totalPagadasMes)}</p>
-        </div>
+        </button>
       </div>
 
-      {/* Filters + Search */}
-      <div>
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-          <div className="flex gap-1.5 flex-wrap">
-            {FILTROS.map(f => (
-              <button
-                key={f.value}
-                onClick={() => setFiltro(f.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  filtro === f.value
-                    ? 'bg-[#0f3460] text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-          <div className="relative w-full sm:w-64">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar por cliente..."
-              value={busqueda}
-              onChange={e => setBusqueda(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-            />
-          </div>
-        </div>
-        <FiltroRangoFechas
-          fechaDesde={fechaDesde}
-          fechaHasta={fechaHasta}
-          onChange={(d, h) => { setFechaDesde(d); setFechaHasta(h); }}
-          onLimpiar={limpiarFiltroFechas}
-          totalSinFiltrar={facturas.length}
-          totalFiltrado={facturasFiltradas.length}
-          campoFecha={campoFecha}
-          onChangeCampo={v => setCampoFecha(v as 'emision' | 'pago')}
-          opcionesCampoFecha={[
-            { value: 'emision', label: 'Por emisión' },
-            { value: 'pago', label: 'Por pago' },
-          ]}
-        />
-      </div>
+      {/* Filtro avanzado */}
+      <FiltroAvanzadoFinanzas
+        ref={filtroRef}
+        pagina="facturas"
+        items={facturas}
+        estados={estadosFiltro}
+        permiteCampoFecha
+        yearCobradoAnual={yearSelected}
+        onChange={(filtrados, activo) => {
+          setFacturasFiltradas(filtrados);
+          setFiltroActivo(activo);
+        }}
+      />
 
       {/* Table */}
       {facturasFiltradas.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
           <FileText size={48} className="mx-auto text-gray-300 mb-3" />
           <p className="text-gray-400">
-            {busqueda || filtro !== 'todas' ? 'No se encontraron conduces con los filtros aplicados' : 'Sin conduces de garantía registrados'}
+            {filtroActivo && filtroActivo.filtrosActivosCount > 0
+              ? 'No se encontraron conduces con los filtros aplicados'
+              : 'Sin conduces de garantía registrados'}
           </p>
         </div>
       ) : (
