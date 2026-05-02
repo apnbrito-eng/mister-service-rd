@@ -4,7 +4,7 @@ import {
   Users, UserCog, FileText, Settings, LogOut, Wrench,
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight, ChevronDown,
   Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
-  CalendarCheck, Sparkles, History, Star, RefreshCw,
+  CalendarCheck, Sparkles, History, Star, RefreshCw, Banknote,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { signOut } from 'firebase/auth';
@@ -252,6 +252,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           { to: '/admin/bancos', icon: Building2, label: 'Bancos', show: p('bancosGestionar') },
           { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: isAdmin || userProfile?.rol === 'coordinadora' },
           { to: '/admin/avances', icon: Wallet, label: 'Avances a Empleados', show: p('avancesGestionar') },
+          { to: '/admin/prestamos', icon: Banknote, label: 'Préstamos a Empleados', show: esAdminOCoord },
           { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: isAdmin || p('configuracionVer') },
           { to: '/admin/estado-resultado', icon: TrendingUp, label: 'Estado de Resultado', show: isAdmin || userProfile?.rol === 'coordinadora' },
           { to: '/admin/rendimiento', icon: TrendingUp, label: 'Rendimiento', show: p('rendimientoVer') },

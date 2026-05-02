@@ -413,6 +413,20 @@ service cloud.firestore {
       allow delete: if esAdmin();
     }
 
+    // Préstamos programados a empleados (sprint descuentos-nomina).
+    // Cuotas se descuentan automáticamente al cerrar liquidación.
+    // Read: staff (los técnicos podrían querer ver su saldo en futuro).
+    // Create/update: admin/coord. Update incluye `aplicarCuota` (transactional)
+    // y `cancelarPrestamo`.
+    // Delete: solo admin — en práctica usar `cancelarPrestamo` que mantiene
+    // el historial de cuotas aplicadas. Hard-delete reservado para casos
+    // extremos (test data, error de seed).
+    match /prestamos_empleados/{docId} {
+      allow read: if esStaff();
+      allow create, update: if esAdminOCoord();
+      allow delete: if esAdmin();
+    }
+
     // Gastos (administrativos)
     match /gastos/{docId} {
       allow read: if esStaffOficina();

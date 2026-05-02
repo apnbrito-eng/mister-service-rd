@@ -504,7 +504,15 @@ export interface LiquidacionEmpleado {
   // Avances descontados (Fase 8)
   avancesIds?: string[];
   totalAvances?: number;
-  totalNeto?: number;              // totalDevengado - totalAvances
+  // Descuentos ad-hoc agregados durante esta liquidación abierta
+  descuentosAdHoc?: DescuentoAdHoc[];
+  totalDescuentosAdHoc?: number;
+  // Cuotas de préstamos aplicadas a esta quincena
+  cuotasPrestamos?: CuotaPrestamoAplicada[];
+  totalCuotasPrestamos?: number;
+  // Suma total de descuentos = avances + adhoc + cuotas
+  totalDescuentos?: number;
+  totalNeto?: number;              // max(0, totalDevengado - totalDescuentos)
   notas?: string;
   // Pago
   metodoPago?: 'efectivo' | 'transferencia' | 'cheque';
@@ -512,6 +520,84 @@ export interface LiquidacionEmpleado {
   fechaPagoEfectivo?: Date;
   pagadoPor?: string;
   pagado: boolean;
+}
+
+/**
+ * Descuento puntual agregado por admin/coord durante una liquidación
+ * abierta. Vive solo dentro del array `empleados[].descuentosAdHoc[]` de
+ * la liquidación; no hay colección aparte.
+ */
+export interface DescuentoAdHoc {
+  /** UUID generado client-side (crypto.randomUUID). */
+  id: string;
+  monto: number;
+  motivo: string;
+  agregadoPorId: string;
+  agregadoPorNombre: string;
+  agregadoEn: Timestamp | Date;
+}
+
+/**
+ * Cuota de un préstamo programado que se aplica a una liquidación.
+ * Snapshot del préstamo al momento de generar la liquidación. La
+ * persistencia real (incremento de `cuotasPagadas`, decremento de
+ * `saldoPendiente`) ocurre al cerrar la liquidación, vía
+ * `aplicarCuota()`.
+ */
+export interface CuotaPrestamoAplicada {
+  prestamoId: string;
+  numeroCuota: number;
+  monto: number;
+  /** Copiado del préstamo para mostrar sin tener que cargar el doc completo. */
+  motivo: string;
+}
+
+/**
+ * Préstamo programado a un empleado, que se descuenta automáticamente
+ * en N cuotas quincenales. Vive en la colección `prestamos_empleados`.
+ */
+export interface PrestamoEmpleado {
+  id: string;
+  personalId: string;
+  personalNombre: string;
+  personalRol: Rol;
+
+  montoTotal: number;
+  montoCuota: number;
+  cuotasTotales: number;
+  cuotasPagadas: number;
+  /** Recalculado: montoTotal - sum(cuotasHistorial.monto). */
+  saldoPendiente: number;
+
+  motivo: string;
+  /** Primera quincena en la que aplica. Si la quincena ya está abierta
+   *  cuando se crea, la cuota se incluye al regenerar/abrir liquidación. */
+  fechaInicio: Timestamp | Date;
+
+  estado: 'activo' | 'pagado' | 'cancelado';
+
+  cuotasHistorial: CuotaPrestamo[];
+
+  motivoCancelacion?: string;
+  canceladoPorId?: string;
+  canceladoPorNombre?: string;
+  canceladoEn?: Timestamp | Date;
+
+  creadoPorId: string;
+  creadoPorNombre: string;
+  createdAt: Timestamp | Date;
+  updatedAt?: Timestamp | Date;
+}
+
+export interface CuotaPrestamo {
+  numero: number;
+  monto: number;
+  liquidacionId: string;
+  /** Formato YYYY-MM-Q1 / YYYY-MM-Q2 (ver utils/comisiones). */
+  quincena: string;
+  fechaAplicacion: Timestamp | Date;
+  /** Saldo pendiente del préstamo después de aplicar esta cuota. */
+  saldoRestante: number;
 }
 
 export interface LiquidacionNomina {

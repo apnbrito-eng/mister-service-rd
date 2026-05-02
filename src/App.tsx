@@ -43,6 +43,7 @@ import MetricasMensuales from './pages/MetricasMensuales';
 import Bancos from './pages/Bancos';
 import FacturacionPendiente from './pages/FacturacionPendiente';
 import Avances from './pages/Avances';
+import Prestamos from './pages/Prestamos';
 import EstadoResultado from './pages/EstadoResultado';
 import AsistenteIA from './pages/AsistenteIA';
 import AsistenteIAHistorial from './pages/AsistenteIAHistorial';
@@ -216,6 +217,7 @@ function AppRoutes() {
         <Route path="bancos" element={<PermisoRoute permiso="bancosGestionar"><Bancos /></PermisoRoute>} />
         <Route path="facturacion-pendiente" element={<RolRoute roles={['administrador', 'coordinadora']}><FacturacionPendiente /></RolRoute>} />
         <Route path="avances" element={<PermisoRoute permiso="avancesGestionar"><Avances /></PermisoRoute>} />
+        <Route path="prestamos" element={<RolRoute roles={['administrador', 'coordinadora']}><Prestamos /></RolRoute>} />
         <Route path="estado-resultado" element={<RolRoute roles={['administrador', 'coordinadora']}><EstadoResultado /></RolRoute>} />
         <Route path="configuracion/usuarios" element={<RolRoute roles={['administrador', 'coordinadora']}><GestionUsuarios /></RolRoute>} />
         <Route path="ponches" element={<RolRoute roles={['administrador', 'coordinadora']}><AdminPonches /></RolRoute>} />
