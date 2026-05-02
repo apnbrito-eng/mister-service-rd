@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { doc, updateDoc, Timestamp, arrayUnion, runTransaction } from 'firebase/firestore';
+import { doc, Timestamp, arrayUnion, runTransaction } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, Usuario, Banco, PagoOrden, EstadoPagoOrden } from '../../types';
 import { suscribirBancos } from '../../services/bancos.service';
@@ -229,32 +229,76 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
   const handleEliminarPago = async (pago: PagoOrden) => {
     if (!orden) return;
     if (!confirm(`¿Eliminar este pago de ${formatearMonto(pago.monto)}?`)) return;
+    // Capturamos el id UNA vez, antes de la transacción. Si Firestore reintenta
+    // el callback internamente, el mismo id se usa en cada intento.
+    const pagoIdAEliminar = pago.id;
+    const montoEliminado = Number(pago.monto) || 0;
+    const metodoEliminado = pago.metodo;
+    const usuario = userProfile?.nombre || 'Sistema';
+    const ordenRef = doc(db, 'ordenes_servicio', orden.id);
+
     try {
-      const restantes = pagosPrevios.filter(p => p.id !== pago.id);
-      const nuevoMonto = restantes.reduce((acc, p) => acc + Number(p.monto || 0), 0);
-      const nuevoEstado: EstadoPagoOrden =
-        total > 0 && nuevoMonto >= total ? 'completo' : nuevoMonto > 0 ? 'parcial' : 'pendiente';
-      const usuario = userProfile?.nombre || 'Sistema';
-      const registro = crearRegistroAuditoria(
-        usuario,
-        'editar',
-        `Eliminó pago de ${formatearMonto(pago.monto)} (${pago.metodo})`,
-        'pagos',
-        formatearMonto(montoYaPagado),
-        formatearMonto(nuevoMonto),
-      );
-      // Re-serializar para firestore — las fechas vuelven a Timestamp
-      const restantesSerial = restantes.map(p => ({
-        ...p,
-        fecha: p.fecha instanceof Date ? Timestamp.fromDate(p.fecha) : p.fecha,
-      }));
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
-        pagos: restantesSerial,
-        montoPagado: nuevoMonto,
-        estadoPago: nuevoEstado,
-        auditoria: arrayUnion(registro),
-        updatedAt: Timestamp.now(),
+      // Transacción: read fresco → idempotencia → recálculo → write.
+      // Cierra la misma race condition que C5 cerró en handleConfirmarPago:
+      // si entre el último onSnapshot y el click otro usuario registró un pago,
+      // el updateDoc plano sobrescribía el array `pagos[]` con la versión vieja.
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(ordenRef);
+        if (!snap.exists()) {
+          throw new Error('La orden ya no existe');
+        }
+        const data = snap.data() as Record<string, unknown>;
+        const pagosActuales: Array<Record<string, unknown>> = Array.isArray(data.pagos)
+          ? (data.pagos as Array<Record<string, unknown>>)
+          : [];
+
+        // Idempotencia: si el pago ya no está (otro tab lo eliminó, o reintento
+        // tras éxito), no-op. No es error desde la perspectiva del usuario.
+        if (!pagosActuales.some(p => p && p.id === pagoIdAEliminar)) {
+          return { yaEliminado: true as const };
+        }
+
+        const pagosNuevos = pagosActuales.filter(p => p && p.id !== pagoIdAEliminar);
+        const totalOrdenActual = Number(
+          data.precioFinal ?? data.precioAprobado ?? data.precioSugerido ?? 0,
+        );
+        // Recalculamos desde el array filtrado del read FRESCO, no desde
+        // pagosPrevios (state local potencialmente stale).
+        const nuevoMontoPagado = pagosNuevos.reduce(
+          (acc, p) => acc + (Number(p.monto) || 0),
+          0,
+        );
+        const nuevoEstadoPago = calcularEstadoFromTotal(nuevoMontoPagado, totalOrdenActual);
+        const montoPagadoPrevio = pagosActuales.reduce(
+          (acc, p) => acc + (Number(p.monto) || 0),
+          0,
+        );
+
+        const registro = crearRegistroAuditoria(
+          usuario,
+          'editar',
+          `Eliminó pago de ${formatearMonto(montoEliminado)} (${metodoEliminado})`,
+          'pagos',
+          formatearMonto(montoPagadoPrevio),
+          formatearMonto(nuevoMontoPagado),
+        );
+
+        const updates: Record<string, unknown> = {
+          pagos: pagosNuevos,
+          montoPagado: nuevoMontoPagado,
+          estadoPago: nuevoEstadoPago,
+          auditoria: arrayUnion(registro),
+          updatedAt: Timestamp.now(),
+        };
+        // Strip undefined defensivamente (convención del repo).
+        const updatesLimpios = Object.fromEntries(
+          Object.entries(updates).filter(([, v]) => v !== undefined),
+        );
+
+        tx.update(ordenRef, updatesLimpios);
+        return { yaEliminado: false as const };
       });
+
       toast.success('Pago eliminado');
     } catch (err) {
       console.error(err);
