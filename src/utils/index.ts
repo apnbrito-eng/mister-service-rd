@@ -952,6 +952,12 @@ export function parseFactura(id: string, raw: Record<string, unknown>): Factura 
     servicioPrecioId: (i.servicioPrecioId as string) || undefined,
     piezaInventarioId: (i.piezaInventarioId as string) || undefined,
     costoCompra: typeof i.costoCompra === 'number' ? (i.costoCompra as number) : undefined,
+    // Vendedor por línea (sprint Conduces SIBS — C1)
+    tecnicoId: (i.tecnicoId as string) || undefined,
+    tecnicoNombre: (i.tecnicoNombre as string) || undefined,
+    precioModalidad: (i.precioModalidad === 'mayoreo' || i.precioModalidad === 'detalle')
+      ? (i.precioModalidad as 'mayoreo' | 'detalle')
+      : undefined,
   }));
 
   let garantia: GarantiaInfo | undefined;

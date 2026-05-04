@@ -838,6 +838,25 @@ export interface ItemCotizacion {
   piezaInventarioId?: string;
   /** Costo de compra capturado al agregar (para análisis de margen) */
   costoCompra?: number;
+  /**
+   * Técnico/vendedor responsable de esta línea (vendedor por línea).
+   * Si está presente, `registrarComisionesPorItems` genera una comisión
+   * proporcional para este uid. Si está ausente, la línea NO genera
+   * comisión (caso "Sin técnico (mostrador)" del modal Detalles).
+   *
+   * Backwards-compat: items históricos no tienen este campo.
+   */
+  tecnicoId?: string;
+  /** Denormalizado para mostrar en UI sin segunda lectura. */
+  tecnicoNombre?: string;
+  /**
+   * Modalidad de precio elegida en el modal Detalles (snapshot).
+   * Snapshot, NO join — admin podría cambiar precios después y romper
+   * el cálculo histórico. Default 'detalle' si el cliente es 'particular',
+   * 'mayoreo' si es 'b2b' (la decisión vive en el componente, no acá).
+   * Para items 'manual' queda undefined.
+   */
+  precioModalidad?: 'mayoreo' | 'detalle';
 }
 
 export interface Cotizacion {

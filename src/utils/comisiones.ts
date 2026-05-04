@@ -1,5 +1,5 @@
 import {
-  collection, addDoc, doc, getDoc, getDocs, query, where, Timestamp, updateDoc, arrayUnion,
+  collection, addDoc, doc, getDoc, getDocs, query, where, Timestamp, updateDoc, arrayUnion, deleteDoc,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, Personal, Usuario, ItemCotizacion } from '../types';
@@ -253,9 +253,427 @@ export async function obtenerTecnicoParaComision(
 }
 
 /**
+ * Resultado del cálculo proporcional por técnico — función pura.
+ *
+ * - `proporcionItems` está en [0..1] y representa la suma de proporciones
+ *   de los items asignados a este técnico, sobre la suma total de
+ *   `montoBase` de TODOS los items (incluso los que no tienen tecnicoId).
+ * - `baseSinItbisAsignada` es la suma de `precio * cantidad` de SUS items
+ *   (ya sin ITBIS, ver convención en JSDoc de `calcularComisionesProporcionales`).
+ */
+export interface ComisionPorTecnicoCalculada {
+  tecnicoId: string;
+  tecnicoNombre: string;
+  monto: number;
+  porcentaje: number;
+  proporcionItems: number;
+  itemsAsignados: number;
+  baseSinItbisAsignada: number;
+}
+
+/** Helper interno: redondeo a 2 decimales monetarios. */
+function redondearMonto(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Calcula comisiones proporcionales por técnico a partir de un array de
+ * `ItemCotizacion` con vendedor por línea. **Función pura**: no toca
+ * Firestore. El caller debe pre-cargar los `Personal` y pasar `getTecnico`
+ * como lookup sincrónico.
+ *
+ * Algoritmo (decisión 12 del sprint Conduces SIBS — orden estricto):
+ *  1. `subtotalSinItbis = desglosarTotalConITBIS(totalConItbis, itbisPct).subtotal`
+ *  2. Para cada item: `montoBase = item.precio * item.cantidad`.
+ *     **NOTA**: `item.precio` en este sistema YA viene SIN ITBIS porque
+ *     el ITBIS se aplica solo al total. La función NO desglosa el ITBIS
+ *     por item — el caller debe pasar precios sin ITBIS.
+ *  3. `sumaMontoBase = Σ(montoBase de TODOS los items)`.
+ *  4. `gananciaNeta = subtotalSinItbis - costoPiezasTotal`.
+ *     Si `gananciaNeta <= 0` → `[]` (sin ganancia, sin comisión).
+ *  5. Para cada técnico (con porcentaje > 0):
+ *     `proporcionItems = Σ(montoBase de SUS items) / sumaMontoBase`
+ *     `monto = round2(gananciaNeta * proporcionItems * porcentaje / 100)`.
+ *
+ * **Anti-patrón prohibido (NO hacer):** usar `totalConItbis` en numerador
+ * o denominador de `proporcionItems`. Siempre `montoBase` (sin ITBIS) en
+ * ambos lados. Si el ITBIS entrara al cálculo, las comisiones quedarían
+ * infladas ~18%. Ver decisión 12 del sprint.
+ *
+ * Orden de retorno: estable, por orden de aparición del PRIMER item del
+ * técnico en el array `items`.
+ */
+export function calcularComisionesProporcionales(args: {
+  items: ItemCotizacion[];
+  totalConItbis: number;
+  costoPiezasTotal: number;
+  itbisPorcentaje?: number;
+  getTecnico: (tecnicoId: string) => { nombre: string; porcentaje: number };
+}): ComisionPorTecnicoCalculada[] {
+  const { items, totalConItbis, costoPiezasTotal, itbisPorcentaje, getTecnico } = args;
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const itbisPct = typeof itbisPorcentaje === 'number' && itbisPorcentaje >= 0
+    ? itbisPorcentaje
+    : ITBIS_PORCENTAJE;
+
+  const { subtotal: subtotalSinItbis } = desglosarTotalConITBIS(totalConItbis, itbisPct);
+
+  // Suma del montoBase de TODOS los items (incluyendo los sin tecnicoId).
+  // Esto es el denominador de proporciones — la sumaMontoBase representa el
+  // 100% del precio facturado SIN ITBIS.
+  const sumaMontoBase = items.reduce((acc, it) => {
+    const cantidad = typeof it.cantidad === 'number' ? it.cantidad : 0;
+    const precio = typeof it.precio === 'number' ? it.precio : 0;
+    return acc + (precio * cantidad);
+  }, 0);
+
+  if (sumaMontoBase <= 0) return [];
+
+  const gananciaNeta = subtotalSinItbis - costoPiezasTotal;
+  if (gananciaNeta <= 0) return [];
+
+  // Acumular por técnico, manteniendo orden de primera aparición.
+  const orden: string[] = [];
+  const acumuladores = new Map<string, {
+    tecnicoId: string;
+    tecnicoNombre: string;
+    porcentaje: number;
+    baseSinItbisAsignada: number;
+    itemsAsignados: number;
+  }>();
+
+  for (const it of items) {
+    const tecnicoId = it.tecnicoId;
+    if (!tecnicoId) continue; // línea sin técnico → no genera comisión
+    const cantidad = typeof it.cantidad === 'number' ? it.cantidad : 0;
+    const precio = typeof it.precio === 'number' ? it.precio : 0;
+    const montoBase = precio * cantidad;
+
+    let bucket = acumuladores.get(tecnicoId);
+    if (!bucket) {
+      const info = getTecnico(tecnicoId);
+      // Si retorna porcentaje 0 o falsy, el técnico no genera comisión (línea muerta).
+      if (!info || !info.porcentaje || info.porcentaje <= 0) continue;
+      bucket = {
+        tecnicoId,
+        tecnicoNombre: info.nombre || it.tecnicoNombre || 'Técnico',
+        porcentaje: info.porcentaje,
+        baseSinItbisAsignada: 0,
+        itemsAsignados: 0,
+      };
+      acumuladores.set(tecnicoId, bucket);
+      orden.push(tecnicoId);
+    }
+    bucket.baseSinItbisAsignada += montoBase;
+    bucket.itemsAsignados += 1;
+  }
+
+  const resultados: ComisionPorTecnicoCalculada[] = [];
+  for (const tecnicoId of orden) {
+    const b = acumuladores.get(tecnicoId)!;
+    const proporcionItems = b.baseSinItbisAsignada / sumaMontoBase;
+    const monto = redondearMonto(gananciaNeta * proporcionItems * (b.porcentaje / 100));
+    resultados.push({
+      tecnicoId: b.tecnicoId,
+      tecnicoNombre: b.tecnicoNombre,
+      monto,
+      porcentaje: b.porcentaje,
+      proporcionItems: redondearMonto(proporcionItems * 10000) / 10000, // 4 decimales para reportes
+      itemsAsignados: b.itemsAsignados,
+      baseSinItbisAsignada: redondearMonto(b.baseSinItbisAsignada),
+    });
+  }
+
+  return resultados;
+}
+
+/**
+ * Wrapper Firestore para `calcularComisionesProporcionales`. Crea/actualiza
+ * docs en `comisiones` (uno por técnico distinto) usando idempotencia por
+ * `(ordenId, tecnicoId)` y limpia comisiones huérfanas tras una re-emisión
+ * de conduce con técnicos distintos a los previos.
+ *
+ * Política de re-emisión (decisión 20 #3 + H9 del sprint):
+ *  - Comisión existente para tecnicoId que YA NO aparece en items:
+ *      - Si está `liquidada` → preservar + marcar `obsoletaPorReemisionConduce: true`.
+ *      - Si está `pendiente` → eliminar.
+ *  - Comisión existente para tecnicoId que SÍ aparece (recalculo):
+ *      - Si está `liquidada` → preservar tal cual (no se modifican montos).
+ *      - Si está `pendiente` → updateDoc con nuevos montos + nueva quincena.
+ *
+ * Fallback legacy: si NINGÚN item trae `tecnicoId`, sintetiza una entrada
+ * con `orden.tecnicoId`/`orden.tecnicoNombre` para preservar el flujo previo
+ * a vendedor por línea (FaseStepper / OrdenesTablero / FacturacionPendiente).
+ *
+ * **NO**:
+ *  - genera comisión si `orden.soloChequeo`.
+ *  - lanza si Firestore falla en una sub-operación; loguea warn y continúa.
+ */
+export async function registrarComisionesPorItems(args: {
+  orden: OrdenServicio;
+  facturaId: string;
+  facturaNumero: string;
+  totalFactura: number;
+  items: ItemCotizacion[];
+  userProfile: Usuario | null;
+  itbisPorcentaje?: number;
+}): Promise<{
+  comisiones: Array<{
+    comisionId: string;
+    tecnicoId: string;
+    tecnicoNombre: string;
+    monto: number;
+    porcentaje: number;
+  }>;
+  totalAgregado: number;
+  preservadasPorLiquidacion: number;
+  eliminadasHuerfanas: number;
+}> {
+  const { orden, facturaId, facturaNumero, totalFactura, userProfile, itbisPorcentaje } = args;
+  const items = args.items || [];
+  const usuario = userProfile?.nombre || 'Sistema';
+
+  // Caso 1: chequeo nunca genera comisión.
+  if (orden.soloChequeo) {
+    return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0 };
+  }
+  // Caso 2: sin items, nada que calcular.
+  if (items.length === 0) {
+    return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0 };
+  }
+
+  // Caso 3 (legacy fallback): si ningún item trae tecnicoId, sintetizar
+  // todos con orden.tecnicoId — preserva flujo legacy y mantiene única
+  // ruta de cálculo (usa la misma función pura). Si la orden tampoco tiene
+  // técnico, retornamos vacío (no hay a quién pagar comisión).
+  let itemsParaCalculo: ItemCotizacion[] = items;
+  const algunoConTecnico = items.some(i => !!i.tecnicoId);
+  if (!algunoConTecnico) {
+    if (!orden.tecnicoId) {
+      return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0 };
+    }
+    itemsParaCalculo = items.map(i => ({
+      ...i,
+      tecnicoId: orden.tecnicoId,
+      tecnicoNombre: orden.tecnicoNombre,
+    }));
+  }
+
+  const costoPiezasTotal = calcularCostoPiezasDeItems(items);
+
+  // Pre-cargar Personal de los técnicos distintos (en paralelo).
+  const tecnicoIdsDistintos = Array.from(new Set(
+    itemsParaCalculo.flatMap(i => (i.tecnicoId ? [i.tecnicoId] : [])),
+  ));
+  const lookup = new Map<string, { nombre: string; porcentaje: number }>();
+  await Promise.all(tecnicoIdsDistintos.map(async tid => {
+    try {
+      const snap = await getDoc(doc(db, 'personal', tid));
+      if (snap.exists()) {
+        const personal = { id: snap.id, ...snap.data() } as Personal;
+        lookup.set(tid, {
+          nombre: personal.nombre || 'Técnico',
+          porcentaje: obtenerPorcentajeComision(personal),
+        });
+      } else {
+        console.error(`[comisiones] Tecnico huerfano detectado: tecnicoId=${tid} en orden=${orden.id}. Comision skipeada (0%)`);
+      }
+    } catch (err) {
+      console.warn(`[comisiones] error leyendo personal/${tid}:`, err);
+    }
+  }));
+
+  const calculadas = calcularComisionesProporcionales({
+    items: itemsParaCalculo,
+    totalConItbis: totalFactura,
+    costoPiezasTotal,
+    itbisPorcentaje,
+    getTecnico: tid => lookup.get(tid) || { nombre: '', porcentaje: 0 },
+  });
+
+  const tecnicoIdsCalculados = new Set(calculadas.map(c => c.tecnicoId));
+  const fechaCobro = new Date();
+  const quincena = calcularQuincenaActual(fechaCobro);
+  const desgloseTotal = desglosarTotalConITBIS(totalFactura, itbisPorcentaje);
+
+  // Leer todas las comisiones existentes para esta orden (cleanup huérfanas
+  // + idempotencia por tecnicoId).
+  let docsExistentes: Array<{ id: string; data: Record<string, unknown> }> = [];
+  try {
+    const existQ = await getDocs(query(
+      collection(db, 'comisiones'),
+      where('ordenId', '==', orden.id),
+    ));
+    docsExistentes = existQ.docs.map(d => ({ id: d.id, data: d.data() as Record<string, unknown> }));
+  } catch (err) {
+    console.warn('[comisiones] no se pudo leer comisiones existentes:', err);
+  }
+
+  let preservadasPorLiquidacion = 0;
+  let eliminadasHuerfanas = 0;
+
+  // Cleanup: comisiones existentes cuyo tecnicoId YA NO aparece en items.
+  for (const ex of docsExistentes) {
+    const exTecnicoId = (ex.data.tecnicoId as string) || '';
+    if (!exTecnicoId) continue;
+    if (tecnicoIdsCalculados.has(exTecnicoId)) continue; // se maneja en el upsert abajo
+    const estadoLiq = ex.data.estadoLiquidacion as string | undefined;
+    if (estadoLiq === 'liquidada') {
+      // Preservar + marcar como obsoleta por re-emisión.
+      try {
+        await updateDoc(doc(db, 'comisiones', ex.id), {
+          obsoletaPorReemisionConduce: true,
+          updatedAt: Timestamp.now(),
+        });
+        preservadasPorLiquidacion += 1;
+      } catch (err) {
+        console.warn(`[comisiones] no se pudo marcar obsoleta ${ex.id}:`, err);
+      }
+    } else {
+      // Pendiente: borrar.
+      try {
+        await deleteDoc(doc(db, 'comisiones', ex.id));
+        eliminadasHuerfanas += 1;
+      } catch (err) {
+        console.warn(`[comisiones] no se pudo eliminar huérfana ${ex.id}:`, err);
+      }
+    }
+  }
+
+  // Upsert por (ordenId, tecnicoId).
+  const comisionesEscritas: Array<{
+    comisionId: string;
+    tecnicoId: string;
+    tecnicoNombre: string;
+    monto: number;
+    porcentaje: number;
+  }> = [];
+
+  for (const c of calculadas) {
+    const existente = docsExistentes.find(d => (d.data.tecnicoId as string) === c.tecnicoId);
+    const itbisMontoTotal = desgloseTotal.itbis;
+
+    // Si existe Y está liquidada: preservar tal cual. NO reescribir montos
+    // ni quincena (decisión 20 H9: respetar lo que ya pagó nómina).
+    if (existente && (existente.data.estadoLiquidacion as string) === 'liquidada') {
+      comisionesEscritas.push({
+        comisionId: existente.id,
+        tecnicoId: c.tecnicoId,
+        tecnicoNombre: c.tecnicoNombre,
+        monto: typeof existente.data.comisionMonto === 'number'
+          ? (existente.data.comisionMonto as number)
+          : c.monto,
+        porcentaje: typeof existente.data.comisionPorcentaje === 'number'
+          ? (existente.data.comisionPorcentaje as number)
+          : c.porcentaje,
+      });
+      continue;
+    }
+
+    // Strip undefined antes de Firestore — convención CLAUDE.md.
+    const payload: Record<string, unknown> = {
+      tecnicoId: c.tecnicoId,
+      tecnicoNombre: c.tecnicoNombre,
+      ordenId: orden.id,
+      ordenNumero: orden.numero || '',
+      clienteNombre: orden.clienteNombre || '',
+      fechaCobro: Timestamp.fromDate(fechaCobro),
+      precioFinal: totalFactura,
+      subtotal: desgloseTotal.subtotal,
+      itbisMonto: itbisMontoTotal,
+      costoPiezas: costoPiezasTotal,
+      basePendienteComision: c.baseSinItbisAsignada,
+      comisionPorcentaje: c.porcentaje,
+      comisionMonto: c.monto,
+      facturaId,
+      facturaNumero,
+      estadoLiquidacion: 'pendiente',
+      quincenaAsignada: quincena,
+      // Metadata específica del flujo proporcional (informativa, no rompe shape legacy)
+      proporcionItems: c.proporcionItems,
+      itemsAsignados: c.itemsAsignados,
+      updatedAt: Timestamp.now(),
+    };
+
+    try {
+      if (existente) {
+        await updateDoc(doc(db, 'comisiones', existente.id), payload);
+        comisionesEscritas.push({
+          comisionId: existente.id,
+          tecnicoId: c.tecnicoId,
+          tecnicoNombre: c.tecnicoNombre,
+          monto: c.monto,
+          porcentaje: c.porcentaje,
+        });
+      } else {
+        payload.createdAt = Timestamp.now();
+        const ref = await addDoc(collection(db, 'comisiones'), payload);
+        comisionesEscritas.push({
+          comisionId: ref.id,
+          tecnicoId: c.tecnicoId,
+          tecnicoNombre: c.tecnicoNombre,
+          monto: c.monto,
+          porcentaje: c.porcentaje,
+        });
+      }
+    } catch (err) {
+      console.warn(`[comisiones] error escribiendo comisión para ${c.tecnicoId}:`, err);
+    }
+  }
+
+  const totalAgregado = comisionesEscritas.reduce((acc, c) => acc + c.monto, 0);
+
+  // Auditoría única (resumen) — no bloqueante.
+  if (comisionesEscritas.length > 0 || preservadasPorLiquidacion > 0 || eliminadasHuerfanas > 0) {
+    try {
+      const partes: string[] = [];
+      if (comisionesEscritas.length > 0) {
+        partes.push(`Comisiones generadas/actualizadas: ${comisionesEscritas.length} técnico(s) por RD$${redondearMonto(totalAgregado).toLocaleString('es-DO')}`);
+      }
+      if (preservadasPorLiquidacion > 0) {
+        partes.push(`${preservadasPorLiquidacion} liquidada(s) preservada(s)`);
+      }
+      if (eliminadasHuerfanas > 0) {
+        partes.push(`${eliminadasHuerfanas} pendiente(s) eliminada(s)`);
+      }
+      const reg = crearRegistroAuditoria(
+        usuario,
+        'cierre',
+        `Factura ${facturaNumero} — ${partes.join('. ')}`,
+        'comision',
+        '',
+        `RD$${redondearMonto(totalAgregado).toLocaleString('es-DO')}`,
+      );
+      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+        auditoria: arrayUnion(reg),
+        updatedAt: Timestamp.now(),
+      });
+    } catch (err) {
+      console.warn('[comisiones] no se pudo registrar auditoría agregada:', err);
+    }
+  }
+
+  return {
+    comisiones: comisionesEscritas,
+    totalAgregado: redondearMonto(totalAgregado),
+    preservadasPorLiquidacion,
+    eliminadasHuerfanas,
+  };
+}
+
+/**
  * Crea o actualiza un ComisionRegistro a partir de una factura recién generada.
- * Es idempotente por `ordenId` — si ya existe una comisión, actualiza sus montos
- * en lugar de duplicarla. Devuelve el id del registro creado/actualizado.
+ * Wrapper backwards-compat: si los items traen `tecnicoId` por línea (vendedor
+ * por línea), delega a `registrarComisionesPorItems` y adapta el shape de
+ * retorno. Si NO traen `tecnicoId`, usa el flujo legacy (1 técnico por orden).
+ *
+ * **Shape de retorno**:
+ *  - 1 técnico (legacy o N=1): `comisionId`, `tecnicoId`, `tecnicoNombre`,
+ *    `comisionMonto` poblados.
+ *  - N>1 técnicos: `comisionId=null`, `tecnicoId=''`, `tecnicoNombre='N técnicos'`,
+ *    `comisionMonto=totalAgregado`. El caller debe denormalizar como agregado.
+ *  - 0 técnicos válidos: `comisionId=null`, `comisionMonto=0`.
  */
 export async function registrarComisionPorFactura(args: {
   orden: OrdenServicio;
@@ -269,6 +687,69 @@ export async function registrarComisionPorFactura(args: {
 }): Promise<{ comisionId: string | null; comisionMonto: number; gananciaNeta: number; subtotal: number; itbis: number; costoPiezas: number; porcentaje: number; tecnicoId: string; tecnicoNombre: string }> {
   const { orden, facturaId, facturaNumero, totalFactura, items, userProfile, itbisPorcentaje } = args;
   const usuario = userProfile?.nombre || 'Sistema';
+  const itemsArr = items || [];
+
+  // Detectar vendedor por línea — si CUALQUIER item trae tecnicoId, delegar
+  // al nuevo flujo proporcional. Una vez delegamos, registrarComisionesPorItems
+  // hace todo: cleanup, upsert, auditoría.
+  const algunItemConTecnico = itemsArr.some(i => !!i.tecnicoId);
+
+  if (algunItemConTecnico) {
+    // Pre-calculamos desglose para retornar shape compatible.
+    const itbisPct = typeof itbisPorcentaje === 'number' && itbisPorcentaje >= 0
+      ? itbisPorcentaje
+      : ITBIS_PORCENTAJE;
+    const desg = desglosarTotalConITBIS(totalFactura, itbisPct);
+    const costoPiezas = calcularCostoPiezasDeItems(itemsArr);
+    const gananciaNeta = Math.max(0, redondearMonto(desg.subtotal - costoPiezas));
+
+    const result = await registrarComisionesPorItems({
+      orden,
+      facturaId,
+      facturaNumero,
+      totalFactura,
+      items: itemsArr,
+      userProfile,
+      itbisPorcentaje,
+    });
+
+    if (result.comisiones.length === 1) {
+      const c = result.comisiones[0];
+      return {
+        comisionId: c.comisionId,
+        comisionMonto: c.monto,
+        gananciaNeta,
+        subtotal: desg.subtotal,
+        itbis: desg.itbis,
+        costoPiezas,
+        porcentaje: c.porcentaje,
+        tecnicoId: c.tecnicoId,
+        tecnicoNombre: c.tecnicoNombre,
+      };
+    }
+    if (result.comisiones.length > 1) {
+      // N>1: shape "agregado". Caller (en C4) detecta por tecnicoId='' o comisionId=null.
+      return {
+        comisionId: null,
+        comisionMonto: result.totalAgregado,
+        gananciaNeta,
+        subtotal: desg.subtotal,
+        itbis: desg.itbis,
+        costoPiezas,
+        porcentaje: 0, // mixto, no aplica un único %
+        tecnicoId: '',
+        tecnicoNombre: 'N técnicos',
+      };
+    }
+    // 0 técnicos válidos
+    return {
+      comisionId: null, comisionMonto: 0, gananciaNeta, subtotal: desg.subtotal, itbis: desg.itbis,
+      costoPiezas, porcentaje: 0, tecnicoId: '', tecnicoNombre: '',
+    };
+  }
+
+  // ---------------- Flujo legacy (sin tecnicoId por línea) ----------------
+  // Se preserva exactamente el comportamiento previo a Conduces SIBS C1.
 
   if (!orden.tecnicoId) {
     return {
@@ -290,7 +771,7 @@ export async function registrarComisionPorFactura(args: {
   const { personal, porcentaje } = await obtenerTecnicoParaComision(orden.tecnicoId);
   const tecnicoNombre = orden.tecnicoNombre || personal?.nombre || 'Técnico';
 
-  const desglose = calcularDesgloseFactura({ total: totalFactura, items, porcentajeTecnico: porcentaje, itbisPorcentaje });
+  const desglose = calcularDesgloseFactura({ total: totalFactura, items: itemsArr, porcentajeTecnico: porcentaje, itbisPorcentaje });
 
   const fechaCobro = new Date();
   const quincena = calcularQuincenaActual(fechaCobro);
