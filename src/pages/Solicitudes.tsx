@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useSolicitudes, useEmpresas } from '../hooks/useFormularios';
-import { actualizarEstadoSolicitud, convertirAOrden } from '../services/solicitudes.service';
+import { actualizarEstadoSolicitud, convertirAOrden, eliminarSolicitud } from '../services/solicitudes.service';
 import { SolicitudServicio, EstadoSolicitud } from '../types/formularios';
+import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Inbox, Search, Filter, Eye, FileText, CheckCircle, XCircle, ArrowRight, ExternalLink, Download } from 'lucide-react';
+import { Inbox, Search, Filter, Eye, FileText, CheckCircle, XCircle, ArrowRight, ExternalLink, Download, Trash2 } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import toast from 'react-hot-toast';
 
@@ -65,6 +66,8 @@ function formatPhoneForWhatsApp(phone: string): string {
 export default function Solicitudes() {
   const { solicitudes, loading } = useSolicitudes();
   const { empresas, loading: loadingEmpresas } = useEmpresas();
+  const { userProfile } = useApp();
+  const puedeEliminar = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
 
   const [tabActivo, setTabActivo] = useState<EstadoSolicitud | 'todas'>('todas');
   const [filtroEmpresa, setFiltroEmpresa] = useState('');
@@ -75,6 +78,7 @@ export default function Solicitudes() {
   const [modalNotas, setModalNotas] = useState('');
   const [saving, setSaving] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Client-side filtering
   const solicitudesFiltradas = useMemo(() => {
@@ -153,6 +157,27 @@ export default function Solicitudes() {
       toast.error('Error al convertir en orden');
     } finally {
       setConverting(false);
+    }
+  };
+
+  const handleEliminar = async (sol: SolicitudServicio) => {
+    if (!puedeEliminar) return;
+    const nombre = String(sol.datos?.nombre || sol.formularioNombre || 'sin identificar');
+    const confirmado = window.confirm(
+      `¿Eliminar la solicitud de "${nombre}"?\n\nEsta acción no se puede deshacer.`
+    );
+    if (!confirmado) return;
+
+    setDeleting(true);
+    try {
+      await eliminarSolicitud(sol.id);
+      toast.success('Solicitud eliminada');
+      if (selectedSolicitud?.id === sol.id) closeDetail();
+    } catch (err) {
+      console.error('Error eliminando solicitud:', err);
+      toast.error('Error al eliminar la solicitud');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -277,6 +302,17 @@ export default function Solicitudes() {
                       {ESTADO_LABEL[sol.estado]}
                     </span>
                     <span className="text-xs text-gray-400 whitespace-nowrap">{timeAgo(fecha)}</span>
+                    {puedeEliminar && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleEliminar(sol); }}
+                        disabled={deleting}
+                        title="Eliminar solicitud"
+                        className="inline-flex items-center justify-center p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                     <Eye size={16} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
                   </div>
                 </div>
@@ -525,6 +561,17 @@ export default function Solicitudes() {
                   <WhatsAppIcon filled={false} className="text-white" size={16} />
                   WhatsApp
                 </button>
+
+                {puedeEliminar && (
+                  <button
+                    onClick={() => handleEliminar(selectedSolicitud)}
+                    disabled={deleting}
+                    className="flex items-center gap-2 px-4 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors font-medium text-sm disabled:opacity-50 ml-auto"
+                  >
+                    <Trash2 size={16} />
+                    {deleting ? 'Eliminando...' : 'Eliminar'}
+                  </button>
+                )}
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import {
-  collection, addDoc, updateDoc, getDoc, getDocs, doc,
+  collection, addDoc, updateDoc, deleteDoc, getDoc, getDocs, doc,
   query, orderBy, where, serverTimestamp, onSnapshot, Timestamp,
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -130,6 +130,10 @@ export async function subirArchivoSolicitud(
   const ref = storageRef(storage, path);
   await uploadBytes(ref, file);
   return await getDownloadURL(ref);
+}
+
+export async function eliminarSolicitud(id: string): Promise<void> {
+  await deleteDoc(doc(db, COL, id));
 }
 
 /** Listener de solicitudes en tiempo real para el panel admin */
