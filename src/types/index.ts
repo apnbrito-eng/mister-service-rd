@@ -75,8 +75,34 @@ export interface Cliente {
   direcciones?: DireccionCliente[];
   /** RNC (empresa) — para reporte 607 DGII */
   rnc?: string;
+  /** Razón social (nombre legal del negocio). Solo si rnc está presente. */
+  razonSocial?: string;
   /** Cédula (persona física) — para reporte 607 DGII */
   cedula?: string;
+  /**
+   * Origen del registro. 'calendar_legacy' marca los importados desde el CSV
+   * histórico de Google Calendar; 'manual' los creados desde /admin/clientes;
+   * 'agendar_publico' los del formulario público; 'cita_publica' por
+   * compatibilidad con flujos antiguos que escriben 'formulario_publico'.
+   */
+  origen?: 'calendar_legacy' | 'manual' | 'agendar_publico' | 'cita_publica';
+  /**
+   * Métricas legacy de los 3+ años de operación en Google Calendar. Se llena
+   * SOLO en el import desde CSV. No se actualiza con el uso normal del
+   * sistema (los servicios nuevos viven en `ordenes_servicio`).
+   */
+  legacyMetricas?: {
+    totalServicios: number;
+    /** YYYY-MM-DD */
+    fechaUltimoServicio: string;
+    montoTotalHistorico: number;
+    /** CSV con tipos de equipo atendidos (ej: "Lavadora,Nevera"). */
+    equiposAtendidos: string;
+    /** CSV con marcas habituales (ej: "Whirlpool,LG"). */
+    marcasHabituales: string;
+    /** CSV con bancos usados para pagos. */
+    bancosPago: string;
+  };
   createdAt: Date;
   updatedAt?: Date;
 }

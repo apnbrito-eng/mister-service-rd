@@ -47,6 +47,11 @@ interface FormState {
   falla: string;
   fechaSolicitada: string;
   horaSolicitada: string;
+  /** RNC fiscal opcional (DGII). Solo se llena si el cliente es empresa
+   *  y necesita factura. Default colapsado. */
+  rnc: string;
+  /** Razón social opcional. Solo aparece si rnc tiene valor. */
+  razonSocial: string;
   /** Map { campoId: valor } para campos personalizados */
   custom: Record<string, string>;
   /** Honeypot anti-bots */
@@ -67,6 +72,8 @@ const FORM_INITIAL: FormState = {
   falla: '',
   fechaSolicitada: '',
   horaSolicitada: '',
+  rnc: '',
+  razonSocial: '',
   custom: {},
   hp: '',
 };
@@ -197,6 +204,7 @@ export default function FormularioAgendarPublico() {
     url: string;
     nombre: string;
   } | null>(null);
+  const [mostrarRnc, setMostrarRnc] = useState(false);
 
   // ─── Foto del equipo ───
   // Se genera un UUID al montar para trazar el path en Storage:
@@ -431,6 +439,14 @@ export default function FormularioAgendarPublico() {
         }
       }
 
+      // RNC opcional: si lo llenaron, debe tener 9-11 dígitos. Vacío = OK
+      // (es campo opcional para clientes residenciales).
+      const rncDigitos = form.rnc.replace(/\D/g, '');
+      if (rncDigitos.length > 0 && (rncDigitos.length < 9 || rncDigitos.length > 11)) {
+        toast.error('El RNC debe tener entre 9 y 11 dígitos.');
+        return;
+      }
+
       // Validar campos personalizados requeridos
       for (const c of camposPersonalizados) {
         if (c.requerido) {
@@ -482,6 +498,8 @@ export default function FormularioAgendarPublico() {
         falla: form.falla.trim(),
         fechaSolicitada: form.fechaSolicitada || undefined,
         horaSolicitada: form.horaSolicitada || undefined,
+        rnc: rncDigitos || undefined,
+        razonSocial: rncDigitos ? (form.razonSocial.trim() || undefined) : undefined,
         camposPersonalizados:
           Object.keys(customPorId).length > 0 ? customPorId : undefined,
         honeypot: form.hp,
@@ -1011,6 +1029,64 @@ export default function FormularioAgendarPublico() {
           ))}
         </div>
       )}
+
+      {/* RNC opcional para empresas con factura fiscal — colapsado por default */}
+      <div className="border-t border-gray-100 pt-5">
+        {!mostrarRnc ? (
+          <button
+            type="button"
+            onClick={() => setMostrarRnc(true)}
+            className="text-sm text-primary hover:underline font-medium"
+          >
+            Soy empresa con RNC (factura fiscal)
+          </button>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-700">
+                Datos fiscales (opcional)
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setMostrarRnc(false);
+                  update({ rnc: '', razonSocial: '' });
+                }}
+                className="text-xs text-gray-500 hover:underline"
+              >
+                Quitar
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">
+              Solo si tu empresa requiere factura fiscal (DGII). Si eres cliente
+              residencial, déjalo vacío.
+            </p>
+            <div>
+              <label className={labelClass}>RNC</label>
+              <input
+                type="text"
+                className={inputClass}
+                value={form.rnc}
+                onChange={e => update({ rnc: e.target.value })}
+                placeholder="000-00000-0"
+                inputMode="numeric"
+              />
+            </div>
+            {form.rnc.replace(/\D/g, '').length > 0 && (
+              <div>
+                <label className={labelClass}>Razón social</label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  value={form.razonSocial}
+                  onChange={e => update({ razonSocial: e.target.value })}
+                  placeholder="Nombre legal de la empresa"
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Submit */}
       <div className="pt-4">

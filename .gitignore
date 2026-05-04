@@ -48,3 +48,4 @@ cors.json
 !.claude/settings.json
 .env*.local
 service-account.json
+data-imports/

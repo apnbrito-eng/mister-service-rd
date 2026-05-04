@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cliente, OrdenServicio, ZONAS_RD } from '../types';
-import { formatFechaCorta, formatTelefono } from '../utils';
+import { formatFechaCorta, formatMoneda, formatTelefono } from '../utils';
+import { whatsappUrl } from '../utils/whatsapp';
 import { inferirZona, zonaColor } from '../utils/zonas';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
@@ -13,7 +14,7 @@ import Badge from '../components/Badge';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import EditarClienteModal from '../components/clientes/EditarClienteModal';
-import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench, Edit2 } from 'lucide-react';
+import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench, Edit2, MessageCircle, Archive } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Clientes() {
@@ -212,6 +213,7 @@ export default function Clientes() {
         direccion: form.direccion,
         lat: form.lat || null,
         lng: form.lng || null,
+        origen: 'manual',
         createdAt: Timestamp.now(),
       };
       if (zonaFinal) payload.zona = zonaFinal;
@@ -291,26 +293,55 @@ export default function Clientes() {
               className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white" />
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-h-[70vh] overflow-y-auto">
-            {filteredClientes.map(c => (
-              <button key={c.id} onClick={() => setSelectedCliente(c)}
-                className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 transition-colors flex items-center gap-3 ${
-                  selectedCliente?.id === c.id ? 'bg-blue-50 border-l-4 border-l-[#1a5fa8]' : ''
-                }`}>
-                <div className="w-8 h-8 bg-[#0f3460]/10 rounded-full flex items-center justify-center flex-shrink-0">
-                  <User size={14} className="text-[#0f3460]" />
+            {filteredClientes.map(c => {
+              const primerNombre = c.nombre.trim().split(/\s+/)[0] || '';
+              return (
+                <div
+                  key={c.id}
+                  className={`w-full border-b border-gray-100 hover:bg-gray-50 transition-colors flex items-center gap-2 ${
+                    selectedCliente?.id === c.id ? 'bg-blue-50 border-l-4 border-l-[#1a5fa8]' : ''
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCliente(c)}
+                    className="flex-1 min-w-0 text-left px-4 py-3 flex items-center gap-3"
+                  >
+                    <div className="w-8 h-8 bg-[#0f3460]/10 rounded-full flex items-center justify-center flex-shrink-0">
+                      <User size={14} className="text-[#0f3460]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{c.nombre}</p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {formatTelefono(c.telefono)}
+                        {c.zona && (
+                          <span className={`hidden md:inline ml-2 ${zonaColor(c.zona)}`}>· {c.zona}</span>
+                        )}
+                        {c.origen === 'calendar_legacy' && (
+                          <span className="hidden md:inline ml-2 text-amber-600" title="Importado del histórico de Calendar">
+                            <Archive size={10} className="inline" /> legacy
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </button>
+                  {c.telefono && (
+                    <a
+                      href={whatsappUrl(c.telefono, `Hola ${primerNombre}, te escribimos de Mister Service RD.`)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      title={`Enviar WhatsApp a ${c.nombre}`}
+                      aria-label={`Enviar WhatsApp a ${c.nombre}`}
+                      className="flex items-center justify-center w-9 h-9 mr-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex-shrink-0"
+                    >
+                      <MessageCircle size={15} />
+                    </a>
+                  )}
+                  <ChevronRight size={14} className="text-gray-300 flex-shrink-0 mr-3" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{c.nombre}</p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {formatTelefono(c.telefono)}
-                    {c.zona && (
-                      <span className={`hidden md:inline ml-2 ${zonaColor(c.zona)}`}>· {c.zona}</span>
-                    )}
-                  </p>
-                </div>
-                <ChevronRight size={14} className="text-gray-300 flex-shrink-0" />
-              </button>
-            ))}
+              );
+            })}
             {filteredClientes.length === 0 && (
               <div className="p-8 text-center text-gray-400 text-sm">Sin resultados</div>
             )}
@@ -324,16 +355,47 @@ export default function Clientes() {
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
                   <h2 className="text-xl font-bold text-gray-900">{selectedCliente.nombre}</h2>
-                  {puedeModificar && (
-                    <button
-                      type="button"
-                      onClick={() => setShowEditModal(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0f3460] hover:bg-[#1a5fa8] text-white"
-                    >
-                      <Edit2 size={13} /> Editar cliente
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {selectedCliente.telefono && (
+                      <a
+                        href={whatsappUrl(
+                          selectedCliente.telefono,
+                          `Hola ${selectedCliente.nombre.trim().split(/\s+/)[0] || ''}, te escribimos de Mister Service RD.`,
+                        )}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white"
+                      >
+                        <MessageCircle size={13} /> WhatsApp
+                      </a>
+                    )}
+                    {puedeModificar && (
+                      <button
+                        type="button"
+                        onClick={() => setShowEditModal(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0f3460] hover:bg-[#1a5fa8] text-white"
+                      >
+                        <Edit2 size={13} /> Editar cliente
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {/* RNC + Razón social arriba del bloque de teléfono si existen */}
+                {(selectedCliente.rnc || selectedCliente.razonSocial) && (
+                  <div className="mb-4 bg-gray-50 border border-gray-100 rounded-lg p-3 text-sm">
+                    {selectedCliente.rnc && (
+                      <div className="text-gray-700">
+                        <span className="font-medium text-gray-900">RNC:</span> {selectedCliente.rnc}
+                      </div>
+                    )}
+                    {selectedCliente.razonSocial && (
+                      <div className="text-gray-700">
+                        <span className="font-medium text-gray-900">Razón social:</span>{' '}
+                        {selectedCliente.razonSocial}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Phone size={14} /> {formatTelefono(selectedCliente.telefono)}
@@ -343,10 +405,10 @@ export default function Clientes() {
                       <Mail size={14} /> {selectedCliente.email}
                     </div>
                   )}
-                  {(selectedCliente.rnc || selectedCliente.cedula) && (
+                  {selectedCliente.cedula && !selectedCliente.rnc && (
                     <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <span className="font-medium">{selectedCliente.rnc ? 'RNC:' : 'Cédula:'}</span>
-                      {selectedCliente.rnc || selectedCliente.cedula}
+                      <span className="font-medium">Cédula:</span>
+                      {selectedCliente.cedula}
                     </div>
                   )}
                   {selectedCliente.direccion && (
@@ -378,6 +440,81 @@ export default function Clientes() {
                 </div>
                 <p className="text-xs text-gray-400 mt-4">Cliente desde {formatFechaCorta(selectedCliente.createdAt)}</p>
               </div>
+
+              {/* Histórico pre-sistema (importado de Calendar) */}
+              {selectedCliente.legacyMetricas && (
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Archive size={16} className="text-amber-700" />
+                    <h3 className="font-semibold text-amber-900">Historial pre-sistema (importado)</h3>
+                  </div>
+                  <p className="text-[11px] text-amber-700 mb-3">
+                    Datos consolidados desde Google Calendar (años previos). No se actualiza automáticamente.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                    <div className="bg-white border border-amber-100 rounded-lg p-3">
+                      <p className="text-[11px] text-amber-700 uppercase tracking-wide">Servicios totales</p>
+                      <p className="text-xl font-bold text-amber-900 mt-0.5">
+                        {selectedCliente.legacyMetricas.totalServicios.toLocaleString('es-DO')}
+                      </p>
+                    </div>
+                    <div className="bg-white border border-amber-100 rounded-lg p-3">
+                      <p className="text-[11px] text-amber-700 uppercase tracking-wide">Último servicio</p>
+                      <p className="text-base font-semibold text-amber-900 mt-0.5">
+                        {selectedCliente.legacyMetricas.fechaUltimoServicio || '—'}
+                      </p>
+                    </div>
+                    <div className="bg-white border border-amber-100 rounded-lg p-3">
+                      <p className="text-[11px] text-amber-700 uppercase tracking-wide">Monto histórico</p>
+                      <p className="text-base font-semibold text-amber-900 mt-0.5">
+                        {formatMoneda(selectedCliente.legacyMetricas.montoTotalHistorico || 0)}
+                      </p>
+                    </div>
+                  </div>
+                  {selectedCliente.legacyMetricas.equiposAtendidos && (
+                    <div className="mt-2">
+                      <p className="text-[11px] text-amber-700 uppercase tracking-wide mb-1">Equipos atendidos</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedCliente.legacyMetricas.equiposAtendidos
+                          .split(',').map(s => s.trim()).filter(Boolean)
+                          .map(e => (
+                            <span key={e} className="text-xs bg-white border border-amber-200 text-amber-800 rounded-full px-2 py-0.5">
+                              {e}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                  {selectedCliente.legacyMetricas.marcasHabituales && (
+                    <div className="mt-2">
+                      <p className="text-[11px] text-amber-700 uppercase tracking-wide mb-1">Marcas habituales</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedCliente.legacyMetricas.marcasHabituales
+                          .split(',').map(s => s.trim()).filter(Boolean)
+                          .map(m => (
+                            <span key={m} className="text-xs bg-white border border-amber-200 text-amber-800 rounded-full px-2 py-0.5">
+                              {m}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                  {selectedCliente.legacyMetricas.bancosPago && (
+                    <div className="mt-2">
+                      <p className="text-[11px] text-amber-700 uppercase tracking-wide mb-1">Bancos usados para pagos</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedCliente.legacyMetricas.bancosPago
+                          .split(',').map(s => s.trim()).filter(Boolean)
+                          .map(b => (
+                            <span key={b} className="text-xs bg-white border border-amber-200 text-amber-800 rounded-full px-2 py-0.5">
+                              {b}
+                            </span>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Historial */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">

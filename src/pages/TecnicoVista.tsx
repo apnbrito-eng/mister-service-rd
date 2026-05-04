@@ -971,9 +971,24 @@ export default function TecnicoVista() {
                     )}
 
                     {/* Cliente */}
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-3 flex items-center gap-2 flex-wrap">
                       <User size={14} className="text-gray-400" />
                       <span className="text-sm font-medium text-gray-800">{orden.clienteNombre}</span>
+                      {permisos.puedeContactarCliente && orden.clienteTelefono && (
+                        <a
+                          href={whatsappUrl(
+                            orden.clienteTelefono,
+                            `Hola ${orden.clienteNombre.trim().split(/\s+/)[0] || ''}, te escribimos de Mister Service RD.`,
+                          )}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={e => e.stopPropagation()}
+                          className="ml-auto inline-flex items-center gap-1.5 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-semibold min-h-[40px]"
+                          title={`Enviar WhatsApp a ${orden.clienteNombre}`}
+                        >
+                          <WhatsAppIcon filled={false} className="text-white" size={14} /> WhatsApp
+                        </a>
+                      )}
                     </div>
 
                     {/* Teléfono condicional */}

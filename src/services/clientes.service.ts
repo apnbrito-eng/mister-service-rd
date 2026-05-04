@@ -102,7 +102,7 @@ export async function validarClienteUnico(
  */
 export async function actualizarCliente(
   clienteId: string,
-  cambios: Partial<Pick<Cliente, 'nombre' | 'email' | 'direccion' | 'referenciaDireccion' | 'lat' | 'lng' | 'sector' | 'ciudad' | 'zona' | 'rnc' | 'cedula'>>,
+  cambios: Partial<Pick<Cliente, 'nombre' | 'email' | 'direccion' | 'referenciaDireccion' | 'lat' | 'lng' | 'sector' | 'ciudad' | 'zona' | 'rnc' | 'razonSocial' | 'cedula'>>,
 ): Promise<void> {
   const updates: Record<string, unknown> = { updatedAt: Timestamp.now() };
   Object.entries(cambios).forEach(([k, v]) => {
@@ -268,7 +268,7 @@ export async function crearOActualizarClienteDesdeCita(
     direccion: dirNueva,
     referenciaDireccion: referenciaCompleta || '',
     sector: cita.clienteSector || '',
-    origen: 'formulario_publico',
+    origen: 'cita_publica',
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
     creadoPor: usuarioActual.nombre,

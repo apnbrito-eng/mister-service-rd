@@ -203,6 +203,12 @@ export interface PayloadEnvioCita {
   falla: string;
   fechaSolicitada?: string; // YYYY-MM-DD
   horaSolicitada?: string;
+  /** RNC fiscal del cliente (opcional). Solo si es empresa que necesita
+   *  factura. 9 a 11 dígitos. Se valida client-side y server-side. */
+  rnc?: string;
+  /** Razón social legal de la empresa (opcional). Solo se persiste si rnc
+   *  tiene valor — sin RNC no aplica. */
+  razonSocial?: string;
   /** Map { tituloCampo: valor } para los campos personalizados llenados. */
   camposPersonalizados?: Record<string, string>;
   /** Honeypot anti-bots — si tiene valor, se descarta silenciosamente. */
@@ -289,6 +295,14 @@ export async function enviarSolicitudCita(
   if (payload.equipoModelo?.trim()) data.equipoModelo = payload.equipoModelo.trim();
   if (payload.fotoEquipoUrl?.trim()) data.fotoEquipoUrl = payload.fotoEquipoUrl.trim();
   if (payload.citaIdProvisional?.trim()) data.citaIdProvisional = payload.citaIdProvisional.trim();
+  // RNC: solo aceptamos si limpio (solo dígitos) tiene 9-11. Defense in depth
+  // contra payloads manipulados desde fuera del form. Razón social solo se
+  // persiste si el RNC sobrevivió la validación.
+  const rncDigitos = (payload.rnc || '').replace(/\D/g, '');
+  if (rncDigitos.length >= 9 && rncDigitos.length <= 11) {
+    data.rnc = rncDigitos;
+    if (payload.razonSocial?.trim()) data.razonSocial = payload.razonSocial.trim();
+  }
   if (payload.fechaSolicitada) {
     try {
       const d = new Date(payload.fechaSolicitada + 'T00:00:00');

@@ -1,7 +1,7 @@
 import { format, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
-import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria, PiezaUsada, CondicionPieza, OrigenPieza, Factura, EstadoFactura, GarantiaInfo, GarantiaEstado, GarantiaOrigen, ItemCotizacion, MetodoPago, PropuestaReprogramacion, SugerenciaSoloChequeo } from '../types';
+import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria, PiezaUsada, CondicionPieza, OrigenPieza, Factura, EstadoFactura, GarantiaInfo, GarantiaEstado, GarantiaOrigen, ItemCotizacion, MetodoPago, PropuestaReprogramacion, SugerenciaSoloChequeo, Cliente, DireccionCliente } from '../types';
 
 /** Orden visual del ciclo de fases (agendado va antes de diagnostico) */
 export const FASES_ORDENADAS: FaseOrden[] = [
@@ -504,6 +504,60 @@ export function parseFirestoreDate(val: unknown): Date | null {
   }
   if (typeof val === 'string') return new Date(val);
   return null;
+}
+
+/**
+ * Rehidrata defensivamente un cliente desde un doc de Firestore. Tolera
+ * campos faltantes (clientes viejos sin `origen` o `legacyMetricas`) y
+ * arrays mal escritos. Útil para nuevos call sites; los existentes pueden
+ * seguir construyendo el objeto inline.
+ */
+export function parseCliente(id: string, raw: Record<string, unknown>): Cliente {
+  const direccionesRaw = Array.isArray(raw.direcciones) ? (raw.direcciones as DireccionCliente[]) : undefined;
+
+  const legacyRaw = raw.legacyMetricas;
+  const legacyMetricas = legacyRaw && typeof legacyRaw === 'object'
+    ? (() => {
+      const lm = legacyRaw as Record<string, unknown>;
+      return {
+        totalServicios: typeof lm.totalServicios === 'number' ? lm.totalServicios : 0,
+        fechaUltimoServicio: typeof lm.fechaUltimoServicio === 'string' ? lm.fechaUltimoServicio : '',
+        montoTotalHistorico: typeof lm.montoTotalHistorico === 'number' ? lm.montoTotalHistorico : 0,
+        equiposAtendidos: typeof lm.equiposAtendidos === 'string' ? lm.equiposAtendidos : '',
+        marcasHabituales: typeof lm.marcasHabituales === 'string' ? lm.marcasHabituales : '',
+        bancosPago: typeof lm.bancosPago === 'string' ? lm.bancosPago : '',
+      };
+    })()
+    : undefined;
+
+  const origenRaw = raw.origen;
+  const origen = (origenRaw === 'calendar_legacy' || origenRaw === 'manual'
+    || origenRaw === 'agendar_publico' || origenRaw === 'cita_publica')
+    ? origenRaw
+    : undefined;
+
+  return {
+    id,
+    nombre: (raw.nombre as string) || '',
+    telefono: (raw.telefono as string) || '',
+    telefonoNormalizado: (raw.telefonoNormalizado as string) || undefined,
+    email: (raw.email as string) || undefined,
+    direccion: (raw.direccion as string) || '',
+    referenciaDireccion: (raw.referenciaDireccion as string) || undefined,
+    sector: (raw.sector as string) || undefined,
+    ciudad: (raw.ciudad as string) || undefined,
+    zona: (raw.zona as string) || undefined,
+    lat: typeof raw.lat === 'number' ? raw.lat : undefined,
+    lng: typeof raw.lng === 'number' ? raw.lng : undefined,
+    direcciones: direccionesRaw,
+    rnc: (raw.rnc as string) || undefined,
+    razonSocial: (raw.razonSocial as string) || undefined,
+    cedula: (raw.cedula as string) || undefined,
+    origen,
+    legacyMetricas,
+    createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
+    updatedAt: parseFirestoreDate(raw.updatedAt) || undefined,
+  };
 }
 
 export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServicio {

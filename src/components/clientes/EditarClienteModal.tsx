@@ -39,6 +39,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
   const [referenciaDireccion, setReferenciaDireccion] = useState('');
   const [sector, setSector] = useState('');
   const [rnc, setRnc] = useState('');
+  const [razonSocial, setRazonSocial] = useState('');
   const [cedula, setCedula] = useState('');
   const [lat, setLat] = useState<number | undefined>();
   const [lng, setLng] = useState<number | undefined>();
@@ -123,6 +124,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
         ciudad: (raw.ciudad as string) || undefined,
         zona: (raw.zona as string) || undefined,
         rnc: (raw.rnc as string) || undefined,
+        razonSocial: (raw.razonSocial as string) || undefined,
         cedula: (raw.cedula as string) || undefined,
         lat: typeof raw.lat === 'number' ? raw.lat : undefined,
         lng: typeof raw.lng === 'number' ? raw.lng : undefined,
@@ -138,6 +140,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
       setReferenciaDireccion(r => r || c.referenciaDireccion || '');
       setSector(s => s || c.sector || '');
       setRnc(r => r || c.rnc || '');
+      setRazonSocial(rs => rs || c.razonSocial || '');
       setCedula(x => x || c.cedula || '');
       setLat(l => (l !== undefined ? l : c.lat));
       setLng(l => (l !== undefined ? l : c.lng));
@@ -155,6 +158,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
       setReferenciaDireccion('');
       setSector('');
       setRnc('');
+      setRazonSocial('');
       setCedula('');
       setLat(undefined);
       setLng(undefined);
@@ -185,12 +189,26 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
     );
   };
 
+  // RNC válido en RD: 9, 10 u 11 dígitos (acepta separadores que se descartan
+  // al normalizar). Vacío = válido (campo opcional).
+  const rncDigitos = rnc.replace(/\D/g, '');
+  const rncValido = rncDigitos.length === 0 || (rncDigitos.length >= 9 && rncDigitos.length <= 11);
+
   const guardarDatosBasicos = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombre.trim()) {
       toast.error('El nombre es obligatorio');
       return;
     }
+    if (!rncValido) {
+      toast.error('El RNC debe tener entre 9 y 11 dígitos');
+      return;
+    }
+    // Si el RNC viene vacío, también limpiamos razón social para no dejar
+    // datos huérfanos (la razón social solo tiene sentido junto a un RNC).
+    const rncFinal = rncDigitos || undefined;
+    const razonSocialFinal = rncFinal ? (razonSocial.trim() || undefined) : undefined;
+
     setSaving(true);
     try {
       await actualizarCliente(clienteId, {
@@ -199,7 +217,8 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
         direccion: direccion.trim(),
         referenciaDireccion: referenciaDireccion.trim() || undefined,
         sector: sector.trim() || undefined,
-        rnc: rnc.trim() || undefined,
+        rnc: rncFinal,
+        razonSocial: razonSocialFinal,
         cedula: cedula.trim() || undefined,
         lat,
         lng,
@@ -210,7 +229,8 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
         nombre: nombre.trim(),
         email: email.trim(),
         direccion: direccion.trim(),
-        rnc: rnc.trim() || undefined,
+        rnc: rncFinal,
+        razonSocial: razonSocialFinal,
         cedula: cedula.trim() || undefined,
         lat,
         lng,
@@ -310,8 +330,17 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                   onChange={e => setRnc(e.target.value)}
                   placeholder="000-00000-0"
                   inputMode="numeric"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
+                    rncValido
+                      ? 'border-gray-200 focus:ring-[#1a5fa8]'
+                      : 'border-red-300 focus:ring-red-400'
+                  }`}
                 />
+                {!rncValido && (
+                  <p className="text-[11px] text-red-600 mt-1">
+                    El RNC debe tener entre 9 y 11 dígitos.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -326,6 +355,20 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
                 />
               </div>
+              {rncDigitos.length > 0 && (
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Razón social <span className="text-gray-400 font-normal">(opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={razonSocial}
+                    onChange={e => setRazonSocial(e.target.value)}
+                    placeholder="Nombre legal de la empresa"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  />
+                </div>
+              )}
               <div className="col-span-2">
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Dirección principal
@@ -383,7 +426,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
             <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || !rncValido}
                 className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
               >
                 {saving ? 'Guardando...' : 'Guardar cambios'}
