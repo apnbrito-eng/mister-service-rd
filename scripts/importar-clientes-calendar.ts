@@ -76,6 +76,16 @@ function capitalizar(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
+// Heurística para nombres de marca de electrodomésticos: 2-3 letras se asume
+// acrónimo (LG, GE, JVC) y va en mayúsculas; 4+ letras va Title Case
+// (Mabe, Whirlpool, Samsung, Frigidaire). Si en el futuro aparece una marca
+// corta que no es acrónimo, se agrega una whitelist puntual.
+function capitalizarMarca(m: string): string {
+  const trimmed = m.trim();
+  if (trimmed.length <= 3) return trimmed.toUpperCase();
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+}
+
 function stripUndefined<T>(value: T): T {
   if (value === null || value === undefined) return value;
   if (Array.isArray(value)) {
@@ -356,7 +366,7 @@ async function main() {
   const topMarcas = [...marcasFreq.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 12)
-    .map(([m]) => capitalizar(m));
+    .map(([m]) => capitalizarMarca(m));
 
   if (topMarcas.length > 0 && !dryRun) {
     await db.collection('config_web').doc('sitio').set(
