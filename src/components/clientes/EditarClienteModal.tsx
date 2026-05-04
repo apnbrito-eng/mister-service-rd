@@ -41,6 +41,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
   const [rnc, setRnc] = useState('');
   const [razonSocial, setRazonSocial] = useState('');
   const [cedula, setCedula] = useState('');
+  const [tipo, setTipo] = useState<'particular' | 'b2b'>('particular');
   const [lat, setLat] = useState<number | undefined>();
   const [lng, setLng] = useState<number | undefined>();
   const [capturandoGps, setCapturandoGps] = useState(false);
@@ -112,6 +113,9 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
     const unsub = onSnapshot(ref, snap => {
       if (!snap.exists()) return;
       const raw = snap.data();
+      // Migración defensiva: clientes existentes sin `tipo` se tratan como
+      // 'particular'. Solo se respeta 'b2b' explícito.
+      const tipoNorm: 'particular' | 'b2b' = raw.tipo === 'b2b' ? 'b2b' : 'particular';
       const c: Cliente = {
         id: snap.id,
         nombre: (raw.nombre as string) || '',
@@ -126,13 +130,22 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
         rnc: (raw.rnc as string) || undefined,
         razonSocial: (raw.razonSocial as string) || undefined,
         cedula: (raw.cedula as string) || undefined,
+        tipo: tipoNorm,
         lat: typeof raw.lat === 'number' ? raw.lat : undefined,
         lng: typeof raw.lng === 'number' ? raw.lng : undefined,
         direcciones: Array.isArray(raw.direcciones) ? (raw.direcciones as DireccionCliente[]) : [],
         createdAt: raw.createdAt?.toDate?.() || new Date(),
         updatedAt: raw.updatedAt?.toDate?.() || undefined,
       };
-      setCliente(c);
+      // Detectar primera hidratación (antes de setear el cliente, no después)
+      // para sincronizar `tipo` solo al abrir el modal y no pisar ediciones
+      // locales del usuario en snapshots subsiguientes.
+      setCliente(prev => {
+        if (prev === null) {
+          setTipo(tipoNorm);
+        }
+        return c;
+      });
       // Sincronizar form solo al abrir (primera vez)
       setNombre(n => n || c.nombre);
       setEmail(e => e || c.email || '');
@@ -160,6 +173,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
       setRnc('');
       setRazonSocial('');
       setCedula('');
+      setTipo('particular');
       setLat(undefined);
       setLng(undefined);
     }
@@ -220,6 +234,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
         rnc: rncFinal,
         razonSocial: razonSocialFinal,
         cedula: cedula.trim() || undefined,
+        tipo,
         lat,
         lng,
       });
@@ -232,6 +247,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
         rnc: rncFinal,
         razonSocial: razonSocialFinal,
         cedula: cedula.trim() || undefined,
+        tipo,
         lat,
         lng,
       });
@@ -354,6 +370,20 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                   inputMode="numeric"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
                 />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">Tipo de cliente</label>
+                <select
+                  value={tipo}
+                  onChange={e => setTipo(e.target.value as 'particular' | 'b2b')}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                >
+                  <option value="particular">Particular</option>
+                  <option value="b2b">B2B (empresa o taller aliado)</option>
+                </select>
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Particular: cliente final que llega al taller. B2B: empresa, otro taller o distribuidor.
+                </p>
               </div>
               {rncDigitos.length > 0 && (
                 <div className="col-span-2">

@@ -80,6 +80,15 @@ export interface Cliente {
   /** Cédula (persona física) — para reporte 607 DGII */
   cedula?: string;
   /**
+   * Tipo de cliente para diferenciar facturación y modalidad de precio:
+   * - 'particular': cliente final / mostrador / domicilio (default).
+   * - 'b2b': empresa, taller aliado, distribuidor.
+   *
+   * Determina la modalidad de precio default (Mayoreo vs Detalle) en el
+   * modal de items del conduce. Migración defensiva en `parseCliente`.
+   */
+  tipo?: 'particular' | 'b2b';
+  /**
    * Origen del registro. 'calendar_legacy' marca los importados desde el CSV
    * histórico de Google Calendar; 'manual' los creados desde /admin/clientes;
    * 'agendar_publico' los del formulario público; 'cita_publica' por

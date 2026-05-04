@@ -536,6 +536,11 @@ export function parseCliente(id: string, raw: Record<string, unknown>): Cliente 
     ? origenRaw
     : undefined;
 
+  // Migración defensiva: clientes existentes sin `tipo` se tratan como
+  // 'particular'. Solo se respeta 'b2b' explícito; cualquier otro valor
+  // (undefined, null, string raro) cae al default seguro.
+  const tipo: 'particular' | 'b2b' = raw.tipo === 'b2b' ? 'b2b' : 'particular';
+
   return {
     id,
     nombre: (raw.nombre as string) || '',
@@ -553,6 +558,7 @@ export function parseCliente(id: string, raw: Record<string, unknown>): Cliente 
     rnc: (raw.rnc as string) || undefined,
     razonSocial: (raw.razonSocial as string) || undefined,
     cedula: (raw.cedula as string) || undefined,
+    tipo,
     origen,
     legacyMetricas,
     createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
