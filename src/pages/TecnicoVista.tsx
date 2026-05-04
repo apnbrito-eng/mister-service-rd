@@ -10,6 +10,7 @@ import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_C
 import { calcularQuincenaActual, rangoQuincena } from '../utils/comisiones';
 import { ComisionRegistro } from '../types';
 import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
+import BotonComoLlegar from '../components/shared/BotonComoLlegar';
 import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Badge from '../components/Badge';
@@ -967,6 +968,17 @@ export default function TecnicoVista() {
                       <div className="mt-3 flex items-start gap-2">
                         <MapPin size={14} className="text-[#1a5fa8] mt-0.5 flex-shrink-0" />
                         <p className="text-xs text-gray-700 flex-1">{orden.clienteDireccion || ubi?.direccion}</p>
+                      </div>
+                    )}
+
+                    {/* Cómo llegar — acción principal del técnico, prominente */}
+                    {!completado && (
+                      <div className="mt-3">
+                        <BotonComoLlegar
+                          ubicacion={ubi ? { lat: ubi.lat, lng: ubi.lng } : null}
+                          size="lg"
+                          variant="block"
+                        />
                       </div>
                     )}
 

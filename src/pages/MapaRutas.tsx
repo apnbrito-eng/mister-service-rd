@@ -7,6 +7,8 @@ import { getTecnicoColor, formatHora, faseLabel, formatFecha, formatTelefono, pa
 import { zonaDeOrden, zonaColor } from '../utils/zonas';
 import { optimizarRuta, distanciaTotalRuta } from '../utils/rutas';
 import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
+import { coordsFromLatLng } from '../utils/maps';
+import BotonComoLlegar from '../components/shared/BotonComoLlegar';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import OrdenEditForm from '../components/ordenes/OrdenEditForm';
@@ -959,6 +961,9 @@ export default function MapaRutas() {
                           </a>
                         </div>
                       )}
+                      <div className="mt-2">
+                        <BotonComoLlegar ubicacion={coordsFromLatLng(m.lat, m.lng)} size="sm" />
+                      </div>
                       {puedeEditar && (
                         <button
                           type="button"

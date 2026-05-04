@@ -5,6 +5,7 @@ import { db } from '../firebase/config';
 import { Cliente, OrdenServicio, ZONAS_RD } from '../types';
 import { formatFechaCorta, formatMoneda, formatTelefono } from '../utils';
 import { whatsappUrl } from '../utils/whatsapp';
+import { coordsFromLatLng, googleMapsViewUrl } from '../utils/maps';
 import { inferirZona, zonaColor } from '../utils/zonas';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
@@ -14,6 +15,7 @@ import Badge from '../components/Badge';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import EditarClienteModal from '../components/clientes/EditarClienteModal';
+import BotonComoLlegar from '../components/shared/BotonComoLlegar';
 import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench, Edit2, MessageCircle, Archive } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -338,6 +340,9 @@ export default function Clientes() {
                       <MessageCircle size={15} />
                     </a>
                   )}
+                  <div className="mr-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                    <BotonComoLlegar ubicacion={coordsFromLatLng(c.lat, c.lng)} size="sm" />
+                  </div>
                   <ChevronRight size={14} className="text-gray-300 flex-shrink-0 mr-3" />
                 </div>
               );
@@ -412,13 +417,44 @@ export default function Clientes() {
                     </div>
                   )}
                   {selectedCliente.direccion && (
-                    <div className="flex items-start gap-2 text-sm text-gray-600 col-span-full">
-                      <MapPin size={14} className="mt-0.5 flex-shrink-0" /> {selectedCliente.direccion}
-                      {selectedCliente.lat && (
-                        <span className="text-xs text-green-600 ml-2">(GPS guardado)</span>
-                      )}
+                    <div className="col-span-full">
+                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Dirección escrita</p>
+                      <div className="flex items-start gap-2 text-sm text-gray-700">
+                        <MapPin size={14} className="mt-0.5 flex-shrink-0 text-gray-400" />
+                        <span>{selectedCliente.direccion}</span>
+                      </div>
                     </div>
                   )}
+                  <div className="col-span-full">
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Ubicación GPS</p>
+                    {(() => {
+                      const coords = coordsFromLatLng(selectedCliente.lat, selectedCliente.lng);
+                      if (!coords) {
+                        return (
+                          <p className="text-sm text-gray-400 italic">Sin coordenadas GPS guardadas</p>
+                        );
+                      }
+                      const verUrl = googleMapsViewUrl(coords);
+                      return (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                            {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+                          </span>
+                          <BotonComoLlegar ubicacion={coords} size="sm" />
+                          {verUrl && (
+                            <a
+                              href={verUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:underline"
+                            >
+                              Ver en mapa
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
                   <div className="col-span-full flex items-center gap-2 text-sm">
                     <span className="text-gray-600">Zona:</span>
                     <span className={`font-medium ${zonaColor(selectedCliente.zona)}`}>

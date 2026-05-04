@@ -9,6 +9,8 @@ import {
   formatearEquipoLabel,
 } from '../utils';
 import FotoEquipoDisplay from '../components/shared/FotoEquipoDisplay';
+import BotonComoLlegar from '../components/shared/BotonComoLlegar';
+import { coordsFromLatLng } from '../utils/maps';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { useApp } from '../context/AppContext';
@@ -757,6 +759,9 @@ function TecnicoColumn({
                   {formatMoneda(o.precioFinal || o.precioAprobado || 0)}
                 </p>
               )}
+              <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                <BotonComoLlegar ubicacion={coordsFromLatLng(o.clienteLat, o.clienteLng)} size="sm" />
+              </div>
               {(necesitaAprobacionPrecio || puedeAccionarChequeo) && (
                 <div
                   className="mt-2 flex flex-wrap gap-1"

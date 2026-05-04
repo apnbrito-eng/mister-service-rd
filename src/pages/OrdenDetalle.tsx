@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { collection, doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, FaseOrden, MetodoPago, StandbyPieza } from '../types';
-import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, googleMapsLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente } from '../utils';
+import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente } from '../utils';
 import ModalSugerirSoloChequeo from '../components/cierre/ModalSugerirSoloChequeo';
 import BannerEstadoSugerenciaSoloChequeo from '../components/cierre/BannerEstadoSugerenciaSoloChequeo';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -29,6 +29,8 @@ import EnviarFacturacionButton from '../components/ordenes/EnviarFacturacionButt
 import { XCircle, Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
 import { generarTrackingToken } from '../services/gps.service';
 import { whatsappUrl } from '../utils/whatsapp';
+import { coordsFromLatLng, googleMapsViewUrl } from '../utils/maps';
+import BotonComoLlegar from '../components/shared/BotonComoLlegar';
 import { crearNotificacion } from '../services/notificaciones.service';
 import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
 import { format } from 'date-fns';
@@ -614,23 +616,51 @@ export default function OrdenDetalle() {
                   </a>
                 </div>
               )}
-              {orden.clienteDireccion && (
-                <a href={
-                  orden.clienteDireccion.startsWith('http')
-                    ? orden.clienteDireccion
-                    : orden.clienteLat && orden.clienteLng
-                      ? `https://maps.google.com/?q=${orden.clienteLat},${orden.clienteLng}`
-                      : googleMapsLink(undefined, undefined, orden.clienteDireccion)
-                }
-                  target="_blank" rel="noreferrer"
-                  className="flex items-center gap-2 text-sm text-[#1a5fa8] hover:underline">
-                  <MapPin size={14} />
-                  {orden.clienteDireccion.startsWith('http') && orden.clienteLat && orden.clienteLng
-                    ? `📍 ${orden.clienteLat.toFixed(6)}, ${orden.clienteLng.toFixed(6)}`
-                    : orden.clienteDireccion}
-                  <ExternalLink size={10} />
-                </a>
+              {orden.clienteDireccion && !orden.clienteDireccion.startsWith('http') && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Dirección escrita</p>
+                  <div className="flex items-start gap-2 text-sm text-gray-700">
+                    <MapPin size={14} className="mt-0.5 flex-shrink-0 text-gray-400" />
+                    <span>{orden.clienteDireccion}</span>
+                  </div>
+                </div>
               )}
+              {(() => {
+                const coords = coordsFromLatLng(orden.clienteLat, orden.clienteLng);
+                if (!coords) {
+                  return (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Ubicación GPS</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-gray-400 italic">Sin coordenadas GPS</span>
+                        <BotonComoLlegar ubicacion={null} size="sm" />
+                      </div>
+                    </div>
+                  );
+                }
+                const verUrl = googleMapsViewUrl(coords);
+                return (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Ubicación GPS</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                        {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+                      </span>
+                      <BotonComoLlegar ubicacion={coords} size="sm" />
+                      {verUrl && (
+                        <a
+                          href={verUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:underline"
+                        >
+                          <ExternalLink size={10} /> Ver en mapa
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 

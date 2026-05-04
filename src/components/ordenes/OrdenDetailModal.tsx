@@ -8,6 +8,8 @@ import {
   estadoSimpleLabel, estadoSimpleColor, tiempoTranscurrido, tieneStandby,
   labelTipoMotor,
 } from '../../utils';
+import { coordsFromLatLng, googleMapsViewUrl } from '../../utils/maps';
+import BotonComoLlegar from '../shared/BotonComoLlegar';
 import FotoEquipoDisplay from '../shared/FotoEquipoDisplay';
 import { puede } from '../../utils/permisos';
 import Badge from '../Badge';
@@ -353,25 +355,51 @@ export default function OrdenDetailModal({
           {!orden.eliminada && orden.fase !== 'cancelado' && (
             <EnviarPortalButton orden={orden} userProfile={userProfile} />
           )}
-          {orden.clienteDireccion && (
-            <a
-              href={
-                orden.clienteDireccion.startsWith('http')
-                  ? orden.clienteDireccion
-                  : orden.clienteLat && orden.clienteLng
-                    ? `https://maps.google.com/?q=${orden.clienteLat},${orden.clienteLng}`
-                    : `https://maps.google.com/?q=${encodeURIComponent(orden.clienteDireccion)}`
-              }
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-[#1a5fa8] hover:underline flex items-center gap-1.5"
-            >
-              <MapPin size={14} />
-              {orden.clienteDireccion.startsWith('http') && orden.clienteLat && orden.clienteLng
-                ? `\u{1F4CD} ${orden.clienteLat.toFixed(6)}, ${orden.clienteLng.toFixed(6)}`
-                : orden.clienteDireccion}
-            </a>
+          {orden.clienteDireccion && !orden.clienteDireccion.startsWith('http') && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Dirección escrita</p>
+              <div className="flex items-start gap-1.5 text-sm text-gray-700">
+                <MapPin size={14} className="mt-0.5 flex-shrink-0 text-gray-400" />
+                <span>{orden.clienteDireccion}</span>
+              </div>
+            </div>
           )}
+          {(() => {
+            const coords = coordsFromLatLng(orden.clienteLat, orden.clienteLng);
+            if (!coords) {
+              return (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Ubicación GPS</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-gray-400 italic">Sin coordenadas GPS</span>
+                    <BotonComoLlegar ubicacion={null} size="sm" />
+                  </div>
+                </div>
+              );
+            }
+            const verUrl = googleMapsViewUrl(coords);
+            return (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Ubicación GPS</p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+                    {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
+                  </span>
+                  <BotonComoLlegar ubicacion={coords} size="sm" />
+                  {verUrl && (
+                    <a
+                      href={verUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-1 text-xs text-blue-600 hover:underline"
+                    >
+                      Ver en mapa
+                    </a>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 

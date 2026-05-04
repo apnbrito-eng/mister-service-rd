@@ -4,7 +4,9 @@ import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, StandbyPieza } from '../../types';
 import { estadoSimpleBorder, formatFecha, tiempoTranscurrido, tieneStandby, crearRegistroAuditoria, formatearEquipoLabel } from '../../utils';
+import { coordsFromLatLng } from '../../utils/maps';
 import FotoEquipoDisplay from '../shared/FotoEquipoDisplay';
+import BotonComoLlegar from '../shared/BotonComoLlegar';
 import Badge from '../Badge';
 import EliminarOrdenButton from './EliminarOrdenButton';
 import FaseStepper from './FaseStepper';
@@ -174,9 +176,10 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
           </div>
         </div>
 
-        {/* Stepper compacto + cancelar + eliminar */}
-        <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+        {/* Stepper compacto + cómo llegar + cancelar + eliminar */}
+        <div className="flex items-center gap-2 shrink-0 flex-wrap" onClick={(e) => e.stopPropagation()}>
           <FaseStepper orden={orden} size="sm" tienestandby={conStandby} />
+          <BotonComoLlegar ubicacion={coordsFromLatLng(orden.clienteLat, orden.clienteLng)} size="sm" />
           {puedeCancelar && !orden.eliminada && orden.fase !== 'cancelado' && (
             <button
               type="button"
