@@ -455,24 +455,34 @@ export default function Clientes() {
                       );
                     })()}
                   </div>
-                  <div className="col-span-full flex items-center gap-2 text-sm">
-                    <span className="text-gray-600">Zona:</span>
-                    <span className={`font-medium ${zonaColor(selectedCliente.zona)}`}>
-                      {selectedCliente.zona || 'No definida'}
-                    </span>
-                    {puedeModificar && (
-                      <select
-                        value={selectedCliente.zona || '__auto__'}
-                        onChange={e => handleCambiarZonaCliente(selectedCliente, e.target.value)}
-                        className="ml-auto px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                      >
-                        <option value="__auto__">Detectar automáticamente</option>
-                        {ZONAS_RD.map(z => (
-                          <option key={z} value={z}>{z}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
+                  {(() => {
+                    const zonaEfectiva = selectedCliente.zona
+                      || inferirZona(selectedCliente.lat, selectedCliente.lng);
+                    const zonaEsAuto = !selectedCliente.zona && !!zonaEfectiva;
+                    return (
+                      <div className="col-span-full flex items-center gap-2 text-sm">
+                        <span className="text-gray-600">Zona:</span>
+                        <span className={`font-medium ${zonaColor(zonaEfectiva)}`}>
+                          {zonaEfectiva || 'No definida'}
+                          {zonaEsAuto && (
+                            <span className="ml-1 text-[10px] text-gray-400 italic">(auto)</span>
+                          )}
+                        </span>
+                        {puedeModificar && (
+                          <select
+                            value={selectedCliente.zona || '__auto__'}
+                            onChange={e => handleCambiarZonaCliente(selectedCliente, e.target.value)}
+                            className="ml-auto px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                          >
+                            <option value="__auto__">Detectar automáticamente</option>
+                            {ZONAS_RD.map(z => (
+                              <option key={z} value={z}>{z}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <p className="text-xs text-gray-400 mt-4">Cliente desde {formatFechaCorta(selectedCliente.createdAt)}</p>
               </div>

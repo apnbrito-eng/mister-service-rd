@@ -1,6 +1,7 @@
 import { collection, query, where, getDocs, doc, setDoc, updateDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cliente, CitaPorConfirmar, DireccionCliente } from '../types';
+import { inferirZona } from '../utils/zonas';
 
 /** Normaliza teléfono a 10 dígitos locales de RD */
 export function normalizarTelefono(tel: string): string {
@@ -66,13 +67,20 @@ export async function buscarOCrearCliente(
     if (datos.referenciaDireccion) updates.referenciaDireccion = datos.referenciaDireccion;
     if (datos.lat) updates.lat = datos.lat;
     if (datos.lng) updates.lng = datos.lng;
+    // Auto-inferir zona si no la tenía y ahora hay coords (o vienen nuevas).
+    if (!existente.data.zona) {
+      const latFinal = typeof datos.lat === 'number' ? datos.lat : existente.data.lat;
+      const lngFinal = typeof datos.lng === 'number' ? datos.lng : existente.data.lng;
+      const zonaInferida = inferirZona(latFinal, lngFinal);
+      if (zonaInferida) updates.zona = zonaInferida;
+    }
     await updateDoc(doc(db, 'clientes', existente.id), updates);
     return existente.id;
   }
 
   // Crear nuevo con teléfono normalizado como ID
   const clienteId = telNorm;
-  await setDoc(doc(db, 'clientes', clienteId), {
+  const payload: Record<string, unknown> = {
     nombre: datos.nombre,
     telefono: telefono,
     telefonoNormalizado: telNorm,
@@ -83,7 +91,10 @@ export async function buscarOCrearCliente(
     lng: datos.lng || null,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
-  });
+  };
+  const zonaInferidaNuevo = inferirZona(datos.lat, datos.lng);
+  if (zonaInferidaNuevo) payload.zona = zonaInferidaNuevo;
+  await setDoc(doc(db, 'clientes', clienteId), payload);
   return clienteId;
 }
 
@@ -99,6 +110,11 @@ export async function validarClienteUnico(
 
 /**
  * Actualiza datos básicos del cliente (ficha global). Strip de undefined para Firestore.
+ *
+ * Auto-zona: si el caller NO especifica `zona` (i.e. `cambios.zona === undefined`)
+ * y el cliente no tiene zona persistida, intenta inferirla desde lat/lng (los del
+ * cambio si vienen, o los actuales del doc). Si el caller pasa `zona: ''` o
+ * `zona: null` (borrado explícito) NO se auto-rellena — se respeta la decisión.
  */
 export async function actualizarCliente(
   clienteId: string,
@@ -109,6 +125,20 @@ export async function actualizarCliente(
     if (v === undefined) return;
     updates[k] = typeof v === 'string' ? v.trim() : v;
   });
+
+  // Auto-inferir zona solo cuando el caller no la especifica y el cliente no la tiene.
+  // Si vino zona explícita (incluido '' o null), respetamos la decisión del caller.
+  if (!('zona' in cambios) || cambios.zona === undefined) {
+    const snap = await getDoc(doc(db, 'clientes', clienteId));
+    const actual = snap.data() as Partial<Cliente> | undefined;
+    if (actual && !actual.zona) {
+      const latFinal = typeof cambios.lat === 'number' ? cambios.lat : actual.lat;
+      const lngFinal = typeof cambios.lng === 'number' ? cambios.lng : actual.lng;
+      const zonaInferida = inferirZona(latFinal, lngFinal);
+      if (zonaInferida) updates.zona = zonaInferida;
+    }
+  }
+
   await updateDoc(doc(db, 'clientes', clienteId), updates);
 }
 
@@ -247,11 +277,21 @@ export async function crearOActualizarClienteDesdeCita(
       Object.entries(nuevaDir).filter(([, v]) => v !== undefined),
     ) as DireccionCliente;
 
-    await updateDoc(doc(db, 'clientes', existente.id), {
+    const updatesExistente: Record<string, unknown> = {
       direcciones: [...direccionesActuales, nuevaLimpia],
       updatedAt: Timestamp.now(),
       actualizadoPor: usuarioActual.nombre,
-    });
+    };
+    // Si el cliente existente no tenía zona y la nueva dirección trae coords,
+    // inferimos zona desde esas coords. No tocamos zona si ya estaba seteada.
+    if (!existente.data.zona) {
+      const zonaInferida = inferirZona(
+        typeof cita.clienteLat === 'number' ? cita.clienteLat : existente.data.lat,
+        typeof cita.clienteLng === 'number' ? cita.clienteLng : existente.data.lng,
+      );
+      if (zonaInferida) updatesExistente.zona = zonaInferida;
+    }
+    await updateDoc(doc(db, 'clientes', existente.id), updatesExistente);
 
     return { clienteId: existente.id, creado: false, direccionAgregada: true };
   }
@@ -275,6 +315,8 @@ export async function crearOActualizarClienteDesdeCita(
   };
   if (typeof cita.clienteLat === 'number') payload.lat = cita.clienteLat;
   if (typeof cita.clienteLng === 'number') payload.lng = cita.clienteLng;
+  const zonaInferidaCita = inferirZona(cita.clienteLat, cita.clienteLng);
+  if (zonaInferidaCita) payload.zona = zonaInferidaCita;
 
   // Strip undefined defensivo (Firestore los rechaza)
   const payloadLimpio = Object.fromEntries(
