@@ -984,10 +984,14 @@ interface QueryPreciosServiciosInput {
   limite?: number;
 }
 
+// SECURITY: precioMayoreo es precio B2B interno (no expuesto al cliente final).
+// Esta tool es staff-only (rolesPermitidos administrador/coordinadora/operaria/
+// secretaria). Si en el futuro se agrega un chat publico, NO incluir esta tool
+// en su set de tools — expondría la estructura de precios B2B.
 const TOOL_QUERY_PRECIOS_SERVICIOS: ToolDef = {
   name: 'query_precios_servicios',
   description:
-    "Consulta el tarifario de servicios (precios estándar por marca, tipo de equipo y servicio). Filtra por marca, tipo de equipo, nombre de servicio o búsqueda libre. Solo retorna servicios activos. Retorna hasta 'limite' resultados (default 20, max 50).",
+    "Consulta el tarifario de servicios (precios estándar por marca, tipo de equipo y servicio). Filtra por marca, tipo de equipo, nombre de servicio o búsqueda libre. Solo retorna servicios activos. Retorna hasta 'limite' resultados (default 20, max 50). Los items pueden tener 'precioMayoreo' (B2B/talleres aliados) y 'precioDetalle' (cliente final/mostrador). Si el doc todavía no migró, ambos caen al campo legacy 'precio'.",
   input_schema: {
     type: 'object',
     properties: {
@@ -1020,12 +1024,17 @@ const TOOL_QUERY_PRECIOS_SERVICIOS: ToolDef = {
         return true;
       });
     const items = filtrados.slice(0, limite).map((raw) => {
+      const precio = typeof raw.precio === 'number' ? raw.precio : 0;
+      const precioMayoreo = typeof raw.precioMayoreo === 'number' ? raw.precioMayoreo : precio;
+      const precioDetalle = typeof raw.precioDetalle === 'number' ? raw.precioDetalle : precioMayoreo;
       const out: Record<string, unknown> = {
         marca: raw.marca || '',
         equipoTipo: raw.equipoTipo || '',
         categoria: raw.categoria || '',
         servicio: raw.nombre || '',
-        precio: typeof raw.precio === 'number' ? raw.precio : 0,
+        precio,
+        precioMayoreo,
+        precioDetalle,
       };
       if (typeof raw.notas === 'string' && raw.notas.length > 0) {
         out.notas = raw.notas;
@@ -1300,10 +1309,13 @@ interface QueryPiezasInventarioInput {
   limite?: number;
 }
 
+// SECURITY: precioMayoreo es precio B2B interno y precioCompra es costo. Esta
+// tool es admin-only. Si en el futuro se agrega un chat publico, NO incluir
+// esta tool en su set — expondría costos y estructura de precios B2B.
 const TOOL_QUERY_PIEZAS_INVENTARIO: ToolDef = {
   name: 'query_piezas_inventario',
   description:
-    "Admin-only. Consulta las piezas del inventario interno del taller, incluyendo precioCompra y proveedorSugerido (datos sensibles no expuestos en query_productos). Filtra por nombre/código/descripción (busqueda), marca (buscado también dentro de nombre/código/descripción), o stock bajo un umbral. Útil para '¿cuánto stock tengo de actuador Mabe?' o '¿qué piezas tengo con menos de 3 unidades?'. Default limite 20, máx 50.",
+    "Admin-only. Consulta las piezas del inventario interno del taller, incluyendo precioCompra y proveedorSugerido (datos sensibles no expuestos en query_productos). Filtra por nombre/código/descripción (busqueda), marca (buscado también dentro de nombre/código/descripción), o stock bajo un umbral. Útil para '¿cuánto stock tengo de actuador Mabe?' o '¿qué piezas tengo con menos de 3 unidades?'. Default limite 20, máx 50. Los items pueden tener 'precioMayoreo' (distribuidores) y 'precioDetalle' (cliente final). Si el doc todavía no migró, ambos caen al campo legacy 'precioVenta'.",
   input_schema: {
     type: 'object',
     properties: {
@@ -1343,11 +1355,16 @@ const TOOL_QUERY_PIEZAS_INVENTARIO: ToolDef = {
       return true;
     });
     const items = filtrados.slice(0, limite).map(({ id, data: p }) => {
+      const precioVenta = typeof p.precioVenta === 'number' ? p.precioVenta : 0;
+      const precioMayoreo = typeof p.precioMayoreo === 'number' ? p.precioMayoreo : precioVenta;
+      const precioDetalle = typeof p.precioDetalle === 'number' ? p.precioDetalle : precioMayoreo;
       const out: Record<string, unknown> = {
         id,
         nombre: p.nombre || '',
         stock: typeof p.stockActual === 'number' ? p.stockActual : 0,
-        precioVenta: typeof p.precioVenta === 'number' ? p.precioVenta : 0,
+        precioVenta,
+        precioMayoreo,
+        precioDetalle,
         activo: p.activo !== false,
       };
       if (typeof p.codigo === 'string' && p.codigo.length > 0) out.codigo = p.codigo;

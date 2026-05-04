@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { ServicioPrecio } from '../types';
-import { formatMoneda } from '../utils';
+import { formatMoneda, parseServicioPrecio } from '../utils';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -22,6 +22,10 @@ export default function PreciosServicios() {
 
   const [loading, setLoading] = useState(true);
   const [precios, setPrecios] = useState<ServicioPrecio[]>([]);
+  // IDs de docs que NO tienen `precioMayoreo` ni `precioDetalle` aún (estado pre-migración).
+  // Política H10: en esos docs mostramos el campo legacy `precio` editable. Una vez admin
+  // guarda con los nuevos campos, se oculta. Previene desincronización.
+  const [preciosPreMigracion, setPreciosPreMigracion] = useState<Set<string>>(new Set());
   const [filtroMarca, setFiltroMarca] = useState('');
   const [filtroEquipo, setFiltroEquipo] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
@@ -33,28 +37,25 @@ export default function PreciosServicios() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<Omit<ServicioPrecio, 'id' | 'createdAt'>>({
     marca: '', categoria: 'Reparación', equipoTipo: 'Lavadora', nombre: '',
-    precio: 0, activo: true, notas: '',
+    precio: 0, precioMayoreo: 0, precioDetalle: 0, activo: true, notas: '',
   });
+  // Indica si el doc en edición tiene todavía el campo legacy `precio` sin migrar.
+  const [editandoPreMigracion, setEditandoPreMigracion] = useState(false);
 
   useEffect(() => {
     const unsub = onSnapshot(
       query(collection(db, 'precios_servicios'), orderBy('marca')),
       (snap) => {
-        setPrecios(snap.docs.map(d => {
+        const preMig = new Set<string>();
+        const items = snap.docs.map(d => {
           const raw = d.data();
-          return {
-            id: d.id,
-            marca: raw.marca || '',
-            categoria: raw.categoria || '',
-            equipoTipo: raw.equipoTipo || '',
-            nombre: raw.nombre || '',
-            precio: raw.precio || 0,
-            activo: raw.activo !== false,
-            createdAt: raw.createdAt?.toDate?.() || new Date(),
-            updatedAt: raw.updatedAt?.toDate?.() || undefined,
-            notas: raw.notas,
-          } as ServicioPrecio;
-        }));
+          if (typeof raw.precioMayoreo !== 'number' && typeof raw.precioDetalle !== 'number') {
+            preMig.add(d.id);
+          }
+          return parseServicioPrecio(d.id, raw);
+        });
+        setPrecios(items);
+        setPreciosPreMigracion(preMig);
         setLoading(false);
       }
     );
@@ -82,9 +83,16 @@ export default function PreciosServicios() {
   }, [precios, filtroMarca, filtroEquipo, filtroCategoria, busqueda, verInactivos]);
 
   const resetForm = () => {
-    setForm({ marca: '', categoria: 'Reparación', equipoTipo: 'Lavadora', nombre: '', precio: 0, activo: true, notas: '' });
+    setForm({
+      marca: '', categoria: 'Reparación', equipoTipo: 'Lavadora', nombre: '',
+      precio: 0, precioMayoreo: 0, precioDetalle: 0, activo: true, notas: '',
+    });
     setEditingId(null);
+    setEditandoPreMigracion(false);
   };
+
+  /** Redondea al múltiplo de 50 más cercano. RD-style. */
+  const redondear50 = (n: number) => Math.round(n / 50) * 50;
 
   const openCreate = () => {
     resetForm();
@@ -92,11 +100,21 @@ export default function PreciosServicios() {
   };
 
   const openEdit = (p: ServicioPrecio) => {
+    const preMig = preciosPreMigracion.has(p.id);
+    // Default sugerido si el admin todavía no migró: Detalle = precio legacy,
+    // Mayoreo = 85% redondeado a múltiplo de 50.
+    const detalleDefault = p.precioDetalle ?? p.precio;
+    const mayoreoDefault = p.precioMayoreo ?? redondear50(p.precio * 0.85);
     setForm({
       marca: p.marca, categoria: p.categoria, equipoTipo: p.equipoTipo,
-      nombre: p.nombre, precio: p.precio, activo: p.activo, notas: p.notas || '',
+      nombre: p.nombre,
+      precio: p.precio,
+      precioDetalle: detalleDefault,
+      precioMayoreo: mayoreoDefault,
+      activo: p.activo, notas: p.notas || '',
     });
     setEditingId(p.id);
+    setEditandoPreMigracion(preMig);
     setShowModal(true);
   };
 
@@ -106,28 +124,37 @@ export default function PreciosServicios() {
       toast.error('Marca y nombre son requeridos');
       return;
     }
-    if (form.precio < 0) {
-      toast.error('Precio inválido');
+    const precioDetalle = form.precioDetalle ?? 0;
+    const precioMayoreo = form.precioMayoreo ?? 0;
+    if (precioDetalle < 0 || precioMayoreo < 0) {
+      toast.error('Precios inválidos (no pueden ser negativos)');
       return;
     }
     setSaving(true);
     try {
+      // Política decisión 34: al guardar, sincronizamos el legacy `precio`
+      // con el Detalle (precio "default" más usado). Así consumidores que
+      // todavía leen `precio` siguen obteniendo un valor coherente.
       const data: Record<string, unknown> = {
         marca: form.marca.trim(),
         categoria: form.categoria,
         equipoTipo: form.equipoTipo,
         nombre: form.nombre.trim(),
-        precio: form.precio,
+        precio: precioDetalle,
+        precioDetalle,
+        precioMayoreo,
         activo: form.activo,
         updatedAt: Timestamp.now(),
       };
       if (form.notas) data.notas = form.notas.trim();
+      // Strip undefined antes de Firestore write
+      const payload = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
       if (editingId) {
-        await updateDoc(doc(db, 'precios_servicios', editingId), data);
+        await updateDoc(doc(db, 'precios_servicios', editingId), payload);
         toast.success('Servicio actualizado');
       } else {
-        data.createdAt = Timestamp.now();
-        await addDoc(collection(db, 'precios_servicios'), data);
+        payload.createdAt = Timestamp.now();
+        await addDoc(collection(db, 'precios_servicios'), payload);
         toast.success('Servicio creado');
       }
       setShowModal(false);
@@ -233,7 +260,19 @@ export default function PreciosServicios() {
                   <td className="px-4 py-3 text-gray-700">{p.equipoTipo}</td>
                   <td className="px-4 py-3 font-medium text-gray-900">{p.nombre}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell">{p.categoria}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-[#0f3460]">{formatMoneda(p.precio)}</td>
+                  <td className="px-4 py-3 text-right">
+                    {preciosPreMigracion.has(p.id) ? (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precio)}</span>
+                        <span className="text-[9px] uppercase tracking-wide text-gray-400 font-medium">Precio único</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="text-[10px] text-gray-500">Det. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioDetalle ?? p.precio)}</span></span>
+                        <span className="text-[10px] text-gray-500">May. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioMayoreo ?? p.precio)}</span></span>
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${p.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                       {p.activo ? 'Activo' : 'Inactivo'}
@@ -288,22 +327,86 @@ export default function PreciosServicios() {
               </select>
             </div>
           </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Equipo</label>
+            <select value={form.equipoTipo}
+              onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+              {EQUIPOS_SUGERIDOS.map(eq => <option key={eq} value={eq}>{eq}</option>)}
+            </select>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Equipo</label>
-              <select value={form.equipoTipo}
-                onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
-                {EQUIPOS_SUGERIDOS.map(eq => <option key={eq} value={eq}>{eq}</option>)}
-              </select>
+              <label
+                className="block text-xs font-medium text-gray-600 mb-1"
+                title="Detalle: cliente que llega al mostrador o pide servicio a domicilio. Mayoreo: cobramos a otro taller o cliente B2B."
+              >
+                Precio Detalle (RD$) *
+                <span className="ml-1 text-gray-400 text-[10px]" title="Cliente final / mostrador / domicilio">ⓘ</span>
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={50}
+                value={form.precioDetalle ?? 0}
+                onChange={e => {
+                  const detalle = Number(e.target.value);
+                  setForm(f => {
+                    // Si admin todavía no tocó Mayoreo (es 0 o igual al default previo),
+                    // sugerir Mayoreo = 85% de Detalle redondeado a múltiplo de 50.
+                    const mayoreoActual = f.precioMayoreo ?? 0;
+                    const sugerirMayoreo = mayoreoActual === 0 || mayoreoActual === redondear50((f.precioDetalle ?? 0) * 0.85);
+                    return {
+                      ...f,
+                      precioDetalle: detalle,
+                      precio: detalle,
+                      precioMayoreo: sugerirMayoreo ? redondear50(detalle * 0.85) : mayoreoActual,
+                    };
+                  });
+                }}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+              <p className="text-[10px] text-gray-400 mt-0.5">Cliente final / mostrador / domicilio.</p>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Precio (RD$)</label>
-              <input type="number" min={0} step={50} value={form.precio}
-                onChange={e => setForm(f => ({ ...f, precio: Number(e.target.value) }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              <label
+                className="block text-xs font-medium text-gray-600 mb-1"
+                title="Detalle: cliente que llega al mostrador o pide servicio a domicilio. Mayoreo: cobramos a otro taller o cliente B2B."
+              >
+                Precio Mayoreo (RD$) *
+                <span className="ml-1 text-gray-400 text-[10px]" title="B2B / talleres aliados / distribuidores">ⓘ</span>
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={50}
+                value={form.precioMayoreo ?? 0}
+                onChange={e => setForm(f => ({ ...f, precioMayoreo: Number(e.target.value) }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+              <p className="text-[10px] text-gray-400 mt-0.5">B2B / talleres aliados / distribuidores.</p>
             </div>
           </div>
+          {/* Política H10: campo legacy `precio` solo visible si el doc todavía
+              está pre-migración (sin precioMayoreo guardado). Una vez admin
+              guarde con los nuevos campos, queda oculto para evitar drift. */}
+          {editandoPreMigracion && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <label className="block text-xs font-medium text-amber-800 mb-1">
+                Precio legacy (RD$) — solo lectura
+              </label>
+              <input
+                type="number"
+                value={form.precio}
+                readOnly
+                className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm bg-amber-50 text-amber-900"
+              />
+              <p className="text-[10px] text-amber-700 mt-1">
+                Este servicio fue creado antes de la separación Mayoreo/Detalle. Al guardar,
+                el campo legacy se sincronizará con el Precio Detalle automáticamente.
+              </p>
+            </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Nombre del servicio *</label>
             <input type="text" value={form.nombre}

@@ -451,10 +451,23 @@ service cloud.firestore {
       allow write: if esAdminOCoord();
     }
 
-    // Piezas de inventario
+    // Sprint Conduces SIBS C2 (decision 35): granularidad fina con affectedKeys.
+    // Operaria/secretaria pueden hacer create + update de stock/activo/recepcion,
+    // pero NO pueden tocar campos de precio. Solo admin/coord cambian precios.
+    // Defense in depth: la rule de backend matcha la intencion del negocio,
+    // no depende solo de gating en UI.
     match /piezas_inventario/{docId} {
       allow read: if esStaff();
-      allow write: if esStaffOficina();
+      allow create: if esStaffOficina();
+      allow update: if (
+        esAdminOCoord()
+      ) || (
+        esStaffOficina() &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'precio', 'precioVenta', 'precioMayoreo', 'precioDetalle', 'precioCompra'
+        ])
+      );
+      allow delete: if esAdmin();
     }
 
     // Movimientos de inventario / piezas (ledger)

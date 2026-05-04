@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { ServicioPrecio, PiezaInventario } from '../types';
-import { formatMoneda } from '../utils';
+import { formatMoneda, parseServicioPrecio, parsePiezaInventario } from '../utils';
 import Modal from './Modal';
 import { Search, Tag, Boxes, AlertTriangle } from 'lucide-react';
 
@@ -33,6 +33,11 @@ export default function CatalogoSelectorModal({
   const [tab, setTab] = useState<'servicios' | 'piezas'>(tabInicial);
   const [servicios, setServicios] = useState<ServicioPrecio[]>([]);
   const [piezas, setPiezas] = useState<PiezaInventario[]>([]);
+  // Quick-win 8: items pre-migración (sin precioMayoreo NI precioDetalle en el doc)
+  // se marcan con badge "Precio único". Mantenemos sets paralelos para no
+  // contaminar el tipo `ServicioPrecio`/`PiezaInventario`.
+  const [serviciosPreMigracion, setServiciosPreMigracion] = useState<Set<string>>(new Set());
+  const [piezasPreMigracion, setPiezasPreMigracion] = useState<Set<string>>(new Set());
   const [busqueda, setBusqueda] = useState('');
   const [filtroMarca, setFiltroMarca] = useState('');
   const [filtroEquipo, setFiltroEquipo] = useState('');
@@ -49,40 +54,33 @@ export default function CatalogoSelectorModal({
     if (!isOpen) return;
     const unsubS = onSnapshot(
       query(collection(db, 'precios_servicios'), orderBy('marca')),
-      (snap) => setServicios(snap.docs.map(d => {
-        const raw = d.data();
-        return {
-          id: d.id,
-          marca: raw.marca || '',
-          categoria: raw.categoria || '',
-          equipoTipo: raw.equipoTipo || '',
-          nombre: raw.nombre || '',
-          precio: raw.precio || 0,
-          activo: raw.activo !== false,
-          createdAt: raw.createdAt?.toDate?.() || new Date(),
-          notas: raw.notas,
-        } as ServicioPrecio;
-      }))
+      (snap) => {
+        const preMig = new Set<string>();
+        const items = snap.docs.map(d => {
+          const raw = d.data();
+          if (typeof raw.precioMayoreo !== 'number' && typeof raw.precioDetalle !== 'number') {
+            preMig.add(d.id);
+          }
+          return parseServicioPrecio(d.id, raw);
+        });
+        setServicios(items);
+        setServiciosPreMigracion(preMig);
+      }
     );
     const unsubP = onSnapshot(
       query(collection(db, 'piezas_inventario'), orderBy('nombre')),
-      (snap) => setPiezas(snap.docs.map(d => {
-        const raw = d.data();
-        return {
-          id: d.id,
-          nombre: raw.nombre || '',
-          codigo: raw.codigo,
-          descripcion: raw.descripcion,
-          precioCompra: raw.precioCompra,
-          precioVenta: raw.precioVenta || 0,
-          stockActual: typeof raw.stockActual === 'number' ? raw.stockActual : 0,
-          stockMinimo: raw.stockMinimo,
-          proveedorSugerido: raw.proveedorSugerido,
-          categoria: raw.categoria,
-          activo: raw.activo !== false,
-          createdAt: raw.createdAt?.toDate?.() || new Date(),
-        } as PiezaInventario;
-      }))
+      (snap) => {
+        const preMig = new Set<string>();
+        const items = snap.docs.map(d => {
+          const raw = d.data();
+          if (typeof raw.precioMayoreo !== 'number' && typeof raw.precioDetalle !== 'number') {
+            preMig.add(d.id);
+          }
+          return parsePiezaInventario(d.id, raw);
+        });
+        setPiezas(items);
+        setPiezasPreMigracion(preMig);
+      }
     );
     return () => { unsubS(); unsubP(); };
   }, [isOpen]);
@@ -176,24 +174,43 @@ export default function CatalogoSelectorModal({
               <p className="p-6 text-center text-sm text-gray-400">Sin servicios que coincidan</p>
             ) : (
               <div className="divide-y divide-gray-50">
-                {serviciosFiltrados.map(s => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => onSelect({ tipo: 'servicio', servicio: s })}
-                    className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">{s.nombre}</p>
-                        <p className="text-[11px] text-gray-500">
-                          {s.marca} · {s.equipoTipo} · {s.categoria}
-                        </p>
+                {serviciosFiltrados.map(s => {
+                  const esPreMigracion = serviciosPreMigracion.has(s.id);
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => onSelect({ tipo: 'servicio', servicio: s })}
+                      className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900">{s.nombre}</p>
+                          <p className="text-[11px] text-gray-500">
+                            {s.marca} · {s.equipoTipo} · {s.categoria}
+                          </p>
+                        </div>
+                        <div className="text-right flex flex-col items-end gap-0.5">
+                          {esPreMigracion ? (
+                            <>
+                              <span className="text-sm font-bold text-[#0f3460]">{formatMoneda(s.precio)}</span>
+                              <span className="text-[9px] uppercase tracking-wide text-gray-400 font-medium">Precio único</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-[10px] text-gray-500">
+                                Det. <span className="font-semibold text-[#0f3460]">{formatMoneda(s.precioDetalle ?? s.precio)}</span>
+                              </span>
+                              <span className="text-[10px] text-gray-500">
+                                May. <span className="font-semibold text-[#0f3460]">{formatMoneda(s.precioMayoreo ?? s.precio)}</span>
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <span className="text-sm font-bold text-[#0f3460]">{formatMoneda(s.precio)}</span>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             )
           ) : (
@@ -205,6 +222,7 @@ export default function CatalogoSelectorModal({
                   const min = p.stockMinimo ?? 0;
                   const sinStock = p.stockActual === 0;
                   const bajo = !sinStock && p.stockActual <= min && min > 0;
+                  const esPreMigracion = piezasPreMigracion.has(p.id);
                   return (
                     <button
                       key={p.id}
@@ -220,7 +238,21 @@ export default function CatalogoSelectorModal({
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-bold text-[#0f3460]">{formatMoneda(p.precioVenta)}</p>
+                          {esPreMigracion ? (
+                            <>
+                              <p className="text-sm font-bold text-[#0f3460]">{formatMoneda(p.precioVenta)}</p>
+                              <p className="text-[9px] uppercase tracking-wide text-gray-400 font-medium">Precio único</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[10px] text-gray-500">
+                                Det. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioDetalle ?? p.precioVenta)}</span>
+                              </p>
+                              <p className="text-[10px] text-gray-500">
+                                May. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioMayoreo ?? p.precioVenta)}</span>
+                              </p>
+                            </>
+                          )}
                           <p className={`text-[10px] flex items-center justify-end gap-1 ${sinStock ? 'text-red-600' : bajo ? 'text-amber-700' : 'text-gray-500'}`}>
                             {(sinStock || bajo) && <AlertTriangle size={10} />}
                             stock: {p.stockActual}

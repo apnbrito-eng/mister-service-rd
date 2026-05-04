@@ -1,7 +1,7 @@
 import { format, formatDistanceToNow, differenceInMinutes, differenceInHours, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
-import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria, PiezaUsada, CondicionPieza, OrigenPieza, Factura, EstadoFactura, GarantiaInfo, GarantiaEstado, GarantiaOrigen, ItemCotizacion, MetodoPago, PropuestaReprogramacion, SugerenciaSoloChequeo, Cliente, DireccionCliente } from '../types';
+import { FaseOrden, EstadoOrdenSimple, OrdenServicio, StandbyPieza, AlertaItem, AccionAuditoria, PiezaUsada, CondicionPieza, OrigenPieza, Factura, EstadoFactura, GarantiaInfo, GarantiaEstado, GarantiaOrigen, ItemCotizacion, MetodoPago, PropuestaReprogramacion, SugerenciaSoloChequeo, Cliente, DireccionCliente, ServicioPrecio, PiezaInventario } from '../types';
 
 /** Orden visual del ciclo de fases (agendado va antes de diagnostico) */
 export const FASES_ORDENADAS: FaseOrden[] = [
@@ -1027,6 +1027,79 @@ export function parseFactura(id: string, raw: Record<string, unknown>): Factura 
       ? raw.origen
       : undefined,
     createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
+  };
+}
+
+/**
+ * Parser defensivo para docs de la colección `precios_servicios` (catálogo
+ * de servicios). Extiende lectura para soportar Mayoreo/Detalle (sprint
+ * Conduces SIBS C2).
+ *
+ * Cascada de migración:
+ * - `precio` (legacy) = `Number(raw.precio) || 0`.
+ * - `precioMayoreo` = `raw.precioMayoreo ?? precio ?? 0`.
+ * - `precioDetalle` = `raw.precioDetalle ?? precioMayoreo ?? precio ?? 0`.
+ *
+ * IMPORTANTE — asimetría con `parsePiezaInventario`: en `ServicioPrecio` el
+ * campo legacy se llama `precio`. En `PiezaInventario` se llama `precioVenta`.
+ * Mantener separados para no confundir cascadas. Ver decisión 29 del sprint.
+ */
+export function parseServicioPrecio(id: string, raw: Record<string, unknown>): ServicioPrecio {
+  const precio = typeof raw.precio === 'number' ? (raw.precio as number) : Number(raw.precio) || 0;
+  const precioMayoreoRaw = typeof raw.precioMayoreo === 'number' ? (raw.precioMayoreo as number) : undefined;
+  const precioDetalleRaw = typeof raw.precioDetalle === 'number' ? (raw.precioDetalle as number) : undefined;
+  const precioMayoreo = precioMayoreoRaw ?? precio ?? 0;
+  const precioDetalle = precioDetalleRaw ?? precioMayoreo ?? precio ?? 0;
+  return {
+    id,
+    marca: (raw.marca as string) || '',
+    categoria: (raw.categoria as string) || '',
+    equipoTipo: (raw.equipoTipo as string) || '',
+    nombre: (raw.nombre as string) || '',
+    precio,
+    precioMayoreo,
+    precioDetalle,
+    activo: raw.activo !== false,
+    createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
+    updatedAt: parseFirestoreDate(raw.updatedAt) || undefined,
+    notas: (raw.notas as string) || undefined,
+  };
+}
+
+/**
+ * Parser defensivo para docs de la colección `piezas_inventario`. Extiende
+ * lectura para soportar Mayoreo/Detalle (sprint Conduces SIBS C2).
+ *
+ * Cascada de migración (asimétrica vs `parseServicioPrecio`):
+ * - `precioVenta` (legacy) = `Number(raw.precioVenta) || 0`.
+ * - `precioMayoreo` = `raw.precioMayoreo ?? precioVenta ?? 0`.
+ * - `precioDetalle` = `raw.precioDetalle ?? precioMayoreo ?? precioVenta ?? 0`.
+ *
+ * IMPORTANTE — asimetría con `parseServicioPrecio`: en `PiezaInventario` el
+ * campo legacy se llama `precioVenta` (no `precio`). Ver decisión 29 del sprint.
+ */
+export function parsePiezaInventario(id: string, raw: Record<string, unknown>): PiezaInventario {
+  const precioVenta = typeof raw.precioVenta === 'number' ? (raw.precioVenta as number) : Number(raw.precioVenta) || 0;
+  const precioMayoreoRaw = typeof raw.precioMayoreo === 'number' ? (raw.precioMayoreo as number) : undefined;
+  const precioDetalleRaw = typeof raw.precioDetalle === 'number' ? (raw.precioDetalle as number) : undefined;
+  const precioMayoreo = precioMayoreoRaw ?? precioVenta ?? 0;
+  const precioDetalle = precioDetalleRaw ?? precioMayoreo ?? precioVenta ?? 0;
+  return {
+    id,
+    nombre: (raw.nombre as string) || '',
+    codigo: (raw.codigo as string) || undefined,
+    descripcion: (raw.descripcion as string) || undefined,
+    precioCompra: typeof raw.precioCompra === 'number' ? (raw.precioCompra as number) : undefined,
+    precioVenta,
+    precioMayoreo,
+    precioDetalle,
+    stockActual: typeof raw.stockActual === 'number' ? (raw.stockActual as number) : 0,
+    stockMinimo: typeof raw.stockMinimo === 'number' ? (raw.stockMinimo as number) : undefined,
+    proveedorSugerido: (raw.proveedorSugerido as string) || undefined,
+    categoria: (raw.categoria as string) || undefined,
+    activo: raw.activo !== false,
+    createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
+    updatedAt: parseFirestoreDate(raw.updatedAt) || undefined,
   };
 }
 

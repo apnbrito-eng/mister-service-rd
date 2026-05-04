@@ -696,7 +696,22 @@ export interface ServicioPrecio {
   categoria: string;
   equipoTipo: string;
   nombre: string;
+  /**
+   * @deprecated Conservado por compatibilidad. Lectura defensiva en parsers
+   * cae a `precioMayoreo` o `precioDetalle` según modalidad. UI editora
+   * lo oculta una vez admin guarda con los nuevos campos.
+   */
   precio: number;
+  /**
+   * Precio para clientes B2B / talleres aliados / distribuidores.
+   * Default a `precio` si falta (migración defensiva en parser).
+   */
+  precioMayoreo?: number;
+  /**
+   * Precio para cliente final / mostrador / domicilio.
+   * Default a `precioMayoreo ?? precio` si falta.
+   */
+  precioDetalle?: number;
   activo: boolean;
   createdAt: Date;
   updatedAt?: Date;
@@ -709,7 +724,16 @@ export interface PiezaInventario {
   codigo?: string;
   descripcion?: string;
   precioCompra?: number;
+  /**
+   * @deprecated Conservado por compatibilidad. Asimetría con `ServicioPrecio.precio`:
+   * en piezas el legacy se llama `precioVenta`. parseServicioPrecio/parsePiezaInventario
+   * usan cascadas distintas — ver decisión 29 del sprint Conduces SIBS.
+   */
   precioVenta: number;
+  /** Ver `ServicioPrecio.precioMayoreo`. Cascada: `precioMayoreo ?? precioVenta ?? 0`. */
+  precioMayoreo?: number;
+  /** Ver `ServicioPrecio.precioDetalle`. Cascada: `precioDetalle ?? precioMayoreo ?? precioVenta ?? 0`. */
+  precioDetalle?: number;
   stockActual: number;
   stockMinimo?: number;
   proveedorSugerido?: string;

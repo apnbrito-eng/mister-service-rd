@@ -1,6 +1,7 @@
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { ServicioPrecio } from '../types';
+import { parseServicioPrecio } from '../utils';
 
 /**
  * Busca un servicio de mantenimiento en el catálogo `precios_servicios`
@@ -19,20 +20,7 @@ export async function buscarPrecioMantenimiento(
       collection(db, 'precios_servicios'),
       where('categoria', '==', 'Mantenimiento'),
     ));
-    const items = snap.docs.map(d => {
-      const raw = d.data();
-      return {
-        id: d.id,
-        marca: raw.marca || '',
-        categoria: raw.categoria || '',
-        equipoTipo: raw.equipoTipo || '',
-        nombre: raw.nombre || '',
-        precio: raw.precio || 0,
-        activo: raw.activo !== false,
-        createdAt: raw.createdAt?.toDate?.() || new Date(),
-        notas: raw.notas,
-      } as ServicioPrecio;
-    });
+    const items: ServicioPrecio[] = snap.docs.map(d => parseServicioPrecio(d.id, d.data()));
 
     const eqLower = equipoTipo.toLowerCase().trim();
     const marcaLower = (marca || '').toLowerCase().trim();

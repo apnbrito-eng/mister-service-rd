@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { PiezaInventario, MovimientoInventario } from '../types';
-import { formatMoneda, formatFecha } from '../utils';
+import { formatMoneda, formatFecha, parsePiezaInventario } from '../utils';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -18,6 +18,8 @@ interface PiezaForm {
   descripcion: string;
   precioCompra: number;
   precioVenta: number;
+  precioMayoreo: number;
+  precioDetalle: number;
   stockActual: number;
   stockMinimo: number;
   proveedorSugerido: string;
@@ -27,20 +29,38 @@ interface PiezaForm {
 
 const initialForm: PiezaForm = {
   nombre: '', codigo: '', descripcion: '',
-  precioCompra: 0, precioVenta: 0,
+  precioCompra: 0, precioVenta: 0, precioMayoreo: 0, precioDetalle: 0,
   stockActual: 0, stockMinimo: 0,
   proveedorSugerido: '', categoria: 'otro', activo: true,
 };
 
+/** Redondea al múltiplo de 50 más cercano. RD-style. */
+function redondear50(n: number): number {
+  return Math.round(n / 50) * 50;
+}
+
 export default function Inventario() {
   const { userProfile } = useApp();
+  // Editar precios y campos sensibles del modal completo: solo admin/coord
+  // (matchea firestore.rules granularidad fina decisión 35 — operaria no puede
+  // tocar campos de precio, ni activo, ni descripción).
   const puedeEditar = puede(userProfile, 'configuracionModificar') ||
     userProfile?.rol === 'administrador' ||
-    userProfile?.rol === 'coordinadora' ||
-    userProfile?.rol === 'operaria';
+    userProfile?.rol === 'coordinadora';
+  // Crear pieza (recepción) y ajustar stock: operaria/secretaria pueden
+  // recepcionar piezas nuevas y mover stock (matchea firestore.rules
+  // create: esStaffOficina y update solo stockActual+updatedAt).
+  const puedeCrear = puedeEditar ||
+    userProfile?.rol === 'operaria' ||
+    userProfile?.rol === 'secretaria';
+  const puedeAjustarStock = puedeCrear;
 
   const [loading, setLoading] = useState(true);
   const [piezas, setPiezas] = useState<PiezaInventario[]>([]);
+  // Política H10: docs sin `precioMayoreo` ni `precioDetalle` están pre-migración.
+  // En la UI editora ocultamos el campo legacy `precioVenta` apenas el doc se guarda
+  // con los nuevos campos (sale del Set). Previene drift.
+  const [piezasPreMigracion, setPiezasPreMigracion] = useState<Set<string>>(new Set());
   const [busqueda, setBusqueda] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
   const [soloAlertas, setSoloAlertas] = useState(false);
@@ -49,6 +69,7 @@ export default function Inventario() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<PiezaForm>(initialForm);
+  const [editandoPreMigracion, setEditandoPreMigracion] = useState(false);
 
   // Movimientos
   const [showMovimientosModal, setShowMovimientosModal] = useState(false);
@@ -68,24 +89,16 @@ export default function Inventario() {
     const unsub = onSnapshot(
       query(collection(db, 'piezas_inventario'), orderBy('nombre')),
       (snap) => {
-        setPiezas(snap.docs.map(d => {
+        const preMig = new Set<string>();
+        const items = snap.docs.map(d => {
           const raw = d.data();
-          return {
-            id: d.id,
-            nombre: raw.nombre || '',
-            codigo: raw.codigo,
-            descripcion: raw.descripcion,
-            precioCompra: raw.precioCompra,
-            precioVenta: raw.precioVenta || 0,
-            stockActual: typeof raw.stockActual === 'number' ? raw.stockActual : 0,
-            stockMinimo: raw.stockMinimo,
-            proveedorSugerido: raw.proveedorSugerido,
-            categoria: raw.categoria,
-            activo: raw.activo !== false,
-            createdAt: raw.createdAt?.toDate?.() || new Date(),
-            updatedAt: raw.updatedAt?.toDate?.() || undefined,
-          } as PiezaInventario;
-        }));
+          if (typeof raw.precioMayoreo !== 'number' && typeof raw.precioDetalle !== 'number') {
+            preMig.add(d.id);
+          }
+          return parsePiezaInventario(d.id, raw);
+        });
+        setPiezas(items);
+        setPiezasPreMigracion(preMig);
         setLoading(false);
       }
     );
@@ -111,31 +124,50 @@ export default function Inventario() {
     });
   }, [piezas, busqueda, filtroCategoria, soloAlertas]);
 
-  const resetForm = () => { setForm(initialForm); setEditingId(null); };
+  const resetForm = () => {
+    setForm(initialForm);
+    setEditingId(null);
+    setEditandoPreMigracion(false);
+  };
 
   const openCreate = () => { resetForm(); setShowModal(true); };
 
   const openEdit = (p: PiezaInventario) => {
+    const preMig = piezasPreMigracion.has(p.id);
+    const detalleDefault = p.precioDetalle ?? p.precioVenta;
+    const mayoreoDefault = p.precioMayoreo ?? redondear50(p.precioVenta * 0.85);
     setForm({
       nombre: p.nombre, codigo: p.codigo || '', descripcion: p.descripcion || '',
-      precioCompra: p.precioCompra || 0, precioVenta: p.precioVenta || 0,
+      precioCompra: p.precioCompra || 0,
+      precioVenta: p.precioVenta || 0,
+      precioDetalle: detalleDefault,
+      precioMayoreo: mayoreoDefault,
       stockActual: p.stockActual, stockMinimo: p.stockMinimo || 0,
       proveedorSugerido: p.proveedorSugerido || '', categoria: p.categoria || 'otro',
       activo: p.activo,
     });
     setEditingId(p.id);
+    setEditandoPreMigracion(preMig);
     setShowModal(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nombre.trim()) { toast.error('Nombre requerido'); return; }
-    if (form.precioVenta < 0 || form.stockActual < 0) { toast.error('Valores numéricos inválidos'); return; }
+    if (form.precioDetalle < 0 || form.precioMayoreo < 0 || form.stockActual < 0) {
+      toast.error('Valores numéricos inválidos');
+      return;
+    }
     setSaving(true);
     try {
+      // Política decisión 34: al guardar, sincronizamos el legacy `precioVenta`
+      // con el Detalle. Consumidores que todavía leen `precioVenta` reciben un
+      // valor coherente.
       const data: Record<string, unknown> = {
         nombre: form.nombre.trim(),
-        precioVenta: form.precioVenta,
+        precioVenta: form.precioDetalle,
+        precioDetalle: form.precioDetalle,
+        precioMayoreo: form.precioMayoreo,
         stockActual: form.stockActual,
         activo: form.activo,
         categoria: form.categoria,
@@ -146,13 +178,15 @@ export default function Inventario() {
       if (form.precioCompra > 0) data.precioCompra = form.precioCompra;
       if (form.stockMinimo > 0) data.stockMinimo = form.stockMinimo;
       if (form.proveedorSugerido) data.proveedorSugerido = form.proveedorSugerido.trim();
+      // Strip undefined antes del write
+      const payload = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== undefined));
 
       if (editingId) {
-        await updateDoc(doc(db, 'piezas_inventario', editingId), data);
+        await updateDoc(doc(db, 'piezas_inventario', editingId), payload);
         toast.success('Pieza actualizada');
       } else {
-        data.createdAt = Timestamp.now();
-        await addDoc(collection(db, 'piezas_inventario'), data);
+        payload.createdAt = Timestamp.now();
+        await addDoc(collection(db, 'piezas_inventario'), payload);
         toast.success('Pieza creada');
       }
       setShowModal(false);
@@ -288,7 +322,7 @@ export default function Inventario() {
           </h1>
           <p className="text-gray-500 text-sm">{piezasFiltradas.length} de {piezas.length} piezas</p>
         </div>
-        {puedeEditar && (
+        {puedeCrear && (
           <button onClick={openCreate}
             className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <Plus size={18} /> Agregar pieza
@@ -327,7 +361,7 @@ export default function Inventario() {
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Código</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Categoría</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Stock</th>
-                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Precio venta</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Precios</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -353,19 +387,33 @@ export default function Inventario() {
                       </span>
                       {min > 0 && <p className="text-[10px] text-gray-400">mín {min}</p>}
                     </td>
-                    <td className="px-4 py-3 text-right font-semibold text-[#0f3460]">{formatMoneda(p.precioVenta)}</td>
+                    <td className="px-4 py-3 text-right">
+                      {piezasPreMigracion.has(p.id) ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioVenta)}</span>
+                          <span className="text-[9px] uppercase tracking-wide text-gray-400 font-medium">Precio único</span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-[10px] text-gray-500">Det. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioDetalle ?? p.precioVenta)}</span></span>
+                          <span className="text-[10px] text-gray-500">May. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioMayoreo ?? p.precioVenta)}</span></span>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openMovimientos(p)} title="Ver movimientos"
                           className="p-2 hover:bg-blue-50 rounded-lg text-blue-600 transition-colors">
                           <History size={13} />
                         </button>
+                        {puedeAjustarStock && (
+                          <button onClick={() => openAjuste(p)} title="Ajustar stock"
+                            className="p-2 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors">
+                            <RefreshCw size={13} />
+                          </button>
+                        )}
                         {puedeEditar && (
                           <>
-                            <button onClick={() => openAjuste(p)} title="Ajustar stock"
-                              className="p-2 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors">
-                              <RefreshCw size={13} />
-                            </button>
                             <button onClick={() => openEdit(p)} title="Editar"
                               className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
                               <Edit size={13} />
@@ -408,7 +456,7 @@ export default function Inventario() {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Categoría</label>
               <select value={form.categoria}
@@ -423,13 +471,77 @@ export default function Inventario() {
                 onChange={e => setForm(f => ({ ...f, precioCompra: Number(e.target.value) }))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
             </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Precio venta (RD$) *</label>
-              <input type="number" min={0} step={50} value={form.precioVenta}
-                onChange={e => setForm(f => ({ ...f, precioVenta: Number(e.target.value) }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              <label
+                className="block text-xs font-medium text-gray-600 mb-1"
+                title="Detalle: cliente final que compra la pieza suelta. Mayoreo: distribuidores u otros talleres que compran en volumen."
+              >
+                Precio Detalle (RD$) *
+                <span className="ml-1 text-gray-400 text-[10px]" title="Cliente final / mostrador">ⓘ</span>
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={50}
+                value={form.precioDetalle}
+                onChange={e => {
+                  const detalle = Number(e.target.value);
+                  setForm(f => {
+                    const mayoreoActual = f.precioMayoreo;
+                    // Si admin todavía no tocó Mayoreo, sugerir 85% del Detalle redondeado.
+                    const sugerirMayoreo = mayoreoActual === 0 || mayoreoActual === redondear50(f.precioDetalle * 0.85);
+                    return {
+                      ...f,
+                      precioDetalle: detalle,
+                      precioVenta: detalle,
+                      precioMayoreo: sugerirMayoreo ? redondear50(detalle * 0.85) : mayoreoActual,
+                    };
+                  });
+                }}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+              <p className="text-[10px] text-gray-400 mt-0.5">Cliente final que compra la pieza suelta.</p>
+            </div>
+            <div>
+              <label
+                className="block text-xs font-medium text-gray-600 mb-1"
+                title="Detalle: cliente final que compra la pieza suelta. Mayoreo: distribuidores u otros talleres que compran en volumen."
+              >
+                Precio Mayoreo (RD$) *
+                <span className="ml-1 text-gray-400 text-[10px]" title="Distribuidores / talleres aliados">ⓘ</span>
+              </label>
+              <input
+                type="number"
+                min={0}
+                step={50}
+                value={form.precioMayoreo}
+                onChange={e => setForm(f => ({ ...f, precioMayoreo: Number(e.target.value) }))}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
+              <p className="text-[10px] text-gray-400 mt-0.5">Distribuidores u otros talleres en volumen.</p>
             </div>
           </div>
+          {/* Política H10: campo legacy `precioVenta` solo visible si el doc todavía
+              está pre-migración. Una vez admin guarda con los nuevos campos, oculto. */}
+          {editandoPreMigracion && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <label className="block text-xs font-medium text-amber-800 mb-1">
+                Precio venta legacy (RD$) — solo lectura
+              </label>
+              <input
+                type="number"
+                value={form.precioVenta}
+                readOnly
+                className="w-full px-3 py-2 border border-amber-200 rounded-lg text-sm bg-amber-50 text-amber-900"
+              />
+              <p className="text-[10px] text-amber-700 mt-1">
+                Esta pieza fue creada antes de la separación Mayoreo/Detalle. Al guardar,
+                el campo legacy se sincronizará con el Precio Detalle automáticamente.
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Stock actual</label>

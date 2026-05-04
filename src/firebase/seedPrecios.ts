@@ -172,15 +172,22 @@ export async function seedPrecios(): Promise<void> {
 
   const items = buildAllItems();
   const ahora = Timestamp.now();
+  // Sprint Conduces SIBS C2: seed escribe precioDetalle = precio (default Detalle)
+  // y precioMayoreo = round(precio * 0.85, múltiplo de 50). Mantenemos `precio`
+  // legacy sincronizado con Detalle para que consumidores antiguos no se rompan.
+  const round50 = (n: number) => Math.round(n / 50) * 50;
   // Insertar en serie para evitar saturar Firestore (no es bloqueante crítico)
   for (const item of items) {
     try {
+      const precioMayoreo = round50(item.precio * 0.85);
       await addDoc(collection(db, 'precios_servicios'), {
         marca: item.marca,
         categoria: item.categoria,
         equipoTipo: item.equipoTipo,
         nombre: item.nombre,
         precio: item.precio,
+        precioDetalle: item.precio,
+        precioMayoreo,
         activo: true,
         createdAt: ahora,
       });

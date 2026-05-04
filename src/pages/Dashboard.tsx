@@ -20,7 +20,7 @@ import {
   faseLabel, faseBgColor, faseColor, formatMoneda, formatHora,
   getAlertasFromOrdenes, getStandbyAlertas, tiempoTranscurrido,
   estadoSimpleLabel, parseOrden, getTecnicoColor,
-  FASES_ORDENADAS
+  FASES_ORDENADAS, parsePiezaInventario
 } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Badge from '../components/Badge';
@@ -169,20 +169,7 @@ export default function Dashboard() {
 
     // Inventario (no contamos para checkLoaded para no bloquear el dashboard)
     const unsubPiezas = onSnapshot(collection(db, 'piezas_inventario'), (snap) => {
-      setPiezasInventario(snap.docs.map(d => {
-        const raw = d.data();
-        return {
-          id: d.id,
-          nombre: raw.nombre || '',
-          codigo: raw.codigo,
-          precioCompra: raw.precioCompra,
-          precioVenta: raw.precioVenta || 0,
-          stockActual: typeof raw.stockActual === 'number' ? raw.stockActual : 0,
-          stockMinimo: raw.stockMinimo,
-          activo: raw.activo !== false,
-          createdAt: raw.createdAt?.toDate?.() || new Date(),
-        } as PiezaInventario;
-      }));
+      setPiezasInventario(snap.docs.map(d => parsePiezaInventario(d.id, d.data())));
     });
 
     return () => {
