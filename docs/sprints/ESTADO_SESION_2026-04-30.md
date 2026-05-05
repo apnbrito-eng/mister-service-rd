@@ -153,3 +153,33 @@ Aprendizajes consolidados en `_estado-temporal-conduces.md` sección "Retrospect
 
 Aprendizajes consolidados en `_estado-temporal-conduces.md` sección "Retrospectiva C4".
 
+## Sesión 2026-05-04 (cont.) — Cleanup consolidado post-Conduces SIBS
+
+**Hash:** cf25310 — `chore(cleanup): consolidado deuda Conduces SIBS C3+C4 (9 items)`
+
+**Métricas:**
+- 10 archivos modificados, +162/-55 LOC.
+- 1 archivo nuevo (`src/utils/factura.ts`, 28 LOC).
+- 0 loops CHANGES_NEEDED.
+- Deuda: 14 → 5 ítems pendientes.
+
+**9 ítems resueltos:**
+- N1: handleDelete abort no-transient (riesgo activo).
+- N2: borrador localStorage guard.
+- N3: audit log forensia (`quincenaAsignada` + `comisionPorcentaje`).
+- N6: `esAdminOCoord` centralizado en `utils/permisos.ts`.
+- N7: `METODO_PAGO_LABELS`+`COLORS` dedup en `utils/factura.ts`.
+- N8: click-outside dropdown.
+- N9: onChange limpiar duplicado.
+- N10: guard orden sintética (`factura-manual-{X}`).
+- N11: re-parseo redundante eliminado.
+
+**5 ítems pendientes** (ver `_estado-temporal-conduces.md` para detalle):
+- N1.5 `resource-exhausted` (decisión producto).
+- N6.5 20+ callsites repo-wide.
+- C3 fase B App Check (post métricas).
+- `Facturas.tsx` extraer modal garantía manual.
+- `ESTADO_COLORS/LABELS` extraer.
+
+**Próximo recomendado:** validar métricas App Check 24-48h, después C3 fase B.
+

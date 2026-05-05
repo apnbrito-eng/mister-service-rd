@@ -295,3 +295,58 @@ Una vez el sprint termine y haya post-mortem completo, **borrar este archivo** (
 2. **Filtro avanzado finanzas** después.
 3. **Postergar C3 fase B App Check** hasta métricas estables 24-48h.
 
+## Retrospectiva Cleanup Consolidado (2026-05-04)
+
+### Commit desplegado
+
+- **Cleanup** — `cf25310` — `chore(cleanup): consolidado deuda Conduces SIBS C3+C4 (9 items)`.
+- 10 archivos modificados, +162 / -55 LOC.
+- 1 archivo nuevo (`src/utils/factura.ts`, 28 LOC).
+- 0 loops `CHANGES_NEEDED`.
+- Tiempo real: ~60 min (estimado ~60 min).
+
+### Lo que salió bien
+
+1. **1 sola iteración sin `CHANGES_NEEDED`** — spec calibrada al delegar.
+2. **Bundling de 9 tareas heterogéneas en un solo commit `chore(cleanup)`** — historial limpio + rollback atómico.
+3. **Builder ejerció criterio en N7 (scope 2→4 archivos) sin pedir permiso** — autonomía correcta.
+4. **Decisión NO tocar 3 callsites locales en N6** respetó regla de no refactor opportunista.
+
+### Lo que se complicó
+
+1. **`react-hot-toast` sin `toast.warning`** → workaround `icon: '!'`. Revela necesidad de wrapper unificado.
+2. **Identificación tardía de N6.5 (20+ callsites pendientes).** Grep preliminar habría ajustado scope.
+
+### Aprendizajes accionables
+
+1. Para cleanups futuros: correr `Grep` exhaustivo del patrón a centralizar ANTES de estimar tamaño.
+2. Helper de toasts unificado (`utils/toast.ts` con `toastWarning`/`toastInfo`) candidato para próximo cleanup.
+3. Límite blando 1000 LOC de CLAUDE.md debería ser check automático en tester (`Facturas.tsx` ya 980).
+
+### Estado deuda post-cleanup
+
+**Antes:** 14 ítems. **Resueltos:** 9. **Pendientes:** 5.
+
+| ID | Descripción | Prioridad |
+|---|---|---|
+| N1.5 | `resource-exhausted` no en TRANSIENT_CODES — decisión Jorge | MEDIA (producto) |
+| N6.5 | 20+ callsites locales `administrador \|\| coordinadora` inline | MEDIA (técnica) |
+| C3 fase B | App Check hard enforcement post métricas 24-48h | ALTA (seguridad) |
+| Facturas.tsx 980 LOC | Extraer modal garantía manual cuando se toque | BAJA (oportunista) |
+| ESTADO_COLORS/LABELS | Mover a `utils/factura.ts` cuando OrdenDetalle los use | BAJA (oportunista) |
+
+### Recomendación próximos sprints
+
+1. Validar métricas App Check 24-48h → C3 fase B (único riesgo de seguridad activo).
+2. Revisar `PROMPT_CONDUCES_ESTILO_FACTURACION_SIBS.md` para sprints SIBS pendientes.
+3. Filtro avanzado finanzas (sprint medio, valor alto).
+4. Repo-wide cleanup N6.5 (paralelizable con helper de toasts).
+5. N1.5 pendiente decisión de producto.
+
+### Métricas
+
+- Tiempo estimado: ~60 min.
+- Loops `CHANGES_NEEDED`: 0.
+- Archivos nuevos: 1 (`utils/factura.ts`).
+- Deuda neta: -9 ítems (14 → 5).
+
