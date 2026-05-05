@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection,
   doc,
@@ -7,22 +7,51 @@ import {
   updateDoc,
   Timestamp,
   arrayUnion,
+  serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { OrdenServicio, Cotizacion, ItemCotizacion, Usuario, PagoOrden, Factura, GarantiaInfo } from '../../types';
-import { crearRegistroAuditoria, formatMonedaPrecisa } from '../../utils';
+import {
+  OrdenServicio,
+  Cotizacion,
+  ItemCotizacion,
+  Usuario,
+  PagoOrden,
+  Factura,
+  GarantiaInfo,
+  ServicioPrecio,
+  PiezaInventario,
+  Personal,
+  Cliente,
+} from '../../types';
+import { crearRegistroAuditoria, formatMonedaPrecisa, parseCliente } from '../../utils';
 import { abrirWhatsApp, mensajeConduceGarantia } from '../../utils/whatsapp';
 import { siguienteNumeroFactura } from '../../services/contadores.service';
-import { registrarComisionPorFactura, desglosarTotalConITBIS, calcularCostoPiezasDeItems } from '../../utils/comisiones';
+import {
+  registrarComisionPorFactura,
+  registrarComisionesPorItems,
+  desglosarTotalConITBIS,
+  calcularCostoPiezasDeItems,
+} from '../../utils/comisiones';
 import { obtenerConfigFiscal } from '../../services/configFiscal.service';
 import Modal from '../Modal';
+import FacturaItemsEditor from '../facturas/FacturaItemsEditor';
 import {
-  Banknote, ArrowRightLeft, CreditCard, Trash2, Plus, Check,
+  Banknote, ArrowRightLeft, CreditCard, Check, Clock, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-interface ItemEditable extends ItemCotizacion {
-  _key: string;
+/** TTL del borrador en localStorage. 24 horas. */
+const BORRADOR_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Prefijo de la key — el sufijo es `${ordenId}` para no colisionar entre órdenes. */
+const BORRADOR_KEY_PREFIX = 'mister_borrador_facturacion_v1_';
+
+interface BorradorFacturacion {
+  ordenId: string;
+  items: ItemCotizacion[];
+  tiempoGarantiaDias: number | null;
+  paso: 1 | 2;
+  guardadoEn: number;
 }
 
 /* ─────────────────────────────────────────── */
@@ -31,7 +60,10 @@ interface ItemEditable extends ItemCotizacion {
 interface ModalProps {
   orden: OrdenServicio | null;
   userProfile: Usuario | null;
-  currentUserUid: string;
+  /** Catálogos cargados por el padre (FacturacionPendiente.tsx) — patrón "padre gordo". */
+  catalogoServicios: ServicioPrecio[];
+  catalogoPiezas: PiezaInventario[];
+  tecnicos: Personal[];
   onClose: () => void;
 }
 
@@ -45,26 +77,116 @@ const GARANTIA_PRESETS: Array<{ dias: number; label: string }> = [
   { dias: 365, label: '1 año' },
 ];
 
-export default function ProcesarFacturacionModal({ orden, userProfile, currentUserUid, onClose }: ModalProps) {
+/**
+ * Modal de procesamiento de Conduce de Garantía desde Bandeja Pendiente.
+ *
+ * C4b — features SIBS sobre el split:
+ *  - `getDoc` puntual del cliente para resolver `cliente.tipo` (default 'particular').
+ *  - Reusa `FacturaItemsEditor` (catálogos + técnicos + modal con prioritarios).
+ *  - Default por línea = `orden.tecnicoId` cuando se sintetiza un item.
+ *  - Render N=1 vs N>1 con denormalización post-helper (regla CLAUDE.md línea 89).
+ *  - `clienteTipoEnEmision` snapshot defensivo.
+ *  - Audit log override modalidad (best-effort).
+ *  - `solicitanteUid` unificado a `userProfile?.id`.
+ *  - Borrador localStorage con TTL 24h.
+ *  - Quick-win 11: confirm si admin emite con líneas sin técnico cuando la orden
+ *    tiene técnico asignado.
+ */
+export default function ProcesarFacturacionModal({
+  orden,
+  userProfile,
+  catalogoServicios,
+  catalogoPiezas,
+  tecnicos,
+  onClose,
+}: ModalProps) {
   const [paso, setPaso] = useState<1 | 2>(1);
-  const [items, setItems] = useState<ItemEditable[]>([]);
+  const [items, setItems] = useState<ItemCotizacion[]>([]);
   const [cargandoCotizacion, setCargandoCotizacion] = useState(false);
   const [generando, setGenerando] = useState(false);
   const [tiempoGarantiaDias, setTiempoGarantiaDias] = useState<number | null>(null);
+  const [cliente, setCliente] = useState<Cliente | null>(null);
+
+  // Borrador localStorage (TTL 24h)
+  const [borradorEncontrado, setBorradorEncontrado] = useState<BorradorFacturacion | null>(null);
+  // Flag para evitar pisar el borrador en el primer render con el setItems inicial.
+  const yaCargoInicialRef = useRef(false);
+  // Debounce para escrituras a localStorage.
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const puedeConfigurarGarantia =
     userProfile?.rol === 'coordinadora' || userProfile?.rol === 'administrador';
+  const puedeOverrideModalidad =
+    userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
 
-  // Cargar items de la cotización vinculada (o crear uno por defecto)
+  // ─── Cargar cliente al abrir el modal (getDoc puntual) ───
+  useEffect(() => {
+    if (!orden) {
+      setCliente(null);
+      return;
+    }
+    let cancelado = false;
+    const cargarCliente = async () => {
+      try {
+        if (!orden.clienteId) {
+          if (!cancelado) setCliente(null);
+          return;
+        }
+        const snap = await getDoc(doc(db, 'clientes', orden.clienteId));
+        if (cancelado) return;
+        if (snap.exists()) {
+          setCliente(parseCliente(snap.id, snap.data() as Record<string, unknown>));
+        } else {
+          setCliente(null);
+        }
+      } catch (err) {
+        console.warn('[procesar-facturacion] no se pudo leer cliente:', err);
+        if (!cancelado) setCliente(null);
+      }
+    };
+    cargarCliente();
+    return () => { cancelado = true; };
+  }, [orden]);
+
+  // ─── Cargar items de la cotización vinculada (o crear uno por defecto) ───
+  // También chequea si hay un borrador válido en localStorage (TTL 24h).
   useEffect(() => {
     if (!orden) {
       setItems([]);
       setPaso(1);
       setTiempoGarantiaDias(null);
+      setBorradorEncontrado(null);
+      yaCargoInicialRef.current = false;
       return;
     }
     setPaso(1);
     setTiempoGarantiaDias(null);
+    yaCargoInicialRef.current = false;
+
+    // Buscar borrador antes de pisar items
+    let borrador: BorradorFacturacion | null = null;
+    try {
+      const raw = localStorage.getItem(`${BORRADOR_KEY_PREFIX}${orden.id}`);
+      if (raw) {
+        const parsed = JSON.parse(raw) as BorradorFacturacion;
+        if (
+          parsed &&
+          parsed.ordenId === orden.id &&
+          typeof parsed.guardadoEn === 'number' &&
+          Date.now() - parsed.guardadoEn < BORRADOR_TTL_MS &&
+          Array.isArray(parsed.items)
+        ) {
+          borrador = parsed;
+        } else {
+          // Expiró o malformed — limpiar
+          localStorage.removeItem(`${BORRADOR_KEY_PREFIX}${orden.id}`);
+        }
+      }
+    } catch (err) {
+      console.warn('[procesar-facturacion] no se pudo leer borrador:', err);
+    }
+    setBorradorEncontrado(borrador);
+
     const cargar = async () => {
       setCargandoCotizacion(true);
       try {
@@ -72,22 +194,72 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
           const snap = await getDoc(doc(db, 'cotizaciones', orden.cotizacionId));
           if (snap.exists()) {
             const cot = snap.data() as Cotizacion;
-            const its = (cot.items || []).map((it, idx) => ({
-              ...it,
-              _key: `it_${idx}_${Date.now()}`,
-            }));
+            const its = (cot.items || []).map(it => aplicarTecnicoDefault(it, orden));
             setItems(its.length > 0 ? its : [defaultItem(orden)]);
             setCargandoCotizacion(false);
+            yaCargoInicialRef.current = true;
             return;
           }
         }
         setItems([defaultItem(orden)]);
+        yaCargoInicialRef.current = true;
       } finally {
         setCargandoCotizacion(false);
       }
     };
     cargar();
   }, [orden]);
+
+  // ─── Persistir borrador a localStorage con debounce ───
+  useEffect(() => {
+    if (!orden || !yaCargoInicialRef.current) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      try {
+        const payload: BorradorFacturacion = {
+          ordenId: orden.id,
+          items,
+          tiempoGarantiaDias,
+          paso,
+          guardadoEn: Date.now(),
+        };
+        localStorage.setItem(`${BORRADOR_KEY_PREFIX}${orden.id}`, JSON.stringify(payload));
+      } catch (err) {
+        console.warn('[procesar-facturacion] no se pudo guardar borrador:', err);
+      }
+    }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [orden, items, tiempoGarantiaDias, paso]);
+
+  const restaurarBorrador = () => {
+    if (!borradorEncontrado) return;
+    setItems(borradorEncontrado.items);
+    setTiempoGarantiaDias(borradorEncontrado.tiempoGarantiaDias);
+    setPaso(borradorEncontrado.paso);
+    setBorradorEncontrado(null);
+    toast.success('Borrador restaurado');
+  };
+
+  const descartarBorrador = () => {
+    if (!orden) return;
+    try {
+      localStorage.removeItem(`${BORRADOR_KEY_PREFIX}${orden.id}`);
+    } catch (err) {
+      console.warn('[procesar-facturacion] no se pudo eliminar borrador:', err);
+    }
+    setBorradorEncontrado(null);
+  };
+
+  const limpiarBorrador = () => {
+    if (!orden) return;
+    try {
+      localStorage.removeItem(`${BORRADOR_KEY_PREFIX}${orden.id}`);
+    } catch (err) {
+      console.warn('[procesar-facturacion] no se pudo limpiar borrador:', err);
+    }
+  };
 
   const totalItems = useMemo(
     () => items.reduce((acc, it) => acc + Number(it.cantidad || 0) * Number(it.precio || 0), 0),
@@ -102,26 +274,10 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
     [pagosPrevios],
   );
 
-  const actualizarItem = (key: string, cambios: Partial<ItemEditable>) => {
-    setItems(prev => prev.map(it => (it._key === key ? { ...it, ...cambios } : it)));
-  };
-
-  const eliminarItem = (key: string) => {
-    setItems(prev => prev.filter(it => it._key !== key));
-  };
-
-  const agregarItem = () => {
-    setItems(prev => [
-      ...prev,
-      {
-        descripcion: '',
-        cantidad: 1,
-        precio: 0,
-        tipoItem: 'manual',
-        _key: `it_new_${Date.now()}`,
-      },
-    ]);
-  };
+  // Técnicos prioritarios para el dropdown del modal de detalles.
+  const tecnicosPrioritarios = useMemo<string[]>(() => {
+    return orden?.tecnicoId ? [orden.tecnicoId] : [];
+  }, [orden]);
 
   const handleGenerar = async () => {
     if (!orden) return;
@@ -137,6 +293,19 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
       toast.error('Selecciona un tiempo de garantía antes de emitir el conduce');
       return;
     }
+
+    // Quick-win 11: si la orden tiene técnico asignado y hay líneas sin técnico,
+    // pedir confirmación antes de emitir.
+    if (orden.tecnicoId) {
+      const sinTecnico = items.filter(it => !it.tecnicoId).length;
+      if (sinTecnico > 0) {
+        const ok = window.confirm(
+          `Hay ${sinTecnico} línea${sinTecnico === 1 ? '' : 's'} sin técnico. Esa${sinTecnico === 1 ? '' : 's'} línea${sinTecnico === 1 ? '' : 's'} NO generará${sinTecnico === 1 ? '' : 'n'} comisión. ¿Confirmar emisión?`,
+        );
+        if (!ok) return;
+      }
+    }
+
     setGenerando(true);
     try {
       const numero = await siguienteNumeroFactura();
@@ -149,18 +318,25 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
       const metodoPagoPrincipal = ultimoPago?.metodo;
       const bancoPrincipal = ultimoPago?.bancoNombre;
 
+      // Snapshot defensivo del tipo de cliente al momento de emitir.
+      // Si el cliente no se pudo leer o no tenía tipo definido, default 'particular'.
+      const clienteTipoEnEmision: 'particular' | 'b2b' =
+        cliente?.tipo === 'b2b' ? 'b2b' : 'particular';
+
       // Construir doc de factura
-      const itemsLimpios = items.map(({ _key: _, ...rest }) => {
-        // Quitar campos undefined
+      const itemsLimpios: Record<string, unknown>[] = items.map(it => {
         const obj: Record<string, unknown> = {
-          descripcion: rest.descripcion.trim(),
-          cantidad: Number(rest.cantidad) || 0,
-          precio: Number(rest.precio) || 0,
+          descripcion: it.descripcion.trim(),
+          cantidad: Number(it.cantidad) || 0,
+          precio: Number(it.precio) || 0,
         };
-        if (rest.tipoItem) obj.tipoItem = rest.tipoItem;
-        if (rest.servicioPrecioId) obj.servicioPrecioId = rest.servicioPrecioId;
-        if (rest.piezaInventarioId) obj.piezaInventarioId = rest.piezaInventarioId;
-        if (typeof rest.costoCompra === 'number') obj.costoCompra = rest.costoCompra;
+        if (it.tipoItem) obj.tipoItem = it.tipoItem;
+        if (it.servicioPrecioId) obj.servicioPrecioId = it.servicioPrecioId;
+        if (it.piezaInventarioId) obj.piezaInventarioId = it.piezaInventarioId;
+        if (typeof it.costoCompra === 'number') obj.costoCompra = it.costoCompra;
+        if (it.tecnicoId) obj.tecnicoId = it.tecnicoId;
+        if (it.tecnicoNombre) obj.tecnicoNombre = it.tecnicoNombre;
+        if (it.precioModalidad) obj.precioModalidad = it.precioModalidad;
         return obj;
       });
 
@@ -170,7 +346,7 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
 
       // Desglose fiscal (el total cobrado ya incluye ITBIS → desglosar)
       const desglose = desglosarTotalConITBIS(totalItems, itbisPct);
-      const costoPiezas = calcularCostoPiezasDeItems(itemsLimpios as unknown as import('../../types').ItemCotizacion[]);
+      const costoPiezas = calcularCostoPiezasDeItems(itemsLimpios as unknown as ItemCotizacion[]);
       const gananciaNeta = Math.max(0, Math.round((desglose.subtotal - costoPiezas) * 100) / 100);
 
       // Construir bloque de garantía si la coord/admin configuró tiempo
@@ -220,6 +396,8 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
         // Origen: distingue conduces emitidos automáticamente al cerrar
         // una orden de los conduces manuales creados desde /admin/facturas.
         origen: 'post-cierre' as const,
+        // Snapshot defensivo del tipo del cliente al momento de emitir.
+        clienteTipoEnEmision,
       };
       if (metodoPagoPrincipal) facturaPayload.metodoPago = metodoPagoPrincipal;
       if (bancoPrincipal) facturaPayload.bancoDestino = bancoPrincipal;
@@ -254,7 +432,8 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
         try {
           await addDoc(collection(db, 'auditoria_admin'), {
             accion: 'emitir_garantia',
-            solicitanteUid: currentUserUid,
+            // Unificado a userProfile?.id (decisión C4b).
+            solicitanteUid: userProfile?.id || null,
             solicitanteNombre: usuario,
             objetivoTipo: 'factura',
             objetivoId: facturaRef.id,
@@ -273,30 +452,123 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
         }
       }
 
-      // Registrar/actualizar comisión del técnico sobre ganancia neta
-      let comisionInfo: Awaited<ReturnType<typeof registrarComisionPorFactura>> | null = null;
+      // ─── Comisiones: detectar N=1 vs N>1 y denormalizar ───
+      // Detección: si CUALQUIER item trae tecnicoId Y hay > 1 técnico distinto,
+      // es N>1. Si todos los items con tecnicoId comparten el mismo (o nadie
+      // trae) — flujo legacy N=1 vía `registrarComisionPorFactura`.
+      const tecnicoIdsDistintos = Array.from(
+        new Set(
+          items
+            .map(it => it.tecnicoId)
+            .filter((id): id is string => !!id),
+        ),
+      );
+      const algunoConTecnico = tecnicoIdsDistintos.length > 0;
+      const esNMultiple = tecnicoIdsDistintos.length > 1;
+
       try {
-        comisionInfo = await registrarComisionPorFactura({
-          orden,
-          facturaId: facturaRef.id,
-          facturaNumero: numero,
-          totalFactura: totalItems,
-          items: itemsLimpios as unknown as import('../../types').ItemCotizacion[],
-          userProfile,
-          itbisPorcentaje: itbisPct,
-        });
-        // Denormalizar los datos de comisión en el doc de factura
-        if (comisionInfo && comisionInfo.comisionId && comisionInfo.tecnicoId) {
-          await updateDoc(doc(db, 'facturas', facturaRef.id), {
-            comisionRegistroId: comisionInfo.comisionId,
-            comisionTecnicoId: comisionInfo.tecnicoId,
-            comisionTecnicoNombre: comisionInfo.tecnicoNombre,
-            comisionTecnicoPorcentaje: comisionInfo.porcentaje,
-            comisionTecnicoMonto: comisionInfo.comisionMonto,
+        if (esNMultiple) {
+          // N>1: usar helper específico y denormalizar como agregado.
+          const result = await registrarComisionesPorItems({
+            orden,
+            facturaId: facturaRef.id,
+            facturaNumero: numero,
+            totalFactura: totalItems,
+            items: itemsLimpios as unknown as ItemCotizacion[],
+            userProfile,
+            itbisPorcentaje: itbisPct,
           });
+          // CRÍTICO: denormalizar post-call (regla CLAUDE.md línea 89).
+          if (result.comisiones.length > 0) {
+            const denorm: Record<string, unknown> =
+              result.comisiones.length === 1
+                ? {
+                  // Caso degenerado: N>1 detectado pero terminó en 1 comisión
+                  // válida (el otro técnico tenía 0% o no existía). Render legacy.
+                  comisionTecnicoId: result.comisiones[0].tecnicoId,
+                  comisionTecnicoNombre: result.comisiones[0].tecnicoNombre,
+                  comisionTecnicoMonto: result.comisiones[0].monto,
+                  comisionTecnicoPorcentaje: result.comisiones[0].porcentaje,
+                  comisionRegistroId: result.comisiones[0].comisionId,
+                }
+                : {
+                  // N>1 real: agregado.
+                  comisionTecnicoId: '',
+                  comisionTecnicoNombre: 'N técnicos',
+                  comisionTecnicoMonto: result.totalAgregado,
+                  comisionTecnicoPorcentaje: 0,
+                };
+            const denormLimpio = Object.fromEntries(
+              Object.entries(denorm).filter(([, v]) => v !== undefined),
+            );
+            await updateDoc(doc(db, 'facturas', facturaRef.id), denormLimpio);
+          }
+        } else {
+          // N=1 (o 0): flujo legacy. `registrarComisionPorFactura` cubre ambos
+          // casos (con/sin tecnicoId por línea) y delega internamente si hace falta.
+          const comisionInfo = await registrarComisionPorFactura({
+            orden,
+            facturaId: facturaRef.id,
+            facturaNumero: numero,
+            totalFactura: totalItems,
+            items: itemsLimpios as unknown as ItemCotizacion[],
+            userProfile,
+            itbisPorcentaje: itbisPct,
+          });
+          // Denormalizar SOLO si hay comisión efectiva (técnico válido + monto > 0).
+          if (comisionInfo && comisionInfo.comisionId && comisionInfo.tecnicoId) {
+            await updateDoc(doc(db, 'facturas', facturaRef.id), {
+              comisionRegistroId: comisionInfo.comisionId,
+              comisionTecnicoId: comisionInfo.tecnicoId,
+              comisionTecnicoNombre: comisionInfo.tecnicoNombre,
+              comisionTecnicoPorcentaje: comisionInfo.porcentaje,
+              comisionTecnicoMonto: comisionInfo.comisionMonto,
+            });
+          }
         }
       } catch (err) {
         console.warn('Error registrando comisión por factura:', err);
+      }
+
+      // Audit log override modalidad (best-effort, no bloquea emisión).
+      // Una entry por cada línea overrideada respecto al default que dictaba
+      // el tipo del cliente.
+      try {
+        const modalidadDefaultPorTipo: 'mayoreo' | 'detalle' =
+          clienteTipoEnEmision === 'b2b' ? 'mayoreo' : 'detalle';
+        const overrides = items
+          .map((it, idx) => ({ it, idx }))
+          .filter(({ it }) =>
+            (it.tipoItem === 'servicio' || it.tipoItem === 'pieza') &&
+            it.precioModalidad &&
+            it.precioModalidad !== modalidadDefaultPorTipo,
+          );
+        if (overrides.length > 0) {
+          for (const { it, idx } of overrides) {
+            const auditPayload: Record<string, unknown> = {
+              accion: 'override_modalidad_precio_factura',
+              lineaIndex: idx,
+              modalidadOriginal: modalidadDefaultPorTipo,
+              modalidadOverride: it.precioModalidad,
+              clienteTipo: clienteTipoEnEmision,
+              solicitanteUid: userProfile?.id || null,
+              solicitanteNombre: userProfile?.nombre || null,
+              facturaNumero: numero,
+              ordenId: orden.id,
+              ordenNumero: orden.numero || null,
+              timestamp: serverTimestamp(),
+            };
+            const auditLimpio = Object.fromEntries(
+              Object.entries(auditPayload).filter(([, v]) => v !== undefined),
+            );
+            // Sin await en paralelo: no bloqueamos la UX del usuario.
+            addDoc(collection(db, 'auditoria_admin'), auditLimpio).catch(err =>
+              console.warn('Audit log override modalidad falló:', err),
+            );
+          }
+        }
+      } catch (auditErr) {
+        console.warn('Error preparando audit log de override modalidad:', auditErr);
       }
 
       // Marcar la orden
@@ -318,6 +590,9 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
         auditoria: arrayUnion(registro),
         updatedAt: ahora,
       });
+
+      // Limpiar borrador en éxito.
+      limpiarBorrador();
 
       // Toast con CTA de WhatsApp si tenemos teléfono y se generó garantía
       const telefono = orden.clienteTelefono || '';
@@ -377,6 +652,9 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
       } else {
         toast.success(`Conduce ${numero} generado`);
       }
+      // Suprimir warning de variable no usada (esNMultiple/algunoConTecnico ya
+      // se consumieron arriba; los dejamos referenciados para claridad).
+      void algunoConTecnico;
       onClose();
     } catch (err) {
       console.error(err);
@@ -391,6 +669,44 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
   return (
     <Modal isOpen={!!orden} onClose={onClose} title={`Emitir conduce de garantía — ${orden.numero || ''}`} size="lg">
       <div className="space-y-5">
+        {/* Banner borrador encontrado */}
+        {borradorEncontrado && (
+          <div className="flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm">
+            <div className="flex items-center gap-2 text-blue-900 min-w-0">
+              <Clock size={14} className="flex-shrink-0" />
+              <span className="truncate">
+                Borrador encontrado del{' '}
+                <strong>
+                  {new Date(borradorEncontrado.guardadoEn).toLocaleString('es-DO', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </strong>
+                . ¿Restaurar?
+              </span>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={restaurarBorrador}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-semibold"
+              >
+                Restaurar
+              </button>
+              <button
+                type="button"
+                onClick={descartarBorrador}
+                className="p-1 hover:bg-blue-100 rounded text-blue-700"
+                title="Descartar borrador"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Stepper */}
         <div className="flex items-center gap-2">
           <StepDot active={paso === 1} done={paso > 1} num={1} label="Aprobar contenido" />
@@ -405,48 +721,17 @@ export default function ProcesarFacturacionModal({ orden, userProfile, currentUs
               <p className="text-xs text-gray-600 mb-2">
                 Items que se incluirán en el conduce de garantía. Edita lo que sea necesario.
               </p>
-              <div className="space-y-2">
-                {items.map(it => (
-                  <div key={it._key} className="grid grid-cols-12 gap-2 items-center">
-                    <input
-                      type="text"
-                      value={it.descripcion}
-                      onChange={e => actualizarItem(it._key, { descripcion: e.target.value })}
-                      placeholder="Descripción"
-                      className="col-span-6 px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
-                    />
-                    <input
-                      type="number"
-                      value={it.cantidad}
-                      onChange={e => actualizarItem(it._key, { cantidad: Number(e.target.value) || 0 })}
-                      placeholder="Cant"
-                      className="col-span-2 px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
-                    />
-                    <input
-                      type="number"
-                      value={it.precio}
-                      onChange={e => actualizarItem(it._key, { precio: Number(e.target.value) || 0 })}
-                      placeholder="Precio"
-                      className="col-span-3 px-2 py-1.5 border border-gray-200 rounded-lg text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => eliminarItem(it._key)}
-                      className="col-span-1 p-1.5 text-red-500 hover:bg-red-50 rounded"
-                      title="Eliminar"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={agregarItem}
-                className="mt-2 inline-flex items-center gap-1 text-xs text-[#1a5fa8] hover:underline"
-              >
-                <Plus size={12} /> Agregar item
-              </button>
+              <FacturaItemsEditor
+                items={items}
+                onItemsChange={setItems}
+                catalogoServicios={catalogoServicios}
+                catalogoPiezas={catalogoPiezas}
+                tecnicos={tecnicos}
+                cliente={cliente}
+                puedeOverrideModalidad={puedeOverrideModalidad}
+                tecnicosPrioritarios={tecnicosPrioritarios}
+                disabled={generando}
+              />
             </div>
             <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg p-3">
               <span className="text-sm font-medium text-[#0f3460]">Total conduce</span>
@@ -599,26 +884,53 @@ function StepDot({ active, done, num, label }: { active: boolean; done: boolean;
   );
 }
 
-function defaultItem(orden: OrdenServicio): ItemEditable {
+/**
+ * Aplica el técnico de la orden como default a un item de cotización si:
+ *  - el item NO trae `tecnicoId` propio,
+ *  - la orden tiene `tecnicoId`.
+ * Si el item ya viene con técnico (vendedor por línea desde la cotización),
+ * se respeta. Si la orden no tiene técnico, no se toca nada.
+ */
+function aplicarTecnicoDefault(item: ItemCotizacion, orden: OrdenServicio): ItemCotizacion {
+  if (item.tecnicoId) return item;
+  if (!orden.tecnicoId) return item;
+  return {
+    ...item,
+    tecnicoId: orden.tecnicoId,
+    tecnicoNombre: orden.tecnicoNombre,
+  };
+}
+
+function defaultItem(orden: OrdenServicio): ItemCotizacion {
   // Solo Chequeo: el item es el chequeo del equipo, no el servicio completo.
   if (orden.soloChequeo) {
     const precioCheq = Number(orden.precioChequeo || orden.precioFinal || 0);
     const descCheq = `Chequeo de ${orden.equipoTipo || 'equipo'}${orden.equipoMarca ? ` ${orden.equipoMarca}` : ''} (sin reparación)`;
-    return {
+    const base: ItemCotizacion = {
       descripcion: descCheq.substring(0, 200),
       cantidad: 1,
       precio: precioCheq,
       tipoItem: 'servicio',
-      _key: `it_default_chequeo_${Date.now()}`,
     };
+    // Default técnico de la orden (si existe) — sirve para el flujo legacy
+    // de comisiones (aunque soloChequeo no genera comisión, dejamos consistente).
+    if (orden.tecnicoId) {
+      base.tecnicoId = orden.tecnicoId;
+      base.tecnicoNombre = orden.tecnicoNombre;
+    }
+    return base;
   }
   const precio = Number(orden.precioFinal || orden.precioAprobado || orden.precioSugerido || 0);
   const desc = `${orden.equipoTipo}${orden.equipoMarca ? ` ${orden.equipoMarca}` : ''} — ${orden.descripcionFalla || 'Servicio'}`;
-  return {
+  const base: ItemCotizacion = {
     descripcion: desc.substring(0, 200),
     cantidad: 1,
     precio,
     tipoItem: 'servicio',
-    _key: `it_default_${Date.now()}`,
   };
+  if (orden.tecnicoId) {
+    base.tecnicoId = orden.tecnicoId;
+    base.tecnicoNombre = orden.tecnicoNombre;
+  }
+  return base;
 }

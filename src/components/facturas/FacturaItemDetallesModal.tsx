@@ -19,6 +19,14 @@ interface FacturaItemDetallesModalProps {
   cliente: Cliente | null;
   /** Solo admin/coord pueden cambiar Mayoreo/Detalle (P3=b). */
   puedeOverrideModalidad: boolean;
+  /**
+   * IDs de técnicos a mostrar primero en el dropdown, separados por divider
+   * visual del resto. Sirve para destacar al técnico asignado a la orden
+   * cuando el modal se abre desde `ProcesarFacturacionModal` (Quick-win 12).
+   * Si está ausente, vacío, o sus IDs no aparecen en `tecnicos`, el dropdown
+   * se renderiza idéntico al comportamiento actual.
+   */
+  tecnicosPrioritarios?: string[];
   onSave: (item: ItemCotizacion) => void;
   onCancel: () => void;
 }
@@ -48,6 +56,7 @@ export default function FacturaItemDetallesModal({
   tecnicos,
   cliente,
   puedeOverrideModalidad,
+  tecnicosPrioritarios,
   onSave,
   onCancel,
 }: FacturaItemDetallesModalProps) {
@@ -199,6 +208,22 @@ export default function FacturaItemDetallesModal({
       .filter(t => t.activo !== false)
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   }, [tecnicos]);
+
+  // Particionar técnicos en "prioritarios" (asignados a la orden) y "resto".
+  // Si la prop está vacía o ningún ID coincide, se renderiza una lista plana
+  // idéntica al comportamiento previo a C4b.
+  const { tecnicosDestacados, tecnicosResto } = useMemo(() => {
+    const prio = Array.isArray(tecnicosPrioritarios)
+      ? tecnicosPrioritarios.filter(Boolean)
+      : [];
+    if (prio.length === 0) {
+      return { tecnicosDestacados: [] as Personal[], tecnicosResto: tecnicosOrdenados };
+    }
+    const setPrio = new Set(prio);
+    const destacados = tecnicosOrdenados.filter(t => setPrio.has(t.id));
+    const resto = tecnicosOrdenados.filter(t => !setPrio.has(t.id));
+    return { tecnicosDestacados: destacados, tecnicosResto: resto };
+  }, [tecnicosOrdenados, tecnicosPrioritarios]);
 
   const sinSeleccion = !seleccionId;
 
@@ -399,9 +424,25 @@ export default function FacturaItemDetallesModal({
               >
                 {/* "Sin técnico (mostrador)" como PRIMERA opción (decisión 40). */}
                 <option value="">Sin técnico (mostrador)</option>
-                {tecnicosOrdenados.map(t => (
-                  <option key={t.id} value={t.id}>{t.nombre}</option>
-                ))}
+                {/* Técnicos prioritarios (orden), separados por divider visual */}
+                {tecnicosDestacados.length > 0 && (
+                  <optgroup label="Asignado a la orden">
+                    {tecnicosDestacados.map(t => (
+                      <option key={t.id} value={t.id}>{t.nombre}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {tecnicosDestacados.length > 0 ? (
+                  <optgroup label="Otros técnicos">
+                    {tecnicosResto.map(t => (
+                      <option key={t.id} value={t.id}>{t.nombre}</option>
+                    ))}
+                  </optgroup>
+                ) : (
+                  tecnicosResto.map(t => (
+                    <option key={t.id} value={t.id}>{t.nombre}</option>
+                  ))
+                )}
               </select>
               <p className="text-[10px] text-gray-400 mt-1">
                 Si seleccionás "Sin técnico", esta línea NO genera comisión.

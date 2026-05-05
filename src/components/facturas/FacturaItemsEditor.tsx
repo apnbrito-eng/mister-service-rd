@@ -18,6 +18,12 @@ interface FacturaItemsEditorProps {
   cliente: Cliente | null;
   /** Solo admin/coord pueden cambiar Mayoreo/Detalle (P3=b). */
   puedeOverrideModalidad: boolean;
+  /**
+   * IDs de técnicos a destacar en el dropdown del modal de detalles
+   * (forwarded a `FacturaItemDetallesModal`). Útil cuando el editor se abre
+   * desde una orden con técnico asignado.
+   */
+  tecnicosPrioritarios?: string[];
   disabled?: boolean;
 }
 
@@ -44,6 +50,7 @@ export default function FacturaItemsEditor({
   tecnicos,
   cliente,
   puedeOverrideModalidad,
+  tecnicosPrioritarios,
   disabled = false,
 }: FacturaItemsEditorProps) {
   const [itemDetalleAbiertoIdx, setItemDetalleAbiertoIdx] = useState<number | null>(null);
@@ -271,6 +278,7 @@ export default function FacturaItemsEditor({
           tecnicos={tecnicos}
           cliente={cliente}
           puedeOverrideModalidad={puedeOverrideModalidad}
+          tecnicosPrioritarios={tecnicosPrioritarios}
           onSave={handleSaveDetalles(itemDetalleAbiertoIdx)}
           onCancel={handleCancelDetalles(itemDetalleAbiertoIdx)}
         />

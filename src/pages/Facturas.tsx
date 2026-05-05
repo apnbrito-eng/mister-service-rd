@@ -5,6 +5,7 @@ import { Factura, EstadoFactura, MetodoPago, OrdenServicio, Personal, ServicioPr
 import { formatMoneda, formatFechaCorta, parseOrden, parseFactura, parseServicioPrecio, parsePiezaInventario } from '../utils';
 import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
 import { useClientesEnVivo } from '../hooks/useClientesEnVivo';
+import { eliminarComisionesDeFactura } from '../utils/comisiones';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
@@ -209,6 +210,19 @@ export default function Facturas() {
     }
     if (!confirm(`¿Eliminar la factura ${factura.numero}? Esta acción no se puede deshacer.`)) return;
     try {
+      // Cascade: borrar/obsoletar comisiones asociadas ANTES de borrar la
+      // factura. Pendientes → delete real; liquidadas → preservar +
+      // marcar `obsoletaPorEliminacionFactura: true`.
+      try {
+        await eliminarComisionesDeFactura({
+          facturaId: factura.id,
+          motivoEliminacion: `Conduce ${factura.numero} eliminado desde /admin/facturas`,
+          solicitanteUid: userProfile?.id,
+          solicitanteNombre: userProfile?.nombre,
+        });
+      } catch (cascErr) {
+        console.error('Cascade comisiones falló (se continúa con delete factura):', cascErr);
+      }
       await deleteDoc(doc(db, 'facturas', factura.id));
       toast.success('Factura eliminada');
     } catch {

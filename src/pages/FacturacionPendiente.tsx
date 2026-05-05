@@ -4,12 +4,13 @@ import {
   onSnapshot,
   query,
   where,
+  orderBy,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio } from '../types';
+import { OrdenServicio, ServicioPrecio, PiezaInventario, Personal } from '../types';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
-import { formatFecha, formatMoneda, formatMonedaPrecisa, parseOrden } from '../utils';
+import { formatFecha, formatMoneda, formatMonedaPrecisa, parseOrden, parseServicioPrecio, parsePiezaInventario } from '../utils';
 import { iconoCondicion, iconoOrigen, etiquetaOrigen } from '../utils/piezas';
 import { aprobarPiezasDeOrden } from '../services/piezas.service';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -34,6 +35,12 @@ export default function FacturacionPendiente() {
   const [aprobandoPiezasId, setAprobandoPiezasId] = useState<string | null>(null);
 
   const [ordenesFiltradas, setOrdenesFiltradas] = useState<OrdenServicio[]>([]);
+
+  // Catálogos + técnicos para el ProcesarFacturacionModal (C4b: vendedor por
+  // línea + selector modalidad). Listeners viven acá; el modal es presentacional.
+  const [catalogoServicios, setCatalogoServicios] = useState<ServicioPrecio[]>([]);
+  const [catalogoPiezas, setCatalogoPiezas] = useState<PiezaInventario[]>([]);
+  const [tecnicos, setTecnicos] = useState<Personal[]>([]);
 
   const esAdmin = userProfile?.rol === 'administrador';
 
@@ -62,7 +69,36 @@ export default function FacturacionPendiente() {
       setOrdenes(list);
       setLoading(false);
     });
-    return () => unsub();
+
+    // Catálogos para el ProcesarFacturacionModal.
+    const unsubServicios = onSnapshot(
+      query(collection(db, 'precios_servicios'), orderBy('marca')),
+      snapServicios => {
+        setCatalogoServicios(snapServicios.docs.map(d => parseServicioPrecio(d.id, d.data())));
+      },
+    );
+    const unsubPiezas = onSnapshot(
+      query(collection(db, 'piezas_inventario'), orderBy('nombre')),
+      snapPiezas => {
+        setCatalogoPiezas(snapPiezas.docs.map(d => parsePiezaInventario(d.id, d.data())));
+      },
+    );
+    // Personal: filtramos client-side a `rol === 'tecnico'` para no introducir
+    // un índice compuesto. La cantidad de personal es pequeña.
+    const unsubPersonal = onSnapshot(
+      query(collection(db, 'personal'), orderBy('nombre')),
+      snapPersonal => {
+        const todos = snapPersonal.docs.map(d => ({ id: d.id, ...d.data() } as Personal));
+        setTecnicos(todos.filter(p => p.rol === 'tecnico' && p.activo !== false));
+      },
+    );
+
+    return () => {
+      unsub();
+      unsubServicios();
+      unsubPiezas();
+      unsubPersonal();
+    };
   }, []);
 
   // Adapta órdenes al shape ItemFiltrable: usa `enviadaAFacturacionAt`
@@ -304,7 +340,9 @@ export default function FacturacionPendiente() {
       <ProcesarFacturacionModal
         orden={procesando}
         userProfile={userProfile}
-        currentUserUid={currentUser?.uid || ''}
+        catalogoServicios={catalogoServicios}
+        catalogoPiezas={catalogoPiezas}
+        tecnicos={tecnicos}
         onClose={() => setProcesando(null)}
       />
 

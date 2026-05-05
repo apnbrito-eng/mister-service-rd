@@ -1,5 +1,6 @@
 import {
   collection, addDoc, doc, getDoc, getDocs, query, where, Timestamp, updateDoc, arrayUnion, deleteDoc,
+  runTransaction, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, Personal, Usuario, ItemCotizacion } from '../types';
@@ -950,4 +951,173 @@ export async function registrarComisionPorOrden(
     console.error('Error registrando comisión:', err);
     return { creada: false, razon: 'error interno' };
   }
+}
+
+/**
+ * Elimina/obsoleta las comisiones asociadas a una factura. Se invoca cuando
+ * la factura se borra (cascade desde `Facturas.tsx:handleDelete` o desde el
+ * flujo de eliminación de orden si llegara a borrar la factura).
+ *
+ * Reglas (sprint Conduces SIBS C4b — security audit):
+ *  - Comisiones `pendientes` → DELETE (no se pagaron, se pueden borrar limpio).
+ *  - Comisiones `liquidadas` → preservar + setear `obsoletaPorEliminacionFactura: true`
+ *    (forensia contable: nómina ya pagó, no se debe perder el registro).
+ *  - Comisiones ya marcadas `obsoletaPorEliminacionFactura === true` → SKIP
+ *    (idempotencia: la 2da invocación es no-op real).
+ *  - Una sola transacción por comisión (evita race delete-vs-liquidación).
+ *  - Audit log en `auditoria_admin` con snapshot completo (`comisionesAfectadas`).
+ *
+ * Flag `obsoletaPorEliminacionFactura` es ortogonal a `obsoletaPorReemisionConduce`:
+ * una comisión puede tener ambos true. Esta función NUNCA toca el flag de re-emisión.
+ *
+ * No bloquea el caller si una sub-operación falla — loguea warn y continúa.
+ *
+ * @param facturaId — ID del doc de factura. Validado: `''` o falsy lanza.
+ * @param motivoEliminacion — texto opcional para forensia.
+ * @param solicitanteUid — `userProfile?.id` (ya unificado en C4b).
+ * @param solicitanteNombre — `userProfile?.nombre`.
+ * @returns conteo `{ eliminadas, preservadas }`.
+ */
+export async function eliminarComisionesDeFactura(args: {
+  facturaId: string;
+  motivoEliminacion?: string;
+  solicitanteUid?: string;
+  solicitanteNombre?: string;
+}): Promise<{ eliminadas: number; preservadas: number }> {
+  const { facturaId, motivoEliminacion, solicitanteUid, solicitanteNombre } = args;
+
+  // Security #5: validación shape — sin esto un bug podría disparar wipe masivo.
+  if (!facturaId || facturaId.trim() === '') {
+    throw new Error('facturaId requerido');
+  }
+
+  let docs: Array<{ id: string; data: Record<string, unknown> }> = [];
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'comisiones'),
+      where('facturaId', '==', facturaId),
+    ));
+    docs = snap.docs.map(d => ({ id: d.id, data: d.data() as Record<string, unknown> }));
+  } catch (err) {
+    // Security #6: PII fuera de logs — solo facturaId.
+    console.warn(`[comisiones] eliminarComisionesDeFactura: no se pudo leer comisiones para facturaId=${facturaId}:`, err);
+    return { eliminadas: 0, preservadas: 0 };
+  }
+
+  let eliminadas = 0;
+  let preservadas = 0;
+  // Snapshot completo para audit log (forensia contable). NO incluye PII en
+  // logs de consola — solo se persiste en la colección `auditoria_admin`.
+  const comisionesAfectadas: Array<{
+    comisionId: string;
+    tecnicoId: string;
+    tecnicoNombre: string;
+    monto: number;
+    estadoPrevio: string;
+    accion: 'eliminada' | 'preservada' | 'skip_ya_obsoleta';
+  }> = [];
+
+  for (const ex of docs) {
+    const comisionId = ex.id;
+    const tecnicoId = (ex.data.tecnicoId as string) || '';
+    const tecnicoNombre = (ex.data.tecnicoNombre as string) || '';
+    const monto = typeof ex.data.comisionMonto === 'number' ? (ex.data.comisionMonto as number) : 0;
+    const yaObsoleta = ex.data.obsoletaPorEliminacionFactura === true;
+
+    // Security #4: idempotencia — skip si ya está marcada por esta misma causa.
+    if (yaObsoleta) {
+      comisionesAfectadas.push({
+        comisionId,
+        tecnicoId,
+        tecnicoNombre,
+        monto,
+        estadoPrevio: (ex.data.estadoLiquidacion as string) || 'desconocido',
+        accion: 'skip_ya_obsoleta',
+      });
+      continue;
+    }
+
+    try {
+      // Security #2: runTransaction por comisión — evita race delete-vs-liquidación.
+      const accionFinal = await runTransaction(db, async tx => {
+        const ref = doc(db, 'comisiones', comisionId);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) return 'skip' as const;
+        const data = snap.data();
+        // Re-check idempotencia dentro de la transacción.
+        if (data.obsoletaPorEliminacionFactura === true) return 'skip' as const;
+        // Security #1: CAMPO CORRECTO — `estadoLiquidacion`.
+        if (data.estadoLiquidacion === 'liquidada') {
+          // Security #7: NO sobrescribir `obsoletaPorReemisionConduce` —
+          // los flags son ortogonales. Solo setea el flag de eliminación.
+          const payload: Record<string, unknown> = {
+            obsoletaPorEliminacionFactura: true,
+            eliminadaEn: serverTimestamp(),
+          };
+          if (motivoEliminacion) payload.motivoEliminacion = motivoEliminacion;
+          tx.update(ref, payload);
+          return 'preservada' as const;
+        }
+        // Pendiente (o cualquier otro estado no liquidado) → delete real.
+        tx.delete(ref);
+        return 'eliminada' as const;
+      });
+
+      if (accionFinal === 'eliminada') {
+        eliminadas += 1;
+        comisionesAfectadas.push({
+          comisionId,
+          tecnicoId,
+          tecnicoNombre,
+          monto,
+          estadoPrevio: (ex.data.estadoLiquidacion as string) || 'pendiente',
+          accion: 'eliminada',
+        });
+      } else if (accionFinal === 'preservada') {
+        preservadas += 1;
+        comisionesAfectadas.push({
+          comisionId,
+          tecnicoId,
+          tecnicoNombre,
+          monto,
+          estadoPrevio: 'liquidada',
+          accion: 'preservada',
+        });
+      }
+      // 'skip' (race ganada por otro write) — no contamos ni audita.
+    } catch (err) {
+      // Security #6: PII fuera de logs — solo IDs.
+      console.warn(`[comisiones] eliminarComisionesDeFactura: error procesando comisionId=${comisionId} facturaId=${facturaId}:`, err);
+    }
+  }
+
+  // Security #3: audit log con snapshot completo, solo si hubo cambios reales
+  // (idempotencia: 2da invocación sin cambios no duplica audit).
+  const huboCambios = eliminadas > 0 || preservadas > 0;
+  if (huboCambios) {
+    try {
+      const auditPayload: Record<string, unknown> = {
+        accion: 'eliminar_comisiones_factura',
+        objetivoTipo: 'factura',
+        objetivoId: facturaId,
+        comisionesAfectadas,
+        eliminadas,
+        preservadas,
+        timestamp: serverTimestamp(),
+      };
+      if (motivoEliminacion) auditPayload.motivoEliminacion = motivoEliminacion;
+      if (solicitanteUid) auditPayload.solicitanteUid = solicitanteUid;
+      if (solicitanteNombre) auditPayload.solicitanteNombre = solicitanteNombre;
+      // Strip undefined defensivo.
+      const auditLimpio = Object.fromEntries(
+        Object.entries(auditPayload).filter(([, v]) => v !== undefined),
+      );
+      await addDoc(collection(db, 'auditoria_admin'), auditLimpio);
+    } catch (err) {
+      // Audit no bloquea — pero loggeamos sin PII.
+      console.error(`[comisiones] eliminarComisionesDeFactura: audit log falló para facturaId=${facturaId}:`, err);
+    }
+  }
+
+  return { eliminadas, preservadas };
 }
