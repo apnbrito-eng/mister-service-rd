@@ -183,3 +183,18 @@ Aprendizajes consolidados en `_estado-temporal-conduces.md` sección "Retrospect
 
 **Próximo recomendado:** validar métricas App Check 24-48h, después C3 fase B.
 
+## Sesión 2026-05-04 (cont.) — Sprint Críticos Post-Audit (4 de 5)
+
+**Hashes desplegados:**
+- C4 fa26ec1 — `fix(nomina): atomicidad en marcado de avances al cerrar liquidacion`
+- C5 9a61e7d — `fix(comisiones): denormalizar factura siempre que haya actividad`
+- C1 d62ded1 — `fix(clientes): rechazar codigos internacionales no-RD en normalizacion`
+- C3 58e3a72 — `fix(auth): eliminar synthesized admin fallback en AppContext`
+
+**Pausado:**
+- C2 App Check fase B — plan Hobby Vercel solo retiene logs ~1h, criterio "<5% sin app_check.ok últimos 2 días" no validable sin instrumentación previa.
+- Recomendación: Opción A (instrumentar `app_check_audit` 24-48h, ~15 min) → desbloquea C2.
+
+**Hallazgo bonus:** `api/ai/chat.ts` NO usa `verificarAppCheck` (usa Firebase ID token). Listo como C2.5.
+
+Retro completa en `docs/sprints/RETRO_AUDIT_CRITICOS_2026-05-04.md`.

@@ -95,6 +95,7 @@ Admins build forms in `FormularioEditor` → `formularios` collection. Public us
 - **Spanish identifiers.** New code should follow existing naming (`clienteNombre`, `fechaCita`, `fase`, `tecnicoId`). Don't translate existing fields.
 - **No emojis** in code or commits unless the user asks.
 - **Commit messages are Spanish, Conventional-Commit style** (`feat:`, `fix:`) — match recent history.
+- **Documentación viva: cuando elimines un patrón existente, sincroniza los docs.** Hacer grep en `CLAUDE.md`, `PROMPTS-CLAUDE-CODE.md`, `CONTEXTO_PROYECTO.md`, `README.md` y `.claude/agents/*.md` por referencias al patrón eliminado e invertirlas. Sin esto, instrucciones desactualizadas pueden llevar a un futuro builder a reintroducir vulnerabilidades. Aprendizaje del audit fix C3 — `PROMPTS-CLAUDE-CODE.md:92` decía "NO toques fallback admin demo" después de que C3 lo eliminó por seguridad.
 
 ## Related docs in repo
 
