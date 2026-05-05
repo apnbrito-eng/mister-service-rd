@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { signOut } from 'firebase/auth';
+import { auth } from './firebase/config';
 import { useApp, AppProvider } from './context/AppContext';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
@@ -72,10 +74,40 @@ import { puede, AccionPermiso } from './utils/permisos';
 import { Rol } from './types';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { currentUser, loading } = useApp();
+  const { currentUser, userProfile, loading, authError } = useApp();
   if (loading) return <LoadingSpinner fullPage text="Cargando..." />;
   if (!currentUser) return <Navigate to="/login" replace />;
+  // Audit fix C3: usuario autenticado en Firebase Auth pero sin perfil real
+  // en `usuarios/{uid}` ni `personal where email==`. Antes el AppContext
+  // sintetizaba un admin en memoria (escalación silenciosa). Ahora bloqueamos.
+  if (!userProfile && authError) return <PerfilNoEncontrado mensaje={authError} />;
   return <>{children}</>;
+}
+
+function PerfilNoEncontrado({ mensaje }: { mensaje: string }) {
+  const handleCerrarSesion = async () => {
+    await signOut(auth);
+    window.location.href = '/login';
+  };
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
+        <div className="bg-red-600 px-8 py-6 text-white">
+          <h1 className="text-xl font-bold">Acceso bloqueado</h1>
+          <p className="text-red-100 text-sm mt-1">No se encontró tu perfil en el sistema</p>
+        </div>
+        <div className="px-8 py-6">
+          <p className="text-gray-700 text-sm leading-relaxed mb-6">{mensaje}</p>
+          <button
+            onClick={handleCerrarSesion}
+            className="w-full bg-brand-600 hover:bg-brand-700 text-white py-3 rounded-xl font-semibold text-sm transition-colors"
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TecnicoRoute({ children }: { children: React.ReactNode }) {

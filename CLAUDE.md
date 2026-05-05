@@ -47,10 +47,11 @@ Environment variables live in `.env` (see `.env.example`). `src/firebase/config.
 - Legacy top-level paths (`/dashboard`, `/ordenes`, etc.) are redirected to `/admin/...`. Keep redirects when renaming routes — external WhatsApp links may point at old URLs.
 
 ### Auth / profile loading (`src/context/AppContext.tsx`)
-Three-step cascade on sign-in:
+Two-step cascade on sign-in:
 1. `usuarios/{uid}` — primary profile, subscribed via `onSnapshot` (real-time).
 2. Fallback: `personal` where `email == user.email` — also real-time.
-3. Fallback: synthesize an in-memory `administrador` profile (demo mode). **Not persisted.**
+
+Si ninguna colección tiene perfil para el usuario autenticado, `AppContext` setea `authError` y `ProtectedRoute` muestra una pantalla "Perfil no encontrado" con botón "Cerrar sesión" — NO hay acceso admin. **Demo mode eliminado en audit fix C3**: antes se sintetizaba un perfil `administrador` en memoria si no existía registro real, lo que permitía escalación silenciosa de privilegios para cualquier email autenticado en Firebase Auth. Todo user autenticado en Firebase Auth requiere perfil real en `usuarios/{uid}` o `personal`.
 
 Permissions changes on a `personal`/`usuarios` doc propagate live now (the ref-based listener was added after the older "logout to refresh permissions" limitation documented in `CONTEXTO_PROYECTO.md`).
 

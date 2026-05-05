@@ -89,7 +89,11 @@ LO QUE NECESITO:
    - Limpiar el listener (unsubscribe) cuando el usuario cierre sesión o el componente se desmonte
    - Manejar errores sin romper la app
 
-3. NO toques la lógica del fallback a "admin demo" cuando no existe en ninguna colección
+3. ELIMINADO en audit fix C3: el fallback a "admin demo" fue removido
+   porque permitía escalación silenciosa de privilegios (cualquier usuario
+   autenticado en Firebase Auth con email no registrado entraba como
+   administrador). NO reintroducir bajo ningún concepto. Si auth falla por
+   falta de perfil, mostrar `PerfilNoEncontrado` con error.
 
 4. Verifica que compile: npm run build
 ```

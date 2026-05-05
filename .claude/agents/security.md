@@ -83,7 +83,8 @@ Endpoints específicos siempre revisar:
 En `src/context/AppContext.tsx`:
 - [ ] `onAuthStateChanged` cleanup correcto.
 - [ ] `onSnapshot` cleanup en sign-out.
-- [ ] Fallback "admin demo" NO se persiste a Firestore.
+- [ ] Fallback "admin demo" ELIMINADO en audit fix C3. Ningún path en
+      `AppContext` sintetiza rol administrador. Verificar que NO se reintroduzca.
 - [ ] No hay forma de elevar permisos via mutación local.
 
 ### D. Tokens públicos

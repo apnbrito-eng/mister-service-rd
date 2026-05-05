@@ -237,11 +237,13 @@ Checklists **hardcodeados** por tipo de equipo (no editables desde la UI):
 ## AppContext (Estado Global)
 
 Carga en cascada al detectar usuario autenticado:
-1. Busca en colección `usuarios/{uid}`
-2. Si no existe, busca en `personal` por email
-3. Si tampoco existe → crea perfil admin de demo
+1. Busca en colección `usuarios/{uid}` (real-time vía `onSnapshot`).
+2. Si no existe, busca en `personal` por email (real-time vía `onSnapshot`).
+3. Si tampoco existe → setea `userProfile=null` y `authError`, la UI muestra `PerfilNoEncontrado`.
 
-**Limitación conocida:** Los cambios de permisos en Firestore no se reflejan en tiempo real. El usuario debe cerrar sesión y volver a entrar.
+**Audit fix C3 (eliminado):** anteriormente, si no había perfil en `usuarios` ni en `personal`, se sintetizaba en memoria un perfil con `rol: 'administrador'` (demo mode). Esto permitía escalación silenciosa de privilegios para cualquier usuario autenticado en Firebase Auth con email no registrado. **Eliminado en audit fix C3 — NO reintroducir.** Si auth falla por falta de perfil, la app debe mostrar `PerfilNoEncontrado` con instrucciones para contactar al administrador.
+
+Los cambios de permisos en `usuarios/{uid}` o `personal` se reflejan en tiempo real (listener basado en `onSnapshot`), no requiere re-login.
 
 ---
 
