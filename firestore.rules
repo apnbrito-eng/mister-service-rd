@@ -599,7 +599,12 @@ service cloud.firestore {
         request.resource.data.overrideCooldownMotivo == resource.data.overrideCooldownMotivo &&
         // totalEnviados solo puede crecer +1 (un envío a la vez)
         request.resource.data.totalEnviados <= resource.data.totalEnviados + 1 &&
-        request.resource.data.totalEnviados >= resource.data.totalEnviados;
+        request.resource.data.totalEnviados >= resource.data.totalEnviados &&
+        // totalReactivados (commit 3 — ROI tracking): puede crecer cualquier
+        // cantidad (batches, re-evaluaciones de data legacy) pero NUNCA
+        // decrece. El default cuando el campo no existe en `resource.data`
+        // es 0; usamos `get(... , 0)` para tolerar campañas pre-Commit 3.
+        request.resource.data.get('totalReactivados', 0) >= resource.data.get('totalReactivados', 0);
       allow delete: if false;
     }
 

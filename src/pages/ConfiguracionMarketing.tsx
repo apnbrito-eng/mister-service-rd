@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Eye, FileText, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
+import { Eye, FileText, Plus, Save, Sparkles, Trash2, TrendingUp } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useApp } from '../context/AppContext';
-import { PlantillaMarketing } from '../types';
+import { CampanaMarketing, PlantillaMarketing } from '../types';
 import {
   PLANTILLAS_INICIALES,
   guardarPlantillas,
   seedPlantillasIniciales,
+  subscribeToCampanas,
   subscribeToPlantillas,
 } from '../services/campanasMarketing.service';
 import {
@@ -36,12 +39,21 @@ export default function ConfiguracionMarketing() {
   const [guardando, setGuardando] = useState(false);
   const [seedeando, setSeedeando] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState('');
+  // Sprint Mapa Clientes Commit 3 — sección ROI con histórico de campañas.
+  const [campanas, setCampanas] = useState<CampanaMarketing[]>([]);
 
   useEffect(() => {
     const unsub = subscribeToPlantillas((list) => {
       setPlantillas(list);
       setDocExiste(list.length > 0);
       setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = subscribeToCampanas((list) => {
+      setCampanas(list);
     });
     return () => unsub();
   }, []);
@@ -387,6 +399,92 @@ export default function ConfiguracionMarketing() {
         {plantillas.length === 0 && docExiste && (
           <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400">
             No hay plantillas. Creá una arriba.
+          </div>
+        )}
+      </div>
+
+      {/* ─── Campañas históricas (ROI tracking) ─────────────────────── */}
+      <div className="space-y-3 pt-4">
+        <div className="flex items-center gap-2">
+          <TrendingUp size={18} className="text-[#0f3460]" />
+          <h2 className="text-lg font-bold text-[#0f3460]">Campañas históricas</h2>
+        </div>
+        <p className="text-xs text-gray-500">
+          Registro de campañas creadas desde el tab Reactivación. La tasa de reactivación se calcula
+          como (órdenes nuevas dentro de 60 días post-envío / total enviados).
+        </p>
+        {campanas.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-8 text-center text-sm text-gray-400">
+            Todavía no hay campañas registradas.
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
+                    <th className="px-4 py-2 font-semibold">Fecha</th>
+                    <th className="px-4 py-2 font-semibold">Plantilla</th>
+                    <th className="px-4 py-2 font-semibold">Filtros</th>
+                    <th className="px-4 py-2 font-semibold text-right">Enviados</th>
+                    <th className="px-4 py-2 font-semibold text-right">Reactivados</th>
+                    <th className="px-4 py-2 font-semibold text-right">Tasa</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {campanas.map((c) => {
+                    const fechaCampana = c.fecha instanceof Date
+                      ? c.fecha
+                      : (c.fecha && typeof (c.fecha as { toDate?: () => Date }).toDate === 'function'
+                        ? (c.fecha as { toDate: () => Date }).toDate()
+                        : null);
+                    const totalReac = typeof c.totalReactivados === 'number' ? c.totalReactivados : 0;
+                    const tasa = c.totalEnviados > 0
+                      ? `${((totalReac / c.totalEnviados) * 100).toFixed(1)}%`
+                      : '—';
+                    const filtros: string[] = [];
+                    if (c.filtrosAplicados?.zonas?.length) {
+                      filtros.push(`Zonas: ${c.filtrosAplicados.zonas.join(', ')}`);
+                    }
+                    if (c.filtrosAplicados?.rangoUltimoServicio) {
+                      filtros.push(`Servicio: ${c.filtrosAplicados.rangoUltimoServicio}`);
+                    }
+                    if (c.filtrosAplicados?.tipo) {
+                      filtros.push(`Tipo: ${c.filtrosAplicados.tipo}`);
+                    }
+                    if (c.filtrosAplicados?.equipos?.length) {
+                      filtros.push(`Equipos: ${c.filtrosAplicados.equipos.join(', ')}`);
+                    }
+                    if (c.filtrosAplicados?.rangoServiciosTotales) {
+                      filtros.push(`Total svcs: ${c.filtrosAplicados.rangoServiciosTotales}`);
+                    }
+                    return (
+                      <tr key={c.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-2 whitespace-nowrap text-gray-700">
+                          {fechaCampana ? format(fechaCampana, 'd MMM yyyy', { locale: es }) : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-gray-900">
+                          <div className="font-medium">{c.plantillaNombre || c.plantillaId}</div>
+                          <div className="text-[11px] text-gray-400 font-mono">{c.plantillaId}</div>
+                        </td>
+                        <td className="px-4 py-2 text-xs text-gray-600 max-w-xs">
+                          {filtros.length > 0 ? filtros.join(' · ') : '—'}
+                        </td>
+                        <td className="px-4 py-2 text-right text-gray-700 tabular-nums">
+                          {c.totalEnviados}
+                        </td>
+                        <td className="px-4 py-2 text-right text-gray-700 tabular-nums">
+                          {totalReac}
+                        </td>
+                        <td className="px-4 py-2 text-right text-gray-900 font-semibold tabular-nums">
+                          {tasa}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </div>

@@ -946,6 +946,25 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
           })
           .filter((p): p is PropuestaReprogramacion => p !== null)
       : undefined,
+    // ROI tracking sprint Mapa Clientes Commit 3 — `reactivadaPor` snapshot
+    // de la campaña que reactivó esta orden. Defensivo: si el bloque no es
+    // un objeto válido o le falta `campanaId`/fechas, devolvemos undefined
+    // para no inflar el snapshot UI con basura.
+    reactivadaPor: raw.reactivadaPor && typeof raw.reactivadaPor === 'object' && !Array.isArray(raw.reactivadaPor)
+      ? (() => {
+          const r = raw.reactivadaPor as Record<string, unknown>;
+          const campanaId = typeof r.campanaId === 'string' && r.campanaId.length > 0 ? r.campanaId : undefined;
+          const campanaFecha = parseFirestoreDate(r.campanaFecha) || undefined;
+          const fechaContacto = parseFirestoreDate(r.fechaContacto) || undefined;
+          if (!campanaId || !campanaFecha || !fechaContacto) return undefined;
+          return {
+            campanaId,
+            campanaFecha,
+            campanaPlantillaNombre: typeof r.campanaPlantillaNombre === 'string' ? r.campanaPlantillaNombre : '',
+            fechaContacto,
+          };
+        })()
+      : undefined,
     historialFases: historialRaw.map(h => ({
       fase: (h.fase as FaseOrden | 'reactivada_post_chequeo') || 'nuevo_lead',
       timestamp: parseFirestoreDate(h.timestamp) || new Date(),

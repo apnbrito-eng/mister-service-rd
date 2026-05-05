@@ -508,6 +508,24 @@ export interface OrdenServicio {
    * campos directamente — las rules de R4 lo bloquean).
    */
   sugerenciasSoloChequeo?: SugerenciaSoloChequeo[];
+  /**
+   * ROI tracking sprint Mapa Clientes Commit 3. Snapshot del último contacto
+   * de marketing del cliente cuando esta orden se creó dentro de la ventana
+   * de reactivación (60 días). Inmutable post-creación: identifica que esta
+   * orden contó como "reactivada" para esa campaña. Idempotente: si ya está
+   * seteado, `marcarOrdenReactivada` es no-op.
+   *
+   * - `campanaId`: id del doc en `campanas_marketing`.
+   * - `campanaFecha`: snapshot de `campana.fecha` al detectar.
+   * - `campanaPlantillaNombre`: snapshot de `campana.plantillaNombre`.
+   * - `fechaContacto`: `cliente.ultimoContactoMarketing` al momento de la detección.
+   */
+  reactivadaPor?: {
+    campanaId: string;
+    campanaFecha: Timestamp | Date;
+    campanaPlantillaNombre: string;
+    fechaContacto: Timestamp | Date;
+  };
   createdAt: Date;
   updatedAt: Date;
 }

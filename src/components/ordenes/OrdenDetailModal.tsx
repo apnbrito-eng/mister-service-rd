@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, MapPin, Edit2, AlertTriangle, XCircle, Package, RotateCcw } from 'lucide-react';
+import { Phone, MapPin, Edit2, AlertTriangle, XCircle, Package, RotateCcw, TrendingUp } from 'lucide-react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { OrdenServicio, Usuario, StandbyPieza } from '../../types';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import {
@@ -227,6 +229,32 @@ export default function OrdenDetailModal({
           )}
         </div>
       )}
+
+      {/* Banner ROI — orden reactivada por campaña de marketing
+          (sprint Mapa Clientes Commit 3). Snapshot inmutable: muestra
+          la campaña que generó la atribución. */}
+      {orden.reactivadaPor && (() => {
+        const reac = orden.reactivadaPor;
+        const fechaCampana = reac.campanaFecha instanceof Date
+          ? reac.campanaFecha
+          : (reac.campanaFecha && typeof (reac.campanaFecha as { toDate?: () => Date }).toDate === 'function'
+            ? (reac.campanaFecha as { toDate: () => Date }).toDate()
+            : null);
+        return (
+          <div className="bg-green-50 border-l-4 border-green-500 rounded-r-xl p-3 flex items-start gap-3">
+            <TrendingUp size={18} className="text-green-700 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-green-900">
+                Reactivada por campaña de marketing
+              </p>
+              <p className="text-xs text-green-800 mt-0.5">
+                {reac.campanaPlantillaNombre || 'Plantilla sin nombre'}
+                {fechaCampana ? ` · ${format(fechaCampana, 'd MMM yyyy', { locale: es })}` : ''}
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Editar / Eliminar / Reactivar post-chequeo */}
       <div className="flex justify-end gap-2 mb-4 flex-wrap">

@@ -15,7 +15,7 @@ import {
   ArrowLeft, Phone, Wrench, User, Calendar,
   Clock, MessageSquare, Save, MapPin, ExternalLink,
   Satellite, Copy, Power, ClipboardCheck, AlertTriangle, FileText, Package, Check,
-  Pause, Play
+  Pause, Play, TrendingUp
 } from 'lucide-react';
 import ModalEditarPiezasOrden from '../components/cierre/ModalEditarPiezasOrden';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
@@ -537,6 +537,31 @@ export default function OrdenDetalle() {
           </div>
         </div>
       )}
+
+      {/* Banner ROI — orden reactivada por campaña de marketing
+          (sprint Mapa Clientes Commit 3). Snapshot inmutable. */}
+      {orden.reactivadaPor && (() => {
+        const reac = orden.reactivadaPor;
+        const fechaCampana = reac.campanaFecha instanceof Date
+          ? reac.campanaFecha
+          : (reac.campanaFecha && typeof (reac.campanaFecha as { toDate?: () => Date }).toDate === 'function'
+            ? (reac.campanaFecha as { toDate: () => Date }).toDate()
+            : null);
+        return (
+          <div className="bg-green-50 border-l-4 border-green-500 rounded-r-2xl p-4 flex items-start gap-3">
+            <TrendingUp size={20} className="text-green-700 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-green-900">
+                Reactivada por campaña de marketing
+              </p>
+              <p className="text-xs text-green-800 mt-1">
+                {reac.campanaPlantillaNombre || 'Plantilla sin nombre'}
+                {fechaCampana ? ` · ${format(fechaCampana, 'd MMM yyyy', { locale: es })}` : ''}
+              </p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Banner stand-by */}
       {orden.enStandby && !orden.eliminada && (

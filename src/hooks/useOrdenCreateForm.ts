@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection, addDoc, doc, setDoc, Timestamp, query, onSnapshot, orderBy,
-  runTransaction, updateDoc, serverTimestamp,
+  runTransaction, updateDoc, serverTimestamp, getDoc,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { format, isSameDay } from 'date-fns';
@@ -12,12 +12,13 @@ import {
   normalizarTelefono, buscarClientePorTelefono, crearOActualizarClienteDesdeCita,
 } from '../services/clientes.service';
 import { buscarPrecioMantenimiento } from '../services/precios.service';
+import { marcarOrdenReactivada } from '../services/campanasMarketing.service';
 import {
   Cliente, Personal, OrdenServicio, FaseOrden, EstadoOrdenSimple, CitaPorConfirmar,
 } from '../types';
 import {
   esOrdenMantenimiento, formatMoneda, crearRegistroAuditoria,
-  generarTokenPortalCliente,
+  generarTokenPortalCliente, parseCliente,
 } from '../utils';
 
 export interface CreateFormState {
@@ -698,6 +699,27 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       );
 
       const nuevaRef = await addDoc(collection(db, 'ordenes_servicio'), ordenLimpia);
+
+      // Sprint Mapa Clientes Commit 3 — ROI tracking Fase 2.
+      // Best-effort: detectamos si esta orden califica como "reactivada" por
+      // una campaña de marketing reciente. Si falla, NO rompemos el flujo —
+      // la orden ya está creada y la atribución es secundaria. Releemos el
+      // cliente para tener el estado más fresco (`ultimoContactoMarketing`
+      // pudo cambiar entre el snapshot del listener y el addDoc).
+      if (clienteId) {
+        try {
+          const clienteSnap = await getDoc(doc(db, 'clientes', clienteId));
+          if (clienteSnap.exists()) {
+            const clienteFresco = parseCliente(clienteSnap.id, clienteSnap.data() as Record<string, unknown>);
+            await marcarOrdenReactivada({
+              ordenId: nuevaRef.id,
+              cliente: clienteFresco,
+            });
+          }
+        } catch (errReac) {
+          console.warn('marcarOrdenReactivada falló (best-effort):', errReac);
+        }
+      }
 
       if (precioMantenimientoEncontrado !== null) {
         toast(`Mantenimiento detectado: precio preaprobado ${formatMoneda(precioMantenimientoEncontrado)} según catálogo.`, {

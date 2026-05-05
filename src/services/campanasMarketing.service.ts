@@ -2,7 +2,10 @@ import {
   collection,
   doc,
   getDoc,
+  increment,
   onSnapshot,
+  query,
+  orderBy,
   runTransaction,
   serverTimestamp,
   setDoc,
@@ -13,6 +16,7 @@ import {
 import { db } from '../firebase/config';
 import {
   CampanaMarketing,
+  Cliente,
   ClienteEnCampana,
   FiltrosCampanaMarketing,
   PlantillaMarketing,
@@ -383,5 +387,197 @@ export async function marcarClienteEnviado(args: MarcarClienteEnviadoArgs): Prom
     }));
 
     return { yaEstabaEnviado: false };
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────
+// ROI tracking — Commit 3 (sprint Mapa Clientes)
+// ──────────────────────────────────────────────────────────────────
+
+/** Ventana de reactivación: si la orden se crea dentro de los N días
+ *  siguientes al último contacto de marketing del cliente, la atribuimos
+ *  a esa campaña. Spec del sprint: 60 días. */
+export const REACTIVACION_VENTANA_DIAS = 60;
+
+export interface MarcarOrdenReactivadaArgs {
+  ordenId: string;
+  cliente: Pick<Cliente, 'id' | 'ultimoContactoMarketing' | 'contactosMarketing'>;
+}
+
+export interface MarcarOrdenReactivadaResult {
+  reactivada: boolean;
+  campanaId?: string;
+}
+
+/**
+ * Detecta si una orden recién creada cuenta como "reactivada" por una
+ * campaña reciente y, en caso afirmativo:
+ *
+ * 1. Marca `orden.reactivadaPor = { campanaId, campanaFecha, ... }`.
+ * 2. Incrementa `campana.totalReactivados` (+1 atomic).
+ * 3. Escribe un audit log en `auditoria_admin` (`accion: 'orden_reactivada_detectada'`).
+ *
+ * Las 3 escrituras viven en el mismo `runTransaction` → 3-way atomic. Si
+ * cualquiera falla, ninguna se commitea. Idempotente: si la orden ya tiene
+ * `reactivadaPor` seteado, retorna `{reactivada: false}` sin tocar campaña.
+ *
+ * No-ops defensivos (retornan `{reactivada: false}`):
+ *  - `cliente.ultimoContactoMarketing` ausente.
+ *  - Último contacto > `REACTIVACION_VENTANA_DIAS` (default 60d).
+ *  - `cliente.contactosMarketing[]` vacío o ausente (no podemos resolver
+ *    qué campaña tomar como referencia).
+ *  - La campaña referenciada no existe en Firestore.
+ *  - La orden referenciada no existe (race con eliminación).
+ *
+ * Best-effort: el caller debe envolverlo en try/catch — si falla, la orden
+ * recién creada queda intacta. NO se usa para gating de creación.
+ *
+ * Toma como "campaña responsable" el ÚLTIMO entry de `contactosMarketing[]`
+ * (el más reciente). Esto coincide con `marcarClienteEnviado`, que
+ * agrega contactos al final del array (slice -50). Si en el futuro se
+ * rotan contactos en orden distinto, ajustar acá.
+ */
+export async function marcarOrdenReactivada(
+  args: MarcarOrdenReactivadaArgs,
+): Promise<MarcarOrdenReactivadaResult> {
+  const { ordenId, cliente } = args;
+
+  // Defensivo: sin último contacto, no hay nada que evaluar.
+  const ultimo = cliente.ultimoContactoMarketing;
+  if (!ultimo) return { reactivada: false };
+
+  // Resolver fecha del último contacto.
+  const fechaUltimoMs = ultimo instanceof Date
+    ? ultimo.getTime()
+    : (typeof (ultimo as Timestamp)?.toDate === 'function'
+      ? (ultimo as Timestamp).toDate().getTime()
+      : NaN);
+  if (!isFinite(fechaUltimoMs)) return { reactivada: false };
+
+  const diffDias = (Date.now() - fechaUltimoMs) / (1000 * 60 * 60 * 24);
+  if (diffDias > REACTIVACION_VENTANA_DIAS) return { reactivada: false };
+
+  // Resolver el último entry de contactos. Sin entries no podemos saber
+  // a qué campaña atribuir.
+  const contactos = Array.isArray(cliente.contactosMarketing) ? cliente.contactosMarketing : [];
+  if (contactos.length === 0) return { reactivada: false };
+  const ultimoContacto = contactos[contactos.length - 1];
+  if (!ultimoContacto || !ultimoContacto.campanaId) return { reactivada: false };
+
+  const campanaId = ultimoContacto.campanaId;
+  const ordenRef = doc(db, 'ordenes_servicio', ordenId);
+  const campanaRef = doc(db, CAMPANAS_COL, campanaId);
+
+  return runTransaction(db, async (tx) => {
+    const [ordenSnap, campanaSnap] = await Promise.all([
+      tx.get(ordenRef),
+      tx.get(campanaRef),
+    ]);
+
+    // No-ops defensivos (race conditions): la orden o la campaña pueden
+    // haber sido eliminadas entre la creación de la orden y este hook.
+    if (!ordenSnap.exists()) return { reactivada: false };
+    if (!campanaSnap.exists()) return { reactivada: false };
+
+    // Idempotencia: si la orden YA tiene `reactivadaPor`, no incrementamos
+    // de nuevo. Esto evita doble-conteo si por algún motivo el caller
+    // re-invoca el helper sobre la misma orden.
+    const ordenData = ordenSnap.data() as Record<string, unknown>;
+    if (ordenData.reactivadaPor && typeof ordenData.reactivadaPor === 'object') {
+      return { reactivada: false };
+    }
+
+    // Resolver snapshot de campaña.
+    const campanaData = campanaSnap.data() as Partial<CampanaMarketing>;
+    const campanaFecha = campanaData.fecha;
+    const campanaPlantillaNombre = campanaData.plantillaNombre || '';
+    if (!campanaFecha) {
+      // Defensivo: campaña sin fecha. No bloqueamos pero no marcamos.
+      return { reactivada: false };
+    }
+
+    // Snapshot fechaContacto: usamos la fecha del entry específico (no
+    // ultimoContactoMarketing, que se reescribe en cada envío). Eso da
+    // trazabilidad fina cuando hay múltiples campañas en cooldown.
+    const fechaContacto = ultimoContacto.fecha;
+
+    // 1. Update orden: snapshot reactivadaPor.
+    tx.update(ordenRef, {
+      reactivadaPor: stripUndefined({
+        campanaId,
+        campanaFecha,
+        campanaPlantillaNombre,
+        fechaContacto,
+      }),
+      updatedAt: Timestamp.now(),
+    });
+
+    // 2. Update campaña: incrementar totalReactivados (+1) atomic.
+    tx.update(campanaRef, {
+      totalReactivados: increment(1),
+      totalReactivadosUpdatedAt: serverTimestamp(),
+    });
+
+    // 3. Audit log atómico (3-way atomic con orden + campaña).
+    const auditRef = doc(collection(db, AUDITORIA_COL));
+    tx.set(auditRef, stripUndefined({
+      accion: 'orden_reactivada_detectada',
+      tipoEntidad: 'orden',
+      entidadId: ordenId,
+      meta: {
+        campanaId,
+        plantillaId: campanaData.plantillaId || '',
+        plantillaNombre: campanaPlantillaNombre,
+        clienteId: cliente.id,
+        diasDesdeContacto: Math.round(diffDias),
+      },
+      timestamp: serverTimestamp(),
+    }));
+
+    return { reactivada: true, campanaId };
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Listado histórico de campañas (Commit 3 — sección ROI en
+// /admin/configuracion-marketing)
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * Suscripción real-time a `campanas_marketing` ordenado por `fecha desc`.
+ * Devuelve campañas con `id` para alimentar la tabla histórica de ROI.
+ * Lectura gate: la rule `campanas_marketing.read` es esAdminOCoord(),
+ * así que esto solo funciona desde sesiones con ese rol.
+ */
+export function subscribeToCampanas(
+  callback: (campanas: CampanaMarketing[]) => void,
+): Unsubscribe {
+  const q = query(collection(db, CAMPANAS_COL), orderBy('fecha', 'desc'));
+  return onSnapshot(q, (snap) => {
+    const lista: CampanaMarketing[] = snap.docs.map((d) => {
+      const data = d.data() as Record<string, unknown>;
+      return {
+        id: d.id,
+        fecha: (data.fecha as Timestamp) || Timestamp.now(),
+        plantillaId: typeof data.plantillaId === 'string' ? data.plantillaId : '',
+        plantillaNombre: typeof data.plantillaNombre === 'string' ? data.plantillaNombre : '',
+        filtrosAplicados: (data.filtrosAplicados as FiltrosCampanaMarketing) || {},
+        clientesContactados: Array.isArray(data.clientesContactados)
+          ? (data.clientesContactados as ClienteEnCampana[])
+          : [],
+        creadaPor: typeof data.creadaPor === 'string' ? data.creadaPor : '',
+        creadaPorNombre: typeof data.creadaPorNombre === 'string' ? data.creadaPorNombre : '',
+        totalEnviados: typeof data.totalEnviados === 'number' ? data.totalEnviados : 0,
+        totalReactivados: typeof data.totalReactivados === 'number' ? data.totalReactivados : undefined,
+        totalReactivadosUpdatedAt: (data.totalReactivadosUpdatedAt as Timestamp) || undefined,
+        overrideCooldown: data.overrideCooldown === true ? true : undefined,
+        overrideCooldownPorId: typeof data.overrideCooldownPorId === 'string' ? data.overrideCooldownPorId : undefined,
+        overrideCooldownPorNombre: typeof data.overrideCooldownPorNombre === 'string' ? data.overrideCooldownPorNombre : undefined,
+        overrideCooldownEn: (data.overrideCooldownEn as Timestamp) || undefined,
+        overrideCooldownMotivo: typeof data.overrideCooldownMotivo === 'string' ? data.overrideCooldownMotivo : undefined,
+        creadaEn: (data.creadaEn as Timestamp) || (data.fecha as Timestamp) || Timestamp.now(),
+      };
+    });
+    callback(lista);
   });
 }
