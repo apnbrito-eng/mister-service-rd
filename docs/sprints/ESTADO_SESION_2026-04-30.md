@@ -135,3 +135,21 @@ Tickets armados que esperan ejecución:
 
 Aprendizajes consolidados en `_estado-temporal-conduces.md` sección "Retrospectiva C3".
 
+## Sesión 2026-05-04 — Sprint Conduces SIBS C4 completo
+
+**Hashes:**
+- C4a: ded0124 — `refactor(facturacion-pendiente): split ProcesarFacturacionModal`
+- C4b: e358f76 — `feat(facturacion-pendiente): vendedor por linea, N>1 tecnicos, cleanup huerfanas`
+
+**Métricas:**
+- FacturacionPendiente.tsx: 947 → 322 LOC (-625, split puro).
+- ProcesarFacturacionModal.tsx: 628 LOC nuevo.
+- Helper nuevo eliminarComisionesDeFactura: ~175 LOC en utils/comisiones.ts (con 7 condiciones de security audit).
+- Total C4b: +702 / -119 LOC en 6 archivos.
+
+**Sprint Conduces SIBS COMPLETO:** C0+C1+C2+C3+C4 desplegados.
+
+**Próximo recomendado:** Sprint cleanup consolidado (14 ítems de deuda C3+C4). Después filtro avanzado finanzas. Postergar C3 fase B App Check hasta métricas 24-48h.
+
+Aprendizajes consolidados en `_estado-temporal-conduces.md` sección "Retrospectiva C4".
+

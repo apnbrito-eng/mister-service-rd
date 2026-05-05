@@ -229,3 +229,69 @@ Una vez el sprint termine y haya post-mortem completo, **borrar este archivo** (
 
 5.5-6.5h estimado vs ~5h real. Sobreestimación leve. **Splits puros son ~30% más rápidos que features a igual LOC.**
 
+## Retrospectiva C4 (2026-05-04)
+
+### Commits desplegados
+
+- **C4a** — `ded0124` — split puro de `FacturacionPendiente.tsx` + helper `formatMonedaPrecisa`.
+- **C4b** — `e358f76` — features completas: vendedor por línea, N>1 técnicos, helper `eliminarComisionesDeFactura` sensible, audit log, `clienteTipoEnEmision`, `solicitanteUid` unificado, borrador localStorage 24h, quick-win 11.
+
+### Lo que salió bien
+
+1. **Security PRE-DESIGN cazó bug crítico del spec** (`estado` vs `estadoLiquidacion`). Sin esto, se borraban comisiones liquidadas al re-emitir conduce.
+2. Las **7 condiciones de security se cumplieron 1-a-1**, reviewer las verificó explícitamente.
+3. **Estimación architect acertada** (4-5h vs 4.5h real).
+4. **Split C4a aislado de features C4b** redujo el riesgo del review (diff puro vs diff de features).
+5. **Builder justificó decisiones leyendo código real** (caso `EliminarOrdenButton` sin cascade) en vez de asumir.
+
+### Lo que se complicó
+
+1. Builder no anticipó violación `react-refresh/only-export-components` con named export desde componente. Sumó 1 iteración (fix corto: extraer `formatMonedaPrecisa`).
+2. **Edge case borrador localStorage** (overwrite sin restaurar) escapó al primer review.
+3. Inconsistencia silenciosa en `handleDelete` con catch que continúa con `deleteDoc` aunque el paso previo falle.
+4. **`solicitanteUid` cambió mid-sprint** (de `currentUserUid` a `userProfile?.id`) — contrato de identidad no estaba en plan del architect.
+5. **14 ítems de deuda acumulada** (8 de C3 + 6 de C4) — señal de que el cleanup consolidado se vuelve prioridad.
+
+### Aprendizajes accionables
+
+1. **Extraer formatters/helpers a `utils/index.ts` desde el primer uso compartido.** No esperar al segundo. Persistido en `CLAUDE.md` (regla `react-refresh/only-export-components`).
+2. **Helpers que tocan dinero/comisiones pasan por security PRE-DESIGN obligatorio.** No al final, no en revisión: antes de que el architect cierre el plan.
+3. **Effects de save a localStorage requieren guard explícito "ya restauré"** (`yaRestauradoRef` o condicionar a `borradorEncontrado === null`). Persistido en `CLAUDE.md`.
+4. **Catch internos en cascadas de deletes deben decidir explícitamente abortar o continuar** — no dejar al azar del catch genérico. Si el error es no-transient, abortar y mostrar toast warning.
+5. **Contratos de identidad (qué `uid` representa al usuario) deben estar en plan del architect**, no decidirse mid-sprint. Documentar en spec qué campo del audit log usa qué fuente.
+
+### Deuda técnica priorizada CONSOLIDADA (C3 + C4)
+
+**Cleanup consolidado (~3-4h, recomendado siguiente sprint):**
+
+- N1 C4: `Facturas.tsx:handleDelete` abort si error no-transient + toast warning.
+- N2 C4: borrador localStorage condicionar save a `borradorEncontrado === null`.
+- N3 C4: audit log `comisionesAfectadas` incluir `quincenaAsignada` + `comisionPorcentaje`.
+- N6 C4: centralizar `puedeOverrideModalidad` y `puedeConfigurarGarantia` en `permisos.ts`.
+- C3: `METODO_PAGO_LABELS` dedup → `utils/factura.ts`.
+- C3: re-parseo redundante en `ClienteNuevoDrawer.tsx:86,104`.
+- C3: click-outside en dropdown `agregarMenuRef`.
+- C3: `ClienteNuevoDrawer.onChange` teléfono — limpiar `duplicado` en change, no en blur.
+- C3: `console.warn` ruidoso por orden sintética `factura-manual-{X}` (guard con flag).
+
+**Sprint propio (no mezclar con cleanup):**
+
+- N5 C4: 4 `onSnapshot` en `FacturacionPendiente` → catálogos como `getDocs` (one-shot).
+- C3 fase B App Check hard enforcement (validar métricas 24-48h primero).
+
+**Backlog largo plazo:**
+
+- `--max-warnings 0` alinear `package.json` con `CLAUDE.md`.
+- Bundle 2.52 MB → code-splitting.
+- Semántica `solicitanteUid` audit logs históricos (mixed `userProfile.id` y `currentUserUid`).
+
+### Estimación calibrada
+
+4-5h estimado vs 4.5h real. **Patrón confirmado: split + features = sumar, no max.** Cada iteración `CHANGES_NEEDED` agrega 20-30 min. Splits puros sobre componente existente = 1-1.5h fijo.
+
+### Recomendación próximos sprints
+
+1. **Cleanup consolidado** (PRIORIDAD #1) — 14 ítems acumulados de C3+C4. ~3-4h.
+2. **Filtro avanzado finanzas** después.
+3. **Postergar C3 fase B App Check** hasta métricas estables 24-48h.
+
