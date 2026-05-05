@@ -25,7 +25,7 @@ Rules deployadas con `npm run deploy:rules` dos veces (post-C2 y post-C3).
 - **C2 iter 1 — rules débiles.** El tester dio GO con rules que dejaban manipulables 12 campos sensibles del cliente y permitían incrementar `totalEnviados` arbitrariamente. El reviewer las cazó porque aplicó el mental model de "cliente con auth válida que se vuelve hostil". Tester no audita inmutabilidad.
 - **Audit log fuera de transacción en C2 iter 1.** Builder lo dejó como `addDoc` separado post-tx. Reviewer pidió moverlo dentro del callback para preservar atomicidad ante crashes.
 - **Lectura stale del listener padre en C3.** Entre `marcarClienteEnviado` y el `addDoc(orden)` siguiente, el listener real-time del componente padre no había refrescado. Workaround: `getDoc` fresh post-mutación. Costo: una lectura extra, evita race condition.
-- **Bug pre-existente detectado.** `src/pages/Mantenimiento.tsx:80` usa `ordenesSnap.size + 1` para numerar órdenes. Viola la regla de oro "Counters must use transactions". NO se arregló acá (no es refactor opportunista) — anotado como deuda crítica para sprint propio.
+- **Bug pre-existente detectado.** `src/pages/Mantenimiento.tsx:80` usa `ordenesSnap.size + 1` para numerar órdenes. Viola la regla de oro "Counters must use transactions". NO se arregló acá (no es refactor opportunista) — anotado como deuda crítica para sprint propio. **[RESUELTO en `2ba57e4` el 2026-05-05]** — sprint posterior reemplazó por `await siguienteNumeroOrden()`.
 
 ## Aprendizajes accionables
 
@@ -43,7 +43,7 @@ Rules deployadas con `npm run deploy:rules` dos veces (post-C2 y post-C3).
 
 ## Recomendación para próximos sprints (orden de prioridad)
 
-1. **Sprint deuda `Mantenimiento.tsx:80` counter.** Único bug que puede causar inconsistencia de datos en producción (colisión de números de orden). ~30 min.
+1. ~~**Sprint deuda `Mantenimiento.tsx:80` counter.** Único bug que puede causar inconsistencia de datos en producción (colisión de números de orden). ~30 min.~~ **[RESUELTO en `2ba57e4` el 2026-05-05]**
 2. **C2 fase B App Check** una vez transcurrida la ventana 24-48h de métricas.
 3. **Sprint C2.5 hardening `api/ai/chat.ts`.**
 4. **Sprint repo-wide N6.5** sobre 20+ callsites locales pendientes.
@@ -57,5 +57,5 @@ Rules deployadas con `npm run deploy:rules` dos veces (post-C2 y post-C3).
 
 ## Riesgos pendientes
 
-- `Mantenimiento.tsx:80` — riesgo activo de colisión de números.
+- ~~`Mantenimiento.tsx:80` — riesgo activo de colisión de números.~~ **[RESUELTO en `2ba57e4` el 2026-05-05]**
 - C2 App Check fase B — bloqueado a métricas.

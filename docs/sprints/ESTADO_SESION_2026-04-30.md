@@ -221,10 +221,10 @@ Retro completa en `docs/sprints/RETRO_AUDIT_CRITICOS_2026-05-04.md`.
 - getDoc fresh post-marcarClienteEnviado (anti-staleness).
 
 **Bug pre-existente detectado** (deuda crítica para próximo sprint):
-- `src/pages/Mantenimiento.tsx:80` usa `ordenesSnap.size + 1` para numerar órdenes — viola regla "Counters must use transactions". Sprint propio recomendado primero.
+- ~~`src/pages/Mantenimiento.tsx:80` usa `ordenesSnap.size + 1` para numerar órdenes — viola regla "Counters must use transactions". Sprint propio recomendado primero.~~ **[RESUELTO en `2ba57e4` el 2026-05-05]** — ahora usa `await siguienteNumeroOrden()` (transaccional).
 
 **Próximo recomendado:**
-1. Sprint counter Mantenimiento.tsx (CRÍTICO — riesgo colisión).
+1. ~~Sprint counter Mantenimiento.tsx (CRÍTICO — riesgo colisión).~~ **[RESUELTO en `2ba57e4` el 2026-05-05]**
 2. C2 fase B App Check (ventana 24-48h).
 3. Sprint C2.5 hardening api/ai/chat.ts.
 4. Sprint repo-wide N6.5 callsites locales.
