@@ -26,6 +26,7 @@ import TablaReactivacion from './TablaReactivacion';
 import PanelPlantilla from './PanelPlantilla';
 import ModalLinksWhatsApp from './ModalLinksWhatsApp';
 import toast from 'react-hot-toast';
+import { useApp } from '../../context/AppContext';
 
 interface Props {
   /** Lista completa parseada (parseCliente). El componente filtra. */
@@ -60,6 +61,7 @@ export default function TabReactivacion({
 }: Props) {
   const esAdmin = userProfile.rol === 'administrador';
   const adminOCoord = esAdminOCoord(userProfile);
+  const { currentUser } = useApp();
 
   const [filtros, setFiltros] = useState<FiltrosClientes>(FILTROS_DEFAULT);
   const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
@@ -187,6 +189,10 @@ export default function TabReactivacion({
       toast.error('No tenés permiso para crear campañas.');
       return;
     }
+    if (!currentUser) {
+      toast.error('No estás autenticado.');
+      return;
+    }
     setCreando(true);
     try {
       const id = await crearCampana({
@@ -197,7 +203,7 @@ export default function TabReactivacion({
           nombre: c.nombre,
           telefono: c.telefono,
         })),
-        agente: { id: userProfile.id, nombre: userProfile.nombre },
+        agente: { id: currentUser.uid, nombre: userProfile.nombre },
         overrideCooldown: overrideCooldown && esAdmin,
         overrideCooldownMotivo: overrideCooldown && esAdmin
           ? 'Override admin desde tab Reactivación'
@@ -207,8 +213,12 @@ export default function TabReactivacion({
       setModalLinksOpen(true);
       toast.success(`Campaña creada — ${clientesSeleccionadosDeCampana.length} clientes.`);
     } catch (err) {
-      console.error(err);
-      toast.error('No se pudo crear la campaña.');
+      const e = err as { code?: string; message?: string; stack?: string };
+      console.error('[crearCampana] error completo:', err);
+      console.error('[crearCampana] code:', e?.code);
+      console.error('[crearCampana] message:', e?.message);
+      console.error('[crearCampana] stack:', e?.stack);
+      toast.error(`No se pudo crear la campaña: ${e?.code || e?.message || 'error desconocido'}`);
     } finally {
       setCreando(false);
     }
@@ -319,14 +329,14 @@ export default function TabReactivacion({
         </div>
       </div>
 
-      {modalLinksOpen && campanaCreadaId && plantillaActiva && (
+      {modalLinksOpen && campanaCreadaId && plantillaActiva && currentUser && (
         <ModalLinksWhatsApp
           isOpen={modalLinksOpen}
           onClose={handleCloseModal}
           campanaId={campanaCreadaId}
           plantilla={plantillaActiva}
           clientes={clientesSeleccionadosDeCampana}
-          agente={{ id: userProfile.id, nombre: userProfile.nombre }}
+          agente={{ id: currentUser.uid, nombre: userProfile.nombre }}
         />
       )}
     </div>

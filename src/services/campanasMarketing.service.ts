@@ -259,7 +259,19 @@ export async function crearCampana(args: CrearCampanaArgs): Promise<string> {
   const auditRef = doc(collection(db, AUDITORIA_COL));
   batch.set(auditRef, stripUndefined(auditPayload));
 
-  await batch.commit();
+  try {
+    await batch.commit();
+  } catch (err) {
+    const e = err as { code?: string; message?: string };
+    console.error('[crearCampana service] batch.commit fallo:', {
+      code: e?.code,
+      message: e?.message,
+      payload,
+      auditPayload,
+      error: err,
+    });
+    throw err;
+  }
   return campanaRef.id;
 }
 
@@ -303,7 +315,8 @@ export async function marcarClienteEnviado(args: MarcarClienteEnviadoArgs): Prom
   const campanaRef = doc(db, CAMPANAS_COL, campanaId);
   const clienteRef = doc(db, 'clientes', clienteId);
 
-  return runTransaction(db, async (tx) => {
+  try {
+    return await runTransaction(db, async (tx) => {
     const [campanaSnap, clienteSnap] = await Promise.all([
       tx.get(campanaRef),
       tx.get(clienteRef),
@@ -387,7 +400,19 @@ export async function marcarClienteEnviado(args: MarcarClienteEnviadoArgs): Prom
     }));
 
     return { yaEstabaEnviado: false };
-  });
+    });
+  } catch (err) {
+    const e = err as { code?: string; message?: string };
+    console.error('[marcarClienteEnviado service] transaction fallo:', {
+      code: e?.code,
+      message: e?.message,
+      campanaId,
+      clienteId,
+      agenteId: agente.id,
+      error: err,
+    });
+    throw err;
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────
