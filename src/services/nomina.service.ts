@@ -8,7 +8,7 @@ import {
 } from '../types';
 import { rangoQuincena } from '../utils/comisiones';
 import { parseOrden } from '../utils';
-import { obtenerAvancesPendientesDeQuincena, marcarAvanceDescontado } from './avances.service';
+import { obtenerAvancesPendientesDeQuincena } from './avances.service';
 import { obtenerPrestamosActivosTodos, aplicarCuota } from './prestamos.service';
 
 const UMBRAL_BONO = 0.70;
@@ -289,11 +289,73 @@ export async function generarLiquidacion(
 }
 
 /**
+ * Marca un grupo de avances como `descontado=true` dentro de una sola
+ * transacción Firestore. Garantía atómica: si cualquiera de los avances
+ * no existe o está en estado inconsistente (ya descontado por OTRA
+ * liquidación), aborta y NINGÚN avance queda marcado.
+ *
+ * Idempotencia: si el avance ya está `descontado=true` con el mismo
+ * `liquidacionId`, se considera no-op (re-cierre seguro tras error de red).
+ *
+ * Límite Firestore: 500 writes por transacción. Una nómina típica tiene
+ * 5-30 avances; si en el futuro se acerca al límite, dividir en chunks.
+ */
+async function marcarAvancesDescontadosAtomic(
+  avancesIds: string[],
+  liquidacionId: string,
+): Promise<void> {
+  if (avancesIds.length === 0) return;
+  if (avancesIds.length > 400) {
+    // Margen defensivo bajo el límite duro de 500 writes/tx de Firestore.
+    throw new Error(
+      `Demasiados avances (${avancesIds.length}) para marcar atómicamente. Dividir en lotes.`,
+    );
+  }
+  await runTransaction(db, async (tx) => {
+    const refs = avancesIds.map(id => doc(db, 'avances', id));
+    // Firestore exige TODAS las lecturas antes de cualquier write en una tx.
+    const snaps = await Promise.all(refs.map(r => tx.get(r)));
+    const ahora = Timestamp.now();
+    snaps.forEach((snap, i) => {
+      const id = avancesIds[i];
+      if (!snap.exists()) {
+        throw new Error(`Avance ${id} no encontrado al cerrar liquidación`);
+      }
+      const data = snap.data() as Record<string, unknown>;
+      const yaDescontado = data.descontado === true;
+      const liqIdExistente = (data.liquidacionId as string) || '';
+      if (yaDescontado && liqIdExistente === liquidacionId) {
+        // No-op: re-cierre idempotente del mismo liquidacionId.
+        return;
+      }
+      if (yaDescontado && liqIdExistente && liqIdExistente !== liquidacionId) {
+        throw new Error(
+          `Avance ${id} ya fue descontado en la liquidación ${liqIdExistente}; no se puede re-asignar a ${liquidacionId}`,
+        );
+      }
+      tx.update(refs[i], {
+        descontado: true,
+        liquidacionId,
+        liquidacionFechaDescuento: ahora,
+        updatedAt: ahora,
+      });
+    });
+  });
+}
+
+/**
  * Cierra la liquidación: marca todas las comisiones referenciadas como
  * `estadoLiquidacion: 'liquidada'`, los avances como `descontado: true`,
  * aplica las cuotas de préstamos al historial (idempotente), y la
  * liquidación como `estado: 'cerrada'`. Después del cierre, las
  * comisiones no pueden re-asignarse a otra quincena.
+ *
+ * Garantías parciales de atomicidad:
+ *  - Avances: marcados ATÓMICAMENTE en una transacción (audit C4). Si
+ *    falla alguno, ninguno queda marcado y la liquidación NO se cierra.
+ *  - Comisiones y cuotas de préstamos: aún en `Promise.all` con catch
+ *    silencioso. Riesgo conocido (audit A12) — sprint separado.
+ *  - Liquidación: solo se marca `cerrada` después de que avances pasen.
  */
 export async function cerrarLiquidacion(
   liquidacionId: string,
@@ -339,11 +401,17 @@ export async function cerrarLiquidacion(
       liquidadaPor: cerradaPor.nombre,
     }).catch(err => console.error('Error liquidando comisión', id, err))
   ));
-  // Marcar avances como descontados
-  await Promise.all(avancesIds.map(id =>
-    marcarAvanceDescontado(id, liquidacionId)
-      .catch(err => console.error('Error descontando avance', id, err))
-  ));
+  // Marcar avances como descontados de forma ATÓMICA (audit C4).
+  // Antes: `Promise.all` con `.catch` que silenciaba errores → si un
+  // updateDoc fallaba, el avance quedaba SIN descontar pero el resto
+  // sí se marcaba `descontado=true`, generando pérdida silenciosa
+  // (empleado recibía extra). Ahora: una sola transacción que lee
+  // todos los avances primero y aplica los updates juntos. Si una
+  // operación falla, ninguna se persiste. Idempotente vía
+  // `liquidacionId` para soportar reintentos seguros.
+  if (avancesIds.length > 0) {
+    await marcarAvancesDescontadosAtomic(avancesIds, liquidacionId);
+  }
   // Aplicar cuotas de préstamos. `aplicarCuota` es idempotente por
   // (prestamoId + liquidacionId) — si se re-llama tras reintento, no
   // doble-descuenta.
