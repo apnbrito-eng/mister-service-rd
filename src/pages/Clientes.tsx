@@ -1,12 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cliente, OrdenServicio, ZONAS_RD } from '../types';
-import { formatFechaCorta, formatMoneda, formatTelefono } from '../utils';
+import { formatFechaCorta, formatMoneda, formatTelefono, parseCliente } from '../utils';
 import { whatsappUrl } from '../utils/whatsapp';
 import { coordsFromLatLng, googleMapsViewUrl } from '../utils/maps';
 import { inferirZona, zonaColor } from '../utils/zonas';
+import {
+  FiltrosClientes,
+  FILTROS_DEFAULT,
+  aplicaFiltros,
+  equiposPresentesEnBase,
+} from '../utils/clientesFiltros';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -15,8 +21,10 @@ import Badge from '../components/Badge';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import EditarClienteModal from '../components/clientes/EditarClienteModal';
+import MapaClientes from '../components/clientes/MapaClientes';
+import FiltrosSidebarClientes from '../components/clientes/FiltrosSidebarClientes';
 import BotonComoLlegar from '../components/shared/BotonComoLlegar';
-import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench, Edit2, MessageCircle, Archive } from 'lucide-react';
+import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench, Edit2, MessageCircle, Archive, List, Map as MapIcon, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Clientes() {
@@ -24,6 +32,11 @@ export default function Clientes() {
   const { userProfile } = useApp();
   const puedeCrear = puede(userProfile, 'clientesCrear');
   const puedeModificar = puede(userProfile, 'clientesModificar');
+  // Gating inline del tab Mapa: técnico/operaria no acceden (decisión D2 — sin
+  // permiso nuevo en `PermisosSistema` hasta Commit 2 de Reactivación).
+  const puedeVerMapa =
+    userProfile?.rol !== 'tecnico' && userProfile?.rol !== 'operaria';
+
   const [loading, setLoading] = useState(true);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
@@ -33,6 +46,13 @@ export default function Clientes() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
+
+  // Tab "Lista" (default) | "Mapa"
+  const [tab, setTab] = useState<'lista' | 'mapa'>('lista');
+  // Filtros aplicados al tab Mapa
+  const [filtros, setFiltros] = useState<FiltrosClientes>(FILTROS_DEFAULT);
+  // Drawer mobile de filtros (lg breakpoint)
+  const [filtrosDrawerOpen, setFiltrosDrawerOpen] = useState(false);
 
   const [form, setForm] = useState({
     nombre: '', telefono: '', email: '', direccion: '', lat: 0, lng: 0,
@@ -102,10 +122,9 @@ export default function Clientes() {
     const unsub = onSnapshot(
       query(collection(db, 'clientes'), orderBy('createdAt', 'desc')),
       (snap) => {
-        setClientes(snap.docs.map(d => ({
-          id: d.id, ...d.data(),
-          createdAt: d.data().createdAt?.toDate?.() || new Date(),
-        } as Cliente)));
+        // parseCliente normaliza legacyMetricas / tipo / origen para uso
+        // consistente en filtros del mapa.
+        setClientes(snap.docs.map(d => parseCliente(d.id, d.data() as Record<string, unknown>)));
         setLoading(false);
       }
     );
@@ -134,6 +153,55 @@ export default function Clientes() {
     c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
     c.telefono.includes(busqueda)
   );
+
+  // ─── Tab Mapa: derivados ────────────────────────────────────────────────
+  /** Clientes que pasan los filtros del sidebar (sin importar coords). */
+  const clientesFiltrados = useMemo(
+    () => clientes.filter(c => aplicaFiltros(c, filtros)),
+    [clientes, filtros],
+  );
+
+  /** Subset con coords válidas — los que efectivamente se renderizan en el mapa. */
+  const clientesConCoords = useMemo(
+    () => clientesFiltrados.filter(c =>
+      typeof c.lat === 'number' && typeof c.lng === 'number' &&
+      !isNaN(c.lat) && !isNaN(c.lng) &&
+      c.lat !== 0 && c.lng !== 0
+    ),
+    [clientesFiltrados],
+  );
+
+  /** Cantidad que pasó filtros pero no tiene coords (banner informativo). */
+  const totalSinCoords = clientesFiltrados.length - clientesConCoords.length;
+
+  /** Zonas únicas presentes en la base entera (para el multi-select). */
+  const zonasDisponibles = useMemo(() => {
+    const set = new Set<string>();
+    clientes.forEach(c => { if (c.zona) set.add(c.zona); });
+    // Mantener el orden canónico de ZONAS_RD; agregar cualquier extra al final.
+    const canonicas = ZONAS_RD.filter(z => set.has(z));
+    const extras = Array.from(set).filter(z => !ZONAS_RD.includes(z as typeof ZONAS_RD[number]));
+    return [...canonicas, ...extras];
+  }, [clientes]);
+
+  /** Tipos de equipo detectados en legacyMetricas (CSV). */
+  const equiposDisponibles = useMemo(
+    () => equiposPresentesEnBase(clientes),
+    [clientes],
+  );
+
+  /** Vuelve al tab Lista mostrando el cliente clickeado en el mapa. */
+  const handleSelectClienteDesdeMapa = (id: string) => {
+    const c = clientes.find(cl => cl.id === id);
+    if (!c) return;
+    setSelectedCliente(c);
+    setTab('lista');
+  };
+
+  /** Si pierde permisos durante la sesión y estaba en tab Mapa, lo regresamos. */
+  useEffect(() => {
+    if (!puedeVerMapa && tab === 'mapa') setTab('lista');
+  }, [puedeVerMapa, tab]);
 
   const geocodeDireccion = async (direccion: string) => {
     if (!direccion) return;
@@ -272,8 +340,42 @@ export default function Clientes() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-[#0f3460]">Clientes</h1>
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-bold text-[#0f3460]">Clientes</h1>
+          {/* Tabs Lista / Mapa — Mapa oculto para técnicos y operarias */}
+          <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100">
+            <button
+              type="button"
+              onClick={() => setTab('lista')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                tab === 'lista' ? 'bg-[#0f3460] text-white' : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <List size={12} /> Lista
+            </button>
+            {puedeVerMapa && (
+              <button
+                type="button"
+                onClick={() => setTab('mapa')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  tab === 'mapa' ? 'bg-[#0f3460] text-white' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <MapIcon size={12} /> Mapa
+              </button>
+            )}
+          </div>
+        </div>
         <div className="flex gap-2">
+          {tab === 'mapa' && (
+            <button
+              type="button"
+              onClick={() => setFiltrosDrawerOpen(true)}
+              className="lg:hidden flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+            >
+              <Filter size={16} /> Filtros
+            </button>
+          )}
           <button onClick={exportCSV}
             className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <Download size={16} /> CSV
@@ -287,6 +389,30 @@ export default function Clientes() {
         </div>
       </div>
 
+      {tab === 'mapa' && puedeVerMapa && (
+        <div className="flex gap-6 flex-col lg:flex-row">
+          <FiltrosSidebarClientes
+            filtros={filtros}
+            onChange={setFiltros}
+            zonasDisponibles={zonasDisponibles}
+            equiposDisponibles={equiposDisponibles}
+            totalCoincidentes={clientesFiltrados.length}
+            totalSinCoords={totalSinCoords}
+            onLimpiar={() => setFiltros(FILTROS_DEFAULT)}
+            drawerOpen={filtrosDrawerOpen}
+            onCloseDrawer={() => setFiltrosDrawerOpen(false)}
+          />
+          <div className="flex-1 min-w-0">
+            <MapaClientes
+              clientes={clientesConCoords}
+              totalSinCoords={totalSinCoords}
+              onSelectCliente={handleSelectClienteDesdeMapa}
+            />
+          </div>
+        </div>
+      )}
+
+      {tab === 'lista' && (
       <div className="flex gap-6 flex-col lg:flex-row">
         {/* Lista */}
         <div className="w-full lg:w-1/3 space-y-4">
@@ -628,6 +754,7 @@ export default function Clientes() {
           )}
         </div>
       </div>
+      )}
 
       {/* Modal nuevo cliente */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Nuevo Cliente">

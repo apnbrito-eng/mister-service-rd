@@ -58,3 +58,49 @@ export function zonaColor(zona?: string | null): string {
     default: return 'text-gray-500';
   }
 }
+
+/**
+ * Color hex para un pin de mapa coloreado por zona. A diferencia de `zonaColor`
+ * (que devuelve clases tailwind para texto), este se usa con Leaflet (DivIcon /
+ * circleMarker / fillColor) y se mantiene sincronizado con la paleta visual.
+ */
+export function colorZonaPin(zona?: string | null): string {
+  switch (zona) {
+    case 'Distrito Nacional': return '#3b82f6';
+    case 'Santo Domingo Norte': return '#10b981';
+    case 'Santo Domingo Este': return '#eab308';
+    case 'Santo Domingo Oeste': return '#f97316';
+    case 'Santiago': return '#a855f7';
+    case 'La Vega': return '#14b8a6';
+    case 'Puerto Plata': return '#0ea5e9';
+    case 'Punta Cana': return '#f59e0b';
+    case 'Otro': return '#64748b';
+    default: return '#9ca3af';
+  }
+}
+
+/**
+ * Color hex para un pin coloreado por antigüedad de último servicio.
+ * Recibe meses transcurridos (puede ser null si no hay registro).
+ *  - null: gris (sin registro)
+ *  - < 3 meses: verde (cliente activo)
+ *  - 3-6 meses: amarillo
+ *  - 6-12 meses: naranja
+ *  - > 12 meses: rojo (frío)
+ */
+export function colorAntiguedadPin(meses: number | null): string {
+  if (meses === null) return '#9ca3af';
+  if (meses < 3) return '#10b981';
+  if (meses < 6) return '#eab308';
+  if (meses < 12) return '#f97316';
+  return '#ef4444';
+}
+
+/** Etiqueta humana del rango de antigüedad correspondiente al pin. */
+export function etiquetaAntiguedadPin(meses: number | null): string {
+  if (meses === null) return 'Sin registro';
+  if (meses < 3) return 'Menos de 3 meses';
+  if (meses < 6) return '3 a 6 meses';
+  if (meses < 12) return '6 a 12 meses';
+  return 'Más de 12 meses';
+}
