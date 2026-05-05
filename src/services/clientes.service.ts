@@ -3,12 +3,35 @@ import { db } from '../firebase/config';
 import { Cliente, CitaPorConfirmar, DireccionCliente } from '../types';
 import { inferirZona } from '../utils/zonas';
 
-/** Normaliza teléfono a 10 dígitos locales de RD */
+/**
+ * Normaliza teléfono a 10 dígitos locales de RD.
+ *
+ * RD usa el código de país +1 (mismo que USA/Canadá) con prefijos de área
+ * 809/829/849. Cualquier número con código internacional distinto de +1
+ * (ej. +56 Chile, +34 España) NO debe normalizarse: hacerlo provoca
+ * colisiones de identidad con clientes RD legítimos (audit fix C1).
+ *
+ * Reglas:
+ *   - >11 dígitos → código internacional NO-RD → retorna `''`.
+ *   - 11 dígitos sin prefijo `1` → NO-RD → retorna `''`.
+ *   - 11 dígitos con prefijo `1` → RD válido, slice(1).
+ *   - 10 dígitos → asume RD local sin código.
+ *   - <10 dígitos → demasiado corto → retorna `''`.
+ *
+ * Los callers deben tratar `''` como teléfono inválido (no hacer query
+ * Firestore con string vacío — matchearía clientes corruptos).
+ */
 export function normalizarTelefono(tel: string): string {
   const soloDigitos = tel.replace(/\D/g, '');
+  // Rechazar códigos internacionales no-RD (ej. +56-809-... → 14 dígitos)
+  if (soloDigitos.length > 11) return '';
+  // 11 dígitos sin prefijo `1` → no es RD (ej. 56-809-555-1234)
+  if (soloDigitos.length === 11 && !soloDigitos.startsWith('1')) return '';
   if (soloDigitos.length === 11 && soloDigitos.startsWith('1')) {
     return soloDigitos.substring(1);
   }
+  // Proteger contra entradas muy cortas (no es un teléfono RD válido)
+  if (soloDigitos.length < 10) return '';
   return soloDigitos.slice(-10);
 }
 
@@ -24,7 +47,11 @@ export function formatearTelefono(tel: string): string {
 /** Busca cliente por teléfono normalizado. Retorna id si existe, null si no. */
 export async function buscarClientePorTelefono(telefono: string): Promise<{ id: string; data: Cliente } | null> {
   const telNorm = normalizarTelefono(telefono);
-  if (telNorm.length < 7) return null;
+  // Guard explícito contra `''` (audit C1): si el normalizador rechazó la
+  // entrada (código internacional NO-RD, demasiado corto, etc.) NO consultamos
+  // Firestore con `where('telefonoNormalizado', '==', '')` — matchearía
+  // docs corruptos sin teléfono.
+  if (!telNorm || telNorm.length < 7) return null;
 
   const q = query(
     collection(db, 'clientes'),
@@ -68,6 +95,15 @@ export async function buscarOCrearCliente(
   }
 ): Promise<string> {
   const telNorm = normalizarTelefono(telefono);
+  // Audit C1: si el normalizador rechazó la entrada (NO-RD o muy corto)
+  // NO podemos crear un doc con id vacío. Lanzamos para que el caller lo
+  // detecte y muestre un toast — los callers ya validan antes de llamar
+  // (ver `useOrdenCreateForm.ts:534`, `ClienteNuevoDrawer.tsx:122`,
+  // `formularioAgendar.service.ts:255`), así que esto es defensa en
+  // profundidad contra callers nuevos.
+  if (!telNorm || telNorm.length !== 10) {
+    throw new Error('Teléfono inválido. Debe ser un número RD de 10 dígitos (ej: 809-555-1234).');
+  }
 
   // Buscar existente
   const existente = await buscarClientePorTelefono(telefono);
@@ -325,6 +361,13 @@ export async function crearOActualizarClienteDesdeCita(
   // Cliente NO existe → crear con los datos de la cita.
   // Reusamos la convención de `buscarOCrearCliente`: ID = teléfono normalizado.
   const telNorm = normalizarTelefono(cita.telefono);
+  // Audit C1: las citas públicas YA validan teléfono antes de llegar acá
+  // (ver `formularioAgendar.service.ts:255`), pero como el helper pasa el
+  // teléfono raw a `buscarClientePorTelefono` arriba, si el form bypassara
+  // la validación llegaríamos acá con `telNorm === ''`. Bloqueamos.
+  if (!telNorm || telNorm.length !== 10) {
+    throw new Error(`Teléfono inválido en cita ${cita.id}: "${cita.telefono}". Esperado: 10 dígitos RD.`);
+  }
   const clienteId = telNorm;
   const payload: Record<string, unknown> = {
     nombre: cita.clienteNombre,
