@@ -486,29 +486,78 @@ export default function ProcesarFacturacionModal({
             itbisPorcentaje: itbisPct,
           });
           // CRÍTICO: denormalizar post-call (regla CLAUDE.md línea 89).
-          if (result.comisiones.length > 0) {
-            const denorm: Record<string, unknown> =
-              result.comisiones.length === 1
-                ? {
-                  // Caso degenerado: N>1 detectado pero terminó en 1 comisión
-                  // válida (el otro técnico tenía 0% o no existía). Render legacy.
+          // Audit fix C5: la guarda anterior `result.comisiones.length > 0`
+          // saltaba la denormalización si todos los técnicos tenían 0% pero
+          // hubo cleanup de huérfanas (preservadas/eliminadas). Eso dejaba
+          // `comisionTecnicoMonto` con valor viejo aunque la realidad post-
+          // recálculo es "sin comisiones nuevas". Ahora denormalizamos
+          // siempre que haya actividad y wrap en try/catch defensivo —
+          // si la denorm falla, la factura ya quedó emitida y las comisiones
+          // están en su colección, así que no debemos abortar la emisión.
+          const tuvoActividad =
+            result.comisiones.length > 0 ||
+            result.preservadasPorLiquidacion > 0 ||
+            result.eliminadasHuerfanas > 0;
+          if (tuvoActividad) {
+            try {
+              let denorm: Record<string, unknown> | null = null;
+              if (result.comisiones.length === 1) {
+                // Caso degenerado: N>1 detectado pero terminó en 1 comisión
+                // válida (el otro técnico tenía 0% o no existía). Render legacy.
+                denorm = {
                   comisionTecnicoId: result.comisiones[0].tecnicoId,
                   comisionTecnicoNombre: result.comisiones[0].tecnicoNombre,
                   comisionTecnicoMonto: result.comisiones[0].monto,
                   comisionTecnicoPorcentaje: result.comisiones[0].porcentaje,
                   comisionRegistroId: result.comisiones[0].comisionId,
-                }
-                : {
-                  // N>1 real: agregado.
+                };
+              } else if (result.comisiones.length > 1) {
+                // N>1 real: agregado.
+                denorm = {
                   comisionTecnicoId: '',
                   comisionTecnicoNombre: 'N técnicos',
                   comisionTecnicoMonto: result.totalAgregado,
                   comisionTecnicoPorcentaje: 0,
                 };
-            const denormLimpio = Object.fromEntries(
-              Object.entries(denorm).filter(([, v]) => v !== undefined),
-            );
-            await updateDoc(doc(db, 'facturas', facturaRef.id), denormLimpio);
+              } else {
+                // Caso edge: tuvoActividad === true pero comisiones.length === 0.
+                // Significa que TODAS las comisiones nuevas son 0% (técnicos sin
+                // porcentaje) y el cleanup limpió/preservó huérfanas anteriores.
+                // Decisión coordinator (audit C5): sobrescribir con shape "sin
+                // comisión" para que la factura refleje el estado real post-
+                // recálculo en lugar de mostrar el monto viejo de una emisión
+                // anterior. La auditoría detallada queda en colección comisiones.
+                console.warn(
+                  '[procesar-facturacion] tuvoActividad sin comisiones nuevas, denormalizando con shape vacío',
+                  {
+                    facturaId: facturaRef.id,
+                    totalAgregado: result.totalAgregado,
+                    preservadas: result.preservadasPorLiquidacion,
+                    eliminadas: result.eliminadasHuerfanas,
+                  },
+                );
+                denorm = {
+                  comisionTecnicoId: '',
+                  comisionTecnicoNombre: '—',
+                  comisionTecnicoMonto: 0,
+                  comisionTecnicoPorcentaje: 0,
+                };
+              }
+              if (denorm) {
+                const denormLimpio = Object.fromEntries(
+                  Object.entries(denorm).filter(([, v]) => v !== undefined),
+                );
+                await updateDoc(doc(db, 'facturas', facturaRef.id), denormLimpio);
+              }
+            } catch (err) {
+              console.error('[procesar-facturacion] error denormalizando comisiones:', err);
+              // NO bloquear emisión — la factura ya se creó, audit queda en
+              // colección comisiones. Avisar al admin para revisión manual.
+              toast(
+                'Conduce emitido. Las comisiones se guardaron pero hubo problema sincronizando el resumen. Verificá en Comisiones.',
+                { duration: 7000, icon: '!' },
+              );
+            }
           }
         } else {
           // N=1 (o 0): flujo legacy. `registrarComisionPorFactura` cubre ambos

@@ -249,30 +249,75 @@ export default function FacturaCrearModal({
           // (solo escribe en `comisiones` + auditoría de la orden), así
           // que esta responsabilidad es del caller — mismo patrón que
           // FacturacionPendiente.tsx post-registrarComisionPorFactura.
-          if (result.comisiones.length > 0) {
-            const denorm: Record<string, unknown> =
-              result.comisiones.length === 1
-                ? {
-                  // N=1: campos completos (compatibles con el render legacy).
+          //
+          // Audit fix C5: guarda anterior `result.comisiones.length > 0`
+          // saltaba la denormalización si todos los técnicos tenían 0% pero
+          // hubo cleanup de huérfanas. Ahora denormalizamos siempre que haya
+          // actividad y wrap defensivo (try/catch dentro del try mayor) para
+          // no bloquear con toast.error si solo falla la sync del resumen.
+          const tuvoActividad =
+            result.comisiones.length > 0 ||
+            result.preservadasPorLiquidacion > 0 ||
+            result.eliminadasHuerfanas > 0;
+          if (tuvoActividad) {
+            try {
+              let denorm: Record<string, unknown> | null = null;
+              if (result.comisiones.length === 1) {
+                // N=1: campos completos (compatibles con el render legacy).
+                denorm = {
                   comisionTecnicoId: result.comisiones[0].tecnicoId,
                   comisionTecnicoNombre: result.comisiones[0].tecnicoNombre,
                   comisionTecnicoMonto: result.comisiones[0].monto,
                   comisionTecnicoPorcentaje: result.comisiones[0].porcentaje,
                   comisionRegistroId: result.comisiones[0].comisionId,
-                }
-                : {
-                  // N>1: agregado. El render expande el desglose por técnico
-                  // a partir de los items (`tecnicoId` por línea).
+                };
+              } else if (result.comisiones.length > 1) {
+                // N>1: agregado. El render expande el desglose por técnico
+                // a partir de los items (`tecnicoId` por línea).
+                denorm = {
                   comisionTecnicoId: '',
                   comisionTecnicoNombre: 'N técnicos',
                   comisionTecnicoMonto: result.totalAgregado,
                   comisionTecnicoPorcentaje: 0,
                 };
-            // Strip undefined defensivo (Firestore rechaza undefined).
-            const denormLimpio = Object.fromEntries(
-              Object.entries(denorm).filter(([, v]) => v !== undefined),
-            );
-            await updateDoc(doc(db, 'facturas', facturaRef.id), denormLimpio);
+              } else {
+                // Caso edge: tuvoActividad === true pero comisiones.length === 0.
+                // En el flujo manual esto es muy raro (la factura recién se creó,
+                // no debería tener huérfanas previas), pero cubrimos por simetría
+                // con ProcesarFacturacionModal. Sobrescribir con shape vacío
+                // refleja el estado real post-recálculo.
+                console.warn(
+                  '[factura-crear] tuvoActividad sin comisiones nuevas, denormalizando con shape vacío',
+                  {
+                    facturaId: facturaRef.id,
+                    totalAgregado: result.totalAgregado,
+                    preservadas: result.preservadasPorLiquidacion,
+                    eliminadas: result.eliminadasHuerfanas,
+                  },
+                );
+                denorm = {
+                  comisionTecnicoId: '',
+                  comisionTecnicoNombre: '—',
+                  comisionTecnicoMonto: 0,
+                  comisionTecnicoPorcentaje: 0,
+                };
+              }
+              if (denorm) {
+                // Strip undefined defensivo (Firestore rechaza undefined).
+                const denormLimpio = Object.fromEntries(
+                  Object.entries(denorm).filter(([, v]) => v !== undefined),
+                );
+                await updateDoc(doc(db, 'facturas', facturaRef.id), denormLimpio);
+              }
+            } catch (err) {
+              console.error('[factura-crear] error denormalizando comisiones:', err);
+              // NO bloquear emisión — la factura ya se creó, audit queda en
+              // colección comisiones. Toast de warning para verificación manual.
+              toast(
+                'Conduce emitido. Las comisiones se guardaron pero hubo problema sincronizando el resumen. Verificá en Comisiones.',
+                { duration: 7000, icon: '!' },
+              );
+            }
           }
         }
       } catch (comErr) {
