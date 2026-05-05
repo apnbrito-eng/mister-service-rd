@@ -12,6 +12,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 import { db } from '../../firebase/config';
 import { useApp } from '../../context/AppContext';
 import { crearRegistroAuditoria } from '../../utils';
+import { METODO_PAGO_LABELS } from '../../utils/factura';
 import { useTiposEquipo } from '../../hooks/useTiposEquipo';
 import { suscribirBancos } from '../../services/bancos.service';
 import type {
@@ -41,13 +42,6 @@ interface Props {
   onCerrar: () => void;
 }
 
-const METODO_PAGO_LABELS: Record<MetodoPago, string> = {
-  efectivo: 'Efectivo',
-  transferencia: 'Transferencia',
-  tarjeta: 'Tarjeta',
-  link: 'Link',
-  otro: 'Otro',
-};
 
 /** Campos sensibles — border amarillo + requieren confirm con razón al modificarse. */
 const CAMPOS_SENSIBLES = [

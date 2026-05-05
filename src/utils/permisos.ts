@@ -72,3 +72,19 @@ export function permisosDefaultDeRol(rol: Rol): PermisosSistema {
 export function iaHabilitadaDefaultPorRol(rol: Rol): boolean {
   return rol === 'administrador' || rol === 'coordinadora';
 }
+
+/**
+ * Helper de conveniencia: ¿el usuario es administrador o coordinadora?
+ *
+ * Centraliza el check duplicado en múltiples componentes (`puedeOverrideModalidad`,
+ * `puedeConfigurarGarantia`, `puedeMarcarGarantia`, `esAdminOCoord` local en
+ * varios sitios). Usar siempre esta función en lugar de re-implementar la
+ * comparación de strings.
+ *
+ * Cuando agregues una nueva acción que sólo deba ser admin u oficina sénior,
+ * usá esto.
+ */
+export function esAdminOCoord(userProfile: Usuario | null | undefined): boolean {
+  const rol = userProfile?.rol;
+  return rol === 'administrador' || rol === 'coordinadora';
+}

@@ -435,6 +435,14 @@ export async function registrarComisionesPorItems(args: {
   const items = args.items || [];
   const usuario = userProfile?.nombre || 'Sistema';
 
+  // Detectar órdenes sintéticas creadas por flujos manuales (`FacturaCrearModal`
+  // arma una `OrdenServicio`-like con id `factura-manual-{facturaRef.id}`).
+  // Estas IDs NO existen en `ordenes_servicio`, así que cualquier `updateDoc`
+  // contra esa colección emite warn ruidoso (`not-found`). El audit de la
+  // orden se skipea — pero las comisiones siguen escribiéndose normalmente
+  // en la colección `comisiones` (la auditoría detallada se registra ahí).
+  const esOrdenSintetica = typeof orden.id === 'string' && orden.id.startsWith('factura-manual-');
+
   // Caso 1: chequeo nunca genera comisión.
   if (orden.soloChequeo) {
     return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0 };
@@ -625,8 +633,13 @@ export async function registrarComisionesPorItems(args: {
 
   const totalAgregado = comisionesEscritas.reduce((acc, c) => acc + c.monto, 0);
 
-  // Auditoría única (resumen) — no bloqueante.
-  if (comisionesEscritas.length > 0 || preservadasPorLiquidacion > 0 || eliminadasHuerfanas > 0) {
+  // Auditoría única (resumen) — no bloqueante. Skip para órdenes sintéticas
+  // (`factura-manual-...`) porque no existen en `ordenes_servicio` y el
+  // updateDoc emite warn ruidoso por cada conduce manual con técnicos.
+  if (
+    !esOrdenSintetica &&
+    (comisionesEscritas.length > 0 || preservadasPorLiquidacion > 0 || eliminadasHuerfanas > 0)
+  ) {
     try {
       const partes: string[] = [];
       if (comisionesEscritas.length > 0) {
@@ -1008,6 +1021,11 @@ export async function eliminarComisionesDeFactura(args: {
   let preservadas = 0;
   // Snapshot completo para audit log (forensia contable). NO incluye PII en
   // logs de consola — solo se persiste en la colección `auditoria_admin`.
+  // Los campos `quincenaAsignada` y `comisionPorcentaje` se incluyen para
+  // permitir reconstrucción contable post-incidente (N3 cleanup post-SIBS):
+  // sin ellos, recuperar a qué quincena se asignó originalmente la comisión
+  // requería leer el snapshot de Firestore. Ambos pueden ser `null` si la
+  // comisión vieja no los tenía persistidos.
   const comisionesAfectadas: Array<{
     comisionId: string;
     tecnicoId: string;
@@ -1015,6 +1033,8 @@ export async function eliminarComisionesDeFactura(args: {
     monto: number;
     estadoPrevio: string;
     accion: 'eliminada' | 'preservada' | 'skip_ya_obsoleta';
+    quincenaAsignada: string | null;
+    comisionPorcentaje: number | null;
   }> = [];
 
   for (const ex of docs) {
@@ -1022,6 +1042,12 @@ export async function eliminarComisionesDeFactura(args: {
     const tecnicoId = (ex.data.tecnicoId as string) || '';
     const tecnicoNombre = (ex.data.tecnicoNombre as string) || '';
     const monto = typeof ex.data.comisionMonto === 'number' ? (ex.data.comisionMonto as number) : 0;
+    const quincenaAsignada = typeof ex.data.quincenaAsignada === 'string'
+      ? (ex.data.quincenaAsignada as string)
+      : null;
+    const comisionPorcentaje = typeof ex.data.comisionPorcentaje === 'number'
+      ? (ex.data.comisionPorcentaje as number)
+      : null;
     const yaObsoleta = ex.data.obsoletaPorEliminacionFactura === true;
 
     // Security #4: idempotencia — skip si ya está marcada por esta misma causa.
@@ -1033,6 +1059,8 @@ export async function eliminarComisionesDeFactura(args: {
         monto,
         estadoPrevio: (ex.data.estadoLiquidacion as string) || 'desconocido',
         accion: 'skip_ya_obsoleta',
+        quincenaAsignada,
+        comisionPorcentaje,
       });
       continue;
     }
@@ -1072,6 +1100,8 @@ export async function eliminarComisionesDeFactura(args: {
           monto,
           estadoPrevio: (ex.data.estadoLiquidacion as string) || 'pendiente',
           accion: 'eliminada',
+          quincenaAsignada,
+          comisionPorcentaje,
         });
       } else if (accionFinal === 'preservada') {
         preservadas += 1;
@@ -1082,6 +1112,8 @@ export async function eliminarComisionesDeFactura(args: {
           monto,
           estadoPrevio: 'liquidada',
           accion: 'preservada',
+          quincenaAsignada,
+          comisionPorcentaje,
         });
       }
       // 'skip' (race ganada por otro write) — no contamos ni audita.

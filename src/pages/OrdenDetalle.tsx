@@ -4,6 +4,7 @@ import { collection, doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'f
 import { db } from '../firebase/config';
 import { OrdenServicio, FaseOrden, MetodoPago, StandbyPieza } from '../types';
 import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente } from '../utils';
+import { METODO_PAGO_LABELS } from '../utils/factura';
 import ModalSugerirSoloChequeo from '../components/cierre/ModalSugerirSoloChequeo';
 import BannerEstadoSugerenciaSoloChequeo from '../components/cierre/BannerEstadoSugerenciaSoloChequeo';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -35,14 +36,6 @@ import { crearNotificacion } from '../services/notificaciones.service';
 import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-
-const METODO_PAGO_LABELS: Record<MetodoPago, string> = {
-  efectivo: 'Efectivo',
-  transferencia: 'Transferencia',
-  tarjeta: 'Tarjeta',
-  link: 'Link',
-  otro: 'Otro',
-};
 
 export default function OrdenDetalle() {
   const { id } = useParams<{ id: string }>();

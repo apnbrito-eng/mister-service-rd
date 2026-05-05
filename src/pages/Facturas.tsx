@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, query, orderBy, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Factura, EstadoFactura, MetodoPago, OrdenServicio, Personal, ServicioPrecio, PiezaInventario } from '../types';
+import { Factura, EstadoFactura, OrdenServicio, Personal, ServicioPrecio, PiezaInventario } from '../types';
 import { formatMoneda, formatFechaCorta, parseOrden, parseFactura, parseServicioPrecio, parsePiezaInventario } from '../utils';
+import { METODO_PAGO_LABELS, METODO_PAGO_COLORS } from '../utils/factura';
 import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
 import { useClientesEnVivo } from '../hooks/useClientesEnVivo';
 import { eliminarComisionesDeFactura } from '../utils/comisiones';
@@ -32,22 +33,6 @@ const ESTADO_LABELS: Record<EstadoFactura, string> = {
   pagada: 'Pagada',
   vencida: 'Vencida',
   anulada: 'Anulada',
-};
-
-const METODO_PAGO_LABELS: Record<MetodoPago, string> = {
-  efectivo: 'Efectivo',
-  transferencia: 'Transferencia',
-  tarjeta: 'Tarjeta',
-  link: 'Link',
-  otro: 'Otro',
-};
-
-const METODO_PAGO_COLORS: Record<MetodoPago, string> = {
-  efectivo: 'bg-green-100 text-green-700',
-  transferencia: 'bg-blue-100 text-blue-700',
-  tarjeta: 'bg-purple-100 text-purple-700',
-  link: 'bg-indigo-100 text-indigo-700',
-  otro: 'bg-gray-100 text-gray-700',
 };
 
 export default function Facturas() {
@@ -213,6 +198,13 @@ export default function Facturas() {
       // Cascade: borrar/obsoletar comisiones asociadas ANTES de borrar la
       // factura. Pendientes → delete real; liquidadas → preservar +
       // marcar `obsoletaPorEliminacionFactura: true`.
+      //
+      // N1 cleanup post-Conduces SIBS: el catch interno previo permitía que
+      // `deleteDoc(factura)` se ejecutara aunque el helper fallara con
+      // `permission-denied` o cualquier error no-transient. Eso dejaba
+      // comisiones huérfanas en producción. Ahora distinguimos:
+      //  - Transient (red/Firestore intermitente): seguimos y avisamos.
+      //  - No-transient (permisos, datos inválidos): ABORTAMOS.
       try {
         await eliminarComisionesDeFactura({
           facturaId: factura.id,
@@ -221,7 +213,32 @@ export default function Facturas() {
           solicitanteNombre: userProfile?.nombre,
         });
       } catch (cascErr) {
-        console.error('Cascade comisiones falló (se continúa con delete factura):', cascErr);
+        console.error('[handleDelete] cascade comisiones falló:', cascErr);
+        const code = (cascErr as { code?: string } | null)?.code || '';
+        // Codes Firestore considerados transient (retry/intermitencia tiene sentido).
+        // Resto = no-transient (permisos, lógica, datos inválidos): no podemos
+        // garantizar consistencia, abortamos el delete factura.
+        const TRANSIENT_CODES = new Set([
+          'unavailable',
+          'deadline-exceeded',
+          'aborted',
+          'cancelled',
+          'internal',
+        ]);
+        const esTransient = TRANSIENT_CODES.has(code);
+        if (!esTransient) {
+          toast.error(
+            'No se pudieron procesar las comisiones asociadas. Eliminación cancelada — revisá nómina manualmente.',
+            { duration: 7000 },
+          );
+          return;
+        }
+        // Transient: continúa pero avisa. Estilo distinto a error/success
+        // porque el delete sí va a ocurrir; el user solo debe verificar.
+        toast(
+          'Conduce eliminado, pero las comisiones se procesaron parcialmente. Revisá nómina.',
+          { duration: 7000, icon: '!' },
+        );
       }
       await deleteDoc(doc(db, 'facturas', factura.id));
       toast.success('Factura eliminada');

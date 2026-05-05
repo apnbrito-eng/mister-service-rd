@@ -33,6 +33,7 @@ import {
   calcularCostoPiezasDeItems,
 } from '../../utils/comisiones';
 import { obtenerConfigFiscal } from '../../services/configFiscal.service';
+import { esAdminOCoord } from '../../utils/permisos';
 import Modal from '../Modal';
 import FacturaItemsEditor from '../facturas/FacturaItemsEditor';
 import {
@@ -114,10 +115,8 @@ export default function ProcesarFacturacionModal({
   // Debounce para escrituras a localStorage.
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const puedeConfigurarGarantia =
-    userProfile?.rol === 'coordinadora' || userProfile?.rol === 'administrador';
-  const puedeOverrideModalidad =
-    userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  const puedeConfigurarGarantia = esAdminOCoord(userProfile);
+  const puedeOverrideModalidad = esAdminOCoord(userProfile);
 
   // ─── Cargar cliente al abrir el modal (getDoc puntual) ───
   useEffect(() => {
@@ -211,8 +210,16 @@ export default function ProcesarFacturacionModal({
   }, [orden]);
 
   // ─── Persistir borrador a localStorage con debounce ───
+  // Guard "ya restauré" (N2 cleanup post-Conduces SIBS): mientras
+  // `borradorEncontrado !== null` significa que mostramos el banner y el
+  // usuario todavía no decidió Restaurar/Descartar. NO escribimos en
+  // localStorage en ese intervalo: si lo hacemos, el setItems del cargar()
+  // (que setea items desde la cotización) pisa el borrador antes de que el
+  // usuario tenga chance de recuperarlo. Una vez clickea Restaurar o
+  // Descartar, `borradorEncontrado` pasa a null y el effect retoma el save.
   useEffect(() => {
     if (!orden || !yaCargoInicialRef.current) return;
+    if (borradorEncontrado !== null) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       try {
@@ -231,7 +238,7 @@ export default function ProcesarFacturacionModal({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [orden, items, tiempoGarantiaDias, paso]);
+  }, [orden, items, tiempoGarantiaDias, paso, borradorEncontrado]);
 
   const restaurarBorrador = () => {
     if (!borradorEncontrado) return;

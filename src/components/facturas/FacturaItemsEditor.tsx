@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, X, Plus, Pencil } from 'lucide-react';
 import {
   ItemCotizacion,
@@ -56,6 +56,23 @@ export default function FacturaItemsEditor({
   const [itemDetalleAbiertoIdx, setItemDetalleAbiertoIdx] = useState<number | null>(null);
   const [agregarMenuAbierto, setAgregarMenuAbierto] = useState(false);
   const agregarMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Click-outside: cerrar dropdown "Agregar Manual / de Inventario" cuando
+  // el usuario clickea fuera sin elegir. Sin esto el menú quedaba abierto
+  // hasta que el user volvía a hacer click en el botón "Agregar".
+  useEffect(() => {
+    if (!agregarMenuAbierto) return;
+    function handler(e: MouseEvent) {
+      if (
+        agregarMenuRef.current &&
+        !agregarMenuRef.current.contains(e.target as Node)
+      ) {
+        setAgregarMenuAbierto(false);
+      }
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [agregarMenuAbierto]);
 
   const updateItem = (
     i: number,

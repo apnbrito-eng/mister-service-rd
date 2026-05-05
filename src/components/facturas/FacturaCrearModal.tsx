@@ -12,21 +12,15 @@ import {
   ServicioPrecio,
 } from '../../types';
 import { formatMoneda } from '../../utils';
+import { METODO_PAGO_LABELS } from '../../utils/factura';
 import { siguienteNumeroFactura } from '../../services/contadores.service';
 import { registrarComisionesPorItems } from '../../utils/comisiones';
+import { esAdminOCoord } from '../../utils/permisos';
 import { useApp } from '../../context/AppContext';
 import Modal from '../Modal';
 import FacturaItemsEditor from './FacturaItemsEditor';
 import ClienteNuevoDrawer from './ClienteNuevoDrawer';
 import { Search, UserPlus, AlertTriangle } from 'lucide-react';
-
-const METODO_PAGO_LABELS: Record<MetodoPago, string> = {
-  efectivo: 'Efectivo',
-  transferencia: 'Transferencia',
-  tarjeta: 'Tarjeta',
-  link: 'Link',
-  otro: 'Otro',
-};
 
 interface FormState {
   cliente: Cliente | null;
@@ -92,8 +86,7 @@ export default function FacturaCrearModal({
   clientesSinTipoDefinido,
 }: FacturaCrearModalProps) {
   const { userProfile } = useApp();
-  const puedeOverrideModalidad =
-    userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  const puedeOverrideModalidad = esAdminOCoord(userProfile);
 
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [saving, setSaving] = useState(false);

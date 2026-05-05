@@ -6,7 +6,6 @@ import {
   buscarOCrearCliente,
   normalizarTelefono,
 } from '../../services/clientes.service';
-import { parseCliente } from '../../utils';
 import { X, AlertCircle, Building2, User } from 'lucide-react';
 
 interface ClienteNuevoDrawerProps {
@@ -77,7 +76,9 @@ export default function ClienteNuevoDrawer({
     buscarClientePorTelefono(telNorm)
       .then(res => {
         if (cancelado) return;
-        if (res) setDuplicado(parseCliente(res.id, res.data as unknown as Record<string, unknown>));
+        // `buscarClientePorTelefono` ya devuelve `Cliente` parseado en `res.data`.
+        // No hace falta re-parsear (N11 cleanup post-Conduces SIBS).
+        if (res) setDuplicado(res.data);
       })
       .catch(err => console.warn('Error verificando duplicado al montar:', err))
       .finally(() => {
@@ -95,7 +96,8 @@ export default function ClienteNuevoDrawer({
     setVerificandoDuplicado(true);
     try {
       const res = await buscarClientePorTelefono(telNorm);
-      setDuplicado(res ? parseCliente(res.id, res.data as unknown as Record<string, unknown>) : null);
+      // Mismo argumento que el bloque anterior — el helper ya devuelve `Cliente`.
+      setDuplicado(res ? res.data : null);
     } catch (err) {
       console.warn('Error verificando duplicado:', err);
       setDuplicado(null);
@@ -247,7 +249,15 @@ export default function ClienteNuevoDrawer({
             <input
               type="tel"
               value={telefono}
-              onChange={e => setTelefono(e.target.value)}
+              onChange={e => {
+                setTelefono(e.target.value);
+                // Limpiar el banner de duplicado al tipear (N9 cleanup
+                // post-Conduces SIBS): si el user había hecho blur con un
+                // teléfono inválido y ahora lo está corrigiendo, no querés
+                // que el botón "Crear cliente" siga deshabilitado hasta el
+                // siguiente blur. La validación real corre en onBlur.
+                if (duplicado) setDuplicado(null);
+              }}
               onBlur={handleTelefonoBlur}
               placeholder="809-555-1234"
               required
