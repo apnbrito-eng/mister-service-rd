@@ -42,7 +42,14 @@ export async function buscarClientePorTelefono(telefono: string): Promise<{ id: 
   return null;
 }
 
-/** Busca o crea cliente. NUNCA duplica por teléfono. Retorna clienteId. */
+/**
+ * Busca o crea cliente. NUNCA duplica por teléfono. Retorna clienteId.
+ *
+ * Extensión sprint Conduces SIBS C3b: acepta `tipo`/`rnc`/`razonSocial`
+ * desde el drawer "Nuevo cliente" del modal de conduces. Todos opcionales
+ * y backwards-compat — los callers existentes siguen funcionando sin
+ * cambios.
+ */
 export async function buscarOCrearCliente(
   telefono: string,
   datos: {
@@ -52,6 +59,12 @@ export async function buscarOCrearCliente(
     referenciaDireccion?: string;
     lat?: number;
     lng?: number;
+    /** 'particular' | 'b2b' — afecta modalidad de precio default en conduces. */
+    tipo?: 'particular' | 'b2b';
+    /** RNC para clientes B2B (opcional). */
+    rnc?: string;
+    /** Razón social para clientes B2B (opcional). */
+    razonSocial?: string;
   }
 ): Promise<string> {
   const telNorm = normalizarTelefono(telefono);
@@ -67,6 +80,11 @@ export async function buscarOCrearCliente(
     if (datos.referenciaDireccion) updates.referenciaDireccion = datos.referenciaDireccion;
     if (datos.lat) updates.lat = datos.lat;
     if (datos.lng) updates.lng = datos.lng;
+    // Solo persistimos `tipo`/`rnc`/`razonSocial` si vienen explícitos —
+    // así un caller legacy que no los pasa no pisa lo que ya estaba.
+    if (datos.tipo) updates.tipo = datos.tipo;
+    if (datos.rnc) updates.rnc = datos.rnc;
+    if (datos.razonSocial) updates.razonSocial = datos.razonSocial;
     // Auto-inferir zona si no la tenía y ahora hay coords (o vienen nuevas).
     if (!existente.data.zona) {
       const latFinal = typeof datos.lat === 'number' ? datos.lat : existente.data.lat;
@@ -92,9 +110,17 @@ export async function buscarOCrearCliente(
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };
+  // Solo escribir si vienen — así no contaminamos docs nuevos con strings vacíos.
+  if (datos.tipo) payload.tipo = datos.tipo;
+  if (datos.rnc) payload.rnc = datos.rnc;
+  if (datos.razonSocial) payload.razonSocial = datos.razonSocial;
   const zonaInferidaNuevo = inferirZona(datos.lat, datos.lng);
   if (zonaInferidaNuevo) payload.zona = zonaInferidaNuevo;
-  await setDoc(doc(db, 'clientes', clienteId), payload);
+  // Strip undefined defensivo (Firestore los rechaza).
+  const payloadLimpio = Object.fromEntries(
+    Object.entries(payload).filter(([, v]) => v !== undefined),
+  );
+  await setDoc(doc(db, 'clientes', clienteId), payloadLimpio);
   return clienteId;
 }
 

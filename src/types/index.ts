@@ -960,6 +960,16 @@ export interface Factura {
    *    (FacturacionPendiente.tsx) al cerrar una orden.
    */
   origen?: 'manual' | 'post-cierre';
+  /**
+   * Snapshot defensivo del tipo del cliente AL MOMENTO de emisión del
+   * conduce (sprint Conduces SIBS C3b — security #2). No reemplaza al
+   * `cliente.tipo` actual; sirve para forensia / reportes históricos
+   * cuando el tipo del cliente cambie después.
+   *
+   * Si el cliente legacy no tenía `tipo` definido al momento de emitir,
+   * se persiste 'particular' (mismo default que `parseCliente`).
+   */
+  clienteTipoEnEmision?: 'particular' | 'b2b';
   createdAt: Date;
 }
 

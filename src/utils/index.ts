@@ -1026,6 +1026,10 @@ export function parseFactura(id: string, raw: Record<string, unknown>): Factura 
     origen: raw.origen === 'manual' || raw.origen === 'post-cierre'
       ? raw.origen
       : undefined,
+    clienteTipoEnEmision:
+      raw.clienteTipoEnEmision === 'particular' || raw.clienteTipoEnEmision === 'b2b'
+        ? raw.clienteTipoEnEmision
+        : undefined,
     createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
   };
 }

@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, query, orderBy, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Factura, EstadoFactura, MetodoPago, OrdenServicio } from '../types';
-import { formatMoneda, formatFechaCorta, parseOrden, parseFactura } from '../utils';
+import { Factura, EstadoFactura, MetodoPago, OrdenServicio, Personal, ServicioPrecio, PiezaInventario } from '../types';
+import { formatMoneda, formatFechaCorta, parseOrden, parseFactura, parseServicioPrecio, parsePiezaInventario } from '../utils';
 import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
+import { useClientesEnVivo } from '../hooks/useClientesEnVivo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
@@ -60,6 +61,17 @@ export default function Facturas() {
   const [yearSelected, setYearSelected] = useState(new Date().getFullYear());
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Catálogos + técnicos + clientes para el FacturaCrearModal (patrón "padre
+  // gordo, hijo presentacional"): el padre tiene los listeners; el hijo recibe
+  // por props. Los clientes vienen del hook `useClientesEnVivo`, los demás
+  // viven en useEffect porque ya estaban acá pre-C3b.
+  const [catalogoServicios, setCatalogoServicios] = useState<ServicioPrecio[]>([]);
+  const [catalogoPiezas, setCatalogoPiezas] = useState<PiezaInventario[]>([]);
+  const [tecnicos, setTecnicos] = useState<Personal[]>([]);
+  const { clientes, clientesSinTipoDefinido } = useClientesEnVivo();
+  // Set local de comisiones N>1 expandidas en el panel detail.
+  const [comisionExpandedId, setComisionExpandedId] = useState<string | null>(null);
+
   // Filtro avanzado: el componente maneja estado, persistencia y URL sync.
   // Acá solo recibimos los items filtrados via callback.
   const filtroRef = useRef<FiltroAvanzadoFinanzasRef>(null);
@@ -90,7 +102,36 @@ export default function Facturas() {
       });
       setOrdenesVinculadas(map);
     });
-    return () => { unsub(); unsubOrdenes(); };
+
+    // Catálogos + técnicos para el FacturaCrearModal (C3b: vendedor por línea
+    // y selector de modalidad/inventario). Los listeners viven acá para que
+    // el modal sea presentacional.
+    const unsubServicios = onSnapshot(
+      query(collection(db, 'precios_servicios'), orderBy('marca')),
+      (snap) => {
+        setCatalogoServicios(snap.docs.map(d => parseServicioPrecio(d.id, d.data())));
+      },
+    );
+    const unsubPiezas = onSnapshot(
+      query(collection(db, 'piezas_inventario'), orderBy('nombre')),
+      (snap) => {
+        setCatalogoPiezas(snap.docs.map(d => parsePiezaInventario(d.id, d.data())));
+      },
+    );
+    const unsubPersonal = onSnapshot(
+      query(collection(db, 'personal'), orderBy('nombre')),
+      (snap) => {
+        setTecnicos(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
+      },
+    );
+
+    return () => {
+      unsub();
+      unsubOrdenes();
+      unsubServicios();
+      unsubPiezas();
+      unsubPersonal();
+    };
   }, []);
 
   // Summary stats
@@ -671,32 +712,110 @@ export default function Facturas() {
                           </div>
                         </div>
 
-                        {/* Bloque de comisión del técnico */}
-                        {factura.comisionTecnicoId && typeof factura.comisionTecnicoMonto === 'number' && (
-                          <div className="mt-3 bg-white rounded-xl p-3 border border-gray-100">
-                            <div className="flex items-center justify-between flex-wrap gap-2">
-                              <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-[#0f3460] text-white flex items-center justify-center text-xs font-bold">
-                                  {(factura.comisionTecnicoNombre || 'T').split(' ').map(s => s[0]).join('').slice(0, 2)}
-                                </div>
-                                <div>
-                                  <div className="text-xs font-semibold text-gray-900">
-                                    Comisión técnico · {factura.comisionTecnicoNombre}
+                        {/* Bloque de comisión del técnico — N>1 (vendedor por línea) o N=1 (legacy) */}
+                        {(() => {
+                          const tieneVendedorPorLinea = Array.isArray(factura.items)
+                            && factura.items.some(i => !!i.tecnicoId);
+
+                          if (tieneVendedorPorLinea) {
+                            // Agrupar items por tecnicoId. Mostramos sólo agregado
+                            // (los montos por técnico viven en colección `comisiones`,
+                            // acá no recalculamos para no romper si el % del técnico
+                            // cambió desde la emisión). En el desglose mostramos:
+                            // RD$ del item × cantidad por técnico.
+                            const porTecnico = new Map<string, { nombre: string; lineas: number; subtotal: number }>();
+                            for (const it of factura.items) {
+                              if (!it.tecnicoId) continue;
+                              const ent = porTecnico.get(it.tecnicoId) || {
+                                nombre: it.tecnicoNombre || 'Técnico',
+                                lineas: 0,
+                                subtotal: 0,
+                              };
+                              ent.lineas += 1;
+                              ent.subtotal += it.cantidad * it.precio;
+                              porTecnico.set(it.tecnicoId, ent);
+                            }
+                            const entries = Array.from(porTecnico.entries());
+                            const expandido = comisionExpandedId === factura.id;
+                            return (
+                              <div className="mt-3 bg-white rounded-xl p-3 border border-gray-100">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setComisionExpandedId(id => id === factura.id ? null : factura.id);
+                                  }}
+                                  className="w-full flex items-center justify-between flex-wrap gap-2 text-left"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold">
+                                      {entries.length}
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-semibold text-gray-900">
+                                        {entries.length} técnico{entries.length !== 1 ? 's' : ''} · vendedor por línea
+                                      </div>
+                                      <div className="text-[11px] text-gray-500">
+                                        {expandido ? 'Click para colapsar' : 'Click para ver desglose'}
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="text-[11px] text-gray-500">
-                                    {factura.comisionTecnicoPorcentaje}% sobre ganancia neta
+                                  <div className="text-right">
+                                    <div className="text-base font-bold text-emerald-600">
+                                      {typeof factura.comisionTecnicoMonto === 'number'
+                                        ? formatMoneda(factura.comisionTecnicoMonto)
+                                        : '—'}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400">comisión total</div>
+                                  </div>
+                                </button>
+                                {expandido && (
+                                  <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+                                    {entries.map(([tid, ent]) => (
+                                      <div key={tid} className="flex items-center justify-between text-xs">
+                                        <span className="text-gray-700">
+                                          <strong>{ent.nombre}</strong>
+                                          <span className="text-gray-400 ml-1">· {ent.lineas} línea{ent.lineas !== 1 ? 's' : ''}</span>
+                                        </span>
+                                        <span className="text-gray-600">{formatMoneda(ent.subtotal)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          // Fallback legacy N=1
+                          if (factura.comisionTecnicoId && typeof factura.comisionTecnicoMonto === 'number') {
+                            return (
+                              <div className="mt-3 bg-white rounded-xl p-3 border border-gray-100">
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-[#0f3460] text-white flex items-center justify-center text-xs font-bold">
+                                      {(factura.comisionTecnicoNombre || 'T').split(' ').map(s => s[0]).join('').slice(0, 2)}
+                                    </div>
+                                    <div>
+                                      <div className="text-xs font-semibold text-gray-900">
+                                        Comisión técnico · {factura.comisionTecnicoNombre}
+                                      </div>
+                                      <div className="text-[11px] text-gray-500">
+                                        {factura.comisionTecnicoPorcentaje}% sobre ganancia neta
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <div className="text-base font-bold text-emerald-600">
+                                      {formatMoneda(factura.comisionTecnicoMonto)}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400">ganancia técnico</div>
                                   </div>
                                 </div>
                               </div>
-                              <div className="text-right">
-                                <div className="text-base font-bold text-emerald-600">
-                                  {formatMoneda(factura.comisionTecnicoMonto)}
-                                </div>
-                                <div className="text-[10px] text-gray-400">ganancia técnico</div>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                            );
+                          }
+                          return null;
+                        })()}
 
                         {/* Items detallados */}
                         {Array.isArray(factura.items) && factura.items.length > 0 && (
@@ -740,6 +859,11 @@ export default function Facturas() {
       <FacturaCrearModal
         open={showModal}
         onClose={() => setShowModal(false)}
+        catalogoServicios={catalogoServicios}
+        catalogoPiezas={catalogoPiezas}
+        tecnicos={tecnicos}
+        clientes={clientes}
+        clientesSinTipoDefinido={clientesSinTipoDefinido}
       />
 
       {/* Modal: marcar como garantía manual */}
