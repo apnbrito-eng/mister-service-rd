@@ -93,8 +93,13 @@ export default function ModalLinksWhatsApp({
         toast.success('Marcado como enviado');
       }
     } catch (err) {
-      console.error(err);
-      toast.error(err instanceof Error ? err.message : 'No se pudo marcar como enviado');
+      const e = err as { code?: string; message?: string; stack?: string };
+      console.error('[marcarClienteEnviado] error completo:', err);
+      console.error('[marcarClienteEnviado] code:', e?.code);
+      console.error('[marcarClienteEnviado] message:', e?.message);
+      console.error('[marcarClienteEnviado] stack:', e?.stack);
+      console.error('[marcarClienteEnviado] args:', { campanaId, clienteId, agenteId: agente.id });
+      toast.error(`No se pudo marcar como enviado: ${e?.code || e?.message || 'error desconocido'}`);
       setFilas((prev) =>
         prev.map((f) => (f.cliente.id === clienteId ? { ...f, guardando: false } : f)),
       );
