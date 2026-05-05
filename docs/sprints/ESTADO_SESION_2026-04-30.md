@@ -2,167 +2,97 @@
 
 ## Resumen ejecutivo
 
-Sesión muy productiva. **8 sprints completos pusheados a producción** + 4 tickets armados para deuda priorizada. El sprint actual (Facturas Counter) está bloqueado en el último paso: el script de consolidación de counters no puede correr localmente porque `vercel env pull` no descarga `FIREBASE_PRIVATE_KEY` (está marcada como Sensitive en Vercel y el CLI solo baja `""` vacío).
+Sesión de mayor producción del proyecto: **6 commits + 1 sprint extra arrancando** en producción + ticket cleanup consolidado de 11 ítems para deuda priorizada. Todo el audit original (C1-C6) cerrado salvo C3 fase B (que requiere validar métricas 24-48h primero).
 
-## Lo que está en producción al cierre de sesión
+## Commits del día en orden cronológico
 
-| Commit | Sprint | Estado |
-|---|---|---|
-| `c607f4c` | C1 — versionar firestore.rules + fix solicitudes_servicio + add avances/counters | ✅ Live |
-| `75553d0` | C4 — SSRF en /api/gps/ubicacion (auth + whitelist) | ✅ Live (commit anterior) |
-| `6c358af` | Hito 1 Portal Cliente — lectura + envío | ✅ Live |
-| `25e0216` | Bug Nómina — mostrar descuentos de avances | ✅ Live |
-| `736cc70` | C5 — race condition pagos con runTransaction | ✅ Live |
-| `0abdb5b` | docs: tickets C5 followup + Facturas counter | ✅ Live |
-| `0ab1196` | C2 R4 — gate aprobación oficina en firestore.rules | ✅ Live |
-| `557955a` | docs: ticket C3 App Check | ✅ Live |
-| `96f7539` | Sprint Sugerencia Solo Chequeo | ✅ Live |
-| `0bdf20c` | Hito 2 Portal Cliente — modal posponer + panel admin | ✅ Live |
+| # | Hash | Hora aprox | Sprint | Riesgo regresión |
+|---|---|---|---|---|
+| 1 | `3e9af9d` | 08:30 | Facturas Counter — consolidado a CG- | **Alto** — generación de números |
+| 2 | `d2b1365` | 09:30 | C5 followup — eliminar pago con runTransaction | Medio |
+| 3 | `aebf689` | 11:00 | Filtro de fechas v1 — Facturas + Facturación + Cotizaciones | Bajo (UI) |
+| 4 | `ba2d81f` | 13:30 | Sprint Descuentos Nómina — préstamos + ad-hoc + cuotas | Medio |
+| 5 | `59d14c7` | 13:32 | docs: ticket cleanup consolidado 11 ítems | Cero |
+| 6 | `1146536` | 18:00 | C3 fase A — App Check soft enforcement | Bajo (no bloquea) |
+| 7 | `014778d` | 18:01 | docs: ticket cleanup extendido | Cero |
+| 8 | _en progreso_ | — | Filtro avanzado finanzas (en este sprint) | Bajo (UI) |
 
-## Sprint en progreso (bloqueado): Facturas Counter
+## Procedimiento de rollback
 
-**Status:** builder + tester + reviewer aprobaron. Refactor de `Facturas.tsx` para usar `siguienteNumeroFactura()` del servicio oficial → emite `CG-####` consistente. Falta un solo paso pre-deploy: correr script `scripts/consolidar-counter-facturas.ts` para alinear `config/contadores.ultimaFactura` al máximo entre legacy y oficial.
-
-### Archivos modificados (sin commit todavía)
-
-- `src/types/index.ts` — agregado `Factura.origen?: 'manual' | 'post-cierre'`
-- `src/utils/index.ts` — eliminada `generateNumeroFactura()`
-- `src/pages/Facturas.tsx` — usa `siguienteNumeroFactura()` del servicio oficial, setea `origen: 'manual'`
-- `src/pages/FacturacionPendiente.tsx` — setea `origen: 'post-cierre'`
-- `src/pages/Cotizaciones.tsx` — fix de 1 línea: setea `origen: 'post-cierre'` al convertir cotización a factura (línea 63 de handleConvertirAFactura)
-- `firestore.rules` — eliminada rule `match /counters/{docId}` (la colección queda sin uso)
-- `scripts/consolidar-counter-facturas.ts` — NUEVO, script one-shot Admin SDK
-
-Build/lint clean. Reviewer aprobado.
-
-### Bloqueador actual
+**Para revertir un commit específico** (mantiene los otros):
 
 ```bash
-npx --yes vercel@latest env pull --environment=production .env.local
-# Output: ✅ Created .env.local
-
-# Verificación:
-grep "^FIREBASE_" .env.local | awk -F= '{print $1": length="length($2)}'
-# Output esperado:
-#   FIREBASE_CLIENT_EMAIL: length=72  ← OK
-#   FIREBASE_PRIVATE_KEY: length=2   ← VACÍA (solo "")
-#   FIREBASE_PROJECT_ID: length=27   ← OK probablemente
+cd ~/Desktop/mister-service-rd
+git revert <hash> --no-edit
+git push
+npm run deploy:rules   # solo si afectaba firestore.rules
 ```
 
-`FIREBASE_PRIVATE_KEY` queda como `""` después del `vercel env pull`. Probablemente Vercel la marcó como Sensitive y el CLI no la descarga por seguridad.
-
-### Próximo paso (cuando Jorge retome)
-
-**Opción A — Manual (recomendada):**
-
-1. Abrir https://vercel.com/misterservicerd-8290s-projects/mister-service-rd/settings/environment-variables
-2. Buscar `FIREBASE_PRIVATE_KEY` → click "Decrypt" / "Reveal" / ojo abierto
-3. Copiar el valor completo (empieza con `-----BEGIN PRIVATE KEY-----`)
-4. Editar `.env.local`:
-   ```bash
-   open -a TextEdit .env.local
-   ```
-5. Reemplazar la línea `FIREBASE_PRIVATE_KEY=""` por el valor real entre comillas
-6. Guardar
-7. Verificar las otras 2 vars también:
-   ```bash
-   grep "^FIREBASE_" .env.local | awk -F= '{print $1": length="length($2)}'
-   ```
-   Si `FIREBASE_PROJECT_ID` o `FIREBASE_CLIENT_EMAIL` también vienen vacías, hacer lo mismo con esas
-8. Correr el script:
-   ```bash
-   npx tsx --env-file=.env.local scripts/consolidar-counter-facturas.ts
-   ```
-9. Output esperado:
-   - `Consolidado: X → Y (legacy era Y)` — counter ajustado
-   - O `No requiere ajuste. Oficial >= Legacy.` — ya alineado
-
-**Opción B — Service account JSON desde Firebase Console (alternativa):**
-
-1. https://console.firebase.google.com/project/mister-service-app-cloude/settings/serviceaccounts/adminsdk
-2. "Generate new private key" → descarga JSON
-3. Mover archivo a raíz del repo como `service-account.json` (NO commitear, agregar a .gitignore si no está)
-4. **Modificar el script** para soportar `GOOGLE_APPLICATION_CREDENTIALS` (hoy lee `FIREBASE_PROJECT_ID/CLIENT_EMAIL/PRIVATE_KEY` por separado)
-5. Correr:
-   ```bash
-   GOOGLE_APPLICATION_CREDENTIALS=./service-account.json npx tsx scripts/consolidar-counter-facturas.ts
-   ```
-
-### Después del script
+**Para revertir TODOS los commits del día** (caso extremo):
 
 ```bash
-git add \
-  src/types/index.ts \
-  src/utils/index.ts \
-  src/pages/Facturas.tsx \
-  src/pages/FacturacionPendiente.tsx \
-  src/pages/Cotizaciones.tsx \
-  firestore.rules \
-  scripts/consolidar-counter-facturas.ts
-
-git commit -m "fix(audit): consolidar counters de facturas en sistema oficial CG-
-
-Antes habia dos paginas activas generando 'Conduces de Garantia' con
-counters distintos:
-
-- Facturas.tsx: counters/facturas.count, prefijo FAC-####
-- FacturacionPendiente.tsx: config/contadores.ultimaFactura, prefijo CG-####
-
-Ambas activas, ambas con permisos. Si dos admins emitian
-simultaneamente desde rutas distintas, los numeros podian colisionar
-internamente (FAC-0042 y CG-0042 distintos). El sidebar mostraba
-'Conduces de Garantia' para ambas, lo que era inconsistente con el
-prefijo FAC- emitido por una de ellas.
-
-Cambios:
-- Facturas.tsx ahora usa siguienteNumeroFactura() del servicio oficial,
-  emitiendo CG-#### consistente con el resto del sistema.
-- Eliminada la funcion local getNextNumero() y el helper
-  generateNumeroFactura() en utils/index.ts.
-- Eliminada la rule match /counters en firestore.rules (la coleccion
-  queda sin uso, cleanup de superficie de ataque).
-- Schema: Factura.origen?: 'manual' | 'post-cierre' distingue el
-  flujo de creacion (Facturas.tsx=manual, FacturacionPendiente.tsx=
-  post-cierre, Cotizaciones.tsx convertir=post-cierre). parseFactura
-  rehidrata defensivamente.
-- Script one-shot scripts/consolidar-counter-facturas.ts (Admin SDK,
-  idempotente) corre antes del deploy para alinear
-  config/contadores.ultimaFactura al max(legacy, oficial).
-
-Documentos historicos con prefijo FAC- en la coleccion facturas se
-preservan (no se modifican, son legitimos pre-refactor).
-
-Sin cambios visibles para admin/coord salvo que los nuevos numeros
-emitidos desde /admin/facturas ahora son CG- en vez de FAC-.
-
-NO hay impacto DGII (los conduces son registro contable interno, no
-fiscal). Los reportes 606/607 leen desde otra fuente."
-
-git push origin main
+git reset --hard 014778d~6
+git push --force
 npm run deploy:rules
 ```
 
-Después devops verifica deploy + que `/admin/facturas` y `/admin/facturacion-pendiente` siguen cargando + emisión de conduce desde Facturas.tsx ahora retorna CG-####.
+⚠️ Force-push es agresivo. Solo discutirlo con coordinator antes.
 
-## Cola de pendientes (en orden de prioridad post-Facturas Counter)
+## Lo que está vivo en producción
 
-1. **C5 followup** (~30 min) — `handleEliminarPago` con runTransaction. Mismo patrón que C5. Ticket en `docs/sprints/PROMPT_AUDIT_C5_FOLLOWUP.md`.
-2. **Sprint Descuentos completo** (~3-4h) — descuentos ad-hoc + préstamos programados con cuotas. NO descartar el bug fix ya vivo (commit 25e0216) — extenderlo. Ticket en `docs/sprints/PROMPT_DESCUENTOS_NOMINA.md`.
-3. **C3 fase A App Check** (~2-3h) — soft enforcement en feedback/garantia/portal-cliente endpoints. App Check ya configurado en Console. Ticket en `docs/sprints/PROMPT_AUDIT_C3_APPCHECK.md`.
-4. **C3 fase B** (~30 min) — hard enforcement después de validar fase A 24-48h.
+### Funcionalidades del negocio nuevas
+
+1. **`/admin/facturas`** ahora emite prefijo `CG-` consistente con el sistema oficial.
+2. **`/admin/facturas`, `/admin/facturacion-pendiente`, `/admin/cotizaciones`** tienen filtro de rango de fechas con default mes corriente.
+3. **`/admin/nomina`** tiene columna "Descuentos" + botón "+ Descuento" en cada empleado para agregar descuentos ad-hoc en liquidación abierta.
+4. **`/admin/prestamos`** (NUEVO) — gestión completa de préstamos a empleados con cuotas programadas.
+5. **Pagos a clientes** son race-condition-safe (registrar + eliminar con `runTransaction`).
+6. **App Check** activo en monitor mode en endpoints públicos (`feedback`, `garantia`, `portal-cliente`).
+7. **Sidebar** tiene entradas nuevas para "Préstamos a Empleados" (gateado a admin/coord).
+
+### Schema nuevo
+
+- `prestamos_empleados/*` — colección nueva con préstamos activos.
+- `LiquidacionEmpleado.descuentosAdHoc[]`, `cuotasPrestamos[]`, `totalDescuentos`, `totalNeto` — campos opcionales (backwards compat).
+- `Factura.origen?: 'manual' | 'post-cierre'` — campo opcional.
+
+### Rules
+
+- `match /counters/{docId}` eliminada (colección sin uso).
+- `match /prestamos_empleados/{docId}` agregada (read=esStaff, write=esAdminOCoord).
+
+## Cola de pendientes (orden de prioridad)
+
+| # | Tarea | Tiempo | Estado |
+|---|---|---|---|
+| 1 | Sprint Filtro Avanzado Finanzas (en progreso) | ~2.5-3h | Arrancando |
+| 2 | Validar 24-48h métricas C3 App Check | — | Pendiente |
+| 3 | C3 fase B (hard enforcement) | ~30 min | Después de #2 |
+| 4 | Cleanup consolidado 11 ítems | ~1.5-2h | Pendiente, ticket completo |
+
+Tickets armados que esperan ejecución:
+
+- `docs/sprints/PROMPT_AUDIT_C3_APPCHECK.md` (fase A ya ejecutada — fase B pendiente)
+- `docs/sprints/PROMPT_CLEANUP_PAGOS_Y_FECHAS.md` (11 ítems consolidados)
+- `docs/sprints/PROMPT_FILTRO_AVANZADO_FINANZAS.md` (a crear con este sprint)
+
+## Validaciones manuales pendientes
+
+- Solo Chequeo end-to-end (sprint commit `96f7539` de ayer).
+- Hito 2 Portal Cliente — modal posponer + panel reprogramaciones.
+- Borrar 2 entradas TEST que dejé el primer día (cita teléfono `8090000000` + solicitud `REXKH43I`).
+- Después del filtro avanzado: validar drilldown de las 4 KPI cards en `/admin/facturas`.
 
 ## Decisiones tomadas en sesión
 
-- **Conduce de garantía es interno, NO DGII.** Los reportes 606/607 (sprint #68) van por otro lado. Esto bajó la prioridad fiscal del Sprint Facturas Counter pero igual se hizo por trazabilidad interna y deuda técnica.
-- **Solo chequeo ahora requiere aprobación de oficina** (sprint Solo Chequeo, commit 96f7539). Técnico sugiere → oficina aprueba → soloChequeo se setea + se desbloquea cierre.
-- **Portal Cliente Hito 1 + Hito 2 vivos.** Cliente recibe link al confirmar cita, ve detalles + estado + puede pedir posponer. Admin gestiona desde `/admin/reprogramaciones`.
-- **C2 R4 vivo.** Técnico no puede avanzar fase a `trabajo_realizado` ni modificar `precioFinal` sin aprobación de oficina (excepto solo chequeo aprobado).
-
-## Pendiente de Jorge en producción (no urgente)
-
-- Validar el flujo completo de Solo Chequeo: login técnico → sugerir → admin aprueba → técnico ve banner verde → cerrar orden.
-- Validar Hito 2 Portal Cliente: enviar link a cliente real, cliente pide posponer, admin aprueba desde `/admin/reprogramaciones`.
-- Borrar las 2 entradas TEST que dejé el primer día (cita teléfono `8090000000` + solicitud `REXKH43I`).
+- Conduce de garantía es interno, NO DGII.
+- Solo chequeo requiere aprobación de oficina.
+- Portal Cliente Hito 1 + Hito 2 vivos.
+- C2 R4 vivo — técnico no puede saltarse aprobación.
+- Préstamos a empleados con cuotas programadas + descuentos ad-hoc en liquidación abierta.
+- App Check en monitor mode 24-48h antes de hard enforcement.
+- KPI cards de Facturas serán clickeables para drilldown (sprint en progreso).
+- Buscador unificado (nombre + número orden + número conduce + teléfono + tipo equipo) en sprint en progreso.
 
 ## Cuentas y endpoints relevantes
 
@@ -171,15 +101,37 @@ Después devops verifica deploy + que `/admin/facturas` y `/admin/facturacion-pe
 - **Production URL**: `https://www.misterservicerd.com`
 - **Cuenta Vercel/Firebase**: `misterservicerd@gmail.com`
 - **Cuenta personal**: `apnbrito@gmail.com`
-- **Deploy hook backup**: ver CLAUDE.md sección "Deploy Hook"
+- **Service account local**: `~/Desktop/mister-service-rd/service-account.json` (gitignored, generado 2026-05-02 09:53)
 
-## Ramas / commits
+## Notas técnicas
 
-Branch principal: `main`. HEAD al cierre de sesión: `0bdf20c` (Hito 2). Sprint Facturas Counter está en working tree, sin commit.
+- Service account JSON viejo (id `e89659cbc7074642606e0bb2e1938a4b330ebf4d`) **REVOCADO** después de exposición accidental en chat.
+- Service account nuevo activo es el que está en `service-account.json` local.
+- `.env.local` con env vars de Vercel (development y production) creado vía `vercel env pull --environment=production`. La `FIREBASE_PRIVATE_KEY` venía vacía porque Vercel marca Sensitive vars como ocultas — workaround: usar `service-account.json` directamente vía Admin SDK.
+- Auto-aprobación de Bash + git en `.claude/settings.json` activa.
+- Soft enforcement App Check loguea en Vercel Functions logs como `{endpoint, app_check, token_orden}` — token URL truncado a 8 chars.
 
-## Notas técnicas relevantes
+## Si algo se rompe mañana
 
-- npm cache local del Mac de Jorge se rompió ayer (permisos de root) y se arregló con `sudo chown -R $(whoami) ~/.npm`. Si vuelve a fallar, repetir.
-- `firebase-tools` instalado global. `vercel` CLI usa `npx --yes vercel@latest`.
-- `.env.local` está gitignored. NO commitear secretos.
-- Auto-aprobación de Bash + git en `.claude/settings.json` activa para flujo de hoy.
+1. Identificar qué función del negocio falla (registro de pago, emisión de conduce, vista de nómina, etc).
+2. Mirar la tabla de commits arriba — el sprint que tocó ese código es el sospechoso.
+3. `git log --oneline -10` para confirmar el orden.
+4. `git revert <hash> --no-edit && git push` revierte ese commit. Si afectaba rules, `npm run deploy:rules` también.
+5. Avisarme acá en Cowork con el sprint que se revertió y diagnostico el bug específico.
+
+## Sesión 2026-05-04 — Sprint Conduces SIBS C3 completo
+
+**Hashes:**
+- C3a: 170b5a3 — `refactor(facturas): split FacturaCrearModal e items editor`
+- C3b: 6b9c4c2 — `feat(facturas): vendedor por linea, drawer cliente nuevo, modalidad por linea`
+
+**Métricas:**
+- Facturas.tsx: 989 → 948 LOC (split + render N>1).
+- Archivos nuevos: 5 (`FacturaCrearModal`, `FacturaItemsEditor`, `FacturaItemDetallesModal`, `ClienteNuevoDrawer`, `useClientesEnVivo`).
+- Modificaciones cross-cutting: `clientes.service.ts` (+25 LOC, firma extendida), `types/index.ts` (+11 LOC, `clienteTipoEnEmision`), `utils/index.ts` (+4 LOC, parser defensivo).
+- Total C3b: +1712 / -207 LOC en 9 archivos.
+
+**Próximo:** Sprint C4 — extensión `FacturacionPendiente.tsx` con vendedor por línea + N>1 técnicos + cleanup huérfanas.
+
+Aprendizajes consolidados en `_estado-temporal-conduces.md` sección "Retrospectiva C3".
+
