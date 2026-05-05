@@ -112,8 +112,117 @@ export interface Cliente {
     /** CSV con bancos usados para pagos. */
     bancosPago: string;
   };
+  /**
+   * Última vez que se contactó al cliente desde una campaña de marketing
+   * (sprint Reactivación). Se actualiza en `marcarClienteEnviado` del
+   * servicio `campanasMarketing.service`. Sirve para enforcement del
+   * cooldown anti-spam (config_marketing.cooldownDias, default 30).
+   *
+   * NOTA defense-in-depth (security #3): el schema extension de Cliente
+   * se valida UI-side. La rule de Firestore (`clientes`) permite update
+   * por staff oficina y NO restringe estos campos específicos. La UI
+   * (TabReactivacion) cap el array a 50 entries y aplica el cooldown.
+   */
+  ultimoContactoMarketing?: Timestamp | Date;
+  /**
+   * Historial de contactos de marketing enviados al cliente. Cap 50
+   * entries (slice -50 al persistir). Cada entry es un snapshot del
+   * envío — no muta una vez creado.
+   *
+   * Sin filtro por estado (todos los contactos cuentan para cooldown,
+   * incluso si la plantilla quedó en error).
+   */
+  contactosMarketing?: Array<{
+    fecha: Timestamp | Date;
+    plantillaId: string;
+    plantillaNombre: string;
+    agenteId: string;
+    agenteNombre: string;
+    campanaId: string;
+  }>;
   createdAt: Date;
   updatedAt?: Date;
+}
+
+// ───────────────────────── Marketing / Reactivación ─────────────────────────
+
+/**
+ * Plantilla de mensaje WhatsApp configurable por admin. Vive en el doc
+ * `config_marketing/plantillas` como array `plantillas[]`.
+ *
+ * Variables soportadas en `mensaje`: `{nombre}`, `{telefono}`,
+ * `{ultimoServicio}`, `{mesesUltimoServicio}`, `{equipoTipo}`, `{zona}`.
+ * Ver `utils/plantillaRender.ts` para el renderer y los fallbacks.
+ */
+export interface PlantillaMarketing {
+  /** Slug único, p.ej. `mantenimiento_3meses`. Si la plantilla se
+   *  desactiva, el id se preserva para no romper FKs históricas en
+   *  `campanas_marketing`. */
+  id: string;
+  /** Nombre humano para el selector. */
+  nombre: string;
+  /** Cuerpo del mensaje con variables. */
+  mensaje: string;
+  /** Si false, no aparece en el selector del tab Reactivación pero
+   *  campañas viejas la siguen referenciando. */
+  activa: boolean;
+}
+
+/**
+ * Filtros aplicados al momento de generar la campaña. Snapshot —
+ * la campaña no se re-evalúa cuando cambia la base de clientes.
+ */
+export interface FiltrosCampanaMarketing {
+  zonas?: string[];
+  rangoUltimoServicio?: string;
+  tipo?: 'particular' | 'b2b';
+  equipos?: string[];
+  rangoServiciosTotales?: string;
+}
+
+/**
+ * Snapshot de un cliente contactado en una campaña. El `enviado: false`
+ * inicial se flippea cuando el agente toca "Marcar enviado" en el modal
+ * de links (transacción atómica con update de `cliente.ultimoContactoMarketing`).
+ */
+export interface ClienteEnCampana {
+  clienteId: string;
+  clienteNombre: string;
+  telefono: string;
+  enviado: boolean;
+  fechaEnvio?: Timestamp | Date;
+}
+
+/**
+ * Campaña de marketing creada desde el tab Reactivación. Inmutable salvo
+ * por el flippeo de `enviado` en el array de `clientesContactados`. Las
+ * rules de Firestore enforcen que `creadaPor`, `fecha`, `creadaEn` no
+ * cambien en updates posteriores (security condition #1).
+ */
+export interface CampanaMarketing {
+  id: string;
+  fecha: Timestamp | Date;
+  plantillaId: string;
+  plantillaNombre: string;
+  filtrosAplicados: FiltrosCampanaMarketing;
+  clientesContactados: ClienteEnCampana[];
+  creadaPor: string;
+  creadaPorNombre: string;
+  totalEnviados: number;
+  totalReactivados?: number;
+  totalReactivadosUpdatedAt?: Timestamp | Date;
+  /**
+   * Marca cuando un admin saltó el cooldown anti-spam. Defense-in-depth:
+   * la UI obliga a confirmación explícita y agrega audit log atómico
+   * (security condition #2 — runTransaction).
+   */
+  overrideCooldown?: boolean;
+  overrideCooldownPorId?: string;
+  overrideCooldownPorNombre?: string;
+  overrideCooldownEn?: Timestamp | Date;
+  overrideCooldownMotivo?: string;
+  /** Marca en epoch ms cuando se persistió el doc. */
+  creadaEn: Timestamp | Date;
 }
 
 export const ZONAS_RD = [
@@ -1074,6 +1183,10 @@ export interface PermisosSistema {
   bancosGestionar: boolean;
   // Avances a empleados (Fase 8)
   avancesGestionar: boolean;
+  // Reactivación marketing (sprint Mapa Clientes Commit 2)
+  // Gate del tab "Reactivación" en /admin/clientes y de la generación
+  // de campañas de WhatsApp. Default true para admin/coord, false resto.
+  clientesReactivacionGestionar: boolean;
   // Técnico (opcional, solo para rol técnico)
   tecnicoVistaAgenda?: 'dia' | 'semana' | 'mes';
   tecnicoSoloPropiasCitas?: boolean;
@@ -1103,6 +1216,7 @@ const TODO_FALSE: PermisosSistema = {
   pagosRegistrar: false, ordenesEnviarAFacturacion: false,
   facturasCerrar: false, bancosGestionar: false,
   avancesGestionar: false,
+  clientesReactivacionGestionar: false,
 };
 
 const TODO_TRUE: PermisosSistema = {
@@ -1119,6 +1233,7 @@ const TODO_TRUE: PermisosSistema = {
   pagosRegistrar: true, ordenesEnviarAFacturacion: true,
   facturasCerrar: true, bancosGestionar: true,
   avancesGestionar: true,
+  clientesReactivacionGestionar: true,
 };
 
 export const PERMISOS_TODO_FALSE: PermisosSistema = { ...TODO_FALSE };

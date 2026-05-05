@@ -548,6 +548,72 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Marketing / Reactivación (sprint Mapa Clientes Commit 2)
+    // ─────────────────────────────────────────────────────────────
+    //
+    // Campañas de WhatsApp creadas desde el tab Reactivación de
+    // /admin/clientes. Read/create/update solo admin/coord (rol
+    // comercial). Los flippeos de `enviado` en clientesContactados[]
+    // suceden vía runTransaction → update permitido.
+    //
+    // Inmutabilidad enforced (sprint Mapa Commit 2 iter 2 — fix
+    // reviewer BLOCKER): el snapshot completo de la campaña es
+    // inmutable. Solo se permiten mutaciones a:
+    //   - `clientesContactados`        (flippeo de enviado por entry)
+    //   - `totalEnviados`              (incrementos +1, nunca decrece)
+    //   - `totalReactivados`           (commit 3 — ROI tracking)
+    //   - `totalReactivadosUpdatedAt`  (commit 3 — ROI tracking)
+    //   - `updatedAt`                  (libre, si llega)
+    //
+    // Todos los demás campos son inmutables — incluido el conjunto
+    // overrideCooldown* (no se puede flippear retroactivamente sin
+    // dejar audit), plantillaId/plantillaNombre (memoria de la
+    // campaña), filtrosAplicados (snapshot), creadaPor/creadaPorNombre
+    // (autoría), fecha/creadaEn (timestamps).
+    //
+    // CREATE: además del check de rol, `creadaPor` debe matchear el
+    // uid autenticado para prevenir spoof de autoría.
+    //
+    // Delete: nunca — son auditables.
+    match /campanas_marketing/{docId} {
+      allow read: if esAdminOCoord();
+      allow create: if esAdminOCoord() &&
+        request.resource.data.creadaPor == request.auth.uid;
+      allow update: if esAdminOCoord() &&
+        // Snapshot inmutable: autoría
+        request.resource.data.creadaPor == resource.data.creadaPor &&
+        request.resource.data.creadaPorNombre == resource.data.creadaPorNombre &&
+        // Snapshot inmutable: timestamps
+        request.resource.data.fecha == resource.data.fecha &&
+        request.resource.data.creadaEn == resource.data.creadaEn &&
+        // Snapshot inmutable: plantilla (memoria de la campaña)
+        request.resource.data.plantillaId == resource.data.plantillaId &&
+        request.resource.data.plantillaNombre == resource.data.plantillaNombre &&
+        // Snapshot inmutable: filtros aplicados
+        request.resource.data.filtrosAplicados == resource.data.filtrosAplicados &&
+        // Snapshot inmutable: override cooldown (no flippeable post-hoc)
+        request.resource.data.overrideCooldown == resource.data.overrideCooldown &&
+        request.resource.data.overrideCooldownPorId == resource.data.overrideCooldownPorId &&
+        request.resource.data.overrideCooldownPorNombre == resource.data.overrideCooldownPorNombre &&
+        request.resource.data.overrideCooldownEn == resource.data.overrideCooldownEn &&
+        request.resource.data.overrideCooldownMotivo == resource.data.overrideCooldownMotivo &&
+        // totalEnviados solo puede crecer +1 (un envío a la vez)
+        request.resource.data.totalEnviados <= resource.data.totalEnviados + 1 &&
+        request.resource.data.totalEnviados >= resource.data.totalEnviados;
+      allow delete: if false;
+    }
+
+    // Configuración de marketing (plantillas WhatsApp + cooldown).
+    // Read: cualquier staff puede leer (la UI las usa para renderizar
+    // mensajes, técnicos podrían ver pero no editar).
+    // Write: solo admin (decisión comercial — plantillas afectan
+    // marca y cumplimiento).
+    match /config_marketing/{docId} {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // 6. Auditoría (append-only)
     // ─────────────────────────────────────────────────────────────
 

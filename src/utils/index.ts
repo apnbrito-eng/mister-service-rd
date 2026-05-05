@@ -546,6 +546,29 @@ export function parseCliente(id: string, raw: Record<string, unknown>): Cliente 
   // (undefined, null, string raro) cae al default seguro.
   const tipo: 'particular' | 'b2b' = raw.tipo === 'b2b' ? 'b2b' : 'particular';
 
+  // Sprint Reactivación Marketing (Commit 2): rehidratamos defensivamente
+  // los campos nuevos. Clientes legacy sin estos campos no rompen.
+  const ultimoContactoMarketing = parseFirestoreDate(raw.ultimoContactoMarketing) || undefined;
+  const contactosMarketingRaw = raw.contactosMarketing;
+  const contactosMarketing = Array.isArray(contactosMarketingRaw)
+    ? contactosMarketingRaw
+        .map((entry) => {
+          if (!entry || typeof entry !== 'object') return null;
+          const e = entry as Record<string, unknown>;
+          const fecha = parseFirestoreDate(e.fecha);
+          if (!fecha) return null;
+          return {
+            fecha,
+            plantillaId: typeof e.plantillaId === 'string' ? e.plantillaId : '',
+            plantillaNombre: typeof e.plantillaNombre === 'string' ? e.plantillaNombre : '',
+            agenteId: typeof e.agenteId === 'string' ? e.agenteId : '',
+            agenteNombre: typeof e.agenteNombre === 'string' ? e.agenteNombre : '',
+            campanaId: typeof e.campanaId === 'string' ? e.campanaId : '',
+          };
+        })
+        .filter((v): v is NonNullable<typeof v> => v !== null)
+    : undefined;
+
   return {
     id,
     nombre: (raw.nombre as string) || '',
@@ -566,6 +589,8 @@ export function parseCliente(id: string, raw: Record<string, unknown>): Cliente 
     tipo,
     origen,
     legacyMetricas,
+    ultimoContactoMarketing,
+    contactosMarketing,
     createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
     updatedAt: parseFirestoreDate(raw.updatedAt) || undefined,
   };

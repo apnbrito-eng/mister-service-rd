@@ -23,8 +23,9 @@ import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import EditarClienteModal from '../components/clientes/EditarClienteModal';
 import MapaClientes from '../components/clientes/MapaClientes';
 import FiltrosSidebarClientes from '../components/clientes/FiltrosSidebarClientes';
+import TabReactivacion from '../components/clientes/TabReactivacion';
 import BotonComoLlegar from '../components/shared/BotonComoLlegar';
-import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench, Edit2, MessageCircle, Archive, List, Map as MapIcon, Filter } from 'lucide-react';
+import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench, Edit2, MessageCircle, Archive, List, Map as MapIcon, Filter, Sparkles } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Clientes() {
@@ -36,6 +37,9 @@ export default function Clientes() {
   // permiso nuevo en `PermisosSistema` hasta Commit 2 de Reactivación).
   const puedeVerMapa =
     userProfile?.rol !== 'tecnico' && userProfile?.rol !== 'operaria';
+  // Tab Reactivación — gateado por permiso explícito (Commit 2 sprint
+  // Reactivación). Default true para admin/coord, false resto.
+  const puedeVerReactivacion = puede(userProfile, 'clientesReactivacionGestionar');
 
   const [loading, setLoading] = useState(true);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -47,8 +51,8 @@ export default function Clientes() {
   const [saving, setSaving] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
 
-  // Tab "Lista" (default) | "Mapa"
-  const [tab, setTab] = useState<'lista' | 'mapa'>('lista');
+  // Tab "Lista" (default) | "Mapa" | "Reactivación"
+  const [tab, setTab] = useState<'lista' | 'mapa' | 'reactivacion'>('lista');
   // Filtros aplicados al tab Mapa
   const [filtros, setFiltros] = useState<FiltrosClientes>(FILTROS_DEFAULT);
   // Drawer mobile de filtros (lg breakpoint)
@@ -202,6 +206,11 @@ export default function Clientes() {
   useEffect(() => {
     if (!puedeVerMapa && tab === 'mapa') setTab('lista');
   }, [puedeVerMapa, tab]);
+
+  /** Si pierde permiso de Reactivación durante la sesión, fallback a Lista. */
+  useEffect(() => {
+    if (!puedeVerReactivacion && tab === 'reactivacion') setTab('lista');
+  }, [puedeVerReactivacion, tab]);
 
   const geocodeDireccion = async (direccion: string) => {
     if (!direccion) return;
@@ -364,10 +373,21 @@ export default function Clientes() {
                 <MapIcon size={12} /> Mapa
               </button>
             )}
+            {puedeVerReactivacion && (
+              <button
+                type="button"
+                onClick={() => setTab('reactivacion')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  tab === 'reactivacion' ? 'bg-[#0f3460] text-white' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <Sparkles size={12} /> Reactivación
+              </button>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
-          {tab === 'mapa' && (
+          {(tab === 'mapa' || tab === 'reactivacion') && (
             <button
               type="button"
               onClick={() => setFiltrosDrawerOpen(true)}
@@ -410,6 +430,15 @@ export default function Clientes() {
             />
           </div>
         </div>
+      )}
+
+      {tab === 'reactivacion' && puedeVerReactivacion && userProfile && (
+        <TabReactivacion
+          clientes={clientes}
+          userProfile={userProfile}
+          filtrosDrawerOpen={filtrosDrawerOpen}
+          onCloseFiltrosDrawer={() => setFiltrosDrawerOpen(false)}
+        />
       )}
 
       {tab === 'lista' && (
