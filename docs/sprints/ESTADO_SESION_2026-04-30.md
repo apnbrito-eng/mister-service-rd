@@ -198,3 +198,35 @@ Aprendizajes consolidados en `_estado-temporal-conduces.md` sección "Retrospect
 **Hallazgo bonus:** `api/ai/chat.ts` NO usa `verificarAppCheck` (usa Firebase ID token). Listo como C2.5.
 
 Retro completa en `docs/sprints/RETRO_AUDIT_CRITICOS_2026-05-04.md`.
+
+## Sesión 2026-05-04 (cont.) — Sprint Mapa Clientes + Reactivación COMPLETO
+
+**Hashes desplegados:**
+- C1 d1d39b0 — `feat(clientes): tab Mapa con sidebar filtros + 3 vistas Leaflet`
+- C2 a38eb89 — `feat(reactivacion): tab Reactivacion + plantillas WhatsApp + audit + schema`
+- C3 800e0b4 — `feat(reactivacion): ROI tracking — orden.reactivadaPor + totalReactivados`
+
+**Rules:** 2 deploys manuales con `npm run deploy:rules` tras C2 y C3.
+
+**Métricas:**
+- 11 archivos nuevos.
+- 16+ archivos modificados.
+- ~+3000 LOC nuevos.
+- 2 loops CHANGES_NEEDED (ambos en C2 iter 1: rules sin endurecer + audit fuera de tx).
+
+**Decisiones cross-cutting destacables:**
+- Override stack a Leaflet (no Google Maps) — convención del repo.
+- 3-way runTransaction atomic con audit log incluido.
+- Idempotencia DENTRO de tx.get post-lectura.
+- getDoc fresh post-marcarClienteEnviado (anti-staleness).
+
+**Bug pre-existente detectado** (deuda crítica para próximo sprint):
+- `src/pages/Mantenimiento.tsx:80` usa `ordenesSnap.size + 1` para numerar órdenes — viola regla "Counters must use transactions". Sprint propio recomendado primero.
+
+**Próximo recomendado:**
+1. Sprint counter Mantenimiento.tsx (CRÍTICO — riesgo colisión).
+2. C2 fase B App Check (ventana 24-48h).
+3. Sprint C2.5 hardening api/ai/chat.ts.
+4. Sprint repo-wide N6.5 callsites locales.
+
+Retro completa en `docs/sprints/RETRO_MAPA_CLIENTES_2026-05-04.md`.

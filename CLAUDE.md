@@ -96,6 +96,8 @@ Admins build forms in `FormularioEditor` → `formularios` collection. Public us
 - **No emojis** in code or commits unless the user asks.
 - **Commit messages are Spanish, Conventional-Commit style** (`feat:`, `fix:`) — match recent history.
 - **Documentación viva: cuando elimines un patrón existente, sincroniza los docs.** Hacer grep en `CLAUDE.md`, `PROMPTS-CLAUDE-CODE.md`, `CONTEXTO_PROYECTO.md`, `README.md` y `.claude/agents/*.md` por referencias al patrón eliminado e invertirlas. Sin esto, instrucciones desactualizadas pueden llevar a un futuro builder a reintroducir vulnerabilidades. Aprendizaje del audit fix C3 — `PROMPTS-CLAUDE-CODE.md:92` decía "NO toques fallback admin demo" después de que C3 lo eliminó por seguridad.
+- **Mutaciones cross-collection deben ir en un solo `runTransaction`, audit logs incluidos.** Si una mutación toca 2+ colecciones (ej: orden + campaña + audit), envolverlas en `runTransaction` para atomicidad. La verificación de idempotencia (`if (data.flag) return`) debe ir DENTRO del callback DESPUÉS del `tx.get()`, no antes — el optimistic locking de Firestore garantiza que invocaciones paralelas no doble-cuentan. Patrón establecido en `marcarClienteEnviado` (`a38eb89`) y `marcarOrdenReactivada` (`800e0b4`).
+- **Reviewer obligatorio cuando un sprint toca `firestore.rules`.** Tester valida typecheck/lint pero NO audita inmutabilidad de campos sensibles ni patrones de defense-in-depth. Coordinator debe convocar reviewer con foco explícito en rules cuando se modifica el archivo. Aprendizaje del audit C3 + Sprint Mapa C2 iter 1 (rules permitían manipulación de 12 campos sensibles que reviewer cazó).
 
 ## Related docs in repo
 
