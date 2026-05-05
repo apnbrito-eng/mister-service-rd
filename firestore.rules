@@ -557,6 +557,16 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // App Check audit log (sprint pre-C2 instrumentación). Escrito SOLO
+    // por endpoints serverless vía Firebase Admin SDK, que bypassa estas
+    // rules. Los clientes web nunca deben leer ni escribir aquí — esta
+    // rule es defense-in-depth (deny explícito) por si la colección
+    // queda expuesta accidentalmente desde un cliente.
+    match /app_check_audit/{docId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Default deny — cualquier colección no listada arriba está
     // bloqueada. Esto incluye colecciones nuevas que se creen sin
