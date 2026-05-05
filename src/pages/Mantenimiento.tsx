@@ -3,6 +3,7 @@ import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, getDocs, que
 import { db } from '../firebase/config';
 import { Mantenimiento as MantenimientoType, Personal } from '../types';
 import { formatFechaCorta, generarTokenPortalCliente } from '../utils';
+import { siguienteNumeroOrden } from '../services/contadores.service';
 import { useTiposEquipo } from '../hooks/useTiposEquipo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
@@ -76,8 +77,7 @@ export default function Mantenimiento() {
 
   const handleGenerarOrden = async (item: MantenimientoType) => {
     try {
-      const ordenesSnap = await getDocs(collection(db, 'ordenes_servicio'));
-      const numero = `OS-${String(ordenesSnap.size + 1).padStart(4, '0')}`;
+      const numero = await siguienteNumeroOrden();
       const ahora = Timestamp.now();
       await addDoc(collection(db, 'ordenes_servicio'), {
         numero,
