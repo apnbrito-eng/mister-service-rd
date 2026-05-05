@@ -1,20 +1,19 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, query, orderBy, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Factura, EstadoFactura, ItemCotizacion, MetodoPago, OrdenServicio } from '../types';
+import { Factura, EstadoFactura, MetodoPago, OrdenServicio } from '../types';
 import { formatMoneda, formatFechaCorta, parseOrden, parseFactura } from '../utils';
-import { siguienteNumeroFactura } from '../services/contadores.service';
 import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
+import FacturaCrearModal from '../components/facturas/FacturaCrearModal';
 import FiltroAvanzadoFinanzas, {
   type FiltroAvanzadoFinanzasRef,
   type FiltroActivo,
 } from '../components/admin/FiltroAvanzadoFinanzas';
-import { Plus, FileText, Trash2, Check, Printer, DollarSign, CalendarDays, TrendingUp, X, ChevronDown, Shield } from 'lucide-react';
-import { startOfMonth, startOfDay, endOfDay, startOfYear, endOfYear, isWithinInterval, format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { Plus, FileText, Trash2, Check, Printer, DollarSign, CalendarDays, TrendingUp, Shield } from 'lucide-react';
+import { startOfMonth, startOfDay, endOfDay, startOfYear, endOfYear, isWithinInterval } from 'date-fns';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
@@ -58,7 +57,6 @@ export default function Facturas() {
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [ordenesVinculadas, setOrdenesVinculadas] = useState<Record<string, OrdenServicio>>({});
   const [showModal, setShowModal] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [yearSelected, setYearSelected] = useState(new Date().getFullYear());
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -67,15 +65,6 @@ export default function Facturas() {
   const filtroRef = useRef<FiltroAvanzadoFinanzasRef>(null);
   const [facturasFiltradas, setFacturasFiltradas] = useState<Factura[]>([]);
   const [filtroActivo, setFiltroActivo] = useState<FiltroActivo | null>(null);
-
-  const [form, setForm] = useState({
-    clienteNombre: '',
-    ordenNumero: '',
-    notas: '',
-    metodoPago: '' as MetodoPago | '',
-    bancoDestino: '',
-    items: [{ descripcion: '', cantidad: 1, precio: 0 }] as ItemCotizacion[],
-  });
 
   // ─── Marcar como garantía manual ───
   const [showGarantiaManualModal, setShowGarantiaManualModal] = useState(false);
@@ -144,72 +133,6 @@ export default function Facturas() {
     { value: 'vencida', label: 'Vencida' },
     { value: 'anulada', label: 'Anulada' },
   ]), []);
-
-  // Form helpers
-  const total = form.items.reduce((sum, item) => sum + item.cantidad * item.precio, 0);
-
-  const addItem = () => setForm(f => ({ ...f, items: [...f.items, { descripcion: '', cantidad: 1, precio: 0 }] }));
-  const removeItem = (i: number) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
-  const updateItem = (i: number, field: keyof ItemCotizacion, value: any) => {
-    setForm(f => ({
-      ...f,
-      items: f.items.map((item, idx) => idx === i ? { ...item, [field]: value } : item),
-    }));
-  };
-
-  const resetForm = () => setForm({
-    clienteNombre: '', ordenNumero: '', notas: '',
-    metodoPago: '', bancoDestino: '',
-    items: [{ descripcion: '', cantidad: 1, precio: 0 }],
-  });
-
-  // Create factura
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.clienteNombre.trim()) { toast.error('El nombre del cliente es requerido'); return; }
-    if (form.items.some(i => !i.descripcion.trim())) { toast.error('Completa la descripción de todos los items'); return; }
-    if (total <= 0) { toast.error('El total debe ser mayor a 0'); return; }
-
-    setSaving(true);
-    try {
-      // Counter oficial: emite `CG-####` con transacción atómica (mismo
-      // counter que usa FacturacionPendiente.tsx, evita colisiones).
-      const numero = await siguienteNumeroFactura();
-      const docData: Record<string, unknown> = {
-        numero,
-        clienteNombre: form.clienteNombre.trim(),
-        items: form.items,
-        total,
-        estado: 'emitida' as EstadoFactura,
-        fechaEmision: Timestamp.now(),
-        createdAt: Timestamp.now(),
-        // Conduces manuales se asumen como reparación completa (no chequeo).
-        tipoCierre: 'reparacion_completa',
-        // Origen: distingue conduces creados manualmente desde /admin/facturas
-        // de los emitidos automáticamente al cerrar una orden.
-        origen: 'manual' as const,
-      };
-      if (form.ordenNumero.trim()) docData.ordenNumero = form.ordenNumero.trim();
-      if (form.notas.trim()) docData.notas = form.notas.trim();
-      if (form.metodoPago) docData.metodoPago = form.metodoPago;
-      if (form.metodoPago === 'transferencia' && form.bancoDestino.trim()) {
-        docData.bancoDestino = form.bancoDestino.trim();
-      }
-      // Strip undefined defensivo (Firestore rechaza undefined).
-      const docLimpio = Object.fromEntries(
-        Object.entries(docData).filter(([, v]) => v !== undefined),
-      );
-      await addDoc(collection(db, 'facturas'), docLimpio);
-      toast.success(`Conduce ${numero} creado`);
-      setShowModal(false);
-      resetForm();
-    } catch (err) {
-      console.error(err);
-      toast.error('Error al crear el conduce de garantía');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   // Mark as paid
   const handleMarcarPagada = async (factura: Factura) => {
@@ -474,7 +397,7 @@ export default function Facturas() {
         </div>
         {puedeCrear && (
         <button
-          onClick={() => { resetForm(); setShowModal(true); }}
+          onClick={() => setShowModal(true)}
           className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
         >
           <Plus size={18} /> Nuevo Conduce de Garantía
@@ -814,148 +737,10 @@ export default function Facturas() {
       )}
 
       {/* Create Modal */}
-      <Modal
-        isOpen={showModal}
-        onClose={() => { setShowModal(false); resetForm(); }}
-        title="Nuevo Conduce de Garantía"
-        size="lg"
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cliente *</label>
-              <input
-                type="text"
-                value={form.clienteNombre}
-                onChange={e => setForm(f => ({ ...f, clienteNombre: e.target.value }))}
-                placeholder="Nombre del cliente"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Orden de Servicio</label>
-              <input
-                type="text"
-                value={form.ordenNumero}
-                onChange={e => setForm(f => ({ ...f, ordenNumero: e.target.value }))}
-                placeholder="Ej: OS-0001 (opcional)"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-              />
-            </div>
-          </div>
-
-          {/* Items */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">Items</label>
-              <button type="button" onClick={addItem} className="text-xs text-[#1a5fa8] hover:underline font-medium">
-                + Agregar item
-              </button>
-            </div>
-            <div className="space-y-2">
-              {form.items.map((item, i) => (
-                <div key={i} className="flex gap-2 items-center">
-                  <input
-                    type="text"
-                    value={item.descripcion}
-                    onChange={e => updateItem(i, 'descripcion', e.target.value)}
-                    placeholder="Descripción del servicio o pieza"
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                  />
-                  <input
-                    type="number"
-                    value={item.cantidad}
-                    onChange={e => updateItem(i, 'cantidad', parseInt(e.target.value) || 0)}
-                    min={1}
-                    className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                  />
-                  <input
-                    type="number"
-                    value={item.precio}
-                    onChange={e => updateItem(i, 'precio', parseFloat(e.target.value) || 0)}
-                    placeholder="RD$"
-                    className="w-28 px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                  />
-                  {form.items.length > 1 && (
-                    <button type="button" onClick={() => removeItem(i)} className="p-2 hover:bg-red-50 rounded-lg text-red-500">
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-            {/* Column labels */}
-            <div className="flex gap-2 mt-1 text-[10px] text-gray-400 px-1">
-              <span className="flex-1">Descripción</span>
-              <span className="w-16 text-center">Cant.</span>
-              <span className="w-28 text-center">Precio</span>
-              {form.items.length > 1 && <span className="w-[38px]"></span>}
-            </div>
-            <div className="text-right mt-3 pt-3 border-t border-gray-100">
-              <span className="text-lg font-bold text-[#0f3460]">Total: {formatMoneda(total)}</span>
-            </div>
-          </div>
-
-          {/* Método de pago */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Método de pago</label>
-              <select
-                value={form.metodoPago}
-                onChange={e => setForm(f => ({ ...f, metodoPago: e.target.value as MetodoPago | '' }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-              >
-                <option value="">Sin especificar</option>
-                {(Object.keys(METODO_PAGO_LABELS) as MetodoPago[]).map(m => (
-                  <option key={m} value={m}>{METODO_PAGO_LABELS[m]}</option>
-                ))}
-              </select>
-            </div>
-            {form.metodoPago === 'transferencia' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Banco destino</label>
-                <input
-                  type="text"
-                  value={form.bancoDestino}
-                  onChange={e => setForm(f => ({ ...f, bancoDestino: e.target.value }))}
-                  placeholder="Ej: Banreservas, BHD, Popular..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Notas */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
-            <textarea
-              value={form.notas}
-              onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
-              rows={2}
-              placeholder="Observaciones adicionales (opcional)"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => { setShowModal(false); resetForm(); }}
-              className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60 transition-colors"
-            >
-              {saving ? 'Guardando...' : 'Crear Factura'}
-            </button>
-          </div>
-        </form>
-      </Modal>
+      <FacturaCrearModal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+      />
 
       {/* Modal: marcar como garantía manual */}
       <Modal
