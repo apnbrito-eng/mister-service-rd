@@ -55,6 +55,11 @@ export function formatMoneda(amount: number): string {
   return `RD$${amount.toLocaleString('es-DO')}`;
 }
 
+/** Igual que formatMoneda pero conserva hasta 2 decimales si el monto los tiene. */
+export function formatMonedaPrecisa(amount: number): string {
+  return `RD$${Number(amount || 0).toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
 export function formatTelefono(tel: string): string {
   const digits = tel.replace(/\D/g, '');
   if (digits.length === 10) {
