@@ -589,14 +589,21 @@ service cloud.firestore {
         // Snapshot inmutable: plantilla (memoria de la campaña)
         request.resource.data.plantillaId == resource.data.plantillaId &&
         request.resource.data.plantillaNombre == resource.data.plantillaNombre &&
-        // Snapshot inmutable: filtros aplicados
-        request.resource.data.filtrosAplicados == resource.data.filtrosAplicados &&
-        // Snapshot inmutable: override cooldown (no flippeable post-hoc)
-        request.resource.data.overrideCooldown == resource.data.overrideCooldown &&
-        request.resource.data.overrideCooldownPorId == resource.data.overrideCooldownPorId &&
-        request.resource.data.overrideCooldownPorNombre == resource.data.overrideCooldownPorNombre &&
-        request.resource.data.overrideCooldownEn == resource.data.overrideCooldownEn &&
-        request.resource.data.overrideCooldownMotivo == resource.data.overrideCooldownMotivo &&
+        // Snapshot inmutable: filtros aplicados (.get defensivo — el map
+        // puede ser empty {} pero igualdad estructural OK con get/null)
+        request.resource.data.get('filtrosAplicados', null) == resource.data.get('filtrosAplicados', null) &&
+        // Snapshot inmutable: override cooldown (no flippeable post-hoc).
+        // Estos campos son OPCIONALES en el create — solo presentes cuando
+        // overrideCooldown=true. Para campañas normales no existen en el doc;
+        // comparar con `resource.data.X` falla si el field nunca se escribió.
+        // Usamos `.get(field, null)` para que la rule pase cuando ambos lados
+        // son missing (null == null) sin perder la inmutabilidad cuando ambos
+        // están presentes (string == string).
+        request.resource.data.get('overrideCooldown', null) == resource.data.get('overrideCooldown', null) &&
+        request.resource.data.get('overrideCooldownPorId', null) == resource.data.get('overrideCooldownPorId', null) &&
+        request.resource.data.get('overrideCooldownPorNombre', null) == resource.data.get('overrideCooldownPorNombre', null) &&
+        request.resource.data.get('overrideCooldownEn', null) == resource.data.get('overrideCooldownEn', null) &&
+        request.resource.data.get('overrideCooldownMotivo', null) == resource.data.get('overrideCooldownMotivo', null) &&
         // totalEnviados solo puede crecer +1 (un envío a la vez)
         request.resource.data.totalEnviados <= resource.data.totalEnviados + 1 &&
         request.resource.data.totalEnviados >= resource.data.totalEnviados &&
