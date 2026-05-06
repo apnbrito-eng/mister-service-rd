@@ -645,6 +645,18 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Rate limits del Asistente IA (sprint C2.5). Doc id formato
+    // `${uid}_ai_chat_${YYYY-MM-DD}`. Escrito SOLO por el endpoint
+    // serverless `api/ai/chat.ts` vía Firebase Admin SDK (bypassa
+    // rules). Defense-in-depth deny clientes — ningún componente web
+    // debe consultar este counter directo (la UI no muestra cuotas).
+    // El doc `config/rate_limits` (caps por rol) ya está cubierto por
+    // la rule de `config/{docId}` arriba (read staff, write admin).
+    match /rate_limits/{docId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
     // ─────────────────────────────────────────────────────────────
     // Default deny — cualquier colección no listada arriba está
     // bloqueada. Esto incluye colecciones nuevas que se creen sin

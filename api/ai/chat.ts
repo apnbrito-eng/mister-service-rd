@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import { Timestamp } from 'firebase-admin/firestore';
-import { getAdminAuth, getAdminFirestore } from '../_lib/firebaseAdmin.js';
+import { getAdminAuth, getAdminFirestore, verificarAppCheck } from '../_lib/firebaseAdmin.js';
 import { toolsParaRol, ejecutarTool, contextoFechaRD, tieneAccesoAsistenteIA, type Rol as RolTool } from '../_lib/iaTools.js';
 
 /**
@@ -131,9 +131,29 @@ Si eres asistente del ADMINISTRADOR, tienes acceso a herramientas ampliadas incl
 const MAX_TOOL_USE_ITERACIONES = 10;
 const MAX_TOKENS_POR_ITERACION = 2048;
 
+// Caps diarios de consultas IA por rol. Sprint C2.5. Si existe el doc
+// `config/rate_limits` con `ai_chat: { <rol>: number }`, esos valores
+// override estos defaults. Doc inexistente → fallback hardcoded.
+const RATE_LIMITS_DEFAULTS: Record<string, number> = {
+  administrador: 1000,
+  coordinadora: 500,
+  operaria: 200,
+  secretaria: 200,
+  default: 100,
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // 0. App Check: defense-in-depth contra requests sin origen verificado.
+  // Va PRIMERO (antes de cualquier otra validación) — origen primero,
+  // identidad después. El audit log de `app_check_audit` se escribe
+  // automáticamente vía wrapper de instrumentación.
+  const appCheck = await verificarAppCheck(req);
+  if (!appCheck.ok) {
+    return res.status(401).json({ error: 'App Check token requerido o inválido' });
   }
 
   // 1. Validar body
@@ -240,6 +260,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: 'El Asistente IA está en fase beta. Tu rol todavía no tiene acceso.' });
     }
 
+    // 7.25. Rate limit por uid (cap diario configurable por rol).
+    // Counter atómico vía runTransaction sobre `rate_limits/{uid}_ai_chat_{YYYY-MM-DD}`.
+    // Cuenta intentos, no éxitos — si Anthropic falla post-counter, el cap ya gastó.
+    // Esto previene fuzzing sin penalización. Cap por rol leído de config/rate_limits
+    // (best-effort fallback a defaults hardcoded).
+    let cap = RATE_LIMITS_DEFAULTS[rol] ?? RATE_LIMITS_DEFAULTS.default;
+    try {
+      const configSnap = await db.collection('config').doc('rate_limits').get();
+      if (configSnap.exists) {
+        const aiChatCaps = configSnap.data()?.ai_chat;
+        if (aiChatCaps && typeof aiChatCaps === 'object') {
+          const capRol = (aiChatCaps as Record<string, unknown>)[rol];
+          if (typeof capRol === 'number' && capRol > 0) {
+            cap = capRol;
+          } else {
+            const capDefault = (aiChatCaps as Record<string, unknown>).default;
+            if (typeof capDefault === 'number' && capDefault > 0) {
+              cap = capDefault;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[ai/chat] No se pudo leer config/rate_limits, usando defaults:', err);
+    }
+
+    const fechaHoy = new Date().toISOString().slice(0, 10);
+    const limitRef = db.collection('rate_limits').doc(`${uid}_ai_chat_${fechaHoy}`);
+    try {
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(limitRef);
+        const current = snap.exists ? Number(snap.data()?.count) || 0 : 0;
+        if (current >= cap) {
+          throw new Error('rate-limit');
+        }
+        tx.set(
+          limitRef,
+          {
+            uid,
+            fecha: fechaHoy,
+            count: current + 1,
+            cap,
+            updatedAt: Timestamp.now(),
+          },
+          { merge: true },
+        );
+      });
+    } catch (err) {
+      if (err instanceof Error && err.message === 'rate-limit') {
+        return res.status(429).json({
+          error: `Alcanzaste el límite diario de ${cap} consultas IA. Reintentá mañana o contactá al administrador para aumentar tu cap.`,
+        });
+      }
+      throw err;
+    }
+
     // 7.5. Si viene conversacionId, validar que exista y pertenezca al uid.
     // No propagamos el doc existente — solo guardamos la ref para el update
     // posterior y rechazamos si no es del usuario actual.
@@ -323,17 +399,22 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
           messages: messagesLoop,
         });
       } catch (err: unknown) {
-        const status = (err as { status?: number })?.status;
-        const message = err instanceof Error ? err.message : 'Error desconocido';
+        // Sanitización de logs: loguear solo metadata (status/message/type) en
+        // vez del objeto err completo. Anthropic puede ecoar el prompt del
+        // usuario en `err.body` y ahí puede haber PII de clientes.
+        const e = err as { status?: number; message?: string; type?: string };
+        const errMeta = { status: e?.status, message: e?.message, type: e?.type };
+        const status = e?.status;
         if (status === 401) {
-          console.error('ai/chat anthropic 401:', err);
+          console.error('[ai/chat] anthropic 401:', errMeta);
           return res.status(500).json({ error: 'Credenciales de Anthropic inválidas (revisar ANTHROPIC_API_KEY)' });
         }
         if (status === 429) {
           return res.status(429).json({ error: 'Anthropic rate limit alcanzado. Intenta de nuevo en unos segundos.' });
         }
         if (status === 400) {
-          return res.status(400).json({ error: `Petición rechazada por Anthropic: ${message.substring(0, 300)}` });
+          console.error('[ai/chat] anthropic 400:', errMeta);
+          return res.status(400).json({ error: 'Tu pregunta no pudo procesarse. Reformulala más simple.' });
         }
         throw err;
       }
@@ -520,8 +601,7 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
     }
     return res.status(200).json(responsePayload);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Error desconocido';
-    console.error('ai/chat error:', err);
-    return res.status(500).json({ error: `Error ${message.substring(0, 300)}` });
+    console.error('[ai/chat] error general:', err);
+    return res.status(500).json({ error: 'Error interno. Intentá de nuevo.' });
   }
 }
