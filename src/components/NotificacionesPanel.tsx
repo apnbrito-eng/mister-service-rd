@@ -13,17 +13,22 @@ interface Props {
 }
 
 export default function NotificacionesPanel({ theme = 'dark' }: Props) {
-  const { userProfile } = useApp();
+  const { currentUser } = useApp();
   const navigate = useNavigate();
   const [notifs, setNotifs] = useState<Notificacion[]>([]);
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // IMPORTANTE: usar `currentUser.uid` (auth.uid), NO `userProfile.id` —
+  // cuando el perfil viene del fallback `personal/`, `userProfile.id` es el
+  // personalDocId, no el auth.uid. La rule gate `userId == auth.uid` rechaza
+  // silenciosamente con permission-denied en ese caso. Gotcha documentado en
+  // CLAUDE.md ("userProfile.id NO siempre es auth.uid").
   useEffect(() => {
-    if (!userProfile?.id) return;
-    const unsub = suscribirNotificaciones(userProfile.id, setNotifs);
+    if (!currentUser?.uid) return;
+    const unsub = suscribirNotificaciones(currentUser.uid, setNotifs);
     return () => unsub();
-  }, [userProfile?.id]);
+  }, [currentUser?.uid]);
 
   useEffect(() => {
     if (!open) return;
@@ -50,8 +55,8 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
   };
 
   const handleMarcarTodas = async () => {
-    if (!userProfile?.id) return;
-    try { await marcarTodasLeidas(userProfile.id); } catch (err) { console.error(err); }
+    if (!currentUser?.uid) return;
+    try { await marcarTodasLeidas(currentUser.uid); } catch (err) { console.error(err); }
   };
 
   const btnBase = theme === 'dark'
