@@ -241,97 +241,16 @@ Hoy el banner es read-only — el admin ve que Wilainy no organizó la ruta y so
 
 ---
 
-### SPRINT-105 — GestionUsuarios alta crea AMBOS docs (personal + usuarios)
-
-**Estado:** COMPLETADO 2026-05-06 (Opción 3 — secondaryDb con sesión del propio user; abort sin estado parcial si falla espejo; cazador determinístico P-004 agregado; gotcha CLAUDE.md tachada como RESUELTA. Hash: pendiente push)
-**Prioridad:** alta (preventivo — sin esto el próximo empleado nuevo reintroduce P-001)
-**Origen:** Coordinator detectó la deuda al cerrar SPRINT-103 (DIARIO_2026-05-06.md "Próximos pasos sugeridos #2"). Jorge eligió Opción A en chat con Cowork el 2026-05-06.
-**Riesgo:** medio (toca alta de empleados — si rompe, no se pueden crear usuarios nuevos hasta que se arregle)
-**Touch-list previsto:**
-- `src/pages/GestionUsuarios.tsx` (2 puntos: líneas ~271 y ~460-466)
-- Posiblemente `src/services/usuarios.service.ts` (NUEVO si no existe — extraer la lógica para reutilizar)
-- `firestore.rules` — auditar primero si la rule de `usuarios/{uid}.create` requiere ajuste para que admin pueda escribir doc espejo (probablemente ya está OK pero validar)
-- `CLAUDE.md` — al cerrar, marcar como RESUELTO la gotcha "Asunción frágil técnico personal/{id}.id == auth.uid" si este sprint también la cierra (probablemente no — esa es separada)
-
-#### Objetivo
-Asegurar que cuando un admin crea un empleado nuevo desde `GestionUsuarios.tsx` (o le da acceso a un empleado existente), se creen **ambos** docs en Firestore atómicamente:
-
-1. `personal/{auto-id}` con todos los datos del empleado + `uid: auth.uid`
-2. `usuarios/{auth.uid}` con `{nombre, email, rol, activo: true, createdAt: serverTimestamp()}`
-
-Sin esto, el `userProfile` cargado por la cascada de `AppContext` cae al fallback `personal where email==` → `userProfile.id == personalDocId !== auth.uid` → cualquier rule que valide `userId == auth.uid` rechaza con `permission-denied` (clase de bug P-001).
-
-#### Por qué
-Hoy el backfill (`scripts/backfill-usuarios-desde-personal.ts`, commit `1353b84`) migró los 21 empleados activos existentes. Pero el formulario de alta nueva NO crea el doc espejo. Apenas contrates al técnico/operaria #22, esa persona reintroducirá el problema P-001 que cazamos hoy en 6 lugares (Reactivación + Notificaciones + ModalSugerirSoloChequeo + Reprogramaciones + SugerenciasChequeo). Es deuda que se va a pagar tarde o temprano — mejor ahora que cuando aparezca un cliente perdido o una operaria frustrada.
-
-#### Detalles técnicos del bug actual
-
-**Punto 1 — alta nueva (líneas ~250-273 de `GestionUsuarios.tsx`):**
-
-```ts
-// Crea Auth en app secundaria para no kickear al admin
-const cred = await createUserWithEmailAndPassword(secondaryAuth, form.email.trim(), form.password);
-createdUid = cred.user.uid;
-// ...
-if (createdUid) data.uid = createdUid;
-data.createdAt = Timestamp.now();
-await addDoc(collection(db, 'personal'), data);  // ← solo personal
-// ❌ FALTA: await setDoc(doc(db, 'usuarios', createdUid), { nombre, email, rol, activo: true, createdAt: serverTimestamp() });
-```
-
-**Punto 2 — dar acceso a empleado existente (líneas ~456-466):**
-
-```ts
-const cred = await createUserWithEmailAndPassword(secondaryAuth, accessUser.email, accessPassword);
-// ...
-await updateDoc(doc(db, 'personal', accessUser.id), {
-  uid: cred.user.uid,
-});  // ← solo update de personal
-// ❌ FALTA: await setDoc(doc(db, 'usuarios', cred.user.uid), { ...accessUser, activo: true, createdAt: serverTimestamp() });
-```
-
-**Edge case — línea 473 (`uid: 'existing'`):** cuando el email ya está en Auth pero no se sabe el uid real. Hoy escribe `uid: 'existing'` como flag. Acá NO se puede crear `usuarios/{uid}` porque no tenemos el uid. Decisión: dejar como está y documentar que esa persona, al loguearse la primera vez, va a caer en cascada `personal/`. Sprint follow-up futuro podría agregar un Cloud Function que, al primer login, autocree el doc espejo. **Por ahora NO scope.**
-
-#### Criterios de aceptación
-
-- [ ] Al crear empleado nuevo desde `GestionUsuarios.tsx` con password (Punto 1), se crean simultáneamente:
-  - `personal/{auto-id}` con `uid: cred.user.uid` (como hoy)
-  - `usuarios/{cred.user.uid}` con `{nombre, email, rol, activo: true, createdAt: serverTimestamp(), creadoDesdeGestionUsuarios: true}`
-- [ ] Al "dar acceso" a empleado existente (Punto 2), se hace lo mismo: update `personal` + create `usuarios/{cred.user.uid}`.
-- [ ] Si la creación de `usuarios/` falla pero `personal/` ya se creó: rollback o al menos toast de warning explícito + log a `auditoria_admin` con `accion: 'alta_parcial_usuarios_pendiente'` para que el admin sepa que hay que reintentar manualmente. NO dejar el sistema en estado parcial silencioso.
-- [ ] **Idealmente** (si es trivial): envolver `addDoc(personal) + setDoc(usuarios)` en un solo `runTransaction` para atomicidad. Si no lo es porque `addDoc` con auto-id no se puede en transaction, usar `setDoc(doc(collection(db, 'personal')), ...)` con id pre-generado y entonces sí transaction. Builder decide.
-- [ ] Test manual sugerido (Jorge lo hace después): crear empleado de prueba "Test Operaria 2026", login con esas credenciales, verificar que ve sus notificaciones / puede crear campañas / etc. — todo lo que falló por P-001 en sprints anteriores.
-- [ ] regression_guardian PASS sobre el diff (especialmente P-001 y P-003).
-- [ ] `npm run check:regression` sigue en 0 hits.
-- [ ] Build OK, deploy Vercel Ready.
-- [ ] Si toca `firestore.rules` (probablemente NO, pero validar) → BLOQUEADO esperando OK explícito de Jorge.
-- [ ] Actualizar gotcha en `CLAUDE.md` "Alta de empleado debe crear AMBOS docs" — marcar como **RESUELTO** con commit hash, ya que este sprint cierra exactamente esa deuda.
-
-#### Restricciones / guardarrails
-
-- regression_guardian obligatorio antes del commit final (toca pages + posiblemente services).
-- Si requiere cambio en `firestore.rules` para que admin pueda escribir `usuarios/{otro-uid}` → **BLOQUEAR** y esperar OK explícito de Jorge (rules son sensibles).
-- Si la transacción atómica `addDoc(personal) + setDoc(usuarios)` no es factible técnicamente, documentar la decisión en commit message y usar try/catch + rollback compensatorio + audit log.
-- NO bypass del pre-commit hook.
-- Mantener compatibilidad con el doc id auto-generado en `personal` — no cambiar el shape ni romper queries existentes que filtran por `email`, `rol`, `activo`.
-
-#### Notas para el coordinator
-
-- Antes de tocar código, **verificar la rule actual** de `usuarios/{userId}.create` en `firestore.rules`. Probablemente requiere `request.auth.uid == userId` (regla común para que cada user solo cree su propio doc). Si es así, el admin NO puede crear el doc espejo de otro uid desde el cliente — necesitaríamos:
-  - **Opción 1:** Ajustar rule para permitir create por admin/coordinadora (cambio menor pero requiere OK Jorge → BLOQUEO).
-  - **Opción 2:** Mover la creación de `usuarios/{uid}` al endpoint serverless en `api/` que use Firebase Admin SDK (bypassa rules). Patrón ya usado en `api/admin/reset-password.ts`.
-  - **Opción 3:** Usar la `secondaryAuth` (la que ya se crea para el `createUserWithEmailAndPassword`) — esa sesión SÍ es el uid del empleado nuevo, entonces puede escribir su propio doc bajo la rule estándar. Probablemente es la opción más limpia.
-  - **Builder decide** (con architect/tech_lead si hace falta) y reporta en commit message.
-- Patrón existente a reusar: `secondaryApp` ya está armado para no kickear al admin durante el `createUserWithEmailAndPassword`. Aprovecharlo para escribir el doc `usuarios/{uid}` antes de `deleteApp(secondaryApp)`.
-- `serverTimestamp()` vs `Timestamp.now()`: el resto del repo usa mix. Mantener consistencia con lo que ya hay en `personal`.
-- Si el code crece >40 líneas en el handler, considerar extraer a `src/services/usuarios.service.ts` con una función `crearEmpleadoConAcceso({nombre, email, password, rol, ...})` que encapsule TODO (auth + 2 docs + audit log + rollback). Reutilizable en el flujo de "dar acceso" también.
-- Sub-regla obligatoria del coordinator: este sprint cierra deuda de producción → además del fix, agregar entrada P-XXX en `docs/PATRONES_REGRESION.md` con cazador correspondiente. Posible cazador determinístico: `check-alta-empleado-doble-doc.ts` que escanee `GestionUsuarios.tsx` buscando `addDoc(collection(db, 'personal'`...`)` sin un `setDoc(doc(db, 'usuarios'`...`)` cercano (ventana de 20 líneas). Si no es factible cazarlo determinísticamente, dejarlo solo como gotcha en CLAUDE.md y tarea para regression_guardian semántico.
-
----
-
 ## Sprints completados (histórico)
 
-_(El coordinator mueve sprints aquí cuando los completa)_
+### SPRINT-105 — GestionUsuarios alta crea AMBOS docs (personal + usuarios)
+- **Completado:** 2026-05-06 por coordinator (tercera pasada)
+- **Hash:** `009bcc8`
+- **Implementación:** Opción 3 — `secondaryDb` con sesión del propio user creado para escribir `usuarios/{uid}` antes del `deleteApp(secondaryApp)`. Si falla espejo, abort antes de crear/actualizar `personal` (no hay estado parcial). Aplicado en 2 puntos: alta nueva (`guardarRestoDeCambios`) y dar acceso a empleado existente (`handleCrearAcceso`).
+- **Cazador nuevo:** P-004 en `scripts/invariantes/check-alta-empleado-doble-doc.ts`. Escanea archivos con `createUserWithEmailAndPassword` y verifica que aparezca `setDoc(doc(... 'usuarios' ...))` cercano. Allowlist por header `// @safe-no-usuarios-mirror: <razón>`.
+- **Sin cambios a rules:** la rule `firestore.rules:379-385` (write a `usuarios/{docId}` permitido para esAdminOCoord) ya cubre.
+- **Documentación sincronizada:** gotcha "Alta de empleado debe crear AMBOS docs" en CLAUDE.md tachada con `~~strikethrough~~` + nota [RESUELTO en SPRINT-105 el 2026-05-06]. Catálogo P-004 agregado a `docs/PATRONES_REGRESION.md`.
+- **Detalle completo:** ver `docs/sprints/EJECUCION_AUTONOMA.md` sección "tercera pasada".
 
 ---
 

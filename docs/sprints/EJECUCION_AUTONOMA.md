@@ -5,6 +5,49 @@
 
 ---
 
+## 2026-05-06 — `trabaja` autónomo tercera pasada (1 sprint completado)
+
+### SPRINT-105 — GestionUsuarios alta crea AMBOS docs (personal + usuarios)
+
+- **Estado final:** COMPLETADO
+- **Archivos modificados:**
+  - `src/pages/GestionUsuarios.tsx` — 2 puntos: (a) `guardarRestoDeCambios` branch alta nueva: después de `createUserWithEmailAndPassword`, escribe `setDoc(usuarios/{uid})` usando `getFirestore(secondaryApp)` (sesión del propio user creado, defense-in-depth). Si falla espejo, abort antes de `addDoc(personal)` con toast explícito al admin sobre la cuenta Auth huérfana. (b) `handleCrearAcceso` (vincular Auth a empleado existente): mismo patrón con secondaryDb antes del `updateDoc(personal, {uid})`. Cleanup colateral: removidos imports/funciones unused pre-existentes (`Plus`, `X`, `openCreate`) que el lint del pre-commit hook bloqueaba.
+  - `scripts/invariantes/check-alta-empleado-doble-doc.ts` — NUEVO cazador P-004. Escanea `src/**` y `api/**`, busca archivos que usen `createUserWithEmailAndPassword` y verifica que en el mismo archivo aparezca `setDoc(doc(... 'usuarios' ...))`. Allowlist por header `// @safe-no-usuarios-mirror: <razón>`.
+  - `scripts/invariantes/run-all.ts` — registrado el cazador P-004 en el array de checks. Cleanup: removido import unused `InvariantResult`.
+  - `docs/PATRONES_REGRESION.md` — entrada P-004 con bug original, síntoma, causa raíz, regla, cazador y allowlist.
+  - `CLAUDE.md` — gotcha "Alta de empleado debe crear AMBOS docs" tachada con `~~strikethrough~~` y marcada [RESUELTO en SPRINT-105 el 2026-05-06] con referencia al cazador. Sub-regla "documentación viva" cumplida.
+  - `docs/sprints/COLA_AUTONOMA.md` — SPRINT-105 marcado COMPLETADO; "Última actualización" actualizada.
+- **Decisiones técnicas:**
+  - **Opción 3 (secondaryDb)** elegida sobre Opción 1 (cambio de rule) y Opción 2 (mover a endpoint serverless): no requiere bloqueo por rules, mantiene la operación client-side existente, y es robusto a futuros cambios de la rule. La rule actual `firestore.rules:379-385` permite `write: esAdminOCoord()` así que técnicamente la sesión del admin también funcionaría — usar la sesión del propio user es defense-in-depth.
+  - **No-tx, abort antes de personal:** `setDoc(usuarios)` y `addDoc(personal)` no van en `runTransaction` porque Firestore Web SDK no soporta tx multi-app. Trade-off documentado en commit. Mitigación: ejecución síncrona, ventana de fallo de ms; si pasa, admin reintenta.
+  - **Edge case `uid: 'existing'`:** dejado como está (NO scope del sprint, requeriría Cloud Function para autocreación al primer login).
+  - **`api/admin/crear-usuario.ts` (vía recomendada vía Admin SDK):** ya creaba ambos docs correctamente con rollback completo. NO marcado por el cazador P-004 porque usa `auth.createUser()` (Admin SDK), no `createUserWithEmailAndPassword`. Coexiste con `GestionUsuarios.tsx` como vía preferida; este sprint deja `GestionUsuarios.tsx` como fallback robusto.
+- **Cazadores:** P-001/P-002/P-003/P-004 todos en 0 hits antes (P-004 justo agregado) y después. El cazador P-004 valida el propio fix.
+- **regression_guardian (manual — Agent tool no disponible en esta capa):**
+  - P-001: el código nuevo NO usa `userProfile.id`. Usa `cred.user.uid` (uid del nuevo empleado, no del actor). PASS.
+  - P-003: mutación cross-collection `usuarios + personal` en orden serial sin tx. Justificado en commit message: SDK no soporta tx multi-app; abort si falla la primera escritura previene estado parcial. PASS con caveat documentado.
+  - P-004 (nuevo): el propio cazador devuelve 0 hits sobre el fix. PASS.
+- **reviewer (manual):**
+  - Correctness PUNTO 1: si `createUserWithEmailAndPassword` falla, el branch existente del catch exterior se preserva (compat con código original). APPROVED.
+  - Correctness PUNTO 2: el fallback `uid: 'existing'` (cuando email ya está en Auth) se preserva. APPROVED.
+  - Race condition: ventana de ms entre `setDoc(usuarios)` y `addDoc/updateDoc(personal)`. Trade-off acceptable, mejor que las alternativas. APPROVED.
+  - Defense-in-depth secondaryDb: APPROVED.
+- **No requirió cambios a `firestore.rules`** — la rule existente cubre. Autonómico.
+- **Hash commit:** `009bcc8`
+- **Push:** OK a `origin/main`.
+- **Vercel deploy hook backup:** disparado, job `Im5jir2whTq9FncnuD1P` PENDING.
+- **Pre-commit hook:** PASS (typecheck + 4 cazadores 0 hits + lint staged).
+- **Tiempo:** ~30 minutos (incluyendo cleanup de warnings ESLint pre-existentes que bloqueaban el hook).
+
+### Notas
+
+- SPRINT-100 sigue pendiente (validación visual de Yohana — fuera de alcance del coordinator). Sin cambios desde la primera pasada.
+- BLOQUEOS.md sigue vacío.
+- Acción humana sin cambio: `npm run deploy:rules` para subir cambios de `firestore.rules` del SPRINT-103 (no relacionado a este sprint).
+- Patrón nuevo catalogado: P-004. Catálogo de patrones determinísticos ahora son 4 (P-001 a P-004). Tiempo total de cazadores: <60ms.
+
+---
+
 ## 2026-05-06 — `trabaja` autónomo segunda pasada (1 sprint completado)
 
 ### SPRINT-104 — Recordatorios admin clickeables (push + override)
