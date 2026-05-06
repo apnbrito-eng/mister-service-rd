@@ -106,6 +106,50 @@ Admins build forms in `FormularioEditor` → `formularios` collection. Public us
 - **Gotcha — asunción frágil "para técnicos, `personal/{id}.id == auth.uid`".** Varios writes técnico-gateados en `ordenes_servicio` (rules de tecnico tipo `auth.uid == tecnicoId`) asumen que al alta de un técnico se crea el doc `personal/{auth.uid}` (NO `personal/{idAutogenerado}`). NO está enforced por código — depende de disciplina al alta manual desde `GestionUsuarios`. Si se rompe (ej: alta de técnico sin alinear ids), TODOS los writes técnico-gateados fallan con `permission-denied`. Antes de cazar bugs raros en flujos de técnico, verificar que su `personal/{id}` doc id matchea su `auth.uid`. Riesgo activo, no resuelto.
 - **Alta de empleado debe crear AMBOS docs (`personal/{auto-id}` + `usuarios/{auth.uid}`).** El sistema de auth lee de `usuarios/{auth.uid}` para decidir rol y permisos en rules. Cuando solo se crea `personal/{...}` (con `uid: auth.uid` adentro), la cascada de fallback de `AppContext` carga el perfil pero `userProfile.id == personalDocId !== auth.uid`. Eso causó el bug de Reactivación (`afc5e4a`) — ver gotcha "userProfile.id NO siempre es auth.uid". El backfill `scripts/backfill-usuarios-desde-personal.ts` migra empleados existentes; para altas nuevas el formulario `GestionUsuarios` debe crear el doc en `usuarios/{uid}` además del `personal/{auto-id}`. Sin esto, los `permission-denied` reaparecen para cualquier rule futura que valide contra `userId == auth.uid`.
 
+## Modo autónomo (Cowork ↔ Coordinator)
+
+> Jorge dice una vez "lo que necesito" y el sistema avanza solo. Diseño completo en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
+
+**Cómo funciona:**
+
+1. Jorge habla con Cowork (Claude desktop app) en lenguaje natural.
+2. Cowork escribe sprints estructurados en `docs/sprints/COLA_AUTONOMA.md`.
+3. Jorge abre Claude Code y pega `trabaja`.
+4. El coordinator lee la cola, procesa cada sprint con builder → tester → regression_guardian → reviewer → commit + push, sin pedirle permiso a Jorge.
+5. Al final, escribe `docs/sprints/DIARIO_<fecha>.md` con resumen 60s.
+
+**Lo que SÍ requiere OK explícito de Jorge** (queda en `docs/sprints/BLOQUEOS.md`):
+
+- Cambios a `firestore.rules`.
+- Migraciones de datos sobre >500 docs.
+- Borrados masivos.
+- Nuevas integraciones de pago, OAuth, terceros.
+- Cambios a endpoints `api/` públicos.
+
+**Triggers que entiende el coordinator:**
+
+- `trabaja` o `procesa cola` → procesar sprints PENDIENTES en orden.
+- `procesa bloqueos` → mover sprints con `OK: jorge ...` de vuelta a la cola.
+- `pausa autónomo` → terminar sprint actual y parar.
+
+**Política de fricción mínima.** Jorge no es el correo entre Cowork y el coordinator. Cowork escribe directo a la cola. El coordinator procesa cuando Jorge dispara `trabaja`. Si Cowork detecta un patrón problemático en el repo, agrega un sprint a la cola sin preguntar.
+
+## Sistema anti-regresión
+
+> **Cada bug que rompió producción se convierte en un cazador ejecutable.** Diseño completo en `docs/PLAN_ANTI_REGRESION.md`.
+
+Tres capas de defensa:
+
+1. **`scripts/invariantes/check-*.ts`** — cazadores determinísticos basados en bugs reales (P-001 userProfile.id misuse, P-002 rules con campo opcional sin .get(), P-003 cross-collection sin runTransaction). Catálogo en `docs/PATRONES_REGRESION.md`. Corren en <5s.
+2. **`.claude/agents/regression_guardian.md`** — agente que el coordinator invoca antes de cerrar sprint. Lee el diff y caza instancias semánticas que el grep no atrapa.
+3. **`.husky/pre-commit`** — hook que corre typecheck + `npm run check:regression` + lint de archivos staged. Bloquea commit si algo falla. Bypass de emergencia: `git commit --no-verify`.
+
+**Sub-regla obligatoria — cada bug capturado se convierte en cazador ejecutable.** Cuando un sprint cierra un bug que rompió producción, el coordinator/builder debe hacer LAS DOS COSAS: (a) actualizar gotcha en CLAUDE.md como antes, Y ADEMÁS (b) agregar entrada P-XXX en `docs/PATRONES_REGRESION.md` y un cazador en `scripts/invariantes/`. Sin el cazador, la próxima feature reintroduce el bug en otro lugar — patrón observado en `userProfile.id ≠ auth.uid` que rompió producción dos veces (`afc5e4a` Reactivación + `b93625d` Notificaciones) antes de capturarse como check determinístico.
+
+**Sub-regla — coordinator debe invocar `regression_guardian` en sprints que toquen rules, services o context.** Es la capa semántica que complementa los cazadores determinísticos. Orden sugerido del flujo: `builder → tester → regression_guardian → reviewer`. Si el guardián retorna CHANGES_NEEDED, el coordinator vuelve al builder antes de cerrar.
+
+**Política de falsos positivos.** Si un cazador grita por algo legítimo: agregar a la allowlist documentada en el header del cazador (NO desactivarlo). Si la allowlist crece a >5 entradas, refactorear el cazador.
+
 ## Related docs in repo
 
 - `README.md` — setup and module list.

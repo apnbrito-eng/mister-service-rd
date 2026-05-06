@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+echo "[hook] typecheck..."
+npx tsc --noEmit || { echo "[ABORT] typecheck"; exit 1; }
+echo "[hook] cazadores..."
+npm run check:regression --silent || { echo "[ABORT] regression"; exit 1; }
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -E "\.(ts|tsx)$" || true)
+if [ -n "$STAGED" ]; then
+  echo "[hook] lint staged..."
+  echo "$STAGED" | xargs npx eslint --max-warnings 0 || { echo "[ABORT] lint"; exit 1; }
+fi
+echo "[hook] OK"
