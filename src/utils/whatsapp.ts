@@ -53,6 +53,17 @@ export const mensajesWhatsApp = {
 
   mantenimientoProgramado: (nombre: string, equipo: string, fecha: string): string =>
     `Hola ${nombre}, le recordamos que tiene un mantenimiento programado de su ${equipo} para el *${fecha}*. ¿Desea confirmar? — Mister Service RD`,
+
+  /**
+   * Empuje a operaria desde admin/coord cuando hay un recordatorio diario
+   * pendiente (SPRINT-104). Tono profesional, no agresivo.
+   * TODO: Jorge revisar copy si querés más cálido/firme.
+   */
+  recordatorioOperariaRutaManana: (operariaNombre: string, actorNombre: string): string =>
+    `Hola ${operariaNombre}, soy ${actorNombre}. Te recuerdo organizar la ruta de mañana antes que cierre la ventana. Gracias.`,
+
+  recordatorioOperariaAvisosClientes: (operariaNombre: string, actorNombre: string): string =>
+    `Hola ${operariaNombre}, soy ${actorNombre}. Te recuerdo avisar a los clientes de mañana antes que cierre la ventana. Gracias.`,
 };
 
 /**

@@ -6,12 +6,12 @@ import {
   OrdenServicio, Personal, RecordatorioDiario, TipoRecordatorio, ItemAviso,
 } from '../../types';
 import { parseOrden, formatHora } from '../../utils';
-import { whatsappUrl, mensajesWhatsApp } from '../../utils/whatsapp';
+import { whatsappUrl } from '../../utils/whatsapp';
 import { useApp } from '../../context/AppContext';
 import {
   obtenerOCrearRecordatorio, marcarCompletado, marcarItemAvisado,
   actualizarItems, suscribirRecordatoriosDelDia, ventanaActiva,
-  esDiaLaboral, obtenerDiaSiguienteLaboral,
+  obtenerDiaSiguienteLaboral,
 } from '../../services/recordatorios.service';
 import {
   Calendar, Check, AlertTriangle, ChevronDown, ChevronUp, MapPin,
@@ -20,6 +20,7 @@ import WhatsAppIcon from '../icons/WhatsAppIcon';
 import { format, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
+import ModalAccionRecordatorio from './ModalAccionRecordatorio';
 
 interface Props {
   tipo: TipoRecordatorio;
@@ -43,6 +44,8 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
   const [expandido, setExpandido] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  // SPRINT-104: modal con acciones admin/coord sobre fila de operaria pendiente.
+  const [modalOperaria, setModalOperaria] = useState<{ op: Personal; rec: RecordatorioDiario | null } | null>(null);
 
   const ahora = useMemo(() => new Date(), [tickSeed]); // eslint-disable-line react-hooks/exhaustive-deps
   const esDomingo = ahora.getDay() === 0;
@@ -336,7 +339,11 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
     ? 'bg-red-50 border-red-300 animate-pulse'
     : 'bg-indigo-50 border-indigo-300';
 
+  // SPRINT-104: filas clickeables sólo para admin/coord cuando recordatorio NO está completado.
+  const puedeAbrirModal = rol === 'administrador' || rol === 'coordinadora';
+
   return (
+    <>
     <div className={`border-2 rounded-xl p-4 ${baseClass}`}>
       <div className="flex items-center gap-2 flex-wrap mb-2">
         {tipo === 'ruta_manana'
@@ -356,14 +363,38 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
       <div className="space-y-1">
         {porOperaria.map(({ op, rec, itemsCount, avisados }) => {
           const completado = rec?.completado === true;
+          const filaClickeable = puedeAbrirModal && !completado;
+          const tooltipCompletado = completado && rec?.completadoPor
+            ? `Completado por ${rec.completadoPor.nombre}: ${rec.completadoPor.motivo}`
+            : undefined;
+          const filaClass = filaClickeable
+            ? 'flex items-center justify-between gap-2 text-xs bg-white/60 rounded-lg px-2 py-1.5 cursor-pointer hover:bg-white transition-colors'
+            : 'flex items-center justify-between gap-2 text-xs bg-white/60 rounded-lg px-2 py-1.5';
+          const handleClickFila = () => {
+            if (!filaClickeable) return;
+            setModalOperaria({ op, rec: rec || null });
+          };
           return (
-            <div key={op.id} className="flex items-center justify-between gap-2 text-xs bg-white/60 rounded-lg px-2 py-1.5">
+            <div
+              key={op.id}
+              className={filaClass}
+              onClick={handleClickFila}
+              role={filaClickeable ? 'button' : undefined}
+              tabIndex={filaClickeable ? 0 : undefined}
+              title={tooltipCompletado}
+              onKeyDown={(e) => {
+                if (filaClickeable && (e.key === 'Enter' || e.key === ' ')) {
+                  e.preventDefault();
+                  handleClickFila();
+                }
+              }}
+            >
               <span className="font-medium text-gray-800 truncate">{op.nombre}</span>
               <span className={`text-[11px] ${completado ? 'text-green-700' : urgente ? 'text-red-700 font-semibold' : 'text-gray-600'}`}>
                 {completado ? (
                   <>
                     <Check size={11} className="inline mr-0.5" />
-                    Completado
+                    {rec?.completadoPor ? 'Completado (override admin)' : 'Completado'}
                     {tipo === 'horarios_clientes' && itemsCount > 0 && ` · ${avisados}/${itemsCount}`}
                   </>
                 ) : (
@@ -378,5 +409,15 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
         })}
       </div>
     </div>
+    {modalOperaria && (
+      <ModalAccionRecordatorio
+        isOpen={true}
+        onClose={() => setModalOperaria(null)}
+        operaria={modalOperaria.op}
+        recordatorio={modalOperaria.rec}
+        tipo={tipo}
+      />
+    )}
+    </>
   );
 }

@@ -1706,6 +1706,13 @@ export interface RecordatorioDiario {
   items?: ItemAviso[];
   notificadoAAdmin?: boolean;
   createdAt: Date;
+  /** Override de admin/coord (SPRINT-104). Solo presente si admin marcó completado. */
+  completadoPor?: {
+    uid: string;
+    nombre: string;
+    motivo: string;
+    fechaOverride: Date;
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════

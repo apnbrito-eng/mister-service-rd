@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-06 por Cowork (Jorge pidió recordatorios admin clickeables desde Dashboard — agregado SPRINT-104)
+**Última actualización:** 2026-05-06 por Coordinator (SPRINT-104 completado en segunda pasada autónoma)
 
 **Próximo ID disponible:** SPRINT-105
 
@@ -185,7 +185,7 @@ El sistema anti-regresión funciona pero por diseño bloquea commits hasta que e
 
 ### SPRINT-104 — Recordatorios admin clickeables (push + override)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-06 (modal con 3 botones operativo, runTransaction recordatorio + auditoria_admin, regression_guardian PASS, sin tocar firestore.rules)
 **Prioridad:** media
 **Origen:** Jorge dijo "desde el administrador u operador también debemos poder dar click en esta notificación si queremos autorizarla y decirle a la joven que haga su trabajo" el 2026-05-06 (Cowork chat). Decisiones confirmadas vía AskUserQuestion: modal con 3 botones + ambos recordatorios (ruta + avisos a clientes).
 **Riesgo:** bajo (UI + un service nuevo + 1 rule nueva mínima)

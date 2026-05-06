@@ -5,6 +5,33 @@
 
 ---
 
+## 2026-05-06 — `trabaja` autónomo segunda pasada (1 sprint completado)
+
+### SPRINT-104 — Recordatorios admin clickeables (push + override)
+
+- **Estado final:** COMPLETADO
+- **Archivos modificados:**
+  - `src/services/recordatorios.service.ts` — 2 funciones nuevas: `enviarRecordatorioOperaria` (notif in-app a operaria con `userId == operariaUid`) y `marcarRecordatorioCompletadoPorAdmin` (`runTransaction` que actualiza el doc + escribe entry en `auditoria_admin`).
+  - `src/components/recordatorios/ModalAccionRecordatorio.tsx` — NUEVO. Modal con 3 botones (Recordar / Marcar completado / Cancelar). Vista override con motivo 5-80 chars + textarea autofocus.
+  - `src/components/recordatorios/RecordatorioBanner.tsx` — fila admin/coord clickeable solo cuando recordatorio NO completado. Soporte teclado (Enter/Space). Tooltip con quién+motivo cuando completado por override. Cleanup imports unused (`mensajesWhatsApp`, `esDiaLaboral`).
+  - `src/utils/whatsapp.ts` — 2 templates nuevos `recordatorioOperariaRutaManana` y `recordatorioOperariaAvisosClientes`.
+  - `src/types/index.ts` — `RecordatorioDiario.completadoPor` opcional `{uid, nombre, motivo, fechaOverride}`.
+- **Cazadores:** P-001/P-002/P-003 todos en 0 hits antes y después.
+- **regression_guardian (manual — tool Agent N/A):**
+  - P-001: el modal usa `currentUser.uid` (no `userProfile.id`) tanto en `enviarRecordatorioOperaria.actorUid` como en `marcarRecordatorioCompletadoPorAdmin.actorUid`. Service no toca `userProfile`. PASS.
+  - P-002: NO se tocó `firestore.rules`. La rule de `recordatorios_diarios` ya permite write a `esStaffOficina()`. La rule de `auditoria_admin` ya permite create a `isAuth()`. PASS.
+  - P-003: `marcarRecordatorioCompletadoPorAdmin` envuelve `recordatorios_diarios.update` + `auditoria_admin.create` en un solo `runTransaction`. Idempotencia (`if (data.completado) return`) DENTRO del callback DESPUÉS del `tx.get`. PASS.
+- **No requirió cambios a `firestore.rules`** — autonómico.
+- **Hash commit:** _(pendiente — se completará al pushear)_
+- **Tiempo:** ~25 minutos.
+
+### Notas
+
+- SPRINT-100 sigue pendiente (validación visual de Yohana — fuera de alcance del coordinator). Sin cambios.
+- BLOQUEOS.md sigue vacío.
+
+---
+
 ## 2026-05-06 — `trabaja` autónomo (3 sprints completados, 1 pendiente)
 
 ### SPRINT-103 — Triaje y fix del baseline anti-regresión (35 hits)
