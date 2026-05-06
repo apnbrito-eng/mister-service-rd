@@ -22,7 +22,9 @@
   - P-002: NO se tocó `firestore.rules`. La rule de `recordatorios_diarios` ya permite write a `esStaffOficina()`. La rule de `auditoria_admin` ya permite create a `isAuth()`. PASS.
   - P-003: `marcarRecordatorioCompletadoPorAdmin` envuelve `recordatorios_diarios.update` + `auditoria_admin.create` en un solo `runTransaction`. Idempotencia (`if (data.completado) return`) DENTRO del callback DESPUÉS del `tx.get`. PASS.
 - **No requirió cambios a `firestore.rules`** — autonómico.
-- **Hash commit:** _(pendiente — se completará al pushear)_
+- **Hash commit:** `b90693c`
+- **Push:** OK a `origin/main`.
+- **Pre-commit hook:** PASS (typecheck + cazadores 0 hits + lint staged).
 - **Tiempo:** ~25 minutos.
 
 ### Notas
