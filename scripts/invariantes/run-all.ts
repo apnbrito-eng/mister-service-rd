@@ -13,7 +13,8 @@
 import { check as checkUserprofileId } from './check-userprofile-id-misuse.js';
 import { check as checkRulesImmutability } from './check-rules-immutability.js';
 import { check as checkCrossCollectionTx } from './check-cross-collection-tx.js';
-import { COLOR, InvariantResult } from './types.js';
+import { check as checkAltaEmpleadoDobleDoc } from './check-alta-empleado-doble-doc.js';
+import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
 const VERBOSE = argv.includes('--verbose');
@@ -27,6 +28,7 @@ async function main() {
     checkUserprofileId,
     checkRulesImmutability,
     checkCrossCollectionTx,
+    checkAltaEmpleadoDobleDoc,
   ];
 
   const t0 = Date.now();

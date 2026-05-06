@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-06 por Cowork (Jorge eligió Opción A — agregado SPRINT-105 GestionUsuarios crea ambos docs)
+**Última actualización:** 2026-05-06 por coordinator (tercera pasada — SPRINT-105 cerrado)
 
 **Próximo ID disponible:** SPRINT-106
 
@@ -243,7 +243,7 @@ Hoy el banner es read-only — el admin ve que Wilainy no organizó la ruta y so
 
 ### SPRINT-105 — GestionUsuarios alta crea AMBOS docs (personal + usuarios)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-06 (Opción 3 — secondaryDb con sesión del propio user; abort sin estado parcial si falla espejo; cazador determinístico P-004 agregado; gotcha CLAUDE.md tachada como RESUELTA. Hash: pendiente push)
 **Prioridad:** alta (preventivo — sin esto el próximo empleado nuevo reintroduce P-001)
 **Origen:** Coordinator detectó la deuda al cerrar SPRINT-103 (DIARIO_2026-05-06.md "Próximos pasos sugeridos #2"). Jorge eligió Opción A en chat con Cowork el 2026-05-06.
 **Riesgo:** medio (toca alta de empleados — si rompe, no se pueden crear usuarios nuevos hasta que se arregle)

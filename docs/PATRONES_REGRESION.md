@@ -81,6 +81,40 @@ backfills/migraciones one-shot) marcadas con comentario
 
 ---
 
+## P-004 — Alta de empleado sin crear doc espejo en `usuarios/{uid}`
+
+**Bug original:** SPRINT-105 (2026-05-06) — antes del fix, `GestionUsuarios.tsx`
+creaba el Auth user + el doc `personal/{auto-id}` pero NO el doc
+`usuarios/{uid}`. Patrón también presente en el segundo flujo "dar acceso a
+empleado existente".
+
+**Síntoma:** El empleado nuevo loguea correctamente pero su `userProfile.id`
+cae al fallback `personal where email==` → `userProfile.id == personalDocId !==
+auth.uid`. Cualquier rule que valide `X == request.auth.uid` rechaza sus
+writes silenciosamente. Es el mismo vector que P-001, pero la causa raíz es
+upstream (en el alta misma).
+
+**Causa raíz:** El form de alta sólo escribía `personal`. La migración masiva
+(`scripts/backfill-usuarios-desde-personal.ts`, commit `1353b84`) cubrió a los
+21 empleados existentes pero no a futuros. Cualquier técnico/operaria #22 lo
+reintroducía.
+
+**Regla:** cuando un flujo crea un `createUserWithEmailAndPassword`, debe
+también escribir `setDoc(doc(<db>, 'usuarios', cred.user.uid), {...})` en el
+mismo archivo. Patrón seguro: usar el `secondaryDb` del `secondaryApp` para
+escribir bajo la sesión del propio user creado (defense-in-depth — funciona
+aunque rules cambien en el futuro a "solo cada user crea su propio doc").
+
+**Cazador:** `scripts/invariantes/check-alta-empleado-doble-doc.ts` — escanea
+`src/**` y `api/**`, busca archivos con `createUserWithEmailAndPassword` y
+verifica que aparezca `setDoc(doc(... , 'usuarios', ...))` en el mismo archivo.
+
+**Allowlist:** comentario `// @safe-no-usuarios-mirror: <razón>` en el header
+del archivo lo excluye (raro — sólo aplica a migraciones one-shot o endpoints
+serverless que crean Auth sin necesitar espejo).
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:

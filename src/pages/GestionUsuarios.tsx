@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, setDoc, doc, Timestamp, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, setDoc, doc, Timestamp, query, orderBy, serverTimestamp, getFirestore } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
@@ -10,7 +10,7 @@ import { agruparPorRol } from '../utils/roles';
 import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, Edit, Key, Power, User, Shield, Eye, EyeOff, Check, X, KeyRound, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Edit, Key, Power, User, Shield, Eye, EyeOff, Check, KeyRound, ExternalLink, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
@@ -105,11 +105,6 @@ export default function GestionUsuarios() {
     setEditingId(null);
     setShowPassword(false);
     setOriginal(null);
-  };
-
-  const openCreate = () => {
-    resetForm();
-    setShowModal(true);
   };
 
   const openEdit = (u: Personal) => {
@@ -250,13 +245,40 @@ export default function GestionUsuarios() {
 
       toast.success('Usuario actualizado');
     } else {
-      // Create Firebase Auth user using a secondary app to not kick out admin
+      // Create Firebase Auth user using a secondary app to not kick out admin.
+      // SPRINT-105 (2026-05-06): además de crear Auth + personal, ahora también
+      // creamos el doc espejo en usuarios/{uid} usando el secondaryDb. Sin esto,
+      // el empleado nuevo cae al fallback `personal where email==` de AppContext y
+      // reintroduce el bug P-001 (userProfile.id != auth.uid → permission-denied
+      // en cualquier rule que valide `X == request.auth.uid`).
       let createdUid: string | null = null;
+      let espejoCreado = false;
       try {
         const secondaryApp = initializeApp(auth.app.options, 'Secondary');
         const secondaryAuth = getAuth(secondaryApp);
         const cred = await createUserWithEmailAndPassword(secondaryAuth, form.email.trim(), form.password);
         createdUid = cred.user.uid;
+
+        // Crear doc espejo en usuarios/{uid} usando el secondaryDb (sesión del
+        // nuevo empleado). Si falla acá, NO se crea personal — evita estado parcial.
+        // Defense-in-depth: aunque la rule firestore.rules:379-385 permite a
+        // esAdminOCoord() escribir, usar la sesión del propio user funciona también
+        // si en el futuro la rule se restringe a "solo cada user crea su propio doc".
+        try {
+          const secondaryDb = getFirestore(secondaryApp);
+          await setDoc(doc(secondaryDb, 'usuarios', createdUid), {
+            nombre: form.nombre.trim(),
+            email: form.email.trim().toLowerCase(),
+            rol: form.rol,
+            activo: true,
+            createdAt: serverTimestamp(),
+            creadoDesdeGestionUsuarios: true,
+          });
+          espejoCreado = true;
+        } catch (espejoErr) {
+          console.error('Falló creación de usuarios/{uid}:', espejoErr);
+        }
+
         await deleteApp(secondaryApp);
       } catch (authErr: unknown) {
         const errCode = (authErr as { code?: string })?.code;
@@ -266,6 +288,15 @@ export default function GestionUsuarios() {
         }
         console.warn('Auth creation issue:', authErr);
       }
+
+      // Si Auth se creó pero el doc espejo NO, abortar antes de crear personal.
+      // El Auth user huérfano queda en Firebase Console — el admin debe eliminarlo
+      // manualmente o reintentar el alta. Mejor que dejar un personal sin acceso real.
+      if (createdUid && !espejoCreado) {
+        toast.error('Usuario de Auth creado pero falló el registro de acceso. Eliminá el Auth desde Firebase Console y reintentá.');
+        return;
+      }
+
       if (createdUid) data.uid = createdUid;
       data.createdAt = Timestamp.now();
       await addDoc(collection(db, 'personal'), data);
@@ -458,7 +489,36 @@ export default function GestionUsuarios() {
       const secondaryApp = initializeApp(auth.app.options, 'AccessSecondary');
       const secondaryAuth = getAuth(secondaryApp);
       const cred = await createUserWithEmailAndPassword(secondaryAuth, accessUser.email, accessPassword);
+
+      // SPRINT-105 (2026-05-06): crear doc espejo en usuarios/{uid} ANTES del
+      // deleteApp, usando secondaryDb (sesión del propio user creado). Sin esto
+      // el empleado entrará al sistema vía cascada `personal where email==` y
+      // reintroducirá el bug P-001 (userProfile.id != auth.uid).
+      let espejoCreado = false;
+      try {
+        const secondaryDb = getFirestore(secondaryApp);
+        await setDoc(doc(secondaryDb, 'usuarios', cred.user.uid), {
+          nombre: accessUser.nombre,
+          email: accessUser.email.toLowerCase(),
+          rol: accessUser.rol,
+          activo: accessUser.activo !== false,
+          createdAt: serverTimestamp(),
+          creadoDesdeGestionUsuarios: true,
+        });
+        espejoCreado = true;
+      } catch (espejoErr) {
+        console.error('Falló creación de usuarios/{uid} en handleCrearAcceso:', espejoErr);
+      }
+
       await deleteApp(secondaryApp);
+
+      // Si el espejo NO se creó, abortar y NO marcar el personal con uid
+      // (mejor "sin acceso" que con acceso roto). El Auth user queda huérfano —
+      // admin debe eliminarlo manualmente desde Firebase Console.
+      if (!espejoCreado) {
+        toast.error('Auth creado pero falló el registro de acceso. Eliminá el Auth desde Firebase Console y reintentá.');
+        return;
+      }
 
       // Guardar el uid en el documento de Firestore para marcar que tiene acceso
       await updateDoc(doc(db, 'personal', accessUser.id), {
