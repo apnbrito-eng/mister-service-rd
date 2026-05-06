@@ -67,7 +67,7 @@ function whatsappClienteUrl(
 }
 
 export default function Reprogramaciones() {
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
   const [loading, setLoading] = useState(true);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [trabajando, setTrabajando] = useState<string | null>(null);
@@ -112,7 +112,10 @@ export default function Reprogramaciones() {
   const cerrarAprobar = () => setConfirmandoAprobar(null);
 
   const handleConfirmarAprobar = async () => {
-    if (!confirmandoAprobar || !userProfile?.id) return;
+    // P-001: la rule valida resueltaPor == request.auth.uid. Para perfiles
+    // cargados vía cascada personal/, userProfile.id es el personalDocId,
+    // NO auth.uid. Usar currentUser.uid del Firebase Auth.
+    if (!confirmandoAprobar || !currentUser?.uid) return;
     setTrabajando(confirmandoAprobar.propuesta.id);
     try {
       await resolverPropuestaReprogramacionConNotif(
@@ -120,8 +123,8 @@ export default function Reprogramaciones() {
         confirmandoAprobar.propuesta,
         'aprobar',
         {
-          resueltaPor: userProfile.id,
-          resueltaPorNombre: userProfile.nombre || 'Oficina',
+          resueltaPor: currentUser.uid,
+          resueltaPorNombre: userProfile?.nombre || 'Oficina',
         },
       );
 
@@ -158,7 +161,8 @@ export default function Reprogramaciones() {
   };
 
   const handleConfirmarRechazo = async () => {
-    if (!rechazandoItem || !userProfile?.id) return;
+    // P-001: ver comentario en handleConfirmarAprobar.
+    if (!rechazandoItem || !currentUser?.uid) return;
     if (notaRechazo.trim().length < MIN_NOTA_RECHAZO) {
       toast.error(`El motivo debe tener al menos ${MIN_NOTA_RECHAZO} caracteres`);
       return;
@@ -170,8 +174,8 @@ export default function Reprogramaciones() {
         rechazandoItem.propuesta,
         'rechazar',
         {
-          resueltaPor: userProfile.id,
-          resueltaPorNombre: userProfile.nombre || 'Oficina',
+          resueltaPor: currentUser.uid,
+          resueltaPorNombre: userProfile?.nombre || 'Oficina',
           notaResolucion: notaRechazo.trim(),
         },
       );
@@ -222,7 +226,8 @@ export default function Reprogramaciones() {
     !!contraFecha && contraHoraIdx !== null && !contraFechaSeleccionadaEsDomingo;
 
   const handleConfirmarContrapropuesta = async () => {
-    if (!contraproponiendoItem || !userProfile?.id || !contraFormularioListo || contraHoraIdx === null) return;
+    // P-001: ver comentario en handleConfirmarAprobar.
+    if (!contraproponiendoItem || !currentUser?.uid || !contraFormularioListo || contraHoraIdx === null) return;
     setTrabajando(contraproponiendoItem.propuesta.id);
     try {
       const [y, m, d] = contraFecha.split('-').map(n => parseInt(n, 10));
@@ -234,8 +239,8 @@ export default function Reprogramaciones() {
         contraproponiendoItem.propuesta,
         'contraproponer',
         {
-          resueltaPor: userProfile.id,
-          resueltaPorNombre: userProfile.nombre || 'Oficina',
+          resueltaPor: currentUser.uid,
+          resueltaPorNombre: userProfile?.nombre || 'Oficina',
           contrapropuestaFecha: fechaInstante,
           notaResolucion: contraNota.trim() || undefined,
         },

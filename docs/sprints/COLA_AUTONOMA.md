@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-06 por Cowork (smoke test del sistema anti-regresión devolvió 35 hits — agregado SPRINT-103)
+**Última actualización:** 2026-05-06 por Coordinator (modo autónomo `trabaja` — procesados SPRINT-101, SPRINT-102, SPRINT-103; SPRINT-100 queda pendiente porque requiere validación visual de Yohana/Jorge)
 
 **Próximo ID disponible:** SPRINT-104
 
@@ -13,7 +13,7 @@
 
 ### SPRINT-100 — Validar que Yohana ve notificaciones después de b93625d
 
-**Estado:** PENDIENTE
+**Estado:** PENDIENTE (requiere validación visual de Jorge/Yohana — no procesable por coordinator)
 **Prioridad:** alta
 **Origen:** Jorge dijo "no veo las notificaciones" como Yohana operaria, 2026-05-06.
 **Riesgo:** bajo
@@ -57,7 +57,7 @@ consulta nueva tampoco matchearía.
 
 ### SPRINT-101 — Smoke test inicial de cazadores anti-regresión
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-06 (smoke test ejecutado por Cowork antes de crear SPRINT-103; baseline 35 hits documentado)
 **Prioridad:** alta
 **Origen:** Cowork creó el sistema anti-regresión hoy.
 **Riesgo:** bajo
@@ -95,7 +95,7 @@ baseline.
 
 ### SPRINT-102 — Fijar la sub-regla de "cada bug → cazador" en flujos
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-06
 **Prioridad:** media
 **Origen:** Cowork, 2026-05-06.
 **Riesgo:** bajo
@@ -128,7 +128,7 @@ sistemáticamente.
 
 ### SPRINT-103 — Triaje y fix del baseline anti-regresión (35 hits)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-06 (P-001: 6 bugs reales fixeados con currentUser.uid + 16 falsos positivos allowlistados con `// @safe-userprofile-id:`. P-002: rules de campos opcionales convertidas a `.get(field, null)`, campos required marcados con `// @safe-required:`. Cazadores: 0 hits.)
 **Prioridad:** alta
 **Origen:** Cowork ejecutó smoke test `npm run check:regression` el 2026-05-06; cazadores devolvieron 22 hits P-001 + 13 hits P-002 + 0 hits P-003. Output completo en chat con Jorge.
 **Riesgo:** medio (P-002 toca `firestore.rules` → BLOQUEAR ese sub-paso si aplica enforcement de la política)

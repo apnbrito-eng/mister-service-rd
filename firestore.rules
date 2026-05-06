@@ -135,7 +135,10 @@ service cloud.firestore {
     // aprobación. Esto cierra el agujero donde un técnico se auto-aprobaba
     // un cierre alternativo evitando R4.
     function noTocaSoloChequeo() {
-      return request.resource.data.soloChequeo == resource.data.soloChequeo;
+      // P-002: `soloChequeo` es opcional en el create de orden (solo se
+      // escribe en reactivación post-chequeo). Usar .get para igualdad
+      // estructural con campos missing.
+      return request.resource.data.get('soloChequeo', null) == resource.data.get('soloChequeo', null);
     }
 
     // Sprint sugerencia-solo-chequeo: el técnico puede AGREGAR
@@ -184,10 +187,14 @@ service cloud.firestore {
     //   2. updateDoc({precioFinal: X, fase: 'trabajo_realizado'})
     // y la rule de R4 se evaluaría contra el estado ya bypassed.
     function noTocaCamposAprobacion() {
-      return request.resource.data.estadoAprobacion == resource.data.estadoAprobacion &&
-             request.resource.data.precioAprobado == resource.data.precioAprobado &&
-             request.resource.data.aprobadoPor == resource.data.aprobadoPor &&
-             request.resource.data.fechaAprobacion == resource.data.fechaAprobacion;
+      // P-002: estos 4 campos son opcionales en el create base — solo se
+      // escriben cuando la orden es de mantenimiento (auto-aprobación).
+      // Para órdenes regulares no existen al crear; usar .get para igualdad
+      // estructural con campos missing.
+      return request.resource.data.get('estadoAprobacion', null) == resource.data.get('estadoAprobacion', null) &&
+             request.resource.data.get('precioAprobado', null) == resource.data.get('precioAprobado', null) &&
+             request.resource.data.get('aprobadoPor', null) == resource.data.get('aprobadoPor', null) &&
+             request.resource.data.get('fechaAprobacion', null) == resource.data.get('fechaAprobacion', null);
     }
 
     // R4 (audit C2 — fix IMPORTANTE): los campos de asignación
@@ -196,8 +203,12 @@ service cloud.firestore {
     // a otro técnico (robo de comisión, desligarse de
     // responsabilidad). Solo esStaffOficina() puede reasignar.
     function noTocaAsignacion() {
+      // @safe-required: tecnicoId
+      // (siempre presente en el create — useOrdenCreateForm.ts:609 lo
+      // escribe SIEMPRE, puede ser '' pero el campo es string presente).
+      // P-002: ayudanteId NO se escribe en el create base — opcional.
       return request.resource.data.tecnicoId == resource.data.tecnicoId &&
-             request.resource.data.ayudanteId == resource.data.ayudanteId;
+             request.resource.data.get('ayudanteId', null) == resource.data.get('ayudanteId', null);
     }
 
     // Helper: la orden ya tiene aprobación de oficina.
@@ -580,6 +591,9 @@ service cloud.firestore {
       allow create: if esAdminOCoord() &&
         request.resource.data.creadaPor == request.auth.uid;
       allow update: if esAdminOCoord() &&
+        // @safe-required: creadaPor, creadaPorNombre, fecha, creadaEn, plantillaId, plantillaNombre
+        // (TODOS presentes en el create base de crearCampana —
+        // campanasMarketing.service.ts:215-225).
         // Snapshot inmutable: autoría
         request.resource.data.creadaPor == resource.data.creadaPor &&
         request.resource.data.creadaPorNombre == resource.data.creadaPorNombre &&

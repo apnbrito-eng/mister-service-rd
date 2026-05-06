@@ -221,6 +221,10 @@ export default function IniciarChequeoButton({
 
       // 4. Construir registro
       const usuario = userProfile?.nombre || orden.tecnicoNombre || 'Técnico';
+      // @safe-userprofile-id: inicioChequeo.tecnicoId es descriptor nested
+      // dentro de ordenes_servicio. La rule de la colección valida tecnicoId
+      // raíz contra auth.uid (no este nested). El fallback a orden.tecnicoId
+      // mantiene consistencia con el dueño de la orden.
       const usuarioId = userProfile?.id || orden.tecnicoId || '';
       const ahora = Timestamp.now();
       const fechaInicio = ahora.toDate();

@@ -59,3 +59,42 @@ When the coordinator delegates a task:
    - Whether tsc is clean
 
 NEVER commit, push, or run git commands. The coordinator handles handoff to Jorge.
+
+## Sub-regla obligatoria — cada bug de producción genera un cazador
+
+Si el sprint que estás implementando arregla un bug que rompió producción
+(reportado por Jorge, detectado en logs, hotfix tras crash, etc.),
+**antes de devolver el diff summary** debés también:
+
+1. **Agregar entrada P-XXX en `docs/PATRONES_REGRESION.md`** con:
+   - Hash del bug original (commit que lo introdujo o tu propio fix).
+   - Fecha (YYYY-MM-DD).
+   - Síntoma observable (cómo se manifestó al usuario).
+   - Causa raíz técnica.
+   - Regla preventiva (qué hacer / qué no hacer).
+   - Path al cazador.
+   - Allowlist inicial (vacía o con una entrada justificada).
+
+2. **Crear cazador en `scripts/invariantes/check-<algo>.ts`** siguiendo la convención de los 3 existentes:
+   - Header con docstring que referencia P-XXX y el bug original.
+   - `PATTERN_ID` y `PATTERN_NAME` constantes.
+   - `ALLOWLIST_FILES` (Set) con comentario "// si crece >5, refactorear el cazador".
+   - Función `check()` que retorna `InvariantResult` con `hits: InvariantHit[]`.
+   - Block `if (import.meta.url === \`file://${process.argv[1]}\`)` para ejecución standalone.
+   - Detección lo más específica posible — preferir falsos positivos sobre falsos negativos sólo si la allowlist se mantiene corta.
+
+3. **Registrar en `scripts/invariantes/run-all.ts`** importando y agregándolo al array de cazadores.
+
+4. **Verificar que `npm run check:regression` corre sin error de runtime** (puede haber hits pre-existentes — los manejás con allowlist o con un sprint follow-up de cleanup, NO desactivando el cazador).
+
+### Cómo escribir un buen cazador
+
+- **Determinístico:** mismo input → mismo output. Sin red, sin clock, sin random.
+- **Rápido:** <500ms ideal, <2s aceptable. Corren en cada commit vía pre-commit hook.
+- **Explicable:** el `explanation` de cada hit debe decir POR QUÉ falla y CÓMO arreglarlo, con ejemplo concreto.
+- **Allowlist en código del cazador, no en config externa.** El cazador es self-contained — quien lee el archivo entiende qué se exceptuó y por qué.
+- **Allowlist tiene límite suave de 5 entradas.** Si crecés más, refactorizá el cazador (probablemente la regla está mal calibrada).
+
+Sin esto, la próxima feature reintroduce el bug en otro lugar. Es la única
+forma de que la inteligencia humana se traduzca en chequeos baratos para
+el futuro.

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { collection, doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, FaseOrden, MetodoPago, StandbyPieza } from '../types';
-import { faseLabel, formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente } from '../utils';
+import { formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente } from '../utils';
 import { METODO_PAGO_LABELS } from '../utils/factura';
 import ModalSugerirSoloChequeo from '../components/cierre/ModalSugerirSoloChequeo';
 import BannerEstadoSugerenciaSoloChequeo from '../components/cierre/BannerEstadoSugerenciaSoloChequeo';
@@ -12,8 +12,8 @@ import Modal from '../components/Modal';
 import Badge from '../components/Badge';
 import { useApp } from '../context/AppContext';
 import {
-  ArrowLeft, Phone, Wrench, User, Calendar,
-  Clock, MessageSquare, Save, MapPin, ExternalLink,
+  ArrowLeft, Phone, Wrench, User,
+  Clock, MessageSquare, MapPin, ExternalLink,
   Satellite, Copy, Power, ClipboardCheck, AlertTriangle, FileText, Package, Check,
   Pause, Play, TrendingUp
 } from 'lucide-react';
@@ -235,6 +235,8 @@ export default function OrdenDetalle() {
     if (orden.enStandby) return false;
     if (!['en_diagnostico', 'en_cotizacion', 'aprobado'].includes(orden.fase)) return false;
     if (puede(userProfile, 'cotizacionesAprobarPrecio')) return true;
+    // @safe-userprofile-id: gate UI de visibilidad (mostrar/ocultar botón).
+    // No es write — la rule final valida en el servidor.
     if (userProfile.rol === 'tecnico' && orden.tecnicoId === userProfile.id) return true;
     return false;
   };
@@ -242,6 +244,7 @@ export default function OrdenDetalle() {
   /** True cuando el usuario actual es el técnico asignado (no oficina). */
   const esTecnicoAsignado = (): boolean => {
     if (!orden || !userProfile) return false;
+    // @safe-userprofile-id: gate UI, no es write.
     return userProfile.rol === 'tecnico' && orden.tecnicoId === userProfile.id;
   };
 
@@ -265,6 +268,7 @@ export default function OrdenDetalle() {
     if (['cerrado', 'cancelado'].includes(orden.fase)) return false;
     if (orden.soloChequeo) return false;
     if (puede(userProfile, 'cotizacionesAprobarPrecio')) return true;
+    // @safe-userprofile-id: gate UI, no es write.
     if (userProfile.rol === 'tecnico' && orden.tecnicoId === userProfile.id) return true;
     return false;
   };

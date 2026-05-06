@@ -28,7 +28,7 @@ interface SugerenciaConOrden {
 }
 
 export default function SugerenciasChequeo() {
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
   const [loading, setLoading] = useState(true);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
@@ -85,7 +85,10 @@ export default function SugerenciasChequeo() {
   }, [ordenes]);
 
   const handleAprobar = async (item: SugerenciaConOrden) => {
-    if (!userProfile?.id) {
+    // P-001: la rule R4 valida resueltaPor == request.auth.uid. Para
+    // perfiles cargados vía cascada personal/, userProfile.id es el
+    // personalDocId, NO auth.uid. Usar currentUser.uid del Firebase Auth.
+    if (!currentUser?.uid) {
       toast.error('No se identificó al usuario');
       return;
     }
@@ -96,8 +99,8 @@ export default function SugerenciasChequeo() {
         item.sugerencia,
         'aprobada',
         {
-          resueltaPor: userProfile.id,
-          resueltaPorNombre: userProfile.nombre || 'Oficina',
+          resueltaPor: currentUser.uid,
+          resueltaPorNombre: userProfile?.nombre || 'Oficina',
         },
       );
       toast.success('Sugerencia aprobada — el técnico puede cerrar la orden');
@@ -121,7 +124,8 @@ export default function SugerenciasChequeo() {
   };
 
   const handleConfirmarRechazo = async () => {
-    if (!rechazandoSug || !userProfile?.id) return;
+    // P-001: ver comentario en handleAprobar.
+    if (!rechazandoSug || !currentUser?.uid) return;
     if (notaRechazo.trim().length < MIN_NOTA_CHARS) {
       toast.error(`El motivo debe tener al menos ${MIN_NOTA_CHARS} caracteres`);
       return;
@@ -133,8 +137,8 @@ export default function SugerenciasChequeo() {
         rechazandoSug.sugerencia,
         'rechazada',
         {
-          resueltaPor: userProfile.id,
-          resueltaPorNombre: userProfile.nombre || 'Oficina',
+          resueltaPor: currentUser.uid,
+          resueltaPorNombre: userProfile?.nombre || 'Oficina',
           notaResolucion: notaRechazo.trim(),
         },
       );

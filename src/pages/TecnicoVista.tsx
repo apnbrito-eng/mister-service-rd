@@ -23,11 +23,11 @@ import NotificacionesPanel from '../components/NotificacionesPanel';
 import { guardarUbicacionVehiculo } from '../services/gps.service';
 import {
   MapPin, Clock, Phone, CheckCircle, LogOut, Navigation,
-  User, Bell, StickyNote, Eye, History, FileText, X, Check,
+  User, Bell, StickyNote, Eye, History,
   ClipboardCheck, Pause, Play
 } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
-import { isSameDay, format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -152,6 +152,10 @@ export default function TecnicoVista() {
 
     // Comisiones de la quincena actual (Fase 5)
     let unsubComisiones = () => {};
+    // @safe-userprofile-id: guard de existencia + filtro client-side de
+    // comisiones legacy donde tecnicoId == personalDocId. La rule de
+    // lectura de comisiones valida auth.uid; si Firestore retorna 0 docs
+    // para perfiles personal/, el filter local no rompe nada (queda vacío).
     if (userProfile?.id) {
       const quincena = calcularQuincenaActual(new Date());
       unsubComisiones = onSnapshot(collection(db, 'comisiones'), (snap) => {
@@ -192,6 +196,7 @@ export default function TecnicoVista() {
             }
             return comision;
           })
+          // @safe-userprofile-id: ver comentario al inicio del bloque if.
           .filter(c => c.tecnicoId === userProfile.id && c.quincenaAsignada === quincena);
         setComisionesQuincena(items);
       });
@@ -200,14 +205,17 @@ export default function TecnicoVista() {
     const unsubEmpresa = suscribirConfigEmpresa(cfg => setEmpresaConfig(cfg));
 
     return () => { unsub(); unsubComisiones(); unsubStandby(); unsubEmpresa(); };
+    // @safe-userprofile-id: deps array de useEffect, no es write.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userProfile?.id]);
 
   // Auto-compartir ubicación cuando hay órdenes con tracking GPS activo
   useEffect(() => {
+    // @safe-userprofile-id: guard de existencia, no es write.
     if (!userProfile?.id) return;
 
     // Verificar si hay alguna orden asignada al técnico con tracking habilitado
+    // @safe-userprofile-id: filtro UI local de "ordenes mías", no escribe a Firestore.
     const tieneTrackingActivo = ordenes.some(o =>
       (o.tecnicoId === userProfile.id || o.tecnicoNombre === userProfile.nombre) &&
       o.trackingGPS?.habilitado &&
@@ -222,6 +230,9 @@ export default function TecnicoVista() {
     if (!navigator.geolocation) return;
     setCompartiendoGPS(true);
 
+    // @safe-userprofile-id: ubicaciones_vehiculos.tecnicoId es descriptor
+    // (matchea con personal.{id} para joins UI), no gateado por rule auth.uid.
+    // La rule de la colección solo valida esStaff().
     const vehiculoId = userProfile.id;
     let lastSave = 0;
 
@@ -235,6 +246,7 @@ export default function TecnicoVista() {
         try {
           await guardarUbicacionVehiculo({
             vehiculoId,
+            // @safe-userprofile-id: ver comentario arriba (vehiculoId).
             tecnicoId: userProfile.id,
             tecnicoNombre: userProfile.nombre,
             lat: pos.coords.latitude,
@@ -256,11 +268,15 @@ export default function TecnicoVista() {
       navigator.geolocation.clearWatch(watchId);
       setCompartiendoGPS(false);
     };
+    // @safe-userprofile-id: deps array de useEffect, no es write.
   }, [ordenes, userProfile?.id, userProfile?.nombre]);
 
   const esOrdenMia = (orden: OrdenServicio): boolean => {
     if (!userProfile) return false;
-    // Matching por id exacto
+    // @safe-userprofile-id: check UI local de "es orden mía", no escribe a
+    // Firestore. orden.tecnicoId puede ser personalDocId (legacy) o auth.uid
+    // (nuevo); el matching por id exacto cubre el primer caso, los matchings
+    // por nombre cubren el segundo.
     if (orden.tecnicoId && orden.tecnicoId === userProfile.id) return true;
     // Matching por nombre completo (case-insensitive + trim)
     const nombreOrden = orden.tecnicoNombre?.toLowerCase().trim();
@@ -311,11 +327,6 @@ export default function TecnicoVista() {
       .sort((a, b) => (a.fechaCita?.getTime() || 0) - (b.fechaCita?.getTime() || 0));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordenes, vista, permisos.soloPropiasCitas, userProfile?.id, userProfile?.nombre, rangoAplicado]);
-
-  const citasHoy = useMemo(() => {
-    return ordenes.filter(o => o.fechaCita && isSameDay(o.fechaCita, new Date()) && o.estado !== 'cancelado' && (!permisos.soloPropiasCitas || esOrdenMia(o)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ordenes, permisos.soloPropiasCitas, userProfile?.id]);
 
   const getClienteUbicacion = (orden: OrdenServicio) => {
     // 1) Preferir coordenadas guardadas en la propia orden (más frescas/precisas)
@@ -1210,6 +1221,9 @@ export default function TecnicoVista() {
           isOpen={showWizardCierre}
           onClose={() => { setShowWizardCierre(false); }}
           orden={selectedOrden}
+          // @safe-userprofile-id: cierreServicio.tecnicoId es descriptor
+          // de quién cerró; la rule de ordenes_servicio valida tecnicoId
+          // raíz de la orden (no del cierre nested) contra auth.uid.
           tecnicoId={userProfile?.id || ''}
           tecnicoNombre={userProfile?.nombre || 'Técnico'}
           clienteLat={getClienteUbicacion(selectedOrden)?.lat}

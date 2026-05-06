@@ -36,7 +36,7 @@ const MIN_MOTIVO_CHARS = 10;
  * legítima.
  */
 export default function ModalSugerirSoloChequeo({ isOpen, onClose, orden, onSubmitted }: Props) {
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
 
   // Reusamos `config_empresa.precioChequeoDefault` (fuente única — la misma
   // que ya leen TecnicoVista, AgendaDia y OrdenDetalle). Mismo patrón:
@@ -79,7 +79,10 @@ export default function ModalSugerirSoloChequeo({ isOpen, onClose, orden, onSubm
 
   const handleSubmit = async () => {
     if (!puedeEnviar) return;
-    if (!userProfile?.id) {
+    // P-001: la rule R4 valida sugeridaPor == request.auth.uid. Para
+    // perfiles cargados vía cascada personal/, userProfile.id es el
+    // personalDocId, NO auth.uid. Usar currentUser.uid del Firebase Auth.
+    if (!currentUser?.uid) {
       toast.error('No se identificó al técnico — recargá la página');
       return;
     }
@@ -91,8 +94,8 @@ export default function ModalSugerirSoloChequeo({ isOpen, onClose, orden, onSubm
       const sugerencia: SugerenciaSoloChequeo = {
         id,
         estado: 'pendiente',
-        sugeridaPor: userProfile.id,
-        sugeridaPorNombre: userProfile.nombre || 'Técnico',
+        sugeridaPor: currentUser.uid,
+        sugeridaPorNombre: userProfile?.nombre || 'Técnico',
         fechaSugerencia: Timestamp.now(),
         motivo: motivoTrim,
         montoChequeo: montoNum,
@@ -100,7 +103,7 @@ export default function ModalSugerirSoloChequeo({ isOpen, onClose, orden, onSubm
       await crearSugerenciaSoloChequeo(orden.id, sugerencia, {
         ordenNumero: orden.numero || '',
         clienteNombre: orden.clienteNombre || '',
-        tecnicoNombre: userProfile.nombre || 'Técnico',
+        tecnicoNombre: userProfile?.nombre || 'Técnico',
       });
       toast.success('Sugerencia enviada a oficina');
       onSubmitted?.();

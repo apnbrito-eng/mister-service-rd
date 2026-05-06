@@ -142,6 +142,28 @@ Sin esto, la próxima feature reintroduce el bug en otro lugar. Es la única
 forma de que la inteligencia humana se traduzca en chequeos baratos para
 el futuro.
 
+### Cómo decidir si un sprint califica para "agregar cazador"
+
+Heurística: ¿este bug ya pasó al menos una vez en producción y un humano
+lo reportó/cazó? Si SÍ → cazador obligatorio. Ejemplos reales:
+
+- ✅ `afc5e4a` (Reactivación) y `b93625d` (Notificaciones) — el mismo
+  patrón `userProfile.id ≠ auth.uid` rompió producción 2 veces antes de
+  capturarse como P-001 + cazador. El segundo bug es la prueba de que
+  sin cazador, el primero no nos enseñó nada.
+- ✅ `c7c8e34` (Reactivación rules con campo opcional) — capturado como
+  P-002 + cazador `check-rules-immutability.ts`.
+- ❌ Refactor que limpia código sin cambio de comportamiento — no aplica.
+- ❌ Feature nueva que nunca corrió en producción — no aplica.
+
+**Cuándo delegás al builder vs lo hacés vos:**
+
+El cazador y el patrón los escribe el `builder` siguiendo las
+instrucciones que tiene en su prompt. Vos (coordinator) sólo verificás
+que el sprint cierra con (a) fix del bug + (b) entrada P-XXX + (c) cazador
+ejecutándose en `run-all.ts`. Si el builder devuelve diff sin (b) o (c),
+mandalo de vuelta con feedback explícito antes de invocar tester.
+
 ## Cómo Cowork (Claude desktop) te alimenta sprints
 
 Jorge habla con Cowork (en su desktop app) en lenguaje natural. Cowork

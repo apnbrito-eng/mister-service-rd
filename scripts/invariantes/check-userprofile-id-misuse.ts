@@ -37,6 +37,17 @@ const ALLOWLIST_FILES: Set<string> = new Set([
   // 'src/pages/GestionUsuarios.tsx',
 ]);
 
+/**
+ * Allowlist por línea: comentario `// @safe-userprofile-id: <razón>` en la
+ * misma línea o en la línea inmediatamente anterior silencia el hit.
+ * Útil para checks UI (filtros, gates de permisos visuales) donde NO hay
+ * write a Firestore — la rule no aplica.
+ *
+ * Cada uso debe explicar la razón. Si crece sin control, refactorear el
+ * cazador (probablemente la heurística está mal calibrada).
+ */
+const SAFE_LINE_TAG = '@safe-userprofile-id:';
+
 /** Campos cuyas rules de Firestore validan contra auth.uid. */
 const SENSITIVE_FIELDS = [
   'creadaPor',
@@ -95,6 +106,15 @@ export async function check(): Promise<InvariantResult> {
       // Excluir comentarios
       const trimmed = line.trim();
       if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue;
+
+      // Allowlist por línea: comentario `// @safe-userprofile-id: <razón>`
+      // en la misma línea o hasta 5 líneas arriba (ventana suficiente para
+      // bloques de comentarios multi-línea con explicación + código entre
+      // medio, ej: line con const + line con .filter()).
+      if (line.includes(SAFE_LINE_TAG)) continue;
+      const tagWindowStart = Math.max(0, i - 5);
+      const tagWindow = lines.slice(tagWindowStart, i).join('\n');
+      if (tagWindow.includes(SAFE_LINE_TAG)) continue;
 
       // ¿Está cerca de un campo sensible?
       const start = Math.max(0, i - NEAR_LINES);

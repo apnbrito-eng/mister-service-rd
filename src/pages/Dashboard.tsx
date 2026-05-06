@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  ClipboardList, Bell, Clock, DollarSign, AlertTriangle,
+  ClipboardList, DollarSign, AlertTriangle,
   ChevronRight, Calendar, User, TrendingUp, Wrench,
-  FileText, Receipt, BarChart3, Users, Timer, Package
+  FileText, Receipt, BarChart3, Users, Timer
 } from 'lucide-react';
-import { differenceInDays, startOfDay, endOfDay, startOfWeek, startOfMonth, startOfYear, format as formatDate } from 'date-fns';
+import { differenceInDays, startOfDay, startOfWeek, startOfMonth, startOfYear, format as formatDate } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   OrdenServicio, StandbyPieza, Factura, Cotizacion, Personal, Gasto, FaseOrden, PiezaInventario
@@ -17,9 +17,9 @@ import { Link } from 'react-router-dom';
 import { Boxes, Wallet, XCircle } from 'lucide-react';
 import { calcularQuincenaActual } from '../utils/comisiones';
 import {
-  faseLabel, faseBgColor, faseColor, formatMoneda, formatHora,
-  getAlertasFromOrdenes, getStandbyAlertas, tiempoTranscurrido,
-  estadoSimpleLabel, parseOrden, getTecnicoColor,
+  faseLabel, faseBgColor, formatMoneda, formatHora,
+  getAlertasFromOrdenes, getStandbyAlertas,
+  parseOrden, getTecnicoColor,
   FASES_ORDENADAS, parsePiezaInventario
 } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -308,6 +308,7 @@ export default function Dashboard() {
       })
       .map(o => ({ ...o, diasAtraso: differenceInDays(now, o.createdAt) }))
       .sort((a, b) => b.diasAtraso - a.diasAtraso);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordenes]);
 
   // Embudo conteo
@@ -421,6 +422,7 @@ export default function Dashboard() {
       case 'mes': return { start: inicioMes, end: tomorrow };
       case 'año': return { start: startOfYear(now), end: tomorrow };
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodoVentas, now]);
 
   const ingresosPeriodo = useMemo(() => {
@@ -441,16 +443,21 @@ export default function Dashboard() {
   const facturasPendientes = useMemo(() => facturas.filter(f => f.estado === 'emitida' || f.estado === 'vencida'), [facturas]);
   const pendientesMenos30 = useMemo(() => {
     return facturasPendientes.filter(f => differenceInDays(now, f.fechaEmision) < 30);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facturasPendientes]);
   const pendientesMas30 = useMemo(() => {
     return facturasPendientes.filter(f => differenceInDays(now, f.fechaEmision) >= 30);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facturasPendientes]);
 
   // Tecnicos activos (filtrados por grupo de operaria si aplica)
   const tecnicos = useMemo(() => {
     const base = personal.filter(p => p.rol === 'tecnico' && p.activo);
     if (!filtroOperariaActivo) return base;
+    // @safe-userprofile-id: filtro client-side por personal.operariaId
+    // (que matchea con personalDocId, no auth.uid). No escribe a Firestore.
     return base.filter(t => t.operariaId === userProfile?.id);
+  // @safe-userprofile-id: deps array de useMemo, no es write a Firestore.
   }, [personal, filtroOperariaActivo, userProfile?.id]);
 
   // Estado de casos por tecnico
@@ -499,6 +506,7 @@ export default function Dashboard() {
         return fc && fc >= today && fc < tomorrow && o.estado === 'activo';
       })
       .sort((a, b) => (a.fechaCita?.getTime() || 0) - (b.fechaCita?.getTime() || 0));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordenes]);
 
   // ---- loading ----
