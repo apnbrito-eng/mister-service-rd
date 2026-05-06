@@ -1666,7 +1666,12 @@ export type TipoNotificacion =
 
 export interface Notificacion {
   id: string;
-  destinatarioId: string;
+  userId: string;
+  /** @deprecated Renombrado a `userId` para alinear con rule
+   *  `notificaciones.update: resource.data.userId == auth.uid`. Solo para
+   *  lectura de docs no migrados; eliminar después del script
+   *  `migrar-notificaciones-userid.ts` y de un commit follow-up. */
+  destinatarioId?: string;
   destinatarioNombre?: string;
   tipo: TipoNotificacion;
   titulo: string;

@@ -241,7 +241,7 @@ export async function crearSugerenciaSoloChequeo(
     await Promise.all(
       destinatarios.map(p =>
         crearNotificacion({
-          destinatarioId: p.uid!,
+          userId: p.uid!,
           destinatarioNombre: p.nombre,
           tipo: 'sugerencia_solo_chequeo',
           titulo: 'Sugerencia de solo chequeo',
@@ -386,7 +386,7 @@ export async function resolverSugerenciaSoloChequeoConNotif(
         ? `Tu sugerencia de solo chequeo en ${orden.numero || orden.id} fue aprobada. Podés cerrar la orden ahora.`
         : `Tu sugerencia de solo chequeo en ${orden.numero || orden.id} fue rechazada${resoluciónData.notaResolucion ? `: "${resoluciónData.notaResolucion}"` : ''}. Volvé al flujo normal de aprobación de precio.`;
       await crearNotificacion({
-        destinatarioId: sugerencia.sugeridaPor,
+        userId: sugerencia.sugeridaPor,
         destinatarioNombre: sugerencia.sugeridaPorNombre,
         tipo: 'sugerencia_solo_chequeo_resuelta',
         titulo,
@@ -618,7 +618,7 @@ export async function resolverPropuestaReprogramacionConNotif(
       contraproponer: `Enviaste contrapropuesta para ${orden.numero || orden.id}.`,
     };
     await crearNotificacion({
-      destinatarioId: data.resueltaPor,
+      userId: data.resueltaPor,
       destinatarioNombre: data.resueltaPorNombre,
       tipo: 'reprogramacion_resuelta',
       titulo: tituloMap[accion],

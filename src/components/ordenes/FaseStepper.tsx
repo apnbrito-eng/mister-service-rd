@@ -123,7 +123,7 @@ export default function FaseStepper({
       try {
         const total = orden.precioFinal || orden.precioAprobado || 0;
         await crearNotificacion({
-          destinatarioId: orden.tecnicoId,
+          userId: orden.tecnicoId,
           destinatarioNombre: orden.tecnicoNombre,
           tipo: 'precio_aprobado',
           titulo: 'Precio aprobado · Puedes comenzar',

@@ -18,27 +18,53 @@ export async function crearNotificacion(
   });
 }
 
+/**
+ * Suscribe a notificaciones del usuario. Hace queries DUALES (`userId` y
+ * `destinatarioId`) y mergea para tolerar docs pre-migración. Después de
+ * correr `scripts/migrar-notificaciones-userid.ts` y un commit follow-up
+ * podemos colapsar a una sola query por `userId`.
+ */
 export function suscribirNotificaciones(
-  destinatarioId: string,
+  userId: string,
   callback: (notifs: Notificacion[]) => void
 ): () => void {
-  const q = query(
+  const qNuevo = query(
     collection(db, 'notificaciones'),
-    where('destinatarioId', '==', destinatarioId)
+    where('userId', '==', userId)
   );
-  return onSnapshot(q, (snap) => {
-    const notifs = snap.docs.map(d => {
-      const data = d.data();
-      return {
-        id: d.id,
-        ...data,
-        createdAt: data.createdAt?.toDate?.() || new Date(),
-        leidaEn: data.leidaEn?.toDate?.(),
-      } as Notificacion;
-    });
+  const qLegacy = query(
+    collection(db, 'notificaciones'),
+    where('destinatarioId', '==', userId)
+  );
+
+  const dedup = new Map<string, Notificacion>();
+  const emitir = () => {
+    const notifs = Array.from(dedup.values());
     notifs.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     callback(notifs.slice(0, 50));
-  });
+  };
+  const aplicarSnap = (snap: import('firebase/firestore').QuerySnapshot) => {
+    snap.docChanges().forEach((change) => {
+      if (change.type === 'removed') {
+        dedup.delete(change.doc.id);
+      } else {
+        const data = change.doc.data();
+        dedup.set(change.doc.id, {
+          id: change.doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate?.() || new Date(),
+          leidaEn: data.leidaEn?.toDate?.(),
+        } as Notificacion);
+      }
+    });
+    emitir();
+  };
+  const unsubNuevo = onSnapshot(qNuevo, aplicarSnap);
+  const unsubLegacy = onSnapshot(qLegacy, aplicarSnap);
+  return () => {
+    unsubNuevo();
+    unsubLegacy();
+  };
 }
 
 export async function marcarLeida(notifId: string): Promise<void> {
@@ -48,17 +74,28 @@ export async function marcarLeida(notifId: string): Promise<void> {
   });
 }
 
-export async function marcarTodasLeidas(destinatarioId: string): Promise<void> {
-  // Query por destinatarioId (single-field). Filtrar 'leida' en cliente para evitar índice compuesto.
-  const q = query(
+export async function marcarTodasLeidas(userId: string): Promise<void> {
+  // Queries duales (single-field) para tolerar docs pre-migración. Filtramos
+  // 'leida' en cliente para evitar índice compuesto.
+  const qNuevo = query(
     collection(db, 'notificaciones'),
-    where('destinatarioId', '==', destinatarioId)
+    where('userId', '==', userId)
   );
-  const snap = await getDocs(q);
-  const pendientes = snap.docs.filter(d => d.data().leida === false);
+  const qLegacy = query(
+    collection(db, 'notificaciones'),
+    where('destinatarioId', '==', userId)
+  );
+  const [snapNuevo, snapLegacy] = await Promise.all([
+    getDocs(qNuevo),
+    getDocs(qLegacy),
+  ]);
+  const dedup = new Map<string, import('firebase/firestore').QueryDocumentSnapshot>();
+  for (const d of snapNuevo.docs) dedup.set(d.id, d);
+  for (const d of snapLegacy.docs) dedup.set(d.id, d);
+  const pendientes = Array.from(dedup.values()).filter((d) => d.data().leida === false);
   if (pendientes.length === 0) return;
   const batch = writeBatch(db);
-  pendientes.forEach(d => {
+  pendientes.forEach((d) => {
     batch.update(d.ref, { leida: true, leidaEn: Timestamp.now() });
   });
   await batch.commit();

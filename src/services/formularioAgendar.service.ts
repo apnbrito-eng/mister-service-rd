@@ -452,7 +452,7 @@ async function notificarStaffNuevaCita(args: {
 
       try {
         await crearNotificacion({
-          destinatarioId: destId,
+          userId: destId,
           destinatarioNombre: raw.nombre,
           tipo: 'nueva_cita',
           titulo: 'Nueva solicitud de cita (web)',

@@ -131,7 +131,7 @@ export default function Standby() {
       const orden = parseOrden(snap.id, snap.data() as Record<string, unknown>) as OrdenServicio;
       if (!orden.tecnicoId) return;
       await crearNotificacion({
-        destinatarioId: orden.tecnicoId,
+        userId: orden.tecnicoId,
         destinatarioNombre: orden.tecnicoNombre,
         tipo: 'pieza_llego',
         titulo: 'Pieza lista — puedes proceder',

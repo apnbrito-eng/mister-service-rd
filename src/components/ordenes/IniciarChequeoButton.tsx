@@ -318,7 +318,7 @@ export default function IniciarChequeoButton({
         await Promise.all(
           Array.from(destinos).map(uid =>
             crearNotificacion({
-              destinatarioId: uid,
+              userId: uid,
               tipo: 'chequeo_iniciado',
               titulo: 'Técnico inició chequeo',
               mensaje: `${usuario} inició el chequeo de ${orden.numero || orden.id} — ${orden.clienteNombre}${distanciaTxt}.`,

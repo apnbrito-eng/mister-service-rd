@@ -185,7 +185,7 @@ export default function Ordenes() {
       if (selectedOrden.tecnicoId) {
         try {
           await crearNotificacion({
-            destinatarioId: selectedOrden.tecnicoId,
+            userId: selectedOrden.tecnicoId,
             destinatarioNombre: selectedOrden.tecnicoNombre,
             tipo: 'precio_aprobado',
             titulo: `Precio aprobado · ${selectedOrden.numero || 'orden'}`,

@@ -71,7 +71,7 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
         await Promise.all(
           destinatarios.map(p =>
             crearNotificacion({
-              destinatarioId: p.uid!,
+              userId: p.uid!,
               destinatarioNombre: p.nombre,
               tipo: 'orden_enviada_a_facturacion',
               titulo: 'Orden lista para conduce de garantía',

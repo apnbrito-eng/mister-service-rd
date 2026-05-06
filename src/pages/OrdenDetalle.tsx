@@ -99,7 +99,7 @@ export default function OrdenDetalle() {
       if (orden.tecnicoId) {
         try {
           await crearNotificacion({
-            destinatarioId: orden.tecnicoId,
+            userId: orden.tecnicoId,
             destinatarioNombre: orden.tecnicoNombre,
             tipo: 'precio_aprobado',
             titulo: `Precio aprobado · ${orden.numero || 'orden'}`,

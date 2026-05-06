@@ -213,7 +213,7 @@ export default function Dashboard() {
             const tipoLabel = tipo === 'ruta_manana' ? 'organización de ruta' : 'avisos a clientes';
             for (const admin of adminsYCoord) {
               await crearNotificacion({
-                destinatarioId: admin.id,
+                userId: admin.id,
                 destinatarioNombre: admin.nombre,
                 tipo: 'recordatorio',
                 titulo: 'Recordatorio vencido',
