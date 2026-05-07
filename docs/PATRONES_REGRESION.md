@@ -31,22 +31,29 @@ positivos, agregarlos al header del cazador con comentario.
 
 ## P-002 — Rule de inmutabilidad sobre campo opcional sin `.get()`
 
-**Bug original:** `c7c8e34` (Reactivación rules, 2026-05-05).
+**Bug original:** `c7c8e34` (Reactivación rules, 2026-05-05). Variante `!=`:
+`b7b6464` (modificaPrecioFinal Iniciar Chequeo Aury, 2026-05-07).
 
 **Síntoma:** Permission-denied al hacer update normal (no overrideado) en una
-campaña. Sólo aparece cuando el campo opcional está ausente en el doc.
+campaña/orden. Sólo aparece cuando el campo opcional está ausente en el doc.
 
-**Causa raíz:** Acceder `request.resource.data.X == resource.data.X` sólo
-funciona si `X` está garantizado present desde el primer create. Para
-campos opcionales/condicionales, ambos lados pueden estar missing y
-Firestore Rules NO resuelve eso como `null == null` con acceso directo.
+**Causa raíz:** Acceder `request.resource.data.X == resource.data.X` (o
+`!=`) sólo funciona si `X` está garantizado present desde el primer create.
+Para campos opcionales/condicionales, ambos lados pueden estar missing y
+Firestore Rules tira evaluation error sobre el acceso directo, rechazando
+con permission-denied. No resuelve `null == null` ni `null != null` desde
+acceso directo.
 
 **Regla:** rules que comparan campos opcionales (existencia condicional)
-deben usar `request.resource.data.get('X', null) == resource.data.get('X', null)`.
+deben usar `request.resource.data.get('X', null) == resource.data.get('X', null)`
+(o `!=`).
 
 **Cazador:** `scripts/invariantes/check-rules-immutability.ts` — escanea
-`firestore.rules` buscando comparaciones directas en campos que no aparecen
-como required en las funciones de validación de la misma rule.
+`firestore.rules` buscando comparaciones directas (`==` y `!=`) en campos
+que no aparecen como required en las funciones de validación de la misma
+rule. La cobertura de `!=` se sumó en SPRINT-108 (2026-05-07) tras el bug
+de Aury Mon — la versión inicial solo cubría `==` y dejó pasar el caso
+`modificaPrecioFinal != precioFinal`.
 
 **Allowlist:** la rule debe documentar en comentario qué campos son
 required (existencia garantizada) para que el cazador no grite.
@@ -152,6 +159,45 @@ SHA-256 de `firestore.rules`, lo compara contra el hash registrado en
 **Allowlist:** ninguna. Si grita y el commit no toca rules, es porque alguien
 deployó fuera de banda — ejecutar
 `npx tsx scripts/invariantes/marcar-rules-deployadas.ts` para sincronizar.
+
+---
+
+## P-006 — Dropdown que asigna técnico/operaria guarda `personal.id` en lugar de `auth.uid`
+
+**Bug original:** `c4be345` (Iniciar Chequeo Aury Mon, 2026-05-07). Postmortem:
+`docs/postmortems/2026-05-07-iniciar-chequeo-permission-denied.md`.
+
+**Síntoma:** Técnico/operaria recién creado (con flujo SPRINT-105 que respeta
+auto-id de Firestore en `personal/`) recibe órdenes asignadas y NO puede
+ejecutar acciones gateadas por su rol — toast `permission-denied` silencioso.
+Para empleados viejos cuyo `personal/{id}.id == auth.uid` por convención
+manual, el bug pasa desapercibido.
+
+**Causa raíz:** Dropdowns de "Asignar técnico" en componentes como
+`OrdenCreateModal.tsx`, `OrdenEditForm.tsx`, `ModalEditarOrdenAdmin.tsx`,
+`AgendaDia.tsx` y `MapaRutas.tsx` usaban `<option value={t.id}>` en lugar de
+`<option value={t.uid}>`. El campo `uid` adentro del doc `personal/{id}` SÍ
+es el `auth.uid` del empleado. Las rules comparan `tecnicoId == request.auth.uid`
+y rechazan cuando `tecnicoId == personalDocId !== auth.uid`. Es el mismo
+vector que P-001, pero la causa raíz está en el WRITE upstream (cuando el
+admin asigna), no en el READ downstream (cuando el técnico ejecuta).
+
+**Regla:** cualquier dropdown que asigna a un técnico/operaria/secretaria/
+ayudante a un campo guardado en Firestore debe usar `t.uid`/`p.uid`, NO
+`t.id`/`p.id`. Filtrar `tecnicos.filter(t => t.uid)` para excluir empleados
+sin Auth (alta vieja sin onboarding completo). Si el dropdown es solo filtro
+UI (no escribe a Firestore), agregar comentario `// @safe-tecnicoid-id: filtro UI, no escribe Firestore`.
+
+**Cazador:** `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` —
+escanea `src/**/*.tsx` por `<option value={X.id}>` donde X es identificador
+corto de personal (`t`, `p`, `tec`, `op`, `sec`, etc.) y el contexto de ±20
+líneas contiene tokens como `tecnicoId`, `ayudanteId`, `tecnicos.map`,
+`personalActivo`. Falla si encuentra hits sin allowlist.
+
+**Allowlist:** comentario `// @safe-tecnicoid-id: <razón>` en la misma línea
+o hasta 5 líneas arriba del `<option>`. Útil cuando el select es solo filtro
+visual (ej: `Comisiones.tsx`, `Mantenimiento.tsx`, `FacturaItemDetallesModal.tsx`)
+y NO se persiste el valor en Firestore como `tecnicoId`.
 
 ---
 

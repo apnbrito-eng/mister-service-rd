@@ -425,13 +425,19 @@ export default function FacturaItemDetallesModal({
                 {/* "Sin técnico (mostrador)" como PRIMERA opción (decisión 40). */}
                 <option value="">Sin técnico (mostrador)</option>
                 {/* Técnicos prioritarios (orden), separados por divider visual */}
+                {/* @safe-tecnicoid-id: item.tecnicoId guarda personal.id (descriptor),
+                   no auth.uid. Es lookup de comisiones (utils/comisiones.ts:245
+                   getDoc(personal/{tecnicoId})). Migración a auth.uid es scope de
+                   SPRINT-111 (auditoría de campos análogos a tecnicoId). */}
                 {tecnicosDestacados.length > 0 && (
                   <optgroup label="Asignado a la orden">
+                    {/* @safe-tecnicoid-id: ver comentario arriba — descriptor personal.id, scope SPRINT-111. */}
                     {tecnicosDestacados.map(t => (
                       <option key={t.id} value={t.id}>{t.nombre}</option>
                     ))}
                   </optgroup>
                 )}
+                {/* @safe-tecnicoid-id: ver comentario arriba — descriptor personal.id, scope SPRINT-111. */}
                 {tecnicosDestacados.length > 0 ? (
                   <optgroup label="Otros técnicos">
                     {tecnicosResto.map(t => (
@@ -439,6 +445,7 @@ export default function FacturaItemDetallesModal({
                     ))}
                   </optgroup>
                 ) : (
+                  // @safe-tecnicoid-id: ver comentario arriba — descriptor personal.id, scope SPRINT-111.
                   tecnicosResto.map(t => (
                     <option key={t.id} value={t.id}>{t.nombre}</option>
                   ))

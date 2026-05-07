@@ -8,7 +8,7 @@ import { Personal, Rol, OrdenServicio, ROLES_CON_ACCESO, PERMISOS_DEFAULT_TECNIC
 import { formatTelefono, parseOrden } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, Edit, Check, X, Users, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Key, Eye, EyeOff, Link2 } from 'lucide-react';
+import { Plus, Edit, Check, Users, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Key, Eye, EyeOff, Link2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 import { puede, iaHabilitadaDefaultPorRol } from '../utils/permisos';
@@ -1211,6 +1211,10 @@ export default function PersonalPage() {
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
               >
                 <option value="">Sin asignar</option>
+                {/* @safe-tecnicoid-id: personal.operariaId es descriptor que matchea con personal.id.
+                    Se compara contra userProfile.id en RecordatorioBanner.tsx:85,135,315 y
+                    OrdenesTablero.tsx:193 (filtros UI), no con auth.uid en rules.
+                    Migración a auth.uid es scope SPRINT-111 (auditoría completa de campos ID). */}
                 {operariasDisponibles.map(op => (
                   <option key={op.id} value={op.id}>
                     {op.nombre} ({ROL_LABELS[op.rol]})

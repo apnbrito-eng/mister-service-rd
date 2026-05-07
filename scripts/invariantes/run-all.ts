@@ -15,6 +15,7 @@ import { check as checkRulesImmutability } from './check-rules-immutability.js';
 import { check as checkCrossCollectionTx } from './check-cross-collection-tx.js';
 import { check as checkAltaEmpleadoDobleDoc } from './check-alta-empleado-doble-doc.js';
 import { check as checkRulesPendientesDeploy } from './check-rules-pendientes-deploy.js';
+import { check as checkTecnicoidPersonalIdMisuse } from './check-tecnicoid-personal-id-misuse.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -31,6 +32,7 @@ async function main() {
     checkCrossCollectionTx,
     checkAltaEmpleadoDobleDoc,
     checkRulesPendientesDeploy,
+    checkTecnicoidPersonalIdMisuse,
   ];
 
   const t0 = Date.now();

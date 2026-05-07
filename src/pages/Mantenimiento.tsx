@@ -8,7 +8,7 @@ import { useTiposEquipo } from '../hooks/useTiposEquipo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Plus, Calendar, Check, X, RefreshCw } from 'lucide-react';
-import { isBefore, addMonths, addDays } from 'date-fns';
+import { isBefore, addMonths } from 'date-fns';
 import toast from 'react-hot-toast';
 
 const FRECUENCIA_LABELS: Record<string, string> = {
@@ -210,6 +210,9 @@ export default function Mantenimiento() {
               <select value={form.tecnicoId} onChange={e => setForm(f => ({ ...f, tecnicoId: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
                 <option value="">Sin asignar</option>
+                {/* @safe-tecnicoid-id: mantenimientos.tecnicoId NO está gateado por rule
+                    auth.uid (firestore.rules:521-525 usa esStaffOficina). Es descriptor
+                    que matchea con personal.id (lookup UI). Migración a uid es scope SPRINT-111. */}
                 {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
               </select>
             </div>

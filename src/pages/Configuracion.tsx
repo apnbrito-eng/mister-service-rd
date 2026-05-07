@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Settings, Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff, MapPin, Loader2, FileText, ChevronUp, ChevronDown, ListPlus } from 'lucide-react';
+import { Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff, MapPin, Loader2, FileText, ChevronUp, ChevronDown, ListPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfigGPS, ProveedorGPS, Personal, OrdenServicio } from '../types';
 import { obtenerConfigGPS, guardarConfigGPS } from '../services/gps.service';
@@ -982,6 +982,10 @@ export default function Configuracion() {
                 onChange={e => setNuevoVehiculo({ ...nuevoVehiculo, tecnicoId: e.target.value })}
                 className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
                 <option value="">Técnico</option>
+                {/* @safe-tecnicoid-id: ubicaciones_vehiculos.tecnicoId es descriptor que matchea
+                    con personal.id (joins UI), NO gateado por rule auth.uid (firestore.rules:259-262
+                    valida solo esStaff()). Cambiar a uid rompería el join con personal.find(p.id===tecnicoId)
+                    en TecnicoVista.tsx:236 que el técnico usa para identificar SU vehículo. */}
                 {personal.filter(p => p.rol === 'tecnico' && p.activo).map(p => (
                   <option key={p.id} value={p.id}>{p.nombre}</option>
                 ))}

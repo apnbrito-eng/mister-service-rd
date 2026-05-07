@@ -234,6 +234,9 @@ export default function Comisiones() {
             <select value={filtroTecnico} onChange={e => setFiltroTecnico(e.target.value)}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
               <option value="">Todos los técnicos</option>
+              {/* @safe-tecnicoid-id: filtroTecnico es estado local de UI (filtro de tabla),
+                  NO se persiste a Firestore. El valor se compara contra c.tecnicoId
+                  (descriptor personal.id, ver comisiones rule + utils/comisiones.ts:245). */}
               {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
             </select>
           </div>

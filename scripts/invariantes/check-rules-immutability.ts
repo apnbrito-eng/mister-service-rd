@@ -2,11 +2,13 @@
  * P-002 — Rule de inmutabilidad sobre campo opcional sin .get()
  *
  * Bug original: c7c8e34 (Reactivación rules, 2026-05-05).
+ * Variante !=: b7b6464 (Iniciar Chequeo Aury, 2026-05-07).
  * Ver docs/PATRONES_REGRESION.md.
  *
  * Estrategia:
  * 1. Parsear firestore.rules buscando comparaciones del estilo
- *    `request.resource.data.X == resource.data.X` dentro de funciones de
+ *    `request.resource.data.X == resource.data.X` o
+ *    `request.resource.data.X != resource.data.X` dentro de funciones de
  *    update/validación.
  * 2. Para cada hit, verificar que `X` aparezca en alguna lista de campos
  *    REQUIRED (heurística: aparece en `affectedKeys()` con `hasOnly` o en
@@ -15,6 +17,11 @@
  * 4. Allowlist en el archivo: comentarios `// @safe-required: campoX, campoY`
  *    arriba de la rule indican que esos campos son required y la
  *    comparación directa es válida.
+ *
+ * Nota SPRINT-108 (2026-05-07): la versión inicial de este cazador solo
+ * cubría `==`. El bug de Aury Mon (modificaPrecioFinal) usaba `!=` y pasó sin
+ * detectar. Esta versión cubre ambos operadores. Cualquier nueva variante de
+ * operador (ej: `<`, `>` sobre campos opcionales) debería sumarse acá.
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -56,9 +63,12 @@ export async function check(): Promise<InvariantResult> {
     }
   }
 
-  // Regex: request.resource.data.X == resource.data.X (mismo X, sin .get())
-  // No matchear `.get(`
-  const directCmp = /request\.resource\.data\.(\w+)\s*==\s*resource\.data\.\1\b/g;
+  // Regex: request.resource.data.X (== | !=) resource.data.X (mismo X, sin .get())
+  // No matchear `.get(`. Cubrimos ambos operadores porque ambos disparan
+  // evaluation error sobre campo missing — Firestore Rules no tolera el
+  // acceso directo si el campo no existe en el doc. Variante != es la que
+  // rompió producción el 2026-05-07 (modificaPrecioFinal).
+  const directCmp = /request\.resource\.data\.(\w+)\s*(?:==|!=)\s*resource\.data\.\1\b/g;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -90,12 +100,12 @@ export async function check(): Promise<InvariantResult> {
         line: i + 1,
         snippet: trimmed,
         explanation:
-          `Campo "${field}" comparado directamente sin .get(). Si "${field}" es opcional ` +
-          `(no garantizado present en el doc), Firestore Rules NO resuelve null==null para ` +
-          `acceso directo y rechaza con permission-denied. ` +
-          `Usá: request.resource.data.get('${field}', null) == resource.data.get('${field}', null). ` +
+          `Campo "${field}" comparado directamente (==/!=) sin .get(). Si "${field}" es ` +
+          `opcional (no garantizado present en el doc), Firestore Rules tira evaluation ` +
+          `error sobre el acceso a un campo missing y rechaza con permission-denied. ` +
+          `Usá: request.resource.data.get('${field}', null) <op> resource.data.get('${field}', null). ` +
           `Si "${field}" SÍ es required, agregá comentario "// @safe-required: ${field}" en la rule. ` +
-          `Bug original: c7c8e34 (2026-05-05).`,
+          `Bugs originales: c7c8e34 (2026-05-05, ==) y b7b6464 (2026-05-07, !=).`,
       });
     }
   }

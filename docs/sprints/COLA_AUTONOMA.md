@@ -384,7 +384,7 @@ Ejercer manualmente en producción con técnico + operaria reales:
 
 ### SPRINT-108 — Cierre disciplina hotfix 2026-05-07 (P-006 + P-002 variante !=)
 
-**Estado:** EN_EJECUCION (coordinator 2026-05-07 tercera pasada)
+**Estado:** COMPLETADO 2026-05-07 (tercera pasada — postmortem + cazador P-006 + cazador P-002 extendido a `!=` + 5 archivos con allowlist `@safe-tecnicoid-id:` documentada)
 **Prioridad:** alta (deuda obligatoria por sub-reglas CLAUDE.md)
 **Origen:** Bug en producción 2026-05-07 — Aury Mon no podía iniciar chequeo. Cadena de 2 bugs:
 1. `tecnicoId` guardado como `personal.id` en lugar de `auth.uid` (commits c4be345 y migración)
