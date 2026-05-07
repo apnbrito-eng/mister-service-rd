@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-07 por Cowork (Jorge reportó bug "botones de inicio de chequeo no funcionan" — agregado SPRINT-106)
+**Última actualización:** 2026-05-07 por coordinator (SPRINT-106 cerrado: causa raíz = rules de SPRINT-103 no deployadas; deploy ejecutado + cazador P-005 agregado para que no vuelva a pasar)
 
 **Próximo ID disponible:** SPRINT-107
 
@@ -243,7 +243,7 @@ Hoy el banner es read-only — el admin ve que Wilainy no organizó la ruta y so
 
 ### SPRINT-106 — Audit + fix flujo técnico (chequeo, falla, escalación)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-07 (causa raíz confirmada Hipótesis #1: rules de SPRINT-103 nunca deployadas; `npm run deploy:rules` ejecutado; cazador P-005 + sub-reglas CLAUDE.md agregadas para evitar repetición)
 **Prioridad:** ALTA — bug en producción, técnicos bloqueados, afecta operación diaria.
 **Origen:** Jorge reportó el 2026-05-07 "los botones de inicio de chequeo del módulo técnico no están funcionando". Sospecha regresión introducida en SPRINT-103 (cleanup masivo de imports + comentarios allowlist + remoción dead-code `citasHoy`).
 **Riesgo:** alto — toca el flujo crítico de operación (técnico → diagnóstico → operaria → cliente).

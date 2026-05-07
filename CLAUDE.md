@@ -140,13 +140,17 @@ Admins build forms in `FormularioEditor` → `formularios` collection. Public us
 
 Tres capas de defensa:
 
-1. **`scripts/invariantes/check-*.ts`** — cazadores determinísticos basados en bugs reales (P-001 userProfile.id misuse, P-002 rules con campo opcional sin .get(), P-003 cross-collection sin runTransaction). Catálogo en `docs/PATRONES_REGRESION.md`. Corren en <5s.
+1. **`scripts/invariantes/check-*.ts`** — cazadores determinísticos basados en bugs reales (P-001 userProfile.id misuse, P-002 rules con campo opcional sin .get(), P-003 cross-collection sin runTransaction, P-004 alta empleado sin doc espejo en usuarios/, P-005 firestore.rules sin deployar). Catálogo en `docs/PATRONES_REGRESION.md`. Corren en <5s.
 2. **`.claude/agents/regression_guardian.md`** — agente que el coordinator invoca antes de cerrar sprint. Lee el diff y caza instancias semánticas que el grep no atrapa.
 3. **`.husky/pre-commit`** — hook que corre typecheck + `npm run check:regression` + lint de archivos staged. Bloquea commit si algo falla. Bypass de emergencia: `git commit --no-verify`.
 
 **Sub-regla obligatoria — cada bug capturado se convierte en cazador ejecutable.** Cuando un sprint cierra un bug que rompió producción, el coordinator/builder debe hacer LAS DOS COSAS: (a) actualizar gotcha en CLAUDE.md como antes, Y ADEMÁS (b) agregar entrada P-XXX en `docs/PATRONES_REGRESION.md` y un cazador en `scripts/invariantes/`. Sin el cazador, la próxima feature reintroduce el bug en otro lugar — patrón observado en `userProfile.id ≠ auth.uid` que rompió producción dos veces (`afc5e4a` Reactivación + `b93625d` Notificaciones) antes de capturarse como check determinístico.
 
 **Sub-regla — coordinator debe invocar `regression_guardian` en sprints que toquen rules, services o context.** Es la capa semántica que complementa los cazadores determinísticos. Orden sugerido del flujo: `builder → tester → regression_guardian → reviewer`. Si el guardián retorna CHANGES_NEEDED, el coordinator vuelve al builder antes de cerrar.
+
+**Sub-regla obligatoria — sprints que tocan `firestore.rules` deben deployar antes de cerrar COMPLETADO.** El coordinator/devops es responsable de ejecutar `npm run deploy:rules` (script compuesto que corre `firebase deploy --only firestore:rules` + actualiza `firestore.rules.deployed.lock`) ANTES de marcar el sprint como COMPLETADO. Sin esto, el código nuevo en producción puede chocar con rules viejas y romper flujos críticos silenciosamente — antiprecedente SPRINT-103/106 (2026-05-06/07): el .get(field, null) commiteado pero no deployado bloqueó el "Iniciar chequeo" de TODOS los técnicos por ~24h. El cazador P-005 (`check-rules-pendientes-deploy.ts`) bloquea el pre-commit hook si hay diff entre repo y lock.
+
+**Sub-regla — cleanup de "dead code" en archivos de páginas críticas requiere QA manual del flujo afectado antes de commit.** Aprendizaje del SPRINT-103: el cleanup de `citasHoy` (memo unused) en `TecnicoVista.tsx` fue inocuo, pero combinado con el cambio de rules sin deploy generó hipótesis falsa de regresión que costó tiempo de diagnóstico. Para cualquier cleanup sobre `Ordenes.tsx`, `TecnicoVista.tsx`, `Dashboard.tsx`, `OrdenDetalle.tsx`, `IniciarChequeoButton.tsx`, `CierreServicio*` o componentes de wizard, el commit message debe declarar "QA flujo X validado" o agregar a `BLOQUEOS.md` para validación humana.
 
 **Política de falsos positivos.** Si un cazador grita por algo legítimo: agregar a la allowlist documentada en el header del cazador (NO desactivarlo). Si la allowlist crece a >5 entradas, refactorear el cazador.
 

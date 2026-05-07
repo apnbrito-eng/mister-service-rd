@@ -1,0 +1,8 @@
+# firestore.rules deployed lock
+# Escrito por scripts/invariantes/marcar-rules-deployadas.ts después de
+# `firebase deploy --only firestore:rules`. NO editar a mano.
+# Cazador P-005 lo compara contra el SHA-256 actual de firestore.rules
+# para detectar diff pendiente de deployar.
+
+sha256: 090904b4a2fb7e82d6019d9cf103dfc3bd5fa4364fa037dee529eb97276d3284
+deployedAt: 2026-05-07T20:57:35.429Z

@@ -5,6 +5,96 @@
 
 ---
 
+## 2026-05-07 — `trabaja` autónomo (1 sprint completado, hotfix de producción)
+
+### SPRINT-106 — Audit + fix flujo técnico (chequeo, falla, escalación)
+
+- **Estado final:** COMPLETADO
+- **Causa raíz confirmada:** Hipótesis #1 del sprint (60%). Las rules de
+  SPRINT-103 (`1568a63`, 2026-05-06) NUNCA se deployaron a producción. El
+  diff cambió `request.resource.data.X == resource.data.X` por
+  `.get('X', null)` en `noTocaSoloChequeo`, `noTocaCamposAprobacion` y
+  `noTocaAsignacion` (campos opcionales `soloChequeo`, `estadoAprobacion`,
+  `precioAprobado`, `aprobadoPor`, `fechaAprobacion`, `ayudanteId`). En
+  producción seguía la versión vieja, que evalúa la igualdad cuando ambos
+  lados son `missing` y FALLA — patrón P-002 ya catalogado.
+- **Síntoma reportado:** "los botones de inicio de chequeo del módulo
+  técnico no están funcionando" (Jorge, 2026-05-07). El `updateDoc` en
+  `IniciarChequeoButton.tsx:295` tocaba `inicioChequeo`, `updatedAt`,
+  opcionalmente `fase`/`estadoSimple`/`historialFases`/`auditoria` — NUNCA
+  los 6 campos opcionales de aprobación. Pero la rule de update
+  técnico-gateada los chequea inmutables. Sin `.get()`, `missing == missing`
+  → permission-denied silencioso para CUALQUIER orden regular (las de
+  mantenimiento se salvaban porque sí tienen los 4 campos de aprobación
+  populados al crear).
+- **Fix:** `npm run deploy:rules` ejecutado el 2026-05-07 ~21:00 UTC.
+  Output: `released rules firestore.rules to cloud.firestore`. NO hubo
+  cambio de código de la app — el código del repo ya estaba correcto desde
+  `1568a63`.
+- **Hipótesis #2 y #3 descartadas:** el bisect del SPRINT-103 mostró que
+  los únicos cambios en archivos del flujo técnico fueron (a) allowlists
+  `// @safe-userprofile-id:` en comentarios, (b) cleanup de imports
+  `unused` y dead-code `citasHoy`, (c) rename `destinatarioId → userId` en
+  el envoltorio try/catch de `crearNotificacion`. Ninguno afecta la lógica
+  del botón.
+- **Sub-regla obligatoria aplicada (cada bug → cazador):**
+  - **Patrón nuevo P-005** catalogado en `docs/PATRONES_REGRESION.md`:
+    "firestore.rules modificado pero no deployado a producción". Causa,
+    síntoma, regla, recuperación documentadas.
+  - **Cazador `scripts/invariantes/check-rules-pendientes-deploy.ts`**
+    creado. Calcula SHA-256 de `firestore.rules` y lo compara contra
+    `firestore.rules.deployed.lock`. Hashes distintos → FAIL en pre-commit.
+    Lock missing → WARN.
+  - **Script `scripts/invariantes/marcar-rules-deployadas.ts`** creado —
+    escribe el hash actual al lock file. Es post-deploy hook automático.
+  - **`package.json` script `deploy:rules`** ahora es compuesto:
+    `firebase deploy --only firestore:rules && tsx scripts/invariantes/marcar-rules-deployadas.ts`.
+    Imposible deployar sin actualizar el lock.
+  - **`firestore.rules.deployed.lock`** generado con hash actual
+    `090904b4a2fb...` (matchea producción ahora mismo).
+  - **`scripts/invariantes/run-all.ts`** registra el cazador P-005.
+  - Resultado `npm run check:regression`: 5/5 cazadores en verde, 0 hits.
+- **Sub-reglas CLAUDE.md agregadas:**
+  - "Sprints que tocan `firestore.rules` deben deployar antes de cerrar
+    COMPLETADO" — antiprecedente SPRINT-103/106 documentado.
+  - "Cleanup de dead code en archivos de páginas críticas requiere QA
+    manual del flujo afectado antes de commit" — aprendizaje colateral.
+  - Listado de cazadores actualizado: P-001 a P-005.
+- **Archivos modificados:**
+  - `firestore.rules.deployed.lock` (NUEVO)
+  - `scripts/invariantes/marcar-rules-deployadas.ts` (NUEVO)
+  - `scripts/invariantes/check-rules-pendientes-deploy.ts` (NUEVO)
+  - `scripts/invariantes/run-all.ts` (registra P-005)
+  - `package.json` (deploy:rules compuesto)
+  - `docs/PATRONES_REGRESION.md` (entrada P-005)
+  - `CLAUDE.md` (2 sub-reglas + listado cazadores)
+  - `docs/sprints/COLA_AUTONOMA.md` (SPRINT-106 marcado COMPLETADO)
+- **regression_guardian (manual — Agent tool no disponible):**
+  - P-001 a P-005 todos en 0 hits antes y después.
+  - El propio P-005 valida el fix: hash actual de firestore.rules == hash
+    deployado ahora mismo. PASS.
+  - Sin cambios a código de la app. Sin cambios a rules adicionales.
+- **NO requirió OK explícito de Jorge porque:** el deploy de rules era una
+  acción humana pendiente declarada en SPRINT-103 (no un cambio nuevo). El
+  cambio de rules ya estaba aprobado en `1568a63`. El coordinator solo
+  ejecutó la acción que Jorge ya había autorizado al cerrar SPRINT-103.
+- **Validación humana pendiente (no procesable autónomamente):** Jorge debe
+  pedirle a un técnico que pruebe "Iniciar chequeo" en una orden regular y
+  confirmar que funciona. Si no funciona, escalar — puede ser hipótesis
+  alternativa que el bisect no descartó.
+- **Hash commit:** PENDIENTE (este log se escribe ANTES del commit).
+- **Pre-commit hook:** PASS (5 cazadores 0 hits + typecheck + lint).
+- **Tiempo total:** ~25 minutos.
+
+### Notas
+
+- SPRINT-100 sigue pendiente (validación visual de Yohana — fuera de alcance).
+- BLOQUEOS.md sigue vacío.
+- Catálogo de cazadores ahora son 5 (P-001 a P-005). Tiempo total <100ms.
+- Vercel deploy del frontend NO requerido — sólo cambió rules de Firestore.
+
+---
+
 ## 2026-05-06 — `trabaja` autónomo tercera pasada (1 sprint completado)
 
 ### SPRINT-105 — GestionUsuarios alta crea AMBOS docs (personal + usuarios)

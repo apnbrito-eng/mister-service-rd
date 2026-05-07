@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "lint": "eslint . --report-unused-disable-directives",
     "preview": "vite preview",
-    "deploy:rules": "npx firebase deploy --only firestore:rules",
+    "deploy:rules": "npx firebase deploy --only firestore:rules && tsx scripts/invariantes/marcar-rules-deployadas.ts",
     "deploy:indexes": "npx firebase deploy --only firestore:indexes",
     "check:regression": "tsx scripts/invariantes/run-all.ts",
     "check:regression:ci": "tsx scripts/invariantes/run-all.ts --ci",

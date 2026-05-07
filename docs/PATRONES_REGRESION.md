@@ -115,6 +115,46 @@ serverless que crean Auth sin necesitar espejo).
 
 ---
 
+## P-005 — `firestore.rules` modificado pero no deployado a producción
+
+**Bug original:** SPRINT-103 (`1568a63`, 2026-05-06) modificó `firestore.rules`
+con `.get(field, null)` en `noTocaSoloChequeo`, `noTocaCamposAprobacion`,
+`noTocaAsignacion`. El sprint cerró COMPLETADO + push a main, pero NUNCA se
+ejecutó `npm run deploy:rules`. Detectado el 2026-05-07 cuando Jorge reportó
+"botones de inicio de chequeo no funcionan" (SPRINT-106). Las rules de
+producción seguían comparando campos opcionales con acceso directo y rechazaban
+silenciosamente cualquier update de técnico sobre orden regular (sin
+`soloChequeo`/`estadoAprobacion`/`ayudanteId` previos).
+
+**Síntoma:** Feature compilado y pusheado funciona en local pero rompe en
+producción con permission-denied silencioso. Vector típico: el `git push`
+dispara deploy de Vercel automático (frontend), pero las rules requieren
+`firebase deploy` ejecutado a mano. Si nadie lo ejecuta, hay desincronía
+entre código nuevo y rules viejas.
+
+**Causa raíz:** No hay enforcement automático de "rules en repo == rules
+deployadas". El coordinator/Jorge debía recordar correr `npm run deploy:rules`
+después de cada sprint que las tocara. SPRINT-103 lo dejó documentado en
+EJECUCION_AUTONOMA.md como "acción humana pendiente" pero nadie lo ejecutó por
+~24h.
+
+**Regla:** todo cambio a `firestore.rules` debe deployarse en el mismo sprint
+que lo modifica. El pre-commit hook bloquea cualquier commit que tenga diff
+entre `firestore.rules` y `firestore.rules.deployed.lock`. Para sincronizar:
+`npm run deploy:rules` (script compuesto que deploya + actualiza el lock).
+
+**Cazador:** `scripts/invariantes/check-rules-pendientes-deploy.ts` — calcula
+SHA-256 de `firestore.rules`, lo compara contra el hash registrado en
+`firestore.rules.deployed.lock` (escrito por
+`scripts/invariantes/marcar-rules-deployadas.ts` post-deploy). Hashes distintos
+→ FAIL. Lock missing → WARN.
+
+**Allowlist:** ninguna. Si grita y el commit no toca rules, es porque alguien
+deployó fuera de banda — ejecutar
+`npx tsx scripts/invariantes/marcar-rules-deployadas.ts` para sincronizar.
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:
