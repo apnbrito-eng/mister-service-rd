@@ -3,9 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-06 por coordinator (tercera pasada — SPRINT-105 cerrado)
+**Última actualización:** 2026-05-07 por Cowork (Jorge reportó bug "botones de inicio de chequeo no funcionan" — agregado SPRINT-106)
 
-**Próximo ID disponible:** SPRINT-106
+**Próximo ID disponible:** SPRINT-107
 
 ---
 
@@ -238,6 +238,79 @@ Hoy el banner es read-only — el admin ve que Wilainy no organizó la ruta y so
 - WhatsApp deep linking: usar `utils/whatsapp.ts` existente. Phone normalization RD ya está implementada ahí.
 - Rule en `firestore.rules` para `recordatorios` (si existe el match): si admin/coord puede update con `completadoPorAdmin`, agregar rule explícita. Si NO existe el match todavía → toda la operación va a `auditoria_admin` y el "completado" se registra ahí, sin tocar el doc original. **Builder decide cuál enfoque tomar** según código actual; reportar decisión en commit message.
 - Architect/tech_lead recomendado al inicio para validar que el shape del doc `recordatorios` aguanta los nuevos campos (`completadoPor`, `motivoOverride`).
+
+---
+
+### SPRINT-106 — Audit + fix flujo técnico (chequeo, falla, escalación)
+
+**Estado:** PENDIENTE
+**Prioridad:** ALTA — bug en producción, técnicos bloqueados, afecta operación diaria.
+**Origen:** Jorge reportó el 2026-05-07 "los botones de inicio de chequeo del módulo técnico no están funcionando". Sospecha regresión introducida en SPRINT-103 (cleanup masivo de imports + comentarios allowlist + remoción dead-code `citasHoy`).
+**Riesgo:** alto — toca el flujo crítico de operación (técnico → diagnóstico → operaria → cliente).
+**Touch-list previsto:** depende del diagnóstico. Probable: `firestore.rules` (deploy pendiente desde SPRINT-103), `IniciarChequeoButton.tsx`, `TecnicoVista.tsx`, posiblemente `ModalSugerirSoloChequeo.tsx`, `Reprogramaciones.tsx`, `SugerenciasChequeo.tsx`.
+
+#### Diagnóstico preliminar (Cowork)
+
+**Hipótesis #1 (60%) — rules de SPRINT-103 NUNCA se deployaron a producción.**
+El diario de SPRINT-103 (`docs/sprints/EJECUCION_AUTONOMA.md`) dice explícitamente: *"Acción humana sin cambio: `npm run deploy:rules` para subir cambios de `firestore.rules` del SPRINT-103."* Las rules locales tienen ahora `.get(field, null)` para campos opcionales (`soloChequeo`, `estadoAprobacion`, `precioAprobado`, `aprobadoPor`, `fechaAprobacion`, `ayudanteId`). Las de producción siguen con acceso directo. El código del cliente (post SPRINT-103) puede estar enviando writes que las rules viejas rechazan silenciosamente con `permission-denied`.
+
+**Hipótesis #2 (30%) — `usuarioId = userProfile?.id || orden.tecnicoId || ''` rompe para algún caso.**
+En `IniciarChequeoButton.tsx:228`. SPRINT-103 NO cambió la lógica, sólo agregó comentario allowlist. Pero si el técnico tiene `userProfile.id == personalDocId` (cargado vía cascada `personal/`) Y la orden tiene `orden.tecnicoId == auth.uid`, el descriptor queda inconsistente. NO debería rechazar el write (la rule no valida el nested), pero puede causar errores de UI downstream.
+
+**Hipótesis #3 (10%) — GPS/cámara fallando en mobile específico.**
+Es la hipótesis menos probable porque Jorge no mencionó "cámara no abre" o "GPS no responde".
+
+#### Pasos OBLIGATORIOS antes de tocar código
+
+**Paso 1 — confirmar con Jorge si ejecutó `npm run deploy:rules` desde SPRINT-103.**
+Si NO, ejecutarlo PRIMERO. Después pedirle a Jorge que pruebe el botón otra vez. Si funciona, sprint cerrado con un solo comando.
+
+**Paso 2 — bisect dirigido del SPRINT-103 (commit `1568a63`):**
+`git diff c7c8e34..1568a63 -- src/components/ordenes/IniciarChequeoButton.tsx src/pages/TecnicoVista.tsx src/components/cierre/ModalSugerirSoloChequeo.tsx src/pages/Reprogramaciones.tsx src/pages/SugerenciasChequeo.tsx firestore.rules`. Validar que ningún cambio rompe lógica.
+
+**Paso 3 — fix del bug encontrado:**
+- Si causa = rules sin deploy → `npm run deploy:rules`.
+- Si causa = lógica rota en algún archivo del SPRINT-103 → revertir solo ese cambio + commit.
+- Si causa = otra cosa → builder + tester + reviewer normal.
+
+**Paso 4 — auditoría completa del flujo técnico (regresión preventiva):**
+
+Ejercer manualmente en producción con técnico + operaria reales:
+1. Técnico inicia chequeo (cámara + GPS + Firestore + cambio fase).
+2. Técnico hace diagnóstico (sugerir solo chequeo / reportar falla).
+3. Operaria recibe notificación + puede aprobar/rechazar.
+4. Cliente aprueba precio (simulado por operaria).
+5. Técnico ejecuta + cierra (wizard + foto + firma).
+6. Operaria envía a facturación.
+
+#### Criterios de aceptación
+
+- [ ] El botón "Iniciar Chequeo" funciona end-to-end.
+- [ ] Los 6 pasos del flujo arriba se ejecutan SIN errores `permission-denied` ni toasts rojos.
+- [ ] Las rules locales == rules deployadas (sin diff pendiente).
+- [ ] regression_guardian PASS sobre cualquier diff aplicado.
+- [ ] `npm run check:regression` sigue en 0 hits.
+- [ ] Build OK + deploy Vercel Ready.
+- [ ] Commit message detalla: causa raíz + fix + qué pasos del flujo se validaron.
+
+#### Restricciones / guardarrails
+
+- Si causa requiere modificar `firestore.rules` adicional (más allá del deploy del SPRINT-103) → **BLOQUEAR** y esperar OK explícito de Jorge.
+- regression_guardian obligatorio antes del commit final.
+
+#### Sub-reglas / cazadores a agregar tras cerrar
+
+1. **CLAUDE.md sub-regla nueva:** "Sprints que tocan `firestore.rules` deben ejecutar `npm run deploy:rules` ANTES de marcar COMPLETADO. El coordinator/devops es responsable. Sin esto, el código nuevo en producción puede chocar con rules viejas y romper flujos críticos silenciosamente." Antiprecedente: SPRINT-103.
+
+2. **Cazador P-005 nuevo:** `scripts/invariantes/check-rules-pendientes-deploy.ts`. Detecta si `firestore.rules` cambió desde el último commit que tiene `[rules-deployed]` en su mensaje. Si hay diff pendiente → bloquea pre-commit.
+
+3. **CLAUDE.md sub-regla:** "Cleanup de 'dead code' en archivos de páginas críticas requiere QA manual del flujo afectado antes de commit."
+
+#### Notas para el coordinator
+
+- **Pre-flight obligatorio:** confirmar con Jorge si ejecutó `npm run deploy:rules` desde SPRINT-103.
+- **No improvisar fixes** — si el diagnóstico no es claro tras paso 2, escalar a Jorge.
+- **Probar en producción real, no en local** — el bug es de producción.
 
 ---
 
