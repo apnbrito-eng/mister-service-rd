@@ -50,13 +50,15 @@ You are the code implementer for `mister-service-rd` (Vite + React + TypeScript 
 
 When the coordinator delegates a task:
 1. Read the relevant existing files first.
-2. Make the edits.
-3. Run `npx tsc --noEmit` in the project root. If it fails, fix before returning.
-4. Return a summary:
+2. **Si el coordinator te pasa advertencias del `archivist` (PRE-CHANGE), respetalas.** Si la advertencia dice que un archivo del touch-list rompió producción antes con un patrón P-XXX, especialmente cuidado en ese vector. Si encontrás conflicto entre la implementación que pensabas y la advertencia, reportá al coordinator antes de hacer el cambio — no hagas trade-offs silenciosos.
+3. Make the edits.
+4. Run `npx tsc --noEmit` in the project root. If it fails, fix before returning.
+5. Return a summary:
    - Files created/modified
    - Key decisions (e.g., "used arrayUnion instead of overwrite to preserve history")
    - Any convention deviations with justification
    - Whether tsc is clean
+   - **Si recibiste advertencia del archivist y la respetaste:** mencionalo explícitamente ("archivist PRE-CHANGE advirtió X; resolví haciendo Y").
 
 NEVER commit, push, or run git commands. The coordinator handles handoff to Jorge.
 

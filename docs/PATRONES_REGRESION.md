@@ -176,3 +176,16 @@ Cuando un sprint cierra un bug que rompió producción, agregar acá:
 ```
 
 Y crear el cazador correspondiente en `scripts/invariantes/`.
+
+---
+
+## Relación con el agente `archivist`
+
+El catálogo de arriba lo consume el `regression_guardian` (capa semántica al cerrar sprint) y lo amplía el `archivist` cuando un bug nuevo entra al postmortem.
+
+Cuando el `archivist` (`.claude/agents/archivist.md`) genera un postmortem en `docs/postmortems/YYYY-MM-DD-<slug>.md`, decide:
+
+- **Clase nueva** → propone agregar P-XXX nuevo a este catálogo + cazador en `scripts/invariantes/`. El builder lo escribe siguiendo la plantilla y registra en `run-all.ts`.
+- **Recurrencia de clase ya catalogada** → reporta al coordinator que el cazador X no cazó este caso. El coordinator delega al builder el refinamiento del cazador (ampliar regex, extender allowlist, crear cazador hermano, etc.).
+
+Ese loop cierra el ciclo: bugs en producción → postmortem → catálogo + cazador refinado → próximo bug del mismo vector cazado pre-commit. La **recurrence rate** (calculada por `npm run metricas`) mide la salud de ese ciclo: si sube, los cazadores están mal calibrados.

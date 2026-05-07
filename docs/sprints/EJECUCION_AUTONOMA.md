@@ -5,6 +5,49 @@
 
 ---
 
+## 2026-05-07 — `trabaja` autónomo segunda pasada (1 sprint meta-infraestructura)
+
+### SPRINT-107 — Agente `archivist` + Continuous Improvement Loop
+
+- **Estado final:** COMPLETADO
+- **Tipo:** meta-infraestructura. NO toca código de la app, rules ni dependencias.
+- **Restricciones evaluadas:** rules NO, migración masiva NO, integración pago/OAuth/terceros NO, endpoint `api/` público NO. Procesable autónomamente sin OK explícito.
+- **Archivos creados/modificados (10 archivos en total):**
+  - `.claude/agents/archivist.md` (NUEVO, 180 líneas) — agente con 3 modos: PRE-CHANGE, POSTMORTEM, MÉTRICAS.
+  - `.claude/agents/coordinator.md` (EDITAR) — pasos `b.5` (PRE-CHANGE invocación) y `i.5` (POSTMORTEM invocación) agregados al flujo autónomo. Tabla de agentes incluye archivist.
+  - `.claude/agents/builder.md` (EDITAR) — sub-regla "respetar advertencias del archivist" antes de hacer edits.
+  - `docs/postmortems/_TEMPLATE.md` (NUEVO) — template estructurado: timeline, impacto, 5 porqués, lo que funcionó/falló, acciones inmediatas + preventivas, métricas, lecciones, referencias.
+  - `docs/postmortems/README.md` (NUEVO) — guía del directorio + relación con catálogo P-XXX + métricas.
+  - `docs/postmortems/2026-05-07-iniciar-chequeo-rules-sin-deploy.md` (NUEVO) — primer postmortem retroactivo del bug de hoy (SPRINT-106), sirve como ejemplo del template.
+  - `scripts/metricas-mejora-continua.ts` (NUEVO, 322 líneas) — calcula MTBF, MTTR, recurrence rate, catch rate, count cazadores activos, allowlist size. Soporta `--desde=YYYY-MM-DD`. Usa fs/child_process nativo (no agrega deps).
+  - `package.json` (EDITAR) — script `metricas` agregado.
+  - `CLAUDE.md` (EDITAR) — sección nueva "Continuous Improvement Loop (archivist + postmortems)" con 3 sub-reglas obligatorias: (a) PRE-CHANGE antes de sprint con touch-list ≥1 archivo, (b) POSTMORTEM al cerrar bug, (c) postmortem completo antes de marcar hotfix COMPLETADO.
+  - `docs/PATRONES_REGRESION.md` (EDITAR) — sección "Relación con el agente archivist" al final, conecta catálogo P-XXX con postmortems.
+  - `docs/sprints/METRICAS_2026-05-07.md` (auto-generado por primer run de `npm run metricas`).
+  - `docs/sprints/COLA_AUTONOMA.md` — SPRINT-107 movido a histórico.
+- **archivist PRE-CHANGE:** N/A (este sprint precede al agente). Touch-list es exclusivamente meta-infraestructura, sin riesgos cruzados con archivos de páginas críticas o services.
+- **regression_guardian (manual — Agent tool no disponible en este flujo):**
+  - P-001 a P-005 todos en 0 hits antes y después del sprint.
+  - Sin cambios a código de la app, rules, ni services. Sin riesgo semántico de regresión.
+  - PASS.
+- **archivist POSTMORTEM:** N/A — sprint no es hotfix de bug en producción. Sin embargo, este sprint **genera retroactivamente** el postmortem de SPRINT-106 (bug del 2026-05-07), saldando esa deuda según la sub-regla "postmortem obligatorio antes de cerrar hotfix".
+- **Validaciones:**
+  - `npx tsc --noEmit`: clean.
+  - `npm run check:regression`: 5/5 PASS, 0 hits.
+  - `npm run lint`: baseline preservado (5559 problems excluyendo worktrees, idéntico a pre-sprint via `git stash` test).
+  - `npm run metricas`: corre OK, genera `docs/sprints/METRICAS_2026-05-07.md` con: 1 postmortem detectado, MTTR 540 min, recurrence 0%, 5 cazadores activos, allowlist size 16, MTBF n/a (necesita ≥2 postmortems), catch rate n/a (sin telemetría real del pre-commit hook todavía).
+- **Decisión clave del coordinator:** verifiqué que `archivist` no solapa con `mejora_continua` (ya existente). El primero ve TIEMPO (commits previos, postmortems, métricas), el segundo ve deuda cross-cutting (duplicación, inconsistencias). Son complementarios.
+- **Decisión clave del builder (yo, en este flujo single-agent):**
+  - Parser de métricas robusto a markdown bold (`**NO**` → "no" después de quitar `*`).
+  - Catch rate retorna `n/a` cuando hay postmortems pero `cazadoresHits=0` (sin telemetría real). Documentado en código + en notas técnicas del output. Sprint futuro podría agregar `docs/sprints/CAZADORES_LOG.jsonl` para activar la métrica.
+  - `tsconfig.json` ya excluye `scripts/` del typecheck principal (solo incluye `src`); no requirió cambios.
+  - El worktree `.claude/worktrees/dazzling-franklin-620e24/` que aparece en lint output es artefacto interno de Claude Code, no se commitea.
+- **NO requirió OK explícito de Jorge porque:** el sprint no toca rules, migraciones masivas, integraciones pago/OAuth/terceros, ni endpoints públicos. Estaba dentro del scope autónomo según `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
+- **Tiempo total:** ~25 min de coordinator end-to-end (lectura + creación + validación + cleanup de cola).
+- **Hash del commit:** `<por commit>` (se completa al hacer commit).
+
+---
+
 ## 2026-05-07 — `trabaja` autónomo (1 sprint completado, hotfix de producción)
 
 ### SPRINT-106 — Audit + fix flujo técnico (chequeo, falla, escalación)

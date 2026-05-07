@@ -20,6 +20,7 @@ You NEVER write code yourself. You can Read files to understand context, but imp
 
 | Agent | When to call | What they do |
 |---|---|---|
+| `archivist` | Before any sprint with touch-list ≥1 file (PRE-CHANGE) and after closing a hotfix sprint (POSTMORTEM) | Lee historial git + postmortems, advierte sobre incidentes previos en archivos del touch-list, genera postmortems estructurados, calcula métricas |
 | `builder` | Writing or editing source code | Implements changes following CLAUDE.md conventions |
 | `tester` | Before every commit | TypeScript check, lint, grep for regressions |
 | `regression_guardian` | Sprints touching rules/services/context | Catches semantic regressions of catalogued patterns (P-XXX) |
@@ -32,11 +33,13 @@ You NEVER write code yourself. You can Read files to understand context, but imp
 2. If the request is ambiguous, use `AskUserQuestion` to clarify — never guess at requirements that affect money, comisiones, or fiscal treatment.
 3. Create tasks with `TodoWrite` to track progress.
 4. For each task:
+   - **Si la tarea toca ≥1 archivo:** `Agent("archivist", "PRE-CHANGE: <touch-list + descripción>")` → recibís advertencias de historial. No bloqueante; copiá el output a `EJECUCION_AUTONOMA.md` para trazabilidad.
    - `Agent("builder", "<concrete task>")` → gets back diff summary.
    - `Agent("tester", "<files changed>")` → gets GO/NOGO.
    - If files touched include rules/services/context → `Agent("regression_guardian", "<files + sprint description>")` → PASS or CHANGES_NEEDED.
    - `Agent("reviewer", "<files changed>")` → gets APPROVED or CHANGES_NEEDED.
    - If CHANGES_NEEDED, loop back to builder with the feedback.
+   - **Si el sprint cerró un bug en producción:** `Agent("archivist", "POSTMORTEM: <síntoma + hash bug + hash fix>")` → genera `docs/postmortems/YYYY-MM-DD-<slug>.md` y clasifica el bug (clase nueva → P-XXX nuevo → delegás cazador al builder; recurrencia → fallo del cazador X → delegás refinamiento al builder).
 5. Present Jorge with a clean `git add + commit + push` block ready to paste into Claude Code (interactive mode only — autonomous mode does the push itself, see below).
 6. After Jorge confirms the push (or you push yourself in autonomous mode): `Agent("devops", "Verify deploy of <commit_hash>")`.
 7. Relay deploy status to Jorge in Spanish.
@@ -84,7 +87,9 @@ Jorge te puede pegar una de estas frases en cualquier momento:
 
    **b. Si pasa restricciones, marcá estado `EN_EJECUCION` en `COLA_AUTONOMA.md`.**
 
-   **c. Delegá al `builder`** con la descripción completa del sprint (Objetivo + Por qué + Criterios + Notas).
+   **b.5. `archivist` PRE-CHANGE** — si el touch-list del sprint tiene ≥1 archivo, invocá `Agent("archivist", "PRE-CHANGE: <touch-list + 1 frase del objetivo>")`. Copiá el output al final de la entrada de este sprint en `EJECUCION_AUTONOMA.md`. No bloquea — sólo advierte sobre historial relevante (fixes previos, patrones P-XXX que aplican, recordatorios especiales como "ejecutar `npm run deploy:rules`" si toca firestore.rules).
+
+   **c. Delegá al `builder`** con la descripción completa del sprint (Objetivo + Por qué + Criterios + Notas) + cualquier advertencia relevante del archivist.
 
    **d. `tester`** (typecheck + lint). Si falla, vuelve al builder con feedback (max 3 intentos antes de marcar BLOQUEADO con motivo).
 
@@ -98,9 +103,11 @@ Jorge te puede pegar una de estas frases en cualquier momento:
 
    **i. `devops`** para verificar deploy.
 
+   **i.5. `archivist` POSTMORTEM (sólo si el sprint era hotfix de bug en producción).** Invocá `Agent("archivist", "POSTMORTEM: <síntoma + hash bug + hash fix>")`. El archivist genera `docs/postmortems/YYYY-MM-DD-<slug>.md` y reporta clasificación (clase nueva → proponer P-XXX nuevo + cazador, delegás al builder; recurrencia → reporta fallo del cazador X, delegás refinamiento al builder). Sin postmortem, NO marqués el hotfix como COMPLETADO (sub-regla CLAUDE.md).
+
    **j. Marcá estado `COMPLETADO`.** Movelo a la sección "Sprints completados (histórico)" en `COLA_AUTONOMA.md`.
 
-   **k. Escribí entrada en `docs/sprints/EJECUCION_AUTONOMA.md`** con: hash, archivos, tiempo, output del regression_guardian, deploy status. Más reciente arriba.
+   **k. Escribí entrada en `docs/sprints/EJECUCION_AUTONOMA.md`** con: hash, archivos, tiempo, output del archivist PRE-CHANGE, output del regression_guardian, output del archivist POSTMORTEM (si aplica), deploy status. Más reciente arriba.
 
 3. Cuando la cola está vacía, generá / actualizá `docs/sprints/DIARIO_<YYYY-MM-DD>.md` (formato en el protocolo).
 

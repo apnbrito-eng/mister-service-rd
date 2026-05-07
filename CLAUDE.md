@@ -154,6 +154,22 @@ Tres capas de defensa:
 
 **Política de falsos positivos.** Si un cazador grita por algo legítimo: agregar a la allowlist documentada en el header del cazador (NO desactivarlo). Si la allowlist crece a >5 entradas, refactorear el cazador.
 
+## Continuous Improvement Loop (archivist + postmortems)
+
+> **Cada bug se convierte en aprendizaje estructurado, consultado antes de cada cambio.** Diseño en `.claude/agents/archivist.md` y `docs/postmortems/`.
+
+Tres capas adicionales que cierran el ciclo de aprendizaje:
+
+1. **`docs/postmortems/`** — análisis estructurado de cada bug en producción. Template en `_TEMPLATE.md`. Un archivo por incidente, formato `YYYY-MM-DD-<slug>.md`. Cada postmortem responde 5 porqués hasta causa raíz estructural y propone acciones preventivas concretas.
+2. **`.claude/agents/archivist.md`** — agente con tres modos: PRE-CHANGE (consulta historial git + postmortems antes de tocar archivos del touch-list), POSTMORTEM (genera el archivo `docs/postmortems/...` siguiendo el template), MÉTRICAS (corre `npm run metricas` y agrega interpretación cualitativa al output).
+3. **`scripts/metricas-mejora-continua.ts`** — calcula MTBF, MTTR, recurrence rate, catch rate, count de cazadores activos y allowlist size. Output en `docs/sprints/METRICAS_<fecha>.md`. Comando: `npm run metricas` o `npm run metricas -- --desde=YYYY-MM-DD`.
+
+**Sub-regla obligatoria — antes de cualquier sprint con touch-list ≥1 archivo, el coordinator invoca `archivist` en modo PRE-CHANGE.** Sin esto, el sprint pierde contexto histórico y puede repetir errores. Antiprecedente SPRINT-103: tocó `IniciarChequeoButton.tsx` sin consultar que el flujo técnico era crítico — un día después rompió producción. El output del archivist va a `EJECUCION_AUTONOMA.md` para trazabilidad.
+
+**Sub-regla obligatoria — después de cualquier bug en producción reportado por Jorge / usuario / monitoreo, el coordinator invoca `archivist` en modo POSTMORTEM.** Genera `docs/postmortems/YYYY-MM-DD-<slug>.md` con el template completo (timeline, impacto, 5 porqués, acciones preventivas, métricas, lecciones). Sin postmortem, los aprendizajes son anecdóticos y se pierden. El archivist también clasifica el bug: clase nueva → propone P-XXX nuevo + cazador (delegar al builder); recurrencia de clase ya catalogada → reporta "fallo del cazador X" + sugerencia de refinamiento.
+
+**Sub-regla obligatoria — postmortem completo es obligatorio antes de marcar un sprint hotfix como COMPLETADO.** Un sprint que arregla un bug de producción NO se cierra hasta tener su archivo en `docs/postmortems/`. Aplica retroactivamente: SPRINT-106 (commit `9ac9742`, 2026-05-07) tiene `docs/postmortems/2026-05-07-iniciar-chequeo-rules-sin-deploy.md` creado por SPRINT-107. Antiprecedente: sin esta regla, los hotfixes anteriores (`afc5e4a`, `b93625d`, `c7c8e34`) cerraron sin postmortem y los aprendizajes quedaron solo en gotchas — eso retrasó la creación de cazadores P-001 a P-003 hasta ya tener varios bugs de la misma clase.
+
 ## Related docs in repo
 
 - `README.md` — setup and module list.
