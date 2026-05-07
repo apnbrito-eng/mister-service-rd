@@ -113,8 +113,16 @@ service cloud.firestore {
     // Detecta si el update modifica precioFinal (campo que afecta
     // comisión). Si el campo no cambia, OK. Si cambia, requiere
     // aprobación previa de oficina.
+    //
+    // P-002 (variante !=): precioFinal es opcional en el create. Para órdenes
+    // sin precio asignado todavía (técnico está iniciando chequeo), el campo
+    // está missing en ambos lados. Acceso directo `request.resource.data.precioFinal`
+    // sobre campo missing tira evaluation error y la rule rechaza con
+    // permission-denied. Usar .get para tratar missing como null.
+    // Bug original: 2026-05-07 (Aury Mon - Iniciar Chequeo). El cazador P-002
+    // solo buscaba `==` directo, no detectó este `!=`. Sprint extendió cazador.
     function modificaPrecioFinal() {
-      return request.resource.data.precioFinal != resource.data.precioFinal;
+      return request.resource.data.get('precioFinal', null) != resource.data.get('precioFinal', null);
     }
 
     // R4 ENDURECIDA (sprint sugerencia-solo-chequeo): el técnico ya
