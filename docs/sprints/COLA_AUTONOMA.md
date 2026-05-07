@@ -3,9 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-07 por coordinator (SPRINT-106 cerrado: causa raíz = rules de SPRINT-103 no deployadas; deploy ejecutado + cazador P-005 agregado para que no vuelva a pasar)
+**Última actualización:** 2026-05-07 por Cowork (Jorge pidió agente de mejora continua / Continuous Improvement Loop — agregado SPRINT-107)
 
-**Próximo ID disponible:** SPRINT-107
+**Próximo ID disponible:** SPRINT-108
 
 ---
 
@@ -311,6 +311,186 @@ Ejercer manualmente en producción con técnico + operaria reales:
 - **Pre-flight obligatorio:** confirmar con Jorge si ejecutó `npm run deploy:rules` desde SPRINT-103.
 - **No improvisar fixes** — si el diagnóstico no es claro tras paso 2, escalar a Jorge.
 - **Probar en producción real, no en local** — el bug es de producción.
+
+---
+
+### SPRINT-107 — Agente `archivist` (Continuous Improvement Loop / SRE)
+
+**Estado:** PENDIENTE
+**Prioridad:** alta — cierra el ciclo de aprendizaje del sistema. Sin esto, los aprendizajes son pasivos (catalogados pero no consultados antes de cada cambio).
+**Origen:** Jorge pidió el 2026-05-07 "diseñar algo que revise los errores cometidos antes de agregar o quitar algo al programa". Cowork le explicó que es Continuous Improvement Loop / Postmortem culture (SRE). Jorge eligió Opción A: agente completo.
+**Riesgo:** bajo (sólo agrega meta-infraestructura — no toca código de la app).
+**Touch-list previsto:**
+- `.claude/agents/archivist.md` (NUEVO)
+- `.claude/agents/coordinator.md` (integrar invocación al archivist)
+- `.claude/agents/builder.md` (integrar consulta pre-cambio)
+- `docs/postmortems/_TEMPLATE.md` (NUEVO — template estructurado)
+- `docs/postmortems/README.md` (NUEVO — explica el directorio)
+- `docs/postmortems/2026-05-07-iniciar-chequeo-rules-sin-deploy.md` (NUEVO — primer postmortem retroactivo del bug de hoy, como ejemplo)
+- `scripts/metricas-mejora-continua.ts` (NUEVO — calcula MTBF, MTTR, recurrence rate, catch rate desde commits)
+- `package.json` (script nuevo `npm run metricas`)
+- `CLAUDE.md` (3 sub-reglas nuevas)
+- `docs/PATRONES_REGRESION.md` (mención cruzada al archivist)
+
+#### Objetivo
+
+Cerrar el Continuous Improvement Loop del proyecto. Hoy tenemos:
+1. ✅ Detección — pre-commit hook + 5 cazadores determinísticos.
+2. ✅ Aprendizaje pasivo — `docs/PATRONES_REGRESION.md` (P-001 a P-005).
+3. ✅ Reviewer semántico — `regression_guardian` agent.
+
+Lo que falta:
+4. ❌ Postmortem estructurado tras cada bug (5 porqués + impacto + MTTR).
+5. ❌ Consulta proactiva del historial ANTES de cada cambio (no solo después).
+6. ❌ Métricas de tendencia (¿estamos mejorando con el tiempo?).
+7. ❌ Detección de "recurrencia" — si un bug es de una clase ya catalogada, eso es fallo del cazador y debe escalarse, no tratarse como bug nuevo.
+
+El agente `archivist` cubre 4-7.
+
+#### Diseño del agente `archivist`
+
+**Cuándo se invoca el archivist:**
+
+**Modo PRE-CHANGE** (antes de tocar código en un sprint):
+- Input: lista de archivos que el sprint va a modificar (touch-list del prompt).
+- Output al coordinator: "Cuidado, en `IniciarChequeoButton.tsx` hubo P-XXX (commit ABC) hace N días. Patrón: <breve>. Este sprint debería tener especial atención en Y."
+- Si touch-list incluye `firestore.rules` → recordatorio explícito de P-005 (ejecutar `npm run deploy:rules` antes de cerrar).
+- Si touch-list incluye archivos de páginas críticas (`Ordenes.tsx`, `TecnicoVista.tsx`, `Dashboard.tsx`, etc.) → recordatorio de QA manual del flujo afectado.
+
+**Modo POSTMORTEM** (después de un bug en producción):
+- Input: descripción del bug + commit del fix.
+- Output: archivo `docs/postmortems/YYYY-MM-DD-<slug>.md` con:
+  - Resumen ejecutivo (1 párrafo)
+  - Timeline (cuándo se introdujo, cuándo se detectó, cuándo se arregló)
+  - Impacto (qué usuarios afectados, cuántos, severidad)
+  - Causa raíz (5 porqués)
+  - Acciones tomadas
+  - Acciones preventivas (cazadores nuevos, sub-reglas, etc.)
+  - Lecciones aprendidas
+  - Métricas (MTBF, MTTR si aplica)
+- Decide si el bug es:
+  - **Clase nueva** → propone P-XXX nuevo + cazador (delega a builder).
+  - **Repetición de clase ya catalogada** → reporta "fallo del cazador X" y propone refinarlo.
+
+**Modo MÉTRICAS** (on-demand, semanal o mensual):
+- Calcula MTBF, MTTR, recurrence rate, catch rate desde commits.
+- Output: tabla en `docs/sprints/METRICAS_<fecha>.md`.
+- Alertas si tendencia es mala (ej: recurrence rate sube → sistema de cazadores no está funcionando).
+
+#### Postmortem template (`docs/postmortems/_TEMPLATE.md`)
+
+```markdown
+# Postmortem — <título corto>
+
+**Fecha del incidente:** YYYY-MM-DD
+**Detectado por:** <Jorge, técnico, sistema, usuario, etc.>
+**Severidad:** crítica | alta | media | baja
+**Patrón asociado:** P-XXX (si existe)
+**Commits relacionados:** introduce `<hash>`, fix `<hash>`
+
+## Resumen ejecutivo
+Una frase clara de qué pasó.
+
+## Timeline
+| Hora | Evento |
+|---|---|
+| YYYY-MM-DD HH:MM | Se introduce el bug en commit `<hash>` |
+| YYYY-MM-DD HH:MM | Primer reporte / detección |
+| YYYY-MM-DD HH:MM | Diagnóstico confirmado |
+| YYYY-MM-DD HH:MM | Fix deployado (commit `<hash>`) |
+
+## Impacto
+- Usuarios afectados: <X técnicos/operarias/clientes/todos>
+- Funcionalidad bloqueada: <qué no podían hacer>
+- Tiempo total fuera: <horas/días>
+- Severidad de negocio: <descripción cualitativa>
+
+## Causa raíz (5 porqués)
+1. ¿Por qué pasó X? — Porque Y.
+2. ¿Por qué Y? — Porque Z.
+3. ¿Por qué Z? — Porque W.
+4. ¿Por qué W? — Porque V.
+5. ¿Por qué V? — Causa raíz: <conclusión>.
+
+## Lo que funcionó bien
+Qué del sistema actual ayudó a detectar/resolver rápido.
+
+## Lo que falló
+Qué del sistema NO detectó esto a tiempo.
+
+## Acciones tomadas (fix inmediato)
+- Acción 1
+- Acción 2
+
+## Acciones preventivas (para que no vuelva)
+- [ ] Cazador P-XXX nuevo en `scripts/invariantes/`
+- [ ] Sub-regla en CLAUDE.md
+- [ ] Update a agente regression_guardian / archivist
+- [ ] Otra
+
+## Métricas
+- **Tiempo desde introducción hasta detección:** <X horas/días>
+- **Tiempo desde detección hasta fix:** <X minutos/horas (MTTR)>
+- **Es recurrencia de clase ya catalogada:** sí/no (si sí → fallo del cazador X)
+
+## Lecciones aprendidas
+Reflexión final, no cosmética. ¿Qué patrón de pensamiento llevó al error? ¿Qué hábito hay que cambiar?
+```
+
+#### Métricas (`scripts/metricas-mejora-continua.ts`)
+
+Calcula desde `git log` y `docs/postmortems/`:
+
+| Métrica | Cómo se calcula | Objetivo |
+|---|---|---|
+| MTBF | Días promedio entre incidents declarados (postmortems) | Creciente |
+| MTTR | Minutos promedio entre primer reporte y fix deployado | Decreciente |
+| Recurrence rate | % de postmortems donde "es recurrencia: sí" | <5% |
+| Catch rate | % de bugs cazados pre-commit (cazador grita) vs post-commit (postmortem) | >80% |
+| Cazadores activos | Total entradas en `docs/PATRONES_REGRESION.md` | Creciente |
+| Allowlist size | Total de `// @safe-...` tags en src/ | Estable, no debe crecer sin justificación |
+
+Output: `docs/sprints/METRICAS_<YYYY-MM-DD>.md` con tabla + análisis breve.
+
+Comando: `npm run metricas` o `npm run metricas -- --desde=2026-05-01`.
+
+#### Sub-reglas a agregar en CLAUDE.md
+
+1. **"Antes de cualquier sprint que toque ≥1 archivo, el coordinator invoca `archivist` en modo PRE-CHANGE."** Sin esto, el sprint pierde contexto histórico y puede repetir errores. Antiprecedente: SPRINT-103 (`1568a63`) tocó `IniciarChequeoButton.tsx` sin consultar que el flujo técnico era crítico — un día después rompió producción.
+
+2. **"Después de cualquier bug en producción (reportado por Jorge, usuario, monitoreo), el coordinator invoca `archivist` en modo POSTMORTEM."** Genera el postmortem estructurado en `docs/postmortems/`. Sin esto, los aprendizajes son anecdóticos y se pierden.
+
+3. **"Postmortem completo es obligatorio antes de marcar un sprint hotfix como COMPLETADO."** Eso significa que SPRINT-106 (cerrado hoy) tiene una deuda: generar el postmortem retroactivo `docs/postmortems/2026-05-07-iniciar-chequeo-rules-sin-deploy.md`. Este sprint (SPRINT-107) lo hace como ejemplo del template.
+
+#### Criterios de aceptación
+
+- [ ] `.claude/agents/archivist.md` creado con instrucciones completas (PRE-CHANGE, POSTMORTEM, MÉTRICAS).
+- [ ] `coordinator.md` actualizado: invoca archivist al iniciar y al cerrar sprints (hotfix).
+- [ ] `builder.md` actualizado: si recibe advertencia del archivist, debe respetarla y reportar al coordinator.
+- [ ] `docs/postmortems/_TEMPLATE.md` con la estructura completa de postmortem.
+- [ ] `docs/postmortems/README.md` que explica el directorio y referencia el template.
+- [ ] **Primer postmortem retroactivo creado:** `docs/postmortems/2026-05-07-iniciar-chequeo-rules-sin-deploy.md` documentando el bug de hoy con los 5 porqués completos. Sirve como ejemplo del template para futuros postmortems.
+- [ ] `scripts/metricas-mejora-continua.ts` (NUEVO) calcula las 6 métricas de la tabla.
+- [ ] `package.json` script `metricas` agregado.
+- [ ] `npm run metricas` corre sin error y genera `docs/sprints/METRICAS_<fecha>.md`.
+- [ ] CLAUDE.md tiene las 3 sub-reglas nuevas.
+- [ ] `npm run check:regression` sigue en 0 hits.
+- [ ] regression_guardian PASS sobre el diff (no toca código de la app, sólo meta).
+- [ ] Build OK + commit + push.
+
+#### Restricciones / guardarrails
+
+- regression_guardian obligatorio antes del commit final.
+- NO toca código de la app. Sólo agrega meta-infraestructura (agentes, docs, scripts de métricas).
+- NO modifica `firestore.rules` ni nada deployable.
+- Si el archivist en su primera ejecución pre-change detecta historial relevante → debe REPORTARLO al coordinator y dejarlo en `EJECUCION_AUTONOMA.md`. No bloquea.
+
+#### Notas para el coordinator
+
+- El archivist es un agente "consultor" — su output es informativo, no bloqueante. La decisión de actuar sobre su advertencia es del coordinator.
+- En modo POSTMORTEM, si el bug es recurrencia (una clase ya catalogada P-XXX rompió en otro lugar), eso es **fallo del cazador X**. Reportar como "el cazador P-XXX necesita refinamiento" + sugerir cómo (ampliar allowlist? extender heurística? crear cazador hermano?).
+- Métricas son reporte mensual al inicio. Más adelante se puede automatizar (cron) si se ve útil.
+- El primer postmortem retroactivo (bug del 2026-05-07) es importante porque sirve como referencia visual del template y dispara la disciplina. Sin él, el template queda como abstracto.
 
 ---
 
