@@ -44,7 +44,7 @@
   - El worktree `.claude/worktrees/dazzling-franklin-620e24/` que aparece en lint output es artefacto interno de Claude Code, no se commitea.
 - **NO requirió OK explícito de Jorge porque:** el sprint no toca rules, migraciones masivas, integraciones pago/OAuth/terceros, ni endpoints públicos. Estaba dentro del scope autónomo según `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 - **Tiempo total:** ~25 min de coordinator end-to-end (lectura + creación + validación + cleanup de cola).
-- **Hash del commit:** `<por commit>` (se completa al hacer commit).
+- **Hash del commit:** `e395052` (push 2026-05-07 ~22:30 UTC).
 
 ---
 

@@ -318,7 +318,7 @@ Ejercer manualmente en producción con técnico + operaria reales:
 
 ### SPRINT-107 — Agente `archivist` + Continuous Improvement Loop
 - **Completado:** 2026-05-07 por coordinator (segunda pasada del día)
-- **Hash:** `<por commit>`
+- **Hash:** `e395052`
 - **Touch-list real:**
   - `.claude/agents/archivist.md` (NUEVO — 180 líneas, 3 modos: PRE-CHANGE / POSTMORTEM / MÉTRICAS)
   - `.claude/agents/coordinator.md` (pasos `b.5` PRE-CHANGE y `i.5` POSTMORTEM agregados al flujo autónomo + tabla de agentes actualizada)
