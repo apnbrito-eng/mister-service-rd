@@ -192,7 +192,7 @@ export default function OrdenDetailModal({
         <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-3 flex items-start gap-3">
           <Package size={18} className="text-yellow-700 mt-0.5 shrink-0" />
           <div className="flex-1">
-            <p className="font-semibold text-yellow-900 text-sm">⏸ Stand-by</p>
+            <p className="font-semibold text-yellow-900 text-sm">⏸ Pendiente de piezas</p>
             {orden.standbyMotivo && (
               <p className="text-xs text-yellow-800 mt-0.5">Motivo: {orden.standbyMotivo}</p>
             )}
@@ -215,7 +215,7 @@ export default function OrdenDetailModal({
           <div className="flex-1">
             <p className="font-semibold text-amber-900 text-sm">Pieza pendiente de llegada</p>
             <p className="text-xs text-amber-800">
-              Esta orden está aprobada pero tiene piezas en stand-by. Puedes reagendar para cuando llegue la pieza.
+              Esta orden está aprobada pero tiene piezas pendientes. Puedes reagendar para cuando llegue la pieza.
             </p>
           </div>
           {puedeModificar && (

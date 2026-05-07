@@ -193,7 +193,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
           { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
           { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios', show: isAdmin || isOperaria || isSecretaria },
-          { to: '/admin/standby', icon: Clock, label: 'Stand-by', badge: standbyCount + ordenesStandbyCount, show: p('ordenesVer') },
+          { to: '/admin/standby', icon: Clock, label: 'Pendiente de piezas', badge: standbyCount + ordenesStandbyCount, show: p('ordenesVer') },
           { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
           { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
           { to: '/admin/feedback', icon: Star, label: 'Feedback NPS', show: esAdminOCoord },

@@ -152,7 +152,7 @@ export default function ReagendarModal({ isOpen, onClose, orden, onSuccess }: Pr
             rows={2}
             value={motivo}
             onChange={e => setMotivo(e.target.value)}
-            placeholder="Ej: Pieza en stand-by, reagendada para cuando llegue."
+            placeholder="Ej: Pieza pendiente, reagendada para cuando llegue."
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           />
         </div>

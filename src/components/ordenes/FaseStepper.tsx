@@ -229,7 +229,7 @@ export default function FaseStepper({
     <div className={`space-y-2 ${className}`}>
       {tienestandby && !esAnulada && (
         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-800 text-[11px] font-medium">
-          <Package size={11} /> En Stand-by — piezas pendientes
+          <Package size={11} /> Pendiente de piezas
         </div>
       )}
 

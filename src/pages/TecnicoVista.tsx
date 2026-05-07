@@ -509,11 +509,11 @@ export default function TecnicoVista() {
       }
       if (standbyForm.notas.trim()) payload.standbyNotas = standbyForm.notas.trim();
       await updateDoc(doc(db, 'ordenes_servicio', ordenStandby.id), payload);
-      toast.success('Orden en stand-by');
+      toast.success('Orden marcada pendiente de piezas');
       cerrarStandbyModal();
     } catch (err) {
       console.error(err);
-      toast.error('Error al poner en stand-by');
+      toast.error('Error al marcar pendiente de piezas');
     } finally {
       setSavingStandby(false);
     }
@@ -1068,7 +1068,7 @@ export default function TecnicoVista() {
                           <Pause size={16} className="text-yellow-700 mt-0.5 shrink-0" />
                           <div className="flex-1 text-xs text-yellow-900">
                             <p className="font-semibold">
-                              ⏸ Stand-by
+                              ⏸ Pendiente de piezas
                               {orden.standbyHasta && (
                                 <span className="ml-1 font-normal">
                                   · hasta {format(orden.standbyHasta instanceof Date ? orden.standbyHasta : new Date(), 'dd/MM/yyyy', { locale: es })}
@@ -1167,9 +1167,9 @@ export default function TecnicoVista() {
                           <button
                             onClick={() => abrirStandby(orden)}
                             className="flex items-center gap-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-2 rounded-lg text-xs font-medium"
-                            title="Poner orden en stand-by"
+                            title="Marcar pendiente de piezas"
                           >
-                            <Pause size={12} /> ⏸ Stand-by
+                            <Pause size={12} /> ⏸ Pendiente de piezas
                           </button>
                         )}
                         {permisos.puedeAgregarNotas && (

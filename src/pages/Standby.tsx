@@ -113,7 +113,7 @@ export default function Standby() {
         estado: 'buscando',
         createdAt: Timestamp.now(),
       });
-      toast.success('Pieza en stand-by registrada');
+      toast.success('Pieza pendiente registrada');
       setShowModal(false);
       setForm({ clienteNombre: '', equipoTipo: '', equipoMarca: '', piezaFaltante: '', tecnicoNombre: '', notas: '' });
     } catch {
@@ -196,15 +196,15 @@ export default function Standby() {
     }
   };
 
-  if (loading) return <LoadingSpinner fullPage text="Cargando stand-by..." />;
+  if (loading) return <LoadingSpinner fullPage text="Cargando pendientes de piezas..." />;
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Stand-by</h1>
+          <h1 className="text-2xl font-bold text-[#0f3460]">Pendiente de piezas</h1>
           <p className="text-gray-500 text-sm">
-            {items.filter(i => i.estado !== 'llego').length} piezas activas · {ordenesStandby.length} órdenes en stand-by
+            {items.filter(i => i.estado !== 'llego').length} piezas activas · {ordenesStandby.length} órdenes pendientes
           </p>
         </div>
         {tab === 'piezas' && (
@@ -303,7 +303,7 @@ export default function Standby() {
           {ordenesStandby.length === 0 ? (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
               <Pause size={48} className="mx-auto text-gray-300 mb-3" />
-              <p className="text-gray-400 text-sm">Sin órdenes en stand-by</p>
+              <p className="text-gray-400 text-sm">Sin órdenes pendientes de piezas</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -331,7 +331,7 @@ export default function Standby() {
                         </p>
                       </div>
                       <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 shrink-0">
-                        <Pause size={10} /> Stand-by
+                        <Pause size={10} /> Pendiente de piezas
                       </span>
                     </div>
                     {o.standbyMotivo && (
@@ -461,7 +461,7 @@ export default function Standby() {
       )}
 
       {/* Modal registrar */}
-      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Registrar Pieza en Stand-by">
+      <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Registrar Pieza Pendiente">
         <form onSubmit={handleRegistrar} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Cliente *</label>

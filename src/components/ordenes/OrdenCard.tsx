@@ -99,14 +99,14 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
               </span>
             )}
             {orden.enStandby && (
-              <Badge label="⏸ Stand-by" color="bg-yellow-100 text-yellow-800" />
+              <Badge label="⏸ Pendiente de piezas" color="bg-yellow-100 text-yellow-800" />
             )}
             {orden.enStandby && puedeReactivar && (
               <button
                 type="button"
                 onClick={handleReactivar}
                 disabled={reactivando}
-                title="Reactivar orden (quitar de stand-by)"
+                title="Reactivar orden (quitar de pendiente de piezas)"
                 className="inline-flex items-center gap-1 text-[10px] font-medium bg-green-50 hover:bg-green-100 text-green-700 px-2 py-0.5 rounded-full disabled:opacity-60"
               >
                 <Play size={10} />

@@ -315,12 +315,12 @@ export default function OrdenDetalle() {
       }
       if (standbyForm.notas.trim()) payload.standbyNotas = standbyForm.notas.trim();
       await updateDoc(doc(db, 'ordenes_servicio', id), payload);
-      toast.success('Orden en stand-by');
+      toast.success('Orden marcada pendiente de piezas');
       setShowStandbyModal(false);
       setStandbyForm({ motivo: 'Esperando pieza', hasta: '', notas: '' });
     } catch (err) {
       console.error(err);
-      toast.error('Error al poner en stand-by');
+      toast.error('Error al marcar pendiente de piezas');
     } finally {
       setSavingStandby(false);
     }
@@ -497,7 +497,7 @@ export default function OrdenDetalle() {
           <div className="flex-1">
             <p className="font-semibold text-amber-900">Pieza pendiente de llegada</p>
             <p className="text-sm text-amber-800">
-              Esta orden está aprobada pero tiene piezas en stand-by. Puedes reagendar el servicio para cuando llegue la pieza.
+              Esta orden está aprobada pero tiene piezas pendientes. Puedes reagendar el servicio para cuando llegue la pieza.
             </p>
           </div>
           {puede(userProfile, 'ordenesModificar') && (
@@ -573,7 +573,7 @@ export default function OrdenDetalle() {
           <Pause size={20} className="text-yellow-700 mt-0.5 shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-semibold text-yellow-900">
-              ⏸ Orden en Stand-by
+              ⏸ Orden Pendiente de piezas
               {orden.standbyHasta && (() => {
                 const fechaHasta = orden.standbyHasta instanceof Date
                   ? orden.standbyHasta
@@ -595,7 +595,7 @@ export default function OrdenDetalle() {
             )}
             {orden.standbyPor && (
               <p className="text-[11px] text-yellow-700 mt-1">
-                Puesto en stand-by por {orden.standbyPor}
+                Marcada pendiente por {orden.standbyPor}
                 {orden.standbyDesde && (() => {
                   const fechaDesde = orden.standbyDesde instanceof Date
                     ? orden.standbyDesde
@@ -1416,7 +1416,7 @@ export default function OrdenDetalle() {
           {/* Poner en stand-by */}
           {puedePonerStandby() && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Stand-by</h3>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Pendiente de piezas</h3>
               <p className="text-xs text-gray-500 mb-3">
                 Congela la orden cuando hay que esperar piezas o coordinar con el cliente. La fase no cambia.
               </p>
@@ -1428,7 +1428,7 @@ export default function OrdenDetalle() {
                 }}
                 className="w-full flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"
               >
-                <Pause size={14} /> ⏸ Poner en stand-by
+                <Pause size={14} /> ⏸ Marcar pendiente de piezas
               </button>
             </div>
           )}
@@ -1611,7 +1611,7 @@ export default function OrdenDetalle() {
       <Modal
         isOpen={showStandbyModal}
         onClose={() => { setShowStandbyModal(false); }}
-        title="Poner orden en stand-by"
+        title="Marcar orden como pendiente de piezas"
       >
         <div className="space-y-4">
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs text-yellow-900">
@@ -1670,7 +1670,7 @@ export default function OrdenDetalle() {
               disabled={savingStandby}
               className="px-5 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
             >
-              {savingStandby ? 'Guardando...' : '⏸ Poner en stand-by'}
+              {savingStandby ? 'Guardando...' : '⏸ Marcar pendiente'}
             </button>
           </div>
         </div>
