@@ -147,12 +147,15 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
   const [tecnicos, setTecnicos] = useState<Personal[]>([]);
   const [bancos, setBancos] = useState<Banco[]>([]);
 
-  // Re-sync si cambia la orden externa (distinta id)
+  // Re-sync si cambia la orden externa (distinta id). Intencional: solo
+  // re-sync cuando cambia el id, no cuando cambian campos del mismo doc
+  // (eso lo maneja el formulario localmente).
   useEffect(() => {
     setForm(ordenToForm(orden));
     setModificados(new Set());
     setRazonCambio('');
     setModalRazonAbierto(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orden.id]);
 
   // Subscribir técnicos activos
@@ -620,8 +623,10 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
                   className={inputCls}
                 >
                   <option value="">Sin asignar</option>
-                  {tecnicos.map(t => (
-                    <option key={t.id} value={t.id}>{t.nombre}</option>
+                  {/* BUG fix (P-006): value es personal.uid (auth.uid), NO doc id.
+                      Las rules comparan tecnicoId == request.auth.uid. */}
+                  {tecnicos.filter(t => t.uid).map(t => (
+                    <option key={t.id} value={t.uid}>{t.nombre}</option>
                   ))}
                 </select>
               </div>

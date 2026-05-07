@@ -373,7 +373,10 @@ export default function AgendaDia() {
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
             >
               <option value="">Todos los técnicos</option>
-              {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+              {/* P-006: filtra por uid (auth.uid) para alinear con ordenes_servicio.tecnicoId */}
+              {tecnicos.filter(t => t.uid).map(t => (
+                <option key={t.id} value={t.uid}>{t.nombre}</option>
+              ))}
             </select>
           )}
           {esAdminOCoord && (

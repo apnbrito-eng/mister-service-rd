@@ -263,6 +263,7 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
     }
     const activas = ordenes.filter(o =>
       o.clienteId === form.clienteId &&
+      !o.eliminada &&
       !['cerrado', 'cancelado'].includes(o.fase)
     );
     setOrdenesActivasCliente(activas);

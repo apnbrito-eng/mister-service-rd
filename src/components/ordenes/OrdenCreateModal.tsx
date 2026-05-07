@@ -681,13 +681,20 @@ export default function OrdenCreateModal({
               <select
                 value={form.tecnicoId}
                 onChange={e => {
-                  const t = tecnicos.find(p => p.id === e.target.value);
+                  // BUG fix (P-006): el value del option es el auth.uid del técnico
+                  // (personal.uid), NO el doc id de personal. Las rules comparan
+                  // resource.data.tecnicoId == request.auth.uid, así que tecnicoId
+                  // DEBE ser el auth.uid o el técnico recibe permission-denied al
+                  // hacer cualquier write (Iniciar Chequeo, etc.).
+                  const t = tecnicos.find(p => (p.uid || p.id) === e.target.value);
                   setForm(f => ({ ...f, tecnicoId: e.target.value, tecnicoNombre: t?.nombre || '' }));
                 }}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
               >
                 <option value="">Sin asignar</option>
-                {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+                {tecnicos.filter(t => t.uid).map(t => (
+                  <option key={t.id} value={t.uid}>{t.nombre}</option>
+                ))}
               </select>
             </div>
 

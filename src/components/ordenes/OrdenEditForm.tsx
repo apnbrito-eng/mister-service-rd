@@ -293,13 +293,18 @@ export default function OrdenEditForm({
             <select
               value={editForm.tecnicoId}
               onChange={e => {
-                const t = tecnicos.find(x => x.id === e.target.value);
+                // BUG fix (P-006): el value del option es el auth.uid del técnico
+                // (personal.uid), NO el doc id de personal. Ver OrdenCreateModal.tsx
+                // para el contexto completo del bug.
+                const t = tecnicos.find(x => (x.uid || x.id) === e.target.value);
                 setEditForm(f => ({ ...f, tecnicoId: e.target.value, tecnicoNombre: t?.nombre || '' }));
               }}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
             >
               <option value="">Sin asignar</option>
-              {tecnicos.map(t => <option key={t.id} value={t.id}>{t.nombre}</option>)}
+              {tecnicos.filter(t => t.uid).map(t => (
+                <option key={t.id} value={t.uid}>{t.nombre}</option>
+              ))}
             </select>
             {editForm.tecnicoId && operariaNuevaNombre && (
               <p className={`text-[11px] mt-1 ${cambiaDeGrupo ? 'text-purple-700' : 'text-gray-500'}`}>
