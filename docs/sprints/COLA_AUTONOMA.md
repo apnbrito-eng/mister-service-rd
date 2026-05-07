@@ -442,7 +442,7 @@ El hotfix de Aury cerró sin cumplir estas dos reglas (Jorge eligió A en vez de
 
 ### SPRINT-109 — Limpiar 22 hits de P-001 (userProfile.id misuse)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-07 (resuelto retroactivamente — SPRINT-103 commit `ef74a04` ya cazó los 22 hits con fixes + allowlists. El cazador P-001 retorna 0 hits hoy. No requiere trabajo adicional).
 **Prioridad:** alta (auditoría pedida por Jorge)
 **Origen:** Smoke test del 2026-05-06 dejó 22 hits del cazador P-001 sin atender. Triaje preliminar en SPRINT-103 dijo "~7 bugs reales mismo patrón que afc5e4a, ~15 falsos positivos" pero nunca se cerró.
 **Riesgo:** medio (toca services y context; misma clase de bug que rompió producción 2 veces)
@@ -491,7 +491,7 @@ Los 22 hits son bugs latentes del mismo vector que ya rompió producción dos ve
 
 ### SPRINT-110 — Limpiar 13 hits P-002 (rules con .get faltantes)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-07 (resuelto retroactivamente — SPRINT-103 commit `ef74a04` cubrió 11 de los 13 hits con `.get()`/`@safe-required`. SPRINT-106 hotfix `b7b6464` cubrió el 12º (`modificaPrecioFinal !=`). SPRINT-108 cubrió la cobertura del cazador para detectar futuras variantes `!=`. El cazador P-002 retorna 0 hits hoy. No requiere trabajo adicional).
 **Prioridad:** alta (auditoría pedida por Jorge)
 **Origen:** Smoke test del 2026-05-06 dejó 13 hits del cazador P-002 (rules de inmutabilidad sobre campo opcional sin `.get()`). Algunos posiblemente ya se arreglaron en SPRINT-103 pero el smoke no se re-corrió.
 **Riesgo:** medio-alto (toca firestore.rules — vector que ya rompió producción 2 veces)

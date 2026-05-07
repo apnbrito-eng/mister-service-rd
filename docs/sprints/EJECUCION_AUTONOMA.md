@@ -5,6 +5,66 @@
 
 ---
 
+## 2026-05-07 — `trabaja` autónomo tercera pasada (1 sprint ejecutado + 2 retroactivos)
+
+### SPRINT-108 — Cierre disciplina hotfix Aury (P-006 + P-002 ext)
+
+- **Estado final:** COMPLETADO
+- **Hash:** `e428a4d`
+- **Tipo:** documentación + cazadores meta + comentarios `@safe-tecnicoid-id` (NO cambia comportamiento de la app).
+- **Restricciones evaluadas:** rules NO, migración masiva NO, integración pago/OAuth/terceros NO, endpoint `api/` público NO. Procesable autónomo.
+- **Archivos creados/modificados (12 archivos):**
+  - `docs/postmortems/2026-05-07-iniciar-chequeo-permission-denied.md` (NUEVO, 180+ líneas) — postmortem retroactivo siguiendo `_TEMPLATE.md` exacto. Cubre cadena de 2 bugs (`tecnicoId` + `modificaPrecioFinal !=`), 5 porqués hasta causa estructural, métricas (MTTR ~70 min), lecciones.
+  - `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` (NUEVO) — cazador P-006. Detecta `<option value={X.id}>` en dropdowns donde X es identificador de personal (`t`, `p`, `tec`, `op`, etc.) y el contexto ±20 líneas contiene tokens de persistencia (`tecnicoId`, `ayudanteId`, `tecnicos.map`, etc.). Allowlist por línea con `// @safe-tecnicoid-id: <razón>`.
+  - `scripts/invariantes/check-rules-immutability.ts` (EDITAR) — regex extendida de `==` a `(==|!=)`. Header documenta el gap histórico y la cobertura nueva. Bug original variante `!=`: `b7b6464` (modificaPrecioFinal Aury 2026-05-07).
+  - `scripts/invariantes/run-all.ts` (EDITAR) — registra `checkTecnicoidPersonalIdMisuse`.
+  - `docs/PATRONES_REGRESION.md` (EDITAR) — entrada P-006 nueva (con bug original, síntoma, causa raíz, regla, cazador, allowlist) + P-002 actualizado para incluir variante `!=` con referencia a `b7b6464`.
+  - `CLAUDE.md` (EDITAR) — gotcha "asunción frágil personal/{id}.id == auth.uid" tachada con `[RESUELTO parcialmente en SPRINT-108 el 2026-05-07]` (deuda restante en campos análogos en SPRINT-111). Sub-regla nueva: dropdowns que asignan empleado a un campo guardado en Firestore deben usar `t.uid`/`p.uid`.
+  - `src/components/facturas/FacturaItemDetallesModal.tsx` (EDITAR) — comentarios `@safe-tecnicoid-id` en 3 líneas con `value={t.id}`. Razón: `item.tecnicoId` es descriptor para lookup en `utils/comisiones.ts:245` (`getDoc(personal/{tecnicoId})`). Migración a auth.uid es scope SPRINT-111.
+  - `src/pages/Comisiones.tsx:237` (EDITAR) — comentario `@safe-tecnicoid-id`. Razón: filtroTecnico es estado UI, no escribe Firestore.
+  - `src/pages/Configuracion.tsx:986` (EDITAR) — comentario `@safe-tecnicoid-id`. Razón: `ubicaciones_vehiculos.tecnicoId` no gateado por rule auth.uid (esStaff() solo). Cambiar rompería el join con `TecnicoVista.tsx:236` que el técnico usa para identificar SU vehículo. Limpieza colateral: removí import unused `Settings` de lucide-react.
+  - `src/pages/Mantenimiento.tsx:213` (EDITAR) — comentario `@safe-tecnicoid-id`. Razón: `mantenimientos.tecnicoId` no gateado por rule auth.uid (esStaffOficina solo). Scope SPRINT-111. Limpieza colateral: removí import unused `addDays` de date-fns.
+  - `src/pages/PersonalPage.tsx:1215` (EDITAR) — comentario `@safe-tecnicoid-id`. Razón: `personal.operariaId` se compara contra `userProfile.id` en filtros UI (`RecordatorioBanner.tsx:85,135,315`, `OrdenesTablero.tsx:193`). Scope SPRINT-111. Limpieza colateral: removí import unused `X` de lucide-react.
+  - `docs/sprints/COLA_AUTONOMA.md` (EDITAR) — SPRINT-108 marcado COMPLETADO; SPRINT-109 y SPRINT-110 marcados COMPLETADO (retroactivamente — los cazadores ya retornan 0 hits desde sprints anteriores).
+- **archivist PRE-CHANGE:** Touch-list de meta-infraestructura (cazadores + docs + postmortems) y comentarios allowlist. Sin contacto con páginas críticas (Ordenes.tsx, TecnicoVista.tsx, Dashboard.tsx, IniciarChequeoButton.tsx) o services con cross-collection. No requería invocación formal.
+- **regression_guardian (manual):**
+  - P-001 a P-006 todos en 0 hits post-sprint.
+  - Sin patrones de los catalogados re-introducidos (cambios son aditivos: comentarios + nuevos archivos + extensión de regex).
+  - APROBADO.
+- **Tester:**
+  - `npx tsc --noEmit`: clean.
+  - `npm run check:regression`: 6/6 PASS, 0 hits, 67-72ms.
+  - `npm run lint`: 5558 problems (idéntico a pre-sprint via stash test, baseline preservado).
+  - PASS.
+- **Pre-commit hook:** typecheck OK, cazadores OK, lint staged inicialmente fallaba con 3 warnings preexistentes en archivos staged (`Settings`, `addDays`, `X` unused imports). Limpieza incluida en el commit final → hook OK.
+- **Tiempo total:** ~30 min coordinator (incluye lectura cola, postmortem, cazador P-006 desde cero, extensión P-002, allowlists con razón documentada, limpieza imports unused, validación retroactiva de SPRINT-109/110, daily summary).
+- **Decisión clave:** los 6 hits iniciales del cazador P-006 fueron clasificados todos como falsos positivos legítimos (descriptors o filtros UI), no bugs reales en el momento. El único hit que **es bug real estructural** (`item.tecnicoId` que llega a `comisiones.tecnicoId` rule-gateado por auth.uid) requiere migración coordinada (cambiar lookup en `utils/comisiones.ts:245` + dropdown + migración de comisiones existentes). Por scope, eso queda en SPRINT-111. El allowlist documenta la excepción explícitamente.
+
+### SPRINT-109 — Limpiar 22 hits P-001 (resuelto retroactivamente)
+
+- **Estado final:** COMPLETADO 2026-05-07
+- **Hash:** ninguno propio (ya fixeado por SPRINT-103 commit `ef74a04` el 2026-05-06).
+- **Validación:** `npx tsx scripts/invariantes/check-userprofile-id-misuse.ts` retorna 0 hits, allowlist 0 archivos. Los 22 hits del baseline fueron procesados en SPRINT-103 (6 fixeados con `currentUser.uid` + 16 allowlistados con `// @safe-userprofile-id:`).
+- **Acción:** marcado COMPLETADO en `COLA_AUTONOMA.md` con nota retroactiva. Sin trabajo nuevo.
+
+### SPRINT-110 — Limpiar 13 hits P-002 (resuelto retroactivamente)
+
+- **Estado final:** COMPLETADO 2026-05-07
+- **Hash:** ninguno propio (cubierto por SPRINT-103 `ef74a04` + SPRINT-106 `b7b6464` + SPRINT-108 extensión cazador).
+- **Validación:** `npx tsx scripts/invariantes/check-rules-immutability.ts` retorna 0 hits. SPRINT-103 cubrió 11 de 13 hits con `.get()`/`@safe-required`. SPRINT-106 hotfix cubrió `modificaPrecioFinal !=`. SPRINT-108 extendió la cobertura del cazador para detectar futuras variantes `!=`.
+- **Acción:** marcado COMPLETADO en `COLA_AUTONOMA.md` con nota retroactiva. Sin trabajo nuevo.
+
+### Resumen para Jorge / Cowork
+
+- **Sprints completados:** 3 (1 ejecutado activamente, 2 marcados retroactivos por validación de cazadores).
+- **Sprints bloqueados nuevos:** 0.
+- **Bloqueos.md:** vacío al cierre.
+- **Archivos creados:** 2 (cazador P-006, postmortem Aury).
+- **Push a producción:** `e428a4d`. Vercel build automático rutinario (sin código de app afectado, solo allowlists + meta).
+- **Pendientes en cola:** SPRINT-100 (validación humana), SPRINT-111/112/113 (sprints de scope grande, recomendado pasada dedicada con scope acotado).
+
+---
+
 ## 2026-05-07 — `trabaja` autónomo segunda pasada (1 sprint meta-infraestructura)
 
 ### SPRINT-107 — Agente `archivist` + Continuous Improvement Loop
