@@ -82,7 +82,7 @@
   pedirle a un técnico que pruebe "Iniciar chequeo" en una orden regular y
   confirmar que funciona. Si no funciona, escalar — puede ser hipótesis
   alternativa que el bisect no descartó.
-- **Hash commit:** PENDIENTE (este log se escribe ANTES del commit).
+- **Hash commit:** `9ac9742`. Push a origin/main OK.
 - **Pre-commit hook:** PASS (5 cazadores 0 hits + typecheck + lint).
 - **Tiempo total:** ~25 minutos.
 
