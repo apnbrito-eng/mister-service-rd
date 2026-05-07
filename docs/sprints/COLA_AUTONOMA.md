@@ -3,9 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-07 por coordinator (segunda pasada — SPRINT-107 procesado)
+**Última actualización:** 2026-05-07 por Cowork (post-hotfix Aury — SPRINT-108 a SPRINT-113 agregados)
 
-**Próximo ID disponible:** SPRINT-108
+**Próximo ID disponible:** SPRINT-114
 
 ---
 
@@ -379,3 +379,279 @@ Ejercer manualmente en producción con técnico + operaria reales:
 #### Notas para el coordinator
 - ...
 ```
+
+---
+
+### SPRINT-108 — Cierre disciplina hotfix 2026-05-07 (P-006 + P-002 variante !=)
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (deuda obligatoria por sub-reglas CLAUDE.md)
+**Origen:** Bug en producción 2026-05-07 — Aury Mon no podía iniciar chequeo. Cadena de 2 bugs:
+1. `tecnicoId` guardado como `personal.id` en lugar de `auth.uid` (commits c4be345 y migración)
+2. Rule `modificaPrecioFinal()` con acceso directo a campo opcional (commit b7b6464)
+**Riesgo:** bajo (todo es documentación + cazador determinístico)
+**Touch-list previsto:** docs/postmortems/, docs/PATRONES_REGRESION.md, scripts/invariantes/, CLAUDE.md, scripts/invariantes/run-all.ts
+
+#### Objetivo
+Cerrar la disciplina obligatoria que CLAUDE.md exige al cerrar un hotfix de producción. Sin esto, los aprendizajes quedan anecdóticos.
+
+#### Por qué
+Las sub-reglas obligatorias en CLAUDE.md dicen:
+- "postmortem completo es obligatorio antes de marcar un sprint hotfix como COMPLETADO"
+- "cada bug capturado se convierte en cazador ejecutable"
+
+El hotfix de Aury cerró sin cumplir estas dos reglas (Jorge eligió A en vez de A+ para descansar). Este sprint paga la deuda.
+
+#### Criterios de aceptación
+- [ ] Crear `docs/postmortems/2026-05-07-iniciar-chequeo-permission-denied.md` siguiendo `_TEMPLATE.md`. Incluir:
+  - Timeline (Aury reporta → diagnóstico → migración tecnicoId → fix rules → resolución).
+  - Impacto: técnicos bloqueados ~1 día post-deploy SPRINT-106.
+  - 5 porqués hasta causa raíz estructural.
+  - Acciones preventivas: extender cazador P-002, crear cazador P-006.
+- [ ] Agregar P-006 a `docs/PATRONES_REGRESION.md` siguiendo plantilla:
+  - Síntoma: técnico recibe permission-denied al hacer cualquier write sobre orden suya.
+  - Causa raíz: dropdowns de "Asignar técnico" guardan `personal.id` (doc id) en lugar de `personal.uid` (auth.uid). La rule compara `tecnicoId == request.auth.uid`.
+  - Regla: cualquier dropdown que asigna a un técnico/operaria/secretaria debe guardar `uid`, no `id`.
+  - Cazador: `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts`.
+- [ ] Crear cazador `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts`:
+  - Escanea `src/**/*.tsx` buscando `<option value={` seguido de `t.id` o `p.id` cerca de un select que filtra `tecnicos` o `personal where rol == 'tecnico'`.
+  - Falla si encuentra hits sin allowlist documentada.
+  - Allowlist en header con regla: "el dropdown es solo para selección visual (filtro), no se guarda en Firestore".
+- [ ] Extender cazador P-002 (`scripts/invariantes/check-rules-immutability.ts`) para que también detecte `!=`:
+  - Hoy solo busca `==`. Bug en `modificaPrecioFinal()` usaba `!=` y no se detectó.
+  - Cambiar regex para capturar ambos.
+  - Re-correr smoke test, verificar 0 hits nuevos.
+- [ ] Registrar P-006 en `scripts/invariantes/run-all.ts`.
+- [ ] Update gotcha en `CLAUDE.md`:
+  - Agregar/extender la gotcha "asunción frágil personal/{id}.id == auth.uid" para incluir el caso del dropdown que escribe a `tecnicoId`.
+  - Marcar como "[RESUELTO en SPRINT-108]" la deuda anterior si aplica.
+- [ ] Verificar que `npm run check:regression` pasa con 0 hits.
+- [ ] Commit con mensaje descriptivo + push.
+
+#### Restricciones / guardarrails
+- regression_guardian OBLIGATORIO antes de cerrar (la sub-regla "sprints que tocan rules, services o context" aplica porque toca cazadores y patrón).
+- NO desactivar cazadores si grita por algo legítimo en el extender de P-002 — agregar al allowlist con justificación.
+- Archivist debe consultarse en modo PRE-CHANGE antes de tocar `scripts/invariantes/`.
+
+#### Notas para el coordinator
+- Este sprint paga deuda de hoy. Es chico (~1h) pero crítico para el sistema de aprendizaje continuo.
+- El postmortem debe responder: ¿por qué tardamos tanto en encontrar el bug? Hipótesis: el cazador P-002 tenía gap (solo `==`).
+- Para extender P-002 a `!=`: revisar `scripts/invariantes/check-rules-immutability.ts` línea con la regex y agregar variante `!=` con misma lógica de detección de campo opcional.
+
+---
+
+### SPRINT-109 — Limpiar 22 hits de P-001 (userProfile.id misuse)
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (auditoría pedida por Jorge)
+**Origen:** Smoke test del 2026-05-06 dejó 22 hits del cazador P-001 sin atender. Triaje preliminar en SPRINT-103 dijo "~7 bugs reales mismo patrón que afc5e4a, ~15 falsos positivos" pero nunca se cerró.
+**Riesgo:** medio (toca services y context; misma clase de bug que rompió producción 2 veces)
+**Touch-list previsto:** ver lista abajo
+
+#### Objetivo
+Auditar uno por uno los 22 hits del cazador P-001 (`userProfile.id` cerca de campos sensibles gateados por `auth.uid`). Para cada hit decidir:
+- **Bug real** → reemplazar `userProfile?.id` por `currentUser?.uid` del context.
+- **Falso positivo** (filtro de UI sin write a Firestore) → agregar a allowlist documentada en el header del cazador.
+- **Requiere refactor** (ej: estructural) → escalar a sprint propio.
+
+#### Por qué
+Los 22 hits son bugs latentes del mismo vector que ya rompió producción dos veces (afc5e4a Reactivación, b93625d Notificaciones). Cualquiera puede ser el próximo "Iniciar Chequeo" de Aury.
+
+#### Lista de archivos con hits (referencia)
+- `src/components/cierre/ModalSugerirSoloChequeo.tsx:94` — campo `sugeridaPor`
+- `src/components/ordenes/IniciarChequeoButton.tsx:224` — campo `tecnicoId` nested
+- `src/pages/Dashboard.tsx:453,454` — filtro UI por `operariaId` (probablemente FP, pero verificar)
+- `src/pages/OrdenDetalle.tsx:238,245,268` — comparaciones `orden.tecnicoId === userProfile.id` (FP si la migración P-006 ya alineó tecnicoId con auth.uid; verificar)
+- `src/pages/Reprogramaciones.tsx:115,123,173,237` — campo `resueltaPor`
+- `src/pages/SugerenciasChequeo.tsx:99,136` — campo `resueltaPor`
+- `src/pages/TecnicoVista.tsx:155,195,204,208,212,238,259,264,1213` — varios; algunos FP de filtros, otros writes (verificar uno por uno)
+
+#### Criterios de aceptación
+- [ ] Cada hit clasificado en una tabla en EJECUCION_AUTONOMA.md: archivo:línea, decisión (FIX/ALLOWLIST/SPRINT_PROPIO), justificación.
+- [ ] Para los FIX: PR con cambios + verificación typecheck/lint.
+- [ ] Para los ALLOWLIST: header del cazador actualizado con regla "// @safe-userprofile-id: <razón>" y comentario en código en el mismo archivo.
+- [ ] Para los SPRINT_PROPIO: agregarlos a la cola con ID SPRINT-XXX.
+- [ ] `npm run check:regression` pasa con 0 hits o con allowlist documentada al 100%.
+- [ ] Cada FIX correspondiente a un campo sensible (sugeridaPor, resueltaPor, etc.) requiere QA manual de que el flujo afectado siga funcionando para todos los roles (admin/coord/secretaria/operaria/tecnico).
+- [ ] Build + lint + cazadores pasan en pre-commit.
+
+#### Restricciones / guardarrails
+- regression_guardian OBLIGATORIO (toca services y context).
+- archivist en modo PRE-CHANGE antes de tocar cualquier archivo del touch-list.
+- NO bypassear con `--no-verify`. Si el cazador grita, decidir entre FIX o ALLOWLIST.
+- Para `Reprogramaciones.tsx` y `SugerenciasChequeo.tsx` (campo `resueltaPor`): verificar primero la rule de Firestore. Si la rule compara contra `auth.uid`, ES bug real; si compara contra otro campo, podría ser FP.
+- Para `TecnicoVista.tsx`: tener cuidado especial — la migración P-006 puede haber alineado `tecnicoId` con `auth.uid`, así que comparaciones `orden.tecnicoId === userProfile.id` ahora podrían fallar para usuarios con `userProfile.id == personalDocId`. Considerar si conviene cambiar a `currentUser.uid` por consistencia.
+
+#### Notas para el coordinator
+- Este sprint puede dividirse en sub-sprints por archivo si se vuelve grande.
+- Si encuentra un patrón nuevo, agregar P-XXX y cazador.
+- Coordinar con SPRINT-108 (extender cazador) si los nuevos cazadores deben capturar variantes.
+
+---
+
+### SPRINT-110 — Limpiar 13 hits P-002 (rules con .get faltantes)
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (auditoría pedida por Jorge)
+**Origen:** Smoke test del 2026-05-06 dejó 13 hits del cazador P-002 (rules de inmutabilidad sobre campo opcional sin `.get()`). Algunos posiblemente ya se arreglaron en SPRINT-103 pero el smoke no se re-corrió.
+**Riesgo:** medio-alto (toca firestore.rules — vector que ya rompió producción 2 veces)
+**Touch-list previsto:** firestore.rules
+
+#### Objetivo
+Auditar cada uno de los 13 hits en `firestore.rules`. Para cada uno:
+- **Campo opcional** → convertir a `request.resource.data.get('campo', null) == resource.data.get('campo', null)`.
+- **Campo required** (garantizado present desde el create) → agregar comentario `// @safe-required: <campo>` antes de la línea para que el cazador lo ignore.
+
+#### Por qué
+Vector P-002 ya rompió producción 2 veces (c7c8e34 Reactivación, b7b6464 Iniciar Chequeo). La regla de pulgar es: si el campo no aparece en el create base de la colección, es opcional → usar `.get`.
+
+#### Lista de archivos con hits (referencia, requiere revalidación)
+- `firestore.rules:138` — `soloChequeo` (probablemente ya .get post-SPRINT-103)
+- `firestore.rules:187-190` — `estadoAprobacion`, `precioAprobado`, `aprobadoPor`, `fechaAprobacion` (probablemente ya .get post-SPRINT-103)
+- `firestore.rules:199-200` — `tecnicoId`, `ayudanteId` (verificar si tecnicoId es required tras SPRINT-105)
+- `firestore.rules:584-591` — `creadaPor`, `creadaPorNombre`, `fecha`, `creadaEn`, `plantillaId`, `plantillaNombre` (campañas marketing — verificar create base)
+
+#### Criterios de aceptación
+- [ ] Re-correr `npm run check:regression` para tener lista actualizada de hits (algunos pueden estar resueltos).
+- [ ] Por cada hit vivo: leer la rule completa, leer el create de la colección, decidir si campo es required u opcional.
+- [ ] Para required: agregar `// @safe-required: <campo>` arriba de la línea con justificación.
+- [ ] Para opcional: convertir a `.get()` (ambos lados de la comparación).
+- [ ] QA manual del flujo afectado (happy path + caso campo missing) para cada rule modificada.
+- [ ] `npm run deploy:rules` (despliega + actualiza lock).
+- [ ] `npm run check:regression` pasa con 0 hits.
+- [ ] Test E2E: técnico hace update de orden sin precioFinal/estadoAprobacion seteados, debe pasar.
+
+#### Restricciones / guardarrails
+- **Sprint que toca rules → deploy obligatorio antes de cerrar (sub-regla CLAUDE.md, P-005).**
+- regression_guardian OBLIGATORIO.
+- Reviewer obligatorio con foco en rules (sub-regla CLAUDE.md).
+- archivist en modo PRE-CHANGE antes de tocar firestore.rules.
+
+#### Notas para el coordinator
+- Este sprint depende de SPRINT-108 (extender cazador para `!=`) — si ya se hizo, re-correr el cazador puede traer hits nuevos.
+- El reviewer debe validar que ninguna rule cambió la semántica (de inmutable a mutable accidental).
+
+---
+
+### SPRINT-111 — Auditar otros campos de ID con vector P-001/P-006
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (auditoría pedida por Jorge)
+**Origen:** P-006 demostró que el bug de `tecnicoId` afecta a CUALQUIER campo que guarde un ID de personal/usuario. Otros campos similares pueden tener el mismo problema.
+**Riesgo:** alto (puede requerir migración de datos similar a P-006)
+**Touch-list previsto:** múltiples (a determinar)
+
+#### Objetivo
+Auditar TODOS los campos del esquema que guardan un ID de un empleado y verificar:
+1. ¿Se compara con `auth.uid` en alguna rule? → debe ser auth.uid (no personal.id)
+2. ¿Se guarda como `personal.id` o como `personal.uid` (auth.uid)?
+3. Si hay desalineación: code fix + migración + nuevo cazador.
+
+#### Campos a auditar
+- `operariaId` — Dashboard filter, recordatorios, comisiones
+- `ayudanteId` — orden + rule de ayudante en ordenes_servicio
+- `responsableId` — orden (creado por staff)
+- `creadaPor` — campañas marketing, plantillas
+- `creadoPor` — orden
+- `eliminadaPorId` — orden (auditoría)
+- `aprobadoPor` — orden
+- `sugeridaPor` — sugerencias solo chequeo
+- `resueltaPor` — sugerencias, reprogramaciones
+- `usuarioId` (audit logs, conversaciones_ia, notificaciones)
+- `personalUid` (ponches)
+- `cerradaPor` — orden
+
+#### Criterios de aceptación
+- [ ] Tabla en EJECUCION_AUTONOMA.md con cada campo: dónde se escribe, dónde se lee, regla aplicable, valor actual (personal.id / auth.uid / mixto).
+- [ ] Para cada campo donde haya bug: PR con code fix (cambiar dropdown/asignación a usar `uid`).
+- [ ] Para cada campo donde haya datos viejos mal guardados: script de migración idempotente con dry-run.
+- [ ] Crear cazador genérico `scripts/invariantes/check-id-vs-authuid-misuse.ts` que detecta el patrón en código nuevo.
+- [ ] Run cazadores, deben pasar.
+
+#### Restricciones / guardarrails
+- Migraciones de datos > 500 docs requieren OK de Jorge (queda en BLOQUEOS.md).
+- regression_guardian + reviewer obligatorios.
+- Cualquier nueva rule que se cree para validar uno de estos campos debe pasar P-002.
+
+#### Notas para el coordinator
+- Este sprint puede ser el más grande de los 5. Considerá dividirlo por colección (ordenes_servicio, campanas_marketing, comisiones, etc.).
+- Si encuentra que `eliminadaPorId` está mal en >50% de las órdenes eliminadas, es marcador del mismo bug P-006 propagado.
+
+---
+
+### SPRINT-112 — Schema drift y matriz de permisos por rol
+
+**Estado:** PENDIENTE
+**Prioridad:** media (auditoría pedida por Jorge — la última)
+**Origen:** Auditoría completa solicitada por Jorge tras hotfix de Aury.
+**Riesgo:** bajo-medio (mayormente documentación + tests manuales)
+**Touch-list previsto:** docs/MATRIZ_PERMISOS.md (nuevo), src/types/index.ts (validación), tests manuales
+
+#### Objetivo
+Crear documentación viva de:
+1. **Schema drift**: qué campos están en TypeScript types pero no en docs reales de Firestore (y viceversa).
+2. **Matriz de permisos por rol**: para cada rol (admin/coord/secretaria/operaria/tecnico/ayudante), qué flujos críticos puede ejecutar y cuáles no, con verificación E2E.
+
+#### Por qué
+- El schema drift causa bugs sutiles (campos opcionales vs required en TS distintos a Firestore).
+- La matriz de permisos hoy está implícita en rules + permisos.ts. No hay un lugar único donde un nuevo dev (o Claude) consulte "¿qué puede hacer una operaria?".
+
+#### Criterios de aceptación
+- [ ] Script `scripts/auditoria/schema-drift.ts` que samplea N docs de cada colección y reporta campos no documentados en TS.
+- [ ] `docs/MATRIZ_PERMISOS.md` con tabla: para cada flujo crítico (crear orden, iniciar chequeo, marcar realizado, facturar, generar conduce, ver comisiones, agendar cita, eliminar orden, etc.), columna por rol con ✓ / ✗ / condicional.
+- [ ] QA manual: testear cada celda ≠ ✗ con un usuario real de cada rol. Documentar resultado.
+- [ ] Si hay celdas que el código permite pero la matriz pretende negar (o viceversa): bug. Crear sprint específico de fix.
+
+#### Restricciones / guardarrails
+- archivist PRE-CHANGE antes de empezar.
+- No tocar code de aplicación; sólo agregar tests/docs.
+- Si encuentra bugs reales, crear sprint nuevo (no fix dentro de este).
+
+#### Notas para el coordinator
+- Este es el sprint más "ligero" pero el de mayor impacto a largo plazo: prevenir bugs futuros mediante documentación enforcement-friendly.
+- Considerá usar Cypress/Playwright para automatizar el QA por rol (sprint follow-up).
+
+---
+
+### SPRINT-113 — UX flujo de orden paso a paso intuitivo (técnico/operaria/secretaria)
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (pedido directo de Jorge — "más entendible, paso a paso, intuitivo")
+**Origen:** Jorge tras hotfix Aury: "tenemos que hacer un flujo de orden visualmente más organizado y entendible".
+**Riesgo:** medio (toca UI de un flujo crítico; no toca rules ni datos)
+**Touch-list previsto:** FaseStepper.tsx, OrdenDetalle.tsx, TecnicoVista.tsx, OrdenCard.tsx, posibles componentes nuevos
+
+#### Objetivo
+Rediseñar la presentación del flujo de orden para que cada rol sepa **cuál es el siguiente paso a realizar**, sin necesidad de manual ni capacitación.
+
+#### Por qué
+Hoy el stepper muestra fases (Nuevo Lead → En Gestión → ...) pero NO indica al usuario:
+- ¿Qué acción concreta tiene que hacer ahora?
+- ¿Qué está esperando el sistema (de él o de otro rol)?
+- ¿Por qué un botón está deshabilitado?
+
+Específico — la sugerencia de chequeo del técnico no se refleja en el stepper, generando confusión ("¿se envió o no?").
+
+#### Criterios de aceptación
+- [ ] **Banner de "siguiente paso"** en OrdenDetalle/TecnicoVista, contextual al rol del usuario logueado y a la fase actual:
+  - Técnico en orden agendada: "Próximo paso: Iniciar chequeo cuando llegues al cliente."
+  - Técnico en orden en_diagnostico: "Próximo paso: Cotizar reparación o sugerir solo chequeo."
+  - Operaria en orden con sugerencia pendiente: "Aury sugirió cobrar solo chequeo (RD$2,000). Aprobá o rechazá."
+  - Etc. — cubrir las 8 fases × 3 roles principales.
+- [ ] **Badge "Sugerencia pendiente"** visible en stepper cuando hay una sugerencia de chequeo no resuelta. Color amarillo, click lleva al modal de aprobación.
+- [ ] **Tooltips en botones deshabilitados** explicando por qué (ej: "Necesitas iniciar chequeo primero", "Esperando aprobación de oficina").
+- [ ] **Indicador visual de "esperando otro rol"** — cuando un rol completó su parte y está bloqueado por otro (ej: técnico envía sugerencia → "Esperando aprobación de oficina" con icono de reloj).
+- [ ] **Resumen visual del flujo** al pie de OrdenDetalle: timeline horizontal con últimas 5 acciones (quién, qué, cuándo).
+- [ ] QA manual con usuarios reales (Jorge + técnico + operaria) recorriendo un flujo end-to-end. Identificar friction points y resolver.
+- [ ] Cazador anti-regresión: ningún botón crítico debe quedar sin tooltip explicativo cuando esté disabled (regla nueva, opcional).
+
+#### Restricciones / guardarrails
+- NO cambiar la lógica de transición de fase (eso es seguro y testeado).
+- NO cambiar los identificadores internos.
+- archivist PRE-CHANGE — los archivos que se tocan son críticos.
+- Reviewer obligatorio con foco en accesibilidad (color contrast, aria-labels en tooltips).
+
+#### Notas para el coordinator
+- Considerá hacerlo en 3 sub-sprints: SPRINT-113a (banner siguiente paso), 113b (badges sugerencia/esperando), 113c (timeline acciones).
+- Pedir a Jorge mockups o screenshots de referencia si hay alguno.
+- Bloqueo conocido: la lógica de "siguiente paso" depende de muchos campos opcionales (sugerencias, aprobaciones, pagos). Definir matriz fase × rol × condiciones antes de empezar a codear.
