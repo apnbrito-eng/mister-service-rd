@@ -340,8 +340,16 @@ export default function IniciarChequeoButton({
         id: 'chequeo',
       });
     } catch (err) {
-      console.error(err);
-      toast.error('Error al iniciar el chequeo', { id: 'chequeo' });
+      const e = err as { code?: string; message?: string; stack?: string };
+      console.error('[chequeo] error completo:', err);
+      console.error('[chequeo] code:', e?.code);
+      console.error('[chequeo] message:', e?.message);
+      console.error('[chequeo] stack:', e?.stack);
+      // Toast con código/mensaje específico para diagnóstico inmediato sin
+      // requerir DevTools. Patrón establecido en afc5e4a/5f8f256
+      // (Reactivación) — gotcha P-002 ya documentada.
+      const motivo = e?.code || e?.message || 'error desconocido';
+      toast.error(`Error al iniciar chequeo: ${motivo}`, { id: 'chequeo', duration: 8000 });
     } finally {
       setProcesando(false);
     }
