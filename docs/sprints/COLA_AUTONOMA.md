@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 por coordinator (autónomo — SPRINT-111 completado fase 111a, SPRINT-114 agregado como follow-up sugerido)
+**Última actualización:** 2026-05-08 por coordinator (segunda pasada autónoma — SPRINT-113b COMPLETADO: badge "Sugerencia pendiente" + tooltips disabled centralizados en helper puro)
 
 **Próximo ID disponible:** SPRINT-115
 
@@ -615,7 +615,7 @@ Crear documentación viva de:
 
 ### SPRINT-113 — UX flujo de orden paso a paso intuitivo (técnico/operaria/secretaria)
 
-**Estado:** EN_PROGRESO — fase 113a EN_REVISION_HUMANA (commit local `9603da3`, sin push). Fases 113b/c PENDIENTE.
+**Estado:** EN_PROGRESO — fase 113a COMPLETADO 2026-05-08 (commits `9603da3` + `dd24bb2` en producción, Jorge confirmó visualmente que el banner aparece). Fases 113b/c PENDIENTE.
 **Prioridad:** alta (pedido directo de Jorge — "más entendible, paso a paso, intuitivo")
 **Origen:** Jorge tras hotfix Aury: "tenemos que hacer un flujo de orden visualmente más organizado y entendible".
 **Riesgo:** medio (toca UI de un flujo crítico; no toca rules ni datos)
@@ -633,7 +633,7 @@ Hoy el stepper muestra fases (Nuevo Lead → En Gestión → ...) pero NO indica
 Específico — la sugerencia de chequeo del técnico no se refleja en el stepper, generando confusión ("¿se envió o no?").
 
 #### Criterios de aceptación
-- [x] **Banner de "siguiente paso"** en OrdenDetalle/TecnicoVista, contextual al rol del usuario logueado y a la fase actual: **Implementado en SPRINT-113a (commit local `9603da3`, EN_REVISION_HUMANA)**.
+- [x] **Banner de "siguiente paso"** en OrdenDetalle/TecnicoVista, contextual al rol del usuario logueado y a la fase actual: **Implementado en SPRINT-113a (commits `9603da3` + `dd24bb2`, COMPLETADO 2026-05-08, validado visualmente por Jorge en producción)**.
   - Técnico en orden agendada: "Próximo paso: Iniciar chequeo cuando llegues al cliente."
   - Técnico en orden en_diagnostico: "Próximo paso: Cotizar reparación o sugerir solo chequeo."
   - Operaria en orden con sugerencia pendiente: "Aury sugirió cobrar solo chequeo (RD$2,000). Aprobá o rechazá."
@@ -655,6 +655,96 @@ Específico — la sugerencia de chequeo del técnico no se refleja en el steppe
 - Considerá hacerlo en 3 sub-sprints: SPRINT-113a (banner siguiente paso), 113b (badges sugerencia/esperando), 113c (timeline acciones).
 - Pedir a Jorge mockups o screenshots de referencia si hay alguno.
 - Bloqueo conocido: la lógica de "siguiente paso" depende de muchos campos opcionales (sugerencias, aprobaciones, pagos). Definir matriz fase × rol × condiciones antes de empezar a codear.
+
+---
+
+### SPRINT-113b — Badges de sugerencia pendiente + tooltips en botones disabled
+
+**Estado:** COMPLETADO 2026-05-08 (segunda pasada autónoma — badge "Sugerencia pendiente" en `FaseStepper`, helper `tooltipsBotones.ts` puro testeable, tooltips `title` en Iniciar chequeo / Cerrar servicio / Enviar a conduce. Sin escrituras nuevas, sin tocar rules, sin tocar services. 6/6 cazadores PASS, 0 hits.)
+**Prioridad:** alta (continuación de 113a, ya aprobado por Jorge)
+**Origen:** SPRINT-113 padre (UX flujo paso a paso). Fase 113a (banner) completada y validada en producción 2026-05-08.
+**Riesgo:** bajo (UI puramente presentacional; no toca rules, services, mutaciones)
+**Touch-list previsto:**
+- `src/components/ordenes/FaseStepper.tsx` (agregar slot/badge "Sugerencia pendiente")
+- `src/components/ordenes/IniciarChequeoButton.tsx` (tooltip cuando está disabled)
+- `src/components/cierre/CierreServicioWizard.tsx` o componentes de aprobación de precio (tooltip cuando disabled)
+- Posiblemente helper nuevo `src/utils/tooltipsBotones.ts` que dado orden + rol retorne razón humana de por qué un botón está bloqueado
+- `src/pages/OrdenDetalle.tsx` y `src/pages/TecnicoVista.tsx` (cablear el tooltip al botón disabled)
+
+#### Objetivo
+Que el stepper deje claro cuándo hay una sugerencia de "solo chequeo" pendiente sin tener que abrir un modal, y que ningún botón disabled del flujo deje al usuario adivinando por qué no se puede clickear.
+
+#### Por qué
+Hoy el técnico hace una sugerencia de solo chequeo y el stepper no cambia visualmente — la operaria solo ve la notificación in-app pero al entrar a la orden no encuentra señal visual fuerte. El banner de 113a ya cubre el mensaje pero un badge en el stepper resuelve el caso de "tengo 30 órdenes en lista, en cuál hay sugerencia?".
+
+Tooltips en botones disabled: hoy el técnico ve "Iniciar chequeo" gris y no sabe si le falta GPS, si la orden no está agendada, o si la rule rechazó. Pasa lo mismo con "Cerrar servicio" cuando falta foto/firma.
+
+#### Criterios de aceptación
+- [ ] **Badge "Sugerencia pendiente"** visible junto al stepper o sobre el chip de fase actual cuando `obtenerSugerenciaSoloChequeoPendiente(orden)` retorna no-null. Color amarillo (consistente con tono `alerta` del banner). Click → abre el modal de aprobación de la sugerencia (reutiliza el modal existente).
+- [ ] El badge desaparece cuando la sugerencia se aprueba o rechaza.
+- [ ] **Tooltip explicativo** en cada botón crítico que pueda quedar disabled:
+  - Iniciar chequeo (técnico): "Necesitás permiso de GPS para iniciar" / "Esperá a que la orden esté agendada" / etc.
+  - Aprobar/rechazar sugerencia (oficina): no aplica disabled (siempre activo).
+  - Cerrar servicio (técnico): "Faltó foto del cierre" / "Faltó firma del cliente" / "Falta marcar 'equipo funciona'".
+  - Enviar a facturación (oficina): "Falta cierre del técnico" / "Ya enviada a facturación".
+- [ ] Tooltips usan `title` HTML nativo o componente accesible (preferir nativo para mantener bundle chico). Si se usa componente, debe tener `aria-describedby`.
+- [ ] La razón de disabled vive en un helper puro testeable, no inline en el componente.
+- [ ] `npm run check:regression` sigue en 0 hits.
+- [ ] Build OK, typecheck OK, lint OK.
+
+#### Restricciones / guardarrails
+- archivist PRE-CHANGE — `IniciarChequeoButton.tsx` y `FaseStepper.tsx` están en la lista de archivos críticos del flujo técnico (sub-regla CLAUDE.md sobre cleanup en páginas críticas).
+- regression_guardian RECOMENDADO — toca componentes con historia de bugs P-001/P-006.
+- NO cambiar la condición que decide si el botón está disabled — solo agregar la explicación. La lógica de gating sigue intacta.
+- NO tocar rules, services ni mutaciones. Si necesitás un dato derivado (ej. razón de disabled), calcularlo client-side desde props.
+- El badge NO escribe a Firestore. Solo lee de la orden ya cargada.
+
+#### Notas para el coordinator
+- El helper `calcularSiguientePaso` de 113a ya tiene la lógica del caso "sugerencia pendiente". Reutilizarla — no duplicar.
+- Antes de codear, hacer matriz `botón → razón_disabled`: técnico tiene 3-4 botones críticos, oficina tiene 2-3. Sin esta matriz se va a olvidar uno.
+- Para el badge en el stepper, considerar si conviene como overlay sobre la fase actual o como pill suelta arriba. El stepper actual probablemente no tiene espacio sobrado — leer su layout primero.
+- Si Jorge tiene preferencia visual (ej. icono de campana vs estrella), preguntarle vía AskUserQuestion antes de elegir.
+
+---
+
+### SPRINT-113c — Timeline horizontal de últimas 5 acciones al pie de OrdenDetalle
+
+**Estado:** PENDIENTE
+**Prioridad:** media (continuación de 113a/b, mejora de visibilidad histórica)
+**Origen:** SPRINT-113 padre (UX flujo paso a paso). Criterio de aceptación pendiente.
+**Riesgo:** bajo (UI presentacional, lectura del campo `historialFases` o `auditoria` ya existente)
+**Touch-list previsto:**
+- `src/components/ordenes/TimelineAcciones.tsx` (NUEVO — componente presentacional)
+- `src/utils/timelineAcciones.ts` (NUEVO — helper que dado una orden retorne las últimas 5 acciones normalizadas)
+- `src/pages/OrdenDetalle.tsx` (montar el componente al pie del bloque "Flujo de la orden" o como sección propia)
+
+#### Objetivo
+Mostrar al pie de OrdenDetalle un timeline visual horizontal con las últimas 5 acciones registradas en la orden: quién, qué, cuándo. Sin clicks, sin modales — solo lectura visual rápida.
+
+#### Por qué
+Hoy `historialFases` y `auditoria` viven dentro de la orden pero no se renderizan visualmente — solo en logs internos. El admin/coordinadora que entra a una orden con problema necesita reconstruir mentalmente "¿quién hizo qué cuándo?" abriendo cada modal. Un timeline al pie resuelve ese caso de uso en 1 segundo.
+
+#### Criterios de aceptación
+- [ ] Helper `obtenerTimelineAcciones(orden, max=5)` retorna array de `{ accion, actorNombre, fechaIso, descripcion }` ordenado de más reciente a más viejo.
+- [ ] Lee de `orden.historialFases` Y `orden.auditoria` (cubrir ambas shapes — gotcha CLAUDE.md sobre cierre legacy + nuevo).
+- [ ] Si una entrada no tiene `actorNombre` o `descripcion`, fallbacks razonables (ej: "Sistema").
+- [ ] Componente `TimelineAcciones` renderiza horizontalmente con scroll-x si hay overflow en mobile, y verticalmente en pantallas chicas (responsive).
+- [ ] Cada item muestra: icono según tipo de acción, nombre del actor, descripción corta, hora relativa (`hace 3h`) y absoluta en tooltip (`2026-05-07 14:32`).
+- [ ] Si la orden tiene `<2` acciones registradas, no se renderiza el componente (evitar pollution visual en órdenes recién creadas).
+- [ ] Sin emojis. Iconos de `lucide-react` consistentes con el resto de la app.
+- [ ] `npm run check:regression` sigue en 0 hits.
+- [ ] Build, typecheck, lint OK.
+
+#### Restricciones / guardarrails
+- archivist PRE-CHANGE recomendado — `OrdenDetalle.tsx` es archivo crítico del flujo.
+- NO escribir a Firestore. Solo lectura del shape ya cargado.
+- NO normalizar/migrar datos viejos. Si el shape legacy tiene campos faltantes, mostrar fallback. La normalización es un sprint propio futuro si se necesita.
+- date-fns ya está en el bundle — usar `formatDistanceToNow` con locale `es` para hora relativa.
+
+#### Notas para el coordinator
+- Antes de codear, hacer dump real de `orden.historialFases` y `orden.auditoria` de 3-4 órdenes en producción para ver qué shapes legacy hay vivas. Sin esto se rompe en órdenes viejas.
+- Si el timeline horizontal no entra bien en mobile (muchas órdenes se abren desde celular del técnico), preferir vertical compacto.
+- Coordinar con el banner de 113a y los badges de 113b para que el conjunto se vea coherente: stepper arriba → banner siguiente paso → flujo (acciones manuales) → timeline al pie.
 
 ---
 

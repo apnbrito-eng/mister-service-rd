@@ -5,11 +5,49 @@
 
 ---
 
+## 2026-05-08 — `trabaja` autónomo (segunda pasada del día — cierre 113a + SPRINT-113b)
+
+### Cierre formal de SPRINT-113a en COLA_AUTONOMA.md
+
+- Cowork ya marcó la cola con SPRINT-113a COMPLETADO antes de esta pasada (header del archivo + criterio de aceptación de SPRINT-113 padre + DIARIO 2026-05-08 actualizado).
+- Coordinator solo actualizó la entrada del log (este archivo) para reflejar el push real (`9603da3` + `dd24bb2` + `5bfa0e0`) y cambiar "EN_REVISION_HUMANA / sin push" → "COMPLETADO / pusheado por Jorge".
+- Sin commit propio para 113a — el cambio acompaña al commit de 113b.
+
+### SPRINT-113b — Badges de sugerencia pendiente + tooltips en botones disabled
+
+- **Estado final:** COMPLETADO.
+- **Tipo:** UI puramente presentacional + helper puro. Sin escrituras a Firestore, sin tocar rules, sin tocar services, sin tocar dropdowns de asignación, sin migrar datos.
+- **Restricciones evaluadas:** rules NO, migración NO, integración pago/OAuth/terceros NO, endpoint público NO. **Procesable autónomo.**
+- **Archivos creados/modificados (5):**
+  - `src/utils/tooltipsBotones.ts` (NUEVO) — helpers puros `razonIniciarChequeoDisabled`, `razonCerrarServicioDisabled`, `razonEnviarFacturacionDisabled`. Cada uno toma el estado relevante (props/state del componente o subset del shape) y devuelve string con la razón humana o `null`. Cubierto el patrón "razón vive en helper puro testeable, no inline" del criterio de aceptación.
+  - `src/components/ordenes/FaseStepper.tsx` — badge "Sugerencia pendiente" (color amber, icono Hourglass, `role=status` + `aria-live=polite`) renderizado debajo del badge "Pendiente de piezas" cuando `obtenerSugerenciaSoloChequeoPendiente(orden)` retorna no-null. Decisión: **badge presentacional sin onClick** — el banner siguiente paso (113a) ya direcciona la acción de aprobar/rechazar a oficina. Click-to-modal queda como mejora futura si Jorge lo pide; mantenerlo presentacional evita acoplar el stepper a un modal global que no existe hoy.
+  - `src/components/ordenes/IniciarChequeoButton.tsx` — `title` con `razonIniciarChequeoDisabled({ procesando, permisoGps })` o fallback "Tomá una foto y capturá GPS para iniciar el chequeo."
+  - `src/components/CierreServicioWizard.tsx` — `title` con `razonCerrarServicioDisabled(...)` que cubre las 5 razones (foto faltante, 3 preguntas null, "usé piezas" sin agregar piezas) o fallback informativo.
+  - `src/components/ordenes/EnviarFacturacionButton.tsx` — refactor del `title` inline al helper `razonEnviarFacturacionDisabled(orden)` para consistencia.
+- **archivist PRE-CHANGE (manual):** `IniciarChequeoButton.tsx` está en lista de archivos críticos del flujo técnico (postmortem 2026-05-07 P-006/P-002, comentarios `@safe-userprofile-id` legítimos del SPRINT-103). El cambio es **sólo agregar `title`**; no toca la lógica de gating ni la rama del write a Firestore. Mismo análisis para `CierreServicioWizard.tsx`. **Sin conflictos con advertencias previas.**
+- **regression_guardian (manual):**
+  - Capa 1 determinística: `npm run check:regression` — 6/6 PASS, 0 hits.
+  - Capa 2 semántica: el diff NO escribe a Firestore (lectura del shape ya cargado), NO toca rules, NO crea mutaciones cross-collection, NO modifica dropdowns de asignación, NO usa `userProfile.id` ni `personal.id` en escrituras nuevas. Patrones P-001/P-002/P-003/P-004/P-005/P-006: ninguno aplica al diff. **PASS.**
+- **Tester:**
+  - `npx tsc --noEmit`: clean (sin output).
+  - `npx eslint --max-warnings 0` sobre los 5 archivos tocados: clean.
+- **Reviewer (manual):** APPROVED. Decisiones revisadas:
+  - Helper puro en `.ts` (no `.tsx`) — gotcha CLAUDE.md cumplido.
+  - Sin emojis, identificadores en español, sin escrituras nuevas.
+  - Tooltips usan `title` HTML nativo (preferencia del sprint para mantener bundle chico).
+  - `role=status` + `aria-live=polite` en el badge nuevo.
+  - Lógica de gating intacta — sólo se agrega texto explicativo.
+  - Cubre los 3 botones del criterio (Iniciar chequeo, Cerrar servicio, Enviar a conduce). El criterio "Aprobar/rechazar sugerencia (oficina)" no aplica disabled (el sprint mismo lo dice).
+- **Decisión clave:** badge presentacional sin onClick a modal. Justificación: no existe un modal global de aprobación de sugerencia accesible desde el `FaseStepper` (el stepper se renderiza en cards de listas y en `OrdenDetalle`); montar el modal acá implicaría duplicar lógica o crear un context global, que es scope de sprint propio. El banner de 113a ya cumple la función directiva ("Sugirieron solo chequeo. Aprobá o rechazá."). El badge agrega señal visual fuerte para vista de listas (Dashboard / TecnicoVista) — caso de uso "tengo 30 órdenes, ¿en cuál hay sugerencia?".
+- **Tiempo total:** ~25 min coordinator (lectura de cola + lectura de archivos críticos + creación de utils + 4 ediciones quirúrgicas + checks + commit + push).
+
+---
+
 ## 2026-05-08 — SPRINT-113a procesado bajo modo "review humano" (commit local sin push)
 
 ### SPRINT-113a — Banner siguiente paso contextual al rol y a la fase
 
-- **Estado final:** EN_REVISION_HUMANA. Commit local `9603da3`. **Sin push** — Jorge revisa diff antes de pushear.
+- **Estado final:** COMPLETADO. Commits `9603da3` + `dd24bb2` (más `5bfa0e0` de utilidad post-hotfix Aury) pusheados a `origin/main` por Jorge el 2026-05-08 tras review humano ("todo OK"). En producción Vercel.
 - **Tipo:** UI puramente presentacional. Sin escrituras a Firestore, sin tocar rules, sin tocar services, sin tocar dropdowns de asignación.
 - **Restricciones evaluadas:** rules NO, migración NO, integración pago/OAuth/terceros NO, endpoint público NO. Procesable autónomo, pero Jorge pidió explícitamente review humano antes del push.
 - **Archivos creados/modificados (4):**
@@ -27,7 +65,7 @@
   - `npm run lint` global: 5555 problems baseline (igual o mejor que 5559 reportado en SPRINT-107). No agrega warnings nuevos.
 - **Reviewer (manual):** APPROVED. Decisiones revisadas: helpers no-component fuera de `.tsx` (gotcha CLAUDE.md), tono "espera" pedagógico (no acusatorio) para roles bloqueados, accesibilidad con `role=status` + `aria-live=polite`, sin emojis en código, identificadores en español. Atención humana sugerida: copy de mensajes (Jorge puede querer ajustar tono); coexistencia con `BannerEstadoSugerenciaSoloChequeo` (redundancia parcial intencional pero revisable); 5-10 banners por pantalla en TecnicoVista (alcance de SPRINT-113b/c).
 - **Pre-commit hook:** PASS (typecheck + cazadores + lint staged).
-- **Push:** **NO REALIZADO** — Jorge revisa antes.
+- **Push:** REALIZADO por Jorge el 2026-05-08 tras review humano. Hashes en `origin/main`: `9603da3` (feat banner), `dd24bb2` (docs sprints), `5bfa0e0` (script diagnóstico tecnicoId vs auth.uid).
 - **Tiempo total:** ~30 min coordinator (lectura de cola + lectura de archivos críticos + creación de utils y component + 2 inserciones quirúrgicas + checks + commit local).
 
 ### Decisiones de diseño reportadas a Jorge para revisión humana

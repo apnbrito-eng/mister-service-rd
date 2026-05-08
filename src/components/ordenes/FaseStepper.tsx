@@ -5,13 +5,14 @@ import { OrdenServicio, FaseOrden, EstadoOrdenSimple } from '../../types';
 import {
   crearRegistroAuditoria, faseLabel, FASES_ORDENADAS,
   generarTokenPortalCliente,
+  obtenerSugerenciaSoloChequeoPendiente,
 } from '../../utils';
 import { useApp } from '../../context/AppContext';
 import { puede } from '../../utils/permisos';
 import { registrarComisionPorOrden } from '../../utils/comisiones';
 import { crearNotificacion } from '../../services/notificaciones.service';
 import Modal from '../Modal';
-import { Check, Package, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Check, Package, AlertTriangle, ChevronRight, Hourglass } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const FASES_STEPPER = FASES_ORDENADAS;
@@ -225,11 +226,32 @@ export default function FaseStepper({
     );
   };
 
+  // SPRINT-113b: badge informativo cuando hay sugerencia de "solo chequeo"
+  // pendiente. El banner de siguiente paso (SPRINT-113a) ya direcciona la
+  // acción concreta a oficina; este badge agrega señal visual fuerte para
+  // listas con muchas órdenes (ej: TecnicoVista, Dashboard) donde el banner
+  // queda escondido por scroll. Es presentacional: no escribe a Firestore
+  // ni dispara modales — la aprobación/rechazo ya tiene su flujo propio.
+  const sugerenciaPendiente = !esAnulada
+    ? obtenerSugerenciaSoloChequeoPendiente(orden)
+    : null;
+
   return (
     <div className={`space-y-2 ${className}`}>
       {tienestandby && !esAnulada && (
         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-yellow-100 text-yellow-800 text-[11px] font-medium">
           <Package size={11} /> Pendiente de piezas
+        </div>
+      )}
+
+      {sugerenciaPendiente && (
+        <div
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-medium"
+          title="Hay una sugerencia de solo chequeo esperando decisión de oficina."
+          role="status"
+          aria-live="polite"
+        >
+          <Hourglass size={11} /> Sugerencia pendiente
         </div>
       )}
 

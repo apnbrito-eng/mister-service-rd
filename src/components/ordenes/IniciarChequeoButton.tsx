@@ -19,6 +19,7 @@ import {
 } from '../../services/storage.service';
 import { crearNotificacion } from '../../services/notificaciones.service';
 import { crearRegistroAuditoria, faseLabel } from '../../utils';
+import { razonIniciarChequeoDisabled } from '../../utils/tooltipsBotones';
 import { Camera, CheckCircle2, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -392,6 +393,10 @@ export default function IniciarChequeoButton({
         type="button"
         onClick={dispararCamara}
         disabled={procesando || permisoGps === 'denied'}
+        title={
+          razonIniciarChequeoDisabled({ procesando, permisoGps }) ||
+          'Tomá una foto y capturá GPS para iniciar el chequeo.'
+        }
         className={`inline-flex items-center ${tamano} bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-semibold disabled:opacity-60 disabled:cursor-not-allowed`}
       >
         <Camera size={size === 'sm' ? 12 : 16} />

@@ -4,6 +4,7 @@ import { db } from '../../firebase/config';
 import { OrdenServicio, Usuario, Personal } from '../../types';
 import { crearRegistroAuditoria } from '../../utils';
 import { crearNotificacion } from '../../services/notificaciones.service';
+import { razonEnviarFacturacionDisabled } from '../../utils/tooltipsBotones';
 import { Receipt, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -109,9 +110,11 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
       onClick={handleClick}
       disabled={!habilitado || saving}
       title={
-        !tienePago
-          ? 'Requiere al menos un pago registrado'
-          : 'Enviar a conduce'
+        razonEnviarFacturacionDisabled({
+          enviadaAFacturacion: orden.enviadaAFacturacion,
+          facturada: orden.facturada,
+          montoPagado: orden.montoPagado,
+        }) || 'Enviar a conduce de garantía.'
       }
       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#0f3460] hover:bg-[#1a5fa8] text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
     >

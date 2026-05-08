@@ -6,6 +6,7 @@ import { subirFotoCierre, distanciaMetros, obtenerUbicacionGPS, type GpsErrorInf
 import { calcularTotales, borrarFotoPieza } from '../services/piezas.service';
 import { crearRegistroAuditoria } from '../utils';
 import { iconoCondicion, iconoOrigen, etiquetaOrigen } from '../utils/piezas';
+import { razonCerrarServicioDisabled } from '../utils/tooltipsBotones';
 import Modal from './Modal';
 import PiezaFormModal from './cierre/PiezaFormModal';
 import {
@@ -515,6 +516,17 @@ export default function CierreServicioWizard({
             type="button"
             onClick={handleCerrarServicio}
             disabled={saving || !todoListo}
+            title={
+              razonCerrarServicioDisabled({
+                saving,
+                fotoTomada: !!fotoBlob,
+                equipoFunciona,
+                clienteSatisfecho,
+                revisoConexiones,
+                usoPiezas,
+                cantidadPiezas: piezasUsadas.length,
+              }) || 'Cerrar la orden y registrar la comisión.'
+            }
             className="w-full flex items-center justify-center gap-2 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold text-base transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {saving ? (
