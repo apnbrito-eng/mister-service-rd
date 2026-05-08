@@ -24,6 +24,7 @@ import { puede } from '../utils/permisos';
 import CancelarOrdenModal from '../components/ordenes/CancelarOrdenModal';
 import FaseStepper from '../components/ordenes/FaseStepper';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
+import BannerSiguientePaso from '../components/ordenes/BannerSiguientePaso';
 import ReagendarModal from '../components/ordenes/ReagendarModal';
 import RegistrarPagoModal from '../components/ordenes/RegistrarPagoModal';
 import EnviarFacturacionButton from '../components/ordenes/EnviarFacturacionButton';
@@ -1437,6 +1438,12 @@ export default function OrdenDetalle() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-3">
             <h3 className="text-sm font-semibold text-gray-500 uppercase">Flujo de la orden</h3>
             <FaseStepper orden={orden} size="md" tienestandby={ordenTieneStandby} />
+            {/* Banner siguiente paso contextual al rol + fase (SPRINT-113a).
+                Se renderiza dentro del bloque de flujo para que el operador
+                vea inmediatamente "qué tiene que hacer ahora" alineado con
+                el stepper. Devuelve null para órdenes cerradas/canceladas/
+                eliminadas o roles sin contexto operativo. */}
+            <BannerSiguientePaso orden={orden} rol={userProfile?.rol} size="md" />
             <div className="flex flex-wrap gap-2 justify-end pt-2">
               {puede(userProfile, 'ordenesModificar') && !orden.eliminada && orden.fase !== 'cancelado' && (
                 <button

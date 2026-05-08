@@ -19,6 +19,7 @@ import Logo from '../components/Logo';
 import CierreServicioWizard from '../components/CierreServicioWizard';
 import FaseStepper from '../components/ordenes/FaseStepper';
 import IniciarChequeoButton from '../components/ordenes/IniciarChequeoButton';
+import BannerSiguientePaso from '../components/ordenes/BannerSiguientePaso';
 import NotificacionesPanel from '../components/NotificacionesPanel';
 import { guardarUbicacionVehiculo } from '../services/gps.service';
 import {
@@ -958,6 +959,13 @@ export default function TecnicoVista() {
                     <div className="mb-3">
                       <FaseStepper orden={orden} size="sm" readonly={true} tienestandby={tieneStandby(orden, standbyItems)} />
                     </div>
+
+                    {/* Siguiente paso contextual al rol técnico (SPRINT-113a) */}
+                    {!completado && (
+                      <div className="mb-3">
+                        <BannerSiguientePaso orden={orden} rol={userProfile?.rol} size="sm" />
+                      </div>
+                    )}
 
                     {/* Equipo */}
                     <div className="flex items-start gap-3">
