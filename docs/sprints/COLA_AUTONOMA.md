@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 por coordinator (tercera pasada autónoma — SPRINT-115 fase diagnóstico cerrada con script read-only entregado; fase write sigue PENDIENTE esperando ejecución de Jorge + OK en BLOQUEOS).
+**Última actualización:** 2026-05-08 por coordinator (cuarta pasada autónoma, `procesa bloqueos` — SPRINT-115 fase write desbloqueada por jorge tras diagnóstico, ahora se procesa autónomo).
 
 **Próximo ID disponible:** SPRINT-116
 
@@ -795,7 +795,9 @@ La inconsistencia no rompe producción hoy (no hay rule que valide estos campos)
 
 ### SPRINT-115 — Diagnóstico + re-migración de notificaciones de Yohana
 
-**Estado:** PENDIENTE (fase write) — fase DIAGNÓSTICO COMPLETADO 2026-05-08 (tercera pasada autónoma del coordinator: script `scripts/diagnostico-notificaciones-yohana.ts` entregado, read-only con Admin SDK, listo para que Jorge lo ejecute con `npx tsx scripts/diagnostico-notificaciones-yohana.ts <email-de-yohana>`). Fase WRITE (re-migración) queda PENDIENTE esperando: (1) que Jorge corra el script y entregue output, (2) según el output, OK explícito en `BLOQUEOS.md` para autorizar la re-migración acotada a Yohana.
+**Estado:** EN_EJECUCION (fase write — DESBLOQUEADA 2026-05-08 por jorge vía `BLOQUEOS.md` tras output del diagnóstico read-only ejecutado el mismo día). Caso A confirmado: 3 docs de Yohana (`F9BV32k4JEoEOk97K4xc`, `TVwtOtmNlzW334IUIUdF`, `VWjdYBRmKgU8rGPlbJAv`) tienen `userId == personalDocId == zFhokrDoPH9lD63ZxKAY`. Scope acotado autorizado: setear `userId = HGkVoYpGKzL4JJI7FnTpHjdsM972` (auth.uid de Yohana, email `melissabalbuena08@gmail.com`). NO tocar `destinatarioId`, NO tocar otros campos, NO migrar a otros usuarios.
+
+**desbloqueadoPor:** jorge 2026-05-08
 
 **Prioridad:** alta condicional (sólo si la condición se dispara)
 **Origen:** SPRINT-100 falló en QA visual con Yohana 2026-05-08 (a confirmar). Hipótesis Cowork: las notificaciones legacy de Yohana tienen `destinatarioId == auth.uid` pero `userId == personalDocId` post-migración fallida del 2026-05-06.
