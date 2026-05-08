@@ -16,6 +16,7 @@ import { check as checkCrossCollectionTx } from './check-cross-collection-tx.js'
 import { check as checkAltaEmpleadoDobleDoc } from './check-alta-empleado-doble-doc.js';
 import { check as checkRulesPendientesDeploy } from './check-rules-pendientes-deploy.js';
 import { check as checkTecnicoidPersonalIdMisuse } from './check-tecnicoid-personal-id-misuse.js';
+import { check as checkCrearnotificacionUseridShape } from './check-crearnotificacion-userid-shape.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -33,6 +34,7 @@ async function main() {
     checkAltaEmpleadoDobleDoc,
     checkRulesPendientesDeploy,
     checkTecnicoidPersonalIdMisuse,
+    checkCrearnotificacionUseridShape,
   ];
 
   const t0 = Date.now();

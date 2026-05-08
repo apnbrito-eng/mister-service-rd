@@ -3,57 +3,13 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 por coordinator (`trabaja` — SPRINT-118 procesado: scripts entregados en DRY-RUN, tester + regression_guardian + reviewer PASS, commits hechos. Estado movido a EN_REVISION_HUMANA: Jorge ejecuta `--apply` manualmente y luego escribe postmortem para cerrar a COMPLETADO).
+**Última actualización:** 2026-05-08 noche por coordinator (cierre disciplina post-SPRINT-118: postmortem + cazador P-007 + fix vivo `Dashboard.tsx:216` + sprints 100/115/118 movidos a histórico).
 
 **Próximo ID disponible:** SPRINT-119
 
 ---
 
 ## Sprints
-
-### SPRINT-100 — Validar que Yohana ve notificaciones después de b93625d
-
-**Estado:** PENDIENTE (QA visual ejecutado 2026-05-08 con Yohana → resultado: "no hay nada en la campanita". Diagnóstico de causa raíz delegado a SPRINT-115. Este sprint queda PENDIENTE hasta que SPRINT-115 confirme y reparare; Yohana hará re-QA post-fix).
-**Prioridad:** alta
-**Origen:** Jorge dijo "no veo las notificaciones" como Yohana operaria, 2026-05-06.
-**Riesgo:** bajo
-**Touch-list previsto:** ninguno (sólo validación)
-
-#### Objetivo
-Confirmar que después del deploy de `b93625d` (NotificacionesPanel usa
-`currentUser.uid`), Yohana puede ver las 3 notificaciones que tiene
-pendientes y marcarlas como leídas. Si NO funciona, escalar al builder
-para investigar si la migración `migrar-notificaciones-userid.ts` copió
-valores correctos.
-
-#### Por qué
-El sprint anterior (`b93625d`) arregló la consulta. Pero la migración previa
-copió `destinatarioId` verbatim a `userId`. Si `destinatarioId` viejo era
-`personalDocId` en lugar de `auth.uid`, la migración propagó el bug — la
-consulta nueva tampoco matchearía.
-
-#### Criterios de aceptación
-- [ ] Yohana hace hard refresh, click en campanita, ve ≥1 notificación.
-- [ ] Yohana puede marcar una como leída y persiste.
-- [ ] Si no ve nada: builder corre script de diagnóstico que dump
-      `notificaciones where userId == <auth.uid de Yohana>` y compara
-      con `notificaciones where destinatarioId == <auth.uid Yohana>`.
-- [ ] Si los dos queries devuelven 0 docs pero Yohana SÍ tenía notifs antes:
-      diseñar script `re-migrar-notificaciones-personaldocid-a-authuid.ts`
-      que mapea `usuarios where rol != 'administrador' → personal where uid==`
-      y reemplaza `userId == personalDocId` por `userId == auth.uid`.
-- [ ] Reportar resultado en EJECUCION_AUTONOMA.md.
-
-#### Restricciones / guardarrails
-- Si requiere correr script de migración → marcar BLOQUEADO (>500 docs no, pero migración de datos sí requiere OK).
-- Si encuentra un patrón nuevo de regresión → agregar P-XXX a `docs/PATRONES_REGRESION.md` + cazador.
-
-#### Notas para el coordinator
-- Usar Yohana como caso de prueba; ID en `usuarios/{auth.uid}` debería ser conocido.
-- El bug original es pre-existente en CLAUDE.md como "asunción frágil técnico personal/{id}.id == auth.uid" extendido a operarias.
-- Si Jorge no está disponible para confirmar visualmente, dejar el sprint en PENDIENTE — no hay forma de "validar UI" desde el coordinator.
-
----
 
 ### SPRINT-101 — Smoke test inicial de cazadores anti-regresión
 
@@ -315,6 +271,35 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ---
 
 ## Sprints completados (histórico)
+
+### SPRINT-118 — Re-migración masiva notis legacy + fix email Wilainy
+- **Completado:** 2026-05-08 noche por Jorge (validación humana visual). Cierre disciplina por coordinator: postmortem + cazador P-007 + fix vivo `Dashboard.tsx:216`.
+- **Hashes:** `e6ccb1e` (scripts DRY-RUN entregados), `a15846e` (trail coordinator), `b781f80` (cierre Jorge — 41 notis re-migradas + 3 ya alineadas + email Wilainy fixeado), commit de cierre disciplina (este).
+- **Resultado:** 41 notificaciones legacy re-migradas + 3 ya alineadas (Yohana idempotencia) = 44 docs procesados. Email Wilainy corregido en Auth + `usuarios/{uid}` de `apnbrito0318@gmail.com` a `Nwilainy@gmail.com`. Audit logs escritos en `auditoria_admin`.
+- **Validación humana:** Jorge confirmó visualmente 39 notis aparecen en campanita admin (antes invisibles); reset de contraseña de Wilainy funciona desde GestionUsuarios.
+- **OK humano:** jorge 2026-05-08 (`procesa bloqueos` desde `BLOQUEOS.md`).
+- **Postmortem:** `docs/postmortems/2026-05-08-notis-legacy-multiples-empleados.md`.
+- **Cazador agregado:** P-007 — `scripts/invariantes/check-crearnotificacion-userid-shape.ts`.
+- **Fix vivo encontrado durante postmortem:** `src/pages/Dashboard.tsx:216` (`userId: admin.id` → `admin.uid` con filter por `p.uid`).
+
+---
+
+### SPRINT-115 — Diagnóstico + re-migración de notificaciones de Yohana
+- **Completado:** 2026-05-08 absorbido por SPRINT-118. La fase write de SPRINT-115 fue ejecutada como subset del scope masivo (3 notis de Yohana entre las 44 totales). Yohana validó campanita post-migración el 2026-05-08.
+- **Hashes:** `f6d1d76` (script diagnóstico), `6b4aade` (script re-migración acotada), absorbido en `b781f80` (Jorge corrió el script masivo que cubrió Yohana + 4 empleados más).
+- **Resultado:** las 3 notis de Yohana (`F9BV32k4JEoEOk97K4xc`, `TVwtOtmNlzW334IUIUdF`, `VWjdYBRmKgU8rGPlbJAv`) confirmadas alineadas correctamente en campanita post-fix.
+- **OK humano:** jorge 2026-05-08.
+- **Postmortem:** parte de `docs/postmortems/2026-05-08-notis-legacy-multiples-empleados.md` (mismo bug, scope expandido).
+
+---
+
+### SPRINT-100 — Validar que Yohana ve notificaciones después de b93625d
+- **Completado:** 2026-05-08 — Yohana validó campanita visualmente post-migración masiva (SPRINT-118). El sprint tenía como objetivo confirmar que las 3 notis de Yohana eran visibles después de `b93625d`. Diagnóstico SPRINT-115 confirmó que NO eran visibles porque tenían `userId == personalDocId`. Fix masivo SPRINT-118 alineó 41 docs + 3 ya correctos. Yohana confirmó el 2026-05-08 que ve sus notis.
+- **Hash:** validación visual humana, sin commit propio (el sprint era QA).
+- **OK humano:** jorge 2026-05-08 (relayando confirmación de Yohana).
+- **Postmortem:** `docs/postmortems/2026-05-08-notis-legacy-multiples-empleados.md`.
+
+---
 
 ### SPRINT-107 — Agente `archivist` + Continuous Improvement Loop
 - **Completado:** 2026-05-07 por coordinator (segunda pasada del día)
@@ -793,7 +778,12 @@ La inconsistencia no rompe producción hoy (no hay rule que valide estos campos)
 
 ---
 
-### SPRINT-115 — Diagnóstico + re-migración de notificaciones de Yohana
+### SPRINT-115 — Diagnóstico + re-migración de notificaciones de Yohana — [MOVIDO A HISTÓRICO]
+
+> Sprint completado el 2026-05-08 — ver entrada condensada en sección "Sprints completados (histórico)" más abajo.
+
+<details>
+<summary>Spec original (preservado para forensia)</summary>
 
 **Estado:** PAUSADO 2026-05-08 (Jorge decidió absorber el fix dentro del rediseño general de SPRINT-117). Fase diagnóstico COMPLETADA (Caso A confirmado, 3 docs identificados). Fase write tiene script listo (`scripts/re-migrar-notificaciones-yohana.ts` commit `6b4aade`) y dry-run validado por Jorge el 2026-05-08, pero NO se ejecuta `--apply` hasta que SPRINT-117 fase A2 termine y decidamos si re-migrar las 3 notis sueltas o esperar al fix masivo de TODOS los empleados afectados. Yohana sigue sin ver sus 3 notis viejas. **NO procesar autónomo. NO ejecutar `--apply` sin OK explícito de Jorge re-confirmado post-auditoría.**
 
@@ -866,6 +856,8 @@ Si Yohana reporta "ve pero no puede marcar", es Caso B. Si reporta "no ve nada",
   - Eliminar la query legacy `where('destinatarioId', '==', userId)` del service una vez TODOS los docs estén migrados a `userId`. Eso es un sprint follow-up.
   - Endurecer rule de update para validar también `destinatarioId == auth.uid` como fallback temporal hasta que la migración masiva (futura) limpie todo.
 - Postmortem obligatorio si confirma Caso B (vector recurrente del bug histórico). Sub-regla CLAUDE.md.
+
+</details>
 
 ---
 
@@ -1179,7 +1171,12 @@ Cada sub-sprint 117cN tiene su propia entrada cuando se desbloquea, con touch-li
 
 ---
 
-### SPRINT-118 — Re-migración masiva notis legacy (5 empleados, ~44 docs) + fix email Wilainy en Auth
+### SPRINT-118 — Re-migración masiva notis legacy (5 empleados, ~44 docs) + fix email Wilainy en Auth — [MOVIDO A HISTÓRICO]
+
+> Sprint completado el 2026-05-08 — ver entrada condensada en sección "Sprints completados (histórico)" más abajo.
+
+<details>
+<summary>Spec original (preservado para forensia)</summary>
 
 **Estado:** EN_REVISION_HUMANA (scripts entregados en DRY-RUN; Jorge ejecuta `--apply` manualmente)
 **desbloqueadoPor:** jorge 2026-05-08 (movido desde `BLOQUEOS.md` por coordinator vía `procesa bloqueos`).
@@ -1284,3 +1281,5 @@ Entregar 2 scripts ejecutables que (a) re-migren 44 notificaciones Caso A apunta
 - Builder debe basarse en patrón existente `scripts/re-migrar-notificaciones-yohana.ts` (entregado en sprints anteriores) — revisar shape exacto y seguir convención.
 - Audit log shape: ver patrón en otros scripts del repo que escriben a `auditoria_admin`.
 - Postmortem va al final del sprint **después** de que Jorge confirme `--apply` exitoso. Si Jorge solo aplica fase 1 y deja fase 2 para más tarde, el postmortem de fase 2 queda como TODO en BLOQUEOS.md.
+
+</details>

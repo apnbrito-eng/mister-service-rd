@@ -201,6 +201,22 @@ y NO se persiste el valor en Firestore como `tecnicoId`.
 
 ---
 
+## P-007 — `crearNotificacion({ userId: <X>.id })` con `personal.id` en lugar de `auth.uid`
+
+**Bug original:** notis legacy con `userId == personalDocId` afectando a 5 empleados (Yohana, Wilainy, Jorge, misterservicerd, Maria Teresa). 44 docs invisibles en campanita. Re-migración masiva en `b781f80` (2026-05-08). Postmortem: `docs/postmortems/2026-05-08-notis-legacy-multiples-empleados.md`.
+
+**Síntoma:** El destinatario no ve su notificación en la campanita (toast nunca llega, badge en 0). La rule de Firestore filtra `notificaciones` por `userId == request.auth.uid` y el doc tiene `userId == personal.id` (doc id auto-generado de `personal/`). Para empleados con `personal/{id}.id == auth.uid` por coincidencia (alta vieja con id manual igual al uid) pasa desapercibido — solo afecta a empleados creados con auto-id.
+
+**Causa raíz:** Callers de `crearNotificacion({...})` enumeran personal con `personal.filter(...)` o `personal.map(...)` y pasan `<item>.id` como `userId` o `destinatarioId`. El doc id de personal NO es `auth.uid`. Lo correcto es usar `<item>.uid` y filtrar items con `uid != ''` para excluir empleados pre-SPRINT-105 sin Auth. Es vector hermano de P-001 (que sí caza `userProfile.id` literal pero no las variantes con identificadores indirectos como `admin.id`, `p.id`, `coord.id`, etc.).
+
+**Regla:** Cuando un caller llama `crearNotificacion({ userId, destinatarioId, ... })` (o cualquier otra función que escriba a la colección `notificaciones`), el valor pasado debe ser `auth.uid` — nunca un doc id de `personal/`. Para enumerar destinatarios desde `personal.filter(...)`, filtrar primero por `p.uid` (`.filter(p => p.uid)`) y pasar `p.uid`. Para el propio user logueado, usar `currentUser.uid` del context (no `userProfile.id`).
+
+**Cazador:** `scripts/invariantes/check-crearnotificacion-userid-shape.ts`. Detecta dentro de bloques `crearNotificacion({...})` patrones `userId: <X>.id` o `destinatarioId: <X>.id` donde `<X>` matchea identificadores típicos de personal (`admin`, `coord`, `p`, `t`, `op`, `sec`, etc.) o es `userProfile`. Bloque multi-línea soportado por balanceo de llaves.
+
+**Allowlist:** comentario `// @safe-crearnotificacion-id: <razón>` en la misma línea o hasta 5 líneas arriba. Si crece >5 entradas, refactorear el cazador. Por archivo, allowlist vacía y se debe mantener vacía — no debería haber un caller legítimo que escriba a `notificaciones` con un doc id de personal.
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:

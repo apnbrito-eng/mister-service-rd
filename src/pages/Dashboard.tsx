@@ -198,8 +198,15 @@ export default function Dashboard() {
       try {
         const recs = await obtenerRecordatoriosDelDia(hoyStr);
         const operariasActivas = personal.filter(p => p.rol === 'operaria' && p.activo);
+        // Filtramos por p.uid para excluir admins/coords pre-SPRINT-105 sin doc
+        // espejo en `usuarios/{uid}`. La rule de Firestore filtra notificaciones
+        // por `userId == request.auth.uid`, así que `admin.uid` (no `admin.id`)
+        // es el valor correcto. Cazador P-007 enforce este patrón.
         const adminsYCoord = personal.filter(
-          p => (p.rol === 'administrador' || p.rol === 'coordinadora') && p.activo,
+          p =>
+            (p.rol === 'administrador' || p.rol === 'coordinadora') &&
+            p.activo &&
+            !!p.uid,
         );
         if (adminsYCoord.length === 0) return;
         for (const op of operariasActivas) {
@@ -213,7 +220,7 @@ export default function Dashboard() {
             const tipoLabel = tipo === 'ruta_manana' ? 'organización de ruta' : 'avisos a clientes';
             for (const admin of adminsYCoord) {
               await crearNotificacion({
-                userId: admin.id,
+                userId: admin.uid!,
                 destinatarioNombre: admin.nombre,
                 tipo: 'recordatorio',
                 titulo: 'Recordatorio vencido',
