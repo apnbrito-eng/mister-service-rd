@@ -5,6 +5,58 @@
 
 ---
 
+## 2026-05-08 — `trabaja` (novena pasada): SPRINT-117b propuesta de reorganización IA (read-only autónomo)
+
+### Contexto
+
+Jorge pegó `trabaja` por novena vez en el día. El sprint anterior (117a) había cerrado pocos minutos antes con commits `f1a89d0` + `066ff6c`. Coordinator evaluó si SPRINT-117b califica autónomo:
+
+- **Procesable autónomo: SÍ.** Razones: (a) read-only, output 100% documental (`.md`); (b) Jorge ya zanjó las 2 ambigüedades clave el 2026-05-08 noche (líneas 1027-1031 de `COLA_AUTONOMA.md`) → "Web y Solicitudes" admin+coord, `/admin/configuracion/usuarios` redirect 301; (c) la spec exige pausa obligatoria al final con entrada en `BLOQUEOS.md`, así que NO ejecuta cambios a código; (d) misma forma que 117a (sólo escribe `.md`) que ya se procesó autónomo OK.
+- **Las 4 preguntas abiertas del documento** (Métricas dentro de Rendimiento, etiqueta "Bandeja de entrada", ocultar Mapa para operaria, tratamiento de Catálogo legacy) tienen defaults razonables y son NO bloqueantes — Jorge puede contestarlas en `BLOQUEOS.md` al desbloquear.
+
+### Scope procesado
+
+SPRINT-117b — propuesta de reorganización con mockup por rol. Output: `docs/sprints/PROPUESTA_IA_2026-05-08.md` (368 líneas, 7 secciones):
+
+1. Mockup textual del sidebar para los 6 roles (admin, coord, operaria, secretaria, técnico, ayudante).
+2. Justificaciones por cada uno de los 18 cambios propuestos (qué fricción resuelve / quién se beneficia / riesgo).
+3. Tabla antes/después de 5 flujos comunes (crear orden, iniciar chequeo, facturar, ver órdenes pendientes, agendar cita) — honestamente: la mejora medida en clicks es marginal (-1 facturación), el beneficio real es reducción de ruido visual.
+4. Plan de 6 sub-sprints 117c1..c6, cada uno con touch-list 1-3 archivos máximo + plan de rollback + riesgo (todos bajo o medio).
+5. Restricciones globales para fase 117c (recordatorio del spec).
+6. Preguntas abiertas no bloqueantes con defaults.
+7. Cómo desbloquear (formato de líneas para `BLOQUEOS.md`).
+
+### Flujo ejecutado
+
+1. **Lectura de insumo**: `docs/sprints/AUDITORIA_IA_2026-05-08.md` (output de 117a) entero, `COLA_AUTONOMA.md` (spec de 117b + decisiones zanjadas), `Sidebar.tsx` líneas 1-330 (estructura actual del sidebar para reordenar correctamente), `BLOQUEOS.md` (formato de entrada).
+2. **Marcar EN_EJECUCION** en `COLA_AUTONOMA.md`.
+3. **Builder manual**: redacción directa de `docs/sprints/PROPUESTA_IA_2026-05-08.md` (368 líneas) + entrada en `BLOQUEOS.md` con formato de desbloqueo.
+4. **Tester manual**: `npm run check:regression` → 7/7 cazadores PASS, 0 hits (idéntico al baseline, esperado por ser solo `.md`). Typecheck/lint no ejecutados manualmente — el pre-commit hook los corre.
+5. **regression_guardian manual** (semántico): el diff es puramente docs. Ningún patrón P-001..P-007 aplica.
+6. **Reviewer manual** (self-review): las 4 secciones requeridas por el spec presentes (mockup, justificaciones, tabla flujos, plan sub-sprints). Adicionalmente: las 2 decisiones zanjadas por Jorge están aplicadas (Web/Solicitudes admin+coord; usuarios redirect 301). Pausa obligatoria respetada: NO se arrancó 117c1, entrada esperando OK en `BLOQUEOS.md`.
+7. **Marcar COMPLETADO** en `COLA_AUTONOMA.md` + mover al histórico.
+8. **Commit + push** (pendiente al cierre de este turno).
+
+### Decisiones tomadas autónomas (reportar a Jorge)
+
+- **Operaria sigue viendo "Mi rendimiento"** (renombrado desde "Rendimiento") — porque `rendimientoVer=true` por default y la operaria sí necesita ver sus comisiones. Si Jorge prefiere ocultarlo, lo dice en `BLOQUEOS.md`.
+- **Secretaria pierde Cotizaciones del sidebar simplificado** — pero ya hoy `cotizacionesVer=false` por default, así que no se le mostraba. Limpieza coherente.
+- **"Catálogo legacy" se oculta del sidebar admin pero no se elimina del routing en 117c** — la eliminación queda como sprint propio porque hay riesgo de imports rotos. Documentado en §4 "Sub-sprints fuera del alcance de 117c".
+- **6 sub-sprints en lugar de 4-5 que sugería la spec** — porque el spec pide "1-3 archivos máx por sub-sprint" y separar la limpieza de alias `isAdmin = esAdminOCoord` (117c6) del cambio funcional de simplificar operaria/secretaria (117c5) reduce riesgo de mezclar refactor con cambio visible.
+
+### Próximo paso humano
+
+Jorge:
+1. Lee `docs/sprints/PROPUESTA_IA_2026-05-08.md` (10 min).
+2. Decide. Edita `docs/sprints/BLOQUEOS.md` con UNA línea:
+   - `OK: jorge YYYY-MM-DD HH:MM`
+   - `OK selectivo: jorge YYYY-MM-DD HH:MM | sub-sprints: 117c1, 117c3, ...`
+   - `Cambios: jorge YYYY-MM-DD HH:MM | <feedback>`
+   - `RECHAZADO: jorge YYYY-MM-DD HH:MM | <motivo>`
+3. Pega `procesa bloqueos` al coordinator.
+
+---
+
 ## 2026-05-08 — `trabaja`: SPRINT-117a auditoría focalizada de IA (read-only autónomo)
 
 ### Contexto

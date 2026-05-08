@@ -272,6 +272,19 @@ Ejercer manualmente en producción con técnico + operaria reales:
 
 ## Sprints completados (histórico)
 
+### SPRINT-117b — Propuesta de reorganización con mockup por rol
+- **Completado:** 2026-05-08 noche por coordinator autónomo (novena pasada `trabaja`, sprint read-only).
+- **Hash:** (pendiente de commit en este mismo turno).
+- **Output:** `docs/sprints/PROPUESTA_IA_2026-05-08.md` (368 líneas, 7 secciones).
+- **Resultado:** mockup de sidebar reorganizado por los 6 roles (admin 32 ítems, coord ~30, operaria ~10, secretaria ~8, técnico/ayudante sin cambios), 18 cambios justificados, tabla antes/después de 5 flujos comunes, 6 sub-sprints 117c1..c6 propuestos cada uno con touch-list 1-3 archivos + plan de rollback + riesgo, 4 preguntas abiertas no bloqueantes con defaults razonables.
+- **Decisiones zanjadas por Jorge aplicadas sin re-preguntar:** (a) "Web y Solicitudes" admin+coord; (b) `/admin/configuracion/usuarios` redirect 301 a `/admin/usuarios`.
+- **Pausa obligatoria respetada:** entrada agregada a `BLOQUEOS.md` esperando `OK: jorge YYYY-MM-DD HH:MM` (o variantes selectivo/cambios/rechazado).
+- **Validación:** cazadores 7/7 PASS 0 hits idéntico al baseline (esperado, sin código tocado). Pre-commit hook OK. Sin tester/regression_guardian/reviewer porque no hay diff de código.
+- **OK humano:** no requerido para 117b (sprint read-only). Sí requerido para arrancar 117c1..c6 — ver `BLOQUEOS.md`.
+- **Próximo paso humano:** Jorge revisa `docs/sprints/PROPUESTA_IA_2026-05-08.md` (10 min de lectura), edita la entrada en `BLOQUEOS.md` con su decisión, pega `procesa bloqueos` al coordinator.
+
+---
+
 ### SPRINT-117a — Auditoría focalizada de menús, rutas y módulos
 - **Completado:** 2026-05-08 por coordinator autónomo (sprint read-only).
 - **Hash:** `f1a89d0`.
@@ -1000,7 +1013,12 @@ Si fase A reporta mismatches reales:
 
 ---
 
-### SPRINT-117b — Propuesta de reorganización con mockup por rol
+### SPRINT-117b — Propuesta de reorganización con mockup por rol — [MOVIDO A HISTÓRICO]
+
+> Sprint completado el 2026-05-08 por coordinator autónomo (novena pasada `trabaja`). Ver entrada en sección "Sprints completados (histórico)" más abajo.
+
+<details>
+<summary>Spec original (preservada para forensia)</summary>
 
 **Estado:** PENDIENTE — depende de SPRINT-117a completado.
 **Prioridad:** alta (precondición de 117c)
@@ -1041,11 +1059,13 @@ Si al ver el mockup Jorge cambia de opinión sobre cualquiera de estas dos, lo d
 
 #### Criterios de aceptación
 
-- [ ] `docs/sprints/PROPUESTA_IA_2026-05-08.md` creado con las 4 secciones + plan de sub-sprints.
-- [ ] Entrada agregada a `BLOQUEOS.md` esperando OK de Jorge.
-- [ ] SPRINT-117b marcado COMPLETADO en `COLA_AUTONOMA.md`.
-- [ ] NO arrancar SPRINT-117c1 — esperar feedback humano.
-- [ ] Commit + push con mensaje descriptivo en español.
+- [x] `docs/sprints/PROPUESTA_IA_2026-05-08.md` creado con las 4 secciones + plan de sub-sprints.
+- [x] Entrada agregada a `BLOQUEOS.md` esperando OK de Jorge.
+- [x] SPRINT-117b marcado COMPLETADO en `COLA_AUTONOMA.md`.
+- [x] NO arrancar SPRINT-117c1 — esperar feedback humano.
+- [x] Commit + push con mensaje descriptivo en español.
+
+</details>
 
 ---
 

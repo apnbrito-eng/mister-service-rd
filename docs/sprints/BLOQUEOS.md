@@ -96,6 +96,29 @@ Conservado acá para histórico. NO procesar desde acá — la entrada activa es
 
 ---
 
+## SPRINT-117c — Esperando aprobación de propuesta de reorganización IA
+
+**Bloqueado:** coordinator 2026-05-08 (cierre de SPRINT-117b). Espera revisión de la propuesta documentada en `docs/sprints/PROPUESTA_IA_2026-05-08.md`.
+
+**Resumen 60 segundos:**
+- 6 sub-sprints 117c1..c6, cada uno con touch-list de 1-3 archivos máximo, plan de rollback y riesgo bajo.
+- Reduce sidebar admin de 44 a ~32 ítems, operaria de 17 a ~10, secretaria de 13 a ~8.
+- Sin tocar identificadores internos. Sin tocar `TecnicoVista`. Sin tocar `firestore.rules`.
+- 4 preguntas abiertas en §6 de la propuesta — opcionales (hay defaults razonables).
+
+**Para desbloquear, agregá UNA línea al final de esta entrada:**
+
+- `OK: jorge YYYY-MM-DD HH:MM` → procesar 117c1..c6 en orden, con QA visual humana entre cada uno.
+- `OK selectivo: jorge YYYY-MM-DD HH:MM | sub-sprints: 117c1, 117c3, 117c4` → procesar sólo los listados.
+- `Cambios: jorge YYYY-MM-DD HH:MM | <feedback en lenguaje natural>` → revisar la propuesta antes de procesar (genero v2 del documento).
+- `RECHAZADO: jorge YYYY-MM-DD HH:MM | <motivo>` → descartar reorganización entera.
+
+Después pegás `procesa bloqueos` al coordinator.
+
+**Restricciones reiteradas:** archivist obligatorio PRE-CHANGE en cada sub-sprint, regression_guardian antes de commit, QA visual con Aury/Wilainy/Yohana después de cada deploy.
+
+---
+
 ## Histórico de desbloqueos
 
 - **SPRINT-115 fase write (re-migración Yohana):** desbloqueado por jorge 2026-05-08, movido a `COLA_AUTONOMA.md` por coordinator 2026-05-08 (cuarta pasada). Re-pausado por jorge mismo día (ver entrada activa arriba). Conservado para histórico.
