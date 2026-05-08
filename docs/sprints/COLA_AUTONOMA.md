@@ -3,9 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 por Cowork (SPRINT-116 abierto: auditoría sistémica de email mismatches y notis legacy en TODOS los empleados, tras detectar caso Wilainy + sospecha de Jorge sobre patrón generalizado).
+**Última actualización:** 2026-05-08 por Cowork (SPRINT-116 abierto: auditoría sistémica emails+notis. SPRINT-117 abierto: rediseño Information Architecture en 3 fases auditoría → propuesta → ejecución por sub-sprints).
 
-**Próximo ID disponible:** SPRINT-117
+**Próximo ID disponible:** SPRINT-118
 
 ---
 
@@ -967,3 +967,123 @@ Si fase A reporta mismatches reales:
 - Si el coordinator detecta que el problema afecta a >50% de empleados, reportar como "patrón sistémico" y escalar a Jorge antes de proponer fix masivo.
 - Postmortem obligatorio si fase B reporta >5 empleados afectados (sub-regla CLAUDE.md "cada bug → cazador" + recurrencia ya documentada en P-XXX históricos).
 - Sub-regla "destructive actions": coordinator NO ejecuta fase C/D autónomo aunque tenga OK Jorge previo — siempre confirmar con dry-run primero, mostrar output a Jorge, esperar su "dale al apply".
+
+---
+
+### SPRINT-117 — Rediseño Information Architecture (auditoría + propuesta + ejecución por fases)
+
+**Estado:** PENDIENTE — fase A (auditoría) procesable autónoma. Fase B (propuesta) procesable autónoma con review humano obligatorio antes de pasar a C. Fase C (ejecución) se descompone en sub-sprints 117c1, 117c2, etc., todos BLOQUEADOS hasta que Jorge apruebe la propuesta de B.
+**Prioridad:** alta (UX general — Jorge dice 2026-05-08: "fusionar y converger módulos para que el sistema sea más intuitivo y fácil de entender")
+**Origen:** Pedido directo de Jorge tras hotfix de Yohana. Observa que el sistema tiene muchos menús/módulos que podrían fusionarse o reorganizarse para reducir fricción cognitiva en empleados.
+**Riesgo:** alto en fase C (toca Sidebar, App.tsx, rutas — afecta a todo el equipo). Bajo en A y B (read-only y propuesta).
+**Touch-list previsto:**
+- Fase A (read-only): ninguno de código. Output a `docs/sprints/AUDITORIA_IA_2026-05-08.md`.
+- Fase B (propuesta): output a `docs/sprints/PROPUESTA_IA_2026-05-08.md`.
+- Fase C (ejecución, por sub-sprints): `src/components/Sidebar.tsx`, `src/App.tsx`, posiblemente `src/utils/permisos.ts`, mover archivos en `src/pages/`. Cada sub-sprint toca solo 1-2 áreas.
+
+#### Objetivo global
+
+Reducir la cantidad de elementos del menú lateral, agrupar módulos relacionados, eliminar redundancias entre vistas, y hacer que cada rol (técnico, ayudante, operaria, secretaria, coordinadora, administrador) llegue al flujo que necesita en menos clicks. Sin romper enlaces existentes ni migrar datos.
+
+#### Fase A — Auditoría sistémica (autónoma, read-only)
+
+**Tareas del builder/coordinator:**
+
+1. **Inventario completo:**
+   - Leer `src/App.tsx` y listar todas las rutas (públicas + admin).
+   - Leer `src/components/Sidebar.tsx` y listar todos los items del menú (con su gate por rol).
+   - Leer `src/utils/permisos.ts` y mapear qué rol puede ver cada cosa.
+   - Recorrer `src/pages/` y listar cada página con: nombre, ruta, propósito (según comentario o inferencia del JSX).
+   - Recorrer `src/components/` por carpetas temáticas (ordenes, facturas, citas, etc.) e identificar si hay vistas que viven en componentes en lugar de páginas.
+
+2. **Tabla módulo × rol:** matriz que muestre por cada módulo (filas) si cada rol (columnas) lo ve, lo usa, o lo evita.
+
+3. **Detección de redundancias:**
+   - Páginas que muestran datos similares con UX distinta (ej: `Ordenes.tsx` vs `Tablero.tsx` vs `Citas.tsx` — qué solapan).
+   - Acciones duplicadas (ej: agendar cita desde 3 lugares distintos).
+   - Módulos que casi nadie ve (revisar git log de commits sobre cada archivo como proxy de "se actualiza").
+
+4. **Métricas observables sin instrumentar:**
+   - Número de módulos en sidebar por rol.
+   - Profundidad de navegación promedio para flujos comunes (ej: "crear orden", "iniciar chequeo", "facturar").
+
+5. **Output:** `docs/sprints/AUDITORIA_IA_2026-05-08.md` con:
+   - Inventario completo (tablas).
+   - Lista de redundancias detectadas con ejemplo concreto.
+   - Top 5 áreas de mayor confusión potencial (con justificación).
+   - Apéndice: decisiones técnicas observadas (ej: por qué Standby es módulo aparte y no fase de orden).
+
+#### Fase B — Propuesta de reorganización (autónoma, requiere review humano)
+
+**Tareas del builder/coordinator (después de fase A):**
+
+1. **Diseñar mockup textual del menú nuevo** por cada rol:
+   - Sidebar reorganizada con grupos lógicos.
+   - Items que se fusionan (ej: "Conduces" + "Facturas" en submenú "Facturación").
+   - Items que cambian de ubicación.
+   - Items que desaparecen (con explicación de adónde van).
+
+2. **Para cada cambio, justificar:**
+   - Por qué este cambio mejora UX.
+   - Qué rol se beneficia más.
+   - Riesgo de romper algo existente.
+   - Si es reversible o no.
+
+3. **Tabla de comparación antes/después** por rol con número de clicks para los 5 flujos más comunes (crear orden, iniciar chequeo, facturar, ver órdenes pendientes, agendar cita).
+
+4. **Plan de ejecución por sub-sprints:**
+   - SPRINT-117c1: cambios chicos sin riesgo (renombres en sidebar, reorder).
+   - SPRINT-117c2: agrupar items en submenús (toca Sidebar.tsx).
+   - SPRINT-117c3: fusionar páginas redundantes (toca rutas y componentes).
+   - SPRINT-117c4: limpiar páginas no usadas (con archive, no delete).
+   - Cada sub-sprint con criterios de aceptación + plan de rollback.
+
+5. **Output:** `docs/sprints/PROPUESTA_IA_2026-05-08.md` con todo lo de arriba.
+
+6. **Pausa obligatoria:** después de generar este archivo, el coordinator marca SPRINT-117 fase B como COMPLETADA y deja entrada en `BLOQUEOS.md` esperando que Jorge lea la propuesta y diga:
+   - "OK fase C completa" → desbloquea todos los sub-sprints 117cN.
+   - "OK pero solo 117c1 y c2" → desbloquea selectivo.
+   - "Cambios en propuesta" → con ajustes específicos, vuelve a fase B con feedback.
+
+#### Fase C — Ejecución por sub-sprints (BLOQUEADA hasta OK Jorge)
+
+Cada sub-sprint 117cN tiene su propia entrada cuando se desbloquea, con touch-list acotado y QA visual obligatorio antes de cerrar. NO se procesan en lote — uno a la vez, con confirmación de Jorge entre cada uno.
+
+#### Criterios de aceptación
+
+**Fase A:**
+- [ ] `docs/sprints/AUDITORIA_IA_2026-05-08.md` creado con inventario completo, tabla rol × módulo, redundancias, top 5 áreas confusas.
+- [ ] Sin tocar código de la app, rules ni servicios.
+- [ ] Cazadores P-001..P-006 siguen en 0 hits.
+
+**Fase B:**
+- [ ] `docs/sprints/PROPUESTA_IA_2026-05-08.md` creado con mockup textual por rol, justificación de cada cambio, tabla antes/después, plan de sub-sprints.
+- [ ] Entrada en `BLOQUEOS.md` con el OK pendiente de Jorge.
+- [ ] Coordinator NO procesa ningún sub-sprint 117cN hasta que Jorge desbloquee.
+
+**Fase C (cada sub-sprint individual):**
+- [ ] Touch-list acotado (1-3 archivos máximo).
+- [ ] Plan de rollback explícito.
+- [ ] QA visual obligatorio con captura o descripción del estado antes/después.
+- [ ] Si afecta rutas, mantener redirects para enlaces viejos (gotcha CLAUDE.md).
+- [ ] Cada sub-sprint sus propios criterios.
+
+#### Restricciones / guardarrails
+
+- **Fase A y B son consultivas**, no aprobadoras. NO ejecutan cambios estructurales.
+- **Fase C requiere OK explícito de Jorge** sobre la propuesta de B antes de empezar (sub-regla CLAUDE.md sobre cambios masivos a UI crítica).
+- archivist OBLIGATORIO en modo PRE-CHANGE antes de cada sub-sprint de fase C — `Sidebar.tsx`, `App.tsx`, `Ordenes.tsx`, `TecnicoVista.tsx` están en la lista de archivos críticos.
+- regression_guardian OBLIGATORIO antes de commit en cada sub-sprint de fase C.
+- NO renombrar identificadores internos (`enStandby`, `StandbyPieza`, etc.) — ya documentado como deuda separada en CLAUDE.md.
+- Si la propuesta de B sugiere fusionar páginas, mantener redirects desde rutas viejas para no romper bookmarks ni enlaces de WhatsApp existentes.
+- NO migrar datos en este sprint. Si la propuesta requiere migración, abrir sprint separado con OK explícito.
+- Sub-regla "documentación viva": al cerrar cada sub-sprint, actualizar `CLAUDE.md` y `CONTEXTO_PROYECTO.md` con el cambio de arquitectura.
+
+#### Notas para el coordinator
+
+- **Procesamiento autónomo:** fase A se procesa apenas Jorge pegue `trabaja`. Fase B también, secuencial.
+- **Pausa obligatoria entre B y C:** después de fase B, NO seguir con C. Marcar SPRINT-117 como "EN_REVISION_HUMANA" con la entrada en BLOQUEOS.md y devolver a Jorge.
+- **Para fase A:** apoyarse en `git log --oneline --since="3 months ago" -- src/pages/<file>` para detectar páginas que casi no se actualizan (proxy de "se usan poco").
+- **Para fase B:** considerar que el rol con más fricción es probablemente operaria/secretaria (tiene que tocar varios módulos en cada orden). El rol con menos clicks pero más críticos es técnico (mobile, en sitio del cliente). Admin/coord es power user, tolera más complejidad.
+- **No subestimar el costo de fase C:** cada sub-sprint requiere QA con usuario real. Aury (técnico), Wilainy (operaria), Yohana (operaria) son los conejillos de indias naturales.
+- **Postmortem del proceso al final:** si fase C completa exitosa con todos los sub-sprints, escribir postmortem-positivo en `docs/postmortems/` documentando el approach, qué funcionó, qué mejoraría para futuros rediseños grandes. NO es bug, pero el aprendizaje vale.
