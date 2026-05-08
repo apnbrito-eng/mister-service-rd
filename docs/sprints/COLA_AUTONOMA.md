@@ -1022,6 +1022,15 @@ Tomar la auditoría de 117a y proponer una reorganización concreta del sidebar 
    - Crear entrada en `BLOQUEOS.md`: *"SPRINT-117c esperando aprobación de Jorge sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md`. Para desbloquear, editar la entrada con `OK: jorge YYYY-MM-DD` o `OK selectivo: 117c1, 117c3` o `Cambios: <feedback>`"*.
    - **NO arrancar 117c**. Volver a Jorge.
 
+#### Decisiones de Jorge (zanjadas el 2026-05-08 noche)
+
+Las 2 ambigüedades que SPRINT-117a marcó "requiere validar con Jorge" quedan resueltas así (Jorge confirmó vía Cowork). El builder NO debe parar a preguntar de nuevo:
+
+1. **"Web y Solicitudes" — visible para admin Y coordinadora.** La coord triagea solicitudes públicas + citas por confirmar; tiene sentido que las vea. NO mostrar a operarias, secretarias, técnicos.
+2. **`/admin/configuracion/usuarios` — eliminar como ítem visible del sidebar pero dejar como redirect 301 a `/admin/usuarios`.** Patrón consistente con resto del repo (CLAUDE.md regla "Keep redirects when renaming routes"). Bookmarks/links viejos siguen funcionando.
+
+Si al ver el mockup Jorge cambia de opinión sobre cualquiera de estas dos, lo dirá en `BLOQUEOS.md` y el coordinator ajusta antes de arrancar 117c.
+
 #### Consideraciones para el builder
 
 - **Operaria/secretaria** son los roles con más fricción hoy (tocan muchos módulos por cada orden). Priorizar simplificar su sidebar.
