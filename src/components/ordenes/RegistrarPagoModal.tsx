@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { doc, Timestamp, arrayUnion, runTransaction } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, Usuario, Banco, PagoOrden, EstadoPagoOrden } from '../../types';
+import { useApp } from '../../context/AppContext';
 import { suscribirBancos } from '../../services/bancos.service';
 import { crearRegistroAuditoria } from '../../utils';
 import { mensajeDatosCuentaBancaria, whatsappUrl } from '../../utils/whatsapp';
@@ -29,6 +30,7 @@ function formatearMonto(n: number): string {
 }
 
 export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile, onSaved }: Props) {
+  const { currentUser } = useApp();
   const [bancos, setBancos] = useState<Banco[]>([]);
   const [metodo, setMetodo] = useState<Metodo>('efectivo');
   const [monto, setMonto] = useState<string>('');
@@ -92,7 +94,11 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
     setSaving(true);
     try {
       const usuario = userProfile?.nombre || 'Sistema';
-      const usuarioId = userProfile?.id || '';
+      // SPRINT-114: usar auth.uid en vez de userProfile.id para que el campo
+      // descriptivo `pago.registradoPorId` sea consistente con la convención
+      // auth.uid del resto del esquema (gotcha CLAUDE.md "userProfile.id NO
+      // siempre es auth.uid").
+      const usuarioId = currentUser?.uid || '';
       const ahora = new Date();
       const ahoraTimestamp = Timestamp.fromDate(ahora);
 

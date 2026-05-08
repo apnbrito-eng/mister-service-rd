@@ -13,6 +13,37 @@
 - Coordinator solo actualizó la entrada del log (este archivo) para reflejar el push real (`9603da3` + `dd24bb2` + `5bfa0e0`) y cambiar "EN_REVISION_HUMANA / sin push" → "COMPLETADO / pusheado por Jorge".
 - Sin commit propio para 113a — el cambio acompaña al commit de 113b.
 
+### SPRINT-114 — Migrar 4 hits descriptivos `userProfile.id` a `currentUser.uid`
+
+- **Estado final:** COMPLETADO.
+- **Tipo:** consistencia defensiva. Cambia el ID que se persiste en 4 campos descriptivos (no gateados por rule) para que use `auth.uid` en vez de `userProfile.id` (que para usuarios cargados por cascada `personal/` es `personalDocId`).
+- **Restricciones evaluadas:** rules NO, migración masiva NO (criterio del sprint: "NO migrar datos viejos — los pagos/facturas con personalDocId siguen siendo válidos"), integración pago/OAuth/terceros NO, endpoint público NO. **Procesable autónomo.**
+- **Archivos modificados (5):**
+  - `src/components/ordenes/RegistrarPagoModal.tsx` — `pago.registradoPorId` ahora usa `currentUser?.uid`. Importa `useApp` y obtiene `currentUser` del context.
+  - `src/components/ordenes/EnviarFacturacionButton.tsx` — `enviadaAFacturacionPorId` ahora usa `currentUser?.uid`.
+  - `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` — `emisorFacturaId` (alias `usuarioId`) y los 2 `solicitanteUid` (auditoría de garantía y override modalidad) ahora usan `currentUser?.uid`. Doc-comment `* solicitanteUid unificado a userProfile?.id` actualizado a `currentUser.uid`.
+  - `src/pages/Ordenes.tsx` — el caller del hook `useOrdenCreateForm` ahora pasa `id: currentUser?.uid` (antes `userProfile?.id`). Esto propaga `auth.uid` a `responsableId` (línea 612 del hook) y a `procesandoPor` del lock de cita (línea 458).
+  - `src/pages/Citas.tsx` — mismo cambio en el segundo caller.
+- **Fix colateral (no parte del sprint pero requerido por el pre-commit hook):**
+  - `src/pages/Ordenes.tsx` tenía un warning preexistente `react-hooks/exhaustive-deps` sobre `hoy` en el useMemo de `ordenesHoy`. Como la regla `--max-warnings 0` se aplica en el lint staged y este sprint stagea ese archivo, había que resolverlo. Solución: envolver `hoy = new Date()` en su propio `useMemo([])` para estabilizar la referencia y agregarlo a la dep array de `ordenesHoy`. Comentario explicativo del trade-off (sesión cruzando medianoche es caso raro). El warning ya estaba en el código pre-SPRINT-114; el fix es defensivo.
+- **archivist PRE-CHANGE (manual):** los 4 archivos del sprint son `services`/`components` con historial relevante. Los 2 callers (`Ordenes.tsx`, `Citas.tsx`) son páginas críticas. El cambio es **localizado al ID de actor humano**; no toca lógica de negocio, no toca dropdowns de asignación (P-006), no toca rules. **Sin conflictos.**
+- **regression_guardian (manual):**
+  - Capa 1 determinística: 6/6 PASS, 0 hits.
+  - Capa 2 semántica: el cambio va al revés del patrón P-001 — estamos eliminando hits potenciales, no introduciéndolos. Sin escrituras nuevas, sin rules, sin mutaciones cross-collection nuevas. **PASS.**
+- **Tester:**
+  - `npx tsc --noEmit`: clean.
+  - `npx eslint --max-warnings 0` sobre los 5 archivos: clean tras el fix colateral.
+- **Reviewer (manual):** APPROVED.
+  - 4 sitios cambian `userProfile?.id` → `currentUser?.uid` para campos descriptivos. Comentario `// SPRINT-114:` en cada uno.
+  - El nombre se mantiene en `userProfile?.nombre` (criterio del sprint).
+  - Sin migración de datos viejos (criterio explícito del sprint).
+  - Doc-comments actualizados en `ProcesarFacturacionModal`.
+  - Fix colateral del warning preexistente con `useMemo([])`, solución limpia.
+  - **Nota:** el cazador P-001 NO cazaba estos 4 hits porque sus campos (`enviadaAFacturacionPorId`, `responsableId`, `emisorFacturaId`, `pago.registradoPorId`) NO están en la lista de SENSITIVE_FIELDS del cazador. La auditoría de SPRINT-111 los identificó manualmente. Tras este sprint los 4 sitios usan `currentUser?.uid` por convención de esquema, sin necesidad de modificar el cazador (su lista de campos sensibles refleja qué rules existen, no qué campos deberían ser auth.uid por convención).
+- **Tiempo total:** ~30 min coordinator (lectura del sprint + verificación de los 4 sitios + 5 ediciones quirúrgicas + fix colateral del warning + checks + commit + push).
+
+---
+
 ### SPRINT-113c — Timeline horizontal de últimas 5 acciones al pie de OrdenDetalle
 
 - **Estado final:** COMPLETADO.

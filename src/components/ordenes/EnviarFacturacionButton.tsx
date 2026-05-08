@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { doc, updateDoc, collection, getDocs, query, where, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, Usuario, Personal } from '../../types';
+import { useApp } from '../../context/AppContext';
 import { crearRegistroAuditoria } from '../../utils';
 import { crearNotificacion } from '../../services/notificaciones.service';
 import { razonEnviarFacturacionDisabled } from '../../utils/tooltipsBotones';
@@ -22,6 +23,7 @@ interface Props {
  *  - usuario con permiso `ordenesEnviarAFacturacion`
  */
 export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
+  const { currentUser } = useApp();
   const [saving, setSaving] = useState(false);
 
   const yaEnviada = !!orden.enviadaAFacturacion;
@@ -36,7 +38,11 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
     setSaving(true);
     try {
       const usuario = userProfile?.nombre || 'Sistema';
-      const usuarioId = userProfile?.id || '';
+      // SPRINT-114: usar auth.uid en vez de userProfile.id para que el campo
+      // descriptivo `enviadaAFacturacionPorId` sea consistente con la
+      // convención auth.uid del resto del esquema (gotcha CLAUDE.md
+      // "userProfile.id NO siempre es auth.uid").
+      const usuarioId = currentUser?.uid || '';
       const ahora = Timestamp.now();
 
       // 1) Marcar la orden

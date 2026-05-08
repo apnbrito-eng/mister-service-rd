@@ -21,7 +21,7 @@ import { useApp } from '../context/AppContext';
 const MARCAS_SUGERIDAS = ['LG', 'Samsung', 'Mabe', 'Whirlpool', 'GE', 'Frigidaire'];
 
 export default function Citas() {
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
   const tiposEquipo = useTiposEquipo();
   const [loading, setLoading] = useState(true);
   const [citas, setCitas] = useState<CitaPorConfirmar[]>([]);
@@ -207,7 +207,8 @@ export default function Citas() {
   const createForm = useOrdenCreateForm({
     ordenes,
     citaPreset: showAgendarModal ? selectedCita : null,
-    usuarioActual: { id: userProfile?.id, nombre: userProfile?.nombre },
+    // SPRINT-114: auth.uid para `responsableId` consistente con auth.uid.
+    usuarioActual: { id: currentUser?.uid, nombre: userProfile?.nombre },
     onAfterCreate: async (nuevaOrdenId) => {
       if (!selectedCita) return;
       const ahoraTs = Timestamp.now();

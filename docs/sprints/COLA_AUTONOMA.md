@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 por coordinator (segunda pasada autónoma — SPRINT-113b + SPRINT-113c COMPLETADOS: badges + tooltips + timeline visual de últimas 5 acciones)
+**Última actualización:** 2026-05-08 por coordinator (segunda pasada autónoma — SPRINT-113b + SPRINT-113c + SPRINT-114 COMPLETADOS: badges + tooltips + timeline + consistencia auth.uid en 4 campos descriptivos)
 
 **Próximo ID disponible:** SPRINT-115
 
@@ -750,7 +750,7 @@ Hoy `historialFases` y `auditoria` viven dentro de la orden pero no se renderiza
 
 ### SPRINT-114 — Migrar 4 hits descriptivos `userProfile.id` a `currentUser.uid` (consistencia)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-08 (segunda pasada autónoma — los 4 sitios migrados a `currentUser.uid`. Plus fix colateral de warning eslint preexistente en `Ordenes.tsx` con `useMemo` para estabilizar la referencia de `hoy`. Sin migración de datos viejos. 6/6 cazadores PASS.)
 **Prioridad:** baja (no urgente — campos no gateados por rule, cambio defensivo de consistencia)
 **Origen:** Auditoría SPRINT-111 (fase 111a, 2026-05-08). Detectó 4 hits descriptivos legítimos (no bugs latentes) que escriben `userProfile?.id` a campos NO gateados pero que por convención del esquema post-SPRINT-105 deberían ser `auth.uid`.
 **Riesgo:** bajo (los campos no están gateados, el cambio es defensivo; no requiere migración de datos viejos)

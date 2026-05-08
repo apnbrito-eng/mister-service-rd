@@ -57,7 +57,7 @@ function detectarCoordenadasURL(texto: string): { lat: number; lng: number } | n
 }
 
 export default function Ordenes() {
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
 
   const [loading, setLoading] = useState(true);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
@@ -123,7 +123,10 @@ export default function Ordenes() {
   // Hook compartido para el form de Crear Orden de Servicio
   const createForm = useOrdenCreateForm({
     ordenes,
-    usuarioActual: { id: userProfile?.id, nombre: userProfile?.nombre },
+    // SPRINT-114: usar auth.uid para que `responsableId` (campo descriptivo
+    // del create de orden) sea consistente con la convención auth.uid del
+    // resto del esquema. El nombre se mantiene del userProfile.
+    usuarioActual: { id: currentUser?.uid, nombre: userProfile?.nombre },
     onAfterCreate: () => {
       // Tras crear, cerrar modal. La toast.success la dispara el hook.
       setShowCreateModal(false);
@@ -639,8 +642,12 @@ export default function Ordenes() {
     return lista;
   }, [ordenes, filtroOperariaActivo, userProfile?.id, verEliminadasFinal, esCoordinadora, filtroOperariaCoord]);
 
-  // Today's orders
-  const hoy = new Date();
+  // Today's orders.
+  // `hoy` envuelto en useMemo para que la referencia sea estable mientras
+  // el componente esté montado — sin esto, `ordenesHoy` se invalidaría en
+  // cada render por cambio de identidad de la fecha. La sesión viviendo
+  // cruzando medianoche es un caso raro aceptable (refresh manual).
+  const hoy = useMemo(() => new Date(), []);
   const ordenesHoy = useMemo(() => {
     return ordenesVisibles
       .filter(o => o.fechaCita && isSameDay(o.fechaCita, hoy))
@@ -648,7 +655,7 @@ export default function Ordenes() {
         if (!a.fechaCita || !b.fechaCita) return 0;
         return a.fechaCita.getTime() - b.fechaCita.getTime();
       });
-  }, [ordenesVisibles]);
+  }, [ordenesVisibles, hoy]);
 
   // Filtered orders
   const ordenesFiltradas = useMemo(() => {

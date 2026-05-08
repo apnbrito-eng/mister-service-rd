@@ -23,6 +23,7 @@ import {
   Personal,
   Cliente,
 } from '../../types';
+import { useApp } from '../../context/AppContext';
 import { crearRegistroAuditoria, formatMonedaPrecisa, parseCliente } from '../../utils';
 import { abrirWhatsApp, mensajeConduceGarantia } from '../../utils/whatsapp';
 import { siguienteNumeroFactura } from '../../services/contadores.service';
@@ -88,7 +89,7 @@ const GARANTIA_PRESETS: Array<{ dias: number; label: string }> = [
  *  - Render N=1 vs N>1 con denormalización post-helper (regla CLAUDE.md línea 89).
  *  - `clienteTipoEnEmision` snapshot defensivo.
  *  - Audit log override modalidad (best-effort).
- *  - `solicitanteUid` unificado a `userProfile?.id`.
+ *  - `solicitanteUid` unificado a `currentUser.uid` (auth.uid) en SPRINT-114.
  *  - Borrador localStorage con TTL 24h.
  *  - Quick-win 11: confirm si admin emite con líneas sin técnico cuando la orden
  *    tiene técnico asignado.
@@ -101,6 +102,7 @@ export default function ProcesarFacturacionModal({
   tecnicos,
   onClose,
 }: ModalProps) {
+  const { currentUser } = useApp();
   const [paso, setPaso] = useState<1 | 2>(1);
   const [items, setItems] = useState<ItemCotizacion[]>([]);
   const [cargandoCotizacion, setCargandoCotizacion] = useState(false);
@@ -318,7 +320,14 @@ export default function ProcesarFacturacionModal({
       const numero = await siguienteNumeroFactura();
       const ahora = Timestamp.now();
       const usuario = userProfile?.nombre || 'Sistema';
-      const usuarioId = userProfile?.id || '';
+      // SPRINT-114: usar auth.uid en vez de userProfile.id para que los
+      // campos descriptivos `emitidaPorId`, `facturadaPorId` y
+      // `solicitanteUid` sean consistentes con la convención auth.uid del
+      // resto del esquema (gotcha CLAUDE.md "userProfile.id NO siempre es
+      // auth.uid"). Estos campos NO son gateados por rule hoy, pero el
+      // cambio es defensivo: si en el futuro se agrega rule de auditoría,
+      // el bug `permission-denied` silencioso se previene.
+      const usuarioId = currentUser?.uid || '';
 
       // Determinar método de pago principal (el del último pago, o el más usado)
       const ultimoPago = pagosPrevios[pagosPrevios.length - 1];
@@ -439,8 +448,9 @@ export default function ProcesarFacturacionModal({
         try {
           await addDoc(collection(db, 'auditoria_admin'), {
             accion: 'emitir_garantia',
-            // Unificado a userProfile?.id (decisión C4b).
-            solicitanteUid: userProfile?.id || null,
+            // SPRINT-114: unificado a currentUser.uid (auth.uid). Antes era
+            // userProfile?.id que podía ser personalDocId — gotcha CLAUDE.md.
+            solicitanteUid: currentUser?.uid || null,
             solicitanteNombre: usuario,
             objetivoTipo: 'factura',
             objetivoId: facturaRef.id,
@@ -607,7 +617,8 @@ export default function ProcesarFacturacionModal({
               modalidadOriginal: modalidadDefaultPorTipo,
               modalidadOverride: it.precioModalidad,
               clienteTipo: clienteTipoEnEmision,
-              solicitanteUid: userProfile?.id || null,
+              // SPRINT-114: auth.uid en vez de userProfile.id (consistencia).
+              solicitanteUid: currentUser?.uid || null,
               solicitanteNombre: userProfile?.nombre || null,
               facturaNumero: numero,
               ordenId: orden.id,
