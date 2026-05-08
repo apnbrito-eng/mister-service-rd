@@ -5,6 +5,54 @@
 
 ---
 
+## 2026-05-08 — `trabaja`: SPRINT-117a auditoría focalizada de IA (read-only autónomo)
+
+### Contexto
+
+Jorge pegó `trabaja` con aclaración explícita: SPRINT-117a califica como autónomo (read-only, scope acotado ~60 min, output único `docs/sprints/AUDITORIA_IA_2026-05-08.md`, NO es el A1/A3 del spec viejo descartado — es la versión reorganizada por Cowork). Coordinator procedió sin pedir confirmación adicional.
+
+### Scope procesado
+
+SPRINT-117a — auditoría focalizada de menús, rutas y módulos. Lectura focalizada (NO exhaustiva) de:
+- `src/App.tsx` (273 líneas, 52 rutas mapeadas).
+- `src/main.tsx` (entry point trivial).
+- `src/components/Sidebar.tsx` (475 líneas, estructura de items + secciones colapsables).
+- `src/components/Layout.tsx` (65 líneas).
+- `src/components/public/PublicLayout.tsx` (header).
+- `src/utils/permisos.ts` (90 líneas) + `PERMISOS_DEFAULT_*` en `src/types/index.ts:1257-1304`.
+- `ls` de `src/pages/` (49 páginas internas + 7 públicas).
+- `ls` de `src/components/` (12 carpetas + 12 components top-level).
+- Headers de cada página (~20 líneas, identificar propósito en una línea).
+
+### Flujo ejecutado
+
+1. **Marcar EN_EJECUCION** en `COLA_AUTONOMA.md`.
+2. **Builder manual**: redacción directa del documento (`docs/sprints/AUDITORIA_IA_2026-05-08.md`, 420 líneas) sin tocar código.
+3. **Tester manual**:
+   - `npm run check:regression` → 7/7 cazadores PASS, 0 hits (idéntico al baseline pre-cambio, esperado).
+   - typecheck/lint NO ejecutados manualmente porque el cambio es 100% docs (.md fuera de `src/`); el pre-commit hook va a correrlos antes del commit.
+4. **regression_guardian manual** (semántico): el diff es puramente docs (creación + edit de estado). Ningún P-001..P-007 aplica — no toca rules, services, context, ni patrones de auth/notificaciones/transacciones.
+5. **Reviewer manual** (self-review): las 6 secciones requeridas por el spec presentes; datos cruzados contra código real (App.tsx para rutas y gates, Sidebar.tsx para items, types/index.ts para defaults por rol). Inconsistencias menores documentadas en cierre del doc para validar con Jorge.
+6. **Commit + push**: `f1a89d0` — `docs(sprint-117a): auditoría focalizada de menús, rutas y módulos`. Pre-commit hook OK (typecheck + cazadores 7/7 + lint staged).
+7. **Marcar COMPLETADO** en `COLA_AUTONOMA.md` y mover al histórico.
+
+### Hallazgos clave (resumen)
+
+- **Volumen sidebar:** 44 ítems para admin, 17 operaria, 13 secretaria, 0 técnico/ayudante.
+- **5 redundancias detectadas:** Calendario × Calendarios; Dashboard / AgendaDia / Ordenes / Calendario; Productos / Precios / Inventario; Citas / Solicitudes / Reprogramaciones (3 inboxes); Cotizaciones / FacturacionPendiente / Facturas (pipeline fragmentado).
+- **5 áreas confusas:** sidebar admin-bloated (44 destinos); etiqueta "Pendiente de piezas" UI vs `Standby`/`enStandby` en código; "Conduces" UI vs `Factura*` en código; coord vs admin con gating ambiguo en "Web y Solicitudes"; ruta duplicada `/admin/usuarios` y `/admin/configuracion/usuarios`.
+- **2 inconsistencias menores que ameritan validar con Jorge antes de SPRINT-117b:** (a) ¿"Web y Solicitudes" debería ser admin-only o admin+coord? El gate del bloque está aliasado (`isAdmin = esAdminOCoord`) y los items siguen usando `isAdmin` — coordinadora SÍ los ve. (b) ¿`/admin/configuracion/usuarios` se quita o se redirige a `/admin/usuarios`?
+
+### Estado del sprint
+
+`COMPLETADO`. Output `docs/sprints/AUDITORIA_IA_2026-05-08.md` queda como insumo para SPRINT-117b (PENDIENTE — propuesta de reorganización con mockup por rol).
+
+### Tiempo
+
+~30 min de coordinator (lectura focalizada + redacción del documento + commit + push + trail).
+
+---
+
 ## 2026-05-08 — `trabaja`: SPRINT-118 entregado en DRY-RUN (Jorge ejecuta `--apply`)
 
 ### Contexto

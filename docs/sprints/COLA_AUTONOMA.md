@@ -272,6 +272,18 @@ Ejercer manualmente en producción con técnico + operaria reales:
 
 ## Sprints completados (histórico)
 
+### SPRINT-117a — Auditoría focalizada de menús, rutas y módulos
+- **Completado:** 2026-05-08 por coordinator autónomo (sprint read-only).
+- **Hash:** `f1a89d0`.
+- **Output:** `docs/sprints/AUDITORIA_IA_2026-05-08.md` (420 líneas, 6 secciones).
+- **Resultado:** 52 rutas inventariadas, sidebar mapeado por rol (44 ítems admin / 17 operaria / 13 secretaria / 0 técnico-ayudante), matriz módulo × rol, top 5 redundancias (Calendario×Calendarios, Dashboard/Agenda/Ordenes/Calendario, Productos/Precios/Inventario, 3 inboxes Citas/Solicitudes/Reprogramaciones, pipeline Cotizaciones/FacturacionPendiente/Facturas), top 5 áreas confusas, apéndice de decisiones técnicas observadas.
+- **Hallazgos extra para 117b:** (a) `/admin/usuarios` y `/admin/configuracion/usuarios` duplicados; (b) sección "Web y Solicitudes" gateada por `isAdmin = esAdminOCoord` cuando los items individuales también usan `isAdmin` — coordinadora SÍ los ve aunque el comment de las rutas en App.tsx parecería sugerir admin-only. Validar con Jorge.
+- **Validación:** cazadores 7/7 PASS 0 hits idéntico al baseline (esperado, sin código tocado). Pre-commit hook OK.
+- **OK humano:** no requerido (sprint read-only autónomo según protocolo).
+- **Próximo paso:** SPRINT-117b queda PENDIENTE para próxima pasada de `trabaja` (consume este output como insumo).
+
+---
+
 ### SPRINT-118 — Re-migración masiva notis legacy + fix email Wilainy
 - **Completado:** 2026-05-08 noche por Jorge (validación humana visual). Cierre disciplina por coordinator: postmortem + cazador P-007 + fix vivo `Dashboard.tsx:216`.
 - **Hashes:** `e6ccb1e` (scripts DRY-RUN entregados), `a15846e` (trail coordinator), `b781f80` (cierre Jorge — 41 notis re-migradas + 3 ya alineadas + email Wilainy fixeado), commit de cierre disciplina (este).
