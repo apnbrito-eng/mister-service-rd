@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 por coordinator (segunda pasada autónoma — SPRINT-113b COMPLETADO: badge "Sugerencia pendiente" + tooltips disabled centralizados en helper puro)
+**Última actualización:** 2026-05-08 por coordinator (segunda pasada autónoma — SPRINT-113b + SPRINT-113c COMPLETADOS: badges + tooltips + timeline visual de últimas 5 acciones)
 
 **Próximo ID disponible:** SPRINT-115
 
@@ -638,12 +638,12 @@ Específico — la sugerencia de chequeo del técnico no se refleja en el steppe
   - Técnico en orden en_diagnostico: "Próximo paso: Cotizar reparación o sugerir solo chequeo."
   - Operaria en orden con sugerencia pendiente: "Aury sugirió cobrar solo chequeo (RD$2,000). Aprobá o rechazá."
   - Etc. — cubrir las 8 fases × 3 roles principales.
-- [ ] **Badge "Sugerencia pendiente"** visible en stepper cuando hay una sugerencia de chequeo no resuelta. Color amarillo, click lleva al modal de aprobación.
-- [ ] **Tooltips en botones deshabilitados** explicando por qué (ej: "Necesitas iniciar chequeo primero", "Esperando aprobación de oficina").
-- [ ] **Indicador visual de "esperando otro rol"** — cuando un rol completó su parte y está bloqueado por otro (ej: técnico envía sugerencia → "Esperando aprobación de oficina" con icono de reloj).
-- [ ] **Resumen visual del flujo** al pie de OrdenDetalle: timeline horizontal con últimas 5 acciones (quién, qué, cuándo).
-- [ ] QA manual con usuarios reales (Jorge + técnico + operaria) recorriendo un flujo end-to-end. Identificar friction points y resolver.
-- [ ] Cazador anti-regresión: ningún botón crítico debe quedar sin tooltip explicativo cuando esté disabled (regla nueva, opcional).
+- [x] **Badge "Sugerencia pendiente"** visible en stepper cuando hay una sugerencia de chequeo no resuelta. Color amarillo. **Implementado en SPRINT-113b (commit `49af624`, 2026-05-08). Decisión: presentacional sin onClick — el banner de 113a ya direcciona la acción a oficina; click-to-modal queda como mejora futura.**
+- [x] **Tooltips en botones deshabilitados** explicando por qué. **Implementado en SPRINT-113b (commit `49af624`, 2026-05-08) con helper puro `src/utils/tooltipsBotones.ts`. Cubiertos: Iniciar chequeo, Cerrar servicio (5 razones), Enviar a conduce.**
+- [x] **Indicador visual de "esperando otro rol"** — **Cubierto por el banner de SPRINT-113a (tono `espera` gris) y reforzado por el badge "Sugerencia pendiente" de SPRINT-113b.**
+- [x] **Resumen visual del flujo** al pie de OrdenDetalle: timeline horizontal con últimas 5 acciones (quién, qué, cuándo). **Implementado en SPRINT-113c (segunda pasada 2026-05-08). Helper `obtenerTimelineAcciones` + componente `TimelineAcciones` montado al pie del bloque "Flujo de la orden". Auto-oculta con <2 acciones. Responsive vertical/horizontal.**
+- [ ] QA manual con usuarios reales (Jorge + técnico + operaria) recorriendo un flujo end-to-end. Identificar friction points y resolver. **(BLOQUEADO — requiere humanos.)**
+- [ ] Cazador anti-regresión: ningún botón crítico debe quedar sin tooltip explicativo cuando esté disabled (regla nueva, opcional). **(NO IMPLEMENTADO — sprint propio futuro si Jorge lo prioriza; el cazador requeriría análisis AST o convención de naming, scope mediano.)**
 
 #### Restricciones / guardarrails
 - NO cambiar la lógica de transición de fase (eso es seguro y testeado).
@@ -709,7 +709,7 @@ Tooltips en botones disabled: hoy el técnico ve "Iniciar chequeo" gris y no sab
 
 ### SPRINT-113c — Timeline horizontal de últimas 5 acciones al pie de OrdenDetalle
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-08 (segunda pasada autónoma — helper `src/utils/timelineAcciones.ts` mezcla `historialFases` + `auditoria` con parser tolerante a shapes legacy. Componente `src/components/ordenes/TimelineAcciones.tsx` responsive (vertical mobile / horizontal scroll md+) montado al pie del bloque "Flujo de la orden" en `OrdenDetalle.tsx`. Auto-oculta con <2 acciones. Iconografía por tipo de acción. Sin escrituras, sin migraciones. 6/6 cazadores PASS.)
 **Prioridad:** media (continuación de 113a/b, mejora de visibilidad histórica)
 **Origen:** SPRINT-113 padre (UX flujo paso a paso). Criterio de aceptación pendiente.
 **Riesgo:** bajo (UI presentacional, lectura del campo `historialFases` o `auditoria` ya existente)

@@ -13,6 +13,43 @@
 - Coordinator solo actualizó la entrada del log (este archivo) para reflejar el push real (`9603da3` + `dd24bb2` + `5bfa0e0`) y cambiar "EN_REVISION_HUMANA / sin push" → "COMPLETADO / pusheado por Jorge".
 - Sin commit propio para 113a — el cambio acompaña al commit de 113b.
 
+### SPRINT-113c — Timeline horizontal de últimas 5 acciones al pie de OrdenDetalle
+
+- **Estado final:** COMPLETADO.
+- **Tipo:** UI puramente presentacional + helper puro de lectura. Sin escrituras a Firestore, sin tocar rules, sin tocar services, sin migración de datos.
+- **Restricciones evaluadas:** rules NO, migración NO, integración pago/OAuth/terceros NO, endpoint público NO. **Procesable autónomo.**
+- **Archivos creados/modificados (3):**
+  - `src/utils/timelineAcciones.ts` (NUEVO) — helper `obtenerTimelineAcciones(orden, max=5)`. Mezcla `historialFases` + `auditoria` en una sola línea de tiempo con parser tolerante a shapes legacy (Date, Firestore Timestamp con `toDate()`, string, number). Auto-devuelve `[]` cuando hay <2 entradas (criterio del sprint para evitar pollution visual).
+  - `src/components/ordenes/TimelineAcciones.tsx` (NUEVO) — componente responsive: vertical compacto en mobile, horizontal con scroll-x en md+. Iconografía por tipo de acción (lucide-react). Tooltip con fecha absoluta + hora relativa (`hace 3h`) usando `date-fns/formatDistanceToNow` con locale `es`. `aria-label="Últimas acciones de la orden"` en el `<section>`.
+  - `src/pages/OrdenDetalle.tsx` (+1 import + 1 sección) — montado al pie del bloque "Flujo de la orden", como sección propia con su propia card.
+- **Decisión clave:** componente lee de `historialFases` Y `auditoria` (gotcha CLAUDE.md sobre shape legacy + nuevo). Items con fecha no parseable se descartan en silencio para no romper en órdenes viejas con datos malformados. Sin migración — la fase 113c expresamente prohíbe normalizar/migrar datos viejos.
+- **archivist PRE-CHANGE (manual):** `OrdenDetalle.tsx` está en lista de archivos críticos. El cambio es **adición de una sección read-only** después del bloque flujo, **no modifica** la lógica existente ni los gates de UI. **Sin conflictos.**
+- **regression_guardian (manual):**
+  - Capa 1 determinística: 6/6 PASS, 0 hits.
+  - Capa 2 semántica: lectura pura, sin escrituras, sin rules, sin mutaciones cross-collection. Patrones P-001/P-002/P-003/P-004/P-005/P-006: ninguno aplica. **PASS.**
+- **Tester:**
+  - `npx tsc --noEmit`: clean.
+  - `npx eslint --max-warnings 0` sobre los 3 archivos tocados: clean.
+- **Reviewer (manual):** APPROVED.
+  - Helper en `.ts` puro (no `.tsx`) — gotcha CLAUDE.md cumplido.
+  - Sin emojis, identificadores en español.
+  - Responsive (vertical mobile / horizontal md+) según criterio del sprint.
+  - Auto-oculta con <2 acciones (criterio del sprint).
+  - Tolerante a shapes legacy (parser `aDate` cubre Date, Timestamp con `toDate()`, string ISO, number ms).
+  - date-fns con locale `es` (ya en bundle).
+  - `aria-label` en `<section>` para accesibilidad.
+  - Sin lógica de gating modificada.
+- **Tiempo total:** ~20 min coordinator (lectura de tipos + creación de helper + componente + montaje + checks).
+
+### SPRINT-113 padre — actualización de criterios
+
+- 4/6 criterios COMPLETADOS por las fases 113a + 113b + 113c.
+- 1 criterio BLOQUEADO (QA manual con usuarios reales — requiere humanos en flujo end-to-end).
+- 1 criterio NO IMPLEMENTADO (cazador anti-regresión de tooltips — sprint propio futuro si Jorge lo prioriza, scope mediano).
+- El sprint padre queda EN_PROGRESO con QA bloqueado por humano. Las 3 fases técnicas están en producción.
+
+---
+
 ### SPRINT-113b — Badges de sugerencia pendiente + tooltips en botones disabled
 
 - **Estado final:** COMPLETADO.

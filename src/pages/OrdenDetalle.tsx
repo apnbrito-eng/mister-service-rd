@@ -25,6 +25,7 @@ import CancelarOrdenModal from '../components/ordenes/CancelarOrdenModal';
 import FaseStepper from '../components/ordenes/FaseStepper';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import BannerSiguientePaso from '../components/ordenes/BannerSiguientePaso';
+import TimelineAcciones from '../components/ordenes/TimelineAcciones';
 import ReagendarModal from '../components/ordenes/ReagendarModal';
 import RegistrarPagoModal from '../components/ordenes/RegistrarPagoModal';
 import EnviarFacturacionButton from '../components/ordenes/EnviarFacturacionButton';
@@ -1457,6 +1458,11 @@ export default function OrdenDetalle() {
               <EliminarOrdenButton orden={orden} variant="button" />
             </div>
           </div>
+
+          {/* Timeline de últimas acciones (SPRINT-113c).
+              Lectura pura de historialFases + auditoria; auto-oculta cuando
+              hay <2 acciones registradas (orden recién creada). */}
+          <TimelineAcciones orden={orden} max={5} />
 
           {/* GPS Tracking */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
