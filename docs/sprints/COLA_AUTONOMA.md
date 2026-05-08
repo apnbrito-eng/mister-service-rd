@@ -3,9 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 por coordinator (segunda pasada autónoma — SPRINT-113b + SPRINT-113c + SPRINT-114 COMPLETADOS: badges + tooltips + timeline + consistencia auth.uid en 4 campos descriptivos)
+**Última actualización:** 2026-05-08 por coordinator (tercera pasada autónoma — SPRINT-115 fase diagnóstico cerrada con script read-only entregado; fase write sigue PENDIENTE esperando ejecución de Jorge + OK en BLOQUEOS).
 
-**Próximo ID disponible:** SPRINT-115
+**Próximo ID disponible:** SPRINT-116
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### SPRINT-100 — Validar que Yohana ve notificaciones después de b93625d
 
-**Estado:** PENDIENTE (requiere validación visual de Jorge/Yohana — no procesable por coordinator)
+**Estado:** PENDIENTE (QA visual ejecutado 2026-05-08 con Yohana → resultado: "no hay nada en la campanita". Diagnóstico de causa raíz delegado a SPRINT-115. Este sprint queda PENDIENTE hasta que SPRINT-115 confirme y reparare; Yohana hará re-QA post-fix).
 **Prioridad:** alta
 **Origen:** Jorge dijo "no veo las notificaciones" como Yohana operaria, 2026-05-06.
 **Riesgo:** bajo
@@ -790,3 +790,75 @@ La inconsistencia no rompe producción hoy (no hay rule que valide estos campos)
 - Cuando lo ejecutés, después del fix, abrir `scripts/invariantes/check-userprofile-id-misuse.ts` y verificar si los 4 archivos modificados tenían comentarios `@safe-userprofile-id:` que ahora son obsoletos. Si quedan obsoletos, eliminarlos para evitar mensajes confusos.
 - Bajo prioridad — solo procesar si la cola se queda sin sprints urgentes.
 - Si después de migrar los 4, el cazador P-001 vuelve a 0 hits, el sistema queda totalmente alineado con la convención `auth.uid` para todos los campos de actor humano.
+
+---
+
+### SPRINT-115 — Diagnóstico + re-migración de notificaciones de Yohana
+
+**Estado:** PENDIENTE (fase write) — fase DIAGNÓSTICO COMPLETADO 2026-05-08 (tercera pasada autónoma del coordinator: script `scripts/diagnostico-notificaciones-yohana.ts` entregado, read-only con Admin SDK, listo para que Jorge lo ejecute con `npx tsx scripts/diagnostico-notificaciones-yohana.ts <email-de-yohana>`). Fase WRITE (re-migración) queda PENDIENTE esperando: (1) que Jorge corra el script y entregue output, (2) según el output, OK explícito en `BLOQUEOS.md` para autorizar la re-migración acotada a Yohana.
+
+**Prioridad:** alta condicional (sólo si la condición se dispara)
+**Origen:** SPRINT-100 falló en QA visual con Yohana 2026-05-08 (a confirmar). Hipótesis Cowork: las notificaciones legacy de Yohana tienen `destinatarioId == auth.uid` pero `userId == personalDocId` post-migración fallida del 2026-05-06.
+**Riesgo:** alto — toca datos en producción (re-migración) y posiblemente rules. Migración limitada a docs específicos de un usuario, NO masiva.
+**Touch-list previsto:**
+- `scripts/diagnostico-notificaciones-yohana.ts` (NUEVO — script de diagnóstico read-only con Admin SDK)
+- `scripts/re-migrar-notificaciones-yohana.ts` (NUEVO opcional — sólo si diagnóstico confirma docs problemáticos)
+- Posiblemente `firestore.rules` (si la rule de update sobre `notificaciones` tiene un gap)
+
+#### Hipótesis principal de Cowork
+
+El service `notificaciones.service.ts` hace lectura DUAL (`userId == auth.uid` OR `destinatarioId == auth.uid`) — eso explica que el commit `b93625d` "arregló" el problema de visibilidad. Pero la rule `firestore.rules:528-534` valida UPDATE/DELETE únicamente contra `userId == auth.uid`. Resultado:
+
+- Caso A — doc legacy con `destinatarioId == personalDocId`, sin `userId`: Yohana NO la ve (ningún query la matchea).
+- Caso B — doc legacy con `destinatarioId == auth.uid`, sin `userId`: Yohana SÍ la ve (query legacy la trae) PERO al marcar leída → permission-denied silencioso.
+- Caso C — doc post-migración con `userId == auth.uid`: funciona perfecto.
+
+Si Yohana reporta "ve pero no puede marcar", es Caso B. Si reporta "no ve nada", es Caso A.
+
+#### Objetivo
+
+1. Generar un dump claro de las notificaciones de Yohana mostrando shape real de cada doc (qué campos tiene, qué valores).
+2. Clasificar cada doc según los Casos A/B/C.
+3. Si Caso B existe → script de re-migración idempotente que setea `userId = auth.uid` en cada doc legacy de Yohana (NO masivo, solo sus docs).
+4. Si Caso A existe → mismo script que setea `userId = auth.uid` cuando `destinatarioId == personalDocId` mapeable.
+5. Confirmar con Yohana que post-migración ve todo y puede marcar.
+
+#### Inputs requeridos del coordinator antes de ejecutar
+
+- `auth.uid` de Yohana (Jorge tiene que dárselo o el script puede buscar por email — preferir email para evitar acoplamiento a uid hardcodeado).
+- email de Yohana (Jorge puede confirmarlo en sesión Cowork o el coordinator lo lee de `personal where rol == 'operaria'`).
+- Confirmación explícita de Jorge en `BLOQUEOS.md`: "OK Jorge — re-migración de notificaciones de Yohana autorizada, scope acotado a docs cuyo destinatarioId/personalUid mapean a su auth.uid". El script es < 50 docs por usuario, pero es migración de datos → requiere OK por sub-regla CLAUDE.md.
+
+#### Criterios de aceptación
+
+- [ ] Script `scripts/diagnostico-notificaciones-yohana.ts` corre con dry-run forzado (NO escribe). Reporta:
+  - Email + auth.uid + personalDocId de Yohana.
+  - Cantidad de docs en `notificaciones` matcheando `userId == auth.uid`, `destinatarioId == auth.uid`, `userId == personalDocId`, `destinatarioId == personalDocId`.
+  - Para cada doc problemático (Caso A o B): id, campos presentes, fecha, leida sí/no.
+- [ ] Si diagnóstico reporta 0 docs problemáticos → escribir resultado en EJECUCION_AUTONOMA.md, marcar SPRINT-100 + SPRINT-115 ambos COMPLETADOS, y proponer otra hipótesis (cache, App Check, etc.).
+- [ ] Si reporta docs problemáticos → escribir `scripts/re-migrar-notificaciones-yohana.ts` con dry-run + ejecución idempotente:
+  - Sólo toca docs que matchean Caso A/B con destinatarioId/personalUid del usuario autorizado.
+  - Sólo escribe campo `userId` faltante con valor `auth.uid` correcto.
+  - NUNCA borra ni modifica otros campos.
+  - Genera log con cada doc tocado (antes/después).
+- [ ] Coordinator deja sprint en BLOQUEADO esperando OK Jorge antes de la ejecución real.
+- [ ] Post-ejecución: Jorge le pide a Yohana QA otra vez. Si funciona → COMPLETADO. Si no → diagnóstico extra (App Check? cache? rule gap?).
+- [ ] Si la causa raíz resulta ser un gap en la rule de update (ej: la rule no permite update a operaria sobre notificación con `userId == auth.uid` por algún branch raro), agregar P-XXX a `docs/PATRONES_REGRESION.md` + cazador.
+- [ ] `npm run check:regression` sigue en 0 hits.
+
+#### Restricciones / guardarrails
+
+- **Migración de datos requiere OK Jorge en BLOQUEOS.md** ANTES de la ejecución real. Diagnóstico (read-only) no requiere OK.
+- archivist PRE-CHANGE OBLIGATORIO — toca services y posiblemente rules; vector P-001/P-002 vivo.
+- regression_guardian OBLIGATORIO antes del commit de cualquier cambio a rules o services.
+- Si toca `firestore.rules` → `npm run deploy:rules` antes de cerrar (sub-regla CLAUDE.md, P-005).
+- NUNCA hacer migración masiva (todos los usuarios) en este sprint. Sólo Yohana. Si después aparece que otros usuarios tienen el mismo problema, abrir SPRINT-116 distinto.
+
+#### Notas para el coordinator
+
+- El gotcha en CLAUDE.md "bug pre-existente en notificaciones" describe el mismo vector pero en sentido contrario (rule gateaba `userId` mientras código escribía `destinatarioId`). Ese gotcha está fechado pre `b93625d`. Después de `b93625d` el código escribe `userId` y la rule se mantiene en `userId`. Pero los docs legacy (escritos antes de `b93625d`) pueden estar en cualquier shape. Este sprint los limpia para Yohana.
+- Si el script de diagnóstico encuentra que el problema afecta a >5 usuarios distintos (no solo Yohana), escalar a Jorge antes de procesar — probablemente requiere migración masiva con OK explícito.
+- Después de cerrar SPRINT-115, considerar:
+  - Eliminar la query legacy `where('destinatarioId', '==', userId)` del service una vez TODOS los docs estén migrados a `userId`. Eso es un sprint follow-up.
+  - Endurecer rule de update para validar también `destinatarioId == auth.uid` como fallback temporal hasta que la migración masiva (futura) limpie todo.
+- Postmortem obligatorio si confirma Caso B (vector recurrente del bug histórico). Sub-regla CLAUDE.md.

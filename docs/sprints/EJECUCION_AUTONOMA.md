@@ -5,6 +5,65 @@
 
 ---
 
+## 2026-05-08 — `trabaja` autónomo (tercera pasada del día — SPRINT-115 fase diagnóstico)
+
+### Estado de la cola al iniciar
+
+- SPRINT-100 PENDIENTE (humano, bloqueado por SPRINT-115).
+- SPRINT-112 PENDIENTE (scope grande con QA por rol — no procesable autónomo).
+- SPRINT-113 padre EN_PROGRESO (4/6 criterios cerrados, faltan QA end-to-end humano y cazador de tooltips opcional).
+- SPRINT-115 PENDIENTE (fase diagnóstico read-only procesable autónoma; fase write requiere OK Jorge en BLOQUEOS).
+- BLOQUEOS.md vacío.
+
+### Decisiones de scope
+
+- **Cazador de tooltips de SPRINT-113 padre:** evaluado costo/beneficio. Scope mediano (requeriría análisis AST o convención de naming). Sin bug de producción que dispare la sub-regla obligatoria de cazadores. **Pasa.**
+- **SPRINT-100 / SPRINT-112 / SPRINT-113 padre:** no procesables autónomos (humanos en el loop).
+- **SPRINT-115 fase diagnóstico:** procesable. Solo agrega script read-only con Admin SDK; no toca rules ni código de la app. La ejecución del script y la fase write quedan para Jorge.
+
+### SPRINT-115 fase diagnóstico — Script de diagnóstico de notificaciones de Yohana
+
+- **Estado final:** COMPLETADO (fase diagnóstico). Fase write sigue PENDIENTE esperando ejecución de Jorge + OK explícito.
+- **Tipo:** utilitario/diagnóstico read-only. Sin escrituras a Firestore. Sin cambios a código de la app.
+- **Restricciones evaluadas:** rules NO, migración masiva NO (read-only), integración terceros NO, endpoint público NO. **Procesable autónomo.**
+- **Archivo nuevo (1):**
+  - `scripts/diagnostico-notificaciones-yohana.ts` — 250 líneas. Toma email como argumento CLI, busca usuario en `personal/` por email, verifica `usuarios/{uid}`, hace 4 queries paralelas a `notificaciones` (matriz `userId/destinatarioId × authUid/personalDocId`), clasifica cada doc con función pura `clasificar()` en Caso OK/A/B/OTRO, imprime resumen + ejemplos (max 20) + diagnóstico final con interpretación humana de cada caso.
+- **Patrón de implementación:** calcado del script gemelo `scripts/diagnostico-tecnicoid-auth-uid.ts` (commit `5bfa0e0` de SPRINT hotfix Aury). Mismo bootstrap del Admin SDK, misma estructura de output con `─── Sección ───`, mismos exit codes.
+- **archivist PRE-CHANGE:** archivo nuevo, sin diff con commits previos. Sin riesgo de regresión: solo agrega utilitario, no modifica nada existente. Sin deuda histórica relevante. **Sin conflictos.**
+- **Tester:**
+  - `npx tsc --noEmit` → clean.
+  - `npm run check:regression` → 6/6 cazadores PASS, 0 hits.
+  - `npx eslint scripts/diagnostico-notificaciones-yohana.ts --max-warnings 0` → clean.
+  - **GO.**
+- **regression_guardian (manual, foco en notificaciones):**
+  - P-001 (`userProfile.id` vs `auth.uid`): el script no escribe a Firestore. La distinción `personalDocId` vs `authUid` es justamente el vector que el script diagnostica. No introduce el bug.
+  - P-002/P-003/P-004/P-005/P-006: no aplican (no toca rules, no escribe, no es alta de empleado, no es dropdown).
+  - Defense-in-depth: el script es read-only por construcción (solo `.get()`, ningún `.set/update/delete`). Type safety con namespace `FirebaseFirestore.QuerySnapshot` para Admin SDK.
+  - **PASS.**
+- **Reviewer (manual, foco en script utilitario):**
+  - Estructura: calca el patrón del script gemelo. Consistente.
+  - Output utilizable sin contexto extra (resumen + por-caso + diagnóstico final con interpretación).
+  - Sin emojis (regla CLAUDE.md). Usa `[OK]/[INFO]/[WARN]/[ERROR]/[BUG-A confirmado]`.
+  - Spanish identifiers (`clasificar`, `porCaso`, `personalDocId`, `authUid`).
+  - Args: requiere `<email>` por línea de comando, no hardcodeado. Bueno.
+  - PII: imprime email, nombres, IDs, títulos truncados. Output a stdout local de Jorge, aceptable.
+  - Falla limpia: error si falta `service-account.json`, si falta email arg, si no encuentra personal, si personal no tiene `uid`. Todos exit 1 con mensaje claro.
+  - **APPROVED.**
+- **Comportamiento esperado al ejecutar:** Jorge corre `npx tsx scripts/diagnostico-notificaciones-yohana.ts <email-yohana>` con `service-account.json` en raíz del repo. El output va a confirmar uno de tres escenarios:
+  - **Caso A confirmado:** docs legacy con `userId/destinatarioId == personalDocId`. Yohana NO los ve. Fix: re-migración write → desbloquear con OK en `BLOQUEOS.md`.
+  - **Caso B confirmado:** docs con `destinatarioId == auth.uid` pero `userId` distinto. Yohana SÍ los ve pero la rule rechaza marcado. Mismo fix que Caso A.
+  - **0 docs problemáticos:** Yohana literalmente no tiene notifs, o el bug es otro vector (cache, App Check). Buscar otro hilo.
+- **Sub-regla "cada bug → cazador":** no aplica todavía. El bug aún no está confirmado en producción (esperamos resultado del diagnóstico). Si el script confirma Caso A o B, el sprint follow-up de re-migración write deberá agregar P-XXX en `docs/PATRONES_REGRESION.md` + cazador determinístico de "doc en notificaciones con `destinatarioId` que no matchea `userId`".
+
+### Resumen de la pasada
+
+- 1 sprint completado en fase diagnóstico (~10 min de coordinator).
+- 0 sprints bloqueados nuevos en `BLOQUEOS.md`.
+- 1 sprint con fase write PENDIENTE en cola (SPRINT-115 fase write).
+- Cola autónoma efectivamente agotada para próxima pasada — todo lo restante requiere humano (Jorge corriendo script o validando UI con Yohana).
+
+---
+
 ## 2026-05-08 — `trabaja` autónomo (segunda pasada del día — cierre 113a + SPRINT-113b)
 
 ### Cierre formal de SPRINT-113a en COLA_AUTONOMA.md
