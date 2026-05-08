@@ -10,7 +10,7 @@
 ### SPRINT-111 — Auditar otros campos de ID con vector P-001/P-006 (fase 111a)
 
 - **Estado final:** COMPLETADO (fase 111a — auditoría documental). El sprint original tenía scope grande con migración potencial de datos; el coordinator lo dividió en fases y procesó solo la fase documental autónomamente.
-- **Hash:** pendiente al cierre del sprint (commit incluye el documento + actualización de cola).
+- **Hash:** `ce9d5c5` (push a `origin/main` 2026-05-08).
 - **Tipo:** auditoría documental + análisis estático del código + lectura de rules. Sin tocar código de aplicación, sin tocar rules, sin migración de datos.
 - **Restricciones evaluadas:** rules NO, migración masiva NO, integración pago/OAuth/terceros NO, endpoint `api/` público NO. Procesable autónomo en fase 111a.
 - **Archivos creados/modificados (3):**
