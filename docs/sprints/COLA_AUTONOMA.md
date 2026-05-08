@@ -984,48 +984,7 @@ Si fase A reporta mismatches reales:
 
 ### SPRINT-117a — Auditoría focalizada de menús, rutas y módulos
 
-**Estado:** PENDIENTE — procesable autónomo en próxima pasada de `trabaja`.
-**Prioridad:** alta (precondición de 117b y 117c)
-**Riesgo:** bajo (read-only, no toca código)
-**Touch-list previsto:** ninguno de código. Crea 1 archivo: `docs/sprints/AUDITORIA_IA_2026-05-08.md`.
-
-#### Objetivo
-
-Mapear el estado actual de la navegación: qué módulos existen, quién los ve, qué hacen, dónde se solapan. Sin proponer cambios — solo documentar la realidad.
-
-#### Tareas (lectura focalizada, NO exhaustiva del repo entero)
-
-El coordinator delega al builder en una sola pasada. Para no desbordar la ventana de contexto, leer SOLO estos archivos completos:
-
-1. **Routing y entrada:** `src/App.tsx`, `src/main.tsx`.
-2. **Sidebar y layouts:** `src/components/Sidebar.tsx`, `src/components/Layout.tsx`, `src/components/PublicLayout.tsx` si existe.
-3. **Permisos:** `src/utils/permisos.ts`.
-4. **Index de páginas (NO contenido completo):** listar archivos en `src/pages/` con `ls`. Para cada página leer SOLO los primeros ~30 líneas + el render principal. Identificar ruta asociada, rol que la usa, propósito en una línea.
-5. **Index de carpetas de componentes (NO contenido completo):** listar carpetas de `src/components/` y para cada una listar los componentes que exporta sin entrar al detalle.
-
-#### Output esperado
-
-`docs/sprints/AUDITORIA_IA_2026-05-08.md` con 6 secciones:
-
-1. **Inventario de rutas** — tabla con `ruta | layout | componente | rol gate | propósito 1 línea`.
-2. **Items del Sidebar por rol** — para admin, coord, operaria, secretaria, técnico y ayudante listar exactamente qué ítems del menú ve cada rol y a qué ruta lleva.
-3. **Tabla módulo × rol** — matriz con módulos en filas, roles en columnas, valores `✓ / ✗ / condicional`.
-4. **Top 5 redundancias detectadas** — pares de módulos que muestran datos similares (ej: `Ordenes.tsx` vs `Tablero.tsx` vs `Citas.tsx`) con ejemplo concreto del solapamiento.
-5. **Top 5 áreas potencialmente confusas** — basado en cantidad de items en sidebar por rol, profundidad de navegación, nombres ambiguos (ej: "Standby" interno vs "Pendiente de piezas" UI).
-6. **Apéndice — decisiones técnicas observadas** — ej: por qué Standby es módulo aparte y no fase de orden, por qué Conduces y Facturas están separados.
-
-#### Criterios de aceptación
-
-- [ ] `docs/sprints/AUDITORIA_IA_2026-05-08.md` creado con las 6 secciones.
-- [ ] Sin tocar código de la app, rules, ni servicios.
-- [ ] Cazadores 7/7 PASS, 0 hits.
-- [ ] Commit + push con mensaje descriptivo en español.
-
-#### Restricciones
-
-- archivist en modo PRE-CHANGE recomendado pero NO obligatorio (sprint read-only).
-- Una sola pasada autónoma, idealmente <60 min de coordinator. Si desborda, dividir en 117a-i + 117a-ii.
-- NO entrar al detalle funcional de cada página — eso es trabajo de futuros sprints. Acá solo IA.
+**Estado:** COMPLETADO 2026-05-08 — coordinator autónomo. Output `docs/sprints/AUDITORIA_IA_2026-05-08.md` creado (420 líneas, 6 secciones). Cazadores 7/7 PASS, 0 hits. Trail completo en histórico abajo.
 
 ---
 
