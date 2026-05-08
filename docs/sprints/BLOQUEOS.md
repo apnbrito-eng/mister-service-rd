@@ -10,17 +10,85 @@
 
 ---
 
-## SPRINT-115 fase write — PAUSADO (no ejecutar `--apply`)
+## SPRINT-115 fase write — SUPERADO por SPRINT-118 (re-migración masiva acotada a 5 empleados)
 
-**PAUSADO:** jorge 2026-05-08 (decisión cualitativa: el fix de las 3 notis sueltas de Yohana se absorbe dentro de la auditoría general de SPRINT-117 fase A2, que va a determinar si hay que migrar más empleados además de Yohana).
+Conservado en histórico. El alcance original (3 notis de Yohana) queda absorbido por el OK más amplio abajo.
 
-**Estado del script:** `scripts/re-migrar-notificaciones-yohana.ts` está commiteado (`6b4aade`), DRY-RUN ejecutado y validado por Jorge el 2026-05-08 (output: 3 docs actualizables, 0 ya alineados, scope hardcodeado verificado contra OK previo). Falta solo `--apply`.
+---
 
-**Qué hacer:** NO ejecutar `--apply` autónomo. Esperar resultado de SPRINT-117 fase A2. Si la auditoría confirma que el patrón se replica en muchos empleados, generalizar el script y migrar en lote. Si solo afecta a Yohana, ejecutar el `--apply` puntual. Cualquier camino requiere re-confirmación de Jorge.
+## SPRINT-118 — Re-migración masiva notis legacy + fix email Wilainy en Auth
 
-**Original OK (pre-pausa, conservar para histórico):**
-- jorge 2026-05-08 (vía conversación Cowork tras diagnóstico read-only ejecutado el mismo día)
-- Scope autorizado: 3 docs Caso A confirmados (`F9BV32k4JEoEOk97K4xc`, `TVwtOtmNlzW334IUIUdF`, `VWjdYBRmKgU8rGPlbJAv`) → setear `userId = HGkVoYpGKzL4JJI7FnTpHjdsM972`. NO tocar otros campos.
+**OK:** jorge 2026-05-08 (vía conversación Cowork tras auditoría con `scripts/auditoria-notis-legacy-todos.ts` + `scripts/auditoria-emails-personal-vs-usuarios.ts`).
+
+### Fase 1 — Re-migración de notis legacy (5 empleados, ~44 docs)
+
+**Scope autorizado** (acotado por uid, NO masivo a toda la colección):
+
+| Empleado | uid | personalDocId | Notis Caso A |
+|---|---|---|---|
+| Yohana Operaria | `HGkVoYpGKzL4JJI7FnTpHjdsM972` | `zFhokrDoPH9lD63ZxKAY` | 3 (de diagnóstico previo) |
+| Wilainy Operaria | `KT9LaszokWNmLCEIe8YOvNKc9rF3` | `j944265Su9Hyw29YQTj8` | 14 |
+| Jorge (admin) | `dN2wxlTrLUMAff1gE2K4Q8IXi2m2` | `63ZMIT2LouKFLpBCQLUk` | 9 |
+| misterservicerd (admin) | `kAKPMRLe8aaAJxCrvyc8YeMoxRG3` | `GqJfIoRgP4GJTAActUKy` | 9 |
+| Maria Teresa (coord) | `HgakSUkclXSyxmBeLm3GkayFOK63` | `NXFORv7bqeksSg980icg` | 9 |
+
+**IDs específicos de docs Caso A** (output exacto del script `auditoria-notis-legacy-todos.ts` ejecutado el 2026-05-08):
+
+- **Yohana** (3): `F9BV32k4JEoEOk97K4xc`, `TVwtOtmNlzW334IUIUdF`, `VWjdYBRmKgU8rGPlbJAv` (de diagnóstico anterior — el script general los cuenta como ok porque encuentra match con personalDocId, pero Yohana NO los ve en su campanita).
+- **Wilainy** (14): `2tPkAmQymtZgMLRRQfTr`, `451UPKpR2vAmsCpsoFNv`, `8WdJHYbEYdZ4wUc4eQnE`, `BgAsQHZMPEfa3LL8ffyV`, `DpQh90B38dmVjSEJVxFv`, `ERtDuPDxeUXph8b8cSNv`, `FMnk6RpFQyxiYRiKZQln`, `JHa0TPJpGVH3OpzPPlV1`, `PFRnT9GuahrydO8g8Hhz`, `Q2Z0pBdjwo6vyK04koPZ`, `SV5DhnuxPwEOCwBwNt2t`, `vKdH6Q9dLRRYQZFUolNY`, `vfbmwla7698GcANVUShS`, `zWWMGk1UFV75sAjaOoVu`.
+- **Jorge** (9): `5CZ6039fqvtRyGpiNseM`, `cWDqvmuXpFJptULZ3eOD`, `fjW4YYIq74MtaneORrCD`, `gzSt5SBjTJBRmDmB1rUq`, `lFOU7YDdREy6Rauyyp0q`, `xBUxbB10ocEH2kjLADIl`, `zisaxTDaX1vGmj6Cq9mu`, `3hV65FcsI4HJ3Q0nc4Dv`, `o5yco816RhNGwquDv8P1`.
+- **misterservicerd** (9): `4WEMXrqqrAZyoxd7CfQs`, `RXpcWGzERPpfnhc8IwcR`, `WMansj9afOAJcFJbTvuH`, `eFKbcOHszof28K3NVL9s`, `k8dH5RIfMKeBx3QDHagB`, `uRyZuUceQPnSgPBqNgtV`, `xpZLRggHAA8goPfJ1Vhf`, `SZe4ymcOeFWDgH9WFZDj`, `T477a42VXV0oguzrZcTh`.
+- **Maria Teresa** (9): `DUZFo0j9pXuKL6oRYPZn`, `DVnPHlYFH838E0xbOVWt`, `LZKL5vbYCoUY4eueQOmW`, `Oyz2NElDajHl2jDOlnD9`, `jU1r9gmKH1oDBQPSMeXG`, `pEwGvpvP0Fo8BUhf2Npc`, `zv8qZ3oq97AXsaPKOCai`, `XqrPkWoGtK65EGrf6yx0`, `rrtigrKrsHyJgNKrprTX`.
+
+**Acción autorizada al builder:**
+
+1. Generalizar `scripts/re-migrar-notificaciones-yohana.ts` → nuevo script `scripts/re-migrar-notificaciones-masivo.ts`.
+2. Scope hardcodeado a los 5 uids listados arriba (NO masivo a toda la colección).
+3. Para cada doc de la lista de IDs autorizados:
+   - `update` que setea `userId = <uid correspondiente>`.
+   - Idempotencia: si `userId` ya es ese valor, skip.
+4. NO tocar `destinatarioId` (la lectura dual del service ya lo soporta).
+5. NO tocar otros campos (leida, leidaEn, tipo, titulo, descripcion).
+6. Logear cada doc tocado con shape antes/después en stdout.
+7. DRY-RUN por default; `--apply` explícito requerido.
+8. Después de ejecución real, escribir entrada en `auditoria_admin` con `accion: 'remigracion_notificaciones_masivo'`, `actorUid`, `docsAfectados: [44 ids]`, `empleadosAfectados: [5 uids]`.
+
+### Fase 2 — Fix email Wilainy en Firebase Auth
+
+**Email correcto confirmado por Jorge:** `Nwilainy@gmail.com` (con N mayúscula).
+
+**Estado actual:**
+- `personal/{j944265Su9Hyw29YQTj8}.email` = `Nwilainy@gmail.com` ✓ (ya correcto, no tocar).
+- `usuarios/{KT9LaszokWNmLCEIe8YOvNKc9rF3}.email` = `apnbrito0318@gmail.com` (incorrecto).
+- Firebase Auth `users/{KT9LaszokWNmLCEIe8YOvNKc9rF3}.email` = `apnbrito0318@gmail.com` (incorrecto).
+
+**Acción autorizada al builder:**
+
+1. Crear `scripts/fix-email-wilainy.ts` con Admin SDK.
+2. Operaciones:
+   - `admin.auth().updateUser(uid, { email: 'Nwilainy@gmail.com' })`.
+   - `usuarios/{uid}.email` setear a `Nwilainy@gmail.com`.
+3. NO tocar contraseña, NO crear nuevo user, NO eliminar el viejo.
+4. Audit log en `auditoria_admin`.
+5. **Wilainy debe tener acceso a la casilla `Nwilainy@gmail.com` para resets de contraseña futuros**. Jorge confirmó este punto.
+6. DRY-RUN por default; `--apply` explícito requerido.
+
+### Restricciones globales
+
+- Cada fase tiene script propio. Builder los entrega ambos en el mismo sprint.
+- Coordinator NO ejecuta `--apply` autónomo. Jorge corre dry-run primero, después decide si aplicar.
+- Después de ejecución real, validación humana:
+  - Yohana, Wilainy, Maria Teresa hacen hard refresh y reportan que ven sus notificaciones nuevas.
+  - Jorge intenta cambiar contraseña de Wilainy desde GestionUsuarios y confirma que ya no tira "no existe usuario".
+- Postmortem obligatorio (sub-regla CLAUDE.md "cada bug → cazador" + "5+ empleados afectados"). Builder genera `docs/postmortems/2026-05-08-notis-legacy-multiples-empleados.md`.
+- Considerar agregar P-XXX nuevo al catálogo: "notificaciones legacy con userId/destinatarioId apuntando a personalDocId en lugar de auth.uid". Cazador difícil porque es bug de datos, no de código — pero el cazador puede ser un script de health-check periódico (ej: `npm run audit:notis-legacy` que corre la auditoría general y avisa si aparecen nuevos casos).
+
+### NO autorizado (requiere OK separado)
+
+- Migrar notificaciones de OTROS usuarios fuera de los 5 listados.
+- Tocar `firestore.rules` (si encuentra rule gap durante el fix, escalar a Jorge).
+- Borrar notis o cambiar campos no listados.
+- Hacer cambio de email para usuarios distintos a Wilainy.
 
 ---
 
