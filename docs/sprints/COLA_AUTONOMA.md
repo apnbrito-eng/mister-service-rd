@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 por coordinator (`procesa bloqueos` — SPRINT-118 desbloqueado por jorge y movido a la cola como PENDIENTE; queda listo para que Jorge dispare `trabaja` y la próxima pasada del coordinator delegue al builder. Restricción del sprint: builder entrega scripts en DRY-RUN; Jorge ejecuta `--apply` manualmente — restricción explícita del OK).
+**Última actualización:** 2026-05-08 por coordinator (`trabaja` — SPRINT-118 procesado: scripts entregados en DRY-RUN, tester + regression_guardian + reviewer PASS, commits hechos. Estado movido a EN_REVISION_HUMANA: Jorge ejecuta `--apply` manualmente y luego escribe postmortem para cerrar a COMPLETADO).
 
 **Próximo ID disponible:** SPRINT-119
 
@@ -1181,8 +1181,9 @@ Cada sub-sprint 117cN tiene su propia entrada cuando se desbloquea, con touch-li
 
 ### SPRINT-118 — Re-migración masiva notis legacy (5 empleados, ~44 docs) + fix email Wilainy en Auth
 
-**Estado:** PENDIENTE
+**Estado:** EN_REVISION_HUMANA (scripts entregados en DRY-RUN; Jorge ejecuta `--apply` manualmente)
 **desbloqueadoPor:** jorge 2026-05-08 (movido desde `BLOQUEOS.md` por coordinator vía `procesa bloqueos`).
+**Builder/Tester/Reviewer:** completados por coordinator 2026-05-08. Ver `docs/sprints/EJECUCION_AUTONOMA.md` para trail.
 **Prioridad:** alta
 **Origen:** Auditoría 2026-05-08 con `scripts/auditoria-notis-legacy-todos.ts` + `scripts/auditoria-emails-personal-vs-usuarios.ts` (entregados en SPRINT-117 fase A2 read-only `ac54662` + `6defe8f`). Output identificó 44 notificaciones Caso A en 5 empleados + email mismatch de Wilainy en Firebase Auth.
 **Riesgo:** medio — toca datos productivos en `notificaciones` (~44 docs scope acotado por uid, NO masivo) + Firebase Auth de Wilainy. Mitigación: scripts con DRY-RUN por default, `--apply` manual por Jorge.

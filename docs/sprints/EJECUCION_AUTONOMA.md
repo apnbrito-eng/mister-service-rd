@@ -5,6 +5,100 @@
 
 ---
 
+## 2026-05-08 — `trabaja`: SPRINT-118 entregado en DRY-RUN (Jorge ejecuta `--apply`)
+
+### Contexto
+
+Jorge disparó `trabaja` después de destrabar SPRINT-118 vía `procesa bloqueos`. Restricción explícita del OK: **coordinator NO ejecuta `--apply` autónomo**. La ejecución contra producción es responsabilidad humana de Jorge.
+
+### Scope procesado
+
+SPRINT-118 — Re-migración masiva notis legacy (5 empleados, ~44 docs) + fix email Wilainy en Auth.
+
+Scripts entregados:
+
+- `scripts/re-migrar-notificaciones-masivo.ts` (435 líneas) — generaliza `re-migrar-notificaciones-yohana.ts` con scope hardcodeado a los 5 empleados + 44 doc IDs autorizados explícitamente. DRY-RUN por default, `--apply` requerido para escribir, idempotente, doble validación contra realidad (lee `personal/{personalDocId}` y verifica `uid == authUidEsperado` antes de tocar), audit log solo post-`--apply`.
+- `scripts/fix-email-wilainy.ts` (311 líneas) — Admin SDK `auth.updateUser(uid, { email: 'Nwilainy@gmail.com' })` + `usuarios/{uid}.email`. NO toca personal.email (ya correcto), NO toca contraseña, NO crea ni elimina users. Validación pre-write contra `emailViejoEsperado`. DRY-RUN por default, `--apply` requerido, idempotente, audit log post-`--apply`.
+
+### Flujo ejecutado
+
+1. **archivist PRE-CHANGE manual**: `git log --oneline --all` de `re-migrar-notificaciones-yohana.ts` (commit `6b4aade`) y `diagnostico-notificaciones-yohana.ts` (commit `f6d1d76`). Patrones a respetar: bootstrap Admin SDK con `service-account.json`, audit log, idempotencia, doble validación contra realidad. Adoptado tal cual.
+2. **Builder manual**: ediciones directas, NO se delegó a `Agent("builder", ...)` por ser sesión sin Agent tool. Patrón: copia de estructura de `re-migrar-notificaciones-yohana.ts`, ampliada a 5 empleados con array `SCOPE` tipado y función `procesarEmpleado` que aborta solo el empleado afectado si la validación falla, no el script entero. Sin emojis. `--apply` lock requerido, no default.
+3. **Tester manual**:
+   - `npx tsc --noEmit` → 0 errores.
+   - `npm run check:regression` → 6/6 cazadores PASS, 0 hits.
+   - `npm run lint` → 5554 problems baseline pre-existente (igual al baseline conocido), 0 hits nuevos en los archivos creados.
+4. **regression_guardian manual** (semántico, P-001..P-006 no aplican porque son scripts server-side Admin SDK fuera del bundle de la app):
+   - `--apply` requiere flag explícito (no es default): OK en ambos scripts (`process.argv.includes('--apply')`).
+   - `try/catch` no traga errores: `main().catch(err => { console.error; process.exit(1) })` en ambos.
+   - Idempotencia: re-correr no duplica audit logs porque sin updates reales no se escribe entrada de auditoría (`if (apply && actualizados > 0)` en script masivo; `if (huboCambio)` en script Wilainy).
+   - Defensa en profundidad: validación pre-write contra realidad en ambos scripts antes de cualquier `update`.
+5. **Reviewer manual** (self-review, foco blast radius):
+   - Script masivo: 44 docs + 1 audit log en colección operativa, completamente reversible (sello `remigradoEn` + `remigradoPor`).
+   - Script Wilainy: 1 user de Auth + 1 doc en `usuarios` + 1 audit log, requiere acceso real de Wilainy a `Nwilainy@gmail.com` (Jorge ya confirmó en spec).
+   - Convención respetada: ambos scripts siguen patrón Yohana (Admin SDK, service-account.json, DRY-RUN default, audit log, sin emojis).
+6. **Commit + push**: `e6ccb1e` — `feat(sprint-118): scripts re-migración masiva notis + fix email Wilainy (DRY-RUN default)`. Pre-commit hook OK (typecheck + cazadores 6/6 + lint staged).
+
+### Lo que NO se ejecutó
+
+El `--apply` en ninguno de los 2 scripts. **Restricción explícita del OK**: Jorge ejecuta DRY-RUN primero, valida output, después decide aplicar. Esa decisión queda fuera del modo autónomo.
+
+### Estado del sprint
+
+`EN_REVISION_HUMANA`. NO se movió a "Sprints completados" todavía. Cierre a `COMPLETADO` requiere:
+1. Jorge corre DRY-RUN de ambos scripts y valida output contra hipótesis del sprint (44 actualizados, 0 ya alineados, 0 skips para script masivo; ambos steps "actualizado" para script Wilainy).
+2. Jorge corre `--apply` de ambos scripts.
+3. Validación humana post-`--apply`:
+   - Yohana, Wilainy, Maria Teresa, Jorge, misterservicerd hacen hard refresh y reportan que ven sus notificaciones legacy.
+   - Jorge intenta reset de contraseña de Wilainy desde GestionUsuarios y confirma que ya no tira "no existe usuario".
+4. Postmortem `docs/postmortems/2026-05-08-notis-legacy-multiples-empleados.md` (sub-regla CLAUDE.md "5+ empleados afectados").
+
+### Hashes y archivos
+
+- Commit feature: `e6ccb1e`.
+- Archivos creados:
+  - `scripts/re-migrar-notificaciones-masivo.ts` (435 líneas).
+  - `scripts/fix-email-wilainy.ts` (311 líneas).
+
+### Instrucciones exactas para Jorge
+
+```bash
+# Asegurate que service-account.json esté en la raíz del repo.
+ls service-account.json
+
+# Fase 1 — re-migración notificaciones (5 empleados, 44 docs):
+#   1. DRY-RUN primero. Valida que diga 44 actualizables, 0 skip, 0 ya_alineados.
+npx tsx scripts/re-migrar-notificaciones-masivo.ts
+
+#   2. Si dry-run se ve bien, aplicar:
+npx tsx scripts/re-migrar-notificaciones-masivo.ts --apply
+
+#   3. Pedirle a los 5 empleados (Yohana, Wilainy, Jorge, misterservicerd,
+#      Maria Teresa) hard refresh y verificar que ven la campanita con sus
+#      notificaciones legacy.
+
+# Fase 2 — fix email Wilainy en Auth + usuarios:
+#   1. DRY-RUN primero. Valida que diga ambos steps "actualizado" (auth_update +
+#      usuarios_update) o uno actualizado y otro ya_alineado si hubo intento previo.
+npx tsx scripts/fix-email-wilainy.ts
+
+#   2. Si dry-run se ve bien, aplicar:
+npx tsx scripts/fix-email-wilainy.ts --apply
+
+#   3. Probar reset de contraseña de Wilainy desde GestionUsuarios contra
+#      Nwilainy@gmail.com. Confirmar que ya no tira "no existe usuario".
+#      Wilainy debe completar el reset desde su casilla.
+```
+
+### Próximo paso
+
+Después de que Jorge corra y valide:
+- Mover SPRINT-118 a "Sprints completados (histórico)" en `COLA_AUTONOMA.md`.
+- Crear postmortem `docs/postmortems/2026-05-08-notis-legacy-multiples-empleados.md`.
+- Considerar agregar P-XXX nuevo al catálogo: cazador health-check periódico (`npm run audit:notis-legacy`) que avisa si aparecen nuevos casos.
+
+---
+
 ## 2026-05-08 — `procesa bloqueos`: SPRINT-118 desbloqueado y movido a la cola
 
 ### Contexto
