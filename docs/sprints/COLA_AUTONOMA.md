@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 noche por coordinator (cierre disciplina post-SPRINT-118: postmortem + cazador P-007 + fix vivo `Dashboard.tsx:216` + sprints 100/115/118 movidos a histórico).
+**Última actualización:** 2026-05-08 noche por Cowork (SPRINT-117 reorganizado en 3 sub-sprints manejables: 117a auditoría focalizada, 117b propuesta con mockup, 117c1..N ejecución por fases chicas. Spec original descartada por overkill).
 
 **Próximo ID disponible:** SPRINT-119
 
@@ -962,212 +962,137 @@ Si fase A reporta mismatches reales:
 
 ---
 
-### SPRINT-117 — Rediseño Information Architecture (auditoría + propuesta + ejecución por fases)
+### SPRINT-117 — Rediseño Information Architecture (sprint padre, dividido en 117a + 117b + 117c)
 
-**Estado:** EN_EJECUCION_PARCIAL — fase A2 (porción read-only) **AVANCE PARCIAL COMPLETADO** el 2026-05-08 con commits `ac54662` + `6defe8f` (2 scripts read-only que absorben SPRINT-116 fases A y B). Falta A1 (lectura exhaustiva del código) y A3 (Information Architecture) — ambos quedan PENDIENTE para una pasada exhaustiva futura por riesgo de degradación de calidad si se ejecutan en la misma ventana. Fase B (propuesta) procesable autónoma con review humano obligatorio antes de pasar a C. Fase C (ejecución) se descompone en sub-sprints 117c1, 117c2, etc., todos BLOQUEADOS hasta que Jorge apruebe la propuesta de B.
+**Estado:** REORGANIZADO 2026-05-08 noche por Cowork. El sprint original era demasiado grande para una sola pasada del coordinator. Se divide en 3 sub-sprints procesados secuencialmente:
 
-**Avance fase A2 (porción read-only) — 2026-05-08:**
+- **SPRINT-117a** — Auditoría focalizada de menús, rutas y módulos. Read-only. ~1 pasada autónoma.
+- **SPRINT-117b** — Propuesta de reorganización con mockup por rol. Read-only + pausa obligatoria.
+- **SPRINT-117c1..N** — Ejecución por fases chicas. Sub-sprints definidos dentro de la propuesta de 117b. BLOQUEADOS hasta que Jorge apruebe.
 
-- `ac54662` — `scripts/auditoria-emails-personal-vs-usuarios.ts` (read-only). Audita TODOS los empleados con uid no vacío y compara `personal.email` vs `usuarios.email` vs `auth.email` (canónico via `admin.auth().getUser()`). Reporta matriz por empleado y conteos de mismatch / case / usuarios_missing / auth_missing. Cubre el alcance original de SPRINT-116 fase A.
-- `6defe8f` — `scripts/auditoria-notis-legacy-todos.ts` (read-only). Generaliza `scripts/diagnostico-notificaciones-yohana.ts` parametrizado por uid: enumera todos los empleados con uid y para cada uno ejecuta las 4 queries clasificando docs OK/Caso A/Caso B/OTRO. Reporta matriz por empleado e ids exactos de afectados. Cubre el alcance original de SPRINT-116 fase B.
-- Tester: typecheck clean, lint clean, cazadores 6/6 PASS.
-- regression_guardian: PASS (ambos scripts son server-side Admin SDK, no aplican P-001..P-006).
-- Reviewer: APPROVED.
-- **Próximo paso humano:** Jorge ejecuta los 2 scripts contra producción con `service-account.json` local y captura la salida. Si los scripts revelan empleados afectados (>0), se abre fase write como sprint nuevo BLOQUEADO con scope listado por uid (sub-regla CLAUDE.md "destructive actions"). El output debe quedar archivado en `docs/sprints/AUDITORIA_NOTIS_2026-05-08.md` (markdown con tablas).
+**Lo que se DESCARTA del scope original** (ahorra tiempo y enfoca en lo que duele):
+- Lectura exhaustiva de TODO `src/` archivo por archivo — overkill para reorganizar menús. 117a hace lectura focalizada (solo routing/UI/permisos/index de páginas).
+- Auditoría funcional cross-cutting completa — ya cubierta por cazadores P-001..P-007 (todos en 0 hits) + scripts de auditoría sistémica + SPRINT-118 cerrado. Si aparece nuevo vector funcional, se abre sprint propio.
 
-**Pendiente todavía dentro de SPRINT-117 fase A:**
+**Avance previo (histórico):** los 2 scripts read-only entregados (`ac54662` + `6defe8f`) cumplieron su función original — destaparon el bug que SPRINT-118 cerró con migración masiva de 5 empleados. Quedan en repo como herramienta de health-check periódico.
 
-- **A1 — Lectura exhaustiva del código** (`src/` archivo por archivo). NO ejecutado en esta pasada por scope masivo + riesgo de degradación de calidad si se hace en la misma ventana de contexto. Pasada exhaustiva futura.
-- **A3 — Auditoría Information Architecture** (rutas, sidebar por rol, redundancias, tabla módulo × rol). NO ejecutado. Misma razón que A1. Pasada exhaustiva futura.
-- **A2 (porción remanente)** — auditoría funcional sobre el código vivo (filtros con `userProfile.id`, queries con `operariaId/tecnicoId/ayudanteId`, dropdowns que asignan empleados, etc.). Esta porción depende de A1 (necesita lectura completa) y queda para la misma pasada exhaustiva.
-**Prioridad:** alta (UX general — Jorge dice 2026-05-08: "fusionar y converger módulos para que el sistema sea más intuitivo y fácil de entender")
-**Origen:** Pedido directo de Jorge tras hotfix de Yohana. Observa que el sistema tiene muchos menús/módulos que podrían fusionarse o reorganizarse para reducir fricción cognitiva en empleados.
-**Riesgo:** alto en fase C (toca Sidebar, App.tsx, rutas — afecta a todo el equipo). Bajo en A y B (read-only y propuesta).
-**Touch-list previsto:**
-- Fase A (read-only): ninguno de código. Output a `docs/sprints/AUDITORIA_IA_2026-05-08.md`.
-- Fase B (propuesta): output a `docs/sprints/PROPUESTA_IA_2026-05-08.md`.
-- Fase C (ejecución, por sub-sprints): `src/components/Sidebar.tsx`, `src/App.tsx`, posiblemente `src/utils/permisos.ts`, mover archivos en `src/pages/`. Cada sub-sprint toca solo 1-2 áreas.
+**Origen:** Pedido directo de Jorge tras hotfix de Aury y Yohana — sistema con muchos menús que generan fricción cognitiva. Quote: *"fusionar y converger módulos para que el sistema sea más intuitivo y fácil de entender"*.
 
-#### Objetivo global
+**Próximo paso humano:** Jorge pega `trabaja` a Claude Code → coordinator arranca SPRINT-117a.
 
-Reducir la cantidad de elementos del menú lateral, agrupar módulos relacionados, eliminar redundancias entre vistas, y hacer que cada rol (técnico, ayudante, operaria, secretaria, coordinadora, administrador) llegue al flujo que necesita en menos clicks. Sin romper enlaces existentes ni migrar datos.
+---
 
-#### Fase A — Auditoría sistémica EXHAUSTIVA (autónoma, read-only)
+### SPRINT-117a — Auditoría focalizada de menús, rutas y módulos
 
-> **Pedido explícito de Jorge 2026-05-08:** "debes leer el código completo todo de principio a fin". Esto NO es un escaneo con grep. Es lectura completa archivo por archivo. El coordinator delega al builder y al archivist en serie. El output esperado es extenso pero estructurado.
+**Estado:** PENDIENTE — procesable autónomo en próxima pasada de `trabaja`.
+**Prioridad:** alta (precondición de 117b y 117c)
+**Riesgo:** bajo (read-only, no toca código)
+**Touch-list previsto:** ninguno de código. Crea 1 archivo: `docs/sprints/AUDITORIA_IA_2026-05-08.md`.
 
-> **Estado al 2026-05-08:** A2 porción read-only (los 2 scripts que absorben SPRINT-116) AVANCE PARCIAL COMPLETADO en `ac54662` + `6defe8f`. A1 + A3 + porción remanente de A2 PENDIENTES para pasada exhaustiva futura.
+#### Objetivo
 
-**Tarea A1 — Lectura exhaustiva del código (NO grep parcial):**
+Mapear el estado actual de la navegación: qué módulos existen, quién los ve, qué hacen, dónde se solapan. Sin proponer cambios — solo documentar la realidad.
 
-Leer en orden, **completo de principio a fin** (sin saltarse), cada archivo en estos buckets:
+#### Tareas (lectura focalizada, NO exhaustiva del repo entero)
 
-1. **Entrada y routing:**
-   - `src/App.tsx`
-   - `src/main.tsx`
-   - `src/firebase/config.ts`
-   - `src/firebase/seedData.ts` (si existe)
+El coordinator delega al builder en una sola pasada. Para no desbordar la ventana de contexto, leer SOLO estos archivos completos:
 
-2. **Context y auth:**
-   - `src/context/AppContext.tsx`
-   - Cualquier otro context bajo `src/context/`
+1. **Routing y entrada:** `src/App.tsx`, `src/main.tsx`.
+2. **Sidebar y layouts:** `src/components/Sidebar.tsx`, `src/components/Layout.tsx`, `src/components/PublicLayout.tsx` si existe.
+3. **Permisos:** `src/utils/permisos.ts`.
+4. **Index de páginas (NO contenido completo):** listar archivos en `src/pages/` con `ls`. Para cada página leer SOLO los primeros ~30 líneas + el render principal. Identificar ruta asociada, rol que la usa, propósito en una línea.
+5. **Index de carpetas de componentes (NO contenido completo):** listar carpetas de `src/components/` y para cada una listar los componentes que exporta sin entrar al detalle.
 
-3. **Páginas (TODAS):**
-   - Recorrer `src/pages/` completo. Leer **cada `.tsx` de principio a fin**, incluyendo `pages/public/`.
-   - Para cada página anotar: ruta, rol, props que recibe, queries que dispara, filtros aplicados, mutaciones que ejecuta.
+#### Output esperado
 
-4. **Componentes (por familia):**
-   - `src/components/Sidebar.tsx`, `Layout.tsx`, `PublicLayout.tsx`
-   - `src/components/ordenes/` completo
-   - `src/components/facturacion-pendiente/` completo
-   - `src/components/cierre/` completo
-   - `src/components/facturas/`, `conduces/`, `citas/`, `clientes/`, `recordatorios/` completo
-   - `src/components/public/` completo (renderer de formularios públicos)
+`docs/sprints/AUDITORIA_IA_2026-05-08.md` con 6 secciones:
 
-5. **Services:**
-   - Leer todos los archivos en `src/services/` de principio a fin.
-   - Para cada uno: qué colección toca, qué shapes lee/escribe, qué queries usa, si hay reads/writes que asumen `auth.uid` o `personalDocId`.
-
-6. **Hooks:**
-   - Leer todos los archivos en `src/hooks/` de principio a fin.
-   - Foco en hooks de creación de órdenes, citas, formularios, autenticación.
-
-7. **Utils:**
-   - `src/utils/index.ts` (helpers compartidos — probablemente el más denso)
-   - `src/utils/permisos.ts` (matriz de permisos)
-   - `src/utils/whatsapp.ts`, `siguientePaso.ts`, `tooltipsBotones.ts`, `timelineAcciones.ts`, `checklistTemplates.ts`
-   - Cualquier otro `.ts` en `src/utils/`
-
-8. **Types:**
-   - `src/types/index.ts` completo (mapa de shapes de toda la app)
-
-9. **Reglas de Firestore:**
-   - `firestore.rules` completo
-   - `firestore.indexes.json`
-
-10. **Scripts de migración y mantenimiento (referencia):**
-    - Listar todos los scripts en `scripts/` con propósito de cada uno.
-    - Leer `scripts/invariantes/*.ts` (cazadores P-XXX) para entender qué se está cazando.
-
-11. **Documentación previa (contexto):**
-    - `CLAUDE.md` (ya en contexto pero releer relevante)
-    - `CONTEXTO_PROYECTO.md`
-    - `CONTEXTO_PAGINA_WEB.md`
-    - `docs/PATRONES_REGRESION.md`
-    - `docs/postmortems/` (todos los archivos)
-
-**Tarea A2 — Auditoría funcional (qué está roto o frágil):**
-
-Mientras lee, anotar TODOS los hits de:
-
-1. **Filtros cliente que asumen `userProfile.id == auth.uid`** (variante P-001 en lectura). Ya hay 16 archivos con `// @safe-userprofile-id:` que se asumieron seguros — re-validar uno por uno con el nuevo entendimiento de operaria↔técnico:
-   - **Ya confirmado roto en Dashboard.tsx:459** — filtro de técnicos por `t.operariaId === userProfile?.id`. Yohana no ve técnicos asignados a ella porque `operariaId` en `personal/` puede estar guardado como `auth.uid` mientras `userProfile.id` es `personalDocId`.
-   - Buscar el patrón hermano en `AgendaDia.tsx:286`, `Ordenes.tsx`, `Citas.tsx`, `MapaRutas.tsx`, `Rendimiento.tsx`, etc.
-
-2. **Queries que filtran por `operariaId`, `tecnicoId`, `ayudanteId`, `creadaPor`, etc.** — verificar shape exacto guardado vs shape esperado por el filtro.
-
-3. **Notificaciones legacy con `userId == personalDocId`** (Caso A confirmado en Yohana, hipótesis Jorge: replicado en otros).
-
-4. **Email mismatches `personal/` ↔ `usuarios/` ↔ Firebase Auth** (caso Wilainy detectado, hipótesis Jorge: replicado).
-
-5. **Páginas que filtran datos por relación operaria↔técnico, supervisor↔ayudante, coordinador↔operaria, etc.** — mapear relaciones implícitas que dependen de que un campo apunte al `auth.uid` correcto.
-
-6. **Acciones que escriben `userProfile.id` a campos que en el futuro podrían estar gateados** — patrón P-001 latente (auditoría 111a identificó 4 casos descriptivos no gateados que SPRINT-114 ya migró, re-validar cobertura).
-
-7. **Dropdowns que asignan empleados** — patrón P-006 (cazado por check-tecnicoid-personal-id-misuse.ts). Verificar que ningún nuevo dropdown evade el cazador.
-
-**Tarea A3 — Auditoría de Information Architecture:**
-
-(El alcance original de fase A — menús, módulos, redundancias, tabla módulo × rol.) Sigue todo lo que estaba antes:
-
-- Inventario de rutas de App.tsx.
-- Items del Sidebar por rol.
-- Matriz módulo × rol.
-- Redundancias entre páginas.
-- Detección de módulos con poco uso (git log proxy).
-
-**Output esperado:** TRES archivos en `docs/sprints/`:
-
-1. `docs/sprints/AUDITORIA_IA_2026-05-08.md` — Information Architecture (de A3).
-2. `docs/sprints/AUDITORIA_FUNCIONAL_2026-05-08.md` — Bugs latentes y patrones rotos (de A1+A2). Con tabla por archivo:línea, severidad (crítico/alto/medio/bajo), patrón asociado (P-XXX si aplica), recomendación.
-3. `docs/sprints/INVENTARIO_CODIGO_2026-05-08.md` — Inventario neutral de cada archivo de `src/` con una línea por archivo describiendo su propósito (es la base sobre la que se construyen las otras dos auditorías y queda como referencia viva).
-
-**Tiempo estimado:** muchas horas de procesamiento del coordinator. NO es un sprint de 25 minutos. Si el coordinator detecta que va a desbordar la ventana de contexto, debe dividir el trabajo en pasadas (ej: A1 + A3 en una pasada, A2 en otra) y no degradar la calidad. Mejor 3 pasadas exhaustivas que 1 pasada superficial.
-
-#### Fase B — Propuesta de reorganización (autónoma, requiere review humano)
-
-**Tareas del builder/coordinator (después de fase A):**
-
-1. **Diseñar mockup textual del menú nuevo** por cada rol:
-   - Sidebar reorganizada con grupos lógicos.
-   - Items que se fusionan (ej: "Conduces" + "Facturas" en submenú "Facturación").
-   - Items que cambian de ubicación.
-   - Items que desaparecen (con explicación de adónde van).
-
-2. **Para cada cambio, justificar:**
-   - Por qué este cambio mejora UX.
-   - Qué rol se beneficia más.
-   - Riesgo de romper algo existente.
-   - Si es reversible o no.
-
-3. **Tabla de comparación antes/después** por rol con número de clicks para los 5 flujos más comunes (crear orden, iniciar chequeo, facturar, ver órdenes pendientes, agendar cita).
-
-4. **Plan de ejecución por sub-sprints:**
-   - SPRINT-117c1: cambios chicos sin riesgo (renombres en sidebar, reorder).
-   - SPRINT-117c2: agrupar items en submenús (toca Sidebar.tsx).
-   - SPRINT-117c3: fusionar páginas redundantes (toca rutas y componentes).
-   - SPRINT-117c4: limpiar páginas no usadas (con archive, no delete).
-   - Cada sub-sprint con criterios de aceptación + plan de rollback.
-
-5. **Output:** `docs/sprints/PROPUESTA_IA_2026-05-08.md` con todo lo de arriba.
-
-6. **Pausa obligatoria:** después de generar este archivo, el coordinator marca SPRINT-117 fase B como COMPLETADA y deja entrada en `BLOQUEOS.md` esperando que Jorge lea la propuesta y diga:
-   - "OK fase C completa" → desbloquea todos los sub-sprints 117cN.
-   - "OK pero solo 117c1 y c2" → desbloquea selectivo.
-   - "Cambios en propuesta" → con ajustes específicos, vuelve a fase B con feedback.
-
-#### Fase C — Ejecución por sub-sprints (BLOQUEADA hasta OK Jorge)
-
-Cada sub-sprint 117cN tiene su propia entrada cuando se desbloquea, con touch-list acotado y QA visual obligatorio antes de cerrar. NO se procesan en lote — uno a la vez, con confirmación de Jorge entre cada uno.
+1. **Inventario de rutas** — tabla con `ruta | layout | componente | rol gate | propósito 1 línea`.
+2. **Items del Sidebar por rol** — para admin, coord, operaria, secretaria, técnico y ayudante listar exactamente qué ítems del menú ve cada rol y a qué ruta lleva.
+3. **Tabla módulo × rol** — matriz con módulos en filas, roles en columnas, valores `✓ / ✗ / condicional`.
+4. **Top 5 redundancias detectadas** — pares de módulos que muestran datos similares (ej: `Ordenes.tsx` vs `Tablero.tsx` vs `Citas.tsx`) con ejemplo concreto del solapamiento.
+5. **Top 5 áreas potencialmente confusas** — basado en cantidad de items en sidebar por rol, profundidad de navegación, nombres ambiguos (ej: "Standby" interno vs "Pendiente de piezas" UI).
+6. **Apéndice — decisiones técnicas observadas** — ej: por qué Standby es módulo aparte y no fase de orden, por qué Conduces y Facturas están separados.
 
 #### Criterios de aceptación
 
-**Fase A:**
-- [ ] `docs/sprints/AUDITORIA_IA_2026-05-08.md` creado con inventario completo, tabla rol × módulo, redundancias, top 5 áreas confusas.
-- [ ] Sin tocar código de la app, rules ni servicios.
-- [ ] Cazadores P-001..P-006 siguen en 0 hits.
+- [ ] `docs/sprints/AUDITORIA_IA_2026-05-08.md` creado con las 6 secciones.
+- [ ] Sin tocar código de la app, rules, ni servicios.
+- [ ] Cazadores 7/7 PASS, 0 hits.
+- [ ] Commit + push con mensaje descriptivo en español.
 
-**Fase B:**
-- [ ] `docs/sprints/PROPUESTA_IA_2026-05-08.md` creado con mockup textual por rol, justificación de cada cambio, tabla antes/después, plan de sub-sprints.
-- [ ] Entrada en `BLOQUEOS.md` con el OK pendiente de Jorge.
-- [ ] Coordinator NO procesa ningún sub-sprint 117cN hasta que Jorge desbloquee.
+#### Restricciones
 
-**Fase C (cada sub-sprint individual):**
-- [ ] Touch-list acotado (1-3 archivos máximo).
-- [ ] Plan de rollback explícito.
-- [ ] QA visual obligatorio con captura o descripción del estado antes/después.
-- [ ] Si afecta rutas, mantener redirects para enlaces viejos (gotcha CLAUDE.md).
-- [ ] Cada sub-sprint sus propios criterios.
+- archivist en modo PRE-CHANGE recomendado pero NO obligatorio (sprint read-only).
+- Una sola pasada autónoma, idealmente <60 min de coordinator. Si desborda, dividir en 117a-i + 117a-ii.
+- NO entrar al detalle funcional de cada página — eso es trabajo de futuros sprints. Acá solo IA.
 
-#### Restricciones / guardarrails
+---
 
-- **Fase A y B son consultivas**, no aprobadoras. NO ejecutan cambios estructurales.
-- **Fase C requiere OK explícito de Jorge** sobre la propuesta de B antes de empezar (sub-regla CLAUDE.md sobre cambios masivos a UI crítica).
-- archivist OBLIGATORIO en modo PRE-CHANGE antes de cada sub-sprint de fase C — `Sidebar.tsx`, `App.tsx`, `Ordenes.tsx`, `TecnicoVista.tsx` están en la lista de archivos críticos.
-- regression_guardian OBLIGATORIO antes de commit en cada sub-sprint de fase C.
-- NO renombrar identificadores internos (`enStandby`, `StandbyPieza`, etc.) — ya documentado como deuda separada en CLAUDE.md.
-- Si la propuesta de B sugiere fusionar páginas, mantener redirects desde rutas viejas para no romper bookmarks ni enlaces de WhatsApp existentes.
-- NO migrar datos en este sprint. Si la propuesta requiere migración, abrir sprint separado con OK explícito.
-- Sub-regla "documentación viva": al cerrar cada sub-sprint, actualizar `CLAUDE.md` y `CONTEXTO_PROYECTO.md` con el cambio de arquitectura.
+### SPRINT-117b — Propuesta de reorganización con mockup por rol
 
-#### Notas para el coordinator
+**Estado:** PENDIENTE — depende de SPRINT-117a completado.
+**Prioridad:** alta (precondición de 117c)
+**Riesgo:** bajo (read-only, output es un documento de propuesta)
+**Touch-list previsto:** ninguno de código. Crea `docs/sprints/PROPUESTA_IA_2026-05-08.md`. Agrega 1 entrada a `docs/sprints/BLOQUEOS.md`.
 
-- **Procesamiento autónomo:** fase A se procesa apenas Jorge pegue `trabaja`. Fase B también, secuencial.
-- **Pausa obligatoria entre B y C:** después de fase B, NO seguir con C. Marcar SPRINT-117 como "EN_REVISION_HUMANA" con la entrada en BLOQUEOS.md y devolver a Jorge.
-- **Para fase A:** apoyarse en `git log --oneline --since="3 months ago" -- src/pages/<file>` para detectar páginas que casi no se actualizan (proxy de "se usan poco").
-- **Para fase B:** considerar que el rol con más fricción es probablemente operaria/secretaria (tiene que tocar varios módulos en cada orden). El rol con menos clicks pero más críticos es técnico (mobile, en sitio del cliente). Admin/coord es power user, tolera más complejidad.
-- **No subestimar el costo de fase C:** cada sub-sprint requiere QA con usuario real. Aury (técnico), Wilainy (operaria), Yohana (operaria) son los conejillos de indias naturales.
-- **Postmortem del proceso al final:** si fase C completa exitosa con todos los sub-sprints, escribir postmortem-positivo en `docs/postmortems/` documentando el approach, qué funcionó, qué mejoraría para futuros rediseños grandes. NO es bug, pero el aprendizaje vale.
+#### Objetivo
+
+Tomar la auditoría de 117a y proponer una reorganización concreta del sidebar y módulos por rol. Output legible para Jorge (no programador) que pueda decir "OK", "OK pero cambiá X", o "no me convence Y".
+
+#### Tareas
+
+1. **Mockup textual del nuevo sidebar por cada rol** (admin, coord, operaria, secretaria, técnico, ayudante). Formato: lista anidada con grupos.
+2. **Para cada cambio respecto al actual, justificar en 2-3 líneas:** qué fricción resuelve, qué rol se beneficia más, riesgo de romper algo (bajo/medio/alto).
+3. **Tabla antes/después** — para los 5 flujos más comunes (crear orden, iniciar chequeo, facturar, ver órdenes pendientes, agendar cita): cuántos clicks toma hoy vs cuántos con la propuesta.
+4. **Plan de sub-sprints 117c1..N** — cada uno con touch-list de 1-3 archivos máximo, cambio concreto, plan de rollback ("qué pasa si Jorge dice no me gusta"), riesgo.
+5. **Pausa obligatoria al final:**
+   - Marcar SPRINT-117b como COMPLETADO.
+   - Crear entrada en `BLOQUEOS.md`: *"SPRINT-117c esperando aprobación de Jorge sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md`. Para desbloquear, editar la entrada con `OK: jorge YYYY-MM-DD` o `OK selectivo: 117c1, 117c3` o `Cambios: <feedback>`"*.
+   - **NO arrancar 117c**. Volver a Jorge.
+
+#### Consideraciones para el builder
+
+- **Operaria/secretaria** son los roles con más fricción hoy (tocan muchos módulos por cada orden). Priorizar simplificar su sidebar.
+- **Técnico** está en mobile, en el sitio del cliente, con poco tiempo. Su sidebar debe ser ultra simple: ver sus citas, iniciar chequeo, cerrar servicio. Nada más.
+- **Admin/coord** son power users, toleran más complejidad pero igualmente prefieren menos items en sidebar.
+- **NO renombrar identificadores internos** (`enStandby`, `StandbyPieza`, colección `standby_piezas`). Solo etiquetas visibles al usuario.
+- **Mantener redirects** desde rutas viejas si se mueve algo — los empleados pueden tener bookmarks o links de WhatsApp viejos.
+
+#### Criterios de aceptación
+
+- [ ] `docs/sprints/PROPUESTA_IA_2026-05-08.md` creado con las 4 secciones + plan de sub-sprints.
+- [ ] Entrada agregada a `BLOQUEOS.md` esperando OK de Jorge.
+- [ ] SPRINT-117b marcado COMPLETADO en `COLA_AUTONOMA.md`.
+- [ ] NO arrancar SPRINT-117c1 — esperar feedback humano.
+- [ ] Commit + push con mensaje descriptivo en español.
+
+---
+
+### SPRINT-117c1..N — Ejecución por fases chicas (BLOQUEADO hasta OK Jorge)
+
+**Estado:** BLOQUEADO — esperando que SPRINT-117b se complete y Jorge apruebe la propuesta en `BLOQUEOS.md`.
+
+Cada sub-sprint 117cN se define dentro de SPRINT-117b (en su sección "Plan de sub-sprints"). Cuando Jorge desbloquea con `OK: jorge`, el coordinator los procesa **uno por uno con confirmación humana entre cada uno** (NO procesa varios en lote).
+
+#### Restricciones globales para fase C
+
+- **archivist OBLIGATORIO en modo PRE-CHANGE** antes de cada sub-sprint — `Sidebar.tsx`, `App.tsx`, `Ordenes.tsx`, `TecnicoVista.tsx` están en la lista de archivos críticos.
+- **regression_guardian OBLIGATORIO** antes de commit.
+- **Touch-list acotado** — 1-3 archivos por sub-sprint. Si necesita más, dividir.
+- **Plan de rollback explícito** — el commit message dice qué revertir si Jorge dice "no me gusta".
+- **QA visual obligatorio** — antes de cerrar, Jorge mira el cambio en producción y confirma con su equipo (Aury técnico, Wilainy/Yohana operarias).
+- **Mantener redirects** desde rutas viejas si se mueve algo.
+- **Sub-regla "documentación viva"** — al cerrar cada sub-sprint, actualizar `CLAUDE.md` y `CONTEXTO_PROYECTO.md` con el cambio de arquitectura.
+- **Postmortem-positivo al final** — cuando todos los sub-sprints cierren OK, archivist genera `docs/postmortems/2026-05-XX-rediseno-ia-aprendizajes.md` documentando el approach. NO es bug, pero el aprendizaje vale para futuros rediseños grandes.
+
+---
+
+#### (Eliminado: spec original de SPRINT-117 con A1+A2+A3 exhaustivos)
+
+> El detalle anterior se descartó por overkill. La versión nueva (117a + 117b + 117c) cumple el mismo objetivo (reorganizar el sistema para que sea más intuitivo) sin la lectura exhaustiva de TODO `src/`. Si en algún momento aparece la necesidad de auditoría funcional cross-cutting completa, se abre sprint propio (no parte de 117).
+
+_(spec original descartada por overkill — la versión vigente de SPRINT-117 está dividida en 117a + 117b + 117c arriba)_
 
 ---
 
