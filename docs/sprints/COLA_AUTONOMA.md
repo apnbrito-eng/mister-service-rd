@@ -795,9 +795,11 @@ La inconsistencia no rompe producción hoy (no hay rule que valide estos campos)
 
 ### SPRINT-115 — Diagnóstico + re-migración de notificaciones de Yohana
 
-**Estado:** EN_EJECUCION (fase write — DESBLOQUEADA 2026-05-08 por jorge vía `BLOQUEOS.md` tras output del diagnóstico read-only ejecutado el mismo día). Caso A confirmado: 3 docs de Yohana (`F9BV32k4JEoEOk97K4xc`, `TVwtOtmNlzW334IUIUdF`, `VWjdYBRmKgU8rGPlbJAv`) tienen `userId == personalDocId == zFhokrDoPH9lD63ZxKAY`. Scope acotado autorizado: setear `userId = HGkVoYpGKzL4JJI7FnTpHjdsM972` (auth.uid de Yohana, email `melissabalbuena08@gmail.com`). NO tocar `destinatarioId`, NO tocar otros campos, NO migrar a otros usuarios.
+**Estado:** PENDIENTE_EJECUCION_HUMANA (fase write — script entregado en commit `6b4aade` el 2026-05-08, cuarta pasada autónoma). El script `scripts/re-migrar-notificaciones-yohana.ts` está committeado con DRY-RUN por default. Sub-regla CLAUDE.md "destructive actions" obliga a que Jorge corra `--apply` desde su Mac, no el coordinator. Espera ejecución de Jorge + reporte de output.
 
 **desbloqueadoPor:** jorge 2026-05-08
+**scriptCommit:** 6b4aade
+**ejecucionPendiente:** `npx tsx scripts/re-migrar-notificaciones-yohana.ts --apply`
 
 **Prioridad:** alta condicional (sólo si la condición se dispara)
 **Origen:** SPRINT-100 falló en QA visual con Yohana 2026-05-08 (a confirmar). Hipótesis Cowork: las notificaciones legacy de Yohana tienen `destinatarioId == auth.uid` pero `userId == personalDocId` post-migración fallida del 2026-05-06.

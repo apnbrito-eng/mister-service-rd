@@ -5,6 +5,84 @@
 
 ---
 
+## 2026-05-08 — `procesa bloqueos` autónomo (cuarta pasada del día — SPRINT-115 fase write)
+
+### Estado de los bloqueos al iniciar
+
+- `BLOQUEOS.md` tenía 1 entrada con OK explícito de jorge: SPRINT-115 fase write (re-migración Yohana). El OK incluye output completo del diagnóstico read-only ejecutado el mismo día por Jorge: 3 docs Caso A confirmados con valores hardcodeados.
+- Cola autónoma: SPRINT-115 fase write estaba PENDIENTE-bloqueado en COLA_AUTONOMA.md, esperando este OK.
+
+### Acción del coordinator
+
+1. Vacié `BLOQUEOS.md` (entrada de SPRINT-115 movida al histórico de desbloqueos del archivo).
+2. Actualicé `COLA_AUTONOMA.md`: SPRINT-115 fase write pasó de PENDIENTE-bloqueado a EN_EJECUCION con `desbloqueadoPor: jorge 2026-05-08` y scope hardcodeado en el header.
+3. Procesé el sprint inmediatamente.
+
+### SPRINT-115 fase write — Script de re-migración acotada de notificaciones de Yohana
+
+- **Estado final:** PENDIENTE_EJECUCION_HUMANA. Script entregado y commiteado. La ejecución contra producción queda para Jorge (sub-regla CLAUDE.md "destructive actions confirmar con jorge"; el coordinator NO corre scripts que escriben a Firestore aunque tenga acceso al `service-account.json` local).
+- **Tipo:** script utility one-shot para re-migración de datos. Scope rígido: 3 docs de un solo usuario.
+- **Restricciones evaluadas:**
+  - rules: NO toca.
+  - migración masiva (>500 docs): NO — son 3 docs hardcodeados en `SCOPE.docsAutorizados`.
+  - integración terceros / OAuth / pago: NO.
+  - endpoint público: NO.
+  - **Procesable autónomo (con OK ya recibido).**
+- **Archivo nuevo (1):**
+  - `scripts/re-migrar-notificaciones-yohana.ts` — 277 líneas. Bootstrap Admin SDK calcado de `scripts/diagnostico-notificaciones-yohana.ts`. DRY-RUN por default; `--apply` requerido para escribir. Doble validación: que `personal where email == melissabalbuena08@gmail.com` resuelva al `auth.uid` (HGkVoYpGKzL4JJI7FnTpHjdsM972) y al `personalDocId` (zFhokrDoPH9lD63ZxKAY) esperados; aborta sin escribir si no matchea. Para cada uno de los 3 ids autorizados (F9BV32k4JEoEOk97K4xc, TVwtOtmNlzW334IUIUdF, VWjdYBRmKgU8rGPlbJAv): lee, verifica idempotencia (skip si `userId === auth.uid` ya), verifica que `userId === null || userId === personalDocId esperado` (skip cualquier otro valor inesperado), y setea `userId = auth.uid` + `remigradoEn` + `remigradoPor`. Después escribe entrada en `auditoria_admin` con accion `remigracion_notificaciones_yohana`, sprintId, hash del OK Jorge, docs afectados, scope.
+  - NO toca `destinatarioId` (sprint lo prohíbe explícitamente; lectura dual del service ya lo cubre).
+  - NO toca otros campos (leida, leidaEn, tipo, titulo, descripcion).
+  - NO migra a otros usuarios; el scope es 3 ids fijos.
+- **Tester:**
+  - `npx tsc --noEmit` → clean.
+  - `npx eslint scripts/re-migrar-notificaciones-yohana.ts --max-warnings 0` → clean.
+  - `npm run check:regression` → 6/6 cazadores PASS, 0 hits.
+  - **GO.**
+- **regression_guardian (manual, foco en migración + atomicidad):**
+  - P-001 (`userProfile.id` vs `auth.uid`): el script existe justamente para arreglar el bug histórico de confusión. Usa `auth.uid` directo como constante. Sin riesgo.
+  - P-002 (rules con `.get()` opcional): no aplica.
+  - P-003 (cross-collection sin runTransaction): el script escribe a `notificaciones/*` (3 updates) y a `auditoria_admin/*` (1 add) sin `runTransaction`. Aceptable porque cada update es independiente, idempotente, y los stdout logs + los campos `remigradoEn`/`remigradoPor` inline en cada doc dan trazabilidad alterna si la auditoría no se escribe. No es mutación de negocio crítica con flag de idempotencia que requiera atomicidad.
+  - P-004/P-005/P-006: no aplican.
+  - Defense-in-depth: doble validación de scope contra constantes hardcodeadas, idempotencia, DRY-RUN por default, NO sobrescritura de `userId` con valor inesperado.
+  - **PASS.**
+- **Reviewer (manual, foco en script crítico de datos):**
+  - Estructura: calca patrones de `diagnostico-notificaciones-yohana.ts` y `migrar-notificaciones-userid.ts`. Consistente.
+  - Scope rígido: 4 constantes hardcoded del OK Jorge en BLOQUEOS.md (email, auth.uid, personalDocId, ids de los 3 docs).
+  - Idempotencia explícita: skip si `userId === auth.uid` esperado.
+  - Salvaguardas: aborto temprano si email no matchea, multi-personal con mismo email, `auth.uid` real distinto del esperado, `personalDocId` real distinto del esperado. Skip por doc si `userId` actual es un valor no anticipado.
+  - Auditoría: entrada en `auditoria_admin` con accion + sprintId + okJorgeBloqueosCommit (`ff61875`) + docsAfectados + scope. Trazable.
+  - Sin emojis. Spanish identifiers. Mensajes claros.
+  - Bypass de rules por Admin SDK es esperado (privilegio de service-account).
+  - Post-fix los docs quedan con `userId == auth.uid`, lo cual permite a Yohana marcar como leído desde el cliente (rule pasa).
+  - **APPROVED.**
+- **Commit + push:** `6b4aade` pusheado a `main`. Hook pre-commit pasó (typecheck + 6/6 cazadores + lint).
+- **Devops:** push a main, deploy de Vercel se dispara solo. El cambio NO afecta el build de la app (es un script utility no importado desde `src/`). No hay smoke test crítico para devops en este sprint.
+- **Sub-regla "cada bug → cazador":** **aplica condicionalmente.** El bug está confirmado en producción (3 docs Caso A reales). Pero el patrón ya está cubierto:
+  - Cazador determinístico equivalente: el cazador P-001 (`userProfile.id` vs `auth.uid`) ya cubre el caso de origen (código que escribe `personalDocId` donde la rule espera `auth.uid`).
+  - El gotcha CLAUDE.md "Alta de empleado debe crear AMBOS docs" ya documenta la causa raíz (técnico/operaria sin doc en `usuarios/{uid}` cae en cascada `personal/` y `userProfile.id == personalDocId`).
+  - El patrón P-004 (cazador de "alta de empleado sin doc espejo en usuarios/{uid}") fue creado en el sprint hotfix Aury y previene la causa raíz de FUTUROS empleados. Yohana ya tenía datos legacy con el bug; este script los limpia. Sin nuevo cazador necesario.
+  - **Postmortem completo + sub-regla cumplida** después de que Jorge ejecute el script y Yohana confirme QA OK. Hasta entonces, mantener sprint en PENDIENTE_EJECUCION_HUMANA.
+
+### Próximos pasos para Jorge
+
+1. Desde la Mac de Jorge (con `service-account.json` en raíz del repo):
+   - **Probar primero en DRY-RUN:** `npx tsx scripts/re-migrar-notificaciones-yohana.ts`. Output esperado: lista de 3 docs con `resultado: 'actualizado'` y "DRY-RUN — nada fue escrito a Firestore."
+   - **Aplicar:** `npx tsx scripts/re-migrar-notificaciones-yohana.ts --apply`. Output esperado: lista de 3 docs con `resultado: 'actualizado'` + "Entrada de auditoría escrita en auditoria_admin/" + "Re-migración aplicada."
+2. Pedirle a Yohana hacer **hard refresh** (`Cmd+Shift+R` en Chrome) y abrir la campanita.
+3. Reportar a Cowork:
+   - Si Yohana ve las 3 notifs y puede marcarlas como leídas → marcar SPRINT-100 + SPRINT-115 ambos COMPLETADOS, postmortem corto en CLAUDE.md (sub-regla obligatoria).
+   - Si NO ve nada o no puede marcar → diagnóstico extra (cache, App Check, otro vector). NO tocar más datos hasta entender.
+
+### Resumen de la pasada
+
+- 1 sprint procesado: SPRINT-115 fase write (entregado, espera ejecución humana).
+- 1 commit pusheado: `6b4aade`.
+- 0 sprints autónomos restantes en cola.
+- 0 entradas activas en BLOQUEOS.md.
+- ~12 minutos de coordinator.
+
+---
+
 ## 2026-05-08 — `trabaja` autónomo (tercera pasada del día — SPRINT-115 fase diagnóstico)
 
 ### Estado de la cola al iniciar
