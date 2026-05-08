@@ -615,7 +615,7 @@ Crear documentación viva de:
 
 ### SPRINT-113 — UX flujo de orden paso a paso intuitivo (técnico/operaria/secretaria)
 
-**Estado:** PENDIENTE
+**Estado:** EN_PROGRESO — fase 113a EN_REVISION_HUMANA (commit local `9603da3`, sin push). Fases 113b/c PENDIENTE.
 **Prioridad:** alta (pedido directo de Jorge — "más entendible, paso a paso, intuitivo")
 **Origen:** Jorge tras hotfix Aury: "tenemos que hacer un flujo de orden visualmente más organizado y entendible".
 **Riesgo:** medio (toca UI de un flujo crítico; no toca rules ni datos)
@@ -633,7 +633,7 @@ Hoy el stepper muestra fases (Nuevo Lead → En Gestión → ...) pero NO indica
 Específico — la sugerencia de chequeo del técnico no se refleja en el stepper, generando confusión ("¿se envió o no?").
 
 #### Criterios de aceptación
-- [ ] **Banner de "siguiente paso"** en OrdenDetalle/TecnicoVista, contextual al rol del usuario logueado y a la fase actual:
+- [x] **Banner de "siguiente paso"** en OrdenDetalle/TecnicoVista, contextual al rol del usuario logueado y a la fase actual: **Implementado en SPRINT-113a (commit local `9603da3`, EN_REVISION_HUMANA)**.
   - Técnico en orden agendada: "Próximo paso: Iniciar chequeo cuando llegues al cliente."
   - Técnico en orden en_diagnostico: "Próximo paso: Cotizar reparación o sugerir solo chequeo."
   - Operaria en orden con sugerencia pendiente: "Aury sugirió cobrar solo chequeo (RD$2,000). Aprobá o rechazá."

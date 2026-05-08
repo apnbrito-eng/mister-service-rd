@@ -5,6 +5,44 @@
 
 ---
 
+## 2026-05-08 — SPRINT-113a procesado bajo modo "review humano" (commit local sin push)
+
+### SPRINT-113a — Banner siguiente paso contextual al rol y a la fase
+
+- **Estado final:** EN_REVISION_HUMANA. Commit local `9603da3`. **Sin push** — Jorge revisa diff antes de pushear.
+- **Tipo:** UI puramente presentacional. Sin escrituras a Firestore, sin tocar rules, sin tocar services, sin tocar dropdowns de asignación.
+- **Restricciones evaluadas:** rules NO, migración NO, integración pago/OAuth/terceros NO, endpoint público NO. Procesable autónomo, pero Jorge pidió explícitamente review humano antes del push.
+- **Archivos creados/modificados (4):**
+  - `src/utils/siguientePaso.ts` (NUEVO, 284 líneas) — `calcularSiguientePaso(orden, rol)` retorna `{ titulo, detalle?, tono }` o `null`. 4 tonos (`accion`/`alerta`/`espera`/`info`). Cubre 8 fases × 6 roles. Casos transversales: sugerencia solo chequeo pendiente, `enStandby`. Helper `classNamesPorTono` para Tailwind.
+  - `src/components/ordenes/BannerSiguientePaso.tsx` (NUEVO, 66 líneas) — componente puramente presentacional. `role="status"` + `aria-live="polite"`. Tamaños `sm` (cards) y `md` (detalle).
+  - `src/pages/TecnicoVista.tsx` (+8 líneas) — banner debajo del FaseStepper de cada card, oculto cuando `completado`.
+  - `src/pages/OrdenDetalle.tsx` (+7 líneas) — banner dentro del bloque "Flujo de la orden", después del stepper.
+- **archivist PRE-CHANGE (manual):** historial relevante en TecnicoVista (postmortem 2026-05-07 P-006 + P-002 cadena Aury Mon, comentarios `@safe-userprofile-id` legítimos del SPRINT-103) y OrdenDetalle (similar). Categorías especiales: páginas críticas → QA manual obligatorio (Jorge lo hace en revisión). Recomendaciones acatadas: helpers fuera de `.tsx`, sin emojis, identificadores en español, sin escrituras nuevas a Firestore. **No introdujo conflictos con la advertencia.**
+- **regression_guardian (manual):**
+  - Capa 1 determinística: `npm run check:regression` — 6/6 PASS, 0 hits, 78ms.
+  - Capa 2 semántica: el diff NO escribe a Firestore, NO toca rules, NO crea mutaciones cross-collection, NO modifica dropdowns de asignación. Ningún P-XXX aplica al diff. Sin patrones candidatos nuevos. **PASS.**
+- **Tester:**
+  - `npx tsc --noEmit`: clean (sin output).
+  - `npx eslint --max-warnings 0` sobre los 4 archivos tocados: clean.
+  - `npm run lint` global: 5555 problems baseline (igual o mejor que 5559 reportado en SPRINT-107). No agrega warnings nuevos.
+- **Reviewer (manual):** APPROVED. Decisiones revisadas: helpers no-component fuera de `.tsx` (gotcha CLAUDE.md), tono "espera" pedagógico (no acusatorio) para roles bloqueados, accesibilidad con `role=status` + `aria-live=polite`, sin emojis en código, identificadores en español. Atención humana sugerida: copy de mensajes (Jorge puede querer ajustar tono); coexistencia con `BannerEstadoSugerenciaSoloChequeo` (redundancia parcial intencional pero revisable); 5-10 banners por pantalla en TecnicoVista (alcance de SPRINT-113b/c).
+- **Pre-commit hook:** PASS (typecheck + cazadores + lint staged).
+- **Push:** **NO REALIZADO** — Jorge revisa antes.
+- **Tiempo total:** ~30 min coordinator (lectura de cola + lectura de archivos críticos + creación de utils y component + 2 inserciones quirúrgicas + checks + commit local).
+
+### Decisiones de diseño reportadas a Jorge para revisión humana
+
+1. **Copy en tono profesional conservador**, no muy directo. Si Jorge quiere "Llamá al cliente ya" en vez de "Próximo paso: contactar al cliente", se ajusta en post.
+2. **Coexistencia con banner de sugerencia solo chequeo**: el banner viejo (`BannerEstadoSugerenciaSoloChequeo`) sigue visible, y el nuevo agrega una capa directiva ("aprobá/rechazá" o "esperando"). Hay redundancia parcial intencional. Alternativas: (a) silenciar el nuevo cuando hay sugerencia pendiente, (b) unificar ambos banners. Decisión actual: mantener ambos para no perder la sugerencia detallada que muestra el banner viejo.
+3. **Múltiples banners en TecnicoVista**: cada card de cita tiene su banner. Para 5-10 órdenes hay 5-10 banners. Útil porque cada orden está en fase distinta. Si Jorge prefiere un único banner en el header con la "primera orden a atender", es alcance natural de SPRINT-113b/c.
+4. **Tono "espera" gris para roles bloqueados**: si un técnico abre orden en `nuevo_lead` ve "Esperando contacto inicial". No le decimos "no es tu paso" — le decimos qué está pasando. Pedagógico.
+
+### Sprints NO procesados en esta pasada
+
+- Solo se procesó **SPRINT-113a** según pedido explícito de Jorge ("scope acotado y review humano"). 113b y 113c siguen PENDIENTE en `COLA_AUTONOMA.md`.
+
+---
+
 ## 2026-05-08 — `trabaja` autónomo (1 sprint completado: auditoría documental SPRINT-111)
 
 ### SPRINT-111 — Auditar otros campos de ID con vector P-001/P-006 (fase 111a)
