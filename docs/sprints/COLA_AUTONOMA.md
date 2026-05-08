@@ -615,7 +615,7 @@ Crear documentación viva de:
 
 ### SPRINT-113 — UX flujo de orden paso a paso intuitivo (técnico/operaria/secretaria)
 
-**Estado:** EN_PROGRESO — fase 113a COMPLETADO 2026-05-08 (commits `9603da3` + `dd24bb2` en producción, Jorge confirmó visualmente que el banner aparece). Fases 113b/c PENDIENTE.
+**Estado:** EN_PROGRESO — 4 de 6 criterios COMPLETADOS por las fases 113a/b/c (commits `9603da3` + `dd24bb2` + `49af624` + `0909237` en producción). Pendientes: QA manual end-to-end con técnicos/operarias reales (humano) y cazador anti-regresión de tooltips (sprint propio futuro si Jorge lo prioriza).
 **Prioridad:** alta (pedido directo de Jorge — "más entendible, paso a paso, intuitivo")
 **Origen:** Jorge tras hotfix Aury: "tenemos que hacer un flujo de orden visualmente más organizado y entendible".
 **Riesgo:** medio (toca UI de un flujo crítico; no toca rules ni datos)
