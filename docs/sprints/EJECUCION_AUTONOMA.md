@@ -5,6 +5,30 @@
 
 ---
 
+## 2026-05-08 — `procesa bloqueos`: SPRINT-118 desbloqueado y movido a la cola
+
+### Contexto
+
+Jorge disparó `procesa bloqueos`. El coordinator leyó `BLOQUEOS.md` y encontró SPRINT-118 (Re-migración masiva notis legacy 5 empleados + fix email Wilainy) con `OK: jorge 2026-05-08`.
+
+### Acción ejecutada (movimientos de archivos)
+
+1. `BLOQUEOS.md`: SPRINT-118 marcado como "DESBLOQUEADO — movido a COLA_AUTONOMA.md el 2026-05-08". Conservada la entrada como histórico para forensia. Agregado al "Histórico de desbloqueos" al pie del archivo.
+2. `COLA_AUTONOMA.md`: SPRINT-118 agregado al final como **PENDIENTE** con metadata `desbloqueadoPor: jorge 2026-05-08`. Reproducida la spec completa (scope autorizado, IDs específicos, fases 1 y 2, criterios de aceptación, restricciones).
+3. Header de la cola actualizado, "Próximo ID disponible" avanzado a SPRINT-119.
+
+### Lo que NO se ejecutó en esta pasada
+
+El SPRINT-118 NO fue procesado en esta pasada. Razón: en este turno el coordinator no tiene acceso al toolset `Agent`/`Task` para invocar `builder` / `tester` / `regression_guardian` / `reviewer`. La pasada `procesa bloqueos` se interpreta literalmente: mover entradas con OK desde BLOQUEOS hacia la cola. La ejecución del sprint queda para la próxima pasada que Jorge dispare con `trabaja`.
+
+Restricción explícita del OK de Jorge ya capturada en la entrada del sprint en la cola: "Coordinator NO ejecuta `--apply` autónomo. Jorge corre dry-run primero, después decide si aplicar." Lo que la próxima pasada autónoma SÍ puede hacer: entregar los 2 scripts en DRY-RUN, pasar tester + regression_guardian + reviewer + commit + push. Después Jorge corre `--apply` manualmente.
+
+### Próximo paso
+
+Jorge pega `trabaja` cuando tenga ventana — el coordinator de esa pasada delegará a builder con la spec completa de SPRINT-118 (scripts `re-migrar-notificaciones-masivo.ts` + `fix-email-wilainy.ts`).
+
+---
+
 ## 2026-05-08 — Avance parcial SPRINT-117 fase A2 porción read-only (quinta pasada del día)
 
 ### Contexto
