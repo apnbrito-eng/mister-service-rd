@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 por Cowork (SPRINT-116 abierto: auditoría sistémica emails+notis. SPRINT-117 abierto: rediseño Information Architecture en 3 fases auditoría → propuesta → ejecución por sub-sprints).
+**Última actualización:** 2026-05-08 por Cowork (Jorge prioriza reordenar+auditoría general — SPRINT-117 ampliado con fase A2 auditoría funcional que absorbe scope de SPRINT-116. SPRINT-115 fase write pausada. SPRINT-116 marcado ABSORBIDO. Nuevo bug detectado: agenda operaria no muestra órdenes de su técnico — variante P-006 con `operariaId`, agregado al scope de A2).
 
 **Próximo ID disponible:** SPRINT-118
 
@@ -795,7 +795,7 @@ La inconsistencia no rompe producción hoy (no hay rule que valide estos campos)
 
 ### SPRINT-115 — Diagnóstico + re-migración de notificaciones de Yohana
 
-**Estado:** PENDIENTE_EJECUCION_HUMANA (fase write — script entregado en commit `6b4aade` el 2026-05-08, cuarta pasada autónoma). El script `scripts/re-migrar-notificaciones-yohana.ts` está committeado con DRY-RUN por default. Sub-regla CLAUDE.md "destructive actions" obliga a que Jorge corra `--apply` desde su Mac, no el coordinator. Espera ejecución de Jorge + reporte de output.
+**Estado:** PAUSADO 2026-05-08 (Jorge decidió absorber el fix dentro del rediseño general de SPRINT-117). Fase diagnóstico COMPLETADA (Caso A confirmado, 3 docs identificados). Fase write tiene script listo (`scripts/re-migrar-notificaciones-yohana.ts` commit `6b4aade`) y dry-run validado por Jorge el 2026-05-08, pero NO se ejecuta `--apply` hasta que SPRINT-117 fase A2 termine y decidamos si re-migrar las 3 notis sueltas o esperar al fix masivo de TODOS los empleados afectados. Yohana sigue sin ver sus 3 notis viejas. **NO procesar autónomo. NO ejecutar `--apply` sin OK explícito de Jorge re-confirmado post-auditoría.**
 
 **desbloqueadoPor:** jorge 2026-05-08
 **scriptCommit:** 6b4aade
@@ -871,8 +871,8 @@ Si Yohana reporta "ve pero no puede marcar", es Caso B. Si reporta "no ve nada",
 
 ### SPRINT-116 — Auditoría sistémica: email mismatches + notis legacy en TODOS los empleados
 
-**Estado:** PENDIENTE (procesable autónomo en fase A; fase B audit + scripts de fix BLOQUEADOS esperando OK Jorge en `BLOQUEOS.md`)
-**Prioridad:** alta (sospecha Jorge 2026-05-08: el patrón de notis con `userId == personalDocId` y emails desalineados puede afectar a varios empleados, no solo Yohana/Wilainy)
+**Estado:** ABSORBIDO por SPRINT-117 fase A2 el 2026-05-08. El alcance original (auditoría sistémica de emails y notis legacy en todos los empleados) queda cubierto por la fase A2 de SPRINT-117 que es más amplia (incluye además filtros de queries, relaciones operaria↔técnico, variantes P-001/P-006 en lectura, etc.). NO procesar de forma independiente. Si el coordinator lee este sprint, debe redirigir el trabajo a SPRINT-117 fase A2.
+**Prioridad:** ABSORBIDO (referencia histórica)
 **Origen:** Tras destrabar SPRINT-115 fase write para Yohana, Jorge intentó cambiar contraseña de Wilainy y la app respondió "No existe usuario con email Nwilainy@gmail.com". El backfill del 2026-05-06 ya había detectado este mismatch (uid `KT9LaszokWNmLCEIe8YOvNKc9rF3` con `usuarios.email=apnbrito0318@gmail.com` ≠ `personal.email=nwilainy@gmail.com`). Jorge sospecha que el patrón se replica.
 **Riesgo:** alto en fase B (toca datos en producción). Bajo en fase A (read-only).
 **Touch-list previsto:**
@@ -985,33 +985,105 @@ Si fase A reporta mismatches reales:
 
 Reducir la cantidad de elementos del menú lateral, agrupar módulos relacionados, eliminar redundancias entre vistas, y hacer que cada rol (técnico, ayudante, operaria, secretaria, coordinadora, administrador) llegue al flujo que necesita en menos clicks. Sin romper enlaces existentes ni migrar datos.
 
-#### Fase A — Auditoría sistémica (autónoma, read-only)
+#### Fase A — Auditoría sistémica EXHAUSTIVA (autónoma, read-only)
 
-**Tareas del builder/coordinator:**
+> **Pedido explícito de Jorge 2026-05-08:** "debes leer el código completo todo de principio a fin". Esto NO es un escaneo con grep. Es lectura completa archivo por archivo. El coordinator delega al builder y al archivist en serie. El output esperado es extenso pero estructurado.
 
-1. **Inventario completo:**
-   - Leer `src/App.tsx` y listar todas las rutas (públicas + admin).
-   - Leer `src/components/Sidebar.tsx` y listar todos los items del menú (con su gate por rol).
-   - Leer `src/utils/permisos.ts` y mapear qué rol puede ver cada cosa.
-   - Recorrer `src/pages/` y listar cada página con: nombre, ruta, propósito (según comentario o inferencia del JSX).
-   - Recorrer `src/components/` por carpetas temáticas (ordenes, facturas, citas, etc.) e identificar si hay vistas que viven en componentes en lugar de páginas.
+**Tarea A1 — Lectura exhaustiva del código (NO grep parcial):**
 
-2. **Tabla módulo × rol:** matriz que muestre por cada módulo (filas) si cada rol (columnas) lo ve, lo usa, o lo evita.
+Leer en orden, **completo de principio a fin** (sin saltarse), cada archivo en estos buckets:
 
-3. **Detección de redundancias:**
-   - Páginas que muestran datos similares con UX distinta (ej: `Ordenes.tsx` vs `Tablero.tsx` vs `Citas.tsx` — qué solapan).
-   - Acciones duplicadas (ej: agendar cita desde 3 lugares distintos).
-   - Módulos que casi nadie ve (revisar git log de commits sobre cada archivo como proxy de "se actualiza").
+1. **Entrada y routing:**
+   - `src/App.tsx`
+   - `src/main.tsx`
+   - `src/firebase/config.ts`
+   - `src/firebase/seedData.ts` (si existe)
 
-4. **Métricas observables sin instrumentar:**
-   - Número de módulos en sidebar por rol.
-   - Profundidad de navegación promedio para flujos comunes (ej: "crear orden", "iniciar chequeo", "facturar").
+2. **Context y auth:**
+   - `src/context/AppContext.tsx`
+   - Cualquier otro context bajo `src/context/`
 
-5. **Output:** `docs/sprints/AUDITORIA_IA_2026-05-08.md` con:
-   - Inventario completo (tablas).
-   - Lista de redundancias detectadas con ejemplo concreto.
-   - Top 5 áreas de mayor confusión potencial (con justificación).
-   - Apéndice: decisiones técnicas observadas (ej: por qué Standby es módulo aparte y no fase de orden).
+3. **Páginas (TODAS):**
+   - Recorrer `src/pages/` completo. Leer **cada `.tsx` de principio a fin**, incluyendo `pages/public/`.
+   - Para cada página anotar: ruta, rol, props que recibe, queries que dispara, filtros aplicados, mutaciones que ejecuta.
+
+4. **Componentes (por familia):**
+   - `src/components/Sidebar.tsx`, `Layout.tsx`, `PublicLayout.tsx`
+   - `src/components/ordenes/` completo
+   - `src/components/facturacion-pendiente/` completo
+   - `src/components/cierre/` completo
+   - `src/components/facturas/`, `conduces/`, `citas/`, `clientes/`, `recordatorios/` completo
+   - `src/components/public/` completo (renderer de formularios públicos)
+
+5. **Services:**
+   - Leer todos los archivos en `src/services/` de principio a fin.
+   - Para cada uno: qué colección toca, qué shapes lee/escribe, qué queries usa, si hay reads/writes que asumen `auth.uid` o `personalDocId`.
+
+6. **Hooks:**
+   - Leer todos los archivos en `src/hooks/` de principio a fin.
+   - Foco en hooks de creación de órdenes, citas, formularios, autenticación.
+
+7. **Utils:**
+   - `src/utils/index.ts` (helpers compartidos — probablemente el más denso)
+   - `src/utils/permisos.ts` (matriz de permisos)
+   - `src/utils/whatsapp.ts`, `siguientePaso.ts`, `tooltipsBotones.ts`, `timelineAcciones.ts`, `checklistTemplates.ts`
+   - Cualquier otro `.ts` en `src/utils/`
+
+8. **Types:**
+   - `src/types/index.ts` completo (mapa de shapes de toda la app)
+
+9. **Reglas de Firestore:**
+   - `firestore.rules` completo
+   - `firestore.indexes.json`
+
+10. **Scripts de migración y mantenimiento (referencia):**
+    - Listar todos los scripts en `scripts/` con propósito de cada uno.
+    - Leer `scripts/invariantes/*.ts` (cazadores P-XXX) para entender qué se está cazando.
+
+11. **Documentación previa (contexto):**
+    - `CLAUDE.md` (ya en contexto pero releer relevante)
+    - `CONTEXTO_PROYECTO.md`
+    - `CONTEXTO_PAGINA_WEB.md`
+    - `docs/PATRONES_REGRESION.md`
+    - `docs/postmortems/` (todos los archivos)
+
+**Tarea A2 — Auditoría funcional (qué está roto o frágil):**
+
+Mientras lee, anotar TODOS los hits de:
+
+1. **Filtros cliente que asumen `userProfile.id == auth.uid`** (variante P-001 en lectura). Ya hay 16 archivos con `// @safe-userprofile-id:` que se asumieron seguros — re-validar uno por uno con el nuevo entendimiento de operaria↔técnico:
+   - **Ya confirmado roto en Dashboard.tsx:459** — filtro de técnicos por `t.operariaId === userProfile?.id`. Yohana no ve técnicos asignados a ella porque `operariaId` en `personal/` puede estar guardado como `auth.uid` mientras `userProfile.id` es `personalDocId`.
+   - Buscar el patrón hermano en `AgendaDia.tsx:286`, `Ordenes.tsx`, `Citas.tsx`, `MapaRutas.tsx`, `Rendimiento.tsx`, etc.
+
+2. **Queries que filtran por `operariaId`, `tecnicoId`, `ayudanteId`, `creadaPor`, etc.** — verificar shape exacto guardado vs shape esperado por el filtro.
+
+3. **Notificaciones legacy con `userId == personalDocId`** (Caso A confirmado en Yohana, hipótesis Jorge: replicado en otros).
+
+4. **Email mismatches `personal/` ↔ `usuarios/` ↔ Firebase Auth** (caso Wilainy detectado, hipótesis Jorge: replicado).
+
+5. **Páginas que filtran datos por relación operaria↔técnico, supervisor↔ayudante, coordinador↔operaria, etc.** — mapear relaciones implícitas que dependen de que un campo apunte al `auth.uid` correcto.
+
+6. **Acciones que escriben `userProfile.id` a campos que en el futuro podrían estar gateados** — patrón P-001 latente (auditoría 111a identificó 4 casos descriptivos no gateados que SPRINT-114 ya migró, re-validar cobertura).
+
+7. **Dropdowns que asignan empleados** — patrón P-006 (cazado por check-tecnicoid-personal-id-misuse.ts). Verificar que ningún nuevo dropdown evade el cazador.
+
+**Tarea A3 — Auditoría de Information Architecture:**
+
+(El alcance original de fase A — menús, módulos, redundancias, tabla módulo × rol.) Sigue todo lo que estaba antes:
+
+- Inventario de rutas de App.tsx.
+- Items del Sidebar por rol.
+- Matriz módulo × rol.
+- Redundancias entre páginas.
+- Detección de módulos con poco uso (git log proxy).
+
+**Output esperado:** TRES archivos en `docs/sprints/`:
+
+1. `docs/sprints/AUDITORIA_IA_2026-05-08.md` — Information Architecture (de A3).
+2. `docs/sprints/AUDITORIA_FUNCIONAL_2026-05-08.md` — Bugs latentes y patrones rotos (de A1+A2). Con tabla por archivo:línea, severidad (crítico/alto/medio/bajo), patrón asociado (P-XXX si aplica), recomendación.
+3. `docs/sprints/INVENTARIO_CODIGO_2026-05-08.md` — Inventario neutral de cada archivo de `src/` con una línea por archivo describiendo su propósito (es la base sobre la que se construyen las otras dos auditorías y queda como referencia viva).
+
+**Tiempo estimado:** muchas horas de procesamiento del coordinator. NO es un sprint de 25 minutos. Si el coordinator detecta que va a desbordar la ventana de contexto, debe dividir el trabajo en pasadas (ej: A1 + A3 en una pasada, A2 en otra) y no degradar la calidad. Mejor 3 pasadas exhaustivas que 1 pasada superficial.
 
 #### Fase B — Propuesta de reorganización (autónoma, requiere review humano)
 
