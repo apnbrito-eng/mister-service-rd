@@ -3,9 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 por coordinator (cuarta pasada autónoma, `procesa bloqueos` — SPRINT-115 fase write desbloqueada por jorge tras diagnóstico, ahora se procesa autónomo).
+**Última actualización:** 2026-05-08 por Cowork (SPRINT-116 abierto: auditoría sistémica de email mismatches y notis legacy en TODOS los empleados, tras detectar caso Wilainy + sospecha de Jorge sobre patrón generalizado).
 
-**Próximo ID disponible:** SPRINT-116
+**Próximo ID disponible:** SPRINT-117
 
 ---
 
@@ -866,3 +866,104 @@ Si Yohana reporta "ve pero no puede marcar", es Caso B. Si reporta "no ve nada",
   - Eliminar la query legacy `where('destinatarioId', '==', userId)` del service una vez TODOS los docs estén migrados a `userId`. Eso es un sprint follow-up.
   - Endurecer rule de update para validar también `destinatarioId == auth.uid` como fallback temporal hasta que la migración masiva (futura) limpie todo.
 - Postmortem obligatorio si confirma Caso B (vector recurrente del bug histórico). Sub-regla CLAUDE.md.
+
+---
+
+### SPRINT-116 — Auditoría sistémica: email mismatches + notis legacy en TODOS los empleados
+
+**Estado:** PENDIENTE (procesable autónomo en fase A; fase B audit + scripts de fix BLOQUEADOS esperando OK Jorge en `BLOQUEOS.md`)
+**Prioridad:** alta (sospecha Jorge 2026-05-08: el patrón de notis con `userId == personalDocId` y emails desalineados puede afectar a varios empleados, no solo Yohana/Wilainy)
+**Origen:** Tras destrabar SPRINT-115 fase write para Yohana, Jorge intentó cambiar contraseña de Wilainy y la app respondió "No existe usuario con email Nwilainy@gmail.com". El backfill del 2026-05-06 ya había detectado este mismatch (uid `KT9LaszokWNmLCEIe8YOvNKc9rF3` con `usuarios.email=apnbrito0318@gmail.com` ≠ `personal.email=nwilainy@gmail.com`). Jorge sospecha que el patrón se replica.
+**Riesgo:** alto en fase B (toca datos en producción). Bajo en fase A (read-only).
+**Touch-list previsto:**
+- `scripts/auditoria-emails-personal-vs-usuarios.ts` (NUEVO — read-only)
+- `scripts/auditoria-notis-legacy-todos.ts` (NUEVO — read-only)
+- (Condicional, BLOQUEADO) `scripts/fix-emails-mismatch.ts` (caso por caso, no masivo automático)
+- (Condicional, BLOQUEADO) `scripts/re-migrar-notis-legacy-todos.ts` (extensión del script de Yohana al universo completo)
+
+#### Hipótesis
+
+1. **Audit A — emails desalineados:** El backfill del 2026-05-06 reportó solo 1 conflicto sobre 22 empleados. Pero ese script comparaba un subset; un audit más completo puede destapar más casos donde el `personal.email` no matchea el email registrado en Firebase Auth para el mismo `uid`.
+
+2. **Audit B — notis legacy con `userId == personalDocId`:** El bug del Caso A confirmado en Yohana puede repetirse en CUALQUIER empleado que haya recibido notificaciones antes del fix de SPRINT-105 (2026-05-06). Cuántas notis legacy tiene cada empleado, y cuántos están afectados.
+
+#### Objetivo
+
+Auditar el universo completo de empleados (22 docs en `personal/` con `uid` no vacío) y reportar:
+1. Cuántos tienen email desalineado entre `personal/` y `usuarios/`.
+2. Cuántas notis legacy tipo Caso A/B tiene cada empleado.
+3. Para cada hit, IDs exactos de docs problemáticos.
+
+Después decidir con Jorge si:
+- El fix de email mismatch es caso-por-caso (UI/manual, ej: corregir desde GestionUsuarios) o script.
+- El fix de notis se generaliza al universo completo (script masivo) o se hace usuario por usuario (más conservador).
+
+#### Fase A — auditoría email mismatches (autónoma, read-only)
+
+**Comportamiento esperado de `scripts/auditoria-emails-personal-vs-usuarios.ts`:**
+
+1. Para cada doc en `personal/` con `uid != ''`:
+   - Leer `usuarios/{uid}` con Admin SDK.
+   - Comparar `personal.email` vs `usuarios.email` (case-sensitive Y case-insensitive separados).
+   - Comparar también con `auth.email` real desde `admin.auth().getUser(uid)` (ese es el email canónico).
+2. Tabla output:
+   - `uid`, `personal.id`, `personal.email`, `usuarios.email`, `auth.email`, `match: ok|case|mismatch`.
+3. Resumen final con conteos.
+4. Si encuentra alguno con `match: mismatch` (no solo case), proponer en EJECUCION_AUTONOMA.md cuál es el email canónico (probablemente `auth.email`) y qué pasos seguir.
+
+#### Fase B — auditoría notis legacy todos los empleados (autónoma, read-only)
+
+**Comportamiento esperado de `scripts/auditoria-notis-legacy-todos.ts`:**
+
+1. Para cada doc en `personal/` con `uid != ''`:
+   - Reusar lógica del script de Yohana, pero parametrizada por uid.
+   - Hacer las 4 queries: `userId == auth.uid`, `destinatarioId == auth.uid`, `userId == personalDocId`, `destinatarioId == personalDocId`.
+   - Clasificar docs en OK / Caso A / Caso B / OTRO.
+2. Tabla output:
+   - empleado nombre, rol, conteo OK, conteo Caso A, conteo Caso B, conteo OTRO.
+3. Resumen final con conteos globales.
+4. Listado de empleados con Caso A o B > 0, ordenado por cantidad descendente.
+
+#### Fase C — fix masivo (BLOQUEADO, requiere OK Jorge en BLOQUEOS.md tras ver fase B)
+
+Si fase B reporta múltiples empleados con notis legacy:
+
+- Generalizar `scripts/re-migrar-notificaciones-yohana.ts` a un script que tome la salida de fase B como input y procese en lote.
+- Mantener idempotencia (skip docs ya alineados), dry-run, audit log per usuario.
+- Scope: SOLO los uids reportados por fase B con `match: ok` o `match: case`. Si hay email mismatch real, NO migrar notis hasta resolver primero el email (escalar a Jorge).
+
+#### Fase D — fix email mismatches (BLOQUEADO, caso-por-caso)
+
+Si fase A reporta mismatches reales:
+
+- NO escribir un script masivo de fix automático — los mismatches de email son ambiguos y requieren decisión humana ("cuál es el email correcto: el de personal/ o el de Auth?").
+- Reportar cada caso individualmente en EJECUCION_AUTONOMA.md.
+- Jorge resuelve uno por uno desde la UI de GestionUsuarios o desde el panel de Firebase Auth.
+- Si la app no permite cambiar el email del personal/ desde la UI, abrir SPRINT-117 chico para agregar la funcionalidad.
+
+#### Criterios de aceptación
+
+- [ ] `scripts/auditoria-emails-personal-vs-usuarios.ts` corre y genera tabla en stdout.
+- [ ] `scripts/auditoria-notis-legacy-todos.ts` corre y genera tabla en stdout.
+- [ ] Output capturado en `docs/sprints/AUDITORIA_NOTIS_2026-05-08.md` (markdown con tablas).
+- [ ] Si fase A reporta 0 mismatches: marcar fase A COMPLETADA. Si reporta >0: actualizar entrada en BLOQUEOS.md con scope acotado por uid.
+- [ ] Si fase B reporta 0 empleados afectados: marcar fase B COMPLETADA y SPRINT-116 entero CERRADO. Si reporta >0: actualizar entrada en BLOQUEOS.md con tabla de uids afectados.
+- [ ] Cazadores P-001..P-006 siguen en 0 hits.
+- [ ] Sin tocar rules ni código de la app en fases A y B.
+
+#### Restricciones / guardarrails
+
+- Fases A y B son **read-only** y procesables autónomas.
+- Fase C **requiere OK Jorge** en `BLOQUEOS.md` con scope listado por uids específicos (no "todos los empleados" en general).
+- Fase D **NO se automatiza**. Cada email mismatch se resuelve manual desde la UI o Firebase Console.
+- archivist PRE-CHANGE recomendado antes de fase C/D (toca datos sensibles).
+- Si la auditoría revela un patrón cualitativamente nuevo (ej: notis con `destinatarioId == "string raro"` no esperado), abrir P-XXX nuevo en `docs/PATRONES_REGRESION.md` + cazador.
+
+#### Notas para el coordinator
+
+- **Reusar máximo posible** del script de Yohana (`scripts/diagnostico-notificaciones-yohana.ts` y `scripts/re-migrar-notificaciones-yohana.ts`). Extraer lógica a helpers compartidos si es necesario.
+- Para **Audit A**, considerar usar `admin.auth().getUser(uid)` para obtener el email canónico de Firebase Auth — es la fuente de verdad sobre con qué email el usuario realmente puede loguear.
+- Para **Audit B**, generar tabla incluso si todos los conteos son 0 — es valioso confirmar que el universo está limpio.
+- Si el coordinator detecta que el problema afecta a >50% de empleados, reportar como "patrón sistémico" y escalar a Jorge antes de proponer fix masivo.
+- Postmortem obligatorio si fase B reporta >5 empleados afectados (sub-regla CLAUDE.md "cada bug → cazador" + recurrencia ya documentada en P-XXX históricos).
+- Sub-regla "destructive actions": coordinator NO ejecuta fase C/D autónomo aunque tenga OK Jorge previo — siempre confirmar con dry-run primero, mostrar output a Jorge, esperar su "dale al apply".
