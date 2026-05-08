@@ -5,6 +5,115 @@
 
 ---
 
+## 2026-05-08 — Avance parcial SPRINT-117 fase A2 porción read-only (quinta pasada del día)
+
+### Contexto
+
+Jorge respondió "1" al conflicto detectado por el coordinator entre SPRINT-116 (ABSORBIDO por SPRINT-117 fase A2) y la entrega autónoma. Camino 1 elegido: entregar los 2 scripts read-only originalmente alcance de SPRINT-116 fases A y B como **avance parcial** dentro de SPRINT-117 fase A2, sin tocar el estado ABSORBIDO de SPRINT-116 ni procesar A1 / A3 de SPRINT-117 (esos quedan para pasada exhaustiva futura por riesgo de degradación de calidad si se hacen en la misma ventana).
+
+### Restricciones del sprint evaluadas
+
+- rules: NO toca.
+- migración masiva (>500 docs): NO — los 2 scripts son **read-only puros** (sin `addDoc`/`setDoc`/`updateDoc`/`deleteDoc`/`FieldValue`).
+- integración terceros / OAuth / pago: NO.
+- endpoint público: NO.
+- **Procesable autónomo** (igual patrón que `f6d1d76`/`5bfa0e0` pusheados antes — scripts read-only sin riesgo).
+
+### Archivos creados (2)
+
+- **`scripts/auditoria-emails-personal-vs-usuarios.ts`** (289 líneas, commit `ac54662`)
+  - Bootstrap Admin SDK calcado de `scripts/diagnostico-notificaciones-yohana.ts`.
+  - Para cada doc en `personal/` con `uid` no vacío:
+    - Lee `usuarios/{uid}` (si existe).
+    - Lee `admin.auth().getUser(uid)` (fuente canónica del email).
+    - Compara los 3 emails en case-sensitive y case-insensitive.
+    - Clasifica en `ok`, `case`, `mismatch`, `usuarios_missing`, `auth_missing`, `auth_error`.
+  - Output: matriz por empleado + listado focalizado de afectados + diagnóstico final con conteos.
+  - Cubre alcance original de SPRINT-116 fase A.
+- **`scripts/auditoria-notis-legacy-todos.ts`** (295 líneas, commit `6defe8f`)
+  - Bootstrap Admin SDK idem.
+  - Generaliza `scripts/diagnostico-notificaciones-yohana.ts` parametrizado por uid: para cada empleado con uid no vacío ejecuta las 4 queries (`userId`/`destinatarioId` × `auth.uid`/`personalDocId`) y dedupea por id.
+  - Clasifica cada doc en OK / Caso A (no las ve nadie) / Caso B (las ve pero no marca leído) / OTRO.
+  - Output: matriz por empleado, conteos globales, listado de afectados con ids exactos (input para eventual re-migración masiva acotada).
+  - Cubre alcance original de SPRINT-116 fase B.
+
+### archivist PRE-CHANGE (manual)
+
+- `git log --oneline --grep="diagnostico\|auditoria"` revisado: identificados scripts hermanos (`f6d1d76` diagnóstico Yohana, `5bfa0e0` diagnóstico tecnicoId, `1353b84` backfill usuarios). Patrón de bootstrap Admin SDK + `service-account.json` raíz consistente.
+- Postmortem relacionado: no existe `docs/postmortems/2026-05-08-*` específico de notis legacy. La causa raíz está documentada en CLAUDE.md (gotcha "userProfile.id NO siempre es auth.uid" + gotcha "Alta de empleado debe crear AMBOS docs") y en P-001/P-004 del catálogo. La sub-regla "cada bug → cazador" se cumplirá completa cuando los scripts revelen el universo afectado y Jorge cierre los hallazgos.
+
+### Tester (manual)
+
+- `npx tsc --noEmit` → clean.
+- `npx eslint scripts/auditoria-emails-personal-vs-usuarios.ts scripts/auditoria-notis-legacy-todos.ts --max-warnings 0` → clean.
+- `npm run check:regression` → 6/6 cazadores PASS, 0 hits.
+- Verificación read-only por grep: `grep -nE "addDoc|setDoc|updateDoc|deleteDoc|FieldValue\.|\.set\(|\.update\(|\.delete\(|\.add\("` → único match es `dedup.set(d.id, ...)` (Map.set en memoria, NO mutación Firestore). **Confirmado read-only.**
+- **GO.**
+
+### regression_guardian (manual, foco P-001..P-006)
+
+- **P-001 (`userProfile.id` vs `auth.uid`):** ambos scripts son server-side Admin SDK; operan sobre `personal.uid` (que ES el `auth.uid`). Sin uso de `userProfile.id` ni `currentUser.uid`. **No aplica.**
+- **P-002 (rules opcionales sin `.get()`):** no tocan rules. **No aplica.**
+- **P-003 (cross-collection sin runTransaction):** ambos scripts son read-only puros. **No aplica.**
+- **P-004 (alta empleado sin doc espejo):** no tocan flujo de alta. **No aplica.**
+- **P-005 (rules sin deploy):** no tocan rules. **No aplica.**
+- **P-006 (dropdown personal.id vs auth.uid):** no tocan UI ni dropdowns. **No aplica.**
+- **PASS.** Como son scripts server-side Admin SDK, ninguno de los patrones determinísticos de regresión aplica.
+
+### Reviewer (manual, self-review)
+
+- Estructura: ambos scripts calcan el patrón de `scripts/diagnostico-notificaciones-yohana.ts` y `scripts/diagnostico-tecnicoid-auth-uid.ts` (consistencia con el ecosistema).
+- Manejo de errores: `auth/user-not-found` clasificado correctamente como `auth_missing`; otros errores como `auth_error` con detalle preservado.
+- Ordenación de output: empleados problemáticos primero (severidad descendente), luego limpios. Útil para Jorge.
+- Spanish identifiers, sin emojis, mensajes claros con marcas ASCII (✓/✗/⚠).
+- Documentación inline en headers explica origen (SPRINT-117 fase A2 absorbió SPRINT-116), uso, requisitos, lo que NO hace por diseño.
+- IDs reportados de Caso A/B son insumo directo para eventual re-migración acotada (analogía exacta al input que SPRINT-115 recibió de Jorge tras el diagnóstico de Yohana).
+- Bypass de rules por Admin SDK es esperado (privilegio de service-account).
+- **APPROVED.**
+
+### Commits + push
+
+- `ac54662` (auditoria-emails) — pre-commit hook PASS (typecheck + 6/6 cazadores + lint).
+- `6defe8f` (auditoria-notis) — pre-commit hook PASS (idem).
+- Push a `main`: `1d3280e..6defe8f`.
+
+### Devops
+
+- Push a main → Vercel deploy se dispara solo. Los cambios NO afectan el build de la app (son scripts utility no importados desde `src/`). No hay smoke test crítico para devops en esta pasada.
+
+### Sub-regla "cada bug → cazador"
+
+- **Aplica condicionalmente y todavía NO se cumple.** Los scripts son **diagnósticos**, no cierran un bug — son la herramienta para mapearlo. La sub-regla se cumplirá completa cuando:
+  1. Jorge ejecute ambos scripts contra producción y capture el output.
+  2. Si revela empleados afectados (>0): abrir sprint write acotado por uid (BLOQUEADO con OK Jorge), aplicar fix, escribir postmortem.
+  3. En el postmortem, decidir: ¿el cazador determinístico de P-001 + P-004 ya cubre la causa raíz? Si sí, no se necesita cazador nuevo. Si revela un patrón cualitativamente nuevo (ej: el mismatch de email tiene una causa upstream no anticipada), abrir P-XXX nuevo + cazador.
+
+### Próximos pasos para Jorge
+
+1. Desde la Mac de Jorge (con `service-account.json` en raíz):
+   - **Auditoría emails:** `npx tsx scripts/auditoria-emails-personal-vs-usuarios.ts`. Output esperado: tabla con N empleados, conteos por clasificación, listado de afectados con detalle del mismatch.
+   - **Auditoría notis legacy:** `npx tsx scripts/auditoria-notis-legacy-todos.ts`. Output esperado: matriz por empleado con total/ok/A/B/otro, listado de afectados con ids exactos.
+2. Capturar el output de ambos scripts en `docs/sprints/AUDITORIA_NOTIS_2026-05-08.md` (markdown con tablas).
+3. Reportar a Cowork:
+   - Si auditoría emails reporta 0 mismatches → marcar fase A absorbida COMPLETADA. Si reporta >0 → cada caso se resuelve manual desde GestionUsuarios o Firebase Console.
+   - Si auditoría notis reporta 0 empleados afectados → SPRINT-116 alcance completo CERRADO. Si reporta >0 → abrir sprint write acotado por uid en BLOQUEOS.md, requiere OK Jorge.
+
+### Lo que NO se ejecutó en esta pasada (queda PENDIENTE para pasada exhaustiva futura)
+
+- **SPRINT-117 fase A1** — lectura exhaustiva del código (`src/` archivo por archivo). Scope masivo, no procesable en la misma ventana sin degradar calidad.
+- **SPRINT-117 fase A3** — auditoría Information Architecture (rutas, sidebar por rol, redundancias, tabla módulo × rol).
+- **SPRINT-117 fase A2 porción remanente** — auditoría funcional sobre el código vivo (filtros con `userProfile.id`, queries con `operariaId/tecnicoId/ayudanteId`, dropdowns, variantes P-006 latentes en lectura). Depende de A1 — esperar pasada exhaustiva.
+
+### Resumen de la pasada
+
+- 1 sprint procesado parcialmente: SPRINT-117 fase A2 (porción read-only).
+- 2 commits pusheados: `ac54662` + `6defe8f`.
+- 0 sprints bloqueados nuevos.
+- SPRINT-116 sigue ABSORBIDO (no tocado).
+- ~30 min coordinator + tiempo de Jorge para ejecutar los scripts contra producción y capturar output.
+
+---
+
 ## 2026-05-08 — `procesa bloqueos` autónomo (cuarta pasada del día — SPRINT-115 fase write)
 
 ### Estado de los bloqueos al iniciar

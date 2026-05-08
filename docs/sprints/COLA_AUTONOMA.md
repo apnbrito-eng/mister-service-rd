@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 por Cowork (Jorge prioriza reordenar+auditoría general — SPRINT-117 ampliado con fase A2 auditoría funcional que absorbe scope de SPRINT-116. SPRINT-115 fase write pausada. SPRINT-116 marcado ABSORBIDO. Nuevo bug detectado: agenda operaria no muestra órdenes de su técnico — variante P-006 con `operariaId`, agregado al scope de A2).
+**Última actualización:** 2026-05-08 por coordinator (avance parcial SPRINT-117 fase A2 porción read-only — 2 scripts que absorben SPRINT-116 entregados en `ac54662` + `6defe8f`). Estado anterior preservado abajo. Jorge prioriza reordenar+auditoría general — SPRINT-117 ampliado con fase A2 auditoría funcional que absorbe scope de SPRINT-116. SPRINT-115 fase write pausada. SPRINT-116 marcado ABSORBIDO. Nuevo bug detectado: agenda operaria no muestra órdenes de su técnico — variante P-006 con `operariaId`, agregado al scope de A2.
 
 **Próximo ID disponible:** SPRINT-118
 
@@ -972,7 +972,22 @@ Si fase A reporta mismatches reales:
 
 ### SPRINT-117 — Rediseño Information Architecture (auditoría + propuesta + ejecución por fases)
 
-**Estado:** PENDIENTE — fase A (auditoría) procesable autónoma. Fase B (propuesta) procesable autónoma con review humano obligatorio antes de pasar a C. Fase C (ejecución) se descompone en sub-sprints 117c1, 117c2, etc., todos BLOQUEADOS hasta que Jorge apruebe la propuesta de B.
+**Estado:** EN_EJECUCION_PARCIAL — fase A2 (porción read-only) **AVANCE PARCIAL COMPLETADO** el 2026-05-08 con commits `ac54662` + `6defe8f` (2 scripts read-only que absorben SPRINT-116 fases A y B). Falta A1 (lectura exhaustiva del código) y A3 (Information Architecture) — ambos quedan PENDIENTE para una pasada exhaustiva futura por riesgo de degradación de calidad si se ejecutan en la misma ventana. Fase B (propuesta) procesable autónoma con review humano obligatorio antes de pasar a C. Fase C (ejecución) se descompone en sub-sprints 117c1, 117c2, etc., todos BLOQUEADOS hasta que Jorge apruebe la propuesta de B.
+
+**Avance fase A2 (porción read-only) — 2026-05-08:**
+
+- `ac54662` — `scripts/auditoria-emails-personal-vs-usuarios.ts` (read-only). Audita TODOS los empleados con uid no vacío y compara `personal.email` vs `usuarios.email` vs `auth.email` (canónico via `admin.auth().getUser()`). Reporta matriz por empleado y conteos de mismatch / case / usuarios_missing / auth_missing. Cubre el alcance original de SPRINT-116 fase A.
+- `6defe8f` — `scripts/auditoria-notis-legacy-todos.ts` (read-only). Generaliza `scripts/diagnostico-notificaciones-yohana.ts` parametrizado por uid: enumera todos los empleados con uid y para cada uno ejecuta las 4 queries clasificando docs OK/Caso A/Caso B/OTRO. Reporta matriz por empleado e ids exactos de afectados. Cubre el alcance original de SPRINT-116 fase B.
+- Tester: typecheck clean, lint clean, cazadores 6/6 PASS.
+- regression_guardian: PASS (ambos scripts son server-side Admin SDK, no aplican P-001..P-006).
+- Reviewer: APPROVED.
+- **Próximo paso humano:** Jorge ejecuta los 2 scripts contra producción con `service-account.json` local y captura la salida. Si los scripts revelan empleados afectados (>0), se abre fase write como sprint nuevo BLOQUEADO con scope listado por uid (sub-regla CLAUDE.md "destructive actions"). El output debe quedar archivado en `docs/sprints/AUDITORIA_NOTIS_2026-05-08.md` (markdown con tablas).
+
+**Pendiente todavía dentro de SPRINT-117 fase A:**
+
+- **A1 — Lectura exhaustiva del código** (`src/` archivo por archivo). NO ejecutado en esta pasada por scope masivo + riesgo de degradación de calidad si se hace en la misma ventana de contexto. Pasada exhaustiva futura.
+- **A3 — Auditoría Information Architecture** (rutas, sidebar por rol, redundancias, tabla módulo × rol). NO ejecutado. Misma razón que A1. Pasada exhaustiva futura.
+- **A2 (porción remanente)** — auditoría funcional sobre el código vivo (filtros con `userProfile.id`, queries con `operariaId/tecnicoId/ayudanteId`, dropdowns que asignan empleados, etc.). Esta porción depende de A1 (necesita lectura completa) y queda para la misma pasada exhaustiva.
 **Prioridad:** alta (UX general — Jorge dice 2026-05-08: "fusionar y converger módulos para que el sistema sea más intuitivo y fácil de entender")
 **Origen:** Pedido directo de Jorge tras hotfix de Yohana. Observa que el sistema tiene muchos menús/módulos que podrían fusionarse o reorganizarse para reducir fricción cognitiva en empleados.
 **Riesgo:** alto en fase C (toca Sidebar, App.tsx, rutas — afecta a todo el equipo). Bajo en A y B (read-only y propuesta).
@@ -988,6 +1003,8 @@ Reducir la cantidad de elementos del menú lateral, agrupar módulos relacionado
 #### Fase A — Auditoría sistémica EXHAUSTIVA (autónoma, read-only)
 
 > **Pedido explícito de Jorge 2026-05-08:** "debes leer el código completo todo de principio a fin". Esto NO es un escaneo con grep. Es lectura completa archivo por archivo. El coordinator delega al builder y al archivist en serie. El output esperado es extenso pero estructurado.
+
+> **Estado al 2026-05-08:** A2 porción read-only (los 2 scripts que absorben SPRINT-116) AVANCE PARCIAL COMPLETADO en `ac54662` + `6defe8f`. A1 + A3 + porción remanente de A2 PENDIENTES para pasada exhaustiva futura.
 
 **Tarea A1 — Lectura exhaustiva del código (NO grep parcial):**
 
