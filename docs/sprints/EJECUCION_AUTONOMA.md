@@ -5,6 +5,48 @@
 
 ---
 
+## 2026-05-08 — `trabaja` autónomo (1 sprint completado: auditoría documental SPRINT-111)
+
+### SPRINT-111 — Auditar otros campos de ID con vector P-001/P-006 (fase 111a)
+
+- **Estado final:** COMPLETADO (fase 111a — auditoría documental). El sprint original tenía scope grande con migración potencial de datos; el coordinator lo dividió en fases y procesó solo la fase documental autónomamente.
+- **Hash:** pendiente al cierre del sprint (commit incluye el documento + actualización de cola).
+- **Tipo:** auditoría documental + análisis estático del código + lectura de rules. Sin tocar código de aplicación, sin tocar rules, sin migración de datos.
+- **Restricciones evaluadas:** rules NO, migración masiva NO, integración pago/OAuth/terceros NO, endpoint `api/` público NO. Procesable autónomo en fase 111a.
+- **Archivos creados/modificados (3):**
+  - `docs/sprints/AUDITORIA_CAMPOS_ID_2026-05-08.md` (NUEVO, 91 líneas) — tabla auditando 12 campos con: rule aplicable, código que escribe, veredicto. Tabla complementaria con los 4 hits de variable local `usuarioId` en componentes.
+  - `docs/sprints/COLA_AUTONOMA.md` (EDITAR) — SPRINT-111 marcado COMPLETADO con resumen 1-línea; SPRINT-114 agregado al final como follow-up sugerido (bajo riesgo, no urgente, 4 archivos, sin migración).
+  - `docs/sprints/EJECUCION_AUTONOMA.md` (EDITAR — este archivo).
+- **archivist PRE-CHANGE (manual):** touch-list 100% documental (markdowns + análisis de código sin escribir). Sin contacto con páginas críticas, services, rules ni context. No requería invocación formal.
+- **regression_guardian:** N/A — el sprint no toca código fuente, sólo lo lee para auditar.
+- **Tester:**
+  - `npm run check:regression`: 6/6 PASS, 0 hits, 72ms (sin cambios en código fuente).
+  - `npx tsc --noEmit`: N/A (no se modificó TypeScript).
+  - `npm run lint`: N/A (no se modificó código).
+- **Hallazgos clave:**
+  - 12 campos auditados (`tecnicoId`, `ayudanteId`, `operariaId`, `responsableId`, `creadaPor`, `creadoPor`, `eliminadaPor`, `aprobadoPor`, `sugeridaPor`, `resueltaPor`, `cerradaPor`, `usuarioId`, `personalUid`).
+  - **Bugs latentes nuevos:** 0. La cobertura de P-001 + P-006 + las gotchas vigentes captura todos los vectores con riesgo de permission-denied.
+  - **Inconsistencias de bajo riesgo:** 4 hits de `userProfile?.id` en campos descriptivos NO gateados por rule (`registradoPorId` en pagos, `enviadaAFacturacionPorId`, `emisorFacturaId`, `responsableId`). Migración recomendada en SPRINT-114 por consistencia, pero NO urgente — no rompen nada hoy.
+  - **Decisión NO crear cazador determinístico genérico:** un check sobre cualquier campo `*Id` solapa con P-001 y P-006 sin agregar señal nueva (espacio de búsqueda cae en falsos positivos rápido). En su lugar, sugerir refinamiento del `regression_guardian` semántico para regla cualitativa "campo `*Id` que identifica empleado debe usar `auth.uid`" — más útil que un cazador determinístico.
+- **Tiempo total:** ~25 min coordinator (lectura de cola + estado sesión + 12 greps + lectura de rules + análisis de cada campo + redacción del documento + actualización de cola y log).
+- **Decisión clave:** dividir SPRINT-111 monolítico en fases. La fase 111a (documental) es 100% procesable autónoma. Una eventual fase 111b (code fixes de los 4 hits descriptivos) es SPRINT-114 separado con scope acotado. Una eventual fase 111c (migración de datos viejos) NO es necesaria — ningún campo descriptivo sin rule activa rompe nada en el estado actual; migrar datos viejos abriría riesgo sin beneficio.
+
+### Sprints NO procesados en esta pasada (decisión)
+
+- **SPRINT-100** — sigue PENDIENTE: requiere validación humana de Yohana (no procesable autónomo).
+- **SPRINT-112** — sigue PENDIENTE: scope grande (schema drift + matriz permisos), incluye QA manual con usuarios reales por rol. Procesable autónomamente la parte de schema drift script + tabla docs, pero el QA manual es bloqueante para "completado". Se deja para una pasada más larga o cuando Jorge esté disponible para QA.
+- **SPRINT-113** — sigue PENDIENTE: UX flujo paso a paso. Cowork sugirió dividir en 113a/b/c. Procesable, pero scope grande (≥6 archivos cada sub-sprint) y los criterios incluyen "QA manual con usuarios reales recorriendo flujo end-to-end" — bloqueante. Se deja para próxima pasada.
+- **SPRINT-114** (recién creado) — PENDIENTE pero baja prioridad. No procesar en esta pasada porque no hay urgencia y el alcance sería mejor procesarlo agrupado con otro sprint relacionado.
+
+### Resumen para Jorge / Cowork
+
+- **Sprints completados:** 1 (SPRINT-111 fase 111a documental).
+- **Sprints bloqueados nuevos:** 0.
+- **Sprints PENDIENTE al cierre:** 5 (SPRINT-100 humano, SPRINT-112, SPRINT-113, SPRINT-114, todos con razón documentada para no procesar autónomamente ahora).
+- **Cazadores anti-regresión:** 6/6 PASS, 0 hits.
+
+---
+
 ## 2026-05-07 — `trabaja` autónomo tercera pasada (1 sprint ejecutado + 2 retroactivos)
 
 ### SPRINT-108 — Cierre disciplina hotfix Aury (P-006 + P-002 ext)

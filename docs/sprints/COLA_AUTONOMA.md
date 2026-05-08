@@ -3,9 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-07 por Cowork (post-hotfix Aury — SPRINT-108 a SPRINT-113 agregados)
+**Última actualización:** 2026-05-08 por coordinator (autónomo — SPRINT-111 completado fase 111a, SPRINT-114 agregado como follow-up sugerido)
 
-**Próximo ID disponible:** SPRINT-114
+**Próximo ID disponible:** SPRINT-115
 
 ---
 
@@ -535,7 +535,7 @@ Vector P-002 ya rompió producción 2 veces (c7c8e34 Reactivación, b7b6464 Inic
 
 ### SPRINT-111 — Auditar otros campos de ID con vector P-001/P-006
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-08 (fase 111a — auditoría documental completa de 12 campos. Resultado: 0 bugs latentes nuevos. P-001 + P-006 + gotchas vigentes cubren todos los vectores activos. 4 inconsistencias de bajo riesgo identificadas → SPRINT-114 sugerido. NO se creó cazador determinístico genérico nuevo — solaparía con P-001/P-006 sin agregar señal. Documento completo en `docs/sprints/AUDITORIA_CAMPOS_ID_2026-05-08.md`).
 **Prioridad:** alta (auditoría pedida por Jorge)
 **Origen:** P-006 demostró que el bug de `tecnicoId` afecta a CUALQUIER campo que guarde un ID de personal/usuario. Otros campos similares pueden tener el mismo problema.
 **Riesgo:** alto (puede requerir migración de datos similar a P-006)
@@ -655,3 +655,48 @@ Específico — la sugerencia de chequeo del técnico no se refleja en el steppe
 - Considerá hacerlo en 3 sub-sprints: SPRINT-113a (banner siguiente paso), 113b (badges sugerencia/esperando), 113c (timeline acciones).
 - Pedir a Jorge mockups o screenshots de referencia si hay alguno.
 - Bloqueo conocido: la lógica de "siguiente paso" depende de muchos campos opcionales (sugerencias, aprobaciones, pagos). Definir matriz fase × rol × condiciones antes de empezar a codear.
+
+---
+
+### SPRINT-114 — Migrar 4 hits descriptivos `userProfile.id` a `currentUser.uid` (consistencia)
+
+**Estado:** PENDIENTE
+**Prioridad:** baja (no urgente — campos no gateados por rule, cambio defensivo de consistencia)
+**Origen:** Auditoría SPRINT-111 (fase 111a, 2026-05-08). Detectó 4 hits descriptivos legítimos (no bugs latentes) que escriben `userProfile?.id` a campos NO gateados pero que por convención del esquema post-SPRINT-105 deberían ser `auth.uid`.
+**Riesgo:** bajo (los campos no están gateados, el cambio es defensivo; no requiere migración de datos viejos)
+**Touch-list previsto:** 4 archivos
+- `src/components/ordenes/RegistrarPagoModal.tsx:95` — `pago.registradoPorId`
+- `src/components/ordenes/EnviarFacturacionButton.tsx:38` — `enviadaAFacturacionPorId`
+- `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx:321` — `emisorFacturaId` y similares
+- `src/hooks/useOrdenCreateForm.ts:612` — `responsableId`
+
+#### Objetivo
+Reemplazar los 4 hits descriptivos restantes de `userProfile?.id` por `currentUser?.uid` para que TODOS los campos `*Id` que identifican a un actor humano usen la misma convención (`auth.uid`).
+
+#### Por qué
+Hoy el esquema mezcla:
+- Campos gateados por rule contra `auth.uid` (tecnicoId, ayudanteId, creadaPor, usuarioId, personalUid) — usan `currentUser.uid` post-fixes.
+- Campos descriptivos (`registradoPorId`, `responsableId`, etc.) — usan `userProfile?.id` que para usuarios cargados vía cascada `personal/` es `personalDocId !== auth.uid`.
+
+La inconsistencia no rompe producción hoy (no hay rule que valide estos campos), pero:
+- Confunde a futuros desarrolladores (¿cuál uso aquí?).
+- Si en el futuro se agrega rule de validación a uno de estos campos (ej. para auditoría), reintroduce el bug `permission-denied` silencioso.
+- La auditoría completa de SPRINT-111 documenta que estos 4 son los únicos restantes.
+
+#### Criterios de aceptación
+- [ ] Importar `useApp` en cada componente si no está; obtener `currentUser`.
+- [ ] Reemplazar `userProfile?.id` por `currentUser?.uid` en los 4 sitios. El nombre puede seguir siendo `userProfile?.nombre`.
+- [ ] Guard `if (!currentUser) return` antes del write si la función puede correr sin usuario auth.
+- [ ] `npm run check:regression` sigue en 0 hits (P-001 ya cazaba estos pero estaban allowlistados con `@safe-userprofile-id:` — quitar el allowlist comment de los que se hayan migrado).
+- [ ] Build OK + lint OK + deploy Vercel Ready.
+- [ ] NO migrar datos viejos — los pagos/facturas con `personalDocId` siguen siendo válidos (no hay rule que los rechace).
+
+#### Restricciones / guardarrails
+- regression_guardian RECOMENDADO (toca services/components, vector P-001).
+- Sin tocar rules ni schema. Sin migración de datos.
+- archivist PRE-CHANGE recomendado (toca componentes con historia de bugs P-001).
+
+#### Notas para el coordinator
+- Cuando lo ejecutés, después del fix, abrir `scripts/invariantes/check-userprofile-id-misuse.ts` y verificar si los 4 archivos modificados tenían comentarios `@safe-userprofile-id:` que ahora son obsoletos. Si quedan obsoletos, eliminarlos para evitar mensajes confusos.
+- Bajo prioridad — solo procesar si la cola se queda sin sprints urgentes.
+- Si después de migrar los 4, el cazador P-001 vuelve a 0 hits, el sistema queda totalmente alineado con la convención `auth.uid` para todos los campos de actor humano.
