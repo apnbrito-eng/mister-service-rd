@@ -304,6 +304,24 @@ Ejercer manualmente en producción con técnico + operaria reales:
 
 ---
 
+### SPRINT-117c4 — Sección "Equipo" + mover Mantenimiento a Operaciones (PENDIENTE QA visual)
+- **Estado:** EN_REVISION_HUMANA al cierre de esta pasada (deployado pero pendiente confirmación visual de Jorge).
+- **Hash:** `480532f`.
+- **Resultado:** tres cambios estructurales en `Sidebar.tsx`:
+  1. Nueva sección **"Equipo"** (id `equipo`, icon `UserCog`, defaultExpanded `false`) con: Personal, Usuarios y Permisos, Reporte de Ponches (en ese orden).
+  2. Sección **"Sistema"** queda con solo: Configuración, Plantillas Marketing.
+  3. **Mantenimiento** mudado del top-level (era ítem suelto entre Finanzas y Web y Solicitudes) al final del array de items de Operaciones.
+
+  Las 4 entradas tocadas conservan sus gates `show:` originales: `p('personalVer')`, `p('personalModificar')`, `esAdminOCoord`, `p('ordenesVer')`. Sin renombrados de ítems, sin cambios de rutas, sin tocar lógica/listeners/queries. La sección "Equipo" se oculta automáticamente para roles sin permiso a ninguno de los 3 ítems (mismo patrón `visibleItems.length === 0` que el resto).
+- **Validación:** typecheck clean + cazadores 7/7 PASS 0 hits + lint Sidebar.tsx limpio + build OK (4.82s, bundle 2,652 kB — idéntico a baseline 117c3).
+- **Plan de rollback:** revertir el commit. Personal/Usuarios/Ponches vuelven a "Sistema", Mantenimiento vuelve a `kind: 'item'` top-level entre Finanzas y Web y Solicitudes. La reversión es 100% segura — sólo es reordenamiento del array `estructura: SidebarNode[]`.
+- **archivist PRE-CHANGE:** último commit en Sidebar.tsx fue `9c262c9` (117c3). Patterns a respetar: `SidebarNode`/`SidebarSection` con `items[]`, gates inline con `show:`, comentario inline + plan de rollback en cada agrupación tocada (igual que 117c2/117c3), sección oculta automática si `visibleItems.length === 0`. Sin postmortems aplicables. Último commit en `Mantenimiento.tsx` fue `2ba57e4` (`fix(mantenimiento): usar siguienteNumeroOrden transaccional`) — ruta `/admin/mantenimiento` activa en App.tsx, intacta. Último commit en `GestionUsuarios.tsx` fue `009bcc8` (SPRINT-105 espejo `usuarios/{uid}`) — ruta `/admin/usuarios` intacta.
+- **regression_guardian:** PASS — rutas `/admin/personal`, `/admin/usuarios`, `/admin/ponches`, `/admin/mantenimiento`, `/admin/configuracion`, `/admin/configuracion-marketing` siguen activas en App.tsx. Permisos por rol idénticos al baseline (diff sólo cambia ubicación visual + `id`/`label`/`icon` de sección). Listeners (`facturacionPendienteCount`, `citasCount`, `solicitudesCount`, `sugerenciasChequeoCount`, `reprogramacionesCount`, `standbyCount`, `ordenesStandbyCount`) sin cambios. Cazadores P-001..P-007 inaplicables al diff (no toca writes Firestore, rules, alta empleado, dropdowns técnico, ni `crearNotificacion`).
+- **reviewer:** APPROVED — comentario inline con plan de rollback presente en cada agrupación tocada; IDs nuevos `equipo` no colisionan con existentes; icon `UserCog` ya importado; sin emojis; identifiers en español.
+- **Próximo paso humano:** Jorge prueba visualmente que (a) "Equipo" aparece como sección nueva (icon UserCog) con Personal, Usuarios & Permisos, Reporte de Ponches en ese orden, (b) "Sistema" ahora muestra solo Configuración y Plantillas Marketing, (c) "Mantenimiento" ya no aparece como ítem top-level — está dentro de "Operaciones" al final, (d) admin/coord ven todas las secciones; operaria sigue viendo Personal y Mantenimiento (el resto gateado), secretaria sólo lo que su rol permite, técnico/ayudante no ven Equipo ni Sistema. Cuando Jorge dispare el siguiente `trabaja`, este sprint pasa a COMPLETADO y arranca 117c6.
+
+---
+
 ### SPRINT-117b — Propuesta de reorganización con mockup por rol
 - **Completado:** 2026-05-08 noche por coordinator autónomo (novena pasada `trabaja`, sprint read-only).
 - **Hash:** (pendiente de commit en este mismo turno).
@@ -1233,9 +1251,16 @@ Ver entrada en "Sprints completados (histórico)" más abajo (hash `9c262c9`).
 
 ---
 
-### SPRINT-117c4 — Crear sección "Equipo" + mover Mantenimientos a Operaciones
+### SPRINT-117c4 — Crear sección "Equipo" + mover Mantenimientos a Operaciones — [DEPLOYADO 2026-05-09]
 
-**Estado:** EN_EJECUCION (coordinator autónomo 2026-05-09)
+**Estado:** EN_REVISION_HUMANA (deployado 2026-05-09 — esperando QA visual de Jorge antes de avanzar a 117c6).
+
+Ver entrada completa en "Sprints completados (histórico)" más abajo (hash `480532f`). Movido temprano para que `procesa cola` no lo agarre nuevamente; sólo se promueve formalmente a COMPLETADO cuando Jorge dispare el siguiente `trabaja`.
+
+<details>
+<summary>Spec original (preservado para forensia)</summary>
+
+**Estado:** EN_EJECUCION → EN_REVISION_HUMANA (coordinator autónomo 2026-05-09)
 **Prioridad:** alta (cuarto del lote)
 **Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c4.
 **Riesgo:** bajo (reordenamiento puro).
@@ -1275,6 +1300,8 @@ Dos cambios estructurales:
 #### Notas para el coordinator
 
 - archivist PRE-CHANGE obligatorio.
+
+</details>
 
 ---
 

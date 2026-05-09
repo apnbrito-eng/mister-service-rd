@@ -5,6 +5,53 @@
 
 ---
 
+## 2026-05-09 — `trabaja` (pasada 4): cierre 117c3 + SPRINT-117c4 sección "Equipo" + Mantenimiento → Operaciones (deploy 4/5 del lote 117c)
+
+### Contexto
+
+Jorge disparó `trabaja` después de validar visualmente el deploy de 117c3 (`9c262c9`). El `trabaja` post-EN_REVISION_HUMANA es OK implícito de cierre del sprint anterior + arrancar el siguiente. Esta pasada cierra 117c3 + procesa SOLO 117c4 (NO c6, ese espera su propio QA según indicación explícita de Jorge — además 117c6 tiene riesgo medio y debe esperar a que la estructura del sidebar esté estable).
+
+### Scope procesado
+
+**Cierre administrativo:**
+- SPRINT-117c3 movido de EN_REVISION_HUMANA → COMPLETADO en `COLA_AUTONOMA.md` con OK humano: "jorge 2026-05-09 (`trabaja` implícito)".
+
+**Sprint nuevo:**
+- SPRINT-117c4 — Tres cambios estructurales en `Sidebar.tsx`:
+  1. Crear sección **"Equipo"** (id `equipo`, icon `UserCog`, defaultExpanded `false`) con: Personal, Usuarios y Permisos, Reporte de Ponches.
+  2. Sección **"Sistema"** queda con solo: Configuración + Plantillas Marketing.
+  3. **"Mantenimiento"** mudado del top-level (era `kind: 'item'` entre Finanzas y Web y Solicitudes) al final del array de items de Operaciones.
+
+  Gates `show:` preservados al 100% en los 4 ítems movidos. Sin renombrados, sin cambios de rutas, sin tocar lógica/listeners/queries.
+
+### Flujo ejecutado
+
+1. **archivist PRE-CHANGE manual**: `git log` sobre `Sidebar.tsx` → último commit `9c262c9` (117c3 Cobranza y facturación). `git log` sobre `Mantenimiento.tsx` → último funcional `2ba57e4` (`fix(mantenimiento): usar siguienteNumeroOrden transaccional`). `git log` sobre `PersonalPage.tsx`/`GestionUsuarios.tsx`/`AdminPonches.tsx` → último funcional `009bcc8` (SPRINT-105 espejo `usuarios/{uid}`) + `e428a4d` (SPRINT-108 P-006/P-002). Patterns a respetar: `SidebarNode`/`SidebarSection` con `items[]`, gates inline con `show:`, comentario inline con plan de rollback en cada agrupación tocada (igual que 117c2/117c3), sección oculta automática si `visibleItems.length === 0`. Postmortems aplicables: ninguno toca el sidebar desde estos archivos. Rutas `/admin/personal`, `/admin/usuarios`, `/admin/ponches`, `/admin/mantenimiento`, `/admin/configuracion`, `/admin/configuracion-marketing` confirmadas activas en App.tsx — diff no las toca.
+2. **Builder manual**: 3 ediciones en Sidebar.tsx — (a) inserción del item Mantenimiento al final del array `items` de Operaciones (con comentario inline + plan de rollback), (b) eliminación del bloque `kind: 'item'` top-level que tenía Mantenimiento, (c) refactor del bloque "Sistema" en dos secciones: nueva "Equipo" (id `equipo`, icon `UserCog`) con los 3 ítems de gente, "Sistema" residual con sólo Configuración + Plantillas Marketing. Comentarios inline con plan de rollback en cada sección tocada. Sin emojis, identifiers en español (`equipo`, `Equipo`). Icon `UserCog` ya importado (línea 4).
+3. **Tester manual**: `npx tsc --noEmit` → silent (PASS). `npm run check:regression` → 7/7 cazadores PASS, 0 hits (P-001..P-007 todos limpios, baseline idéntico al de 117c3). `npx eslint src/components/Sidebar.tsx --max-warnings 0` → silent (PASS). `npm run build` → 4.82s OK, bundle 2,652 kB (idéntico al baseline 117c3, esperado: misma cantidad de items en `estructura`, sólo reorganizados).
+4. **regression_guardian manual** (sub-regla obligatoria — toca `src/components/`):
+   - Las 6 rutas tocadas (`/admin/personal`, `/admin/usuarios`, `/admin/ponches`, `/admin/mantenimiento`, `/admin/configuracion`, `/admin/configuracion-marketing`) siguen activas en App.tsx (no tocadas).
+   - Permisos por rol idénticos: Personal `p('personalVer')`, Usuarios y Permisos `p('personalModificar')`, Reporte de Ponches `esAdminOCoord`, Mantenimiento `p('ordenesVer')`, Configuración `p('configuracionVer')`, Plantillas Marketing `userProfile?.rol === 'administrador'`. Diff sólo cambia ubicación visual + crea sección nueva con id `equipo`.
+   - Queries y listeners intactos: los 7 listeners (`standbyCount`, `ordenesStandbyCount`, `citasCount`, `solicitudesCount`, `facturacionPendienteCount`, `sugerenciasChequeoCount`, `reprogramacionesCount`) sin cambios.
+   - Cazadores P-001..P-007 inaplicables al diff: cambio puramente UI sin Firestore writes, sin rules, sin alta empleado, sin dropdowns técnico, sin `crearNotificacion`. Cazadores devuelven 0 hits.
+   - PASS.
+5. **Reviewer manual** (self-review): diff mínimo (~33 líneas insertadas, 16 eliminadas), comentario inline con qué/por qué/rollback en cada sección tocada. id `equipo` no choca con los existentes (`bandeja_entrada`, `operaciones`, `cobranza_facturacion`, `catalogo_inventario`, `finanzas`, `web_solicitudes`, `asistente_ia`, `sistema`). Modo collapsed sigue funcionando porque `itemsPlanos` aplana desde `estructura`. La sección "Sistema" mantiene su `id: 'sistema'` (preserva el estado de localStorage `sidebar_sections_state` para usuarios que ya la tenían colapsada/expandida). APPROVED.
+6. **Commit + push**: directo a main (modo autónomo). Hash `480532f`. Mensaje conventional español + plan de rollback explícito.
+
+### Restricciones del sprint cumplidas
+
+- ✓ NO se ocultaron ítems por rol (gates intactos).
+- ✓ NO se movieron archivos ni se cambiaron rutas.
+- ✓ SOLO reorganización visual del sidebar (mover ítems entre secciones + crear sección nueva).
+- ✓ Plan de rollback documentado: revertir el commit, vuelve a estructura previa.
+- ✓ Mensaje de commit conventional en español.
+
+### Resultado
+
+Sprint en EN_REVISION_HUMANA esperando QA visual de Jorge. NO se procesa 117c6 en esta pasada por indicación explícita de Jorge (riesgo medio, además precondición del sprint exige que c1+c2+c3+c4 estén deployados y validados). Próxima pasada de `trabaja` cierra 117c4 + arranca 117c6.
+
+---
+
 ## 2026-05-09 — `trabaja` (pasada 3): cierre 117c2 + SPRINT-117c3 sección "Cobranza y facturación" (deploy 3/5 del lote 117c)
 
 ### Contexto
