@@ -215,6 +215,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
           { to: '/admin/feedback', icon: Star, label: 'Feedback NPS', show: esAdminOCoord },
           { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: isAdmin || userProfile?.rol === 'coordinadora' || p('ordenesVerEliminadas') },
+          // SPRINT-117c4: Mantenimiento mudado desde top-level (era ítem suelto bajo Finanzas)
+          // hacia el final de Operaciones — conceptualmente es operación recurrente, no merece
+          // altura visual de top-level. Gate `show:` preservado idéntico al original.
+          // Plan de rollback: revertir el commit, vuelve a ser kind:'item' top-level.
+          { to: '/admin/mantenimiento', icon: Calendar, label: 'Mantenimiento', show: p('ordenesVer') },
         ],
       },
     },
@@ -286,11 +291,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         ],
       },
     },
-    // Mantenimiento — item suelto
-    {
-      kind: 'item',
-      item: { to: '/admin/mantenimiento', icon: Calendar, label: 'Mantenimiento', show: p('ordenesVer') },
-    },
     // Web y Solicitudes
     {
       kind: 'section',
@@ -321,7 +321,27 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         ],
       },
     },
-    // Sistema
+    // Equipo (SPRINT-117c4): nueva sección que separa la gestión de gente
+    // (Personal, Usuarios y Permisos, Reporte de Ponches) de las configs
+    // técnicas que quedan en "Sistema". Reduce carga cognitiva al evitar
+    // mezclar conceptos heterogéneos. Gates de permisos preservados al 100%.
+    // Plan de rollback: revertir el commit, los 3 ítems vuelven a "Sistema".
+    {
+      kind: 'section',
+      section: {
+        id: 'equipo',
+        label: 'Equipo',
+        icon: UserCog,
+        defaultExpanded: false,
+        items: [
+          { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
+          { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: p('personalModificar') },
+          { to: '/admin/ponches', icon: ClipboardCheck, label: 'Reporte de Ponches', show: esAdminOCoord },
+        ],
+      },
+    },
+    // Sistema (SPRINT-117c4): se queda solo con Configuración + Plantillas
+    // Marketing tras separar la gestión de gente a la sección "Equipo".
     {
       kind: 'section',
       section: {
@@ -330,9 +350,6 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         icon: Settings,
         defaultExpanded: false,
         items: [
-          { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
-          { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: p('personalModificar') },
-          { to: '/admin/ponches', icon: ClipboardCheck, label: 'Reporte de Ponches', show: esAdminOCoord },
           { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: p('configuracionVer') },
           { to: '/admin/configuracion-marketing', icon: Sparkles, label: 'Plantillas Marketing', show: userProfile?.rol === 'administrador' },
         ],

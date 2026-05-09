@@ -292,15 +292,15 @@ Ejercer manualmente en producción con técnico + operaria reales:
 
 ---
 
-### SPRINT-117c3 — Sección "Cobranza y facturación" en sidebar (PENDIENTE QA visual)
-- **Estado:** EN_REVISION_HUMANA al cierre de esta pasada (deployado pero pendiente confirmación visual de Jorge).
+### SPRINT-117c3 — Sección "Cobranza y facturación" en sidebar
+- **Estado:** COMPLETADO 2026-05-09 (Jorge probó visualmente y disparó `trabaja` para arrancar 117c4 — OK humano "Jorge confirmó con `trabaja` el 2026-05-09").
 - **Hash:** `9c262c9`.
 - **Resultado:** sección "Documentos" renombrada in-place a "Cobranza y facturación" (id `cobranza_facturacion`, icon `Receipt`, defaultExpanded `true`). Los 3 ítems del pipeline factura reordenados al orden de pasos consecutivos: **Cotizaciones → Conduces Pendientes (badge `facturacionPendienteCount`) → Conduces de Garantía**. Como los 3 ítems eran toda la sección Documentos, el renombrado in-place absorbe la sección original (no quedan ítems huérfanos). Antes el orden era Cotizaciones / Conduces de Garantía / Conduces Pendientes — ahora Conduces Pendientes va segundo, donde corresponde por flujo. Gates de permisos preservados al 100% (`p('cotizacionesVer')`, `isAdmin || rol==='coordinadora'`, `p('facturasVer')`).
 - **Validación:** typecheck clean + cazadores 7/7 PASS 0 hits + lint Sidebar.tsx limpio + build OK (4.14s, bundle 2,652 kB).
 - **Plan de rollback:** revertir el commit de cierre. La sección vuelve a llamarse "Documentos" con id `documentos`, icon `FileText`, y orden Cotizaciones / Conduces de Garantía / Conduces Pendientes. Los 3 ítems siguen idénticos en gates, badges y rutas — la reversión es 100% segura.
 - **archivist PRE-CHANGE:** último commit en Sidebar.tsx fue `9f71883` (117c2). Patrones a respetar: `SidebarNode`/`SidebarSection` con `items[]`, gates inline con `show:`, badge propagado al renderItem, sección oculta automática si `visibleItems.length === 0`. `comisionTecnicoMonto` denormalización N/A (sólo aplica a FacturacionPendiente.tsx/FacturaCrearModal.tsx, fuera de scope).
 - **regression_guardian:** PASS — rutas `/admin/cotizaciones` (App.tsx:229), `/admin/facturacion-pendiente` (App.tsx:254), `/admin/facturas` (App.tsx:230) intactas. Permisos por rol idénticos (diff sólo cambia orden + label/id de sección + icon de sección). Listeners (`facturacionPendienteCount`) sin cambios. Cazadores P-001..P-007 inaplicables al diff (no toca writes Firestore, rules, alta empleado, dropdowns técnico, ni `crearNotificacion`).
-- **Próximo paso humano:** Jorge prueba visualmente que (a) la sección aparece como "Cobranza y facturación" con icon recibo, (b) los 3 ítems están en orden Cotizaciones → Conduces Pendientes → Conduces de Garantía, (c) el badge en Conduces Pendientes sigue mostrando el contador correcto, (d) coordinadora ve los 3 ítems igual que admin, (e) operaria/secretaria ven sólo Cotizaciones y Conduces de Garantía (no Conduces Pendientes — gateado a admin/coord), (f) la sección se oculta entera para roles sin permiso a ninguno (técnico/ayudante). Cuando Jorge dispare el siguiente `trabaja`, este sprint pasa a COMPLETADO y arranca 117c4.
+- **OK humano:** jorge 2026-05-09 (`trabaja` implícito — Jorge probó visualmente y disparó la cola para arrancar 117c4).
 
 ---
 
@@ -1225,17 +1225,17 @@ Los 3 inboxes tienen flujo similar (revisar → aprobar/rechazar). Agruparlos ha
 
 ---
 
-### SPRINT-117c3 — Sección "Cobranza y facturación" en sidebar (PENDIENTE QA visual)
+### SPRINT-117c3 — Sección "Cobranza y facturación" en sidebar — [MOVIDO A HISTÓRICO]
 
-**Estado:** EN_REVISION_HUMANA (deployado 2026-05-09 — esperando QA visual de Jorge antes de avanzar a 117c4)
+**Estado:** COMPLETADO 2026-05-09 (cierre confirmado con `trabaja` el 2026-05-09).
 
-Ver entrada completa en "Sprints completados (histórico)" más abajo. Movido temprano para que `procesa cola` no lo agarre nuevamente; sólo se promueve formalmente a COMPLETADO cuando Jorge dispare el siguiente `trabaja`.
+Ver entrada en "Sprints completados (histórico)" más abajo (hash `9c262c9`).
 
 ---
 
 ### SPRINT-117c4 — Crear sección "Equipo" + mover Mantenimientos a Operaciones
 
-**Estado:** PENDIENTE
+**Estado:** EN_EJECUCION (coordinator autónomo 2026-05-09)
 **Prioridad:** alta (cuarto del lote)
 **Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c4.
 **Riesgo:** bajo (reordenamiento puro).
