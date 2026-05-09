@@ -223,18 +223,24 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       kind: 'item',
       item: { to: '/admin/clientes', icon: Users, label: 'Clientes', show: p('clientesVer') },
     },
-    // Documentos
+    // Cobranza y facturación (SPRINT-117c3): renombrada desde "Documentos"
+    // y reordenada para que el pipeline factura se vea como pasos consecutivos:
+    // Cotizaciones → Conduces pendientes → Conduces de Garantía. Los 3 ítems
+    // que vivían en "Documentos" eran exactamente este pipeline, así que la
+    // sección original queda absorbida (no quedan ítems huérfanos). Plan de
+    // rollback: revertir el commit, vuelve a llamarse "Documentos" con el
+    // orden previo Cotizaciones / Conduces de Garantía / Conduces Pendientes.
     {
       kind: 'section',
       section: {
-        id: 'documentos',
-        label: 'Documentos',
-        icon: FileText,
+        id: 'cobranza_facturacion',
+        label: 'Cobranza y facturación',
+        icon: Receipt,
         defaultExpanded: true,
         items: [
           { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: p('cotizacionesVer') },
-          { to: '/admin/facturas', icon: Receipt, label: 'Conduces de Garantía', show: p('facturasVer') },
           { to: '/admin/facturacion-pendiente', icon: Inbox, label: 'Conduces Pendientes', badge: facturacionPendienteCount, show: isAdmin || userProfile?.rol === 'coordinadora' },
+          { to: '/admin/facturas', icon: Receipt, label: 'Conduces de Garantía', show: p('facturasVer') },
         ],
       },
     },

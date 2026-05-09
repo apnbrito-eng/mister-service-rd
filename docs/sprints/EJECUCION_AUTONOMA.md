@@ -5,6 +5,49 @@
 
 ---
 
+## 2026-05-09 — `trabaja` (pasada 3): cierre 117c2 + SPRINT-117c3 sección "Cobranza y facturación" (deploy 3/5 del lote 117c)
+
+### Contexto
+
+Jorge disparó `trabaja` después de validar visualmente el deploy de 117c2 (`9f71883`). El `trabaja` post-EN_REVISION_HUMANA es OK implícito de cierre del sprint anterior + arrancar el siguiente. Esta pasada cierra 117c2 + procesa SOLO 117c3 (NO c4/c6, esos esperan su propio QA según indicación explícita de Jorge).
+
+### Scope procesado
+
+**Cierre administrativo:**
+- SPRINT-117c2 movido de EN_REVISION_HUMANA → COMPLETADO en `COLA_AUTONOMA.md` con OK humano: "jorge 2026-05-09 (`trabaja` implícito)".
+
+**Sprint nuevo:**
+- SPRINT-117c3 — Renombrar sección "Documentos" → "Cobranza y facturación" en `Sidebar.tsx` y reordenar los 3 ítems del pipeline factura para que se lean como pasos consecutivos: **Cotizaciones → Conduces Pendientes (badge) → Conduces de Garantía**. id de sección cambia `documentos` → `cobranza_facturacion`, label cambia, icon `FileText` → `Receipt`. Como los 3 ítems eran toda la sección Documentos, el renombrado in-place absorbe la sección original sin huérfanos. Gates de permisos preservados al 100%.
+
+### Flujo ejecutado
+
+1. **archivist PRE-CHANGE manual**: `git log` sobre `Sidebar.tsx` (último funcional `9f71883` 117c2 Bandeja de entrada). `git log` sobre `Cotizaciones.tsx`/`FacturacionPendiente.tsx`/`Facturas.tsx` (sin commits recientes que afecten Sidebar). Búsqueda de `Cobranza*` → no existe ruta `/admin/cobranza` (sprint sólo crea sección con ese nombre). Rutas `/admin/cotizaciones` (App.tsx:229), `/admin/facturas` (App.tsx:230), `/admin/facturacion-pendiente` (App.tsx:254) confirmadas activas. Patrón `comisionTecnicoMonto` denormalización post-`registrarComisionPorFactura` (CLAUDE.md) inaplicable a Sidebar.tsx — sólo aplica a FacturacionPendiente.tsx/FacturaCrearModal.tsx, fuera de scope. Postmortems revisados: ninguno toca este pipeline desde el sidebar.
+2. **Builder manual**: 1 edición en Sidebar.tsx — bloque de la sección "Documentos" reemplazado in-place por sección "Cobranza y facturación" (id `cobranza_facturacion`, icon `Receipt`, defaultExpanded `true` preservado), reordenando los 3 ítems al orden Cotizaciones → Conduces Pendientes → Conduces de Garantía. Comentario inline con plan de rollback explícito. Sin emojis, identificadores spanish (`cobranza_facturacion`, `Cobranza y facturación`). Imports `FileText` y `Receipt` ambos siguen usados (verificado con grep).
+3. **Tester manual**: `npx tsc --noEmit` → silent (PASS). `npm run check:regression` → 7/7 cazadores PASS, 0 hits (P-001..P-007 todos limpios). `npx eslint src/components/Sidebar.tsx --max-warnings 0` → silent (PASS). `npm run build` → 4.14s OK, bundle 2,652 kB.
+4. **regression_guardian manual** (sub-regla obligatoria — toca `src/components/`):
+   - Las 3 rutas `/admin/cotizaciones`, `/admin/facturacion-pendiente`, `/admin/facturas` siguen activas en `App.tsx` (no tocadas).
+   - Permisos por rol idénticos: Cotizaciones `p('cotizacionesVer')`, Conduces Pendientes `isAdmin || rol==='coordinadora'`, Conduces de Garantía `p('facturasVer')`. Diff sólo cambia orden + label/id de sección + icon.
+   - Queries y listeners intactos: `facturacionPendienteCount` listener (líneas 91-98) sigue alimentando el badge de Conduces Pendientes.
+   - Badges preservados: el único en estos 3 ítems (`facturacionPendienteCount`) sigue propagado tal cual.
+   - Patrones P-001..P-007 inaplicables: cambio puramente UI sin Firestore writes, sin rules, sin alta empleado, sin dropdowns técnico, sin `crearNotificacion`. Cazadores devuelven 0 hits.
+   - PASS.
+5. **Reviewer manual** (self-review): diff mínimo (~14 líneas), comentario inline con qué/por qué/rollback. id nuevo `cobranza_facturacion` no choca con localStorage `documentos` (efecto secundario benigno: usuarios verán la sección expandida la primera vez, alineado con `defaultExpanded: true`). Modo collapsed sigue funcionando porque `itemsPlanos` aplana desde `estructura`. APPROVED.
+6. **Commit + push**: directo a main (modo autónomo). Mensaje conventional español + plan de rollback explícito.
+
+### Restricciones del sprint cumplidas
+
+- ✓ NO se ocultaron ítems por rol (gates intactos).
+- ✓ NO se movieron archivos ni se cambiaron rutas.
+- ✓ SOLO reorganización visual del sidebar (renombre de sección + reorden de 3 items).
+- ✓ Plan de rollback documentado: revertir el commit, vuelve a "Documentos" con orden previo y todos los gates.
+- ✓ Mensaje de commit conventional en español.
+
+### Resultado
+
+Sprint en EN_REVISION_HUMANA esperando QA visual de Jorge. NO se procesa 117c4/c6 en esta pasada por indicación explícita de Jorge. Próxima pasada de `trabaja` cierra 117c3 + arranca 117c4.
+
+---
+
 ## 2026-05-09 — `trabaja` (pasada 2): cierre 117c1 + SPRINT-117c2 sección "Bandeja de entrada" (deploy 2/5 del lote 117c)
 
 ### Contexto

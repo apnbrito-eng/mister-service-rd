@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-09 por coordinator (cierre 117c1 con OK implícito `trabaja` + procesamiento 117c2 entregado en EN_REVISION_HUMANA).
+**Última actualización:** 2026-05-09 por coordinator (cierre 117c2 con OK implícito `trabaja` + procesamiento 117c3 entregado en EN_REVISION_HUMANA).
 
 **Próximo ID disponible:** SPRINT-119
 
@@ -282,13 +282,25 @@ Ejercer manualmente en producción con técnico + operaria reales:
 
 ---
 
-### SPRINT-117c2 — Sección "Bandeja de entrada" en sidebar (PENDIENTE QA visual)
-- **Estado:** EN_REVISION_HUMANA al cierre de esta pasada (deployado pero pendiente confirmación visual de Jorge).
+### SPRINT-117c2 — Sección "Bandeja de entrada" en sidebar
+- **Completado:** 2026-05-09 por coordinator autónomo. OK humano: Jorge confirmó con `trabaja` el 2026-05-09 (OK implícito de cierre del EN_REVISION_HUMANA + arrancar 117c3).
 - **Hash:** `9f71883`.
 - **Resultado:** sección nueva `Bandeja de entrada` (id `bandeja_entrada`, icon `Inbox`, defaultExpanded `true`) agrupa los 3 inboxes (Citas por Confirmar, Reprogramaciones, Sugerencias chequeo) extraídos de Operaciones. Props originales preservadas (`to`, `icon`, `show`, `badge`). Sección filtra por `visibleItems.length === 0` (lógica preexistente del render) — si un usuario no tiene permiso a ninguno, la sección no aparece.
 - **Validación:** typecheck + cazadores 7/7 PASS + lint Sidebar.tsx limpio + build OK.
-- **Plan de rollback:** revertir el commit de cierre.
-- **Próximo paso humano:** Jorge prueba visualmente y dispara `trabaja` para que coordinator avance a 117c3 (siguiente sub-sprint del lote).
+- **Plan de rollback:** revertir `9f71883`.
+- **OK humano:** jorge 2026-05-09 (`trabaja` implícito).
+
+---
+
+### SPRINT-117c3 — Sección "Cobranza y facturación" en sidebar (PENDIENTE QA visual)
+- **Estado:** EN_REVISION_HUMANA al cierre de esta pasada (deployado pero pendiente confirmación visual de Jorge).
+- **Hash:** (asignado en este mismo turno post-push).
+- **Resultado:** sección "Documentos" renombrada in-place a "Cobranza y facturación" (id `cobranza_facturacion`, icon `Receipt`, defaultExpanded `true`). Los 3 ítems del pipeline factura reordenados al orden de pasos consecutivos: **Cotizaciones → Conduces Pendientes (badge `facturacionPendienteCount`) → Conduces de Garantía**. Como los 3 ítems eran toda la sección Documentos, el renombrado in-place absorbe la sección original (no quedan ítems huérfanos). Antes el orden era Cotizaciones / Conduces de Garantía / Conduces Pendientes — ahora Conduces Pendientes va segundo, donde corresponde por flujo. Gates de permisos preservados al 100% (`p('cotizacionesVer')`, `isAdmin || rol==='coordinadora'`, `p('facturasVer')`).
+- **Validación:** typecheck clean + cazadores 7/7 PASS 0 hits + lint Sidebar.tsx limpio + build OK (4.14s, bundle 2,652 kB).
+- **Plan de rollback:** revertir el commit de cierre. La sección vuelve a llamarse "Documentos" con id `documentos`, icon `FileText`, y orden Cotizaciones / Conduces de Garantía / Conduces Pendientes. Los 3 ítems siguen idénticos en gates, badges y rutas — la reversión es 100% segura.
+- **archivist PRE-CHANGE:** último commit en Sidebar.tsx fue `9f71883` (117c2). Patrones a respetar: `SidebarNode`/`SidebarSection` con `items[]`, gates inline con `show:`, badge propagado al renderItem, sección oculta automática si `visibleItems.length === 0`. `comisionTecnicoMonto` denormalización N/A (sólo aplica a FacturacionPendiente.tsx/FacturaCrearModal.tsx, fuera de scope).
+- **regression_guardian:** PASS — rutas `/admin/cotizaciones` (App.tsx:229), `/admin/facturacion-pendiente` (App.tsx:254), `/admin/facturas` (App.tsx:230) intactas. Permisos por rol idénticos (diff sólo cambia orden + label/id de sección + icon de sección). Listeners (`facturacionPendienteCount`) sin cambios. Cazadores P-001..P-007 inaplicables al diff (no toca writes Firestore, rules, alta empleado, dropdowns técnico, ni `crearNotificacion`).
+- **Próximo paso humano:** Jorge prueba visualmente que (a) la sección aparece como "Cobranza y facturación" con icon recibo, (b) los 3 ítems están en orden Cotizaciones → Conduces Pendientes → Conduces de Garantía, (c) el badge en Conduces Pendientes sigue mostrando el contador correcto, (d) coordinadora ve los 3 ítems igual que admin, (e) operaria/secretaria ven sólo Cotizaciones y Conduces de Garantía (no Conduces Pendientes — gateado a admin/coord), (f) la sección se oculta entera para roles sin permiso a ninguno (técnico/ayudante). Cuando Jorge dispare el siguiente `trabaja`, este sprint pasa a COMPLETADO y arranca 117c4.
 
 ---
 
@@ -1213,51 +1225,11 @@ Los 3 inboxes tienen flujo similar (revisar → aprobar/rechazar). Agruparlos ha
 
 ---
 
-### SPRINT-117c3 — Crear sección "Cobranza y facturación"
+### SPRINT-117c3 — Sección "Cobranza y facturación" en sidebar (PENDIENTE QA visual)
 
-**Estado:** PENDIENTE
-**Prioridad:** alta (tercero del lote)
-**Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c3.
-**Riesgo:** bajo (reordenamiento puro).
-**Touch-list previsto:** `src/components/Sidebar.tsx`.
+**Estado:** EN_REVISION_HUMANA (deployado 2026-05-09 — esperando QA visual de Jorge antes de avanzar a 117c4)
 
-#### Objetivo
-
-Crear sección "Cobranza y facturación" que junte el pipeline factura para que se vea como pasos consecutivos:
-
-1. Cotizaciones (sacar de "Documentos" o donde esté).
-2. Conduces pendientes (badge) — `/admin/facturacion-pendiente`.
-3. Conduces de Garantía — `/admin/facturas`.
-
-Si la sección "Documentos" queda vacía después del move, eliminarla. Si queda con algún ítem (ej: solo Conduces de Garantía no se mueve), renombrar a "Otros documentos".
-
-#### Por qué
-
-Hoy una orden cerrada cruza 3 pantallas en pipeline: Cotizaciones → Conduces pendientes → Conduces de Garantía. Juntarlas en una sección las hace ver como pasos consecutivos. Reduce confusión sobre "cuál es el siguiente paso después de cerrar la orden".
-
-#### Criterios de aceptación
-
-- [ ] Sección "Cobranza y facturación" con los 3 ítems en orden listado arriba.
-- [ ] `defaultExpanded: true`.
-- [ ] Visible para roles con permiso a cualquiera de los 3 ítems (filtrado por `items.some(it => it.show)`).
-- [ ] Sección "Documentos" eliminada si queda vacía, o renombrada a "Otros documentos" si conserva ítems.
-- [ ] NO cambiar gates de permisos en los 3 ítems movidos.
-- [ ] NO cambiar rutas ni componentes destino.
-- [ ] Tester: typecheck + lint + cazadores 7/7 PASS.
-- [ ] regression_guardian: PASS.
-- [ ] reviewer: APPROVED.
-- [ ] Commit en español + plan de rollback.
-- [ ] Push + deploy Ready.
-
-#### Restricciones / guardarrails
-
-- Plan de rollback: revertir commit. Los 3 ítems vuelven a su sección original.
-- Si "Documentos" queda con ítems no listados acá (raro), preservarlos y solo renombrar la sección.
-
-#### Notas para el coordinator
-
-- archivist PRE-CHANGE obligatorio.
-- Builder verifica el estado actual de "Documentos" antes de mover — si no existe esa sección, crear directo "Cobranza y facturación".
+Ver entrada completa en "Sprints completados (histórico)" más abajo. Movido temprano para que `procesa cola` no lo agarre nuevamente; sólo se promueve formalmente a COMPLETADO cuando Jorge dispare el siguiente `trabaja`.
 
 ---
 
