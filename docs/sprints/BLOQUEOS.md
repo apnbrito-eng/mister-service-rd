@@ -119,6 +119,20 @@ Después pegás `procesa bloqueos` al coordinator.
 
 ---
 
+**OK selectivo: jorge 2026-05-09 | sub-sprints: 117c1, 117c2, 117c3, 117c4, 117c6**
+
+**Motivo del descarte de 117c5:** ese sub-sprint ocultaba ítems del sidebar basándose en el rol (operaria/secretaria). Eso pisa el sistema de permisos individuales que Jorge ya maneja desde el módulo de Usuarios — donde se da o quita acceso a cada módulo persona por persona según su función. Reorganizar el sidebar es OK porque solo cambia agrupación visual de los ítems a los que el empleado YA tiene acceso. Pero ocultar por rol introduce una segunda capa de gating que choca con la fuente de verdad existente (`usuarios/{uid}.permisos.*`).
+
+**Defaults aceptados de las preguntas abiertas (§6 de la propuesta):**
+1. Métricas del Mes como pestaña dentro de Rendimiento → sprint propio futuro (NO en 117c).
+2. Etiqueta "Bandeja de entrada" → OK.
+3. Mapa de Rutas para operaria → no aplica (gating sigue siendo el de Usuarios, no el del rol).
+4. Catálogo legacy (`/admin/productos`) en sidebar admin → ocultar en 117c1, eliminar del routing en sprint propio futuro.
+
+**Recordatorio explícito al builder:** TODO ítem del sidebar debe seguir respetando los permisos individuales que vienen de `usuarios/{uid}.permisos.*`. La reorganización SOLO agrupa y renombra etiquetas. NO agrega lógica de "este ítem se oculta si rol === X". Si un empleado tiene permiso para un módulo, lo ve. Si no, no lo ve. Esto ya funciona así hoy y no se cambia.
+
+---
+
 ## Histórico de desbloqueos
 
 - **SPRINT-115 fase write (re-migración Yohana):** desbloqueado por jorge 2026-05-08, movido a `COLA_AUTONOMA.md` por coordinator 2026-05-08 (cuarta pasada). Re-pausado por jorge mismo día (ver entrada activa arriba). Conservado para histórico.
