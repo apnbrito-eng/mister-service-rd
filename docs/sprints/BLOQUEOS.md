@@ -96,9 +96,16 @@ Conservado acá para histórico. NO procesar desde acá — la entrada activa es
 
 ---
 
-## SPRINT-117c — Esperando aprobación de propuesta de reorganización IA
+## SPRINT-117c — DESBLOQUEADO 2026-05-09 (OK selectivo: 5 de 6 sub-sprints)
 
-**Bloqueado:** coordinator 2026-05-08 (cierre de SPRINT-117b). Espera revisión de la propuesta documentada en `docs/sprints/PROPUESTA_IA_2026-05-08.md`.
+**Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-09 por coordinator (procesa bloqueos). desbloqueadoPor: jorge 2026-05-09.**
+
+Conservado acá para histórico. NO procesar desde acá — las entradas activas (117c1, 117c2, 117c3, 117c4, 117c6) están en `COLA_AUTONOMA.md`. SPRINT-117c5 marcado RECHAZADO con motivo abajo.
+
+<details>
+<summary>Spec original + decisión humana (preservada para forensia)</summary>
+
+**Bloqueado originalmente:** coordinator 2026-05-08 (cierre de SPRINT-117b). Espera revisión de la propuesta documentada en `docs/sprints/PROPUESTA_IA_2026-05-08.md`.
 
 **Resumen 60 segundos:**
 - 6 sub-sprints 117c1..c6, cada uno con touch-list de 1-3 archivos máximo, plan de rollback y riesgo bajo.
@@ -106,20 +113,8 @@ Conservado acá para histórico. NO procesar desde acá — la entrada activa es
 - Sin tocar identificadores internos. Sin tocar `TecnicoVista`. Sin tocar `firestore.rules`.
 - 4 preguntas abiertas en §6 de la propuesta — opcionales (hay defaults razonables).
 
-**Para desbloquear, agregá UNA línea al final de esta entrada:**
-
-- `OK: jorge YYYY-MM-DD HH:MM` → procesar 117c1..c6 en orden, con QA visual humana entre cada uno.
-- `OK selectivo: jorge YYYY-MM-DD HH:MM | sub-sprints: 117c1, 117c3, 117c4` → procesar sólo los listados.
-- `Cambios: jorge YYYY-MM-DD HH:MM | <feedback en lenguaje natural>` → revisar la propuesta antes de procesar (genero v2 del documento).
-- `RECHAZADO: jorge YYYY-MM-DD HH:MM | <motivo>` → descartar reorganización entera.
-
-Después pegás `procesa bloqueos` al coordinator.
-
-**Restricciones reiteradas:** archivist obligatorio PRE-CHANGE en cada sub-sprint, regression_guardian antes de commit, QA visual con Aury/Wilainy/Yohana después de cada deploy.
-
----
-
-**OK selectivo: jorge 2026-05-09 | sub-sprints: 117c1, 117c2, 117c3, 117c4, 117c6**
+**OK selectivo: jorge 2026-05-09 | sub-sprints aprobados: 117c1, 117c2, 117c3, 117c4, 117c6**
+**RECHAZADO: jorge 2026-05-09 | sub-sprint: 117c5**
 
 **Motivo del descarte de 117c5:** ese sub-sprint ocultaba ítems del sidebar basándose en el rol (operaria/secretaria). Eso pisa el sistema de permisos individuales que Jorge ya maneja desde el módulo de Usuarios — donde se da o quita acceso a cada módulo persona por persona según su función. Reorganizar el sidebar es OK porque solo cambia agrupación visual de los ítems a los que el empleado YA tiene acceso. Pero ocultar por rol introduce una segunda capa de gating que choca con la fuente de verdad existente (`usuarios/{uid}.permisos.*`).
 
@@ -131,9 +126,14 @@ Después pegás `procesa bloqueos` al coordinator.
 
 **Recordatorio explícito al builder:** TODO ítem del sidebar debe seguir respetando los permisos individuales que vienen de `usuarios/{uid}.permisos.*`. La reorganización SOLO agrupa y renombra etiquetas. NO agrega lógica de "este ítem se oculta si rol === X". Si un empleado tiene permiso para un módulo, lo ve. Si no, no lo ve. Esto ya funciona así hoy y no se cambia.
 
+**Restricciones reiteradas:** archivist obligatorio PRE-CHANGE en cada sub-sprint, regression_guardian antes de commit, QA visual con Aury/Wilainy/Yohana después de cada deploy.
+
+</details>
+
 ---
 
 ## Histórico de desbloqueos
 
 - **SPRINT-115 fase write (re-migración Yohana):** desbloqueado por jorge 2026-05-08, movido a `COLA_AUTONOMA.md` por coordinator 2026-05-08 (cuarta pasada). Re-pausado por jorge mismo día (ver entrada activa arriba). Conservado para histórico.
 - **SPRINT-118 (re-migración masiva 5 empleados + fix email Wilainy):** desbloqueado por jorge 2026-05-08, movido a `COLA_AUTONOMA.md` por coordinator 2026-05-08 (`procesa bloqueos`). Restricción del sprint conservada: el coordinator entrega scripts en DRY-RUN; Jorge ejecuta dry-run y `--apply` manualmente.
+- **SPRINT-117c (reorganización IA del sidebar):** desbloqueado por jorge 2026-05-09 con OK selectivo (5 de 6 sub-sprints). 117c1, 117c2, 117c3, 117c4, 117c6 movidos a `COLA_AUTONOMA.md` como PENDIENTE. 117c5 marcado RECHAZADO con motivo (chocaba con sistema de permisos individuales). Coordinator procesa uno por uno con QA visual humana entre cada deploy — restricción explícita del spec original.

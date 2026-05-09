@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-08 noche por Cowork (SPRINT-117 reorganizado en 3 sub-sprints manejables: 117a auditoría focalizada, 117b propuesta con mockup, 117c1..N ejecución por fases chicas. Spec original descartada por overkill).
+**Última actualización:** 2026-05-09 por coordinator (procesa bloqueos — SPRINT-117c desbloqueado con OK selectivo de Jorge; 117c1, 117c2, 117c3, 117c4, 117c6 expandidos como PENDIENTE; 117c5 marcado RECHAZADO).
 
 **Próximo ID disponible:** SPRINT-119
 
@@ -1069,22 +1069,267 @@ Si al ver el mockup Jorge cambia de opinión sobre cualquiera de estas dos, lo d
 
 ---
 
-### SPRINT-117c1..N — Ejecución por fases chicas (BLOQUEADO hasta OK Jorge)
+### SPRINT-117c1..N — Ejecución por fases chicas (DESBLOQUEADO 2026-05-09 con OK selectivo)
 
-**Estado:** BLOQUEADO — esperando que SPRINT-117b se complete y Jorge apruebe la propuesta en `BLOQUEOS.md`.
+**Estado:** EXPANDIDO en sub-sprints 117c1, 117c2, 117c3, 117c4, 117c6 (todos PENDIENTE más abajo). 117c5 RECHAZADO por Jorge con motivo documentado en `BLOQUEOS.md`.
 
-Cada sub-sprint 117cN se define dentro de SPRINT-117b (en su sección "Plan de sub-sprints"). Cuando Jorge desbloquea con `OK: jorge`, el coordinator los procesa **uno por uno con confirmación humana entre cada uno** (NO procesa varios en lote).
+**desbloqueadoPor:** jorge 2026-05-09 | OK selectivo en `BLOQUEOS.md` entrada SPRINT-117c.
 
-#### Restricciones globales para fase C
+Cuando Jorge dispara `trabaja`, el coordinator procesa **uno por uno con QA visual humana entre cada deploy** (NO en lote). Cada sub-sprint hace commit + push + deploy independiente y el coordinator se detiene a esperar feedback humano antes del siguiente.
+
+#### Restricciones globales para fase C (aplican a TODOS los sub-sprints 117cN)
 
 - **archivist OBLIGATORIO en modo PRE-CHANGE** antes de cada sub-sprint — `Sidebar.tsx`, `App.tsx`, `Ordenes.tsx`, `TecnicoVista.tsx` están en la lista de archivos críticos.
-- **regression_guardian OBLIGATORIO** antes de commit.
+- **regression_guardian OBLIGATORIO** antes de commit (toca `src/components/`).
 - **Touch-list acotado** — 1-3 archivos por sub-sprint. Si necesita más, dividir.
 - **Plan de rollback explícito** — el commit message dice qué revertir si Jorge dice "no me gusta".
-- **QA visual obligatorio** — antes de cerrar, Jorge mira el cambio en producción y confirma con su equipo (Aury técnico, Wilainy/Yohana operarias).
+- **QA visual obligatorio** — antes de procesar el siguiente sub-sprint, Jorge mira el cambio en producción y confirma con su equipo (Aury técnico, Wilainy/Yohana operarias). Si alguien dice "perdí X", restaurar X antes de seguir.
 - **Mantener redirects** desde rutas viejas si se mueve algo.
-- **Sub-regla "documentación viva"** — al cerrar cada sub-sprint, actualizar `CLAUDE.md` y `CONTEXTO_PROYECTO.md` con el cambio de arquitectura.
-- **Postmortem-positivo al final** — cuando todos los sub-sprints cierren OK, archivist genera `docs/postmortems/2026-05-XX-rediseno-ia-aprendizajes.md` documentando el approach. NO es bug, pero el aprendizaje vale para futuros rediseños grandes.
+- **Sub-regla "documentación viva"** — al cerrar cada sub-sprint, actualizar `CLAUDE.md` con el cambio de IA si aplica.
+- **Recordatorio explícito de Jorge:** la reorganización SOLO agrupa y renombra etiquetas. NO agrega lógica de "este ítem se oculta si rol === X". Los permisos individuales (`usuarios/{uid}.permisos.*`) siguen siendo la fuente de verdad. Cualquier ítem visible debe seguir respetando esos permisos.
+- **Postmortem-positivo al final** — cuando los 5 sub-sprints aprobados cierren OK, archivist genera `docs/postmortems/2026-05-XX-rediseno-ia-aprendizajes.md` documentando el approach. NO es bug, pero el aprendizaje vale para futuros rediseños grandes.
+
+---
+
+### SPRINT-117c1 — Renombrar etiquetas + verificar redirect `/admin/configuracion/usuarios`
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (primero del lote — base de confianza)
+**Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c1.
+**Riesgo:** bajo (cambia strings + verifica 1 redirect ya existente).
+**Touch-list previsto:** `src/components/Sidebar.tsx`, `src/App.tsx` (verificar/agregar redirect 301).
+
+#### Objetivo
+
+Aplicar 3 cambios concretos de etiqueta + verificar redirect, sin alterar comportamiento funcional:
+
+1. Sidebar: renombrar label visible `Calendarios` → `Calendarios públicos (Calendly)`. NO cambiar la ruta `/admin/calendarios` ni el componente. Solo el string del label.
+2. Sidebar: renombrar label `Rendimiento` → `Mi rendimiento` **solo para operaria/secretaria**. Admin/coord siguen viendo `Rendimiento` (sin cambios).
+3. Sidebar: ocultar el ítem "Catálogo legacy" / "Productos" (`/admin/productos`) si todavía aparece en sidebar admin. La ruta debe seguir activa (accesible por URL hasta que sprint propio futuro la elimine del routing).
+4. App.tsx: verificar que `/admin/configuracion/usuarios` exista como redirect 301 a `/admin/usuarios`. Si NO existe, agregarlo. Si ya existe, no tocar.
+
+#### Por qué
+
+- "Calendarios" se confunde con "Calendario" (distintos: uno son calendarios públicos Calendly, el otro es la grilla interna). Aclarar con paréntesis sin renombrar identificadores.
+- "Rendimiento" para operaria/secretaria es vista propia (su KPI), no panel global. Renombrar a "Mi rendimiento" señala eso.
+- Catálogo legacy (`Productos`) es deuda histórica. Ocultarlo del sidebar reduce ruido sin romper imports.
+- `/admin/configuracion/usuarios` ya estaba decidido eliminar como ítem visible — verificar que el redirect exista para bookmarks viejos.
+
+#### Criterios de aceptación
+
+- [ ] `Sidebar.tsx`: label de Calendarios cambiado a `Calendarios públicos (Calendly)`. Ruta intacta.
+- [ ] `Sidebar.tsx`: label de Rendimiento dinámico — `Mi rendimiento` para operaria/secretaria, `Rendimiento` para admin/coord. Sin cambiar lógica `show:`.
+- [ ] `Sidebar.tsx`: ítem que apunta a `/admin/productos` (Catálogo / Productos) tiene `show: false` o se elimina del array para admin (verificar primero si está; si NO está, no agregar nada).
+- [ ] `App.tsx`: existe ruta `<Route path="configuracion/usuarios" element={<Navigate to="/admin/usuarios" replace />} />` o equivalente. Si no, agregarla.
+- [ ] Tester: typecheck + lint + cazadores 7/7 PASS.
+- [ ] regression_guardian: PASS (sin cambios a rules/services/context, solo etiquetas y redirect).
+- [ ] reviewer: APPROVED.
+- [ ] Commit con mensaje en español + plan de rollback.
+- [ ] Push + deploy Vercel Ready.
+
+#### Restricciones / guardarrails
+
+- NO cambiar identificadores internos (`enStandby`, `productos` collection, etc.).
+- NO cambiar permisos / `puede(...)` / arrays `show:` para operaria/secretaria distintos a lo descrito (ese es 117c5 RECHAZADO).
+- NO crear nueva ruta — solo verificar redirect existente y agregar si falta.
+- Plan de rollback: revertir el commit. Solo strings y 1 redirect — operación segura.
+- Sub-regla "documentación viva": si se actualiza `CLAUDE.md`, mencionarlo en commit message.
+
+#### Notas para el coordinator
+
+- archivist PRE-CHANGE obligatorio para `Sidebar.tsx` (archivo crítico).
+- Builder debe leer `Sidebar.tsx` completo para entender la estructura `SidebarNode` antes de tocar.
+- El gating del label "Mi rendimiento" debe respetar los roles **sin agregar nueva lógica de `show:`** — solo es un string condicional. Patrón: `label: rol === 'operaria' || rol === 'secretaria' ? 'Mi rendimiento' : 'Rendimiento'`.
+- Verificar primero si el ítem `/admin/productos` está actualmente en el sidebar admin — si no, ese criterio queda como N/A documentado en el commit.
+
+---
+
+### SPRINT-117c2 — Crear sección "Bandeja de entrada" en sidebar
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (segundo del lote, depende de 117c1 deployado y validado)
+**Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c2.
+**Riesgo:** bajo (agrupación visual pura — sin cambiar permisos ni rutas).
+**Touch-list previsto:** `src/components/Sidebar.tsx`.
+
+#### Objetivo
+
+Crear una nueva sección colapsable "Bandeja de entrada" que agrupe los 3 inboxes de revisión que hoy están dispersos en "Operaciones":
+
+- Citas por confirmar (badge en vivo)
+- Reprogramaciones (badge)
+- Sugerencias de chequeo (badge)
+
+#### Por qué
+
+Los 3 inboxes tienen flujo similar (revisar → aprobar/rechazar). Agruparlos hace explícito que son "todo lo entrante" y reduce ruido en Operaciones. Beneficiario principal: coordinadora que triagea inboxes.
+
+#### Criterios de aceptación
+
+- [ ] Sección nueva `Bandeja de entrada` en `Sidebar.tsx` con `defaultExpanded: true`.
+- [ ] Los 3 ítems (Citas por confirmar, Reprogramaciones, Sugerencias de chequeo) movidos desde "Operaciones" a la nueva sección.
+- [ ] Cada ítem conserva sus props originales: `to`, `icon`, `show`, `badge`. NO tocar `puede(...)` ni los gates.
+- [ ] Sección visible para todos los roles con permisos a esos módulos (admin, coord, operaria, secretaria — quien tenga `show: true` en cualquiera de los 3 ítems).
+- [ ] Si un usuario no tiene permiso a NINGUNO de los 3 ítems, la sección entera no aparece (filtro por `items.some(it => it.show)`).
+- [ ] Tester: typecheck + lint + cazadores 7/7 PASS.
+- [ ] regression_guardian: PASS.
+- [ ] reviewer: APPROVED.
+- [ ] Commit en español + plan de rollback.
+- [ ] Push + deploy Ready.
+
+#### Restricciones / guardarrails
+
+- NO tocar el componente destino de cada ruta. Solo mover la entrada en el sidebar.
+- NO cambiar la lógica de badges (siguen siendo los listeners actuales).
+- Plan de rollback: revertir commit. Los 3 ítems vuelven a "Operaciones".
+
+#### Notas para el coordinator
+
+- archivist PRE-CHANGE obligatorio.
+- Builder debe inspeccionar cómo se renderiza una sección colapsable en el sidebar actual (`SidebarSection` con `items[]`) y replicar el patrón.
+- Validar que la sección se oculta correctamente si `items.every(it => !it.show)`.
+
+---
+
+### SPRINT-117c3 — Crear sección "Cobranza y facturación"
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (tercero del lote)
+**Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c3.
+**Riesgo:** bajo (reordenamiento puro).
+**Touch-list previsto:** `src/components/Sidebar.tsx`.
+
+#### Objetivo
+
+Crear sección "Cobranza y facturación" que junte el pipeline factura para que se vea como pasos consecutivos:
+
+1. Cotizaciones (sacar de "Documentos" o donde esté).
+2. Conduces pendientes (badge) — `/admin/facturacion-pendiente`.
+3. Conduces de Garantía — `/admin/facturas`.
+
+Si la sección "Documentos" queda vacía después del move, eliminarla. Si queda con algún ítem (ej: solo Conduces de Garantía no se mueve), renombrar a "Otros documentos".
+
+#### Por qué
+
+Hoy una orden cerrada cruza 3 pantallas en pipeline: Cotizaciones → Conduces pendientes → Conduces de Garantía. Juntarlas en una sección las hace ver como pasos consecutivos. Reduce confusión sobre "cuál es el siguiente paso después de cerrar la orden".
+
+#### Criterios de aceptación
+
+- [ ] Sección "Cobranza y facturación" con los 3 ítems en orden listado arriba.
+- [ ] `defaultExpanded: true`.
+- [ ] Visible para roles con permiso a cualquiera de los 3 ítems (filtrado por `items.some(it => it.show)`).
+- [ ] Sección "Documentos" eliminada si queda vacía, o renombrada a "Otros documentos" si conserva ítems.
+- [ ] NO cambiar gates de permisos en los 3 ítems movidos.
+- [ ] NO cambiar rutas ni componentes destino.
+- [ ] Tester: typecheck + lint + cazadores 7/7 PASS.
+- [ ] regression_guardian: PASS.
+- [ ] reviewer: APPROVED.
+- [ ] Commit en español + plan de rollback.
+- [ ] Push + deploy Ready.
+
+#### Restricciones / guardarrails
+
+- Plan de rollback: revertir commit. Los 3 ítems vuelven a su sección original.
+- Si "Documentos" queda con ítems no listados acá (raro), preservarlos y solo renombrar la sección.
+
+#### Notas para el coordinator
+
+- archivist PRE-CHANGE obligatorio.
+- Builder verifica el estado actual de "Documentos" antes de mover — si no existe esa sección, crear directo "Cobranza y facturación".
+
+---
+
+### SPRINT-117c4 — Crear sección "Equipo" + mover Mantenimientos a Operaciones
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (cuarto del lote)
+**Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c4.
+**Riesgo:** bajo (reordenamiento puro).
+**Touch-list previsto:** `src/components/Sidebar.tsx`.
+
+#### Objetivo
+
+Dos cambios estructurales:
+
+1. **Crear sección "Equipo"** (nueva) con los 3 ítems: Personal, Usuarios y Permisos, Reporte de Ponches. Sacarlos de la sección "Sistema" donde están hoy mezclados con Configuración y Plantillas Marketing.
+2. **Sección "Sistema"** queda con solo: Configuración, Plantillas Marketing (es lo que queda).
+3. **Mover "Mantenimientos"** del top-level (donde es ítem suelto) al interior de la sección "Operaciones".
+
+#### Por qué
+
+- Separar gente (Personal, Usuarios, Ponches) de configs técnicas (Configuración, Plantillas) reduce carga cognitiva.
+- "Mantenimientos" como ítem top-level toma altura visual desproporcionada — conceptualmente es operación recurrente, debe ir dentro de Operaciones.
+
+#### Criterios de aceptación
+
+- [ ] Sección nueva "Equipo" con: Personal, Usuarios y Permisos, Reporte de Ponches (en ese orden).
+- [ ] Sección "Sistema" pasa a tener solo: Configuración, Plantillas Marketing.
+- [ ] "Mantenimientos" ya no es ítem top-level — está dentro de "Operaciones" (al final del array de items de Operaciones, o donde Cowork sugiera por orden lógico).
+- [ ] Cada ítem conserva sus gates de permisos originales (NO tocar `show:`).
+- [ ] Tester: typecheck + lint + cazadores 7/7 PASS.
+- [ ] regression_guardian: PASS.
+- [ ] reviewer: APPROVED.
+- [ ] Commit en español + plan de rollback.
+- [ ] Push + deploy Ready.
+
+#### Restricciones / guardarrails
+
+- Plan de rollback: revertir commit. Personal/Usuarios/Ponches vuelven a Sistema, Mantenimientos vuelve a top-level.
+- NO tocar gates de permisos.
+- NO renombrar ítems.
+
+#### Notas para el coordinator
+
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-117c6 — Limpiar alias `isAdmin = esAdminOCoord` en Sidebar.tsx
+
+**Estado:** PENDIENTE
+**Prioridad:** media (último del lote — limpieza técnica, sin cambio funcional visible)
+**Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c6.
+**Riesgo:** **medio** — el alias se usa en ~15 lugares. Si se reemplaza mal, un ítem aparece donde no debería o se oculta donde debería verse.
+**Touch-list previsto:** `src/components/Sidebar.tsx`.
+
+#### Objetivo
+
+Eliminar el alias `const isAdmin = esAdminOCoord;` (línea ~164 actual) en `Sidebar.tsx` y reemplazar TODAS las usages con la intención correcta:
+
+- Si la usage era para "admin Y coord" → reemplazar con `esAdminOCoord` directo.
+- Si la usage era para "sólo admin literal" → reemplazar con `userProfile?.rol === 'administrador'`.
+
+Auditar caso por caso. **No es búsqueda y reemplazo automático.**
+
+#### Por qué
+
+El alias `isAdmin = esAdminOCoord` es **misleading**: el nombre dice "es admin" pero la realidad es "es admin O coord". Al usar `isAdmin` en código futuro, un builder puede creer que está chequeando solo administrador cuando en realidad incluye coord. Esto generó una clase de gating ambiguo cuya raíz quedó documentada en `AUDITORIA_IA_2026-05-08.md` §5.4.
+
+#### Criterios de aceptación
+
+- [ ] Línea `const isAdmin = esAdminOCoord;` eliminada.
+- [ ] CERO referencias a `isAdmin` en `Sidebar.tsx` (verificar con grep post-cambio).
+- [ ] Cada usage previa reemplazada con la intención semántica correcta:
+  - "admin Y coord" → `esAdminOCoord`
+  - "admin literal" → `userProfile?.rol === 'administrador'`
+- [ ] Builder documenta en el commit message una tabla de qué usages migró a qué (forensia).
+- [ ] Tester: typecheck + lint + cazadores 7/7 PASS.
+- [ ] regression_guardian: PASS.
+- [ ] **reviewer obligatorio con foco en este cambio** — verificar que cada migración respeta la intención original. Riesgo de gating mal-aplicado.
+- [ ] Commit en español + plan de rollback.
+- [ ] Push + deploy Ready.
+
+#### Restricciones / guardarrails
+
+- Plan de rollback: revertir commit. El alias vuelve.
+- Si el reviewer encuentra una migración ambigua (no claro si era "admin Y coord" o "admin literal"), volver al builder con el caso específico para resolver.
+- **Pre-condición:** los sub-sprints 117c1, 117c2, 117c3, 117c4 ya deben estar deployados y validados (la estructura del sidebar debe estar estable antes de tocar el alias).
+
+#### Notas para el coordinator
+
+- archivist PRE-CHANGE obligatorio.
+- **Builder debe inspeccionar cada usage y decidir caso por caso.** No hay shortcut de "replace_all". Si encuentra ambigüedad, escribir en el commit message qué decidió y por qué.
+- El reviewer debe leer el diff completo y validar cada migración. Foco explícito en gating de ítems exclusivos del admin (Asistente IA, Plantillas Marketing) que NO deben aparecer para coord.
 
 ---
 
