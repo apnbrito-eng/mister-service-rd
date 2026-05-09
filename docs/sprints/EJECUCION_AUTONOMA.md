@@ -5,6 +5,60 @@
 
 ---
 
+## 2026-05-09 — `trabaja` (pasada 2): cierre 117c1 + SPRINT-117c2 sección "Bandeja de entrada" (deploy 2/5 del lote 117c)
+
+### Contexto
+
+Jorge disparó `trabaja` después de validar visualmente el deploy de 117c1 (`759a76b`). Por convención del modo autónomo en sprints encadenados con QA humano (alineado con cierre SPRINT-113a), el `trabaja` post-EN_REVISION_HUMANA es OK implícito de cierre. Esta pasada cierra 117c1 + procesa solo 117c2 (NO c3/c4/c6, esos esperan su propio QA).
+
+### Scope procesado
+
+**Cierre administrativo:**
+- SPRINT-117c1 movido de EN_REVISION_HUMANA → COMPLETADO en `COLA_AUTONOMA.md` + entrada en sección histórica con OK humano: "jorge 2026-05-09 (`trabaja` implícito)".
+
+**Sprint nuevo:**
+- SPRINT-117c2 — Crear sección colapsable "Bandeja de entrada" en `Sidebar.tsx`. Mueve 3 ítems (Citas por Confirmar, Reprogramaciones, Sugerencias chequeo) desde la sección "Operaciones" a una sección nueva con `id: 'bandeja_entrada'`, `icon: Inbox`, `defaultExpanded: true`. Props originales (`to`, `icon`, `show`, `badge`) preservadas literalmente — sin cambiar permisos ni gates.
+
+### Flujo ejecutado
+
+1. **archivist PRE-CHANGE manual**: `git log` sobre `Sidebar.tsx` (último funcional `1b75ca6` rename Stand-by, agrupación colapsable establecida en `84f61a3`). `git log` sobre `Citas.tsx`/`Solicitudes.tsx`/`Reprogramaciones.tsx` y rutas en `App.tsx` — confirmadas activas en líneas 222 (`<Route path="citas">`), 243 (`<Route path="solicitudes">`), 265 (`<Route path="reprogramaciones">`). Postmortems revisados: ninguno toca Sidebar.tsx ni navegación. Patrón colapsable establecido en `84f61a3` — replico la misma estructura `SidebarNode` + `SidebarSection`.
+2. **Builder manual**: 1 edición en Sidebar.tsx — agregada nueva entrada `kind: 'section'` con id `bandeja_entrada` ANTES de "Operaciones", removidos los 3 ítems de "Operaciones". Comentario inline con plan de rollback. Sin emojis, identificadores spanish preservados (`bandeja_entrada`, `Bandeja de entrada`).
+3. **Tester manual**: `npx tsc --noEmit` → silent (PASS). `npm run check:regression` → 7/7 cazadores PASS, 0 hits. `npx eslint src/components/Sidebar.tsx --max-warnings 0` → silent (PASS, archivo limpio). `npm run build` → 4.44s OK, 2455 modules transformed.
+4. **regression_guardian manual** (sub-regla obligatoria — `src/components/`):
+   - Las 3 rutas `/admin/citas`, `/admin/solicitudes`, `/admin/reprogramaciones` siguen activas en `App.tsx` (no tocadas).
+   - Permisos por rol no cambiaron: Citas conserva `p('ordenesVer')`, Reprogramaciones y Sugerencias chequeo conservan `esAdminOCoord`.
+   - Queries de cada página intactas (no se tocó código de las páginas).
+   - Listeners de badges (`citasCount`, `reprogramacionesCount`, `sugerenciasChequeoCount`) intactos en líneas 86, 108-128, 133-155.
+   - Patrones P-001..P-007 inaplicables: cambio puramente UI sin Firestore writes, sin rules, sin asignaciones.
+   - PASS.
+5. **Reviewer manual** (self-review): el filtro `visibleItems.length === 0 → return null` en línea 430-431 garantiza que la sección entera desaparece si ningún ítem es visible para el rol. Modo collapsed funciona porque `itemsPlanos` aplana desde `estructura` (líneas 337-342) — los 3 ítems aparecen como antes en el modo colapsado, sin repetición. APPROVED.
+6. **Commit + push**: directo a main (modo autónomo). Mensaje conventional español + plan de rollback explícito.
+7. **Marcar EN_REVISION_HUMANA** (NO COMPLETADO) en `COLA_AUTONOMA.md` — protocolo del lote 117c demanda QA visual de Jorge antes de avanzar a 117c3.
+
+### Decisiones tomadas autónomas (reportar a Jorge)
+
+- **Sobre el orden de la sección**: la coloqué ANTES de "Operaciones" (no después). Razón: los inboxes son lo primero que la coordinadora triagea por la mañana. Si Jorge lo prefiere después, el rollback es trivial (mover el bloque hacia abajo en el array `estructura`).
+- **Sobre el ítem Solicitudes (`/admin/solicitudes`)**: NO incluido en la sección — el sprint 117c2 explícitamente lista solo Citas/Reprogramaciones/Sugerencias chequeo. Solicitudes vive en su propia sección "Web y Solicitudes" (correcto por su origen distinto: formularios públicos, no inbox de revisión interna).
+- **Sobre wrapper "Bandeja"**: descartado — el sprint pidió "evaluá si es necesario o si se puede lograr solo con agrupación en sidebar. Preferí lo más simple". La agrupación colapsable resuelve sin crear página nueva.
+
+### Output checks
+
+- typecheck: PASS (0 errores).
+- check:regression: 7/7 PASS, 0 hits.
+- lint sobre Sidebar.tsx: PASS (silent, 0 warnings 0 errors).
+- build full: OK (4.44s).
+- pre-commit hook: ejecutará typecheck + cazadores + lint staged automáticamente.
+
+### Plan de rollback
+
+`git revert <hash>`. Cambio puramente visual sin migración de datos ni cambio de rutas. Tras el revert, los 3 ítems vuelven a "Operaciones" en su orden original.
+
+### Próximos pasos
+
+Jorge prueba visualmente la sección "Bandeja de entrada" en sidebar admin/coord/operaria/secretaria. Si OK, dispara `trabaja` para que coordinator avance a SPRINT-117c3 ("Cobranza y facturación").
+
+---
+
 ## 2026-05-09 — `trabaja`: SPRINT-117c1 renombrar etiquetas sidebar (deploy 1/5 del lote 117c)
 
 ### Contexto

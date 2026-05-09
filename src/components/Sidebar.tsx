@@ -179,6 +179,24 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       kind: 'item',
       item: { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', show: true },
     },
+    // Bandeja de entrada (SPRINT-117c2): agrupa los 3 inboxes de revisión
+    // que comparten flujo "revisar → aprobar/rechazar". Reduce ruido en
+    // Operaciones. Plan de rollback: revertir el commit, los 3 ítems
+    // vuelven a Operaciones con su orden original.
+    {
+      kind: 'section',
+      section: {
+        id: 'bandeja_entrada',
+        label: 'Bandeja de entrada',
+        icon: Inbox,
+        defaultExpanded: true,
+        items: [
+          { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
+          { to: '/admin/reprogramaciones', icon: RefreshCw, label: 'Reprogramaciones', badge: reprogramacionesCount, show: esAdminOCoord },
+          { to: '/admin/sugerencias-chequeo', icon: ClipboardCheck, label: 'Sugerencias chequeo', badge: sugerenciasChequeoCount, show: esAdminOCoord },
+        ],
+      },
+    },
     // Operaciones
     {
       kind: 'section',
@@ -190,15 +208,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         items: [
           { to: '/admin/agenda-dia', icon: CalendarCheck, label: 'Agenda del Día', show: p('ordenesVer') },
           { to: '/admin/ordenes', icon: ClipboardList, label: 'Órdenes', show: p('ordenesVer') },
-          { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
           { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
           { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios públicos (Calendly)', show: isAdmin || isOperaria || isSecretaria },
           { to: '/admin/standby', icon: Clock, label: 'Pendiente de piezas', badge: standbyCount + ordenesStandbyCount, show: p('ordenesVer') },
           { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
           { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
           { to: '/admin/feedback', icon: Star, label: 'Feedback NPS', show: esAdminOCoord },
-          { to: '/admin/sugerencias-chequeo', icon: ClipboardCheck, label: 'Sugerencias chequeo', badge: sugerenciasChequeoCount, show: esAdminOCoord },
-          { to: '/admin/reprogramaciones', icon: RefreshCw, label: 'Reprogramaciones', badge: reprogramacionesCount, show: esAdminOCoord },
           { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: isAdmin || userProfile?.rol === 'coordinadora' || p('ordenesVerEliminadas') },
         ],
       },

@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-09 por coordinator (procesa bloqueos — SPRINT-117c desbloqueado con OK selectivo de Jorge; 117c1, 117c2, 117c3, 117c4, 117c6 expandidos como PENDIENTE; 117c5 marcado RECHAZADO).
+**Última actualización:** 2026-05-09 por coordinator (cierre 117c1 con OK implícito `trabaja` + procesamiento 117c2 entregado en EN_REVISION_HUMANA).
 
 **Próximo ID disponible:** SPRINT-119
 
@@ -271,6 +271,26 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ---
 
 ## Sprints completados (histórico)
+
+### SPRINT-117c1 — Renombrar etiquetas sidebar + redirect `/admin/configuracion/usuarios`
+- **Completado:** 2026-05-09 por coordinator autónomo. OK humano: Jorge confirmó con `trabaja` el 2026-05-09 (OK implícito de cierre, alineado con cómo se cerró SPRINT-113a).
+- **Hash:** `759a76b`.
+- **Resultado:** 3 cambios de etiqueta en `Sidebar.tsx` aplicados — (a) `Calendarios` → `Calendarios públicos (Calendly)`, (b) label dinámico Rendimiento (operaria/secretaria ven `Mi rendimiento`, admin/coord ven `Rendimiento`), (c) ítem Catálogo (`/admin/productos`) ocultado con `show: false` (ruta sigue activa por URL). Redirect `/admin/configuracion/usuarios` → `/admin/usuarios` ya existía en `App.tsx` — N/A (sin cambios).
+- **Validación:** typecheck + cazadores 7/7 PASS + lint Sidebar.tsx limpio.
+- **Plan de rollback:** revertir `759a76b`.
+- **OK humano:** jorge 2026-05-09 (`trabaja` implícito).
+
+---
+
+### SPRINT-117c2 — Sección "Bandeja de entrada" en sidebar (PENDIENTE QA visual)
+- **Estado:** EN_REVISION_HUMANA al cierre de esta pasada (deployado pero pendiente confirmación visual de Jorge).
+- **Hash:** (ver siguiente sección — se completa al pushear).
+- **Resultado:** sección nueva `Bandeja de entrada` (id `bandeja_entrada`, icon `Inbox`, defaultExpanded `true`) agrupa los 3 inboxes (Citas por Confirmar, Reprogramaciones, Sugerencias chequeo) extraídos de Operaciones. Props originales preservadas (`to`, `icon`, `show`, `badge`). Sección filtra por `visibleItems.length === 0` (lógica preexistente del render) — si un usuario no tiene permiso a ninguno, la sección no aparece.
+- **Validación:** typecheck + cazadores 7/7 PASS + lint Sidebar.tsx limpio + build OK.
+- **Plan de rollback:** revertir el commit de cierre.
+- **Próximo paso humano:** Jorge prueba visualmente y dispara `trabaja` para que coordinator avance a 117c3 (siguiente sub-sprint del lote).
+
+---
 
 ### SPRINT-117b — Propuesta de reorganización con mockup por rol
 - **Completado:** 2026-05-08 noche por coordinator autónomo (novena pasada `trabaja`, sprint read-only).
@@ -1091,9 +1111,11 @@ Cuando Jorge dispara `trabaja`, el coordinator procesa **uno por uno con QA visu
 
 ---
 
-### SPRINT-117c1 — Renombrar etiquetas + verificar redirect `/admin/configuracion/usuarios`
+### SPRINT-117c1 — Renombrar etiquetas + verificar redirect `/admin/configuracion/usuarios` — [MOVIDO A HISTÓRICO]
 
-**Estado:** EN_REVISION_HUMANA (deployado 2026-05-09 — esperando QA visual de Jorge antes de avanzar a 117c2)
+> Sprint completado el 2026-05-09 — Jorge confirmó con `trabaja` (OK implícito de cierre). Ver entrada condensada en sección "Sprints completados (histórico)" más abajo.
+
+**Estado:** COMPLETADO 2026-05-09 (hash `759a76b`)
 **Prioridad:** alta (primero del lote — base de confianza)
 **Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c1.
 **Riesgo:** bajo (cambia strings + verifica 1 redirect ya existente).
@@ -1146,7 +1168,7 @@ Aplicar 3 cambios concretos de etiqueta + verificar redirect, sin alterar compor
 
 ### SPRINT-117c2 — Crear sección "Bandeja de entrada" en sidebar
 
-**Estado:** PENDIENTE
+**Estado:** EN_REVISION_HUMANA (deployado 2026-05-09 — esperando QA visual de Jorge antes de avanzar a 117c3)
 **Prioridad:** alta (segundo del lote, depende de 117c1 deployado y validado)
 **Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c2.
 **Riesgo:** bajo (agrupación visual pura — sin cambiar permisos ni rutas).
