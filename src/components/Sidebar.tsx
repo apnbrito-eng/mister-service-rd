@@ -159,11 +159,13 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     navigate('/login');
   };
 
+  // SPRINT-117c6: alias `isAdmin = esAdminOCoord` eliminado por engañoso —
+  // el nombre sugería "solo administrador" pero en realidad cubría admin+coord.
+  // Todas las usages migradas a `esAdminOCoord` directo (semántica idéntica).
+  // Plan de rollback: revertir el commit, el alias vuelve.
   const esAdminOCoord = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
-  // Alias mantenido: ahora coordinadora también cuenta como "admin" en visibilidad
-  const isAdmin = esAdminOCoord;
-  const isOperaria = userProfile?.rol === 'operaria' || isAdmin;
-  const isSecretaria = userProfile?.rol === 'secretaria' || isAdmin;
+  const isOperaria = userProfile?.rol === 'operaria' || esAdminOCoord;
+  const isSecretaria = userProfile?.rol === 'secretaria' || esAdminOCoord;
   // Permisos granulares
   const p = (acc: AccionPermiso) => puede(userProfile, acc);
 
@@ -209,12 +211,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           { to: '/admin/agenda-dia', icon: CalendarCheck, label: 'Agenda del Día', show: p('ordenesVer') },
           { to: '/admin/ordenes', icon: ClipboardList, label: 'Órdenes', show: p('ordenesVer') },
           { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
-          { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios públicos (Calendly)', show: isAdmin || isOperaria || isSecretaria },
+          { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios públicos (Calendly)', show: esAdminOCoord || isOperaria || isSecretaria },
           { to: '/admin/standby', icon: Clock, label: 'Pendiente de piezas', badge: standbyCount + ordenesStandbyCount, show: p('ordenesVer') },
           { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
           { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
           { to: '/admin/feedback', icon: Star, label: 'Feedback NPS', show: esAdminOCoord },
-          { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: isAdmin || userProfile?.rol === 'coordinadora' || p('ordenesVerEliminadas') },
+          { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: esAdminOCoord || p('ordenesVerEliminadas') },
           // SPRINT-117c4: Mantenimiento mudado desde top-level (era ítem suelto bajo Finanzas)
           // hacia el final de Operaciones — conceptualmente es operación recurrente, no merece
           // altura visual de top-level. Gate `show:` preservado idéntico al original.
@@ -244,7 +246,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         defaultExpanded: true,
         items: [
           { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: p('cotizacionesVer') },
-          { to: '/admin/facturacion-pendiente', icon: Inbox, label: 'Conduces Pendientes', badge: facturacionPendienteCount, show: isAdmin || userProfile?.rol === 'coordinadora' },
+          { to: '/admin/facturacion-pendiente', icon: Inbox, label: 'Conduces Pendientes', badge: facturacionPendienteCount, show: esAdminOCoord },
           { to: '/admin/facturas', icon: Receipt, label: 'Conduces de Garantía', show: p('facturasVer') },
         ],
       },
@@ -262,9 +264,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           // La ruta sigue activa en App.tsx — accesible por URL hasta sprint propio futuro
           // que la elimine del routing. Para revertir: cambiar show a `p('ordenesVer')`.
           { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: false },
-          { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionModificar') || userProfile?.rol === 'operaria' || isAdmin },
+          { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionModificar') || userProfile?.rol === 'operaria' || esAdminOCoord },
           { to: '/admin/taller', icon: Wrench, label: 'Equipos Taller', show: p('ordenesVer') },
-          { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: isAdmin || p('configuracionModificar') },
+          { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: esAdminOCoord || p('configuracionModificar') },
         ],
       },
     },
@@ -279,15 +281,15 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         items: [
           { to: '/admin/gastos', icon: DollarSign, label: 'Gastos e Ingresos', show: p('gastosVer') },
           { to: '/admin/bancos', icon: Building2, label: 'Bancos', show: p('bancosGestionar') },
-          { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: isAdmin || userProfile?.rol === 'coordinadora' },
+          { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: esAdminOCoord },
           { to: '/admin/avances', icon: Wallet, label: 'Avances a Empleados', show: p('avancesGestionar') },
           { to: '/admin/prestamos', icon: Banknote, label: 'Préstamos a Empleados', show: esAdminOCoord },
-          { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: isAdmin || p('configuracionVer') },
-          { to: '/admin/estado-resultado', icon: TrendingUp, label: 'Estado de Resultado', show: isAdmin || userProfile?.rol === 'coordinadora' },
+          { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: esAdminOCoord || p('configuracionVer') },
+          { to: '/admin/estado-resultado', icon: TrendingUp, label: 'Estado de Resultado', show: esAdminOCoord },
           // SPRINT-117c1: label dinámico — operaria/secretaria ven "Mi rendimiento" (KPI propio),
           // admin/coord siguen viendo "Rendimiento" (panel global). Sin cambios al gate `show:`.
           { to: '/admin/rendimiento', icon: TrendingUp, label: userProfile?.rol === 'operaria' || userProfile?.rol === 'secretaria' ? 'Mi rendimiento' : 'Rendimiento', show: p('rendimientoVer') },
-          { to: '/admin/metricas-mensuales', icon: TrendingUp, label: 'Métricas del Mes', show: p('rendimientoVer') || isAdmin },
+          { to: '/admin/metricas-mensuales', icon: TrendingUp, label: 'Métricas del Mes', show: p('rendimientoVer') || esAdminOCoord },
         ],
       },
     },
@@ -300,10 +302,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         icon: Globe,
         defaultExpanded: false,
         items: [
-          { to: '/admin/web', icon: Globe, label: 'Página Web', show: isAdmin },
-          { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: isAdmin },
-          { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: isAdmin },
-          { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: isAdmin },
+          { to: '/admin/web', icon: Globe, label: 'Página Web', show: esAdminOCoord },
+          { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: esAdminOCoord },
+          { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: esAdminOCoord },
+          { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: esAdminOCoord },
         ],
       },
     },

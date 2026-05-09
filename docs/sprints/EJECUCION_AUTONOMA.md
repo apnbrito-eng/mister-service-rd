@@ -5,6 +5,69 @@
 
 ---
 
+## 2026-05-09 — `trabaja` (pasada 5, último del lote 117c): cierre 117c4 + SPRINT-117c6 limpieza alias `isAdmin` (deploy 5/5 del lote 117c)
+
+### Contexto
+
+Jorge confirmó SPRINT-117c4 con "si" (OK implícito) y disparó pasada de 117c6. El sprint 117c6 cierra el lote completo 117c (5/6 sub-sprints aprobados ejecutados — 117c5 fue rechazado en el OK selectivo del 2026-05-09). Riesgo medio según la propuesta original (toca semántica de permisos, no solo UI), por lo que se sigue el flujo manual completo con rigor adicional.
+
+### Scope procesado
+
+**Cierre administrativo:**
+- SPRINT-117c4 movido de EN_REVISION_HUMANA → COMPLETADO en `COLA_AUTONOMA.md` con OK humano: "jorge 2026-05-09 ('si' implícito al disparar pasada de 117c6)".
+
+**Sprint nuevo:**
+- SPRINT-117c6 — Eliminar alias `const isAdmin = esAdminOCoord;` en `Sidebar.tsx` y migrar las 16 usages funcionales. Análisis caso por caso confirmó que ninguna usage dependía de "solo admin literal" — todas evaluaban admin+coord (semántica del alias). Por lo tanto la migración es 100% a `esAdminOCoord`. En 4 sitios la cláusula redundante `|| userProfile?.rol === 'coordinadora'` se eliminó por idempotencia lógica (`A∨B∨B = A∨B`).
+
+### Flujo ejecutado
+
+1. **archivist PRE-CHANGE manual**: `git log` sobre `Sidebar.tsx` → último commit `480532f` (117c4 sección "Equipo"). Mapeo exhaustivo de las 17 ocurrencias de `isAdmin` en el archivo:
+   - Línea 164: declaración del alias.
+   - Líneas 165-166: redefiniciones de `isOperaria`/`isSecretaria` (dependencia interna).
+   - Líneas 212, 217, 247, 265, 267, 282, 285, 286, 290, 303, 304, 305, 306: 14 call-sites en `show:` de items.
+   - Total: 1 declaración + 16 usages funcionales.
+   Patterns a respetar: gates inline, identifiers español, sin emojis, comentario + plan de rollback (igual que 117c1..c4). Sub-regla CLAUDE.md "no ocultar por rol" verificada — el sprint NO crea ítems nuevos ocultos. Sub-regla "userProfile.id ≠ auth.uid" inaplicable (sprint UI puro). Postmortem `AUDITORIA_IA_2026-05-08.md §5.4` documenta que `isAdmin` se usaba como sinónimo de admin+coord.
+   `grep -r "\bisAdmin\b" src/` → solo 1 archivo (`src/components/Sidebar.tsx`), confirmando que el alias es local al componente y no hay dependencias externas.
+2. **Builder manual**: 12 ediciones en `Sidebar.tsx`:
+   - Edit 1: declaración del alias eliminada + comentario de forensia con plan de rollback. `isOperaria` e `isSecretaria` redefinidas con `esAdminOCoord` directo.
+   - Edits 2-12: 14 call-sites migrados:
+     - Línea 212 (`/admin/calendarios`): `isAdmin || isOperaria || isSecretaria` → `esAdminOCoord || isOperaria || isSecretaria`.
+     - Línea 217 (`/admin/historial-anuladas`): `isAdmin || 'coordinadora' || p('ordenesVerEliminadas')` → `esAdminOCoord || p('ordenesVerEliminadas')` (eliminada redundancia coord).
+     - Línea 247 (`/admin/facturacion-pendiente`): `isAdmin || 'coordinadora'` → `esAdminOCoord` (eliminada redundancia).
+     - Línea 265 (`/admin/inventario`): `p('configuracionModificar') || 'operaria' || isAdmin` → `... || esAdminOCoord`.
+     - Línea 267 (`/admin/precios`): `isAdmin || p('configuracionModificar')` → `esAdminOCoord || p('configuracionModificar')`.
+     - Línea 282 (`/admin/nomina`): `isAdmin || 'coordinadora'` → `esAdminOCoord` (redundancia).
+     - Línea 285 (`/admin/comisiones`): `isAdmin || p('configuracionVer')` → `esAdminOCoord || p('configuracionVer')`.
+     - Línea 286 (`/admin/estado-resultado`): `isAdmin || 'coordinadora'` → `esAdminOCoord` (redundancia).
+     - Línea 290 (`/admin/metricas-mensuales`): `p('rendimientoVer') || isAdmin` → `... || esAdminOCoord`.
+     - Líneas 303-306 (`/admin/web`, `/admin/empresas-aliadas`, `/admin/formularios`, `/admin/solicitudes`): `isAdmin` → `esAdminOCoord`.
+   Sin emojis. Identifiers en español. Comentario de forensia preservado.
+3. **Tester manual**: `npx tsc --noEmit` → silent (PASS). `npm run check:regression` → 7/7 cazadores PASS, 0 hits idéntico al baseline pre-cambio. `npx eslint src/components/Sidebar.tsx --max-warnings 0` → silent (PASS). `npm run build` → 4.11s OK, bundle 2,651.94 kB (idéntico a baseline 117c4).
+4. **regression_guardian manual** (sub-regla obligatoria — toca `src/components/`):
+   - Tabla de equivalencia caso por caso (16 migraciones) verificada matemáticamente: cada `show:` evalúa exactamente el mismo conjunto de roles antes y después. `isAdmin = esAdminOCoord` por definición → todo `isAdmin` se reemplazó por su definición.
+   - Las 4 simplificaciones lógicas `A∨B∨B = A∨B` validadas: en `historial-anuladas`, `facturacion-pendiente`, `nomina`, `estado-resultado` la cláusula `|| 'coordinadora'` era redundante porque `isAdmin` ya cubría coordinadora. Eliminarla deja conjunto idéntico.
+   - Verificación negativa: ningún call-site del alias quedó sin reemplazar. `grep "\bisAdmin\b" src/components/Sidebar.tsx` retorna solo el comentario de forensia (línea 162, no funcional).
+   - Verificación de ítems admin-literal exclusivos: Asistente IA (`/admin/asistente`, `/admin/asistente/historial`) y Plantillas Marketing (`/admin/configuracion-marketing`) NO usaban `isAdmin` previo al sprint — siempre usaron `userProfile?.rol === 'administrador'` directo. NO modificados. Coordinadora sigue SIN ver Asistente IA ni Plantillas Marketing post-cambio.
+   - Cazadores P-001..P-007 inaplicables al diff: cambio puramente UI sin Firestore writes, sin rules, sin alta empleado, sin dropdowns técnico, sin `crearNotificacion`. 0 hits.
+   - PASS.
+5. **Reviewer manual** (self-review): diff de 11 hunks. Cada migración revisada contra su línea original (ver tabla en commit message). Comentario de forensia explica el cambio + plan de rollback. Sub-regla "no ocultar por rol" respetada — cero ítems nuevos ocultos, cero gates más restrictivos. Identifiers en español preservados. Sin emojis. APPROVED.
+6. **Commit + push**: directo a main (modo autónomo). Mensaje conventional español + tabla de migración + plan de rollback + cierre lote 117c.
+
+### Restricciones del sprint cumplidas
+
+- ✓ NO cambia la semántica de quién puede ver qué (validado caso por caso).
+- ✓ NO oculta ítems por rol nuevos (cero gates más restrictivos).
+- ✓ SOLO refactor de naming + 4 simplificaciones lógicas equivalentes.
+- ✓ Plan de rollback documentado: revertir el commit, el alias vuelve.
+- ✓ Mensaje de commit conventional en español con tabla de forensia.
+- ✓ Pre-condición cumplida: 117c1..c4 deployados y 117c4 confirmado por Jorge.
+
+### Resultado
+
+Pasada exitosa. Lote 117c cerrado al 100% (5/6 sub-sprints aprobados deployados). Sprint queda EN_REVISION_HUMANA por riesgo medio — Jorge debe validar visualmente con los 5 roles que el sidebar es idéntico al de antes.
+
+---
+
 ## 2026-05-09 — `trabaja` (pasada 4): cierre 117c3 + SPRINT-117c4 sección "Equipo" + Mantenimiento → Operaciones (deploy 4/5 del lote 117c)
 
 ### Contexto

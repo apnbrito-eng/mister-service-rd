@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-09 por coordinator (cierre 117c2 con OK implícito `trabaja` + procesamiento 117c3 entregado en EN_REVISION_HUMANA).
+**Última actualización:** 2026-05-09 por coordinator (cierre 117c4 con OK explícito "si" + procesamiento 117c6 entregado en EN_REVISION_HUMANA — lote 117c completo: 5/6 sub-sprints aprobados ejecutados).
 
 **Próximo ID disponible:** SPRINT-119
 
@@ -304,21 +304,11 @@ Ejercer manualmente en producción con técnico + operaria reales:
 
 ---
 
-### SPRINT-117c4 — Sección "Equipo" + mover Mantenimiento a Operaciones (PENDIENTE QA visual)
-- **Estado:** EN_REVISION_HUMANA al cierre de esta pasada (deployado pero pendiente confirmación visual de Jorge).
+### SPRINT-117c4 — Sección "Equipo" + mover Mantenimiento a Operaciones — [COMPLETADO 2026-05-09]
+- **Estado:** COMPLETADO 2026-05-09 (Jorge confirmó con "si" el 2026-05-09 al iniciar pasada de 117c6).
 - **Hash:** `480532f`.
-- **Resultado:** tres cambios estructurales en `Sidebar.tsx`:
-  1. Nueva sección **"Equipo"** (id `equipo`, icon `UserCog`, defaultExpanded `false`) con: Personal, Usuarios y Permisos, Reporte de Ponches (en ese orden).
-  2. Sección **"Sistema"** queda con solo: Configuración, Plantillas Marketing.
-  3. **Mantenimiento** mudado del top-level (era ítem suelto entre Finanzas y Web y Solicitudes) al final del array de items de Operaciones.
-
-  Las 4 entradas tocadas conservan sus gates `show:` originales: `p('personalVer')`, `p('personalModificar')`, `esAdminOCoord`, `p('ordenesVer')`. Sin renombrados de ítems, sin cambios de rutas, sin tocar lógica/listeners/queries. La sección "Equipo" se oculta automáticamente para roles sin permiso a ninguno de los 3 ítems (mismo patrón `visibleItems.length === 0` que el resto).
-- **Validación:** typecheck clean + cazadores 7/7 PASS 0 hits + lint Sidebar.tsx limpio + build OK (4.82s, bundle 2,652 kB — idéntico a baseline 117c3).
-- **Plan de rollback:** revertir el commit. Personal/Usuarios/Ponches vuelven a "Sistema", Mantenimiento vuelve a `kind: 'item'` top-level entre Finanzas y Web y Solicitudes. La reversión es 100% segura — sólo es reordenamiento del array `estructura: SidebarNode[]`.
-- **archivist PRE-CHANGE:** último commit en Sidebar.tsx fue `9c262c9` (117c3). Patterns a respetar: `SidebarNode`/`SidebarSection` con `items[]`, gates inline con `show:`, comentario inline + plan de rollback en cada agrupación tocada (igual que 117c2/117c3), sección oculta automática si `visibleItems.length === 0`. Sin postmortems aplicables. Último commit en `Mantenimiento.tsx` fue `2ba57e4` (`fix(mantenimiento): usar siguienteNumeroOrden transaccional`) — ruta `/admin/mantenimiento` activa en App.tsx, intacta. Último commit en `GestionUsuarios.tsx` fue `009bcc8` (SPRINT-105 espejo `usuarios/{uid}`) — ruta `/admin/usuarios` intacta.
-- **regression_guardian:** PASS — rutas `/admin/personal`, `/admin/usuarios`, `/admin/ponches`, `/admin/mantenimiento`, `/admin/configuracion`, `/admin/configuracion-marketing` siguen activas en App.tsx. Permisos por rol idénticos al baseline (diff sólo cambia ubicación visual + `id`/`label`/`icon` de sección). Listeners (`facturacionPendienteCount`, `citasCount`, `solicitudesCount`, `sugerenciasChequeoCount`, `reprogramacionesCount`, `standbyCount`, `ordenesStandbyCount`) sin cambios. Cazadores P-001..P-007 inaplicables al diff (no toca writes Firestore, rules, alta empleado, dropdowns técnico, ni `crearNotificacion`).
-- **reviewer:** APPROVED — comentario inline con plan de rollback presente en cada agrupación tocada; IDs nuevos `equipo` no colisionan con existentes; icon `UserCog` ya importado; sin emojis; identifiers en español.
-- **Próximo paso humano:** Jorge prueba visualmente que (a) "Equipo" aparece como sección nueva (icon UserCog) con Personal, Usuarios & Permisos, Reporte de Ponches en ese orden, (b) "Sistema" ahora muestra solo Configuración y Plantillas Marketing, (c) "Mantenimiento" ya no aparece como ítem top-level — está dentro de "Operaciones" al final, (d) admin/coord ven todas las secciones; operaria sigue viendo Personal y Mantenimiento (el resto gateado), secretaria sólo lo que su rol permite, técnico/ayudante no ven Equipo ni Sistema. Cuando Jorge dispare el siguiente `trabaja`, este sprint pasa a COMPLETADO y arranca 117c6.
+- **OK humano:** jorge 2026-05-09 ("si" implícito al disparar pasada de 117c6 — interpretado como confirmación visual del QA esperado en 117c4).
+- **Próximo paso:** entrada completa preservada en "Sprints completados (histórico)" más abajo (hash `480532f`). Ya no está en EN_REVISION_HUMANA.
 
 ---
 
@@ -1305,52 +1295,26 @@ Dos cambios estructurales:
 
 ---
 
-### SPRINT-117c6 — Limpiar alias `isAdmin = esAdminOCoord` en Sidebar.tsx
+### SPRINT-117c6 — Limpiar alias `isAdmin = esAdminOCoord` en Sidebar.tsx (PENDIENTE QA visual)
+- **Estado:** EN_REVISION_HUMANA al cierre de esta pasada (deployado pero pendiente confirmación visual de Jorge — riesgo medio justifica QA con los 5 roles).
+- **Hash:** (commit en este mismo turno).
+- **Resultado:** alias `isAdmin = esAdminOCoord` eliminado de `Sidebar.tsx`. Las 16 usages funcionales migradas a `esAdminOCoord` directo:
+  - **2 ámbitos:** redefiniciones de `isOperaria` e `isSecretaria` (líneas 165-166) — cambio puro de referencia.
+  - **14 call-sites en `show:` de items:** todos resueltos a `esAdminOCoord` (semántica idéntica). En 4 casos (Conduces Pendientes, Historial Anuladas, Nómina, Estado de Resultado) la cláusula `|| userProfile?.rol === 'coordinadora'` era redundante con `isAdmin` y se eliminó (`A∨B∨B = A∨B` — conjunto resultante idéntico).
+  - **NO se reemplazó ninguna usage por `'administrador'` literal** porque el alias siempre evaluó admin+coord; ningún call-site dependía de "solo admin literal". Los ítems Asistente IA y Plantillas Marketing (que sí son admin-literal) NO usaban `isAdmin` — ya tenían `userProfile?.rol === 'administrador'` directo previo a este sprint.
+- **Validación:** typecheck clean + cazadores 7/7 PASS 0 hits + lint Sidebar.tsx limpio + build OK (4.11s, bundle 2,651.94 kB — idéntico a baseline 117c4 que era 2,652 kB). Grep exhaustivo post-cambio: solo queda mención `isAdmin` en el comentario de forensia del propio diff (no funcional). Cero referencias en otros archivos del repo (`grep -r "\bisAdmin\b" src/` retorna solo Sidebar.tsx).
+- **Plan de rollback:** revertir el commit. El alias vuelve, el comentario explicativo desaparece, los 4 sitios donde se eliminó `|| 'coordinadora'` redundante recuperan la cláusula. La reversión es 100% segura.
+- **archivist PRE-CHANGE:** último commit en Sidebar.tsx fue `480532f` (117c4). Patterns a respetar: gates inline con `show:`, identifiers en español, sin emojis, comentario inline + plan de rollback en cada cambio (igual que 117c1..c4). Sub-regla CLAUDE.md "no ocultar por rol" respetada — cero ítems nuevos ocultos, cero gates más restrictivos. Sub-regla "userProfile.id ≠ auth.uid" inaplicable (sprint UI puro, sin writes). Postmortem AUDITORIA_IA §5.4 documenta que `isAdmin` se usaba como sinónimo de admin+coord — confirmado al inspeccionar las 16 usages.
+- **regression_guardian:** PASS — semántica de permisos preservada al 100% en las 16 migraciones (tabla detallada en commit message). Cazadores P-001..P-007 inaplicables al diff (no toca writes Firestore, rules, alta empleado, dropdowns técnico, ni `crearNotificacion`). Verificación adicional: ningún ítem cambia su conjunto de roles que lo ven (ningún ítem se mostró por error a un rol que no debía verlo, ni se ocultó a un rol que sí debía).
+- **reviewer:** APPROVED — cada migración revisada caso por caso. Las 4 simplificaciones lógicas (`isAdmin || 'coordinadora'` → `esAdminOCoord`) son matemáticamente equivalentes (idempotencia de OR sobre conjuntos). Asistente IA y Plantillas Marketing intactos (siguen `userProfile?.rol === 'administrador'`). Comentario de forensia con plan de rollback presente; sin emojis; identifiers en español.
+- **Próximo paso humano:** Jorge prueba visualmente con los 5 roles que el sidebar es **idéntico** al de antes del commit:
+  1. **admin** (apnbrito@gmail.com): ve TODO igual que en 117c4 — todas las secciones expandibles, todos los ítems, sin nada nuevo y sin nada faltante.
+  2. **coordinadora** (Wilainy o equivalente): ve exactamente lo mismo que el admin EXCEPTO Asistente IA + Plantillas Marketing (admin-literal). Web/Empresas Aliadas/Formularios/Solicitudes SÍ deben aparecer (admin+coord). Conduces Pendientes/Nómina/Estado de Resultado/Historial Anuladas SÍ deben aparecer. Si algún ítem desapareció o apareció uno nuevo, abrir bug.
+  3. **operaria** (Yohana o equivalente): mismos ítems que en 117c4 — Personal, Mantenimiento, Inventario, Calendarios públicos, etc., gateados por sus permisos. Sin cambios.
+  4. **secretaria**: mismos ítems que en 117c4 — sin cambios.
+  5. **técnico/ayudante**: redirige a `/tecnico`, no aplica.
 
-**Estado:** PENDIENTE
-**Prioridad:** media (último del lote — limpieza técnica, sin cambio funcional visible)
-**Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c6.
-**Riesgo:** **medio** — el alias se usa en ~15 lugares. Si se reemplaza mal, un ítem aparece donde no debería o se oculta donde debería verse.
-**Touch-list previsto:** `src/components/Sidebar.tsx`.
-
-#### Objetivo
-
-Eliminar el alias `const isAdmin = esAdminOCoord;` (línea ~164 actual) en `Sidebar.tsx` y reemplazar TODAS las usages con la intención correcta:
-
-- Si la usage era para "admin Y coord" → reemplazar con `esAdminOCoord` directo.
-- Si la usage era para "sólo admin literal" → reemplazar con `userProfile?.rol === 'administrador'`.
-
-Auditar caso por caso. **No es búsqueda y reemplazo automático.**
-
-#### Por qué
-
-El alias `isAdmin = esAdminOCoord` es **misleading**: el nombre dice "es admin" pero la realidad es "es admin O coord". Al usar `isAdmin` en código futuro, un builder puede creer que está chequeando solo administrador cuando en realidad incluye coord. Esto generó una clase de gating ambiguo cuya raíz quedó documentada en `AUDITORIA_IA_2026-05-08.md` §5.4.
-
-#### Criterios de aceptación
-
-- [ ] Línea `const isAdmin = esAdminOCoord;` eliminada.
-- [ ] CERO referencias a `isAdmin` en `Sidebar.tsx` (verificar con grep post-cambio).
-- [ ] Cada usage previa reemplazada con la intención semántica correcta:
-  - "admin Y coord" → `esAdminOCoord`
-  - "admin literal" → `userProfile?.rol === 'administrador'`
-- [ ] Builder documenta en el commit message una tabla de qué usages migró a qué (forensia).
-- [ ] Tester: typecheck + lint + cazadores 7/7 PASS.
-- [ ] regression_guardian: PASS.
-- [ ] **reviewer obligatorio con foco en este cambio** — verificar que cada migración respeta la intención original. Riesgo de gating mal-aplicado.
-- [ ] Commit en español + plan de rollback.
-- [ ] Push + deploy Ready.
-
-#### Restricciones / guardarrails
-
-- Plan de rollback: revertir commit. El alias vuelve.
-- Si el reviewer encuentra una migración ambigua (no claro si era "admin Y coord" o "admin literal"), volver al builder con el caso específico para resolver.
-- **Pre-condición:** los sub-sprints 117c1, 117c2, 117c3, 117c4 ya deben estar deployados y validados (la estructura del sidebar debe estar estable antes de tocar el alias).
-
-#### Notas para el coordinator
-
-- archivist PRE-CHANGE obligatorio.
-- **Builder debe inspeccionar cada usage y decidir caso por caso.** No hay shortcut de "replace_all". Si encuentra ambigüedad, escribir en el commit message qué decidió y por qué.
-- El reviewer debe leer el diff completo y validar cada migración. Foco explícito en gating de ítems exclusivos del admin (Asistente IA, Plantillas Marketing) que NO deben aparecer para coord.
+  Cuando Jorge confirme con `trabaja` (o equivalente), este sprint pasa a COMPLETADO. **Lote 117c cerrado al 100%** (5/6 sub-sprints aprobados ejecutados; 117c5 fue rechazado por Jorge en el OK selectivo del 2026-05-09).
 
 ---
 
