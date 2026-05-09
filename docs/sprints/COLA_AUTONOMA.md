@@ -1093,7 +1093,7 @@ Cuando Jorge dispara `trabaja`, el coordinator procesa **uno por uno con QA visu
 
 ### SPRINT-117c1 — Renombrar etiquetas + verificar redirect `/admin/configuracion/usuarios`
 
-**Estado:** PENDIENTE
+**Estado:** EN_REVISION_HUMANA (deployado 2026-05-09 — esperando QA visual de Jorge antes de avanzar a 117c2)
 **Prioridad:** alta (primero del lote — base de confianza)
 **Origen:** OK selectivo de Jorge 2026-05-09 sobre `docs/sprints/PROPUESTA_IA_2026-05-08.md` §4 SPRINT-117c1.
 **Riesgo:** bajo (cambia strings + verifica 1 redirect ya existente).

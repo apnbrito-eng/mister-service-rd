@@ -5,6 +5,55 @@
 
 ---
 
+## 2026-05-09 — `trabaja`: SPRINT-117c1 renombrar etiquetas sidebar (deploy 1/5 del lote 117c)
+
+### Contexto
+
+Jorge desbloqueó SPRINT-117c con OK selectivo: aprobados 117c1, 117c2, 117c3, 117c4, 117c6; rechazado 117c5. El protocolo manda procesar uno por uno con QA visual humana entre cada deploy. Esta entrada cubre solo 117c1.
+
+### Scope procesado
+
+SPRINT-117c1 — Renombrar etiquetas + verificar redirect `/admin/configuracion/usuarios`. 4 cambios concretos sin alterar lógica:
+
+1. Sidebar: `'Calendarios'` → `'Calendarios públicos (Calendly)'` (línea 195).
+2. Sidebar: `'Rendimiento'` → label dinámico `userProfile?.rol === 'operaria' || 'secretaria' ? 'Mi rendimiento' : 'Rendimiento'` (línea 258).
+3. Sidebar: ítem `Catálogo` (`/admin/productos`) → `show: false` (línea 235). Ruta sigue activa por URL directa.
+4. App.tsx: ruta `configuracion/usuarios` que renderizaba `GestionUsuarios` directo → ahora `Navigate to="/admin/usuarios" replace`. Bookmarks viejos preservados.
+
+### Flujo ejecutado
+
+1. **archivist PRE-CHANGE manual**: `git log` sobre `Sidebar.tsx` y `App.tsx`. Última modif funcional: `1b75ca6` (renombrar Stand-by) + `84f61a3` (sidebar agrupar secciones colapsables). No hay postmortems específicos de Sidebar. Sin advertencias bloqueantes.
+2. **Builder manual**: 3 ediciones en Sidebar.tsx + 1 en App.tsx. Comentarios `// SPRINT-117c1` en cada cambio explicando rollback. Sin emojis, identificadores en español preservados.
+3. **Tester manual**: `npx tsc --noEmit` → silent (PASS). `npm run check:regression` → 7/7 cazadores PASS, 0 hits. `npm run lint --max-warnings 0` → 5554 problems = baseline preexistente (verificado con `git stash`). Sobre archivos modificados: 1 warning preexistente en App.tsx:154 (`loading` unused) — no introducido por este sprint.
+4. **regression_guardian manual** (sub-regla obligatoria — `src/components/`): identificadores `enStandby`, `standby_piezas`, `productos`, gates `puede(...)`, rutas `/admin/calendarios`, `/admin/productos`, `/admin/rendimiento`, `/admin/usuarios` — TODOS preservados. Cero cambios a rules/services/context/transactions. Patrones P-001..P-007 inaplicables. PASS.
+5. **Reviewer manual** (self-review): los 7 cazadores no pueden disparar falso positivo sobre cambios de strings + 1 redirect cliente-side. RolRoute en destino canónico (`/admin/usuarios`) garantiza permisos para bookmarks viejos. APPROVED.
+6. **Commit + push**: directo a main (modo autónomo). Mensaje conventional español + plan de rollback explícito.
+7. **Marcar EN_REVISION_HUMANA** (NO COMPLETADO) en `COLA_AUTONOMA.md` — protocolo 117c demanda QA visual de Jorge antes de avanzar a 117c2.
+
+### Decisiones tomadas autónomas (reportar a Jorge)
+
+- **Sobre el ítem Catálogo**: lo encontré activo en línea 235 con `show: p('ordenesVer')`. Lo cambié a `show: false` (no eliminado del array) para preservar reversibilidad trivial. Comentario inline indica cómo revertir.
+- **Sobre `/admin/configuracion/usuarios`**: NO era redirect previo — era ruta activa que renderizaba `GestionUsuarios` con `RolRoute`. Convertí a `Navigate to="/admin/usuarios" replace` (equivalente cliente-side de redirect 301). El RolRoute aplica en el destino, así que bookmarks viejos siguen respetando permisos.
+
+### Output checks
+
+- typecheck: PASS (0 errores).
+- check:regression: 7/7 PASS, 0 hits.
+- lint sobre archivos modificados: solo 1 warning preexistente (App.tsx:154 `loading` unused), no introducido por este sprint.
+- pre-commit hook: ejecuta typecheck + cazadores + lint staged automáticamente.
+
+### Plan de rollback
+
+`git revert <hash>`. Solo strings + 1 redirect — operación segura, sin riesgo de pérdida de datos ni state.
+
+### Próximos pasos
+
+- Esperar QA visual de Jorge en producción (Aury técnico, Wilainy/Yohana operarias).
+- Si Jorge confirma OK, marcar COMPLETADO y arrancar SPRINT-117c2 (sección "Bandeja de entrada").
+- Si Jorge dice "perdí X" o "no se ve bien": `git revert <hash>` + mover a BLOQUEOS.md.
+
+---
+
 ## 2026-05-08 — `trabaja` (novena pasada): SPRINT-117b propuesta de reorganización IA (read-only autónomo)
 
 ### Contexto

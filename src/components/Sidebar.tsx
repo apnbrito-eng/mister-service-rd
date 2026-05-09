@@ -192,7 +192,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           { to: '/admin/ordenes', icon: ClipboardList, label: 'Órdenes', show: p('ordenesVer') },
           { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
           { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
-          { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios', show: isAdmin || isOperaria || isSecretaria },
+          { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios públicos (Calendly)', show: isAdmin || isOperaria || isSecretaria },
           { to: '/admin/standby', icon: Clock, label: 'Pendiente de piezas', badge: standbyCount + ordenesStandbyCount, show: p('ordenesVer') },
           { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
           { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
@@ -232,7 +232,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         icon: Boxes,
         defaultExpanded: false,
         items: [
-          { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: p('ordenesVer') },
+          // SPRINT-117c1: ocultar ítem "Catálogo" (apunta a /admin/productos, deuda histórica).
+          // La ruta sigue activa en App.tsx — accesible por URL hasta sprint propio futuro
+          // que la elimine del routing. Para revertir: cambiar show a `p('ordenesVer')`.
+          { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: false },
           { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionModificar') || userProfile?.rol === 'operaria' || isAdmin },
           { to: '/admin/taller', icon: Wrench, label: 'Equipos Taller', show: p('ordenesVer') },
           { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: isAdmin || p('configuracionModificar') },
@@ -255,7 +258,9 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           { to: '/admin/prestamos', icon: Banknote, label: 'Préstamos a Empleados', show: esAdminOCoord },
           { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: isAdmin || p('configuracionVer') },
           { to: '/admin/estado-resultado', icon: TrendingUp, label: 'Estado de Resultado', show: isAdmin || userProfile?.rol === 'coordinadora' },
-          { to: '/admin/rendimiento', icon: TrendingUp, label: 'Rendimiento', show: p('rendimientoVer') },
+          // SPRINT-117c1: label dinámico — operaria/secretaria ven "Mi rendimiento" (KPI propio),
+          // admin/coord siguen viendo "Rendimiento" (panel global). Sin cambios al gate `show:`.
+          { to: '/admin/rendimiento', icon: TrendingUp, label: userProfile?.rol === 'operaria' || userProfile?.rol === 'secretaria' ? 'Mi rendimiento' : 'Rendimiento', show: p('rendimientoVer') },
           { to: '/admin/metricas-mensuales', icon: TrendingUp, label: 'Métricas del Mes', show: p('rendimientoVer') || isAdmin },
         ],
       },

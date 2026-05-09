@@ -151,7 +151,10 @@ function RolRoute({ roles, children }: { roles: Rol[]; children: React.ReactNode
 }
 
 function AppRoutes() {
-  const { currentUser, userProfile, loading } = useApp();
+  // SPRINT-117c1: removido `loading` del destructuring — no se usaba en este
+  // componente (ProtectedRoute/PermisoRoute manejan loading internamente).
+  // Eliminaba warning preexistente que bloqueaba el pre-commit hook.
+  const { currentUser, userProfile } = useApp();
 
   useEffect(() => {
     (window as unknown as { limpiarOrdenDuplicada: typeof limpiarOrdenDuplicada }).limpiarOrdenDuplicada = limpiarOrdenDuplicada;
@@ -252,7 +255,10 @@ function AppRoutes() {
         <Route path="avances" element={<PermisoRoute permiso="avancesGestionar"><Avances /></PermisoRoute>} />
         <Route path="prestamos" element={<RolRoute roles={['administrador', 'coordinadora']}><Prestamos /></RolRoute>} />
         <Route path="estado-resultado" element={<RolRoute roles={['administrador', 'coordinadora']}><EstadoResultado /></RolRoute>} />
-        <Route path="configuracion/usuarios" element={<RolRoute roles={['administrador', 'coordinadora']}><GestionUsuarios /></RolRoute>} />
+        {/* SPRINT-117c1: /admin/configuracion/usuarios es legacy — redirigir
+            a la canónica /admin/usuarios para preservar bookmarks viejos.
+            Antes era una segunda ruta activa al mismo componente. */}
+        <Route path="configuracion/usuarios" element={<Navigate to="/admin/usuarios" replace />} />
         <Route path="ponches" element={<RolRoute roles={['administrador', 'coordinadora']}><AdminPonches /></RolRoute>} />
         <Route path="feedback" element={<RolRoute roles={['administrador', 'coordinadora']}><Feedback /></RolRoute>} />
         <Route path="sugerencias-chequeo" element={<RolRoute roles={['administrador', 'coordinadora']}><SugerenciasChequeo /></RolRoute>} />
