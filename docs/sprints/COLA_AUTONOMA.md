@@ -284,7 +284,7 @@ Ejercer manualmente en producción con técnico + operaria reales:
 
 ### SPRINT-117c2 — Sección "Bandeja de entrada" en sidebar (PENDIENTE QA visual)
 - **Estado:** EN_REVISION_HUMANA al cierre de esta pasada (deployado pero pendiente confirmación visual de Jorge).
-- **Hash:** (ver siguiente sección — se completa al pushear).
+- **Hash:** `9f71883`.
 - **Resultado:** sección nueva `Bandeja de entrada` (id `bandeja_entrada`, icon `Inbox`, defaultExpanded `true`) agrupa los 3 inboxes (Citas por Confirmar, Reprogramaciones, Sugerencias chequeo) extraídos de Operaciones. Props originales preservadas (`to`, `icon`, `show`, `badge`). Sección filtra por `visibleItems.length === 0` (lógica preexistente del render) — si un usuario no tiene permiso a ninguno, la sección no aparece.
 - **Validación:** typecheck + cazadores 7/7 PASS + lint Sidebar.tsx limpio + build OK.
 - **Plan de rollback:** revertir el commit de cierre.
