@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-10 por coordinator — pasada 3 de `trabaja` procesó SPRINT-124 (auditoría read-only, doc-only). Cola autónoma vacía después de esta pasada. Pendientes humano-presenciales: SPRINT-100, SPRINT-112, SPRINT-113 padre. Posible follow-up: SPRINT-125 si Jorge aprueba "Opción A" de la matriz (exponer 3 keys granular-no-modal en el modal de GestionUsuarios — Bancos/Avances/Reactivación).
+**Última actualización:** 2026-05-10 por coordinator — pasada 3 de `trabaja` procesó SPRINT-124 (hash `e635230`, auditoría read-only, doc-only). Cola autónoma vacía después de esta pasada. Pendientes humano-presenciales: SPRINT-100, SPRINT-112, SPRINT-113 padre. Posible follow-up: SPRINT-125 si Jorge aprueba "Opción A" de la matriz (exponer 3 keys granular-no-modal en el modal de GestionUsuarios — Bancos/Avances/Reactivación).
 
 **Próximo ID disponible:** SPRINT-125
 
