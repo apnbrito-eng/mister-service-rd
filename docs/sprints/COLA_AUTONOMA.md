@@ -306,7 +306,7 @@ Este sprint es la auditoría que da la foto. NO toma decisiones — Jorge las to
 
 ### SPRINT-125 — Exponer 3 keys huérfanas (Bancos/Avances/Reactivación) en el modal de Usuarios
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-10 (sección "Operaciones" agregada al modal con `bancosGestionar`, `avancesGestionar`, `clientesReactivacionGestionar`; matriz actualizada; cazadores 7/7 PASS)
 **Prioridad:** alta (gap obvio detectado por SPRINT-124; cierra la incoherencia entre lo que dice la regla de Jorge y lo que el modal permite controlar hoy)
 **Origen:** Jorge 2026-05-10 vía Cowork. Aprobó "Opción A" de la matriz `docs/MATRIZ_PERMISOS_VS_MODULOS.md` tras leer el output de SPRINT-124.
 **Riesgo:** bajo (toca 1 archivo, ~5 líneas adicionales en una sección de checkboxes que ya existe; no cambia rules ni services).

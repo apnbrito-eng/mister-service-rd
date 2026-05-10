@@ -11,15 +11,15 @@
 
 **Permisos granulares disponibles en TypeScript** (`src/types/index.ts:1158-1221`, interfaz `PermisosSistema`):
 
-35 keys booleanas (required) — 29 expuestas en el modal "Editar Usuario" (`src/pages/GestionUsuarios.tsx:985-991`), **6 keys definidas pero NO expuestas en el modal**. Aparte hay 12 keys opcionales legacy de técnico (`tecnico*`, prefijadas), que viven en el editor de overrides técnico aparte y no se renderizan en este modal de checkboxes.
+35 keys booleanas (required) — 32 expuestas en el modal "Editar Usuario" (`src/pages/GestionUsuarios.tsx:985-992`), **3 keys definidas pero NO expuestas en el modal**. Aparte hay 12 keys opcionales legacy de técnico (`tecnico*`, prefijadas), que viven en el editor de overrides técnico aparte y no se renderizan en este modal de checkboxes.
 - `pagosRegistrar`
 - `ordenesEnviarAFacturacion`
 - `facturasCerrar`
-- `bancosGestionar`
-- `avancesGestionar`
-- `clientesReactivacionGestionar`
+- ~~`bancosGestionar`~~ [RESUELTO en SPRINT-125 el 2026-05-10 — agregadas en sección "Operaciones" del modal]
+- ~~`avancesGestionar`~~ [RESUELTO en SPRINT-125 el 2026-05-10]
+- ~~`clientesReactivacionGestionar`~~ [RESUELTO en SPRINT-125 el 2026-05-10]
 
-Esto es relevante porque tienen defaults por rol pero NO se pueden personalizar persona-por-persona desde el modal.
+Esto es relevante porque tienen defaults por rol pero NO se pueden personalizar persona-por-persona desde el modal. Las 3 que se resolvieron en SPRINT-125 (Bancos, Avances, Reactivación) ya son controlables persona-por-persona desde el modal.
 
 **Roles del sistema** (`src/types/index.ts:1259-1304`):
 
@@ -106,13 +106,13 @@ Notas sobre ítems que el sprint pidió revisar:
 
 | Cobertura | Conteo | Lista |
 |---|---|---|
-| **granular** (controlable desde el modal hoy) | 16 | Citas, Agenda del Día, Órdenes, Calendario, Pendiente de piezas, Mapa, Cierre del Día, Mantenimiento, Clientes, Cotizaciones, Conduces de Garantía, Equipos Taller, Gastos, Personal, Rendimiento, Configuración |
+| **granular** (controlable desde el modal hoy) | 19 | Citas, Agenda del Día, Órdenes, Calendario, Pendiente de piezas, Mapa, Cierre del Día, Mantenimiento, Clientes, Cotizaciones, Conduces de Garantía, Equipos Taller, Gastos, Personal, Rendimiento, Configuración, **Bancos** (SPRINT-125), **Avances a Empleados** (SPRINT-125), **Reactivación de clientes** (SPRINT-125, tab dentro de Clientes) |
 | **mixto** (granular + rol con OR) | 6 | Historial Anuladas, Inventario, Precios, Comisiones, Métricas del Mes, Usuarios & Permisos |
 | **rol-only** (NO controlable desde el modal) | 18 | Ponche, Dashboard, Reprogramaciones, Sugerencias chequeo, Calendarios públicos, Feedback NPS, Conduces Pendientes, Nómina, Préstamos, Estado de Resultado, Página Web, Empresas Aliadas, Formularios, Solicitudes, Chat IA, Historial IA, Reporte de Ponches, Plantillas Marketing |
-| **granular-no-modal** (key TypeScript existe pero modal no la expone) | 3 | Reactivación de clientes (`clientesReactivacionGestionar`), Bancos (`bancosGestionar`), Avances (`avancesGestionar`) |
+| **granular-no-modal** (key TypeScript existe pero modal no la expone) | 0 | ~~Reactivación de clientes, Bancos, Avances~~ [movidos a "granular" en SPRINT-125 el 2026-05-10] |
 | **oculto / legacy** | 1 | Catálogo (`/admin/productos`) |
 
-> Nota: 16 granular + 6 mixto + 18 rol-only + 3 granular-no-modal + 1 oculto/legacy = 44, suma >43 porque el tab Reactivación de Clientes aparece tanto bajo "Clientes" (granular) como bajo su propia entrada granular-no-modal (16b). Resta uno por solapamiento → 43.
+> Nota: 19 granular + 6 mixto + 18 rol-only + 0 granular-no-modal + 1 oculto/legacy = 44, suma >43 porque el tab Reactivación de Clientes aparece tanto bajo "Clientes" (granular) como bajo su propia entrada (16b, ahora también granular). Resta uno por solapamiento → 43.
 
 **Resumen ejecutivo:**
 

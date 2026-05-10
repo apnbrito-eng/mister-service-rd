@@ -988,6 +988,7 @@ export default function GestionUsuarios() {
                   { titulo: 'Clientes', keys: ['clientesVer', 'clientesCrear', 'clientesModificar', 'clientesEliminar'] },
                   { titulo: 'Personal', keys: ['personalVer', 'personalCrear', 'personalModificar', 'personalEliminar'] },
                   { titulo: 'Gastos', keys: ['gastosVer', 'gastosCrear', 'gastosEliminar'] },
+                  { titulo: 'Operaciones', keys: ['bancosGestionar', 'avancesGestionar', 'clientesReactivacionGestionar'] },
                   { titulo: 'Otros', keys: ['rendimientoVer', 'configuracionVer', 'configuracionModificar', 'cierreDiaEjecutar'] },
                 ].map(g => (
                   <div key={g.titulo}>
