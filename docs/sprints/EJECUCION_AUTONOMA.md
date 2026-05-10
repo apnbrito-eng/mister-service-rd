@@ -5,6 +5,65 @@
 
 ---
 
+## 2026-05-10 — `trabaja` (pasada 6 del día): SPRINT-127 COMPLETADO + SPRINT-128 BLOQUEADO
+
+### Contexto
+
+Jorge disparó `trabaja` por sexta vez del día. La cola tenía SPRINT-127 (cleanup notificaciones legacy) y SPRINT-128 (inconsistencia #14 operaria + eliminar orden). El prompt explicitó que SPRINT-128 → BLOQUEO si builder elige R2 (toca rules).
+
+### SPRINT-127 — Hash `305a9e5` (`fix(notificaciones): SPRINT-127 cinturón+tirantes contra destinatarioId legacy (B1)`)
+
+- **archivist PRE-CHANGE** (auto-rol del coordinator):
+  - `git log src/services/notificaciones.service.ts` → 2 commits previos. El último (`3733237`) hizo el renombrado masivo `destinatarioId → userId` en callers.
+  - Postmortem relevante: `docs/postmortems/2026-05-08-notis-legacy-multiples-empleados.md` — bug histórico de 5 empleados con 44 docs legacy. SPRINT-118 lo migró completamente.
+  - Grep exhaustivo de `crearNotificacion(` en `src/`: 11 callers en `Ordenes.tsx`, `OrdenDetalle.tsx`, `Dashboard.tsx`, `AgendaDia.tsx`, `Standby.tsx`, `formularioAgendar.service.ts`, `recordatorios.service.ts`, `ordenes.service.ts` (3x), `EnviarFacturacionButton.tsx`, `OrdenesTablero.tsx`, `IniciarChequeoButton.tsx`, `FaseStepper.tsx`. **Todos pasan `userId: <algo>`, ninguno escribe `destinatarioId`.**
+  - Estado del campo `destinatarioId` hoy: typing legacy `@deprecated` en `src/types/index.ts:1674`, leído por query dual del service, referenciado por cazadores/scripts. No escrito por ningún caller activo.
+- **Decisión de ruta**: B1 (conservador). Justificación:
+  1. El sprint dice default B1 si no se garantiza B2.
+  2. B2 requiere correr `auditoria-notis-legacy-todos.ts` con `service-account.json`, imposible en autónomo sin credenciales locales.
+  3. P-007 + P-008 ya cubren prevención. La query legacy es deuda inocua para sprint follow-up.
+- **builder** (edición directa del coordinator):
+  - `src/services/notificaciones.service.ts`: agregadas 2 assertions runtime + JSDoc detallado en `crearNotificacion`. `console.warn` si falta `userId` o si llega `destinatarioId`. Sin romper producción (warn, no throw).
+  - `src/types/index.ts`: comentario más detallado del `@deprecated destinatarioId?` con referencia a SPRINT-127.
+  - `CLAUDE.md`: tachada la gotcha "bug pre-existente en notificaciones" con `[RESUELTO en SPRINT-127 ruta B1]` y resumen de cambios.
+- **tester**: typecheck OK, lint OK, cazadores 7/7 PASS.
+- **regression_guardian**: PASS — análisis semántico por P-001..P-008. Ninguno aplica: no toca dropdowns, no toca rules, no cross-collection, no alta empleado, no `userProfile.id`. Query dual del service intacta (no rompe lectura de docs Caso B remanentes).
+- **reviewer**: APPROVED — diff mínimo (~36 líneas, 6 funcionales + comentarios). Cast `(data as { destinatarioId?: unknown })` es narrow controlado, no `as any`. El typing legacy se mantiene porque scripts/queries lo necesitan.
+- **Push OK** `30b88c9..305a9e5`. Pre-commit hook PASS.
+
+### SPRINT-128 — BLOQUEADO (movido a `BLOQUEOS.md`)
+
+- **archivist PRE-CHANGE**:
+  - `git log -S "ordenesEliminar" -- src/types/index.ts` → único commit `3a41487` (sistema granular fase 3B inicial). Nadie cambió el default desde entonces.
+  - `grep ordenesEliminar src/`: 6 hits.
+    - `src/types/index.ts:1164` (typing), `:1225` (TODO_FALSE), `:1242` (TODO_TRUE), `:985` (gestión usuarios — campo del modal).
+    - `src/components/ordenes/EliminarOrdenButton.tsx:24` y `src/pages/Ordenes.tsx:536` ambos usan `puede(userProfile, 'ordenesEliminar')` (gate UI correcto).
+  - Inspección de `PERMISOS_DEFAULT_OPERARIA` (`src/types/index.ts:1267`): **NO incluye `ordenesEliminar: true` override**. Hereda de `TODO_FALSE` (línea 1268 `...TODO_FALSE`). El default real es `false`.
+- **Decisión**: el spec del sprint dice "R1 = cambiar `true → false`", pero ya es `false`. **R1 es no-op**. El verdadero fix conceptual es R2 (alinear rule a `puede('ordenesEliminar')`) que **toca `firestore.rules`** → BLOQUEO obligatorio por sub-regla autonómica.
+- **Hallazgo colateral**: `docs/MATRIZ_PERMISOS.md` líneas 61 y 92 reportaban erróneamente "default operaria `ordenesEliminar=true`". **Corregido** en el mismo commit del bloqueo con nota explicativa del SPRINT-128. Sin esa corrección, futuros agentes leerían info incorrecta.
+- **Acción**: SPRINT-128 movido a `BLOQUEOS.md` con sección detallada (comando exacto del fix R2, validación humana, riesgos, postmortem a leer antes del `deploy:rules`). Marcado en `COLA_AUTONOMA.md` como `[MOVIDO A BLOQUEOS]` para histórico.
+
+### Hallazgos clave
+
+1. **Pago de deuda documental encontrado en flight**: la matriz MATRIZ_PERMISOS.md tenía un dato falso ("default operaria `ordenesEliminar=true`"). Corregido en commit del bloqueo. Sin SPRINT-128 nadie lo habría detectado.
+2. **Sprint protocol funcionó**: el spec explícito de R1/R2 con "default R1 si dudas" permitió decidir sin pedirle a Jorge. La realidad sorprendió (R1 era no-op), y la salida correcta fue subir el sprint a BLOQUEOS — el flujo lo soportó.
+3. **Query dual `notificaciones` se mantiene**: cleanup profundo B2 queda como deuda explícita. Quien la pague debe correr `auditoria-notis-legacy-todos.ts` antes con service-account. Anotado en JSDoc del service.
+4. **Cazadores 7/7 PASS** en el commit pusheado.
+
+### Métricas de la pasada
+
+| Sprint | Estado | Hash | Archivos | Tiempo aprox |
+|---|---|---|---|---|
+| SPRINT-127 | COMPLETADO | `305a9e5` | 3 | ~12 min |
+| SPRINT-128 | BLOQUEADO | n/a | 0 código + 2 docs (bloqueo + matriz) | ~6 min |
+
+### Próximos pasos
+
+- Jorge: revisar `BLOQUEOS.md` SPRINT-128 y decidir si autoriza R2 (alinear rule). Sin OK explícito, queda como deuda latente — efecto cero hasta que un admin active manualmente `ordenesEliminar=true` para una operaria.
+- Cowork: la cola autónoma queda con SPRINT-127 COMPLETADO y SPRINT-128 BLOQUEADO. Próximos focos abiertos son humano-presenciales (SPRINT-100, SPRINT-112 QA matriz por rol, SPRINT-113 padre UX flujos).
+
+---
+
 ## 2026-05-10 — `trabaja` (pasada 5 del día): SPRINT-125 + SPRINT-126 completados (2/2)
 
 ### Contexto

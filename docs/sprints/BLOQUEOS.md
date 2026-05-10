@@ -96,6 +96,46 @@ Conservado acá para histórico. NO procesar desde acá — la entrada activa es
 
 ---
 
+## SPRINT-128 — Inconsistencia #14: alinear rule `ordenes_servicio.delete` al granular `ordenesEliminar`
+
+**Bloqueado por:** coordinator 2026-05-10 (autónomo `trabaja`). Builder evaluó R1 vs R2 y concluyó que R1 es no-op (default ya es `false` heredado de `TODO_FALSE`, ver `src/types/index.ts:1267` `PERMISOS_DEFAULT_OPERARIA` sin override) y el verdadero fix es R2.
+
+**Hallazgo colateral durante auditoría:** la matriz `docs/MATRIZ_PERMISOS.md` línea 61 + 92 decía erróneamente "default operaria `ordenesEliminar=true`". Corregido en commit del bloqueo. Información correcta: default es `false`; la inconsistencia solo se manifiesta si admin activa el granular persona-por-persona en el modal.
+
+**Por qué R2 (no R1):**
+
+- R1 (cambiar default a `false`) es no-op — ya es `false`.
+- R2 (ampliar la rule a `puede('ordenesEliminar')`) alinea con la regla declarada de Jorge: "los permisos se controlan desde Usuarios y Permisos". Sin R2 el checkbox `ordenesEliminar` del modal es engañoso para roles operaria/secretaria: si Jorge lo activa, la operaria ve el botón pero la rule rechaza.
+
+**Acción autorizada si Jorge da OK:**
+
+1. Editar `firestore.rules` línea 369:
+   - Reemplazar `allow delete: if esAdminOCoord();`
+   - Por: `allow delete: if isAuth() && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.permisos.ordenesEliminar == true;`
+   - (Sintaxis exacta a confirmar contra otros `get()` en la misma rules — usar la convención existente del archivo.)
+2. Ejecutar `npm run deploy:rules` ANTES de commitear (sub-regla P-005 lock).
+3. Validación humana: Jorge crea una orden de prueba (NO real), le da `ordenesEliminar=true` a una operaria de prueba desde el modal, esa operaria intenta borrar la orden de prueba → debe funcionar sin `permission-denied`.
+4. Reviewer obligatorio con foco en rules (sub-regla "reviewer obligatorio cuando sprint toca firestore.rules").
+5. Update `firestore.rules.deployed.lock` automáticamente vía `deploy:rules`.
+6. Actualizar `docs/MATRIZ_PERMISOS.md` sección "Inconsistencias detectadas" marcando #14 como RESUELTO con hash + ruta R2.
+7. Cazadores 7/7 PASS al cerrar.
+
+**Riesgo de R2:**
+
+- La rule pasa de validación por rol (estática, conocida) a validación por permiso granular (lookup de `usuarios/{uid}`). Es +1 `get()` por delete request, costo aceptable.
+- Si un admin se equivoca y le da `ordenesEliminar=true` a una operaria que no debería, esa operaria podrá borrar órdenes. Mitigación: el delete es **soft-delete via `eliminada=true`** según la nota del rule en línea 367-368 — recuperable.
+- Postmortem relevante para no repetir: `docs/postmortems/2026-05-07-iniciar-chequeo-rules-sin-deploy.md` (sub-regla P-005). Leer ANTES de hacer `deploy:rules`.
+
+**Comando de aprobación:**
+
+Editá este sprint y agregá `OK: jorge YYYY-MM-DD HH:MM` al final. Después pegá `procesa bloqueos` al coordinator.
+
+**Comando de rechazo (si preferís R1 conceptual o esperar):**
+
+`RECHAZADO: jorge YYYY-MM-DD <motivo>`. Si rechazás, Cowork puede proponer una variante (ej: quitar el checkbox `ordenesEliminar` del modal para operaria/secretaria, así Jorge no lo puede activar por error — pero eso introduce gating por rol en GestionUsuarios.tsx que requiere su propio análisis).
+
+---
+
 ## SPRINT-117c — DESBLOQUEADO 2026-05-09 (OK selectivo: 5 de 6 sub-sprints)
 
 **Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-09 por coordinator (procesa bloqueos). desbloqueadoPor: jorge 2026-05-09.**

@@ -3,9 +3,11 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-10 por Cowork — Jorge aprobó "ambos" follow-ups de SPRINT-124. Agregados SPRINT-125 (Opción A: exponer 3 keys huérfanas Bancos/Avances/Reactivación en el modal de GestionUsuarios.tsx) y SPRINT-126 (bugs colaterales detectados por SPRINT-124: 4 links rotos coord en sidebar + gating doble inconsistente en Comisiones y Usuarios & Permisos). Pendientes humano-presenciales: SPRINT-100, SPRINT-112, SPRINT-113 padre.
+**Última actualización:** 2026-05-10 por coordinator (autónomo `trabaja`) — SPRINT-127 COMPLETADO ruta B1 (`305a9e5`, cinturón+tirantes sobre `crearNotificacion`). SPRINT-128 BLOQUEADO (mismo día): builder evaluó R1 vs R2 y concluyó que R1 es no-op (default operaria `ordenesEliminar` ya es false) y el verdadero fix es R2 (toca `firestore.rules` → ver `BLOQUEOS.md`). Hallazgo colateral: la matriz tenía documentado erróneamente "default operaria `=true`" — corregido en `docs/MATRIZ_PERMISOS.md`.
 
-**Próximo ID disponible:** SPRINT-127
+**Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
+
+**Próximo ID disponible:** SPRINT-129
 
 ---
 
@@ -400,6 +402,137 @@ Estos son los 2 hallazgos colaterales que SPRINT-124 reportó pero NO arregló (
 - Los 2 sub-objetivos son independientes — si Parte A está clara y Parte B requiere decisión, builder puede commitear Parte A primero y dejar Parte B en sub-bloqueo. NO mezclar en un solo commit gigante.
 - La matriz documenta los 4 + 2 hallazgos en su sección "Hallazgos colaterales" / "Bugs detectados" — empezar la lectura por ahí.
 - Si después de este sprint el sidebar coord queda limpio, agregar a `docs/PATRONES_REGRESION.md` (o proponer) un cazador P-009 que detecte ítems del Sidebar.tsx cuya ruta NO existe en App.tsx. Eso evitaría que el bug recurra. Si el cazador no es trivial de escribir, dejarlo para un sprint follow-up explícito — NO bloquear este sprint por eso.
+
+---
+
+### SPRINT-127 — Cleanup notificaciones legacy (cerrar gotcha userId vs destinatarioId)
+
+**Estado:** COMPLETADO 2026-05-10 (coordinator autónomo `trabaja`, hash `305a9e5`, ruta B1 conservadora — auditoría confirmó 0 callers escriben `destinatarioId`, agregadas assertions runtime + JSDoc + gotcha tachado en CLAUDE.md). Cazadores 7/7 PASS. Query dual del service intacta como red de seguridad — B2 queda como sprint follow-up que requiere correr `auditoria-notis-legacy-todos.ts`.
+**Prioridad:** alta (cierra gotcha activo en CLAUDE.md desde hace semanas, bloquea remover query dual del service)
+**Origen:** Jorge 2026-05-10 vía Cowork tras elegir "pagar deuda técnica conocida". Gotcha en CLAUDE.md: *"el código escribe campo `destinatarioId` en `src/services/notificaciones.service.ts`, pero `firestore.rules:530,534` gatean por `userId == request.auth.uid`. Resultado: técnicos/operarias/secretarias que reciben notificaciones NO pueden marcarlas como leídas."* SPRINT-118 ya migró los **datos** de los 5 empleados afectados — falta cerrar el lado **código** para que el bug no recurra.
+**Riesgo:** bajo-medio (toca service que tiene listeners activos en producción; si se rompe la query, las notis dejan de aparecer en vivo). Mitigación: cazador P-007 ya bloquea reintroducir `destinatarioId` desde fuera del service.
+**Touch-list previsto:** `src/services/notificaciones.service.ts`, posiblemente 1-2 callers de `crearNotificacion` si alguno aún pasa `destinatarioId`. Builder confirma con grep al inicio.
+
+#### Objetivo
+
+Dejar el código en un estado donde **NUNCA** se escriba `destinatarioId` en docs nuevos, y opcionalmente limpiar la query dual `where('destinatarioId', '==', userId)` del listener ahora que los datos están migrados. El gotcha de CLAUDE.md queda RESUELTO con hash del commit.
+
+#### Por qué
+
+1. La rule de Firestore (`firestore.rules:528-536`) gatea read/update/delete por `userId == request.auth.uid`. Si algún caller futuro pasa `destinatarioId` en lugar de `userId`, el doc se crea pero el dueño no puede marcarlo como leído → bug silencioso.
+2. Los datos viejos ya están migrados (SPRINT-118 commit `c5b4107`). La query dual en `suscribirNotificaciones` ya no es necesaria — es deuda de compatibilidad que podemos limpiar.
+3. El cazador P-007 (`check-crearnotificacion-userid-shape.ts`) atrapa variantes obvias (literales `admin.id`, `p.id`, etc.) pero no garantiza que el typing del campo sea estricto. Forzar `userId: string` requerido en el typing es el cinturón + tirantes.
+
+#### Criterios de aceptación
+
+**Parte A — Auditoría:**
+- [ ] Grep exhaustivo de `crearNotificacion(` en todo el codebase para listar los callers actuales.
+- [ ] Para cada caller: verificar que pasa `userId` (no `destinatarioId`). Si alguno pasa `destinatarioId`, renombrarlo a `userId` en el mismo commit.
+- [ ] Verificar el tipo `Notificacion` en `src/types/index.ts`: ¿`userId` es required? Si no lo es, hacerlo required. ¿`destinatarioId` aparece como campo opcional legacy? Decidir si removerlo o marcarlo `@deprecated`.
+
+**Parte B — Cleanup del service (decisión interna del builder):**
+
+Builder decide ENTRE estas dos rutas según lo que encuentre en la auditoría:
+
+- **B1 — conservador (recomendado si hay incertidumbre):** Dejar la query dual `where('destinatarioId', '==', userId)` intacta en `suscribirNotificaciones` por ahora. Solo agregar un `console.warn` o assertion si en runtime aparece un doc con `destinatarioId` pero sin `userId` (señal de que algo lo está escribiendo). Sin cambio de UX. Sprint riesgo bajo.
+
+- **B2 — limpieza profunda:** Eliminar la query legacy y dejar solo `where('userId', '==', userId)`. Requiere CERTEZA de que (a) ningún caller escribe `destinatarioId` y (b) los datos en prod no tienen docs huérfanos sin `userId`. Si hay duda, NO hacer B2 y reportar para sprint follow-up con script de auditoría previo.
+
+Builder elige B1 por default si no puede garantizar B2 con grep simple. Si elige B2, debe correr antes el script `scripts/auditoria-notis-legacy-todos.ts` (ya existe del SPRINT-117 A2) y reportar 0 docs con `destinatarioId` sin `userId`. Sin esa garantía, B1.
+
+**Global:**
+- [ ] archivist PRE-CHANGE obligatorio (`src/services/notificaciones.service.ts` toca path crítico — postmortem `2026-05-08-notis-legacy-multiples-empleados.md` aplica directo).
+- [ ] regression_guardian obligatorio.
+- [ ] Build OK, typecheck clean, 8/8 cazadores PASS (incluido P-007).
+- [ ] Si la rule `firestore.rules` NO se toca (no debería), confirmar que el lock está al día con `npm run check:regression`.
+- [ ] Commit + push con mensaje declarando la ruta elegida (B1 o B2) y por qué.
+- [ ] Actualizar gotcha en `CLAUDE.md` tachando `~~Gotcha — bug pre-existente en notificaciones~~` con `[RESUELTO en <hash> el 2026-05-XX — ruta elegida B1/B2]`.
+- [ ] NO tocar `firestore.rules`. Si el builder cree que hace falta, abrir sub-sprint y dejar este en bloqueo.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio.
+- regression_guardian obligatorio.
+- NO tocar la rule de notificaciones. La rule ya está alineada con `userId` — el problema es el código.
+- NO migrar más datos. SPRINT-118 ya lo hizo. Si encontramos docs sucios remanentes, abrir sprint separado con DRY-RUN/--apply pattern.
+- Si el diff de la Parte A supera 30 líneas (callers múltiples para renombrar), pausar y reportar — quizá hay un patrón más profundo (helpers que pasan campos por referencia, etc.) que requiere refactor distinto.
+
+#### Notas para el coordinator
+
+- Gotcha en `CLAUDE.md` está en la sección de "Convenciones & gotchas". Buscarlo con grep `bug pre-existente en \`notificaciones\``.
+- P-007 cazador relacionado: `scripts/invariantes/check-crearnotificacion-userid-shape.ts`. Si el builder elige B2 (cleanup profundo), considerar si P-007 sigue siendo necesario o si se puede simplificar/retirar. NO retirarlo en este sprint — eso es decisión separada.
+- Si el grep encuentra callers con `destinatarioId`, builder debe usar `Edit` con context suficiente para que el cambio sea trivialmente verificable. NO hacer `replace_all` ciego.
+- Si todos los callers ya pasan `userId` y nada escribe `destinatarioId` desde hace tiempo (commit blame muestra fechas viejas), eso fortalece la elección de B2 — pero la guía sigue siendo: en caso de duda, B1.
+
+---
+
+### SPRINT-128 — Inconsistencia #14: operaria ve botón "eliminar orden" pero rule la rechaza — [MOVIDO A BLOQUEOS]
+
+**Estado:** BLOQUEADO 2026-05-10 (coordinator autónomo `trabaja`) — entrada activa en `docs/sprints/BLOQUEOS.md`. Builder evaluó R1 vs R2 durante archivist PRE-CHANGE:
+- R1 es no-op: default operaria `ordenesEliminar=false` ya, heredado de `TODO_FALSE` en `src/types/index.ts:1267`. La matriz que decía "default true" estaba mal — corregido en mismo commit.
+- R2 (alinear rule a `puede('ordenesEliminar')`) toca `firestore.rules` → BLOQUEO obligatorio por sub-regla autonómica.
+
+Conservado acá para histórico. NO procesar desde acá — la entrada activa con comando exacto y validación humana está en `BLOQUEOS.md`.
+**Prioridad:** alta (bug silencioso en producción — operaria intenta y "no pasa nada", erosiona confianza)
+**Origen:** Jorge 2026-05-10 vía Cowork. Hallazgo de `docs/MATRIZ_PERMISOS.md` línea 92, sección "Inconsistencias UI ↔ Rule detectadas": *"Eliminar orden (#14): UI deja a operaria (default `ordenesEliminar=true`), rule la rechaza con `esAdminOCoord` solamente."*
+**Riesgo:** medio (toca lógica de gating + decisión sobre tocar o no la rule). El builder debe elegir entre dos rutas con tradeoffs distintos.
+**Touch-list previsto:** **Ruta R1** (no tocar rule): `src/types/index.ts` (defaults `PermisosSistema.ordenesEliminar` para operaria → `false`) + posiblemente `Ordenes.tsx`/`EliminarOrdenButton.tsx` para validar que el gate UI funciona. **Ruta R2** (alinear rule): `firestore.rules` línea 369 + `firestore.rules.deployed.lock` + `npm run deploy:rules`.
+
+#### Objetivo
+
+Cerrar la inconsistencia entre UI y rule para el flujo "Eliminar orden de servicio". Después del sprint, una de las dos debe ser cierta para operaria:
+- (R1) UI esconde el botón Y rule rechaza → coherente: operaria no ve ni puede.
+- (R2) UI muestra el botón Y rule permite vía `puede('ordenesEliminar')` → coherente: operaria ve, puede, y Jorge controla persona-por-persona desde el modal.
+
+#### Por qué
+
+Hoy: defaults de operaria tienen `ordenesEliminar=true` en TS, así que la UI le muestra el botón "Eliminar". Si una operaria hace clic, la `firestore.rules` línea 369 evalúa `esAdminOCoord()`, devuelve `false`, y Firestore rechaza con `permission-denied`. La operaria ve "no pasó nada" sin mensaje claro. Es exactamente el patrón de bug silencioso que SPRINT-115 / SPRINT-118 enseñaron a no tolerar.
+
+La regla declarada de Jorge ("los permisos se controlan desde Usuarios y Permisos") apunta hacia R2 — alinear la rule al granular. Pero R2 toca `firestore.rules`, que es decisión sensible y requiere deploy obligatorio (sub-regla SPRINT-103/106).
+
+#### Criterios de aceptación
+
+**Decisión inicial del builder (después de archivist PRE-CHANGE):**
+
+Builder revisa contexto histórico de `firestore.rules` rule de `ordenes_servicio` (commits que tocaron `delete: esAdminOCoord`) y decide R1 o R2 ANTES de tocar nada. La decisión va en `EJECUCION_AUTONOMA.md` con justificación. Default si dudas: **R1** (más conservador, no toca rules).
+
+**Ruta R1 — esconder el botón a operaria:**
+- [ ] Cambiar `ordenesEliminar: true` → `false` en defaults de operaria en `src/types/index.ts`.
+- [ ] Confirmar que la UI usa `puede('ordenesEliminar')` (NO `esAdminOCoord` literal) — si usa rol literal, el cambio de default no toma efecto. En ese caso refactorizar el gate UI a `puede(...)`.
+- [ ] Verificar que el modal "Editar Usuario" expone `ordenesEliminar` como checkbox (es un permiso del set Órdenes, ya visible — confirmar).
+- [ ] Migración de datos: usuarios existentes con `permisos.ordenesEliminar=true` siguen así. Si Jorge quiere quitarles el permiso, lo hace persona-por-persona desde el modal (no requiere sprint).
+- [ ] NO tocar `firestore.rules`.
+- [ ] Build, typecheck, lint, 8/8 cazadores PASS.
+
+**Ruta R2 — ampliar la rule:**
+- [ ] Editar `firestore.rules` línea 369: cambiar `allow delete: if esAdminOCoord();` → `allow delete: if isAuth() && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.permisos.ordenesEliminar == true;` (verificar sintaxis exacta de `get()` en rules — convención usada en otras rules).
+- [ ] `npm run deploy:rules` ANTES de commitear (sub-regla P-005 lock).
+- [ ] Validar manualmente en prod con un usuario operaria de prueba que tenga `ordenesEliminar=true` que puede borrar una orden de prueba (NO orden real de cliente).
+- [ ] reviewer obligatorio con foco en rules (sub-regla "reviewer obligatorio cuando sprint toca firestore.rules").
+- [ ] Update `firestore.rules.deployed.lock` automáticamente vía `deploy:rules`.
+
+**Global (cualquier ruta):**
+- [ ] archivist PRE-CHANGE obligatorio.
+- [ ] regression_guardian obligatorio.
+- [ ] Documentar la elección en `EJECUCION_AUTONOMA.md` con la justificación.
+- [ ] Si Builder elige R2, agregar entrada a `BLOQUEOS.md` ANTES del deploy pidiendo OK explícito de Jorge (sub-regla: rules en autonómico no se deployan sin OK humano). Si elige R1, no requiere OK.
+- [ ] Actualizar `docs/MATRIZ_PERMISOS.md` sección "Inconsistencias detectadas" marcando #14 como RESUELTO con hash del commit y ruta elegida.
+- [ ] Commit + push con mensaje declarando la ruta.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio.
+- regression_guardian obligatorio.
+- Si R2: reviewer obligatorio con foco rules, y OK humano en BLOQUEOS.md antes del deploy.
+- NO tocar las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado). Son sprints separados que requieren QA humano primero.
+- Si el builder descubre durante la implementación que el botón "Eliminar" no usa `puede('ordenesEliminar')` sino un check de rol literal, eso es un bug colateral — corregir el gate UI a `puede(...)` y reportar en `EJECUCION_AUTONOMA.md`.
+
+#### Notas para el coordinator
+
+- La matriz dice "Sprint propio sugerido: ajustar UI para esconder botón a operaria O ampliar rule a `puede('ordenesEliminar')`". Esa frase ES la decisión R1 vs R2.
+- Default operaria `ordenesEliminar=true` es probablemente herencia histórica (algún sprint antiguo le dio el permiso por error y se cristalizó). Builder puede confirmar con `git log --all -S "ordenesEliminar"` en `src/types/index.ts`.
+- Si después de elegir R1, builder ve que `Ordenes.tsx:536` usa `puede('ordenesEliminar')` (matriz lo confirma), el fix es trivial: 1 línea en defaults TS. Si usa rol literal, scope crece — pausar y reportar.
+- Postmortems relevantes: `2026-05-07-iniciar-chequeo-rules-sin-deploy.md` (si elige R2, leer ese para no repetir el bug de SPRINT-106).
 
 ---
 
