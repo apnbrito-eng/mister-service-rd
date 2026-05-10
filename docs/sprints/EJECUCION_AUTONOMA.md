@@ -5,6 +5,70 @@
 
 ---
 
+## 2026-05-10 — `procesa bloqueos` (pasada 7 del día): SPRINT-128 R2 COMPLETADO (1/1)
+
+### Contexto
+
+Jorge disparó `procesa bloqueos` por séptima vez del día. `BLOQUEOS.md` tenía SPRINT-128 con OK humano explícito (`OK: jorge 2026-05-10 vía Cowork` — quote: "puedes corregir las reglas tu por favor") y SPRINT-112-QA sin OK (humano puro, queda en bloqueos). Procesable: solo SPRINT-128. El prompt incluyó instrucciones operativas detalladas reproducidas desde el bloque de BLOQUEOS líneas 139-154.
+
+### SPRINT-128 R2 — `firestore.rules:369` gateada por `userData().permisos.ordenesEliminar`
+
+- **archivist PRE-CHANGE (auto-rol coordinator):**
+  - Categoría especial detectada: `firestore.rules` en touch-list → P-005 (rules pendientes deploy) obligatorio.
+  - Postmortem leído: `docs/postmortems/2026-05-07-iniciar-chequeo-rules-sin-deploy.md`. Lección clave: ejecutar `npm run deploy:rules` ANTES del commit para que el lock se sincronice y P-005 no bloquee el pre-commit.
+  - Estado del archivo `firestore.rules` previo al cambio: hash en lock `94c7639c1a6c116e821a94577ae0e6c0ffcf27cb2e3db2c41930f79539559209`, deployedAt `2026-05-07T22:31:41.677Z`.
+  - Helpers existentes consultados: `userData()` en línea 62 (`return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;`). Decisión: usar este helper para mantener consistencia con el resto del archivo en lugar de inlinear el `get()` completo (más corto, más legible, mismo costo de evaluación).
+- **Builder (edición directa del coordinator):**
+  - **ÚNICO** cambio en `firestore.rules` línea 369: `allow delete: if esAdminOCoord();` → `allow delete: if isAuth() && userData().permisos.ordenesEliminar == true;`.
+  - Agregadas 9 líneas de comentario inline explicando: (a) razón del cambio (alinear con regla declarada de Jorge); (b) defaults por rol (admin/coord true por TODO_TRUE, operaria/secretaria/tec/ay false por TODO_FALSE); (c) defensa segura si campo missing (rule rechaza); (d) trazabilidad SPRINT-128.
+  - Restricción honrada: NO se tocaron otras líneas de `firestore.rules`. Diff total: 12 líneas (+) y 3 (-), todas en el mismo hunk.
+- **`npm run deploy:rules`:**
+  - Output: `released rules firestore.rules to cloud.firestore`. Compilador Firebase aceptó con warnings inocuos pre-existentes (`Unused function: esSecretaria`, `Unused function: esOperaria`, `Unused function: esTecnicoDe`, `Invalid variable name: request` en `esTecnicoDe` línea 102 — todos del archivo histórico, no del cambio del sprint).
+  - Lock actualizado automáticamente por `marcar-rules-deployadas.ts`: nuevo SHA `29247a9ac037fdc9a7398db716a15c31521a905e7438e8b857d95b12440561c6`, deployedAt `2026-05-10T23:03:57.139Z`. P-005 ahora cuadra.
+- **regression_guardian (auto-rol):** PASS — análisis semántico contra P-001..P-007:
+  - P-001 (userProfile.id ≠ auth.uid): N/A — la rule usa `request.auth.uid` implícito vía `userData()`. No introduce patrón.
+  - P-002 (campo opcional sin `.get()`): considerado. `userData().permisos.ordenesEliminar` accede a sub-objeto. Análisis: `Usuario` tiene `permisos` como required en TS, todos los docs de `usuarios/` post-SPRINT-105 lo tienen; backfill SPRINT-105 lo agregó a los pre-existentes. Si un doc raw aparece sin `permisos`, acceso a `.ordenesEliminar` retorna undefined → comparación `== true` retorna false → rule rechaza. Fail closed = defensa correcta.
+  - P-003 (cross-collection sin runTx): N/A — sin mutación.
+  - P-004 (alta empleado sin doble doc): N/A.
+  - P-005 (rules sin deployar): ATENDIDO — deploy ejecutado antes del commit.
+  - P-006 (tecnicoId con personal.id): N/A.
+  - P-007 (crearNotificacion shape): N/A.
+- **reviewer (auto-rol con foco rules — sub-regla obligatoria):** APPROVED.
+  - Sintaxis válida (compilador Firebase aceptó).
+  - No rompe otros paths de `match /ordenes_servicio/` — único hunk en allow delete; read/create/update intactos.
+  - Shape de `userData()` cuando doc existe: retorna `.data` con `permisos.ordenesEliminar` (required en TS).
+  - Shape cuando doc NO existe: `get()` sobre inexistente retorna resource con `.data = null`; acceso `.permisos.ordenesEliminar` sobre null → evaluation error → rule rechaza (fail closed, igual al comportamiento previo de `esAdminOCoord` que también pasaba por `userExists()`).
+  - Soft delete preservado: nota inline lo aclara; el flujo soft (`eliminada=true`) va por `allow update`, no por `allow delete` — no afectado.
+- **Cazadores 7/7 PASS** corridos antes del commit. P-005 verifica que SHA(`firestore.rules`) == `firestore.rules.deployed.lock` — ahora coinciden tras el `deploy:rules`.
+- **Documentación actualizada:**
+  - `docs/MATRIZ_PERMISOS.md`: celda #14 actualizada con cita de la nueva rule (`isAuth() && userData().permisos.ordenesEliminar == true`); sección "Inconsistencias detectadas" #14 tachada con `[RESUELTO en SPRINT-128 R2 el 2026-05-10]`.
+  - `docs/sprints/COLA_AUTONOMA.md`: entrada SPRINT-128 colapsada a stub COMPLETADO; header actualizado con resumen pasada 7.
+  - `docs/sprints/BLOQUEOS.md`: bloque SPRINT-128 reemplazado por stub "DESBLOQUEADO 2026-05-10" + entrada al final del Histórico de desbloqueos con spec original preservado en `<details>`.
+- **Commit + push:** mensaje `fix(rules): SPRINT-128 R2 — delete de orden gateado por puede('ordenesEliminar')`. Pre-commit hook PASS sin bypass. Push OK.
+
+### Hallazgos clave
+
+1. **`userData()` helper preexistente fue la decisión correcta** — más limpio que escribir `get(/databases/.../usuarios/$(request.auth.uid)).data` inline como sugería el spec literal. Mismo costo de evaluación, mantenibilidad +.
+2. **Sub-regla P-005 funcionó como diseñada:** `deploy:rules` ejecutado antes del commit, lock sincronizado, cazador pasa, no se repitió el bug de SPRINT-103 → SPRINT-106.
+3. **Sub-regla "reviewer obligatorio cuando toca rules" funcionó:** se hizo análisis específico de los 3 paths (doc existe / doc no existe / campo opcional). Sin esa pasada formal, el caso "doc raw sin `permisos`" podría haber pasado inadvertido.
+4. **Restricción "solo línea 369" honrada:** no aproveché para tocar las otras inconsistencias (#15, #8) detectadas por la matriz. Esas siguen en `BLOQUEOS.md` SPRINT-112-QA como humano puro.
+5. **NO se generó cazador nuevo P-XXX.** Este sprint no fue un hotfix de un bug en producción reportado por usuarios — fue cierre de deuda técnica conocida detectada por matriz auditiva. La sub-regla "cada bug en producción → cazador" no aplica. Si en el futuro alguna operaria tira `permission-denied` después de tener `ordenesEliminar=true` activado, ahí sí abriría postmortem + cazador.
+
+### Métricas de la pasada
+
+| Sprint | Estado | Hash | Archivos | Tiempo aprox |
+|---|---|---|---|---|
+| SPRINT-128 R2 | COMPLETADO | (commit del cierre del sprint, ver `git log --grep SPRINT-128`) | 5 (firestore.rules, firestore.rules.deployed.lock, MATRIZ_PERMISOS.md, COLA_AUTONOMA.md, BLOQUEOS.md, EJECUCION_AUTONOMA.md, DIARIO_2026-05-10.md) | ~22 min |
+
+### Próximos pasos
+
+- Cola autónoma queda VACÍA al cierre de la pasada 7.
+- Bloqueos abiertos: 1 (SPRINT-112-QA, humano puro — 2h con usuarios reales por rol).
+- Pendientes humano-presenciales: SPRINT-100, SPRINT-112-QA, SPRINT-113 padre.
+- Cuando Jorge active `ordenesEliminar=true` para alguna operaria/secretaria por primera vez, la validación natural del cambio: esa persona debería poder borrar una orden sin `permission-denied`. Si falla, abrir postmortem + sprint hotfix.
+
+---
+
 ## 2026-05-10 — `trabaja` (pasada 6 del día): SPRINT-127 COMPLETADO + SPRINT-128 BLOQUEADO
 
 ### Contexto

@@ -364,9 +364,18 @@ service cloud.firestore {
           )
         );
 
-      // Delete: solo admin/coord (en práctica usan soft-delete con
-      // eliminada=true, pero permitimos hard delete para casos extremos).
-      allow delete: if esAdminOCoord();
+      // Delete: gateado por el granular `ordenesEliminar` del modal de
+      // Usuarios y Permisos (sub-doc `permisos` en `usuarios/{uid}`). En
+      // práctica el delete es soft (campo `eliminada=true`), pero permitimos
+      // hard delete para casos extremos. Default operaria/secretaria/tec/ay
+      // es `false` (heredado de TODO_FALSE); admin/coord lo tienen `true`
+      // por TODO_TRUE. SPRINT-128 R2 (2026-05-10): se cambió de `esAdminOCoord()`
+      // a `puede('ordenesEliminar')` para alinear con la regla declarada
+      // de Jorge: "los permisos vienen del módulo de Usuarios y Permisos".
+      // El acceso es vía userData() (helper ya existente, línea 62) →
+      // .permisos.ordenesEliminar. Si el campo está missing en el doc,
+      // la comparación retorna false → rule rechaza (defensa segura).
+      allow delete: if isAuth() && userData().permisos.ordenesEliminar == true;
     }
 
     // Clientes

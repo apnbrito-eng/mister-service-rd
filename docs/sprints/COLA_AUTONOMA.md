@@ -3,7 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-10 por coordinator (autónomo `trabaja`) — SPRINT-127 COMPLETADO ruta B1 (`305a9e5`, cinturón+tirantes sobre `crearNotificacion`). SPRINT-128 BLOQUEADO (mismo día): builder evaluó R1 vs R2 y concluyó que R1 es no-op (default operaria `ordenesEliminar` ya es false) y el verdadero fix es R2 (toca `firestore.rules` → ver `BLOQUEOS.md`). Hallazgo colateral: la matriz tenía documentado erróneamente "default operaria `=true`" — corregido en `docs/MATRIZ_PERMISOS.md`.
+**Última actualización:** 2026-05-10 por coordinator (autónomo `procesa bloqueos`, pasada 7) — SPRINT-128 R2 COMPLETADO. Rule `firestore.rules:378` alineada al granular `ordenesEliminar` (`userData().permisos.ordenesEliminar == true` en vez de `esAdminOCoord()`). `npm run deploy:rules` ejecutado (lock `29247a9...`). Matriz #14 marcado RESUELTO. Bloque movido a Histórico de desbloqueos en BLOQUEOS.md. SPRINT-112-QA sigue en BLOQUEOS (humano puro).
+
+**Última actualización previa:** 2026-05-10 por coordinator (autónomo `trabaja`) — SPRINT-127 COMPLETADO ruta B1 (`305a9e5`, cinturón+tirantes sobre `crearNotificacion`). SPRINT-128 BLOQUEADO (mismo día): builder evaluó R1 vs R2 y concluyó que R1 es no-op (default operaria `ordenesEliminar` ya es false) y el verdadero fix es R2 (toca `firestore.rules` → ver `BLOQUEOS.md`). Hallazgo colateral: la matriz tenía documentado erróneamente "default operaria `=true`" — corregido en `docs/MATRIZ_PERMISOS.md`.
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
@@ -466,73 +468,11 @@ Builder elige B1 por default si no puede garantizar B2 con grep simple. Si elige
 
 ---
 
-### SPRINT-128 — Inconsistencia #14: operaria ve botón "eliminar orden" pero rule la rechaza — [MOVIDO A BLOQUEOS]
+### SPRINT-128 — Inconsistencia #14: alinear rule `ordenes_servicio.delete` al granular `ordenesEliminar` — COMPLETADO
 
-**Estado:** BLOQUEADO 2026-05-10 (coordinator autónomo `trabaja`) — entrada activa en `docs/sprints/BLOQUEOS.md`. Builder evaluó R1 vs R2 durante archivist PRE-CHANGE:
-- R1 es no-op: default operaria `ordenesEliminar=false` ya, heredado de `TODO_FALSE` en `src/types/index.ts:1267`. La matriz que decía "default true" estaba mal — corregido en mismo commit.
-- R2 (alinear rule a `puede('ordenesEliminar')`) toca `firestore.rules` → BLOQUEO obligatorio por sub-regla autonómica.
+**Estado:** COMPLETADO 2026-05-10 (ruta R2). Rule `firestore.rules:378` ahora gateada por `userData().permisos.ordenesEliminar == true` (antes `esAdminOCoord()`). `npm run deploy:rules` ejecutado (lock `29247a9...`). Matriz `docs/MATRIZ_PERMISOS.md` actualizada — #14 marcado como RESUELTO. Bloque movido a "Histórico de desbloqueos" en `BLOQUEOS.md`.
 
-Conservado acá para histórico. NO procesar desde acá — la entrada activa con comando exacto y validación humana está en `BLOQUEOS.md`.
-**Prioridad:** alta (bug silencioso en producción — operaria intenta y "no pasa nada", erosiona confianza)
-**Origen:** Jorge 2026-05-10 vía Cowork. Hallazgo de `docs/MATRIZ_PERMISOS.md` línea 92, sección "Inconsistencias UI ↔ Rule detectadas": *"Eliminar orden (#14): UI deja a operaria (default `ordenesEliminar=true`), rule la rechaza con `esAdminOCoord` solamente."*
-**Riesgo:** medio (toca lógica de gating + decisión sobre tocar o no la rule). El builder debe elegir entre dos rutas con tradeoffs distintos.
-**Touch-list previsto:** **Ruta R1** (no tocar rule): `src/types/index.ts` (defaults `PermisosSistema.ordenesEliminar` para operaria → `false`) + posiblemente `Ordenes.tsx`/`EliminarOrdenButton.tsx` para validar que el gate UI funciona. **Ruta R2** (alinear rule): `firestore.rules` línea 369 + `firestore.rules.deployed.lock` + `npm run deploy:rules`.
-
-#### Objetivo
-
-Cerrar la inconsistencia entre UI y rule para el flujo "Eliminar orden de servicio". Después del sprint, una de las dos debe ser cierta para operaria:
-- (R1) UI esconde el botón Y rule rechaza → coherente: operaria no ve ni puede.
-- (R2) UI muestra el botón Y rule permite vía `puede('ordenesEliminar')` → coherente: operaria ve, puede, y Jorge controla persona-por-persona desde el modal.
-
-#### Por qué
-
-Hoy: defaults de operaria tienen `ordenesEliminar=true` en TS, así que la UI le muestra el botón "Eliminar". Si una operaria hace clic, la `firestore.rules` línea 369 evalúa `esAdminOCoord()`, devuelve `false`, y Firestore rechaza con `permission-denied`. La operaria ve "no pasó nada" sin mensaje claro. Es exactamente el patrón de bug silencioso que SPRINT-115 / SPRINT-118 enseñaron a no tolerar.
-
-La regla declarada de Jorge ("los permisos se controlan desde Usuarios y Permisos") apunta hacia R2 — alinear la rule al granular. Pero R2 toca `firestore.rules`, que es decisión sensible y requiere deploy obligatorio (sub-regla SPRINT-103/106).
-
-#### Criterios de aceptación
-
-**Decisión inicial del builder (después de archivist PRE-CHANGE):**
-
-Builder revisa contexto histórico de `firestore.rules` rule de `ordenes_servicio` (commits que tocaron `delete: esAdminOCoord`) y decide R1 o R2 ANTES de tocar nada. La decisión va en `EJECUCION_AUTONOMA.md` con justificación. Default si dudas: **R1** (más conservador, no toca rules).
-
-**Ruta R1 — esconder el botón a operaria:**
-- [ ] Cambiar `ordenesEliminar: true` → `false` en defaults de operaria en `src/types/index.ts`.
-- [ ] Confirmar que la UI usa `puede('ordenesEliminar')` (NO `esAdminOCoord` literal) — si usa rol literal, el cambio de default no toma efecto. En ese caso refactorizar el gate UI a `puede(...)`.
-- [ ] Verificar que el modal "Editar Usuario" expone `ordenesEliminar` como checkbox (es un permiso del set Órdenes, ya visible — confirmar).
-- [ ] Migración de datos: usuarios existentes con `permisos.ordenesEliminar=true` siguen así. Si Jorge quiere quitarles el permiso, lo hace persona-por-persona desde el modal (no requiere sprint).
-- [ ] NO tocar `firestore.rules`.
-- [ ] Build, typecheck, lint, 8/8 cazadores PASS.
-
-**Ruta R2 — ampliar la rule:**
-- [ ] Editar `firestore.rules` línea 369: cambiar `allow delete: if esAdminOCoord();` → `allow delete: if isAuth() && get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.permisos.ordenesEliminar == true;` (verificar sintaxis exacta de `get()` en rules — convención usada en otras rules).
-- [ ] `npm run deploy:rules` ANTES de commitear (sub-regla P-005 lock).
-- [ ] Validar manualmente en prod con un usuario operaria de prueba que tenga `ordenesEliminar=true` que puede borrar una orden de prueba (NO orden real de cliente).
-- [ ] reviewer obligatorio con foco en rules (sub-regla "reviewer obligatorio cuando sprint toca firestore.rules").
-- [ ] Update `firestore.rules.deployed.lock` automáticamente vía `deploy:rules`.
-
-**Global (cualquier ruta):**
-- [ ] archivist PRE-CHANGE obligatorio.
-- [ ] regression_guardian obligatorio.
-- [ ] Documentar la elección en `EJECUCION_AUTONOMA.md` con la justificación.
-- [ ] Si Builder elige R2, agregar entrada a `BLOQUEOS.md` ANTES del deploy pidiendo OK explícito de Jorge (sub-regla: rules en autonómico no se deployan sin OK humano). Si elige R1, no requiere OK.
-- [ ] Actualizar `docs/MATRIZ_PERMISOS.md` sección "Inconsistencias detectadas" marcando #14 como RESUELTO con hash del commit y ruta elegida.
-- [ ] Commit + push con mensaje declarando la ruta.
-
-#### Restricciones / guardarrails
-
-- archivist PRE-CHANGE obligatorio.
-- regression_guardian obligatorio.
-- Si R2: reviewer obligatorio con foco rules, y OK humano en BLOQUEOS.md antes del deploy.
-- NO tocar las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado). Son sprints separados que requieren QA humano primero.
-- Si el builder descubre durante la implementación que el botón "Eliminar" no usa `puede('ordenesEliminar')` sino un check de rol literal, eso es un bug colateral — corregir el gate UI a `puede(...)` y reportar en `EJECUCION_AUTONOMA.md`.
-
-#### Notas para el coordinator
-
-- La matriz dice "Sprint propio sugerido: ajustar UI para esconder botón a operaria O ampliar rule a `puede('ordenesEliminar')`". Esa frase ES la decisión R1 vs R2.
-- Default operaria `ordenesEliminar=true` es probablemente herencia histórica (algún sprint antiguo le dio el permiso por error y se cristalizó). Builder puede confirmar con `git log --all -S "ordenesEliminar"` en `src/types/index.ts`.
-- Si después de elegir R1, builder ve que `Ordenes.tsx:536` usa `puede('ordenesEliminar')` (matriz lo confirma), el fix es trivial: 1 línea en defaults TS. Si usa rol literal, scope crece — pausar y reportar.
-- Postmortems relevantes: `2026-05-07-iniciar-chequeo-rules-sin-deploy.md` (si elige R2, leer ese para no repetir el bug de SPRINT-106).
+Conservado acá para histórico. El spec completo (R1 vs R2, criterios de aceptación, restricciones) está preservado en la entrada de `BLOQUEOS.md` que se movió al histórico. El comando exacto del fix está en `EJECUCION_AUTONOMA.md` sección 2026-05-10 pasada 7.
 
 ---
 
