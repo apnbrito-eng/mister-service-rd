@@ -5,6 +5,67 @@
 
 ---
 
+## 2026-05-10 — `trabaja` (pasada 5 del día): SPRINT-125 + SPRINT-126 completados (2/2)
+
+### Contexto
+
+Jorge disparó `trabaja` por quinta vez del día. La cola tenía SPRINT-125 (Opción A: exponer 3 keys huérfanas Bancos/Avances/Reactivación en el modal de Usuarios) y SPRINT-126 (bugs colaterales de SPRINT-124: 4 links rotos coord + 2 gating doble inconsistente). Ambos con OK explícito previo de Jorge ("ambos") registrado en COLA_AUTONOMA.md línea 6 por Cowork tras SPRINT-124. El prompt de invocación del coordinator los listó nominalmente para evitar ambigüedad sobre qué procesar.
+
+### Sprints procesados
+
+**SPRINT-125 — Hash `8d1851e`** (`feat(usuarios): SPRINT-125 exponer 3 keys granulares en modal (Bancos/Avances/Reactivación)`)
+
+- **archivist PRE-CHANGE** (auto-rol del coordinator):
+  - `git log` `GestionUsuarios.tsx` → último cambio relevante SPRINT-105 (009bcc8) espejo `usuarios/{uid}`. Gotcha activa, no aplica al cambio (no toca writes Firestore).
+  - `git log` `permisos.ts` → 0e4def2 toggle iaHabilitada + 3a41487 sistema granular fase 3B. Sin postmortems específicos del modal.
+  - Verificación: las 3 keys `bancosGestionar`, `avancesGestionar`, `clientesReactivacionGestionar` YA existen en `PermisosSistema` (`types/index.ts:1201,1203,1207`), YA están en defaults por rol, YA se usan en `App.tsx` (`PermisoRoute`), `Sidebar.tsx`, `Bancos.tsx`, `Avances.tsx`, `Clientes.tsx`. Solo faltaba exponerlas en el modal.
+- **builder** (edición directa del coordinator — cambio de 1 línea sigue el patrón visual existente del array de grupos):
+  - Agregada sección "Operaciones" en `GestionUsuarios.tsx:991` con las 3 keys, entre "Gastos" y "Otros". Decisión visual: separar de "Otros" para agrupar semánticamente las operaciones financieras/marketing.
+- **tester**: typecheck OK, lint OK, cazadores 7/7 PASS.
+- **regression_guardian**: PASS (sprint no toca rules/services/context, solo UI de página; analizado por categorías P-001..P-008, ninguna aplica).
+- **reviewer**: APPROVED — diff mínimo (~1 línea funcional + render label sigue patrón existente; no introduce keys nuevas).
+- **Matriz actualizada**: `docs/MATRIZ_PERMISOS_VS_MODULOS.md` ahora reporta 19 granular + 0 granular-no-modal (antes 16 + 3).
+- **Push OK** `29416e2..8d1851e`. Pre-commit hook PASS (typecheck + cazadores + lint).
+
+**SPRINT-126 — Hash `af2ba02`** (`fix(sidebar): SPRINT-126 alinear gates sidebar↔ruta (4 links rotos coord + 2 gating doble)`)
+
+- **archivist PRE-CHANGE**:
+  - `git log` `Sidebar.tsx` → último relevante 9b5aee2 SPRINT-117c6 (alias isAdmin engañoso eliminado). Patrón actual: gates con `esAdminOCoord`/`userProfile?.rol === 'administrador'` para módulos solo admin.
+  - `git log` `Comisiones.tsx` → tocada hace tiempo (e428a4d SPRINT-108 anti-regresión), sin cambios recientes. App.tsx tocada por SPRINT-121 (refactor routing).
+  - Cross-check estado real en código: confirmé los 4 links coord rotos (`Web`, `Empresas Aliadas`, `Formularios`, `Solicitudes` en Sidebar.tsx con `esAdminOCoord`, vs `RolRoute roles={['administrador']}` en App.tsx:241-245) + 2 gating doble (`Comisiones` sidebar `esAdminOCoord || p('configuracionVer')` vs ruta `[admin, coord]`; `Usuarios & Permisos` sidebar `p('personalModificar')` vs ruta `[admin, coord]`).
+- **builder**:
+  - Decisión: alinear sidebar con la ruta más restrictiva (alternativa más segura — no toca RolRoute, no toca rules, no abre permisos). 3 cambios en Sidebar.tsx con comentarios explicando rationale + cómo cambiar si Jorge quisiera otra decisión en futuro.
+  - Diff total ~18 líneas (6 funcionales + 12 comentarios). Bajo límite de 60 del sprint.
+- **tester**: typecheck OK, lint OK, cazadores 7/7 PASS.
+- **regression_guardian**: PASS — cambios puramente de gating UI, no introducen `userProfile.id`, no escriben Firestore, no son cross-collection, no tocan onboarding. Análisis semántico de regresión por rol confirmó que ningún usuario pierde capacidad funcional real (los rebotes ya rebotaban en la ruta).
+- **reviewer**: APPROVED — QA mental por rol validado: Wilainy coord deja de ver 4 ítems rotos, sigue viendo todo lo que sí puede abrir. Operaria default no tenía esos ítems igualmente. Jorge admin sin cambios.
+- **Matriz actualizada**: sección 4.3 marcada `[TODOS RESUELTOS en SPRINT-126]`.
+- **Push OK** `8d1851e..af2ba02`. Pre-commit hook PASS.
+
+### Hallazgos clave
+
+1. **No abrí sprints follow-up** durante la pasada (no aparecieron 5tos links rotos ni 3eros gates dobles más allá de los 3 hallazgos de la matriz). Si Jorge en QA visual real detecta algo más, se abre sprint nuevo.
+2. **No declaré bloqueos nuevos**: ninguno de los 2 sprints tocó `firestore.rules` ni migraciones masivas. SPRINT-126 explícitamente alineó el sidebar a la ruta sin tocar ni rules ni RolRoute para mantener riesgo bajo.
+3. **Cazadores 7/7 PASS** en ambos commits (P-001..P-007). P-008 es audit on-demand de Firestore, no se corre en pre-commit.
+
+### Decisiones que NO tomé
+
+- **No expandí el modal con más keys** además de las 3 de Opción A (sub-regla del sprint: NO opcionalmente agregar las otras 3 huérfanas `pagosRegistrar`/`ordenesEnviarAFacturacion`/`facturasCerrar` — esas requieren decisión arquitectural de Jorge porque son granularidad fina dentro del pipeline Cobranza).
+- **No refactoricé Sidebar.tsx** oportunísticamente (sub-regla del sprint).
+- **No creé cazador P-009** ("ítem sidebar cuya ruta no existe en App.tsx"). El sprint lo sugirió como opcional follow-up — queda pendiente para sprint futuro si Cowork lo agrega a cola. Razonamiento: el cazador es no-trivial porque las rutas usan param dinámico (`/admin/...`), requiere parseo del JSX y matching contra `<Route path>`. Mejor diseñarlo aparte.
+
+### Estado al cierre
+
+- Cola autónoma: SPRINT-125, SPRINT-126 → COMPLETADO. No quedan PENDIENTES procesables autónomos.
+- BLOQUEOS.md: sin cambios respecto a pasada 4 (humano-presenciales SPRINT-100, SPRINT-112 fase humana, SPRINT-113 padre siguen ahí).
+- Próximo paso lógico: si Cowork detecta nuevos sprints (ej: postmortem de SPRINT-126 si Jorge encuentra regresión en QA visual, o cazador P-009 si lo prioriza), agregarlos a cola.
+
+### Tiempo
+
+~10 minutos de coordinator (procesamiento + commits + push + actualización docs).
+
+---
+
 ## 2026-05-10 — `trabaja` (pasada 4 del día): SPRINT-112 fase documental procesada (1/1 COMPLETADO, doc + script read-only)
 
 ### Contexto
