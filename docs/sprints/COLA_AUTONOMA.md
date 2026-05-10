@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-10 por coordinator — pasada `trabaja` procesó SPRINT-119 a 123 (5/5 COMPLETADOS). Hashes: 55f55e3 (119), a61022e (120), 03e24df (121), ee4cecc (122), ba5180a (123). SPRINT-124 fue agregado por Cowork durante esta pasada y queda PENDIENTE para próxima ejecución de `trabaja` — el usuario explícitamente solo pidió procesar 119-123 en el pedido inicial. Pendientes humano-presenciales: SPRINT-100, SPRINT-112, SPRINT-113 padre.
+**Última actualización:** 2026-05-10 por coordinator — pasada 3 de `trabaja` procesó SPRINT-124 (auditoría read-only, doc-only). Cola autónoma vacía después de esta pasada. Pendientes humano-presenciales: SPRINT-100, SPRINT-112, SPRINT-113 padre. Posible follow-up: SPRINT-125 si Jorge aprueba "Opción A" de la matriz (exponer 3 keys granular-no-modal en el modal de GestionUsuarios — Bancos/Avances/Reactivación).
 
 **Próximo ID disponible:** SPRINT-125
 
@@ -231,7 +231,7 @@ Tener archivos untracked en raíz pollucionan `git status` y confunden a futuros
 
 ### SPRINT-124 — Auditoría: cobertura de permisos granulares vs módulos del sidebar
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-10 (`docs/MATRIZ_PERMISOS_VS_MODULOS.md` creado, 43 ítems mapeados, hallazgo central: 6 keys TypeScript NO expuestas en modal, 18 módulos rol-only sin control granular. Opción A propuesta para exponer 3 keys low-hanging — Bancos/Avances/Reactivación — vía SPRINT-125 si Jorge aprueba.)
 **Prioridad:** alta (decisión arquitectural sobre fuente de gating, pedida por Jorge tras inspeccionar modal Editar Usuario)
 **Origen:** Jorge 2026-05-10 vía Cowork. Al revisar el modal "Editar Usuario" para Wilainy, detectó que los permisos granulares cubren solo 7 categorías (Órdenes, Cotizaciones, Facturas, Clientes, Personal, Gastos, "Otros" con 4 permisos sueltos) mientras que el sidebar tiene ~20+ módulos visibles. Pregunta crítica: ¿el modelo "los permisos vienen del módulo de usuarios" (regla establecida que llevó a rechazar SPRINT-117c5) realmente cubre todo el software, o hay módulos cuyo gating depende solo del rol en el código?
 **Riesgo:** bajo (read-only, solo doc + posiblemente sprints follow-up).

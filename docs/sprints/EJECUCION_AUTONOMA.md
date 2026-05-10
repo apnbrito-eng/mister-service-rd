@@ -5,6 +5,52 @@
 
 ---
 
+## 2026-05-10 — `trabaja` (pasada 3 del día): SPRINT-124 procesado (1/1 COMPLETADO, doc-only)
+
+### Contexto
+
+Jorge disparó `trabaja` por tercera vez en el día, esta vez con scope explícito del único sprint PENDIENTE que quedaba: SPRINT-124 — auditoría de cobertura de permisos granulares vs módulos del sidebar. Sprint nacido del review humano del modal "Editar Usuario" de Wilainy: Jorge detectó visualmente que el modal expone ~7 categorías mientras el sidebar tiene ~20+ módulos. Pregunta crítica: ¿la regla declarada "los permisos vienen del módulo de usuarios" se cumple en la realidad del código?
+
+### Scope procesado
+
+**SPRINT-124** — auditoría read-only, doc-only. Touch-list: 1 archivo nuevo `docs/MATRIZ_PERMISOS_VS_MODULOS.md` (251 líneas).
+
+### Flujo ejecutado
+
+- **archivist PRE-CHANGE**: consultados `git log Sidebar.tsx` (últimos 20 commits, todos del lote 117c y prior), historial de `permisos.ts`, `roles.ts`, `AUDITORIA_IA_2026-05-08.md` (reusado como punto de partida del inventario de rutas). No hubo postmortems relevantes — el touch-list es solo `docs/`.
+- **builder**: ediciones directas del coordinator (sin delegar) por ser sprint puro de documentación + lectura estática del código. Procedimiento: leer `Sidebar.tsx:173-360`, mapear cada ítem contra `puede(...)` o gate de rol; cruzar con la lista de checkboxes en `GestionUsuarios.tsx:985-991`; cruzar con la interfaz `PermisosSistema` en `types/index.ts:1158-1221` para detectar las 6 keys "granular-no-modal".
+- **tester**: `npm run build` OK (4.48s); `npm run check:regression` 7/7 cazadores PASS, 0 hits.
+- **regression_guardian**: NO aplica — el sprint no toca rules, services ni context. Documentado en sub-regla CLAUDE.md.
+- **reviewer**: self-review aritmética (los conteos del resumen ejecutivo NO cuadraban inicialmente con la tabla principal — corregido en 2 ediciones: 35 keys = 29 modal + 6 no-modal, y 18 rol-only ítems no 17).
+
+### Hallazgos clave del output
+
+1. **Aritmética del modelo:** `PermisosSistema` tiene 35 keys booleanas required. El modal expone 29 (las 7 categorías que Jorge vio). 6 keys quedan definidas pero invisibles al modal: `pagosRegistrar`, `ordenesEnviarAFacturacion`, `facturasCerrar`, `bancosGestionar`, `avancesGestionar`, `clientesReactivacionGestionar`.
+2. **Cobertura de módulos del sidebar (43 filas mapeadas):**
+   - granular puro: 16 (37%)
+   - granular + mixto: 22 (51%)
+   - rol-only NO controlable desde el modal: 18 (42%)
+   - granular-no-modal (low-hanging para SPRINT-125): 3 (Bancos, Avances, Reactivación de clientes)
+3. **Veredicto:** la regla declarada de Jorge **se cumple parcialmente**. Hay 18 módulos donde quitarle el acceso a una persona específica requiere cambiarle el rol o tocar código.
+4. **Bugs colaterales detectados (NO arreglados — fuera de scope):**
+   - Coord ve 4 links rotos en sidebar para Web / Empresas Aliadas / Formularios / Solicitudes (gate sidebar `esAdminOCoord`, gate ruta `RolRoute roles=['administrador']`).
+   - Comisiones tiene gating doble inconsistente (sidebar OR-permissive, ruta rol-restrictive).
+   - Usuarios & Permisos mismo patrón inconsistente.
+
+### Recomendación al final del doc
+
+**Opción A** (riesgo bajo, ~5 líneas en `GestionUsuarios.tsx:991`): exponer las 3 keys granular-no-modal. Si Jorge aprueba, abrir SPRINT-125. Opciones B/C (más invasivas) NO recomendadas sin pedido explícito.
+
+### Cazadores y salud
+
+P-001..P-007 PASS 0 hits durante toda la pasada. P-008 (data-live) no aplica al pre-commit. Pre-commit hook nunca gritó.
+
+### Tiempo total estimado
+
+~25 minutos coordinator (lectura código + redacción doc + reviews aritméticas).
+
+---
+
 ## 2026-05-10 — `trabaja` (pasada 2 del día): SPRINT-119 a 123 procesados (5/5 COMPLETADOS, sin bloqueos)
 
 ### Contexto
