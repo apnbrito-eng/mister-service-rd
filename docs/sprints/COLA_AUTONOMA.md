@@ -151,7 +151,7 @@ Eliminar la ruta `/admin/productos` y sus referencias del routing. Si el compone
 
 ### SPRINT-122 — Correr `npm run metricas` por primera vez + interpretación archivist
 
-**Estado:** COMPLETADO 2026-05-10 (`docs/sprints/METRICAS_2026-05-10.md` generado + interpretación cualitativa agregada por archivist — hash a registrar post-commit. Veredicto: salud BUENA, recurrence rate 0%, ninguna acción urgente)
+**Estado:** COMPLETADO 2026-05-10 (`docs/sprints/METRICAS_2026-05-10.md` generado + interpretación cualitativa agregada por archivist, hash `ee4cecc`. Veredicto: salud BUENA, recurrence rate 0%, ninguna acción urgente)
 **Prioridad:** baja (visibilidad, no urgente)
 **Origen:** Cowork 2026-05-10. SPRINT-107 (commit `e395052`) creó el comando `npm run metricas` y el modo MÉTRICAS del archivist, pero nunca se corrió la primera pasada formal con interpretación cualitativa. Ahora hay base suficiente (8 sprints procesados, 7 cazadores activos, 1 postmortem real + 1 retroactivo) para una primera lectura útil.
 **Riesgo:** nulo (read-only, solo doc).
@@ -191,7 +191,7 @@ El sistema anti-regresión lleva ~5 días vivo (SPRINT-103 fue el 2026-05-06). H
 
 ### SPRINT-123 — Decidir destino de `COWORK_CONTEXTO.md` (versionar o eliminar)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-10 (DECISIÓN YA APLICADA: versionado en commit `0181778` del 2026-05-08, antes de que se escribiera este sprint. `git status` limpio, sin cambios pendientes. Sin acción adicional necesaria — sprint cierra como no-op administrativo. Hash a registrar post-commit)
 **Prioridad:** baja (limpieza, low-stakes)
 **Origen:** Cowork 2026-05-10. SPRINT-117a (commit `f1a89d0`) cerró con nota: *"Pendiente menor: COWORK_CONTEXTO.md untracked en la raíz — fuera de scope, decime si querés sprint propio."* Quedó untracked desde hace varios días.
 **Riesgo:** nulo (decisión binaria, sin código).
