@@ -168,11 +168,12 @@ Son granulares dentro del flujo Cobranza → expandirlos sería más complejo (r
 
 ### 4.3 Bugs / inconsistencias menores cazados como vector colateral
 
-> **NO arreglar en este sprint** (es read-only). Lista para futuros sprints follow-up acotados.
+> ~~**NO arreglar en este sprint** (es read-only). Lista para futuros sprints follow-up acotados.~~
+> **[TODOS RESUELTOS en SPRINT-126 el 2026-05-10]** — sidebar alineado con rutas (alternativa más segura: gates del sidebar = gates de la ruta).
 
-1. **Coord ve links rotos en sidebar para Web / Empresas Aliadas / Formularios / Solicitudes.** El sidebar usa `esAdminOCoord` (admin+coord), pero la ruta usa `RolRoute roles={['administrador']}`. Una coord que hace click recibe redirect. Patrón en 4 ítems consecutivos. Fix: o gatear el sidebar a admin only (alinear con la ruta), o expandir RolRoute a `[admin, coord]` (alinear con sidebar).
-2. **Comisiones tiene gating doble inconsistente.** Sidebar: `esAdminOCoord OR p('configuracionVer')` (operaria con configuracionVer custom vería el item). Ruta: `rol in [admin, coord]` (operaria con configuracionVer custom recibe redirect al hacer click). El gate del sidebar miente.
-3. **Usuarios & Permisos tiene gating doble inconsistente.** Sidebar: `p('personalModificar')` (operaria con `personalModificar=true` vería el item). Ruta: `RolRoute roles={['admin, coord]}` (la rechazaría). El gate del sidebar miente.
+1. ~~**Coord ve links rotos en sidebar para Web / Empresas Aliadas / Formularios / Solicitudes.**~~ [RESUELTO SPRINT-126] Sidebar ahora gatea con `userProfile?.rol === 'administrador'`, alineado con `RolRoute roles={['administrador']}` en App.tsx:241-245. Coord ya no ve esos 4 links rotos.
+2. ~~**Comisiones tiene gating doble inconsistente.**~~ [RESUELTO SPRINT-126] Sidebar ahora `show: esAdminOCoord`, alineado con `RolRoute roles={['admin', 'coord']}` en App.tsx:252.
+3. ~~**Usuarios & Permisos tiene gating doble inconsistente.**~~ [RESUELTO SPRINT-126] Sidebar ahora `show: esAdminOCoord`, alineado con `RolRoute roles={['admin', 'coord']}` en App.tsx:240.
 
 ---
 

@@ -284,7 +284,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: esAdminOCoord },
           { to: '/admin/avances', icon: Wallet, label: 'Avances a Empleados', show: p('avancesGestionar') },
           { to: '/admin/prestamos', icon: Banknote, label: 'Préstamos a Empleados', show: esAdminOCoord },
-          { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: esAdminOCoord || p('configuracionVer') },
+          // SPRINT-126: gate alineado con ruta App.tsx:252 (RolRoute admin+coord).
+          // Antes era `esAdminOCoord || p('configuracionVer')` — la disyunción mostraba
+          // el ítem a operarias con configuracionVer personalizado y luego la ruta las
+          // rechazaba con redirect. Si en el futuro Comisiones debe abrirse a otros
+          // roles, cambiar AMBOS lugares (sidebar + RolRoute en App.tsx).
+          { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: esAdminOCoord },
           { to: '/admin/estado-resultado', icon: TrendingUp, label: 'Estado de Resultado', show: esAdminOCoord },
           // SPRINT-117c1: label dinámico — operaria/secretaria ven "Mi rendimiento" (KPI propio),
           // admin/coord siguen viendo "Rendimiento" (panel global). Sin cambios al gate `show:`.
@@ -302,10 +307,15 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         icon: Globe,
         defaultExpanded: false,
         items: [
-          { to: '/admin/web', icon: Globe, label: 'Página Web', show: esAdminOCoord },
-          { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: esAdminOCoord },
-          { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: esAdminOCoord },
-          { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: esAdminOCoord },
+          // SPRINT-126: las 4 rutas siguientes están gateadas en App.tsx:241-245 con
+          // RolRoute roles={['administrador']}. Antes el sidebar mostraba el ítem a
+          // coordinadora (esAdminOCoord) y la ruta la rechazaba con redirect, creando
+          // 4 links "rotos" en su menú. Si en el futuro estas pantallas deben abrirse
+          // a coord, cambiar AMBOS lugares (sidebar + RolRoute en App.tsx).
+          { to: '/admin/web', icon: Globe, label: 'Página Web', show: userProfile?.rol === 'administrador' },
+          { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: userProfile?.rol === 'administrador' },
+          { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: userProfile?.rol === 'administrador' },
+          { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: userProfile?.rol === 'administrador' },
         ],
       },
     },
@@ -337,7 +347,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         defaultExpanded: false,
         items: [
           { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
-          { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: p('personalModificar') },
+          // SPRINT-126: gate alineado con ruta App.tsx:240 (RolRoute admin+coord).
+          // Antes era `p('personalModificar')` — una operaria con personalModificar
+          // personalizado veía el ítem y la ruta la rechazaba. Si en el futuro
+          // Usuarios y Permisos debe controlarse vía permiso granular, cambiar AMBOS
+          // lugares (sidebar + RolRoute en App.tsx).
+          { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: esAdminOCoord },
           { to: '/admin/ponches', icon: ClipboardCheck, label: 'Reporte de Ponches', show: esAdminOCoord },
         ],
       },

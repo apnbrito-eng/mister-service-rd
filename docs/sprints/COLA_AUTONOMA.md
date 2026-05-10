@@ -349,7 +349,7 @@ SPRINT-124 detectó que hay 3 módulos en "limbo": el código define las llaves 
 
 ### SPRINT-126 — Bugs colaterales SPRINT-124: links rotos coord + gating doble inconsistente
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-10 (Sidebar.tsx alineado: 4 links rotos coord eliminados (Web/Empresas/Formularios/Solicitudes ahora admin-only en sidebar) + 2 gates doble alineados a `esAdminOCoord` (Comisiones, Usuarios & Permisos). Matriz actualizada. Cazadores 7/7 PASS. QA mental por rol validado.)
 **Prioridad:** media (UX para coordinadora + deuda técnica que crecerá si no se limpia)
 **Origen:** Jorge 2026-05-10 vía Cowork. Aprobó procesar los follow-ups colaterales que detectó SPRINT-124 en su matriz.
 **Riesgo:** bajo-medio (toca Sidebar.tsx + 2 archivos de páginas con gating; cambios pequeños cada uno pero suma 3 archivos).
