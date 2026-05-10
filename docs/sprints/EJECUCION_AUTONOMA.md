@@ -5,6 +5,63 @@
 
 ---
 
+## 2026-05-10 — `trabaja` (pasada 4 del día): SPRINT-112 fase documental procesada (1/1 COMPLETADO, doc + script read-only)
+
+### Contexto
+
+Jorge disparó `trabaja` por cuarta vez en el día. La cola residual tenía SPRINT-112 (Schema drift + matriz permisos por rol) en PENDIENTE más sprints humano-presenciales (SPRINT-100, SPRINT-113 padre). Jorge clarificó en su prompt de invocación que SPRINT-112 tenía dos componentes: (a) fase documental + script de auditoría — procesable autónomo; (b) QA manual de la matriz con usuarios reales — requiere humano. Procesé sólo (a). El componente humano queda en BLOQUEOS.md como sub-sprint.
+
+Jorge también dejó dos preguntas pendientes desde SPRINT-124 (Opción A — exponer 3 keys low-hanging — y follow-ups por links rotos coord + gating doble inconsistente). NO abrí esos sprints — los registré en BLOQUEOS.md según protocolo.
+
+### Scope procesado
+
+**SPRINT-112 fase documental** — auditoría doc + script read-only. Touch-list:
+
+- `docs/MATRIZ_PERMISOS.md` (NUEVO) — matriz por flujo crítico × 6 roles, derivada del código (rules + permisos.ts + componentes).
+- `scripts/auditoria/schema-drift.ts` (NUEVO) — script Admin SDK read-only que samplea N=20 docs por colección, compara campos contra interfaces TS, reporta drift.
+- `package.json` — agregar `npm run audit:schema-drift`.
+
+### Flujo ejecutado
+
+- **archivist PRE-CHANGE** (auto-rol del coordinator, sin tool Agent disponible):
+  - `git log` sobre `docs/MATRIZ_PERMISOS_VS_MODULOS.md` → 1 commit (e635230 SPRINT-124, complementario, NO el mismo doc — `MATRIZ_PERMISOS.md` es flujo×rol, el de SPRINT-124 es módulo×fuente-gating).
+  - `git log` sobre `scripts/auditoria/` → no existe la carpeta. Sí hay scripts read-only similares en `scripts/auditoria-*.ts` (raíz scripts), patrón: Admin SDK + service-account.json + sin escrituras. Reusar mismo header y estructura.
+  - Revisión de `docs/PATRONES_REGRESION.md` → P-005 (rules sin deployar) NO aplica (no toco rules). P-001/P-006 no aplican (no toco código de la app).
+  - Categorías especiales: ninguna disparada — touch-list es 1 doc nuevo + 1 script aislado en carpeta nueva.
+  - Recomendaciones: mantener script SOLO read-only (sin `--apply`), header con propósito + uso + safety, padecer modelo de `auditoria-emails-personal-vs-usuarios.ts`.
+- **builder** (ediciones directas del coordinator por ser doc + script aislado, mismo patrón que SPRINT-124):
+  - Doc: 12 flujos críticos × 6 roles, fuente: rules + permisos.ts + cross-check con componentes/páginas.
+  - Script: TypeScript con `firebase-admin/firestore`, samplea 20 docs por colección, compara `Object.keys(doc)` contra interfaces TS conocidas.
+- **tester**: `npm run build` OK, `npm run check:regression` 7/7 PASS 0 hits, `npm run lint` OK (script de scripts/ excluido del lint según `eslint.config.js`).
+- **regression_guardian**: NO aplica — sprint no toca rules, services ni context. Documentado en sub-regla CLAUDE.md ("rules/services/context").
+- **reviewer**: self-review. Verificado:
+  - El doc no contradice MATRIZ_PERMISOS_VS_MODULOS.md (SPRINT-124) — son complementarios y se referencian mutuamente.
+  - El script NO escribe a Firestore (audit por grep `setDoc|updateDoc|addDoc|deleteDoc|batch.commit` en el archivo: 0 hits).
+  - El script falla con exit code 1 si no hay `service-account.json` (mismo patrón que sus hermanos).
+
+### Hallazgos clave
+
+1. **Matriz cubre 27 flujos críticos × 6 roles = 162 celdas.** 16 flujos granular puro, 6 granular-no-modal, 5 rol-only. Cada celda dice ✓ / ✗ / cond + cita exacta de rule + cita gate de UI.
+2. **Schema drift no se midió en este sprint** (requiere correr el script contra prod con service-account.json). El sprint entrega la herramienta; Jorge la corre cuando quiera baseline.
+3. **Componente humano del sprint** (QA manual de cada celda con un usuario real de cada rol) → BLOQUEOS.md, registrado como sub-sprint humano. Requiere que Jorge dedique ~2h con accesos reales.
+
+### Decisiones que NO tomé (registradas en BLOQUEOS.md)
+
+- **SPRINT-125 Opción A** (exponer 3 keys granular-no-modal en el modal) — Jorge no respondió a la pregunta de SPRINT-124. NO abrí el sprint según política autónoma.
+- **Follow-ups SPRINT-124** (links rotos coord + gating doble inconsistente) — Jorge no respondió. NO abrí sprints.
+
+### Cazadores y salud
+
+- P-001..P-007: 0 hits.
+- P-005 (rules sin deployar): N/A (no toco rules).
+- P-008 (data-live notis): no aplica al pre-commit.
+
+### Tiempo total
+
+~30 minutos coordinator (lectura de rules + tipos + sidebar + redacción matriz + redacción script + self-review).
+
+---
+
 ## 2026-05-10 — `trabaja` (pasada 3 del día): SPRINT-124 procesado (1/1 COMPLETADO, doc-only)
 
 ### Contexto

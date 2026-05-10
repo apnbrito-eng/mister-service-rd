@@ -3,9 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-10 por coordinator — pasada 3 de `trabaja` procesó SPRINT-124 (hash `e635230`, auditoría read-only, doc-only). Cola autónoma vacía después de esta pasada. Pendientes humano-presenciales: SPRINT-100, SPRINT-112, SPRINT-113 padre. Posible follow-up: SPRINT-125 si Jorge aprueba "Opción A" de la matriz (exponer 3 keys granular-no-modal en el modal de GestionUsuarios — Bancos/Avances/Reactivación).
+**Última actualización:** 2026-05-10 por Cowork — Jorge aprobó "ambos" follow-ups de SPRINT-124. Agregados SPRINT-125 (Opción A: exponer 3 keys huérfanas Bancos/Avances/Reactivación en el modal de GestionUsuarios.tsx) y SPRINT-126 (bugs colaterales detectados por SPRINT-124: 4 links rotos coord en sidebar + gating doble inconsistente en Comisiones y Usuarios & Permisos). Pendientes humano-presenciales: SPRINT-100, SPRINT-112, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-125
+**Próximo ID disponible:** SPRINT-127
 
 ---
 
@@ -301,6 +301,105 @@ Este sprint es la auditoría que da la foto. NO toma decisiones — Jorge las to
   - Y un toggle adicional al final del modal: `habilitarAsistenteIA`
 - Módulos del sidebar que claramente NO tienen permiso granular en esa lista (a confirmar leyendo Sidebar.tsx): Dashboard, Agenda del Día, Calendario, Calendarios públicos (Calendly), Mantenimiento, Citas por Confirmar, Reprogramaciones, Sugerencias chequeo, Conduces Pendientes, Conduces de Garantía, Equipos de Taller, Standby de Piezas, Productos, Precios, Inventario, Marketing/Campañas, Plantillas Marketing, Reactivación de clientes, Reporte de Ponches, Nómina, Comisiones, Web, Solicitudes, Usuarios y Permisos.
 - Si Jorge lee este doc y dice "expandí el modal con X módulos", eso es SPRINT-125 (sprint B nuevo, riesgo medio, toca código).
+
+---
+
+### SPRINT-125 — Exponer 3 keys huérfanas (Bancos/Avances/Reactivación) en el modal de Usuarios
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (gap obvio detectado por SPRINT-124; cierra la incoherencia entre lo que dice la regla de Jorge y lo que el modal permite controlar hoy)
+**Origen:** Jorge 2026-05-10 vía Cowork. Aprobó "Opción A" de la matriz `docs/MATRIZ_PERMISOS_VS_MODULOS.md` tras leer el output de SPRINT-124.
+**Riesgo:** bajo (toca 1 archivo, ~5 líneas adicionales en una sección de checkboxes que ya existe; no cambia rules ni services).
+**Touch-list previsto:** `src/pages/GestionUsuarios.tsx` (o el archivo equivalente que renderice el modal "Editar Usuario" — el builder lo confirma al inicio leyendo Sidebar.tsx para encontrar la ruta).
+
+#### Objetivo
+
+Exponer en el modal "Editar Usuario" los 3 permisos granulares que existen como keys en TypeScript pero NO aparecen como checkbox en el modal: **Bancos**, **Avances**, **Reactivación de clientes**. Después de este sprint, Jorge puede activar/desactivar esos 3 módulos persona-por-persona desde el módulo de Usuarios — igual que ya puede hacer con Órdenes, Facturas, Clientes, etc.
+
+#### Por qué
+
+SPRINT-124 detectó que hay 3 módulos en "limbo": el código define las llaves de permiso (`bancosVer`, `avancesVer`, `reactivacionVer` o nombres equivalentes — el builder confirma los identificadores exactos leyendo `src/utils/permisos.ts` o donde se definan) pero el modal de GestionUsuarios no las renderiza como checkbox. Resultado: aunque la regla declarada de Jorge es "todo se controla desde Usuarios y Permisos", esos 3 módulos hoy son rol-only en la práctica. Este sprint cierra ese gap específico (Opción A en la matriz) sin abrir el debate más grande de los 18 módulos rol-only puros (esos son sprints futuros si Jorge decide).
+
+#### Criterios de aceptación
+
+- [ ] Builder identifica los nombres exactos de las 3 keys leyendo `src/utils/permisos.ts` / `src/utils/index.ts` / donde estén definidas (la matriz dice que existen pero NO confirma los identificadores literales — verificar).
+- [ ] Si las 3 keys NO existen aún en TypeScript (la matriz puede estar usando nombres descriptivos, no literales), agregarlas siguiendo el patrón de las keys existentes (`ordenesVer`, `facturasVer`, etc.).
+- [ ] Agregar los 3 checkboxes al modal "Editar Usuario" en la sección apropiada (probablemente "Otros" o crear una sub-sección "Operaciones" si encaja mejor — builder decide siguiendo el patrón visual existente).
+- [ ] Verificar que el toggle persiste correctamente en Firestore al `usuarios/{uid}.permisos.<key>` y que el sidebar respeta el flag al re-render.
+- [ ] Verificar manualmente (typecheck + lint + build) que no rompe el modal existente — usar `npm run build` antes del commit.
+- [ ] regression_guardian obligatorio (toca archivo de página crítica que renderiza modal de permisos).
+- [ ] Cazadores 8/8 PASS.
+- [ ] Commit + push.
+- [ ] Actualizar `docs/MATRIZ_PERMISOS_VS_MODULOS.md`: bajar el conteo de "keys huérfanas" de 3 a 0 y mover Bancos/Avances/Reactivación a la columna "granular" en la tabla principal.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio (consulta historial de `GestionUsuarios.tsx` y `permisos.ts` — buscar si esos 3 checkboxes fueron eliminados intencionalmente en algún commit pasado, lo cual cambiaría el sprint).
+- regression_guardian obligatorio.
+- NO tocar `firestore.rules`. Si la rule actual ya respeta el flag genérico `puede('xxxVer')`, este sprint no la necesita. Si NO la respeta (el módulo se accede directo sin gate de rule), abrir sprint follow-up acotado — NO arreglar acá.
+- NO expandir el modal con módulos que NO estén en las 3 keys de la Opción A. Si encuentras la tentación de agregar el resto (ej: Marketing, Productos), eso es un sprint futuro que requiere decisión arquitectural de Jorge.
+
+#### Notas para el coordinator
+
+- Hallazgo central de SPRINT-124 que origina este sprint: *"3 módulos en limbo (Bancos, Avances, Reactivación) — tienen key TS pero modal no las expone."*
+- Si al leer el código aparece que las 3 keys NO existen como string literal en TypeScript (el coordinator de SPRINT-124 puede haber inferido la existencia de la entrada en la matriz por otro mecanismo), el builder debe pausar y reportar — el sprint pasaría a "agregar keys + checkbox", riesgo sigue siendo bajo pero scope crece.
+- El cambio es de ~5 líneas reales (3 `<Checkbox name="..." />` + tal vez 1 sub-sección de heading). Si el diff supera 30 líneas el builder debe detenerse y reportar — probablemente esté tocando más de lo necesario.
+
+---
+
+### SPRINT-126 — Bugs colaterales SPRINT-124: links rotos coord + gating doble inconsistente
+
+**Estado:** PENDIENTE
+**Prioridad:** media (UX para coordinadora + deuda técnica que crecerá si no se limpia)
+**Origen:** Jorge 2026-05-10 vía Cowork. Aprobó procesar los follow-ups colaterales que detectó SPRINT-124 en su matriz.
+**Riesgo:** bajo-medio (toca Sidebar.tsx + 2 archivos de páginas con gating; cambios pequeños cada uno pero suma 3 archivos).
+**Touch-list previsto:** `src/components/Sidebar.tsx`, `src/pages/Comisiones.tsx` (o equivalente), `src/pages/GestionUsuarios.tsx` (verificar gating doble). Builder confirma rutas exactas al leer la matriz.
+
+#### Objetivo
+
+Limpiar 2 problemas colaterales que `docs/MATRIZ_PERMISOS_VS_MODULOS.md` documentó:
+
+1. **4 links rotos en el sidebar de la coordinadora** — ítems del menú que la coord ve y al hacer clic no llevan a ningún lado (o navegan a ruta inexistente / componente que no monta para su rol).
+2. **Gating doble inconsistente en 2 módulos** (Comisiones y Usuarios & Permisos) — la página tiene un `puede(...)` interno Y el sidebar tiene un check de rol, y ambos no están alineados. Resultado: hay combinaciones de rol+permiso donde el ítem aparece en el sidebar pero la página rechaza, o viceversa.
+
+#### Por qué
+
+Estos son los 2 hallazgos colaterales que SPRINT-124 reportó pero NO arregló (por scope read-only). Son chicos individualmente pero crecerán: cada nuevo módulo agregado al sidebar puede heredar el mismo patrón si no limpiamos ahora. Para Wilainy (la coordinadora) los 4 links rotos son fricción diaria — hace clic y "no pasa nada", lo cual erosiona la confianza en el software.
+
+#### Criterios de aceptación
+
+**Parte A — 4 links rotos coord:**
+- [ ] Builder lee `docs/MATRIZ_PERMISOS_VS_MODULOS.md` para identificar exactamente cuáles son los 4 ítems que aparecen en el sidebar de la coordinadora pero rompen al click. La matriz debe listarlos por nombre — si no lo hace explícitamente, el builder los detecta cruzando rutas del Sidebar.tsx contra `App.tsx` (cualquier ruta sin Route correspondiente o cuyo componente no renderiza para rol coord).
+- [ ] Para cada uno de los 4: o (a) crear la Route faltante si el módulo SÍ debe existir para coord, o (b) eliminar el ítem del sidebar para rol coord si NO debe existir. Builder decide caso por caso siguiendo lo que sugiere la matriz; si dudas, abrir sub-bloqueo en `BLOQUEOS.md` pidiendo a Jorge decidir antes de cerrar.
+- [ ] Verificar manualmente que la coordinadora ya no ve ítems rotos: simular sesión coord en dev y hacer clic en cada item del sidebar.
+
+**Parte B — gating doble inconsistente (Comisiones y Usuarios & Permisos):**
+- [ ] Builder identifica el sidebar check (`show: ... rol === ...`) Y el page-level check (`puede(...)` o `userProfile.rol === ...`) en cada uno de los 2 módulos.
+- [ ] Decide la fuente canónica: el sidebar debe reflejar EXACTAMENTE el mismo gate que la página. Regla: si la página gatea con `puede('comisionesVer')`, el sidebar también; si la página solo gatea por rol, el sidebar también.
+- [ ] Hace los cambios mínimos para alinear ambos. NO inventar nuevas keys de permiso — usar las existentes.
+- [ ] Verificar manualmente en dev con un usuario por cada rol que el ítem aparece SI Y SOLO SI la página lo deja entrar.
+
+**Global:**
+- [ ] regression_guardian obligatorio (toca Sidebar.tsx, archivo cuyo bug puede romper navegación de roles enteros).
+- [ ] archivist PRE-CHANGE obligatorio (consulta historial de Sidebar.tsx + las 2 páginas tocadas).
+- [ ] `npm run build` + `npm run lint` PASS antes del commit.
+- [ ] Cazadores 8/8 PASS.
+- [ ] Commit + push con mensaje declarando "QA flujo coord + sidebar validado" (sub-regla de CLAUDE.md sobre cleanup en archivos críticos).
+- [ ] Actualizar `docs/MATRIZ_PERMISOS_VS_MODULOS.md`: marcar los 2 hallazgos colaterales como RESUELTO con hash del commit.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio.
+- regression_guardian obligatorio.
+- NO tocar `firestore.rules`. Si el bug requiere cambio de rule, abrir sprint nuevo y dejar este en BLOQUEOS.
+- NO refactorizar Sidebar.tsx oportunísticamente. Solo limpiar los 4 links rotos coord + alinear los 2 dobles. Si el diff supera 60 líneas total, el builder se detiene y reporta.
+- Si al verificar manualmente aparece un 5º link roto o un 3er gating doble inconsistente (que SPRINT-124 no listó), documentar en `EJECUCION_AUTONOMA.md` pero NO arreglar acá — abrir sprint follow-up acotado.
+
+#### Notas para el coordinator
+
+- Los 2 sub-objetivos son independientes — si Parte A está clara y Parte B requiere decisión, builder puede commitear Parte A primero y dejar Parte B en sub-bloqueo. NO mezclar en un solo commit gigante.
+- La matriz documenta los 4 + 2 hallazgos en su sección "Hallazgos colaterales" / "Bugs detectados" — empezar la lectura por ahí.
+- Si después de este sprint el sidebar coord queda limpio, agregar a `docs/PATRONES_REGRESION.md` (o proponer) un cazador P-009 que detecte ítems del Sidebar.tsx cuya ruta NO existe en App.tsx. Eso evitaría que el bug recurra. Si el cazador no es trivial de escribir, dejarlo para un sprint follow-up explícito — NO bloquear este sprint por eso.
 
 ---
 
@@ -940,7 +1039,7 @@ Auditar TODOS los campos del esquema que guardan un ID de un empleado y verifica
 
 ### SPRINT-112 — Schema drift y matriz de permisos por rol
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-10 fase documental (`docs/MATRIZ_PERMISOS.md` con 27 flujos × 6 roles + script `scripts/auditoria/schema-drift.ts` read-only + comando `npm run audit:schema-drift`. Smoke test contra prod retornó 65 drift+ y 157 drift- — herramienta funciona. Componente humano — QA manual de las 162 celdas — movido a `BLOQUEOS.md` como SPRINT-112-QA.)
 **Prioridad:** media (auditoría pedida por Jorge — la última)
 **Origen:** Auditoría completa solicitada por Jorge tras hotfix de Aury.
 **Riesgo:** bajo-medio (mayormente documentación + tests manuales)
