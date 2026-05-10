@@ -57,7 +57,7 @@ Los postmortems hoy en el repo son todos de bugs en producción. Este documenta 
 
 ### SPRINT-120 — Cazador P-008: health-check notis legacy con userId == personalDocId
 
-**Estado:** COMPLETADO 2026-05-10 (cazador P-008 creado en `scripts/invariantes/check-notis-legacy-data-shape.ts` + comando `npm run audit:notis-legacy` + entrada P-008 en catálogo — hash a registrar post-commit)
+**Estado:** COMPLETADO 2026-05-10 (cazador P-008 creado en `scripts/invariantes/check-notis-legacy-data-shape.ts` + comando `npm run audit:notis-legacy` + entrada P-008 en catálogo, hash `a61022e`)
 **Prioridad:** media (prevención del bug masivo de SPRINT-118)
 **Origen:** Cowork 2026-05-10. Sugerencia documentada en `BLOQUEOS.md` SPRINT-118 línea 88: *"Considerar agregar P-XXX nuevo al catálogo: 'notificaciones legacy con userId/destinatarioId apuntando a personalDocId en lugar de auth.uid'. Cazador difícil porque es bug de datos, no de código — pero el cazador puede ser un script de health-check periódico (ej: `npm run audit:notis-legacy` que corre la auditoría general y avisa si aparecen nuevos casos)."*
 **Riesgo:** bajo (script read-only nuevo, no toca data ni rules).
@@ -111,7 +111,7 @@ el bug puede reaparecer silenciosamente. Un health-check periódico de los DATOS
 
 ### SPRINT-121 — Eliminar `/admin/productos` (Catálogo legacy) del routing
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-10 (`src/pages/Productos.tsx` eliminado, ruta `/admin/productos` reemplazada por redirect 301 a `/admin/precios` — hash a registrar post-commit)
 **Prioridad:** baja (limpieza de deuda)
 **Origen:** Cowork 2026-05-10. Decisión documentada en `BLOQUEOS.md` SPRINT-117c línea 125: *"Catálogo legacy (`/admin/productos`) en sidebar admin → ocultar en 117c1, eliminar del routing en sprint propio futuro."* SPRINT-117c1 ya ocultó del sidebar; este sprint cierra el ciclo eliminando del routing.
 **Riesgo:** bajo (ruta sin tráfico interno, sin enlaces externos conocidos).

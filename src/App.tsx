@@ -17,7 +17,6 @@ import Clientes from './pages/Clientes';
 import Cotizaciones from './pages/Cotizaciones';
 import Facturas from './pages/Facturas';
 import EquiposTaller from './pages/EquiposTaller';
-import Productos from './pages/Productos';
 import Rendimiento from './pages/Rendimiento';
 import Mantenimiento from './pages/Mantenimiento';
 import Gastos from './pages/Gastos';
@@ -229,7 +228,10 @@ function AppRoutes() {
         <Route path="cotizaciones" element={<PermisoRoute permiso="cotizacionesVer"><Cotizaciones /></PermisoRoute>} />
         <Route path="facturas" element={<PermisoRoute permiso="facturasVer"><Facturas /></PermisoRoute>} />
         <Route path="taller" element={<EquiposTaller />} />
-        <Route path="productos" element={<Productos />} />
+        {/* SPRINT-121: Catálogo legacy eliminado del routing (oculto desde SPRINT-117c1).
+            Redirect preventivo para bookmarks viejos y links externos. PreciosServicios
+            cubre la funcionalidad real de catálogo de servicios. Rollback: git revert. */}
+        <Route path="productos" element={<Navigate to="/admin/precios" replace />} />
         <Route path="rendimiento" element={<PermisoRoute permiso="rendimientoVer"><Rendimiento /></PermisoRoute>} />
         <Route path="metricas-mensuales" element={<PermisoRoute permiso="rendimientoVer"><MetricasMensuales /></PermisoRoute>} />
         <Route path="mantenimiento" element={<Mantenimiento />} />
