@@ -3,9 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-10 por Cowork — Jorge pidió agregar 5 sprints procesables autónomos. Agregados SPRINT-119 (postmortem-positivo lote 117c, sub-regla obligatoria), SPRINT-120 (cazador P-008 health-check notis legacy, prevención bug masivo), SPRINT-121 (eliminar Catálogo legacy del routing), SPRINT-122 (correr `npm run metricas` por primera vez), SPRINT-123 (decidir destino de COWORK_CONTEXTO.md). Todos riesgo bajo o nulo, sin tocar rules ni datos.
+**Última actualización:** 2026-05-10 por Cowork — Jorge pidió agregar 6 sprints procesables autónomos. SPRINT-119 (postmortem-positivo lote 117c), SPRINT-120 (cazador P-008 health-check notis legacy), SPRINT-121 (eliminar Catálogo legacy del routing), SPRINT-122 (correr `npm run metricas` primera vez), SPRINT-123 (decidir destino de COWORK_CONTEXTO.md), SPRINT-124 (auditoría cobertura de permisos granulares vs módulos — Jorge detectó al revisar el modal Editar Usuario que solo cubre 7 de ~20 módulos del sidebar). Todos riesgo bajo o nulo, sin tocar rules ni datos.
 
-**Próximo ID disponible:** SPRINT-124
+**Próximo ID disponible:** SPRINT-125
 
 ---
 
@@ -13,7 +13,7 @@
 
 ### SPRINT-119 — Postmortem-positivo del lote 117c (rediseño IA del sidebar)
 
-**Estado:** COMPLETADO 2026-05-10 (postmortem-positivo creado en `docs/postmortems/2026-05-10-rediseno-ia-aprendizajes.md` — hash a registrar post-commit)
+**Estado:** COMPLETADO 2026-05-10 (postmortem-positivo creado en `docs/postmortems/2026-05-10-rediseno-ia-aprendizajes.md`, hash `55f55e3`)
 **Prioridad:** media (sub-regla obligatoria por spec del 117c)
 **Origen:** Cowork 2026-05-10. El spec original de SPRINT-117c1..N en `BLOQUEOS.md` línea 146 dice: *"Postmortem-positivo al final — cuando los 5 sub-sprints aprobados cierren OK, archivist genera `docs/postmortems/2026-05-XX-rediseno-ia-aprendizajes.md` documentando el approach. NO es bug, pero el aprendizaje vale para futuros rediseños grandes."*
 **Riesgo:** bajo (solo doc, no toca código).
@@ -57,7 +57,7 @@ Los postmortems hoy en el repo son todos de bugs en producción. Este documenta 
 
 ### SPRINT-120 — Cazador P-008: health-check notis legacy con userId == personalDocId
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-10 (cazador P-008 creado en `scripts/invariantes/check-notis-legacy-data-shape.ts` + comando `npm run audit:notis-legacy` + entrada P-008 en catálogo — hash a registrar post-commit)
 **Prioridad:** media (prevención del bug masivo de SPRINT-118)
 **Origen:** Cowork 2026-05-10. Sugerencia documentada en `BLOQUEOS.md` SPRINT-118 línea 88: *"Considerar agregar P-XXX nuevo al catálogo: 'notificaciones legacy con userId/destinatarioId apuntando a personalDocId en lugar de auth.uid'. Cazador difícil porque es bug de datos, no de código — pero el cazador puede ser un script de health-check periódico (ej: `npm run audit:notis-legacy` que corre la auditoría general y avisa si aparecen nuevos casos)."*
 **Riesgo:** bajo (script read-only nuevo, no toca data ni rules).
@@ -226,6 +226,81 @@ Tener archivos untracked en raíz pollucionan `git status` y confunden a futuros
 
 - 90% probable que Opción A o B aplique sin escalar. C es para casos raros donde el contenido tiene info de negocio que solo Jorge sabe si es relevante.
 - Si va a `.gitignore`, agregar también el patrón general `COWORK_*.md` por si Cowork genera más archivos similares en el futuro (preventivo).
+
+---
+
+### SPRINT-124 — Auditoría: cobertura de permisos granulares vs módulos del sidebar
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (decisión arquitectural sobre fuente de gating, pedida por Jorge tras inspeccionar modal Editar Usuario)
+**Origen:** Jorge 2026-05-10 vía Cowork. Al revisar el modal "Editar Usuario" para Wilainy, detectó que los permisos granulares cubren solo 7 categorías (Órdenes, Cotizaciones, Facturas, Clientes, Personal, Gastos, "Otros" con 4 permisos sueltos) mientras que el sidebar tiene ~20+ módulos visibles. Pregunta crítica: ¿el modelo "los permisos vienen del módulo de usuarios" (regla establecida que llevó a rechazar SPRINT-117c5) realmente cubre todo el software, o hay módulos cuyo gating depende solo del rol en el código?
+**Riesgo:** bajo (read-only, solo doc + posiblemente sprints follow-up).
+**Touch-list previsto:** `docs/MATRIZ_PERMISOS_VS_MODULOS.md` (NUEVO). NO toca código de la app.
+
+#### Objetivo
+
+Mapear cada módulo visible en el sidebar (para los 5 roles: admin, coord, operaria, secretaria, técnico) contra la fuente real de gating en el código. Output: tabla `módulo → fuente de gating` que responde la pregunta "¿este ítem se controla desde el modal de Usuarios o solo desde el rol?". Identificar gaps entre la regla declarada de Jorge y la realidad del código.
+
+#### Por qué
+
+Hay un conflicto latente entre dos verdades:
+1. **Regla declarada de Jorge:** "los permisos se dan desde el módulo de usuarios donde se debe quitar o dar permisos a cada módulo dependiendo de su función" (rechazó SPRINT-117c5 sobre esta base).
+2. **Realidad observable del modal:** solo aparecen ~17 checkboxes granulares + 1 toggle de Asistente IA, mientras que el sidebar admin tiene 44 ítems y operaria 17.
+
+Si la realidad muestra que muchos módulos dependen solo del rol (gating en código), entonces:
+- La regla de Jorge no es ejecutable hoy para esos módulos.
+- Quitarle a una operaria el acceso a, por ejemplo, "Reactivación de clientes" no se puede hacer desde el modal — solo cambiándole el rol o tocando código.
+- Es importante saber esto antes de decidir si vale la pena un sprint B (expandir el modal con más checkboxes) o si la cobertura actual es suficiente.
+
+Este sprint es la auditoría que da la foto. NO toma decisiones — Jorge las toma después de leer el output.
+
+#### Criterios de aceptación
+
+- [ ] `docs/MATRIZ_PERMISOS_VS_MODULOS.md` creado con tabla principal:
+
+  | Módulo (label sidebar) | Ruta | Permiso granular en modal | Fuente de gating actual (código) | Cobertura |
+  |---|---|---|---|---|
+  | Dashboard | `/admin` | (ninguno) | rol === admin/coord/operaria/secretaria | rol-only |
+  | Órdenes | `/admin/ordenes` | `ordenesVer` | `puede('ordenesVer')` | granular |
+  | Reactivación de clientes | `/admin/reactivacion` | ??? | ??? | a determinar |
+  | ... (los ~20 módulos restantes) | | | | |
+
+- [ ] Para cada módulo, builder lee:
+  - `src/components/Sidebar.tsx` para identificar el `show:` y el rol/permiso usado.
+  - El componente de la página para ver si tiene gate adicional al render.
+  - `firestore.rules` para ver si hay rule de read/write asociada al módulo y qué la gatea.
+- [ ] Sección "Hallazgos clave" con conteo: cuántos módulos tienen permiso granular, cuántos rol-only, cuántos mixtos.
+- [ ] Sección "Módulos sin gating granular pero con sensibilidad" — listado de módulos donde sería razonable que Jorge pudiera controlarlo persona-por-persona y hoy no puede (ej: ¿debería poder restringir "Reactivación" a operarias específicas?).
+- [ ] Sección "Recomendaciones" — el builder propone (NO decide):
+  - Qué módulos vale la pena expandir al modal (si alguno).
+  - Qué módulos están bien con gating solo por rol (porque no son sensibles o porque la persona del rol siempre debe ver).
+  - Si vale la pena crear un sistema más genérico (ej: `modulosHabilitados: string[]` por usuario).
+- [ ] NO modificar código. NO modificar el modal. Solo doc.
+- [ ] Cazadores 7/7 PASS (deberían — es solo .md).
+- [ ] Commit + push.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio (consulta el historial de los archivos que va a leer).
+- NO tomar decisiones por Jorge. Solo presentar la foto + recomendaciones.
+- NO empezar a modificar el modal aunque sea tentador — eso es sprint B (no autorizado hoy).
+- Si encuentra un bug real (ej: una operaria puede ver un módulo que NO debería por bug de gating), NO arreglar en este sprint — abrir sprint follow-up acotado.
+
+#### Notas para el coordinator
+
+- Punto de partida útil: `docs/sprints/AUDITORIA_IA_2026-05-08.md` ya tiene el listado de módulos por rol. Reusar.
+- El permiso `puede(...)` del módulo Usuarios vive probablemente en `src/utils/permisos.ts` o `src/utils/index.ts`. Leerlo para entender qué checkboxes están definidos hoy en TypeScript.
+- Los checkboxes vivos en el modal de la captura de Jorge son (transcripción literal):
+  - Órdenes: `ordenesVer`, `ordenesCrear`, `ordenesModificar`, `ordenesModificarFueraGrupo`, `ordenesEliminar`, `ordenesVerEliminadas`
+  - Cotizaciones: `cotizacionesVer`, `cotizacionesCrear`, `cotizacionesModificar`, `cotizacionesAprobarPrecio`
+  - Facturas: `facturasVer`, `facturasCrear`, `facturasModificar`, `facturasEliminar`
+  - Clientes: `clientesVer`, `clientesCrear`, `clientesModificar`, `clientesEliminar`
+  - Personal: `personalVer`, `personalCrear`, `personalModificar`, `personalEliminar`
+  - Gastos: `gastosVer`, `gastosCrear`, `gastosEliminar`
+  - Otros: `rendimientoVer`, `configuracionVer`, `configuracionModificar`, `cierreDiaEjecutar`
+  - Y un toggle adicional al final del modal: `habilitarAsistenteIA`
+- Módulos del sidebar que claramente NO tienen permiso granular en esa lista (a confirmar leyendo Sidebar.tsx): Dashboard, Agenda del Día, Calendario, Calendarios públicos (Calendly), Mantenimiento, Citas por Confirmar, Reprogramaciones, Sugerencias chequeo, Conduces Pendientes, Conduces de Garantía, Equipos de Taller, Standby de Piezas, Productos, Precios, Inventario, Marketing/Campañas, Plantillas Marketing, Reactivación de clientes, Reporte de Ponches, Nómina, Comisiones, Web, Solicitudes, Usuarios y Permisos.
+- Si Jorge lee este doc y dice "expandí el modal con X módulos", eso es SPRINT-125 (sprint B nuevo, riesgo medio, toca código).
 
 ---
 

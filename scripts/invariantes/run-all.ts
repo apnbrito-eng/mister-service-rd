@@ -9,6 +9,14 @@
  * Exit codes:
  *   0 — todos los cazadores pasaron (o sólo warns).
  *   1 — al menos un cazador falló.
+ *
+ * NOTA — P-008 NO está acá por diseño:
+ *   `scripts/invariantes/check-notis-legacy-data-shape.ts` escanea DATOS LIVE
+ *   en Firestore via Admin SDK. Requiere `service-account.json` + cuota
+ *   Firebase + 10-60s de tiempo de ejecución. NO es apto para pre-commit
+ *   hook (que corre en <5s sobre archivos locales). Se invoca manualmente
+ *   con `npm run audit:notis-legacy`. Ver entrada P-008 en
+ *   `docs/PATRONES_REGRESION.md` para frecuencia recomendada.
  */
 import { check as checkUserprofileId } from './check-userprofile-id-misuse.js';
 import { check as checkRulesImmutability } from './check-rules-immutability.js';

@@ -217,6 +217,24 @@ y NO se persiste el valor en Firestore como `tecnicoId`.
 
 ---
 
+## P-008 — Notificaciones en producción con `userId`/`destinatarioId` apuntando a `personal.id` en lugar de `auth.uid` (HEALTH-CHECK DE DATOS)
+
+**Bug original:** mismo set que P-007 — 44 notis legacy afectando a 5 empleados (Yohana, Wilainy, Jorge, misterservicerd, Maria Teresa). Re-migrados en `b781f80` (2026-05-08). Postmortem: `docs/postmortems/2026-05-08-notis-legacy-multiples-empleados.md`.
+
+**Síntoma:** el destinatario NO ve sus notis en la campanita (Caso A: ni `userId` ni `destinatarioId` matchean `auth.uid`, alguno apunta a `personal.id`) o las ve pero NO puede marcarlas como leídas (Caso B: `destinatarioId == auth.uid` pero `userId != auth.uid`, rule de update rechaza).
+
+**Causa raíz (de DATOS):** notis creadas antes del fix de SPRINT-105 + posibles regresiones de código que P-007 no detectó. P-001 + P-004 + P-006 + P-007 cubren el lado del CÓDIGO (cómo prevenir nuevas escrituras malas). P-008 cubre el lado de los DATOS (cómo detectar shape problemático que ya está en producción).
+
+**Regla:** el campo de target de la lectura siempre debe ser `auth.uid`. Si el cazador detecta hits, hay 3 causas posibles: (a) alta de empleado pre-SPRINT-105 que el backfill no migró, (b) regresión en código que P-007 no detectó (allowlist mal usada, variante no contemplada), (c) re-migración previa incompleta. NO autorizar re-migración automática — reportar a Jorge y abrir sprint write acotado por uid (mismo patrón que SPRINT-118), con OK explícito en `BLOQUEOS.md`.
+
+**Cazador:** `scripts/invariantes/check-notis-legacy-data-shape.ts`. Comando: `npm run audit:notis-legacy`. Naturaleza diferente al resto: este cazador escanea DATOS LIVE en Firestore via Admin SDK — requiere `service-account.json` + cuota Firebase + ~10-60s. Por eso NO está registrado en `run-all.ts` (que corre en pre-commit cada vez) y NO se ejecuta automáticamente. Es una herramienta manual de health-check, apta para integrar como scheduled task futura.
+
+**Frecuencia recomendada:** ejecutar manualmente tras (a) cualquier alta de empleado nueva, (b) cualquier sprint que toque `notificaciones.service.ts`, (c) sospecha de regresión reportada por un empleado, (d) revisión periódica (semanal o mensual). Salida: 0 hits → exit 0; N>0 hits → lista de empleados afectados + IDs exactos + exit 1.
+
+**Allowlist:** vacía y se debe mantener vacía. No hay caso legítimo donde una noti deba tener `userId == personalDocId`.
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:
