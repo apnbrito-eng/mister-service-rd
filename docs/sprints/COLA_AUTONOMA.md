@@ -13,7 +13,7 @@
 
 ### SPRINT-119 — Postmortem-positivo del lote 117c (rediseño IA del sidebar)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-10 (postmortem-positivo creado en `docs/postmortems/2026-05-10-rediseno-ia-aprendizajes.md` — hash a registrar post-commit)
 **Prioridad:** media (sub-regla obligatoria por spec del 117c)
 **Origen:** Cowork 2026-05-10. El spec original de SPRINT-117c1..N en `BLOQUEOS.md` línea 146 dice: *"Postmortem-positivo al final — cuando los 5 sub-sprints aprobados cierren OK, archivist genera `docs/postmortems/2026-05-XX-rediseno-ia-aprendizajes.md` documentando el approach. NO es bug, pero el aprendizaje vale para futuros rediseños grandes."*
 **Riesgo:** bajo (solo doc, no toca código).
