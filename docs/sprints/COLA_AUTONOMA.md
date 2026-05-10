@@ -3,13 +3,231 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-10 por coordinator (cierre formal de SPRINT-117c6 + SPRINT-117c4 + SPRINT-117c2 con `trabaja` implícito de Jorge — **lote 117c cerrado al 100%**: 5/6 sub-sprints aprobados ejecutados, 117c5 rechazado por Jorge en OK selectivo del 2026-05-09. Cola autónoma procesable agotada: solo quedan SPRINT-112 (matriz QA por rol) y SPRINT-113 padre (QA end-to-end), ambos requieren humanos presentes — no procesables autónomos).
+**Última actualización:** 2026-05-10 por Cowork — Jorge pidió agregar 5 sprints procesables autónomos. Agregados SPRINT-119 (postmortem-positivo lote 117c, sub-regla obligatoria), SPRINT-120 (cazador P-008 health-check notis legacy, prevención bug masivo), SPRINT-121 (eliminar Catálogo legacy del routing), SPRINT-122 (correr `npm run metricas` por primera vez), SPRINT-123 (decidir destino de COWORK_CONTEXTO.md). Todos riesgo bajo o nulo, sin tocar rules ni datos.
 
-**Próximo ID disponible:** SPRINT-119
+**Próximo ID disponible:** SPRINT-124
 
 ---
 
 ## Sprints
+
+### SPRINT-119 — Postmortem-positivo del lote 117c (rediseño IA del sidebar)
+
+**Estado:** PENDIENTE
+**Prioridad:** media (sub-regla obligatoria por spec del 117c)
+**Origen:** Cowork 2026-05-10. El spec original de SPRINT-117c1..N en `BLOQUEOS.md` línea 146 dice: *"Postmortem-positivo al final — cuando los 5 sub-sprints aprobados cierren OK, archivist genera `docs/postmortems/2026-05-XX-rediseno-ia-aprendizajes.md` documentando el approach. NO es bug, pero el aprendizaje vale para futuros rediseños grandes."*
+**Riesgo:** bajo (solo doc, no toca código).
+**Touch-list previsto:** `docs/postmortems/2026-05-10-rediseno-ia-aprendizajes.md` (NUEVO).
+
+#### Objetivo
+
+Generar postmortem-positivo del lote 117c documentando qué funcionó del approach de "1 sprint dividido en 6 sub-sprints chicos con QA visual humana entre cada deploy". Output legible para futuros rediseños grandes.
+
+#### Por qué
+
+Los postmortems hoy en el repo son todos de bugs en producción. Este documenta un acierto: el approach de dividir un cambio grande de IA en sub-sprints de 1-3 archivos cada uno, procesados uno por uno con confirmación humana, evitó el riesgo de un PR gigante mal QAeado y permitió rollback granular. Vale capturarlo antes de que se olvide.
+
+#### Criterios de aceptación
+
+- [ ] Archivo `docs/postmortems/2026-05-10-rediseno-ia-aprendizajes.md` creado, NO siguiendo `_TEMPLATE.md` (que es para bugs) sino formato libre adaptado a "lecciones de un rediseño exitoso".
+- [ ] Secciones: Resumen ejecutivo (2-3 frases), Contexto (auditoría → propuesta → ejecución), Approach (6 sub-sprints, QA visual entre cada uno, rollback granular), Lo que funcionó, Lo que cambiaría la próxima vez, Recordatorios para futuros rediseños grandes (ej: "siempre dividir en sub-sprints de 1-3 archivos", "siempre QA humano entre deploys").
+- [ ] Hashes de los 5 commits del lote referenciados (759a76b, 9f71883, 9c262c9, 480532f, 9b5aee2).
+- [ ] Mencionar 117c5 RECHAZADO con motivo: separar agrupación visual de gating de permisos (que vive en `usuarios/{uid}.permisos.*`).
+- [ ] Cazadores 7/7 PASS al cerrar.
+- [ ] Commit + push.
+
+#### Restricciones / guardarrails
+
+- archivist obligatorio para generar el doc (modo POSTMORTEM adaptado).
+- NO tocar código de la app. NO tocar rules. Solo doc.
+- NO bloquear si el archivist no tiene plantilla específica para "postmortem-positivo" — formato libre OK.
+
+#### Notas para el coordinator
+
+- Estructura sugerida del doc:
+  1. **Resumen** (2-3 frases): qué se hizo, por qué se considera exitoso.
+  2. **Cronología**: 117a (auditoría) → 117b (propuesta + OK selectivo) → 117c1..c6 (ejecución).
+  3. **Decisiones humanas clave**: rechazar 117c5, mantener permisos individuales como fuente de verdad.
+  4. **Lo que funcionó**: sub-sprints chicos, QA visual entre deploys, plan de rollback explícito, archivist PRE-CHANGE en cada uno.
+  5. **Lo que cambiaríamos**: opcionales (puede que nada — entonces decirlo).
+  6. **Recordatorios** para futuros rediseños grandes.
+- El doc es para Jorge y para futuros agentes (Cowork, coordinator, builder). Tono explicativo no técnico.
+
+---
+
+### SPRINT-120 — Cazador P-008: health-check notis legacy con userId == personalDocId
+
+**Estado:** PENDIENTE
+**Prioridad:** media (prevención del bug masivo de SPRINT-118)
+**Origen:** Cowork 2026-05-10. Sugerencia documentada en `BLOQUEOS.md` SPRINT-118 línea 88: *"Considerar agregar P-XXX nuevo al catálogo: 'notificaciones legacy con userId/destinatarioId apuntando a personalDocId en lugar de auth.uid'. Cazador difícil porque es bug de datos, no de código — pero el cazador puede ser un script de health-check periódico (ej: `npm run audit:notis-legacy` que corre la auditoría general y avisa si aparecen nuevos casos)."*
+**Riesgo:** bajo (script read-only nuevo, no toca data ni rules).
+**Touch-list previsto:** `scripts/invariantes/check-notis-legacy-data-shape.ts` (NUEVO), `scripts/invariantes/run-all.ts` (registrar), `docs/PATRONES_REGRESION.md` (entrada P-008), `package.json` (script `npm run audit:notis-legacy`).
+
+#### Objetivo
+
+Crear un cazador de **datos en producción** (no de código) que corra como health-check semanal/manual y reporte si aparecen notificaciones nuevas con `userId` o `destinatarioId` apuntando a `personalDocId` en lugar de `auth.uid`. Si el cazador detecta hits, alerta a Jorge para re-migración acotada.
+
+#### Por qué
+
+El bug del SPRINT-118 afectó a 5 empleados con 44 docs invisibles. Las causas raíz (alta de empleado pre-SPRINT-105 + service que escribía notis con `userProfile.id`) ya están resueltas. Pero si en el futuro:
+- Algún empleado nuevo se da de alta sin doble doc (regresión P-004), o
+- Algún service nuevo escribe notis con un identificador indirecto que no detecta P-007,
+
+el bug puede reaparecer silenciosamente. Un health-check periódico de los DATOS detecta el shape problemático aunque el código esté limpio.
+
+#### Criterios de aceptación
+
+- [ ] Script `scripts/invariantes/check-notis-legacy-data-shape.ts`:
+  - Lee `notificaciones` colección via Admin SDK (requiere `service-account.json`).
+  - Para cada doc, compara `userId` y `destinatarioId` contra la tabla `usuarios` y la colección `personal`.
+  - Reporta hits donde el ID matchea con un `personal.id` (doc id) pero NO con un `auth.uid` válido.
+  - Output legible: nombre empleado afectado, cantidad de docs, IDs de docs.
+  - Read-only por diseño (sin `--apply`, sin escrituras).
+- [ ] Comando `npm run audit:notis-legacy` agregado a `package.json` que ejecuta el script.
+- [ ] Entrada P-008 en `docs/PATRONES_REGRESION.md` siguiendo plantilla:
+  - Síntoma: empleados no ven sus notis en la campanita después de un cambio de cuenta o alta nueva.
+  - Causa raíz: `userId/destinatarioId == personal.id` cuando debería ser `auth.uid`.
+  - Regla: el campo de target del lectura siempre debe ser `auth.uid`.
+  - Cazador: este script + cazadores P-007 y P-001 para el lado del código.
+  - Frecuencia recomendada: ejecutar manualmente tras cualquier alta de empleado o sprint que toque `notificaciones.service.ts`.
+- [ ] NO se ejecuta en pre-commit hook (consume cuota Firebase y requiere service-account). Es manual / programable como scheduled task futura.
+- [ ] Cazadores 7/7 (los actuales) siguen en PASS. P-008 es nuevo y queda registrado en `run-all.ts` con flag `read-only-data` o equivalente que lo excluye del pre-commit.
+- [ ] Commit + push.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio (toca `scripts/invariantes/`).
+- regression_guardian RECOMENDADO.
+- NO ejecutar contra prod en este sprint — solo crear el script. Jorge decide cuándo correrlo manualmente.
+- Idempotente: si se corre 100 veces, mismo output. Sin escrituras nunca.
+
+#### Notas para el coordinator
+
+- Reutilizar lógica de `scripts/auditoria-notis-legacy-todos.ts` (ya existe del SPRINT-117 A2). El cazador nuevo es esa auditoría + envoltura de "fail si hay hits" + integración con catálogo P-XXX.
+- Considerar si vale la pena hacer el cazador GENÉRICO (escanea cualquier colección con campo `userId`/`destinatarioId`) o ESPECÍFICO (solo `notificaciones`). Recomendación: empezar específico, generalizar si aparece otra colección con mismo problema.
+- Si el cazador encuentra hits al correrlo en prod, **NO autorizar re-migración automática**. Reportar a Jorge y abrir sprint write acotado por uid (mismo patrón que SPRINT-118).
+
+---
+
+### SPRINT-121 — Eliminar `/admin/productos` (Catálogo legacy) del routing
+
+**Estado:** PENDIENTE
+**Prioridad:** baja (limpieza de deuda)
+**Origen:** Cowork 2026-05-10. Decisión documentada en `BLOQUEOS.md` SPRINT-117c línea 125: *"Catálogo legacy (`/admin/productos`) en sidebar admin → ocultar en 117c1, eliminar del routing en sprint propio futuro."* SPRINT-117c1 ya ocultó del sidebar; este sprint cierra el ciclo eliminando del routing.
+**Riesgo:** bajo (ruta sin tráfico interno, sin enlaces externos conocidos).
+**Touch-list previsto:** `src/App.tsx` (eliminar `<Route path="productos" />`), `src/pages/Productos.tsx` (decidir si eliminar el archivo o dejarlo huérfano), `docs/sprints/AUDITORIA_IA_2026-05-08.md` (cross-reference si aplica).
+
+#### Objetivo
+
+Eliminar la ruta `/admin/productos` y sus referencias del routing. Si el componente `Productos.tsx` no tiene importadores fuera de App.tsx, eliminar el archivo. Si tiene (ej: un test o un import muerto), dejar el archivo pero quitar la ruta y agregar redirect 301 a `/admin/precios` (que cubre la funcionalidad real).
+
+#### Por qué
+
+`Productos` (Catálogo legacy) está duplicado con `Precios` e `Inventario`. El sidebar ya lo oculta desde SPRINT-117c1. Eliminar del routing previene que un bookmark viejo o un link de WhatsApp lleve a una pantalla muerta. Reduce surface area sin riesgo (ya está oculto hace días).
+
+#### Criterios de aceptación
+
+- [ ] `<Route path="productos" element={<Productos />} />` eliminado de `src/App.tsx` o reemplazado por `<Route path="productos" element={<Navigate to="/admin/precios" replace />} />` (redirect 301).
+- [ ] Si `Productos.tsx` no tiene importadores fuera de App.tsx (`grep -r "from.*Productos" src/`): eliminar el archivo.
+- [ ] Si tiene importadores: dejar el archivo, quitar la ruta, agregar redirect.
+- [ ] Build OK, typecheck OK, lint OK.
+- [ ] Cazadores 7/7 PASS.
+- [ ] Commit + push.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE para `App.tsx` (archivo crítico).
+- Si `Productos.tsx` tiene lógica única no replicada en `Precios.tsx` o `Inventario.tsx`: PARAR y escalar a Jorge antes de eliminar. La lógica única no se pierde, se migra al componente vivo.
+- Mantener redirect 301 si hay duda — bookmarks viejos no rompen.
+- NO tocar `firestore.rules`, NO tocar services, NO migrar datos.
+
+#### Notas para el coordinator
+
+- Antes de eliminar el archivo, hacer `grep -rn "Productos" src/` para confirmar que no hay imports activos.
+- Revisar si `Precios.tsx` tiene la funcionalidad equivalente. Si no, escalar.
+- Plan de rollback: revertir el commit. Operación 100% reversible.
+
+---
+
+### SPRINT-122 — Correr `npm run metricas` por primera vez + interpretación archivist
+
+**Estado:** PENDIENTE
+**Prioridad:** baja (visibilidad, no urgente)
+**Origen:** Cowork 2026-05-10. SPRINT-107 (commit `e395052`) creó el comando `npm run metricas` y el modo MÉTRICAS del archivist, pero nunca se corrió la primera pasada formal con interpretación cualitativa. Ahora hay base suficiente (8 sprints procesados, 7 cazadores activos, 1 postmortem real + 1 retroactivo) para una primera lectura útil.
+**Riesgo:** nulo (read-only, solo doc).
+**Touch-list previsto:** `docs/sprints/METRICAS_2026-05-10.md` (NUEVO, generado por el script).
+
+#### Objetivo
+
+Ejecutar `npm run metricas` por primera vez en HEAD actual y dejar que el archivist en modo MÉTRICAS agregue interpretación cualitativa al final del archivo generado. Output: foto del estado de salud del sistema anti-regresión a 2026-05-10.
+
+#### Por qué
+
+El sistema anti-regresión lleva ~5 días vivo (SPRINT-103 fue el 2026-05-06). Hay datos suficientes para medir: MTBF, MTTR, recurrence rate, catch rate, cazadores activos, allowlist size. Sin la lectura, las decisiones futuras (ej: "¿vale la pena agregar P-XXX?") se toman a ojo. Este sprint da la primera línea de base.
+
+#### Criterios de aceptación
+
+- [ ] `npm run metricas` ejecutado sin error.
+- [ ] `docs/sprints/METRICAS_2026-05-10.md` generado.
+- [ ] archivist (modo MÉTRICAS) agrega sección "Interpretación cualitativa" al final del archivo con:
+  - Salud general: buena | regular | preocupante.
+  - Alertas (si las hay): recurrence rate creciente, catch rate bajo, allowlist explotando, etc.
+  - Sugerencias de acción concretas (ej: "refinar cazador X", "agregar cazador para clase Y", o "ninguna acción necesaria — sistema saludable").
+- [ ] Output al chat de Jorge en formato corto: 4-6 líneas con números clave + veredicto.
+- [ ] Commit + push.
+
+#### Restricciones / guardarrails
+
+- NO modificar el script `scripts/metricas-mejora-continua.ts` salvo bug obvio (ej: division by zero). Si hay bug, fix mínimo + commit separado.
+- archivist obligatorio para la interpretación. No saltar ese paso.
+- NO ejecutar contra prod (el script lee solo metadata local de git + docs/postmortems/).
+
+#### Notas para el coordinator
+
+- Si las métricas tienen valores raros (ej: catch rate 0%), validar primero si es bug del script o realidad del sistema.
+- Considerar si vale la pena programar una scheduled task que corra `npm run metricas` semanal automático y comitee el output (sprint follow-up).
+
+---
+
+### SPRINT-123 — Decidir destino de `COWORK_CONTEXTO.md` (versionar o eliminar)
+
+**Estado:** PENDIENTE
+**Prioridad:** baja (limpieza, low-stakes)
+**Origen:** Cowork 2026-05-10. SPRINT-117a (commit `f1a89d0`) cerró con nota: *"Pendiente menor: COWORK_CONTEXTO.md untracked en la raíz — fuera de scope, decime si querés sprint propio."* Quedó untracked desde hace varios días.
+**Riesgo:** nulo (decisión binaria, sin código).
+**Touch-list previsto:** o bien `COWORK_CONTEXTO.md` (versionar) o bien `.gitignore` (eliminar/ignorar).
+
+#### Objetivo
+
+Decidir si `COWORK_CONTEXTO.md` (en raíz, untracked) va al repo o se elimina. Si va al repo, agregarlo al commit. Si no va, agregarlo a `.gitignore` y eliminar el archivo local.
+
+#### Por qué
+
+Tener archivos untracked en raíz pollucionan `git status` y confunden a futuros builders ("¿es importante? ¿lo borro? ¿lo commit?"). Resolver ahora (5 minutos) evita confusión recurrente.
+
+#### Criterios de aceptación
+
+- [ ] Coordinator lee `COWORK_CONTEXTO.md` y decide:
+  - **Opción A — versionar:** si el contenido es valioso para futuros agentes (ej: contexto de Cowork sobre el negocio que CLAUDE.md no cubre). `git add COWORK_CONTEXTO.md` + commit.
+  - **Opción B — eliminar:** si el contenido es efímero o duplicado de CLAUDE.md / README.md. Agregar `COWORK_CONTEXTO.md` a `.gitignore` + `rm COWORK_CONTEXTO.md` + commit del `.gitignore`.
+  - **Opción C — escalar:** si el contenido es ambiguo, preguntar a Jorge vía AskUserQuestion antes de decidir.
+- [ ] `git status` queda limpio post-commit (no untracked).
+- [ ] Build OK, cazadores 7/7 PASS (deberían ser unaffected — es solo un .md).
+- [ ] Commit con mensaje explícito sobre la decisión tomada.
+- [ ] Push.
+
+#### Restricciones / guardarrails
+
+- NO eliminar el archivo sin antes leerlo y resumir en el commit message qué contenía. Forensia.
+- NO duplicar contenido en CLAUDE.md sin chequear que no esté ya ahí.
+- Si la opción es C (escalar), DETENER el sprint y abrir entrada en BLOQUEOS.md.
+
+#### Notas para el coordinator
+
+- 90% probable que Opción A o B aplique sin escalar. C es para casos raros donde el contenido tiene info de negocio que solo Jorge sabe si es relevante.
+- Si va a `.gitignore`, agregar también el patrón general `COWORK_*.md` por si Cowork genera más archivos similares en el futuro (preventivo).
+
+---
 
 ### SPRINT-101 — Smoke test inicial de cazadores anti-regresión
 
