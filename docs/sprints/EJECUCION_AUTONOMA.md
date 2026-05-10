@@ -5,6 +5,55 @@
 
 ---
 
+## 2026-05-10 — `trabaja` (cierre administrativo del lote 117c): SPRINT-117c6 + 117c4 + 117c2 promovidos formalmente a COMPLETADO
+
+### Contexto
+
+Jorge disparó `trabaja` el 2026-05-10 (día nuevo). El último sprint del lote 117c (SPRINT-117c6, hash `9b5aee2`) había quedado EN_REVISION_HUMANA al cierre del 2026-05-09 esperando QA visual con los 5 roles. El `trabaja` del nuevo día funciona como OK implícito de cierre — patrón consistente con cómo se cerraron 117c1..c4 a lo largo del lote.
+
+### Scope procesado
+
+**Cierre administrativo del lote 117c (sin cambios de código):**
+- SPRINT-117c6 movido de EN_REVISION_HUMANA → COMPLETADO en `COLA_AUTONOMA.md`. Entrada activa colapsada a stub "MOVIDO A HISTÓRICO". Entrada completa preservada en sección histórico (hash `9b5aee2`).
+- SPRINT-117c4 también promovido formalmente (entrada activa quedaba EN_REVISION_HUMANA del 2026-05-09 aunque la entrada histórica ya decía COMPLETADO con "si" implícito).
+- SPRINT-117c2 también promovido formalmente (mismo patrón — entrada activa quedaba EN_REVISION_HUMANA del 2026-05-09).
+- Header de `COLA_AUTONOMA.md` actualizado a fecha 2026-05-10 + nota explícita de cola autónoma agotada.
+
+**Lote 117c cerrado al 100%** — 5/6 sub-sprints aprobados ejecutados (117c1, 117c2, 117c3, 117c4, 117c6). 117c5 fue rechazado por Jorge en el OK selectivo del 2026-05-09 (chocaba con el sistema de permisos individuales `usuarios/{uid}.permisos.*`).
+
+### Revisión de cola y bloqueos
+
+- **`docs/sprints/COLA_AUTONOMA.md`**: revisado por completo. NO hay sprints nuevos agregados por Cowork durante la noche del 2026-05-09 → 2026-05-10. Sprints PENDIENTES restantes:
+  - SPRINT-112 (schema drift + matriz permisos por rol) — requiere QA humano por rol con cada empleado presente. NO procesable autónomo según indicación explícita del coordinator.
+  - SPRINT-113 padre (UX flujo orden) — 4 de 6 criterios COMPLETADOS por sub-sprints 113a/b/c. Pendiente: QA manual end-to-end con técnico/operaria reales (humano). NO procesable autónomo.
+- **`docs/sprints/BLOQUEOS.md`**: revisado. NO hay OKs explícitos nuevos. Las entradas existentes son históricas (SPRINT-115, 117c, 118 todas ya desbloqueadas y procesadas).
+
+### Flujo ejecutado
+
+Sin builder/tester/regression_guardian/reviewer porque el cierre es puramente administrativo — sin diff de código, solo edits a docs de sprint para sincronizar estado.
+
+1. Lectura de `COLA_AUTONOMA.md` y `BLOQUEOS.md` para mapear estado real.
+2. Verificación de `git log` y `git status`: HEAD en `9b5aee2`, working tree clean. Confirma que 117c6 ya está deployado.
+3. Promoción de las 3 entradas activas EN_REVISION_HUMANA → COMPLETADO con OK humano "jorge 2026-05-10 (`trabaja` implícito)".
+4. Inserción de entrada histórica completa para 117c6 después de la de 117c4 (preservando orden cronológico).
+5. Header `COLA_AUTONOMA.md` actualizado.
+
+### Decisión deliberada — NO se generó `CIERRE_LOTE_117c_2026-05-10.md`
+
+El reporte humano sugería considerar un doc de cierre consolidado del lote. Decisión: **no crearlo**. Razón:
+
+- Cada sub-sprint del lote ya tiene su entrada histórica completa con resultado, validación, plan de rollback, hash, y trail en `EJECUCION_AUTONOMA.md`.
+- La propuesta original (`docs/sprints/PROPUESTA_IA_2026-05-08.md`) sigue siendo el doc de referencia del rediseño completo — un cierre consolidado duplicaría esa información.
+- La sub-regla CLAUDE.md "documentación viva" indica NO crear docs por inventarlos. El doc de cierre solo se justificaría si Cowork lo pidiera específicamente o si hubiera lecciones cross-sprint que no quedan capturadas en los trails individuales — no es el caso. El postmortem-positivo previsto en las restricciones globales del lote 117c (línea 1130 de `COLA_AUTONOMA.md`) sigue siendo opcional y no se considera urgente.
+
+Si Jorge o Cowork lo piden explícitamente más adelante, se genera entonces.
+
+### Resultado
+
+Cola autónoma procesable agotada. Lote 117c cerrado al 100%. Solo quedan SPRINT-112 y SPRINT-113 padre que requieren humanos presentes para QA. Sin commits de código en esta pasada — sólo cierre administrativo de docs.
+
+---
+
 ## 2026-05-09 — `trabaja` (pasada 5, último del lote 117c): cierre 117c4 + SPRINT-117c6 limpieza alias `isAdmin` (deploy 5/5 del lote 117c)
 
 ### Contexto
