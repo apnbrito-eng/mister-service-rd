@@ -1668,9 +1668,13 @@ export interface Notificacion {
   id: string;
   userId: string;
   /** @deprecated Renombrado a `userId` para alinear con rule
-   *  `notificaciones.update: resource.data.userId == auth.uid`. Solo para
-   *  lectura de docs no migrados; eliminar después del script
-   *  `migrar-notificaciones-userid.ts` y de un commit follow-up. */
+   *  `notificaciones.update: resource.data.userId == auth.uid`. Solo se lee
+   *  para tolerar docs legacy pre-migración (query dual en
+   *  `notificaciones.service.ts`). NUEVOS callers NO deben escribir este
+   *  campo — `crearNotificacion()` emite warn runtime si llega. SPRINT-127
+   *  decidió B1 (conservador): mantener typing legacy + query dual hasta
+   *  validar 0 docs huérfanos con `auditoria-notis-legacy-todos.ts`.
+   *  Cazador P-007 caza re-introducción del campo en callers. */
   destinatarioId?: string;
   destinatarioNombre?: string;
   tipo: TipoNotificacion;

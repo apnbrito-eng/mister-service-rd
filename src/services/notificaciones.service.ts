@@ -5,9 +5,38 @@ import {
 import { db } from '../firebase/config';
 import { Notificacion } from '../types';
 
+/**
+ * Crea una notificación. Garantiza el shape `userId` (auth.uid del
+ * destinatario) — la rule de Firestore `notificaciones` filtra read/update
+ * por `userId == request.auth.uid`. Si llega un objeto con el campo legacy
+ * `destinatarioId` o sin `userId`, lo log-eamos en runtime para detectarlo
+ * antes de que se manifieste como "notificación invisible".
+ *
+ * Histórico: SPRINT-127 (2026-05-10) consolidó esta validación cinturón+
+ * tirantes. El cazador determinístico P-007 ya bloquea reintroducir
+ * `destinatarioId` en callers nuevos, pero este warn cubre el caso runtime
+ * (p.ej. callers que reciben `data` por interfaz untyped).
+ */
 export async function crearNotificacion(
   data: Omit<Notificacion, 'id' | 'createdAt' | 'leida'>
 ): Promise<void> {
+  // Sanity checks runtime — no rompemos producción, solo gritamos en consola
+  // si el shape se desvía del contrato (userId requerido, destinatarioId no
+  // debe ser escrito por callers nuevos).
+  if (!data.userId || typeof data.userId !== 'string') {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[notificaciones] crearNotificacion sin userId — la notificación quedará invisible para su destinatario (rule filtra por userId == auth.uid). data=',
+      data
+    );
+  }
+  if ((data as { destinatarioId?: unknown }).destinatarioId !== undefined) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[notificaciones] crearNotificacion recibió `destinatarioId` (campo legacy deprecated). Renombrar a `userId` en el caller. data=',
+      data
+    );
+  }
   const clean = Object.fromEntries(
     Object.entries(data).filter(([, v]) => v !== undefined)
   );
@@ -21,8 +50,11 @@ export async function crearNotificacion(
 /**
  * Suscribe a notificaciones del usuario. Hace queries DUALES (`userId` y
  * `destinatarioId`) y mergea para tolerar docs pre-migración. Después de
- * correr `scripts/migrar-notificaciones-userid.ts` y un commit follow-up
- * podemos colapsar a una sola query por `userId`.
+ * SPRINT-118 (`b781f80`, 2026-05-08) todos los empleados afectados quedaron
+ * migrados a `userId`. La query legacy `destinatarioId` se mantiene como
+ * red de seguridad por si aparecen docs huérfanos no detectados; el cleanup
+ * profundo (B2) requiere correr `scripts/auditoria-notis-legacy-todos.ts`
+ * con service-account y confirmar 0 docs sin `userId` — sprint follow-up.
  */
 export function suscribirNotificaciones(
   userId: string,
