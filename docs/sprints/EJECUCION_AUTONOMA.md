@@ -5,6 +5,63 @@
 
 ---
 
+## 2026-05-10 — `trabaja` (pasada 8 del día): SPRINT-129 COMPLETADO (1/1)
+
+### Contexto
+
+Jorge disparó `trabaja` por octava vez del día. Cola tenía un único PENDIENTE: SPRINT-129 (auditoría sistémica de asignaciones técnico↔operaria + huérfanos). Origen: bug puntual reportado por Jorge — orden con técnico Aury Mon sin operaria en producción, pese a perfil de técnico con Wilainy asignada. Causa raíz diagnosticada por Cowork: derivación snapshot en `useOrdenCreateForm.ts:588-590` y `OrdenEditForm.tsx:72-77`.
+
+Sprint clasificado **read-only puro** (Admin SDK + sin `--apply`, sin mutaciones). Riesgo bajo. No requiere OK humano.
+
+### SPRINT-129 — `scripts/auditoria/asignaciones-tecnico-operaria.ts` + placeholder md
+
+- **archivist PRE-CHANGE (auto-rol coordinator):**
+  - Touch-list: 2 archivos NUEVOS. Cero archivos de la app modificados → riesgo de regresión en la app = 0.
+  - Historial relevante consultado:
+    - SPRINT-112 (commit `6aae2e5`) creó `scripts/auditoria/schema-drift.ts` — patrón de Admin SDK + `service-account.json` + read-only enforced. Reusado tal cual.
+    - SPRINT-117 (commit `ac54662`) creó `scripts/auditoria-emails-personal-vs-usuarios.ts` — mismo patrón de "auditoría primero, fix manual o sprint follow-up con OK humano". Reusado.
+    - SPRINT-118 (commits previos) hizo fix masivo `tecnicoId → uid` con script `--apply` separado. Precedente del patrón "read-only audit → `--apply` en BLOQUEOS.md".
+  - Convención de IDs verificada vía grep antes de codear:
+    - `personal.operariaId` = doc id de la operaria en `personal/` (NO uid). Confirmado en `PersonalPage.tsx:1204-1207` (dropdown setea `value=t.id`) y `nomina.service.ts:172` (filtro por `operariaId === p.id`).
+    - `ordenes_servicio.operariaId` = mismo convenio (doc id de personal).
+  - Decisión arquitectural pendiente identificada y documentada en reporte: snapshot vs reactivo en derivación de operaria (scope sprint propio).
+- **Builder (edición directa del coordinator):**
+  - Creado `scripts/auditoria/asignaciones-tecnico-operaria.ts` (610 líneas) con:
+    - Header completo: origen, IDs convention, read-only enforced, uso, 6 tipos de inconsistencia, política de privacidad.
+    - 6 tipos de inconsistencia auditados: `TECNICO_SIN_OPERARIA`, `HUERFANO_TECNICO`, `OPERARIA_HUERFANA`, `ORDEN_SIN_OPERARIA_DESINCRONIZADA`, `ORDEN_OPERARIA_DESACTUALIZADA`, `RESPONSABLE_HUERFANO`.
+    - Query `ordenes_servicio where fase not-in ['cerrado','cancelado']` con `orderBy('fase')` (requisito de Firestore para `not-in`); fallback a scan en cliente si falta índice.
+    - Sample size N=500 órdenes activas más recientes.
+    - Privacidad: helpers `partialId()` (12 chars + ellipsis) y `primerNombre()` (split en primer espacio). NO expone emails ni teléfonos.
+    - Output stdout + reescribe `docs/sprints/AUDITORIA_ASIGNACIONES_<YYYY-MM-DD>.md` con reporte completo: resumen ejecutivo, tabla por tipo, sección "Cómo arreglar manualmente" con pasos UI, sección "Si querés fix masivo" con propuesta de sprint follow-up condicional (>20 desinc), decisión arquitectural pendiente, limitaciones del script.
+  - Creado `docs/sprints/AUDITORIA_ASIGNACIONES_2026-05-10.md` (placeholder ~80 líneas) — se reescribe cuando Jorge corre el script. Documenta cómo correrlo, qué hacer después, decisión arquitectural pendiente.
+- **Tester (auto-rol):**
+  - `npm run build` PASS (typecheck + vite). Solo warning preexistente de chunk size + dynamic import inocuo (no relacionado con SPRINT-129).
+  - `npm run lint` PASS para el archivo nuevo (`npx eslint scripts/auditoria/asignaciones-tecnico-operaria.ts` → 0 warnings, 0 errors). Los 5554 errors del repo son todos preexistentes (notificaciones service, gps service, etc., scope sprints anteriores), no introducidos por SPRINT-129.
+  - `npm run check:regression` 7/7 PASS (P-001..P-007). P-008 activo via `npm run audit:notis-legacy` pero no corre en pre-commit (Admin SDK, requiere service-account.json, scope manual).
+  - **Read-only enforcement check (criterio explícito SPRINT-129):**
+    - `grep -nE "db\.collection\([^)]*\)\.(doc\([^)]*\)\.)?(set|update|delete|add)\(" scripts/auditoria/asignaciones-tecnico-operaria.ts` → sin matches. Sin mutaciones a Firestore.
+- **regression_guardian (auto-rol):** NO INVOCADO — el sprint no toca rules, services ni context. Solo scripts/ standalone. La sub-regla de invocación obligatoria aplica a archivos de la app; aquí no aplica.
+- **reviewer (auto-rol):** APPROVED.
+  - Read-only enforced (criterio 1 del sprint).
+  - NO toca `useOrdenCreateForm.ts` ni `OrdenEditForm.tsx` (criterio 2).
+  - Convención reusada de `schema-drift.ts` (criterio 3).
+  - Privacidad respetada (criterio 4: solo primer nombre + ID parcial).
+  - Manejo de fallback de índice Firestore (criterio robustez).
+  - Documenta la decisión arquitectural pendiente que NO es scope de este sprint.
+  - Documenta limitaciones del script (sample N=500 activas, asume convención `tecnicoId == personal.id`).
+- **Commit + push:** ejecutados en este paso.
+- **Devops:** no aplica — el sprint solo agrega un script + doc placeholder, no toca código de la app, no afecta el build de Vercel (los archivos en `scripts/` no se incluyen en el bundle de Vite).
+- **Jorge corre el script en su Mac** cuando quiera con `npx tsx scripts/auditoria/asignaciones-tecnico-operaria.ts` — eso reescribe el md con datos reales y permite decidir caso por caso o pedir SPRINT-130 (`--apply` con scope acotado).
+
+### Estado de la cola al cerrar pasada 8
+
+- PENDIENTES: 0
+- EN_EJECUCION: 0
+- BLOQUEADOS esperando OK: SPRINT-112-QA (humano puro, fuera de scope autónomo).
+- COMPLETADOS hoy: 8 (SPRINT-120 a SPRINT-129 — algunos absorbidos o renombrados, ver histórico).
+
+---
+
 ## 2026-05-10 — `procesa bloqueos` (pasada 7 del día): SPRINT-128 R2 COMPLETADO (1/1)
 
 ### Contexto

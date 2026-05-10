@@ -3,13 +3,15 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-10 por coordinator (autónomo `procesa bloqueos`, pasada 7) — SPRINT-128 R2 COMPLETADO. Rule `firestore.rules:378` alineada al granular `ordenesEliminar` (`userData().permisos.ordenesEliminar == true` en vez de `esAdminOCoord()`). `npm run deploy:rules` ejecutado (lock `29247a9...`). Matriz #14 marcado RESUELTO. Bloque movido a Histórico de desbloqueos en BLOQUEOS.md. SPRINT-112-QA sigue en BLOQUEOS (humano puro).
+**Última actualización:** 2026-05-10 por Cowork — Jorge reportó bug específico (orden con técnico Aury Mon mostrada sin operaria, pero el modal de Personal SÍ muestra Wilainy asignada). Diagnosticada causa raíz: la orden se creó/editó antes de la asignación de Wilainy a Aury, y el sistema "congela" la operaria en el doc de la orden al momento de crear/editar — no se re-deriva en cada render. Jorge pidió auditoría sistémica de asignaciones. Agregado SPRINT-129 (auditoría read-only de asignaciones técnico↔operaria + órdenes activas con técnico-sin-operaria pero técnico-con-operaria-en-perfil + huérfanos cruzados). Las inconsistencias por rol siguen cubiertas por matriz SPRINT-112 (162 celdas, pendiente QA humano).
+
+**Última actualización previa:** 2026-05-10 por coordinator (autónomo `procesa bloqueos`, pasada 7) — SPRINT-128 R2 COMPLETADO. Rule `firestore.rules:378` alineada al granular `ordenesEliminar` (`userData().permisos.ordenesEliminar == true` en vez de `esAdminOCoord()`). `npm run deploy:rules` ejecutado (lock `29247a9...`). Matriz #14 marcado RESUELTO. Bloque movido a Histórico de desbloqueos en BLOQUEOS.md. SPRINT-112-QA sigue en BLOQUEOS (humano puro).
 
 **Última actualización previa:** 2026-05-10 por coordinator (autónomo `trabaja`) — SPRINT-127 COMPLETADO ruta B1 (`305a9e5`, cinturón+tirantes sobre `crearNotificacion`). SPRINT-128 BLOQUEADO (mismo día): builder evaluó R1 vs R2 y concluyó que R1 es no-op (default operaria `ordenesEliminar` ya es false) y el verdadero fix es R2 (toca `firestore.rules` → ver `BLOQUEOS.md`). Hallazgo colateral: la matriz tenía documentado erróneamente "default operaria `=true`" — corregido en `docs/MATRIZ_PERMISOS.md`.
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-129
+**Próximo ID disponible:** SPRINT-130
 
 ---
 
@@ -473,6 +475,81 @@ Builder elige B1 por default si no puede garantizar B2 con grep simple. Si elige
 **Estado:** COMPLETADO 2026-05-10 (ruta R2). Rule `firestore.rules:378` ahora gateada por `userData().permisos.ordenesEliminar == true` (antes `esAdminOCoord()`). `npm run deploy:rules` ejecutado (lock `29247a9...`). Matriz `docs/MATRIZ_PERMISOS.md` actualizada — #14 marcado como RESUELTO. Bloque movido a "Histórico de desbloqueos" en `BLOQUEOS.md`.
 
 Conservado acá para histórico. El spec completo (R1 vs R2, criterios de aceptación, restricciones) está preservado en la entrada de `BLOQUEOS.md` que se movió al histórico. El comando exacto del fix está en `EJECUCION_AUTONOMA.md` sección 2026-05-10 pasada 7.
+
+---
+
+### SPRINT-129 — Auditoría sistémica de asignaciones técnico↔operaria + huérfanos
+
+**Estado:** COMPLETADO 2026-05-10 (script + placeholder commiteados. Jorge lo corre en su Mac con `npx tsx scripts/auditoria/asignaciones-tecnico-operaria.ts` para que se reescriba `docs/sprints/AUDITORIA_ASIGNACIONES_2026-05-10.md` con datos reales. Read-only enforced — verificado por grep negativo, sin `.set/.update/.delete` sobre Firestore. Cazadores 7/7 PASS + P-008 activo via `npm run audit:notis-legacy`.)
+**Prioridad:** alta (origen bug en producción reportado por Jorge 2026-05-10; vector más amplio probable)
+**Origen:** Jorge 2026-05-10 vía Cowork. Reportó orden con técnico Aury Mon mostrada sin operaria, pero el modal de Editar Personal SÍ tiene a Wilainy asignada como "Operaria a cargo". Causa raíz diagnosticada por Cowork con Explore: el sistema deriva la operaria al CREAR/EDITAR la orden (`useOrdenCreateForm.ts:588-590` y `OrdenEditForm.tsx:72-77`), leyendo `personal[tecnicoId].operariaNombre`. Si la orden se creó cuando el técnico aún no tenía operaria asignada, queda permanentemente con `operariaNombre: undefined`. Posteriormente asignar la operaria al técnico no actualiza órdenes viejas. Jorge pidió "revisar fallas de asignación y operaria reglas y roles de todo el sistema" — este sprint cubre la parte detectable por script read-only (asignaciones + huérfanos). Reglas/roles ya cubiertos por SPRINT-112 + SPRINT-124 + SPRINT-128 (último resuelto hoy).
+**Riesgo:** bajo (read-only, sin --apply, sin mutaciones a Firestore — solo lectura + reporte).
+**Touch-list previsto:** `scripts/auditoria/asignaciones-tecnico-operaria.ts` (NUEVO), `docs/sprints/AUDITORIA_ASIGNACIONES_2026-05-10.md` (NUEVO). NO toca código de la app.
+
+#### Objetivo
+
+Generar reporte sistémico que liste todas las inconsistencias detectables por script en producción relacionadas con asignaciones técnico↔operaria. Output legible por Jorge en md. NO arregla datos — solo los lista. Los fixes salen como sprints follow-up por Jorge si quiere arreglar masivamente.
+
+#### Por qué
+
+El bug puntual de Aury Mon (1 orden) es la punta del iceberg. Probablemente hay:
+- Otros técnicos cuyas órdenes viejas quedaron sin operaria por el mismo timing.
+- Técnicos sin operaria asignada en `personal/` (caso huérfano del lado opuesto al de Aury).
+- `operariaId` en perfil de técnico apuntando a un uid que ya no existe o cuyo rol no es `operaria` (mismatch tras cambios de empleados).
+- Operarias que ningún técnico tiene apuntada (operaria suelta).
+- Posibles inconsistencias en el modelo de `responsableId` también (revisar como bonus).
+
+Sin esta auditoría no se sabe el alcance real. Una vez con el reporte, Jorge decide caso por caso.
+
+#### Criterios de aceptación
+
+**Parte A — Script de auditoría:**
+- [ ] `scripts/auditoria/asignaciones-tecnico-operaria.ts` creado, Admin SDK con `service-account.json`. Read-only puro (sin `.set`, `.update`, `.delete`).
+- [ ] Para cada técnico (`personal where rol == 'tecnico'`):
+  - Reportar si tiene `operariaId` poblado.
+  - Si lo tiene, verificar que el doc apuntado existe en `personal/` Y que su rol es `operaria` Y que está activo. Si no, marcar como **inconsistencia tipo HUERFANO_TECNICO** (técnico apunta a una operaria que no existe o no es operaria).
+  - Si NO tiene `operariaId`, marcar como **inconsistencia tipo TECNICO_SIN_OPERARIA**.
+- [ ] Para cada operaria (`personal where rol == 'operaria'`):
+  - Contar cuántos técnicos la apuntan vía `operariaId`.
+  - Si ninguno, marcar como **inconsistencia tipo OPERARIA_HUERFANA** (operaria suelta, ningún técnico asignado).
+- [ ] Para órdenes activas (`ordenes_servicio where fase != 'cerrado' and fase != 'cancelado'`, sample N=500 más recientes):
+  - Si la orden tiene `tecnicoId` set Y el técnico actualmente tiene `operariaId` en perfil Y la orden NO tiene `operariaNombre` set → marcar como **inconsistencia tipo ORDEN_SIN_OPERARIA_DESINCRONIZADA**. Listar `ordenNumero`, `clienteNombre`, `tecnicoNombre`, operaria-actual-del-tecnico, fecha de creación de la orden.
+- [ ] Bonus: para órdenes activas con `operariaNombre` SÍ set pero el techo actualmente tiene una operaria DISTINTA en su perfil → marcar como **inconsistencia tipo ORDEN_OPERARIA_DESACTUALIZADA** (orden quedó con operaria histórica, el técnico cambió de pareja). Esto NO necesariamente es bug — puede ser correcto histórico. Reportar para visibilidad.
+- [ ] Bonus: revisar campo `responsableId` en órdenes — si está set pero el uid no existe en personal o no es admin/coord, marcar como **inconsistencia tipo RESPONSABLE_HUERFANO**.
+
+**Parte B — Reporte md:**
+- [ ] `docs/sprints/AUDITORIA_ASIGNACIONES_2026-05-10.md` (placeholder si no se corre el script en la pasada del coordinator, o llenado si se corre).
+- [ ] Estructura:
+  - Resumen ejecutivo: conteos por tipo de inconsistencia.
+  - Sección por tipo con tabla detallada (uid/id, nombre, descripción del problema, sugerencia de fix manual).
+  - Sección "Cómo arreglar manualmente" con pasos UI: ej. para TECNICO_SIN_OPERARIA → abrir modal Editar Personal, asignar operaria, guardar; para ORDEN_SIN_OPERARIA_DESINCRONIZADA → abrir orden, cambiar técnico a otro y volver al original, guardar.
+  - Sección "Si querés fix masivo" → propone sprint follow-up (SPRINT-130 hipotético) que escribiría un script `--apply` por uid/ordenId acotado, con OK explícito de Jorge en BLOQUEOS.md. NO crear ese sprint en esta pasada.
+- [ ] NO mostrar datos sensibles (emails completos, teléfonos) en el reporte. Usar primer nombre + ID parcial (`Aury (HGkVoY...)`).
+
+**Global:**
+- [ ] archivist PRE-CHANGE obligatorio (script toca Admin SDK + lee personal — categorías "datos en prod").
+- [ ] regression_guardian opcional (no toca código de la app, solo script standalone).
+- [ ] Read-only confirmado por grep: el único método de mutación que puede aparecer es `Map.set` en memoria. Si aparece `.set(`, `.update(`, `.delete(` sobre `db.collection(...)` o `db.doc(...)`, el sprint pausa y reporta.
+- [ ] `npm run build` + `npm run lint` PASS (el script no debería romper nada — está en `scripts/` no en `src/`).
+- [ ] Cazadores 8/8 PASS.
+- [ ] Commit + push con mensaje "feat(auditoria): SPRINT-129 script asignaciones técnico↔operaria + reporte md placeholder".
+- [ ] NO correr el script contra prod desde el coordinator. Eso lo hace Jorge en su Mac con `npx tsx scripts/auditoria/asignaciones-tecnico-operaria.ts`.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio.
+- Read-only. Si el builder encuentra tentación de incluir `--apply` para "fix mientras estamos", PARAR y reportar. El --apply es sprint separado con OK explícito.
+- NO tocar el flujo de derivación en `useOrdenCreateForm.ts` ni `OrdenEditForm.tsx`. Eso podría ser otro sprint si Jorge quiere comportamiento dinámico (display reactivo vs snapshot histórico) — decisión arquitectural que requiere su input.
+- Si el script encuentra >20 órdenes con `ORDEN_SIN_OPERARIA_DESINCRONIZADA`, reportar en el resumen "esto es masivo, considerar sprint de fix por lote". Si encuentra <5, sugerir fix manual UI uno por uno.
+- NO incluir verificación de rules/roles en este sprint — eso está en `docs/MATRIZ_PERMISOS.md` (SPRINT-112) y `docs/MATRIZ_PERMISOS_VS_MODULOS.md` (SPRINT-124). El alcance de este sprint es **datos**, no permisos.
+
+#### Notas para el coordinator
+
+- Convención de scripts: el directorio `scripts/auditoria/` ya existe (creado por SPRINT-112 con `schema-drift.ts`). Reusar la convención de inicialización del Admin SDK desde ese script.
+- Comando para Jorge al cerrar: `npx tsx scripts/auditoria/asignaciones-tecnico-operaria.ts`. Output a stdout + escribe el archivo md al final.
+- Si Jorge corre el script y reporta el output, el sprint follow-up potencial (`--apply` para rellenar órdenes desincronizadas) puede ir a BLOQUEOS.md con scope acotado por IDs. Patrón ya usado en SPRINT-118.
+- Bug original reportado por Jorge: orden con técnico Aury Mon (uid del personal probablemente similar a otros técnicos de SPRINT-118) sin operaria asignada. La operaria correcta según modal de Personal es Wilainy. Este caso DEBE aparecer en el output como ORDEN_SIN_OPERARIA_DESINCRONIZADA.
+- Cross-check post-script: si aparece TECNICO_SIN_OPERARIA para alguien que Jorge cree que SÍ tiene operaria, hay bug en el modal de Editar Personal (no persiste el campo). Eso sería otro sprint.
 
 ---
 
