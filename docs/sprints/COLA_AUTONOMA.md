@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-10 por Cowork — Jorge pidió agregar 6 sprints procesables autónomos. SPRINT-119 (postmortem-positivo lote 117c), SPRINT-120 (cazador P-008 health-check notis legacy), SPRINT-121 (eliminar Catálogo legacy del routing), SPRINT-122 (correr `npm run metricas` primera vez), SPRINT-123 (decidir destino de COWORK_CONTEXTO.md), SPRINT-124 (auditoría cobertura de permisos granulares vs módulos — Jorge detectó al revisar el modal Editar Usuario que solo cubre 7 de ~20 módulos del sidebar). Todos riesgo bajo o nulo, sin tocar rules ni datos.
+**Última actualización:** 2026-05-10 por coordinator — pasada `trabaja` procesó SPRINT-119 a 123 (5/5 COMPLETADOS). Hashes: 55f55e3 (119), a61022e (120), 03e24df (121), ee4cecc (122), ba5180a (123). SPRINT-124 fue agregado por Cowork durante esta pasada y queda PENDIENTE para próxima ejecución de `trabaja` — el usuario explícitamente solo pidió procesar 119-123 en el pedido inicial. Pendientes humano-presenciales: SPRINT-100, SPRINT-112, SPRINT-113 padre.
 
 **Próximo ID disponible:** SPRINT-125
 
@@ -191,7 +191,7 @@ El sistema anti-regresión lleva ~5 días vivo (SPRINT-103 fue el 2026-05-06). H
 
 ### SPRINT-123 — Decidir destino de `COWORK_CONTEXTO.md` (versionar o eliminar)
 
-**Estado:** COMPLETADO 2026-05-10 (DECISIÓN YA APLICADA: versionado en commit `0181778` del 2026-05-08, antes de que se escribiera este sprint. `git status` limpio, sin cambios pendientes. Sin acción adicional necesaria — sprint cierra como no-op administrativo. Hash a registrar post-commit)
+**Estado:** COMPLETADO 2026-05-10 (DECISIÓN YA APLICADA: versionado en commit `0181778` del 2026-05-08, antes de que se escribiera este sprint. `git status` limpio, sin cambios pendientes. Sin acción adicional necesaria — sprint cierra como no-op administrativo. Hash `ba5180a`)
 **Prioridad:** baja (limpieza, low-stakes)
 **Origen:** Cowork 2026-05-10. SPRINT-117a (commit `f1a89d0`) cerró con nota: *"Pendiente menor: COWORK_CONTEXTO.md untracked en la raíz — fuera de scope, decime si querés sprint propio."* Quedó untracked desde hace varios días.
 **Riesgo:** nulo (decisión binaria, sin código).

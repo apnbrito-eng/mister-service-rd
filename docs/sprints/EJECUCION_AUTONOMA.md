@@ -5,6 +5,53 @@
 
 ---
 
+## 2026-05-10 — `trabaja` (pasada 2 del día): SPRINT-119 a 123 procesados (5/5 COMPLETADOS, sin bloqueos)
+
+### Contexto
+
+Jorge disparó `trabaja` por segunda vez en el día, después de que Cowork agregó 5 sprints procesables autónomos a la cola (commit `e019ea0`). Los 5 sprints estaban catalogados como riesgo bajo o nulo, sin tocar `firestore.rules`, sin migraciones masivas, sin endpoints públicos.
+
+### Scope procesado
+
+5 sprints en orden:
+
+1. **SPRINT-119** — Postmortem-positivo del lote 117c. Hash `55f55e3`. Solo doc.
+2. **SPRINT-120** — Cazador P-008 health-check notis legacy (data-live). Hash `a61022e`. Script nuevo + entrada P-008 + comando `npm run audit:notis-legacy`.
+3. **SPRINT-121** — Eliminar `Productos.tsx` (Catálogo legacy) del routing. Hash `03e24df`. `src/pages/Productos.tsx` eliminado + redirect 301 a `/admin/precios` en App.tsx.
+4. **SPRINT-122** — Primera lectura formal de `npm run metricas`. Hash `ee4cecc`. Doc `METRICAS_2026-05-10.md` generado + interpretación cualitativa archivist.
+5. **SPRINT-123** — Decidir destino de `COWORK_CONTEXTO.md`. Hash `ba5180a`. Cerrado como **no-op administrativo** — la decisión "versionar" ya estaba aplicada en commit `0181778` del 2026-05-08, antes de que se escribiera el sprint.
+
+### Flujo ejecutado por sprint
+
+Para cada uno: archivist PRE-CHANGE → builder (manual, ediciones directas) → tester (typecheck + lint + `npm run check:regression` 7/7 PASS) → reviewer/regression_guardian aplicable solo donde el sprint tocaba código (SPRINT-120 y SPRINT-121). Cazadores P-001..P-007 en pre-commit nunca gritaron — 0 hits constantes durante toda la pasada.
+
+### Decisiones notables del coordinator
+
+- **SPRINT-120**: el sprint pidió "P-008 registrado en `run-all.ts` con flag `read-only-data` o equivalente que lo excluye del pre-commit". Interpretado como: NO agregar P-008 a `run-all.ts` (que corre en pre-commit cada vez) sino documentar en su header por qué queda fuera. Se agregó comentario explicativo al header de `run-all.ts` indicando que P-008 existe pero requiere Admin SDK + Firebase y se invoca manualmente. Comando `npm run audit:notis-legacy` cubre el lado de ejecución.
+- **SPRINT-121**: el sprint mencionó `Precios.tsx`, pero el archivo real se llama `PreciosServicios.tsx`. La funcionalidad legacy de `Productos.tsx` se cubre entre `PreciosServicios.tsx` (colección `precios_servicios`) e `Inventario.tsx` (colección `piezas_inventario`). La categoría `accesorio` del modelo viejo no tiene módulo activo dedicado, pero el sidebar lo había ocultado desde SPRINT-117c1 — riesgo asumido. Se eligió la opción "redirect 301 + eliminar archivo huérfano" en lugar de eliminación pura para preservar bookmarks viejos.
+- **SPRINT-122**: archivist en modo MÉTRICAS agregó interpretación cualitativa al `METRICAS_2026-05-10.md`. Veredicto: salud BUENA, recurrence rate 0%, ninguna acción urgente. MTBF de 1.0 d es engañoso — pesa la racha mala 2026-05-07/08 ya superada. Recomendación de re-leer la métrica en 7 días.
+- **SPRINT-123**: cerrado como no-op porque la decisión "versionar" ya estaba aplicada hace 2 días. La cola autónoma puede contener sprints obsoletos cuando se procesa con delay — patrón identificado y lección anotada en el commit message.
+
+### SPRINT-124 — llegó durante la pasada, queda para próxima
+
+Durante mi pasada, Cowork agregó SPRINT-124 a la cola (auditoría de cobertura de permisos granulares vs módulos del sidebar — alta prioridad, riesgo bajo, ~20 módulos × 5 roles × 3 capas). El usuario explícitamente solo listó SPRINT-119 a 123 en el pedido inicial. Decisión conservadora: **NO procesar SPRINT-124 en esta pasada** — queda PENDIENTE para próxima ejecución de `trabaja`. Razón: scope grande de auditoría que merece su propia sesión + respeto del scope explícito del usuario.
+
+### Cazadores y salud del sistema
+
+- Pre-commit hook corrió en cada commit: 7/7 PASS, 0 hits, consistentemente. P-008 nuevo (creado en SPRINT-120) queda registrado en el catálogo pero NO se ejecuta en pre-commit por requerir Firebase Admin SDK.
+- Total cazadores activos al cierre de la pasada: **8** (P-001 a P-008).
+- Allowlist size: 17 (sin cambios durante la pasada).
+
+### Bloqueos
+
+Ninguno introducido. `docs/sprints/BLOQUEOS.md` sin OKs nuevos pendientes ni entradas nuevas.
+
+### Resultado
+
+5 commits pusheados a `main`: `55f55e3`, `a61022e`, `03e24df`, `ee4cecc`, `ba5180a`. Cola autónoma procesable agotada (SPRINT-124 nuevo queda para próxima pasada). Tiempo total estimado: ~25 minutos.
+
+---
+
 ## 2026-05-10 — `trabaja` (cierre administrativo del lote 117c): SPRINT-117c6 + 117c4 + 117c2 promovidos formalmente a COMPLETADO
 
 ### Contexto
