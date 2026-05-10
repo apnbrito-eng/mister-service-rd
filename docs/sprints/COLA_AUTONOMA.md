@@ -111,7 +111,7 @@ el bug puede reaparecer silenciosamente. Un health-check periódico de los DATOS
 
 ### SPRINT-121 — Eliminar `/admin/productos` (Catálogo legacy) del routing
 
-**Estado:** COMPLETADO 2026-05-10 (`src/pages/Productos.tsx` eliminado, ruta `/admin/productos` reemplazada por redirect 301 a `/admin/precios` — hash a registrar post-commit)
+**Estado:** COMPLETADO 2026-05-10 (`src/pages/Productos.tsx` eliminado, ruta `/admin/productos` reemplazada por redirect 301 a `/admin/precios`, hash `03e24df`)
 **Prioridad:** baja (limpieza de deuda)
 **Origen:** Cowork 2026-05-10. Decisión documentada en `BLOQUEOS.md` SPRINT-117c línea 125: *"Catálogo legacy (`/admin/productos`) en sidebar admin → ocultar en 117c1, eliminar del routing en sprint propio futuro."* SPRINT-117c1 ya ocultó del sidebar; este sprint cierra el ciclo eliminando del routing.
 **Riesgo:** bajo (ruta sin tráfico interno, sin enlaces externos conocidos).
@@ -151,7 +151,7 @@ Eliminar la ruta `/admin/productos` y sus referencias del routing. Si el compone
 
 ### SPRINT-122 — Correr `npm run metricas` por primera vez + interpretación archivist
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-10 (`docs/sprints/METRICAS_2026-05-10.md` generado + interpretación cualitativa agregada por archivist — hash a registrar post-commit. Veredicto: salud BUENA, recurrence rate 0%, ninguna acción urgente)
 **Prioridad:** baja (visibilidad, no urgente)
 **Origen:** Cowork 2026-05-10. SPRINT-107 (commit `e395052`) creó el comando `npm run metricas` y el modo MÉTRICAS del archivist, pero nunca se corrió la primera pasada formal con interpretación cualitativa. Ahora hay base suficiente (8 sprints procesados, 7 cazadores activos, 1 postmortem real + 1 retroactivo) para una primera lectura útil.
 **Riesgo:** nulo (read-only, solo doc).
