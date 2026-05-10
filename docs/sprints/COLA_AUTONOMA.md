@@ -1039,7 +1039,7 @@ Auditar TODOS los campos del esquema que guardan un ID de un empleado y verifica
 
 ### SPRINT-112 — Schema drift y matriz de permisos por rol
 
-**Estado:** COMPLETADO 2026-05-10 fase documental (`docs/MATRIZ_PERMISOS.md` con 27 flujos × 6 roles + script `scripts/auditoria/schema-drift.ts` read-only + comando `npm run audit:schema-drift`. Smoke test contra prod retornó 65 drift+ y 157 drift- — herramienta funciona. Componente humano — QA manual de las 162 celdas — movido a `BLOQUEOS.md` como SPRINT-112-QA.)
+**Estado:** COMPLETADO 2026-05-10 fase documental, hash `6aae2e5` (`docs/MATRIZ_PERMISOS.md` con 27 flujos × 6 roles + script `scripts/auditoria/schema-drift.ts` read-only + comando `npm run audit:schema-drift`. Smoke test contra prod retornó 65 drift+ y 157 drift- — herramienta funciona. Componente humano — QA manual de las 162 celdas — movido a `BLOQUEOS.md` como SPRINT-112-QA.)
 **Prioridad:** media (auditoría pedida por Jorge — la última)
 **Origen:** Auditoría completa solicitada por Jorge tras hotfix de Aury.
 **Riesgo:** bajo-medio (mayormente documentación + tests manuales)
