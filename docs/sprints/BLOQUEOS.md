@@ -10,6 +10,48 @@
 
 ---
 
+## SPRINT-132-QA — Validación funcional: CREATE de orden con técnico que tiene operariaId
+
+**Tipo:** QA humana **no bloqueante** (registro de pendiente, no impide cierre del sprint).
+**Estado:** PENDIENTE VALIDACIÓN HUMANA
+**Origen:** SPRINT-132 (commit `43a2087`, 2026-05-11) corrigió 12 sitios de READ + 4 de WRITE upstream con vector P-006 (`find(p.id === tecnicoId)` post-c4be345 retornaba undefined). Cazadores 7/7 PASS, build OK, lint OK, deploy verificado. PERO el sprint pide validación manual del flujo CREATE — el coordinator no puede ejecutar UI real.
+
+**Caso concreto a validar (idealmente Jorge en su Mac o en producción):**
+
+1. **Caso primary — derivación de operaria al crear orden:**
+   - Verificar que el técnico **Aury Mon** tenga **Wilainy** asignada como `operariaId` en su perfil (en `/admin/personal`, editar Aury Mon y confirmar el campo "Operaria" en el bloque de Grupos).
+   - Si Aury NO tiene operaria asignada → primero asignar Wilainy desde la UI de Personal.
+   - Ir a `/admin/ordenes` → "Nueva orden".
+   - Seleccionar un cliente existente.
+   - En el selector de técnico, elegir **Aury Mon**.
+   - Llenar resto de campos mínimos (equipo, dirección, fecha).
+   - Guardar la orden.
+   - **Resultado esperado:** la orden creada debe mostrar **Operaria: Wilainy** desde el inicio (NO `—`, NO vacío). Verificar en la vista de la orden recién creada y en la tabla de órdenes.
+   - **Si falla:** capturar pantalla + console del browser + reportar a Cowork. Esto sería regresión del fix.
+
+2. **Caso secondary — edit de orden post-fix:**
+   - Abrir la orden de Aury Mon recién creada.
+   - Cambiar el técnico a otro que tenga distinta operariaId.
+   - **Resultado esperado:** banner amber "Esta orden pasará al grupo de {nueva operaria}" debe aparecer.
+   - Guardar. Verificar que la orden ahora muestra la nueva operaria.
+
+3. **Caso terciario — reasignación drag&drop en mapa:**
+   - Ir a `/admin/mapa` (Mapa de rutas).
+   - Drag&drop de un pin de orden a otro técnico (en la lista de técnicos del sidebar derecho).
+   - Confirmar la reasignación en el modal.
+   - **Resultado esperado:** la orden queda con `tecnicoId == auth.uid` del nuevo técnico (verificable porque el nuevo técnico puede ejecutar acciones en la orden, ej: "Iniciar chequeo"). Antes del fix, escribía `tecnicoId == personal.id` y rompía rules.
+
+4. **Caso colateral — display de comisiones / cierre día / facturas:**
+   - Abrir `/admin/comisiones` agrupado por técnico: verificar que cada técnico muestra su color asignado (no el default `#0f3460`) para órdenes nuevas.
+   - Abrir `/admin/cierre-dia`: idem.
+   - Abrir una factura con items asignados a técnico: el avatar/nombre debe aparecer correcto.
+
+**Si todos pasan:** Jorge edita esta sección con `OK: jorge YYYY-MM-DD HH:MM — QA validado` y la archivamos.
+
+**Si algún caso falla:** reportar a Cowork con captura + console error. Cowork abrirá SPRINT-132-FIX o investigará caso específico.
+
+---
+
 ## SPRINT-131-QA — Validación visual: cards de orden en iPad portrait
 
 **Tipo:** QA humana **no bloqueante** (registro de pendiente, no impide cierre del sprint).

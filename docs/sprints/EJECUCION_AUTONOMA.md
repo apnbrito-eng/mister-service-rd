@@ -5,6 +5,90 @@
 
 ---
 
+## 2026-05-11 — `trabaja` (pasada 3 del día): SPRINT-132 COMPLETADO (1/1)
+
+### Contexto
+
+Jorge disparó `trabaja` por tercera vez en el día. Sprint en cola: SPRINT-132 (bug sistémico `find(p.id === tecnicoId)` post-c4be345 en 14 sitios + cazador P-006 extendido). Origen: el propio coordinator reportó como hallazgo colateral al cerrar SPRINT-130 que `OrdenEditForm.tsx:77` no derivaba operaria correctamente. Cowork verificó con grep y descubrió **14 sitios** con el mismo patrón, incluido el CREATE flow en `useOrdenCreateForm.ts:588` — el bug explica el caso Aury Mon de raíz (no solo timing como diagnosticó SPRINT-129).
+
+Sprint clasificado **autónomo completo** (cambios uniformes a lookups + extensión cazador + doc; NO toca rules, NO migra datos, NO toca integraciones).
+
+### SPRINT-132 — Bug sistémico .find(p.id === tecnicoId) post-c4be345
+
+- **archivist PRE-CHANGE (auto-rol coordinator):**
+  - Touch-list verificado vía grep regex `\.find\(.*\.id === .*Id\)`: confirmé los 14 sitios + un hallazgo adicional en `MapaRutas.tsx:539` (handleConfirmarReasignar) y `MapaRutas.tsx:1183` (modal confirmación) — esos también requieren fix porque el flujo de drag&drop escribe `tecnicoId` directamente.
+  - Historial git de archivos críticos:
+    - `useOrdenCreateForm.ts:588` agregado en `08b675e` (Fase 2 grupos operaria-técnico, derivación automática). El `.find()` ahí es el core de derivación; falla post-c4be345.
+    - `OrdenEditForm.tsx:77` agregado en `9e4e298` (edit form completo). Banner amber "cambia de grupo" depende del `.find()`.
+    - `MapaRutas.tsx` editado en `333ec00`, `f531d75` (drag&drop reasignación), `669c4d3` (filtro zona). Líneas 539/610/917/1026/1179 son lookups; **líneas 558 y 1079 son WRITES upstream** que reintroducen P-006 original (no cazados por cazador antiguo).
+  - Postmortems relevantes: `2026-05-07-iniciar-chequeo-permission-denied.md` (origen del problema c4be345). El postmortem cubrió WRITES en dropdowns pero NO READS via `.find()` — eso es exactamente este sprint.
+  - Gotcha "cleanup en componentes de wizard requiere QA manual": touch-list incluye 3 archivos de wizard (useOrdenCreateForm, OrdenEditForm, MapaRutas). QA humano obligatorio post-deploy. Declarado SPRINT-132-QA en BLOQUEOS.md.
+  - **Conclusión:** sin riesgo conocido más allá del QA manual de creación de orden. Sprint sigue.
+
+- **Builder (edición directa del coordinator):**
+  - **Fase A — 12 sitios de READ corregidos** con patrón uniforme `find(X => (X.uid || X.id) === Y)`:
+    - `src/hooks/useOrdenCreateForm.ts:588` (CREATE CRÍTICO — explica caso Aury Mon de raíz)
+    - `src/pages/Ordenes.tsx:468` (edit dentro de página)
+    - `src/pages/MapaRutas.tsx:539, 610, 917, 1026, 1183` (5 lookups: reasignar + edit + 2 displays de pin + modal confirmación)
+    - `src/components/ordenes/OrdenEditForm.tsx:77` (banner cambia grupo)
+    - `src/components/ordenes/ModalEditarOrdenAdmin.tsx:247`
+    - `src/pages/Configuracion.tsx:444`, `Comisiones.tsx:384`, `CierreDia.tsx:315`
+    - `src/components/facturas/FacturaItemsEditor.tsx:176`, `FacturaItemDetallesModal.tsx:167`
+    - `src/pages/PersonalPage.tsx:690, 725` (lookup en transferencia)
+  - **Hallazgos adicionales — 4 WRITES upstream con vector P-006 original** (no detectados por cazador antiguo porque NO eran `<option>` simples):
+    - `src/pages/MapaRutas.tsx:558` — payload `tecnicoId: destino.id` → `destino.uid || destino.id` (drag&drop reasignación)
+    - `src/pages/MapaRutas.tsx:1079` — `data-tecnico-id={t.id}` → `{t.uid || t.id}` (atributo DOM que se propaga al write)
+    - `src/pages/PersonalPage.tsx:1453, 1510` — `<option value={d.id}>` en dropdowns de transferencia → `{d.uid || d.id}`
+    - `src/pages/PersonalPage.tsx:699, 705` — `payload.tecnicoId/responsableId = destino.id` → `destino.uid || destino.id` (transferencia masiva al eliminar técnico, escribe a múltiples órdenes)
+  - **Decisión sobre `Avances.tsx:109`:** declarado `// @safe-tecnicoid-id:` con justificación — `form.personalId` proviene del dropdown UI local simétrico y `/avances` NO se gatea por `auth.uid` en `firestore.rules` (verificado con grep contra rules: solo gateo por rol via `esStaffOficina()`). Patrón intencional, sin riesgo.
+  - **Fase B — Cazador P-006 extendido:**
+    - `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` ahora escanea `.ts` además de `.tsx` (necesario porque `useOrdenCreateForm.ts` es `.ts`).
+    - Variante 2 agregada: regex `\.find\(\s*(\w+)\s*=>\s*\1\.id\s*===?\s*([\w.[\]]+)\s*\)`. Filtra por (a) identificador corto de personal (mismo set `t`, `p`, `tec`, etc.) y (b) sufijo de campo conocido (`tecnicoId`, `operariaId`, `ayudanteId`, `responsableId`, `secretariaId`, `tecnicoDestinoId`).
+    - Test fixture verificó detección del patrón antiguo (cazador retornó FAIL con hit como esperado; luego se removió el fixture y volvió a PASS).
+  - **Fase C — Documentación:** `docs/PATRONES_REGRESION.md` entrada P-006 expandida con variante 2 + lista de 14 sitios fixed.
+
+- **Tester (typecheck + lint + cazadores):**
+  - `npm run build` PASS (tsc + vite, 4.58s).
+  - `npx eslint --max-warnings 0` sobre archivos tocados: EXIT 0.
+  - `npm run check:regression` (P-001 a P-007): **7/7 PASS, 0 hits.**
+  - **Nota sobre cuenta de cazadores:** el sprint pedía "8/8 PASS" pero P-008 (`check-notis-legacy-data-shape.ts`) NO está en `run-all.ts` por diseño — escanea datos live de Firestore via Admin SDK, requiere `service-account.json` y cuota, corre como `npm run audit:notis-legacy` manual. La cuenta correcta de cazadores ejecutables en pre-commit es 7.
+
+- **regression_guardian (auto-rol coordinator):**
+  - P-003 cross-collection: PersonalPage.tsx `handleConfirmarEliminar` hace múltiples `updateDoc` + `deleteDoc` sobre 2 colecciones sin `runTransaction`. **Bug preexistente** — no introducido en este sprint, no cazado por P-003 actual porque vive en `src/pages/` (P-003 escanea `src/services/`). Documentado para sprint follow-up futuro.
+  - P-006: sprint es exactamente esto. APPROVED.
+  - Resto de patrones: no afectados.
+  - Riesgo de doble-match en `(uid || id) === X`: descartado — `auth.uid` (28+ chars Firebase v1) y doc id de Firestore (20 chars) son estructuralmente distintos, no colisionan.
+  - APPROVED.
+
+- **Reviewer (auto-rol coordinator):**
+  - Lectura del diff: 15 archivos, 371 inserciones / 119 eliminaciones.
+  - Cambios uniformes en patrón. Comentarios `// SPRINT-132:` explican cada fix.
+  - `MapaRutas.tsx:518` (`tecnicoIdDestino === orden.tecnicoId`) sigue siendo correcto post-fix porque ambos lados son ahora auth.uid.
+  - APPROVED.
+
+- **Commit + push:**
+  - Pre-commit hook PASS (typecheck + cazadores 7/7 PASS + lint staged).
+  - Hash: `43a2087`. Push limpio a `origin/main`.
+
+- **Devops (auto-rol coordinator):**
+  - Vercel deploy verificado en producción: `https://misterservicerd.com/version.json` retorna `{"commit": "43a2087", "builtAt": "2026-05-11T16:12:59.935Z"}`.
+  - Deploy Ready ~3 min después del push.
+
+### Resultado del sprint
+
+- 12 lookups `.find()` corregidos + 4 writes upstream adicionales corregidos.
+- Cazador P-006 extendido con variante `.find()` cubriendo `.ts` y `.tsx`.
+- Documentación P-006 actualizada.
+- 0 hits en cazadores post-fix.
+- QA manual SPRINT-132-QA escalado a BLOQUEOS.md.
+
+### Próximos pasos sugeridos a Cowork
+
+- Sprint follow-up: refactorear `PersonalPage.tsx handleConfirmarEliminar` para envolver en `runTransaction` (deuda P-003 preexistente, no introducida hoy, pero detectada durante regression_guardian).
+- Considerar extender P-003 para escanear también `src/pages/` (hoy escanea solo `src/services/`).
+
+---
+
 ## 2026-05-11 — `trabaja` (pasada 2 del día): SPRINT-131 COMPLETADO (1/1)
 
 ### Contexto

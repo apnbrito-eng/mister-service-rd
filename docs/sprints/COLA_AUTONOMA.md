@@ -630,7 +630,7 @@ Agregar UI mínima (un botón) en el detalle/edit de una orden que, cuando se ha
 
 ### SPRINT-132 — Bug sistémico: `find(p.id === tecnicoId)` post-c4be345 (14 sitios) + cazador P-006 extendido
 
-**Estado:** EN_EJECUCION (coordinator autónomo `trabaja`, 2026-05-11)
+**Estado:** COMPLETADO 2026-05-11 (commit `43a2087`, deploy verificado en producción 16:12 UTC). QA humano declarado como SPRINT-132-QA en BLOQUEOS.md. Hallazgos adicionales: 4 sitios de WRITE upstream con el mismo vector P-006 (MapaRutas drag&drop + PersonalPage transferencias) también corregidos.
 **Prioridad:** crítica (rompe derivación de operaria en CREATE + edit + mapa + facturas + comisiones + avances + cierre día; afecta a TODOS los técnicos con operariaId asignada; explica el caso original Aury Mon más allá del timing)
 **Origen:** Coordinator 2026-05-11 durante el cierre de SPRINT-130. Reportó como hallazgo colateral: `OrdenEditForm.tsx:77` (`tecnicos.find(t => t.id === editForm.tecnicoId)`) no se dispara correctamente porque `editForm.tecnicoId` post-`c4be345` (SPRINT-108) es `auth.uid`, mientras `t.id` sigue siendo `personal/{docId}`. Cowork verificó con grep `find\(.*\.id === .*tecnicoId|find\(.*p\.id === form|find\(.*t\.id === editForm` y encontró **14 sitios con el mismo patrón**, incluido el CREATE flow.
 **Riesgo:** bajo-medio. El fix por sitio es 1 línea (`p.id === X` → `(p.uid || p.id) === X`). El cazador P-006 actualmente solo detecta dropdowns `<option>` — extenderlo a `.find()` requiere refinamiento de regex. No toca rules, no toca migraciones, no toca data.
