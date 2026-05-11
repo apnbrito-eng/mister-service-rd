@@ -6,7 +6,7 @@ import { OrdenServicio, Personal, MetodoPago, FaseOrden, Usuario } from '../type
 import {
   faseLabel, faseBgColor, formatMoneda, formatHora, parseOrden,
   getTecnicoColor, estadoSimpleLabel, crearRegistroAuditoria,
-  formatearEquipoLabel,
+  formatearEquipoLabel, calcularExpiracionTokenPortal,
 } from '../utils';
 import FotoEquipoDisplay from '../components/shared/FotoEquipoDisplay';
 import BotonComoLlegar from '../components/shared/BotonComoLlegar';
@@ -175,6 +175,10 @@ export default function AgendaDia() {
         historialFases: nuevoHistorial,
         auditoria: arrayUnion(registroAuditoria),
         updatedAt: ahora,
+        // SPRINT-139 (2026-05-11): expirar token portal 30 días post-cierre.
+        tokenPortalClienteExpiraEn: Timestamp.fromDate(
+          calcularExpiracionTokenPortal(ahora.toDate())
+        ),
       };
       if (chequeoForm.metodoPago) updateData.metodoPagoCierre = chequeoForm.metodoPago;
       if (nuevoPago) {

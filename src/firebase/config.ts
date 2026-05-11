@@ -4,14 +4,35 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
-// Configuración de Firebase con fallbacks al proyecto mister-service-app-cloude
+// Configuración de Firebase — fail-fast si falta cualquier env var.
+// Antes había fallback hardcodeado al proyecto productivo (audit fix SPRINT-136 2026-05-11):
+// si alguien clonaba el repo sin `.env`, la app arrancaba pegada a producción real.
+// Ahora si falta cualquier variable, el módulo throw-ea con mensaje explícito.
+const REQUIRED_ENV_VARS = [
+  'VITE_FIREBASE_API_KEY',
+  'VITE_FIREBASE_AUTH_DOMAIN',
+  'VITE_FIREBASE_PROJECT_ID',
+  'VITE_FIREBASE_STORAGE_BUCKET',
+  'VITE_FIREBASE_MESSAGING_SENDER_ID',
+  'VITE_FIREBASE_APP_ID',
+] as const;
+
+const missing = REQUIRED_ENV_VARS.filter((k) => !import.meta.env[k]);
+if (missing.length > 0) {
+  throw new Error(
+    `[firebase] Faltan variables de entorno obligatorias: ${missing.join(', ')}.\n` +
+    `Copiá .env.example a .env y rellená los valores antes de arrancar.\n` +
+    `En Vercel: agregalas en Project Settings → Environment Variables.`
+  );
+}
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyAKjaZAWHi_OKoH9HAdvk64MN4dmvVYoRk",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "mister-service-app-cloude.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "mister-service-app-cloude",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "mister-service-app-cloude.firebasestorage.app",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "342961599729",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:342961599729:web:aa7d3bdb531e530419a550",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);

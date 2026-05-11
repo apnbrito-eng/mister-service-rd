@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, Usuario } from '../../types';
-import { crearRegistroAuditoria, faseLabel } from '../../utils';
+import { crearRegistroAuditoria, faseLabel, calcularExpiracionTokenPortal } from '../../utils';
 import Modal from '../Modal';
 import toast from 'react-hot-toast';
 
@@ -64,6 +64,11 @@ export default function CancelarOrdenModal({ isOpen, onClose, orden, userProfile
         historialFases: nuevoHistorial,
         auditoria: arrayUnion(registro),
         updatedAt: ahora,
+        // SPRINT-139 (2026-05-11): el token del portal queda activo 30 días
+        // más después de la cancelación para que el cliente pueda consultar.
+        tokenPortalClienteExpiraEn: Timestamp.fromDate(
+          calcularExpiracionTokenPortal(ahora.toDate())
+        ),
       });
       toast.success('Orden cancelada con motivo registrado');
       handleClose();

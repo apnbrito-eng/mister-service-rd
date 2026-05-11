@@ -483,6 +483,19 @@ export interface OrdenServicio {
    */
   tokenPortalCliente?: string;
   /**
+   * Fecha de expiración del `tokenPortalCliente`. Se setea cuando la orden
+   * pasa a `fase: 'cerrado'` o `'cancelado'` a `fechaCierre/fechaCancelacion + 30 días`.
+   * Mientras la orden está abierta, este campo es `undefined` y el token
+   * funciona sin fecha límite.
+   *
+   * Si está ausente Y la orden está cerrada/cancelada, se computa al vuelo
+   * desde `fechaCierre`/`fechaCancelacion + 30 días` (compatibilidad legacy
+   * para órdenes pre-SPRINT-139, 2026-05-11).
+   *
+   * Comprobar validez con `tokenPortalClienteValido(orden)` en `utils/index.ts`.
+   */
+  tokenPortalClienteExpiraEn?: Timestamp | Date;
+  /**
    * Marca cuándo y por quién se envió el WhatsApp con el link al portal del
    * cliente. Se setea cuando el staff toca el botón "Enviar portal al cliente"
    * en el modal de orden. Se sobrescribe cuando se reenvía.

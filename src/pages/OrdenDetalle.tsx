@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { collection, doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, FaseOrden, MetodoPago, StandbyPieza } from '../types';
-import { formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente } from '../utils';
+import { formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente, calcularExpiracionTokenPortal } from '../utils';
 import { METODO_PAGO_LABELS } from '../utils/factura';
 import ModalSugerirSoloChequeo from '../components/cierre/ModalSugerirSoloChequeo';
 import BannerEstadoSugerenciaSoloChequeo from '../components/cierre/BannerEstadoSugerenciaSoloChequeo';
@@ -402,6 +402,10 @@ export default function OrdenDetalle() {
         historialFases: nuevoHistorial,
         auditoria: arrayUnion(registroAuditoria),
         updatedAt: ahora,
+        // SPRINT-139 (2026-05-11): expirar token portal 30 días post-cierre.
+        tokenPortalClienteExpiraEn: Timestamp.fromDate(
+          calcularExpiracionTokenPortal(ahora.toDate())
+        ),
       };
       if (chequeoForm.metodoPago) {
         updateData.metodoPagoCierre = chequeoForm.metodoPago;

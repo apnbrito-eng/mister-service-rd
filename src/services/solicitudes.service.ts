@@ -1,11 +1,12 @@
 import {
   collection, addDoc, updateDoc, deleteDoc, getDoc, getDocs, doc,
-  query, orderBy, where, serverTimestamp, onSnapshot, Timestamp,
+  query, where, serverTimestamp, onSnapshot, Timestamp,
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 import { SolicitudServicio, EstadoSolicitud } from '../types/formularios';
 import { siguienteNumeroOrden } from './contadores.service';
+import { validarDocumento } from '../utils/uploads';
 
 const COL = 'solicitudes_servicio';
 
@@ -124,6 +125,13 @@ export async function subirArchivoSolicitud(
   solicitudId: string,
   campoId: string
 ): Promise<string> {
+  // SPRINT-137 (2026-05-11): validar tamaño + MIME antes de subir.
+  // Defense in depth — Storage Rules es la segunda capa (SPRINT-138 pendiente).
+  const validacion = validarDocumento(file);
+  if (!validacion.ok) {
+    throw new Error(validacion.error);
+  }
+
   const timestamp = Date.now();
   const ext = file.name.split('.').pop() || 'bin';
   const path = `solicitudes/${solicitudId}/${campoId}/${timestamp}.${ext}`;

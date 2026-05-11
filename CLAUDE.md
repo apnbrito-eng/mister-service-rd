@@ -36,7 +36,7 @@ npm run deploy:rules # despliega firestore.rules al proyecto mister-service-app-
 
 El `.firebaserc` ya tiene el projectId configurado. Si querés usar otro proyecto: `npx firebase use <projectId>`. **Nunca edites las rules desde Firebase Console** — siempre commitealas acá primero, hacé PR, y despliega vía npm script. La rule de R4 (gate aprobación oficina) está pendiente de agregar — ver C2 del audit.
 
-Environment variables live in `.env` (see `.env.example`). `src/firebase/config.ts` includes hardcoded fallback credentials for the `mister-service-app-cloude` project, so the app boots without `.env` — be aware this means missing env vars don't fail loudly.
+Environment variables live in `.env` (see `.env.example`). Las 6 `VITE_FIREBASE_*` son obligatorias — `src/firebase/config.ts` hace fail-fast con mensaje explícito si falta cualquiera (audit fix SPRINT-136 el 2026-05-11). Antes había fallback hardcodeado al proyecto `mister-service-app-cloude`; se quitó por seguridad. En Vercel las variables viven en Project Settings → Environment Variables; verificá que estén las 6 antes de cada deploy.
 
 ## Architecture
 

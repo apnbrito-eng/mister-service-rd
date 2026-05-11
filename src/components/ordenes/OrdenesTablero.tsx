@@ -7,7 +7,7 @@ import {
 import {
   faseLabel, faseBgColor, formatMoneda, formatHora, formatFecha,
   crearRegistroAuditoria, FASES_ORDENADAS, tieneStandby,
-  generarTokenPortalCliente,
+  generarTokenPortalCliente, calcularExpiracionTokenPortal,
 } from '../../utils';
 import { useApp } from '../../context/AppContext';
 import { registrarComisionPorOrden } from '../../utils/comisiones';
@@ -124,6 +124,12 @@ export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Prop
     // generarlo. Idempotente: nunca pisamos uno existente.
     if (faseDestino === 'agendado' && !orden.tokenPortalCliente) {
       updatePayload.tokenPortalCliente = generarTokenPortalCliente();
+    }
+    // SPRINT-139 (2026-05-11): al cerrar, setear expiración del token portal.
+    if (faseDestino === 'cerrado') {
+      updatePayload.tokenPortalClienteExpiraEn = Timestamp.fromDate(
+        calcularExpiracionTokenPortal(ahora.toDate())
+      );
     }
     await updateDoc(doc(db, 'ordenes_servicio', orden.id), updatePayload);
 

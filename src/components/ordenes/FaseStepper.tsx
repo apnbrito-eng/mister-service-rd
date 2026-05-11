@@ -6,6 +6,7 @@ import {
   crearRegistroAuditoria, faseLabel, FASES_ORDENADAS,
   generarTokenPortalCliente,
   obtenerSugerenciaSoloChequeoPendiente,
+  calcularExpiracionTokenPortal,
 } from '../../utils';
 import { useApp } from '../../context/AppContext';
 import { puede } from '../../utils/permisos';
@@ -104,6 +105,15 @@ export default function FaseStepper({
     // stepper), generar token si no existe. Idempotente.
     if (nuevaFase === 'agendado' && !orden.tokenPortalCliente) {
       updatePayload.tokenPortalCliente = generarTokenPortalCliente();
+    }
+    // SPRINT-139 (2026-05-11): al cerrar la orden, fijar expiración del token
+    // del portal del cliente a `hoy + 30 días`. Si ya tenía expiración (cierre
+    // anterior + reactivación + nuevo cierre), se sobrescribe — el cliente
+    // recibió un nuevo link válido por otros 30 días.
+    if (nuevaFase === 'cerrado') {
+      updatePayload.tokenPortalClienteExpiraEn = Timestamp.fromDate(
+        calcularExpiracionTokenPortal(ahora.toDate())
+      );
     }
     await updateDoc(doc(db, 'ordenes_servicio', orden.id), updatePayload);
 

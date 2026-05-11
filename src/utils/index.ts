@@ -331,6 +331,82 @@ export function generarTokenPortalCliente(): string {
 }
 
 /**
+ * Días de gracia que sigue funcionando el `tokenPortalCliente` después
+ * de cerrar/cancelar la orden. Decidido por Jorge 2026-05-11 — cubre
+ * reclamos de garantía tempranos y consultas post-cierre.
+ *
+ * SPRINT-139.
+ */
+export const TOKEN_PORTAL_DIAS_GRACIA = 30;
+
+/**
+ * Calcula la fecha de expiración del `tokenPortalCliente` para una orden
+ * que recién pasa a `fase: 'cerrado'` o `'cancelado'`. Setear este campo
+ * en la misma escritura que cambia la fase.
+ *
+ * SPRINT-139 (2026-05-11).
+ */
+export function calcularExpiracionTokenPortal(desdeFecha: Date = new Date()): Date {
+  const exp = new Date(desdeFecha);
+  exp.setDate(exp.getDate() + TOKEN_PORTAL_DIAS_GRACIA);
+  return exp;
+}
+
+/**
+ * Devuelve `true` si el `tokenPortalCliente` de la orden sigue siendo válido.
+ *
+ * Reglas:
+ * - Si la orden NO está cerrada/cancelada → válido siempre (sin fecha límite).
+ * - Si la orden está cerrada/cancelada y tiene `tokenPortalClienteExpiraEn`
+ *   → válido si `Date.now() <= expiraEn`.
+ * - Si la orden está cerrada/cancelada y NO tiene `tokenPortalClienteExpiraEn`
+ *   (legacy pre-SPRINT-139) → válido si `Date.now() <= fechaCierre + 30 días`.
+ * - Si no hay forma de calcular fecha (orden cerrada sin `fechaCierre` ni
+ *   `fechaCancelacion`) → válido (fail-open, evita romper portales legacy).
+ *
+ * SPRINT-139 (2026-05-11).
+ */
+export function tokenPortalClienteValido(orden: {
+  fase?: string;
+  estado?: string;
+  tokenPortalClienteExpiraEn?: { toDate?: () => Date } | Date | null;
+  fechaCierre?: { toDate?: () => Date } | Date | null;
+  fechaCancelacion?: { toDate?: () => Date } | Date | null;
+}): boolean {
+  const faseEsCerrada = orden.fase === 'cerrado' || orden.fase === 'cancelado'
+    || orden.estado === 'cerrado' || orden.estado === 'cancelado';
+
+  if (!faseEsCerrada) return true;
+
+  const toDate = (v: unknown): Date | null => {
+    if (!v) return null;
+    if (v instanceof Date) return v;
+    if (typeof v === 'object' && v && 'toDate' in v && typeof (v as { toDate: unknown }).toDate === 'function') {
+      try {
+        return (v as { toDate: () => Date }).toDate();
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const expiraExplicito = toDate(orden.tokenPortalClienteExpiraEn);
+  if (expiraExplicito) {
+    return Date.now() <= expiraExplicito.getTime();
+  }
+
+  // Legacy: computar desde fechaCierre / fechaCancelacion + 30 días.
+  const fechaBase = toDate(orden.fechaCierre) ?? toDate(orden.fechaCancelacion);
+  if (!fechaBase) {
+    // Orden cerrada pero sin fechaCierre — fail-open para no romper portales legacy.
+    return true;
+  }
+  const expiracionLegacy = calcularExpiracionTokenPortal(fechaBase);
+  return Date.now() <= expiracionLegacy.getTime();
+}
+
+/**
  * Devuelve la propuesta de reprogramación pendiente del CLIENTE más
  * reciente — la que está esperando resolución de admin/coord — o null
  * si no hay ninguna. Defensiva: la fecha de propuesta puede venir como

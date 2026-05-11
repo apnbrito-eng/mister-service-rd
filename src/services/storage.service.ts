@@ -1,12 +1,29 @@
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 import { calcularDistanciaKm } from '../utils/rutas';
+import { validarFoto } from '../utils/uploads';
+
+/**
+ * Valida el archivo (size + MIME) si es un `File` real. Los `Blob` puros
+ * (ej: foto del canvas) no se validan porque no traen `name`/`type` confiable.
+ * SPRINT-137 (2026-05-11).
+ */
+function validarSiEsFile(file: File | Blob, contexto: string): void {
+  if (file instanceof File) {
+    const res = validarFoto(file);
+    if (!res.ok) {
+      throw new Error(`[${contexto}] ${res.error}`);
+    }
+  }
+}
 
 /** Sube foto de cierre a Firebase Storage y retorna URL pública */
 export async function subirFotoCierre(
   ordenId: string,
   file: File | Blob
 ): Promise<string> {
+  validarSiEsFile(file, 'foto de cierre');
+
   const timestamp = Date.now();
   const fileName = `cierre-${timestamp}.jpg`;
   const path = `fotos-servicio/${ordenId}/${fileName}`;
@@ -27,6 +44,8 @@ export async function subirFotoInicioChequeo(
   ordenId: string,
   file: File | Blob
 ): Promise<string> {
+  validarSiEsFile(file, 'foto de inicio chequeo');
+
   const timestamp = Date.now();
   const fileName = `inicio-chequeo-${timestamp}.jpg`;
   const path = `fotos-servicio/${ordenId}/${fileName}`;
