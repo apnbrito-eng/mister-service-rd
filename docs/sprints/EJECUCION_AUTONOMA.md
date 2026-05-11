@@ -5,6 +5,91 @@
 
 ---
 
+## 2026-05-11 — `sigue` (pasada 5 del día): SPRINT-134 sub-sprint Mantenimiento COMPLETADO (1/6)
+
+### Contexto
+
+Jorge disparó `sigue` (alias de `trabaja`) por quinta vez en el día. Sprint en cola: SPRINT-134 (refactor a `writeBatch` de los 7 cross-collection en `src/pages/`, follow-up de SPRINT-133). El sprint padre tenía 2 opciones: (1) procesar SOLO una función como sub-sprint individual con QA visual humana entre cada deploy, o (2) procesar las 6 funciones en una sola pasada.
+
+**Decisión del coordinator: Opción 1 (uno por uno).**
+
+**Razonamiento:**
+- El sub-sprint 134a sugerido (`Cotizaciones.tsx:handleConvertirAFactura`) tiene semántica intencional documentada en el código original: el try/catch INTERNO al loop de piezas dice explícitamente `"No revertir la factura: el admin debe conciliar manualmente"`. Eso significa que envolverlo en `writeBatch` puro CAMBIARÍA el comportamiento (haría rollback de la factura si UNA pieza falla al descontar stock, lo cual es regresión semántica). Decisión: postergar a sub-sprint dedicado con clarificación de negocio.
+- El candidato más limpio entre los 6 es `Mantenimiento.tsx:handleGenerarOrden` (2 writes fijos, sin reads dentro del bloque, sin try/catch interno con semántica especial). Es el caso ideal para establecer el patrón `writeBatch` en este sprint con el menor riesgo.
+- El orden sugerido en el sprint padre (Cotizaciones primero por "más riesgoso") era razonable desde lo cuantitativo (3 colecciones), pero NO consideraba la semántica intencional del código original. Una vez ejecutado el sub-sprint Mantenimiento, los otros 5 quedan agendados como sub-sprints separados para futuras pasadas.
+
+Sprint clasificado **autónomo completo** (cambio interno mecánico + sin nuevos campos a Firestore + sin tocar rules/services/context).
+
+### SPRINT-134-mant — `handleGenerarOrden` envuelto en writeBatch
+
+- **archivist PRE-CHANGE (auto-rol coordinator):**
+  - Touch-list verificado: `src/pages/Mantenimiento.tsx:1-2` (import) + `78-116` (handler).
+  - Historial git de `Mantenimiento.tsx`: `2ba57e4` (fix usar `siguienteNumeroOrden` transaccional — precedente para tratar counter aparte), `15cab52` (SPRINT-133 que dejó la allowlist `@safe-non-tx`), `e428a4d` (SPRINT-108 alineamiento P-006), `6c558be` ya integraba portal del cliente. **Archivo en lista crítica del archivist** (`docs/postmortems` lo lista en categoría especial de páginas críticas).
+  - Postmortems relevantes: ninguno menciona `Mantenimiento.tsx` como introductor ni víctima. `2026-05-10-rediseno-ia-aprendizajes.md` lo menciona indirectamente (movido a sección Operaciones del sidebar).
+  - Gotcha CLAUDE.md "Mutaciones cross-collection deben ir en un solo `runTransaction`, audit logs incluidos" aplica directamente — pero como NO hay reads dentro del bloque, `writeBatch` es la opción correcta (no requiere lectura previa).
+  - Gotcha "cleanup en archivos críticos requiere QA manual" aplica. QA registrado en BLOQUEOS.md como SPRINT-134-mant-QA no bloqueante.
+  - **Conclusión:** sprint procesable autónomo, sin overlap con bugs recientes.
+
+- **Builder (edición directa del coordinator):**
+  - `src/pages/Mantenimiento.tsx:2` import extendido con `writeBatch` desde `firebase/firestore` (manteniendo `addDoc` y `updateDoc` que siguen usándose en `handleSubmit:59` y `toggleActivo:126` respectivamente).
+  - `src/pages/Mantenimiento.tsx:78-87`: comentario `@safe-non-tx` reemplazado por comentario explicativo del nuevo patrón. Explica:
+    - Que `siguienteNumeroOrden()` ya es transaccional internamente (counter), por lo que se invoca antes del batch.
+    - Que el batch garantiza "o ambas o ninguna" — atomicidad explícita.
+    - Que si el batch falla, el número de orden ya consumido queda como hueco numérico (comportamiento idéntico a SPRINT-133, precedente establecido para no revertir counters).
+  - `handleGenerarOrden` reescrito: `addDoc` + `updateDoc` separados → `writeBatch(db)` con `batch.set(ordenRef, ...)` (ref creada con `doc(collection(db, 'ordenes_servicio'))` para ID auto) + `batch.update(doc(db, 'mantenimiento', item.id), { proximaFecha })` + `await batch.commit()`.
+  - **Cero cambios en payload**: todos los campos del addDoc anterior se mantienen 1:1 (numero, clienteId, clienteNombre, equipoTipo, equipoMarca, descripcionFalla, tecnicoId, tecnicoNombre='', responsableId='', fase='agendado', estado='activo', fechaCita, notas, historialFases, tokenPortalCliente, createdAt, updatedAt).
+  - **Cero cambios en UI/UX**: toast verde `Orden ${numero} creada` y toast rojo `Error al generar orden` idénticos. `try/catch` preservado.
+
+- **Tester (auto-rol coordinator):**
+  - `npx tsc --noEmit` → 0 errores. GO.
+  - `npx eslint --max-warnings 0 src/pages/Mantenimiento.tsx` → 0 warnings. GO.
+  - `npx tsx scripts/invariantes/run-all.ts` → cazadores 7/7 PASS, 0 hits totales.
+  - Verificación adicional `grep -rn "safe-non-tx: SPRINT-134" src/pages/` → 6 hits restantes (PersonalPage:201, PersonalPage:429, Cotizaciones:40, Cotizaciones:257, EquiposTaller:89, Inventario:269). Bajó de 7 a 6. Confirmación de que P-003 cazó bien la transición.
+
+- **Regression_guardian (mental, foco rules/services/context):**
+  - NO toca rules. NO toca services. NO toca context. Es page-local.
+  - Cross-collection (P-003 aplica): envuelto en writeBatch correctamente, atomicidad explícita en comentario.
+  - Counter aparte del batch (precedente SPRINT-133): comportamiento idéntico, ya documentado.
+  - PASS.
+
+- **Reviewer (mental, foco orden de operaciones del batch):**
+  - `doc(collection(...))` sin id genera ref con auto-id antes del commit — patrón estándar de Firebase v9 para "addDoc en batch". Correcto.
+  - Orden `set(ordenRef) → update(mantenimientoRef)` — en `writeBatch` el orden no importa para atomicidad, pero convención "crear lo nuevo antes de mutar lo viejo" cumplida.
+  - Payload de la orden idéntico al addDoc original (verificado field-by-field).
+  - APPROVED.
+
+- **Commit + push:** pendiente abajo, el coordinator dispara `git add` + `git commit` + `git push` con mensaje conventional commit.
+
+### Estado del SPRINT-134 padre
+
+- **1/6 funciones fixed:** `Mantenimiento.handleGenerarOrden` ✓
+- **5/6 pendientes** (cada una como sub-sprint individual para próximas pasadas):
+  - `Cotizaciones.handleConvertirAFactura` (134-cotizfac) — bloqueado en deuda: requiere clarificación de negocio sobre semántica "no revertir factura si falla descuento de stock". Plantear a Jorge.
+  - `Cotizaciones.handleSubmit` (134-cotizsubmit) — cotización + lead orden.
+  - `PersonalPage.handleSubmit` (134-personalalta) — alta empleado, overlap con P-004, cross-db con secondaryDb.
+  - `PersonalPage.ejecutarVinculacion` (134-personalvinc) — vinculación Auth + perfil.
+  - `Inventario.handleConfirmarAjuste` (134-invajuste) — stock + movimientos.
+  - `EquiposTaller.handleChangeEstado` (134-eqstandby) — equipo + standby.
+- Cada uno se ejecutará como sub-sprint individual en próximas pasadas de `trabaja`, con su propio QA humano registrado en BLOQUEOS.md.
+- SPRINT-134 padre permanece `EN_PROGRESO` en `COLA_AUTONOMA.md` hasta cerrar los 6.
+
+### Restricciones del sprint padre respetadas
+
+- ✓ NO se cambió UI ni toasts.
+- ✓ NO se metieron audit logs nuevos.
+- ✓ NO se tocó `firestore.rules`.
+- ✓ NO refactor opportunistico (solo el bloque `handleGenerarOrden` cambió; resto del archivo intacto).
+- ✓ Comentario `// @safe-non-tx: SPRINT-134 follow-up ...` removido (reemplazado por comentario que explica el nuevo patrón).
+- ✓ Cazador P-003 cuenta de allowlist baja en 1 (de 7 a 6).
+
+### Próximos pasos
+
+- Tras commit + push, ejecutar `devops` para verificar deploy.
+- Próxima pasada de `trabaja` puede procesar 134-eqstandby (también simple, sin reads, dos colecciones) o 134-invajuste (igual de simple).
+- Sub-sprint `134-cotizfac` debería plantearse a Jorge antes (decisión de negocio: ¿queremos atomicidad total y revertir factura si falla stock, o mantener semántica actual de "factura prevalece"?).
+
+---
+
 ## 2026-05-11 — `trabaja` (pasada 4 del día): SPRINT-133 COMPLETADO (1/1)
 
 ### Contexto

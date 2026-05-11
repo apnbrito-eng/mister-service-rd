@@ -10,6 +10,39 @@
 
 ---
 
+## SPRINT-134-mant-QA — Validación funcional: generar orden desde mantenimiento programado (writeBatch atómico)
+
+**Tipo:** QA humana **no bloqueante** (registro de pendiente, no impide cierre del sub-sprint).
+**Estado:** PENDIENTE VALIDACIÓN HUMANA
+**Origen:** SPRINT-134 sub-sprint Mantenimiento (pasada 5 del 2026-05-11). `handleGenerarOrden` envuelto en `writeBatch` para que la creación de la orden y la actualización de `proximaFecha` en el mantenimiento sean atómicas. Cazadores 7/7 PASS + typecheck + lint OK + regression_guardian PASS + reviewer APPROVED. PERO el sprint pide validación manual del flujo — el coordinator no puede ejercitar UI real ni network throttling.
+
+**Casos a validar manualmente (Jorge en su Mac, en entorno de prueba):**
+
+1. **Caso primary — generar orden desde mantenimiento vencido (happy path):**
+   - Ir a `/admin/mantenimiento` y elegir un mantenimiento programado vencido (o crear uno con fecha en el pasado).
+   - Click "Generar orden" (botón con icono RefreshCw o equivalente).
+   - **Resultado esperado:** toast verde `Orden OS-XXXX creada`. Verificar en `/admin/ordenes` que la orden nueva aparece con `fase: 'agendado'`, cliente y equipo del mantenimiento, descripción "Mantenimiento programado (frecuencia)". Verificar en `/admin/mantenimiento` que la `proximaFecha` del item se movió N meses (mensual=1, trimestral=3, semestral=6, anual=12).
+
+2. **Caso secondary — atomicidad (simular fallo a mitad):**
+   - Abrir DevTools → Network tab → setear "Offline".
+   - Click "Generar orden" sobre un mantenimiento programado.
+   - **Resultado esperado:** el toast de error debe aparecer ("Error al generar orden") y verificar en Firestore Console:
+     - **Ninguna** orden nueva en `ordenes_servicio` con el `numero` consumido del counter (el counter sí avanzó por ser tx aparte — esto es comportamiento esperado, idéntico al SPRINT-133).
+     - El item de `mantenimiento` mantiene su `proximaFecha` original (NO se movió).
+   - El test antiguo (pre-SPRINT-134) habría dejado la orden creada Y luego habría fallado al update de `proximaFecha`, resultando en una orden de mantenimiento "no contabilizada" en su item original.
+
+3. **Caso terciario — orden secuencial de operaciones:**
+   - Ejecutar el caso primary 2 veces consecutivas en el mismo mantenimiento.
+   - **Resultado esperado:** ambas órdenes se crean con números secuenciales (OS-XXXX y OS-XXXX+1), y `proximaFecha` salta dos veces. No hay race condition aparente.
+
+**Si todos pasan:** Jorge edita esta sección con `OK: jorge YYYY-MM-DD HH:MM — QA validado` y la archivamos.
+
+**Si algún caso falla:** capturar consola del browser + Firestore Console (estado de docs afectados) y reportar a Cowork. Posible regresión del fix.
+
+**Nota técnica:** Firestore `writeBatch` es atómico para el set de la orden + update del mantenimiento (2 ops, dentro del límite de 500). El `siguienteNumeroOrden()` consume un counter en su propia tx ANTES del batch — si el batch falla, el número queda como hueco numérico (consistente con SPRINT-133 / SPRINT-2ba57e4).
+
+---
+
 ## SPRINT-133-QA — Validación funcional: eliminación atómica de técnico/operaria con órdenes activas
 
 **Tipo:** QA humana **no bloqueante** (registro de pendiente, no impide cierre del sprint).

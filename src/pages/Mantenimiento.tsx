@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, getDocs, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Mantenimiento as MantenimientoType, Personal } from '../types';
 import { formatFechaCorta, generarTokenPortalCliente } from '../utils';
@@ -75,13 +75,23 @@ export default function Mantenimiento() {
     }
   };
 
-  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
-  // Muta mantenimiento + ordenes_servicio. Refactor pendiente a writeBatch.
+  // SPRINT-134 (sub-sprint Mantenimiento, 2026-05-11): cross-collection
+  // mantenimiento + ordenes_servicio envuelto en writeBatch para atomicidad.
+  // `siguienteNumeroOrden()` ya es transaccional internamente (counter), por lo
+  // que se invoca antes del batch (lectura/escritura aislada en su propia tx).
+  // El batch garantiza: o se crea la orden Y se actualiza proximaFecha, o ninguna
+  // de las dos. Si el batch falla, el número de orden ya consumido queda como
+  // hueco numérico (mismo comportamiento que SPRINT-133 — counter no se revierte).
   const handleGenerarOrden = async (item: MantenimientoType) => {
     try {
       const numero = await siguienteNumeroOrden();
       const ahora = Timestamp.now();
-      await addDoc(collection(db, 'ordenes_servicio'), {
+      const meses = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 }[item.frecuencia] || 3;
+      const nextDate = addMonths(item.proximaFecha, meses);
+
+      const batch = writeBatch(db);
+      const ordenRef = doc(collection(db, 'ordenes_servicio'));
+      batch.set(ordenRef, {
         numero,
         clienteId: item.clienteId || '',
         clienteNombre: item.clienteNombre,
@@ -101,13 +111,10 @@ export default function Mantenimiento() {
         createdAt: ahora,
         updatedAt: ahora,
       });
-
-      // Update next date
-      const meses = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 }[item.frecuencia] || 3;
-      const nextDate = addMonths(item.proximaFecha, meses);
-      await updateDoc(doc(db, 'mantenimiento', item.id), {
+      batch.update(doc(db, 'mantenimiento', item.id), {
         proximaFecha: Timestamp.fromDate(nextDate),
       });
+      await batch.commit();
 
       toast.success(`Orden ${numero} creada`);
     } catch {
