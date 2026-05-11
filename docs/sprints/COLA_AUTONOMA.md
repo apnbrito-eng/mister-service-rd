@@ -3,7 +3,11 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-11 por coordinator (autónomo `sigue`, pasada 5) — SPRINT-134 EN_PROGRESO (1/6). Sub-sprint `Mantenimiento.handleGenerarOrden` envuelto en `writeBatch` para atomicidad de orden + actualización de `proximaFecha`. Allowlist `@safe-non-tx` removida del archivo. Decisión: Opción 1 (uno por uno) — `handleConvertirAFactura` postergado por requerir clarificación de negocio sobre semántica "factura prevalece si falla descuento de stock". Cazadores 7/7 PASS, regression_guardian PASS, reviewer APPROVED. SPRINT-134-mant-QA registrado en BLOQUEOS.md como validación humana no bloqueante. 5 sub-sprints restantes pendientes para próximas pasadas.
+**Última actualización:** 2026-05-11 por Cowork — Auditoría forense completa al codebase (4 agentes en paralelo: arquitectura, seguridad, calidad, anti-regresión). Hallazgos CRÍTICOS: secretos hardcodeados como fallback en `src/firebase/config.ts:9-15` (proyecto productivo), `subirArchivoSolicitud` sin validación de size/MIME/cantidad, `storage.rules` no versionado (solo vive en consola). HALLAZGOS ALTO: tokens `tokenPortalCliente` y `garantia.token` sin expiración, App Check en soft mode (no bloquea), 4 monolitos (PersonalPage 1713 / MapaRutas 1267 / Configuracion 1102 / Ordenes 1001). FALSOS POSITIVOS aclarados: `.env` NO está en git (sí está en `.gitignore`), `dist/` NO está en git. Sistema anti-regresión saludable: 8 cazadores en verde, recurrence rate 0%, MTBF creciente. Jorge dio OK "vamos todo" — 4 decisiones tomadas vía AskUserQuestion: max 10MB por archivo, token cliente expira "mientras orden activa + 30 días", App Check enforce con monitoreo 48h previo, solo refactorizar PersonalPage de los 4 monolitos. Agregados SPRINT-136 a 142 (7 sprints). Estados: 136/137/139/142 PENDIENTE autónomo, 138/141 BLOQUEADO esperando OK Jorge (toca rules de Storage y config de App Check), 140 BLOQUEADO esperando SPRINT-135a cerrado.
+
+**Última actualización previa:** 2026-05-11 por Cowork — Discovery completo del refactor de garantía con Jorge (~60min de back-and-forth). Decisión: garantía DEBE reactivar la orden original (no crear nueva), preservando técnico responsable + trazabilidad + datos contables intactos. Modelo final: nueva fase `garantia_reclamada` + array `visitasGarantia[]` + período configurable + countdown público + descuento técnico automático = `comisionPorcentaje × costo_piezas_garantía` aplicado a próxima quincena + toggle "mal uso" en wizard que reactiva flujo cobrable dentro del mismo doc. ITBIS aclarado: es interno, NO se muestra en conduce de garantía (facturación fiscal va por sistema externo). Jorge eligió approach incremental: empieza con SPRINT-135a (modelo + countdown UI, bajo riesgo, sin tocar comportamiento crítico). Sub-sprints 135b/c/d/e diseñados pero NO escritos todavía — se agregan tras QA visual de 135a. Discovery también identificó decisión pendiente sobre WhatsApp (Business app vs Cloud API) — Q1/Q2/Q3 pendientes.
+
+**Última actualización previa:** 2026-05-11 por coordinator (autónomo `sigue`, pasada 5) — SPRINT-134 EN_PROGRESO (1/6). Sub-sprint `Mantenimiento.handleGenerarOrden` envuelto en `writeBatch` para atomicidad de orden + actualización de `proximaFecha`. Allowlist `@safe-non-tx` removida del archivo. Decisión: Opción 1 (uno por uno) — `handleConvertirAFactura` postergado por requerir clarificación de negocio sobre semántica "factura prevalece si falla descuento de stock". Cazadores 7/7 PASS, regression_guardian PASS, reviewer APPROVED. SPRINT-134-mant-QA registrado en BLOQUEOS.md como validación humana no bloqueante. 5 sub-sprints restantes pendientes para próximas pasadas.
 
 **Última actualización previa:** 2026-05-11 por coordinator (autónomo `trabaja`, pasada 4) — SPRINT-133 COMPLETADO. `handleConfirmarEliminar` envuelto en `writeBatch` con chunking (branches técnico + operaria). Cazador P-003 extendido a `src/services/` + `src/pages/` + `src/hooks/` + `api/`. 7 hallazgos colaterales en otras funciones de `src/pages/` documentados como deuda en SPRINT-134 (allowlist `@safe-non-tx` con razón explícita). Cazadores 7/7 PASS. SPRINT-134 (refactor de los 7 a writeBatch) agendado como follow-up PENDIENTE. SPRINT-133-QA registrado en BLOQUEOS.md como validación humana no bloqueante.
 
@@ -23,7 +27,7 @@
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-135
+**Próximo ID disponible:** SPRINT-143
 
 ---
 
@@ -869,6 +873,440 @@ Convertir cada una de las 7 funciones en `writeBatch` (sin reads previos) o `run
   6. `Cotizaciones.tsx handleSubmit` (cotización + lead orden) — sub-sprint 134f.
 - Después de cada fix individual, correr `npx tsx scripts/invariantes/check-cross-collection-tx.ts` y verificar que la cuenta de hits baja en 1. Cuando llega a 0, el sprint queda cerrado.
 - Cada sub-sprint debe registrar QA humano en BLOQUEOS.md (flujo afectado tiene impacto en datos de operación).
+
+---
+
+### SPRINT-135a — Refactor garantía (fase 1): modelo de datos + countdown público + período configurable
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (es la base de los sub-sprints 135b-e; sin esto el refactor no puede arrancar). Riesgo bajo porque solo prepara estructura sin tocar comportamiento productivo.
+**Origen:** Discovery con Jorge 2026-05-11 (~60min back-and-forth via Cowork). Confirmó que el comportamiento actual de "garantía = orden nueva con flag `esGarantia`" NO es lo que quiere — quiere reactivación de la misma orden con array de visitas para preservar técnico responsable, trazabilidad histórica, conduce/ITBIS/comisión originales intactos, y soporte para múltiples reclamos dentro del período sin reiniciarlo.
+**Riesgo:** bajo. Solo agrega tipos + campos opcionales en `OrdenServicio` + UI countdown pública. NO toca rules, NO toca lógica de cierre, NO toca facturación. Las órdenes existentes con `esGarantia=true` quedan como están (migración es deuda futura, NO scope de este sprint).
+**Touch-list previsto:**
+- `src/types/index.ts`:
+  - Agregar `'garantia_reclamada'` al enum `FaseOrden`.
+  - Nuevo tipo `VisitaGarantia`:
+    ```typescript
+    export interface VisitaGarantia {
+      id: string;                    // crypto.randomUUID()
+      fecha: Timestamp;              // fecha del reclamo
+      motivoCliente: string;         // texto que el cliente escribió en /garantia/:token
+      tecnicoUid?: string;           // se completa cuando operaria asigna
+      tecnicoNombre?: string;
+      fechaVisita?: Timestamp;       // cuando técnico va a la casa
+      piezas?: PiezaUsada[];         // piezas instaladas en esta visita (reutilizar tipo si existe)
+      costoPiezas?: number;          // suma de costos de piezas (RD$)
+      cubrioNegocio?: boolean;       // true=garantía gratis, false=mal uso cobrable
+      malUso?: boolean;              // marcado por técnico en wizard cierre
+      cobroExtra?: number;           // si malUso=true, monto cobrado al cliente
+      descuentoComisionAplicado?: number; // costoPiezas × % técnico (se llena en 135d)
+      quincenaAplicaDescuento?: string;    // ID de quincena donde se aplicó (135d)
+      notas?: string;
+      fechaCierre?: Timestamp;       // cuando técnico marca cerrada esta visita
+      estado: 'reclamada' | 'asignada' | 'en_visita' | 'cerrada_defecto' | 'cerrada_mal_uso';
+    }
+    ```
+  - Campos nuevos en `OrdenServicio` (todos opcionales para retrocompatibilidad):
+    - `visitasGarantia?: VisitaGarantia[]`
+    - `periodoGarantiaDias?: number` (default 60)
+    - `garantiaVencimiento?: Timestamp` (computed al cerrar orden)
+- `src/utils/garantia.ts` (NUEVO archivo):
+  - `calcularVencimiento(fechaCierre: Date, dias: number): Date`
+  - `diasRestantes(orden: OrdenServicio): number` — retorna 0 o negativo si expirada.
+  - `estaDentroDePeriodo(orden: OrdenServicio): boolean`
+- `src/pages/public/GarantiaCliente.tsx`:
+  - Mostrar countdown: "Tu garantía vence en X días" (rojo si <7 días, verde si >7).
+  - Mostrar fecha cierre original + fecha vencimiento.
+  - Botón "Reclamar garantía" deshabilitado si `estaDentroDePeriodo()` retorna false.
+  - El botón existente NO cambia comportamiento todavía (el reclamo real es scope de 135b). En este sprint solo es UI placeholder con `disabled` real basado en período.
+- `src/components/cierre/CierreServicioWizard.tsx` (o el componente donde se cierra la orden — verificar primero):
+  - Agregar input "Período de garantía (días)" con default 60.
+  - Al guardar cierre, calcular y persistir `garantiaVencimiento`.
+- `firestore.rules`: **NO se toca**. La rule actual ya permite update de campos opcionales si admin/coord/permiso aplica. Si el cazador P-002 grita por algún caso, allowlistar con `// @safe-required:` o `.get(field, null)`.
+
+#### Objetivo
+
+Preparar el modelo de datos + UI base sin cambiar el comportamiento operativo. Al cerrar este sprint, una orden nueva cerrada tendrá `garantiaVencimiento` poblada y el cliente verá el countdown en `/garantia/:token`. El botón "Reclamar" estará allí pero solo visible/habilitado dentro del período — el reclamo en sí (cambio de fase + notif a operaria) viene en 135b.
+
+#### Por qué
+
+- Es el primer paso del refactor de garantía. Sin esto los siguientes 4 sub-sprints no tienen modelo donde escribir.
+- Approach incremental (igual que lote 117c): preparar estructura → QA visual → seguir.
+- Riesgo bajo porque NO toca lógica productiva ni rules.
+- Bonus visible: aunque el botón no haga nada todavía, el cliente ya verá el countdown — pequeña mejora de UX que mucha gente valora.
+
+#### Criterios de aceptación
+
+- [ ] Tipo `VisitaGarantia` exportado desde `src/types/index.ts` con todos los campos del touch-list.
+- [ ] Enum `FaseOrden` incluye `'garantia_reclamada'`. Verificar que `faseLabel()` y `faseColor()` en `utils/index.ts` lo mapean (label = "Garantía reclamada", color = naranja).
+- [ ] `OrdenServicio` tiene los 3 campos opcionales nuevos.
+- [ ] `src/utils/garantia.ts` exporta los 3 helpers, con tests inline en comentarios JSDoc (no test runner — el repo no tiene tests). Cazadores deben pasar.
+- [ ] `GarantiaCliente.tsx` muestra countdown legible + botón Reclamar con estado `disabled` correcto. Si `garantiaVencimiento` es `undefined` (orden vieja), muestra mensaje neutro tipo "Período de garantía no especificado, contacta a Mister Service".
+- [ ] Wizard de cierre tiene el input "Período de garantía". Default 60 días. Solo aparece si fase cierre es exitosa (no en cancelaciones).
+- [ ] `npm run build` PASS.
+- [ ] `npm run lint` PASS (max-warnings 0).
+- [ ] Cazadores 7/7 PASS, 0 hits.
+- [ ] Commit + push.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio (toca `src/types/index.ts` archivo crítico + `GarantiaCliente.tsx` página pública).
+- regression_guardian recomendado (toca el tipo central `OrdenServicio`).
+- NO crear todavía la lógica de reclamo (eso es 135b).
+- NO calcular descuento comisión todavía (eso es 135d).
+- NO tocar `firestore.rules` (eso es 135e con OK explícito de Jorge).
+- NO hacer migración de órdenes viejas con `esGarantia=true` — quedan como están. Las órdenes nuevas que se cierren tras este sprint tendrán `garantiaVencimiento`, las viejas no. La UI de `GarantiaCliente.tsx` debe manejar ambos casos.
+- Si Cowork detecta durante el sprint que el botón existente de `/garantia/:token` ya hace algo (crear orden nueva con `esGarantia`), DEJARLO como está hasta 135b. No se rompe nada porque el botón solo dispara si está dentro del período.
+- QA manual sugerido al cerrar: abrir una orden de prueba, cerrarla con período 1 día, abrir `/garantia/:token` y validar que muestra "Vence en 1 día". Esperar 1 día (o setear `garantiaVencimiento` manualmente a ayer en Firestore Console) y validar que el botón queda deshabilitado.
+
+#### Notas para el coordinator
+
+- El componente del wizard de cierre necesita identificarse. Búsqueda sugerida: `grep -rn "CierreServicio" src/components/` o buscar dónde se setea `fase: 'cerrado'`. Probablemente en `CierreServicioWizard.tsx` o `IniciarChequeoButton.tsx` (este último puede compartir flujo).
+- Si el wizard de cierre tiene 2 versiones (legacy con `piezasRetiradas/checklist` y nueva con `equipoFunciona/clienteSatisfecho`), el input nuevo se agrega solo en la versión nueva. La legacy queda como está.
+- Default 60 días es asunción razonable. Si querés default diferente para tipos específicos (ej: 30 días para chequeos, 90 días para reparaciones grandes), eso es scope de 135c o sprint independiente.
+- El countdown puede usar `date-fns/locale/es` que ya está en el repo: `formatDistanceToNow(vencimiento, { locale: es, addSuffix: true })`.
+
+---
+
+### SPRINT-136 — Quitar fallback hardcodeado de Firebase config (fail-fast)
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (audit forense 2026-05-11 — hallazgo CRÍTICO #3)
+**Origen:** Cowork 2026-05-11. Audit forense detectó `src/firebase/config.ts:7-15` con credenciales reales del proyecto `mister-service-app-cloude` como fallback `||` de cada `import.meta.env.VITE_*`. Si alguien clona el repo sin `.env`, la app arranca pegada al proyecto productivo. Las API keys de Firebase web son públicas por diseño (Vite las inyecta al bundle), pero el fallback hardcodeado igual es mala práctica: facilita forks accidentales que escriben a producción real.
+**Riesgo:** bajo (cambio simple, blast radius limitado a entornos sin `.env`).
+**Touch-list previsto:** `src/firebase/config.ts`, `.env.example` (verificar que tenga todas las keys documentadas), `README.md` (sección setup), `CLAUDE.md` (línea ~36 que dice "src/firebase/config.ts includes hardcoded fallback credentials...").
+
+#### Objetivo
+
+Que `src/firebase/config.ts` falle al arrancar (`throw new Error('Missing VITE_FIREBASE_* env vars...')`) si falta cualquier env var requerida, en vez de pegarse silenciosamente al proyecto `mister-service-app-cloude`. Documentar en `.env.example` y `README.md` cuáles son las 6 variables obligatorias.
+
+#### Por qué
+
+- Defense in depth. Si Jorge clona el repo en una máquina nueva y se olvida de `.env`, hoy la app arranca contra producción real y puede escribir data accidentalmente. Con fail-fast, se entera al instante.
+- Higiene del bundle. El bundle de producción seguirá teniendo las keys (Vite las inyecta), pero al menos el repo deja de contenerlas como string literal. Cualquier auditor externo que mire el código deja de ver "credenciales hardcodeadas".
+- Actualiza la documentación viva (`CLAUDE.md` describe el comportamiento actual: hay que invertir esa línea).
+
+#### Criterios de aceptación
+
+- [ ] `src/firebase/config.ts:7-15` reescrito: cada campo de `firebaseConfig` lee `import.meta.env.VITE_FIREBASE_*` SIN fallback `||`. Si alguno es `undefined` o vacío, el módulo throw-ea con mensaje explícito listando qué env vars faltan.
+- [ ] `.env.example` tiene las 6 variables documentadas: `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`. Cada una con un comentario corto del propósito.
+- [ ] `README.md` sección "Setup" explica que hay que copiar `.env.example` a `.env` y rellenar antes de `npm run dev`.
+- [ ] `CLAUDE.md` línea ~36 invertida: ahora dice "config falla al arrancar si faltan env vars (audit fix SPRINT-136 2026-05-XX)".
+- [ ] `npm run dev` con `.env` válido sigue funcionando idéntico.
+- [ ] `npm run build` con `.env` válido sigue funcionando idéntico.
+- [ ] Smoke local: renombrar `.env` temporalmente a `.env.bak` y correr `npm run dev` → confirmar que falla con mensaje claro. Devolver `.env` después.
+- [ ] Cazadores 7/7 PASS.
+
+#### Restricciones / guardarrails
+
+- NO tocar `appCheckInstance` ni `initializeAppCheck` (eso es SPRINT-141).
+- NO cambiar el nombre del proyecto Firebase. Sigue siendo `mister-service-app-cloude`.
+- NO mover credenciales a otro lugar — la solución es eliminarlas del código, no esconderlas en otro archivo del repo.
+- Vercel ya tiene las env vars configuradas en su panel — confirmar antes de pushear (revisar `.env.example` contra lo que Vercel inyecta).
+
+#### Notas para el coordinator
+
+- Patrón sugerido para el throw:
+  ```ts
+  const required = ['VITE_FIREBASE_API_KEY', 'VITE_FIREBASE_AUTH_DOMAIN', ...];
+  const missing = required.filter(k => !import.meta.env[k]);
+  if (missing.length > 0) {
+    throw new Error(`Firebase config: faltan env vars: ${missing.join(', ')}. Copiá .env.example a .env y rellenalas.`);
+  }
+  ```
+- archivist PRE-CHANGE recomendado (toca `src/firebase/config.ts`, archivo crítico que importa todo el resto del app).
+- Reviewer obligatorio (toca arranque del app — si falla, NO arranca nada).
+- Coordinar con devops antes de pushear: si Vercel no tiene alguna de las 6 env vars seteadas, el deploy va a romper. Validar en panel Vercel primero.
+
+---
+
+### SPRINT-137 — Validación de archivos en uploads públicos (size + MIME + cantidad)
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (audit forense 2026-05-11 — hallazgo CRÍTICO #4)
+**Origen:** Cowork 2026-05-11. Audit forense detectó que `src/services/solicitudes.service.ts:122-133 subirArchivoSolicitud` y `src/services/storage.service.ts:1-23 subirFotoCierre/subirFirma` aceptan cualquier `File`/`Blob` sin validar tamaño, MIME real, ni cantidad de archivos por solicitud. Vector de abuso: atacante sube un .exe disfrazado de .jpg de 500MB y entra al bucket. También: cliente legítimo desde móvil sube foto sin comprimir de 30MB y satura Storage.
+**Riesgo:** bajo (agrega checks defensivos, no cambia el happy path).
+**Touch-list previsto:** `src/utils/uploads.ts` (NUEVO — helpers `validarArchivoPublico`, `validarFoto`, `validarFirma`), `src/services/solicitudes.service.ts`, `src/services/storage.service.ts`, `src/components/public/CampoFormulario.tsx` (mensaje de error al usuario), `src/components/cierre/CierreServicioWizard.tsx` (mensaje en flujo técnico si aplica).
+
+#### Objetivo
+
+Bloquear server-side todo upload de archivos que supere los límites del negocio: 10 MB max, MIME real en whitelist (no por extensión), cantidad razonable por solicitud. Cliente recibe mensaje claro en español si el archivo se rechaza.
+
+#### Por qué
+
+- Storage rules pueden mitigar (SPRINT-138) pero la validación client-side en el service da defense in depth y mensaje específico al usuario antes de gastar ancho de banda subiendo 30MB que la rule va a rechazar.
+- Whitelist por MIME real (sniffing del primer chunk del archivo) en vez de por extensión: protege contra `.exe` renombrado a `.jpg`.
+- Decisión Jorge 2026-05-11: max 10 MB por archivo.
+
+#### Criterios de aceptación
+
+- [ ] `src/utils/uploads.ts` NUEVO exporta:
+  - `MAX_FILE_BYTES = 10 * 1024 * 1024` (10 MB).
+  - `MIME_WHITELIST_FOTO = ['image/jpeg', 'image/png', 'image/webp', 'image/heic']`.
+  - `MIME_WHITELIST_FIRMA = ['image/png', 'image/svg+xml']` (las firmas suelen ser PNGs del canvas).
+  - `MIME_WHITELIST_DOC = ['application/pdf', ...MIME_WHITELIST_FOTO]` para campos de formulario público que aceptan PDF + imagen.
+  - `MAX_ARCHIVOS_POR_SOLICITUD = 10` (suficiente para casos legítimos, bloquea spam).
+  - Función pura `validarArchivoPublico(file: File, opts: { whitelist: string[]; maxBytes?: number }): { ok: true } | { ok: false; error: string }` que devuelve mensaje en español listo para mostrar al usuario.
+- [ ] `subirArchivoSolicitud` valida antes de `uploadBytes`. Si falla, throw con mensaje específico. Caller atrapa y muestra.
+- [ ] `subirFotoCierre`, `subirFotoInicio`, `subirFirma` (todos los exports de `storage.service.ts`) usan helpers correspondientes.
+- [ ] `CampoFormulario.tsx` muestra el error en rojo bajo el input cuando la validación rechaza. No envía el archivo al backend si falla cliente-side (early return).
+- [ ] Cantidad max: si el campo es de tipo `archivo_multiple`, validar `files.length <= MAX_ARCHIVOS_POR_SOLICITUD`.
+- [ ] Sniffing MIME real: leer primeros 12 bytes del archivo y comparar magic numbers conocidos (JPEG `FF D8 FF`, PNG `89 50 4E 47`, PDF `25 50 44 46`, WebP `52 49 46 46 ... 57 45 42 50`). Si MIME declarado no coincide con magic number, rechazar como "Archivo corrupto o tipo no permitido".
+- [ ] Tests manuales: subir un .jpg de 12 MB → rechazo claro. Subir un .exe renombrado a .jpg → rechazo. Subir un .pdf legítimo → OK.
+- [ ] Cazadores 7/7 PASS.
+
+#### Restricciones / guardarrails
+
+- NO bloquear `.heic` (iPhones default). Convertir o aceptar tal cual — verificar comportamiento en `OrdenAuditoria` y en cierre del técnico.
+- NO romper el flujo del wizard de cierre: técnicos suben fotos desde celular y NO pueden tener fricción. Mensaje debe ser amable: "Tu foto pesa 14 MB. Necesitamos máximo 10 MB. Bajala desde la cámara con calidad media."
+- NO confundir con SPRINT-138: el service hace la primera línea. Las rules de Storage hacen la segunda (defense in depth).
+- Sniffing MIME real es opcional. Si complica, dejar solo whitelist por `file.type` declarado (no es perfecto pero ya es 10x mejor que nada).
+
+#### Notas para el coordinator
+
+- Para sniffing: `const buf = await file.slice(0, 12).arrayBuffer()` + comparar bytes.
+- archivist PRE-CHANGE: tocar `src/services/solicitudes.service.ts` y `storage.service.ts` son críticos (uso por público).
+- regression_guardian: tocar storage.service afecta cierre de órdenes en producción. Revisar.
+
+---
+
+### SPRINT-138 — Crear `storage.rules` versionado + `npm run deploy:storage-rules`
+
+**Estado:** BLOQUEADO — esperando OK Jorge (toca reglas de Storage = config de seguridad productiva)
+**Prioridad:** alta (audit forense 2026-05-11 — hallazgo CRÍTICO #5)
+**Origen:** Cowork 2026-05-11. Audit forense detectó que `firestore.rules` está versionado en la raíz del repo pero `storage.rules` NO existe. Las reglas de Storage actuales viven solo en Firebase Console — no auditables desde el repo, no diffeables en PR, no protegidas por el flujo `npm run deploy:rules` + lock file.
+**Riesgo:** medio (introducir rules nuevas puede bloquear flujos legítimos si están mal escritas). Mitigación: empezar con rules permisivas equivalentes a lo que ya existe en consola, después restringir en sprints separados.
+**Touch-list previsto:** `storage.rules` (NUEVO), `storage.rules.deployed.lock` (NUEVO — espejo de `firestore.rules.deployed.lock`), `package.json` (script `deploy:storage-rules`), `scripts/invariantes/marcar-storage-rules-deployadas.ts` (NUEVO), `scripts/invariantes/check-storage-rules-pendientes-deploy.ts` (NUEVO — P-009), `docs/PATRONES_REGRESION.md` (entrada P-009), `scripts/invariantes/run-all.ts` (registrar P-009), `CLAUDE.md` (mencionar el nuevo flujo).
+
+#### Objetivo
+
+Tener `storage.rules` en la raíz del repo como fuente de verdad, con flujo `npm run deploy:storage-rules` que deploya + actualiza lock, y cazador P-009 que bloquea pre-commit si hay diff entre repo y lock. Patrón espejo del que ya existe para `firestore.rules` (sub-regla CLAUDE.md, P-005).
+
+#### Por qué
+
+- Hoy las rules de Storage son una caja negra. Si alguien las cambia en consola, no queda registro en git. Si se pierden, no hay forma de restaurarlas.
+- Audit logs y compliance: cualquier auditor pide "muéstreme sus rules de Storage" — sin archivo versionado, la respuesta es "están en la consola, créanos". Eso no escala.
+- SPRINT-137 hace validación client-side. Las rules son el cinturón defense in depth — sin storage.rules versionado, no podemos auditar que esa capa existe.
+- Patrón meta: si firestore.rules tiene este flujo, storage.rules debe tenerlo. Consistencia operacional.
+
+#### Criterios de aceptación
+
+- [ ] Jorge revisa las rules actuales de Storage en Firebase Console (https://console.firebase.google.com/project/mister-service-app-cloude/storage/rules) y las pega en `BLOQUEOS.md` o las dicta al coordinator. El sprint NO puede empezar sin baseline.
+- [ ] `storage.rules` creado en raíz del repo con el contenido baseline + comentarios explicando cada bloque. Estructura sugerida: regla por carpeta (`solicitudes/`, `fotos-servicio/`, `firmas/`, `equipos-taller/`, etc.).
+- [ ] Rules siguen el patrón de `firestore.rules`: helper `isSignedIn()`, `request.resource.size < 10 * 1024 * 1024`, `request.resource.contentType.matches('image/.*')`, etc.
+- [ ] Carpeta `solicitudes/{solicitudId}/{...}`: write permitido a no autenticados (formulario público) pero con límite de size y contentType.
+- [ ] Carpeta `fotos-servicio/{ordenId}/{...}`: write solo si `isSignedIn()` y tiene rol técnico/operaria/admin/coord.
+- [ ] Carpeta `firmas/{...}`: write permitido a no autenticados (cliente firma en wizard de cierre) pero solo PNG/SVG y <2 MB.
+- [ ] Read público para `fotos-servicio/` y `firmas/` (caller usa `getDownloadURL` que requiere URL pública — verificar el patrón actual).
+- [ ] `package.json` agrega script `deploy:storage-rules`: `"deploy:storage-rules": "npx firebase deploy --only storage:rules && tsx scripts/invariantes/marcar-storage-rules-deployadas.ts"`.
+- [ ] `scripts/invariantes/marcar-storage-rules-deployadas.ts` NUEVO — hashea `storage.rules` y escribe `storage.rules.deployed.lock` con el hash + timestamp.
+- [ ] `scripts/invariantes/check-storage-rules-pendientes-deploy.ts` NUEVO — P-009, espejo de P-005. Compara hash del repo vs lock, bloquea pre-commit si hay diff.
+- [ ] `docs/PATRONES_REGRESION.md` entrada P-009 nueva.
+- [ ] `scripts/invariantes/run-all.ts` registra P-009.
+- [ ] `CLAUDE.md` agrega sub-regla "sprints que tocan `storage.rules` deben deployar antes de cerrar COMPLETADO" — espejo de la sub-regla P-005.
+- [ ] Jorge ejecuta `npm run deploy:storage-rules` localmente para inicializar el lock. Coordinator NO ejecuta autónomo (es deploy productivo).
+- [ ] Cazadores 8/8 PASS post-deploy.
+
+#### Restricciones / guardarrails
+
+- **REQUIERE OK Jorge en BLOQUEOS.md.** Cowork escribe el sprint con `BLOQUEADO` hasta tener OK explícito.
+- Antes de pushear, Jorge debe pegar las rules actuales en `BLOQUEOS.md` para que el baseline coincida con producción y no rompa nada.
+- Si Jorge no recuerda qué tiene en consola, el sprint queda esperando hasta que las saque y las pegue.
+- archivist PRE-CHANGE obligatorio.
+- reviewer obligatorio (sub-regla CLAUDE.md: rules → reviewer con foco en inmutabilidad y defense in depth).
+- regression_guardian obligatorio (cualquier cambio de rules es de alto riesgo).
+- Después de deploy, smoke test manual: técnico sube foto de cierre, operaria sube foto, cliente firma. Si algo se rompe, revertir.
+
+#### Notas para el coordinator
+
+- El comando `npx firebase deploy --only storage:rules` puede fallar si el proyecto no tiene Storage habilitado (poco probable porque ya se usa) o si no hay default bucket. Verificar `firebase.json` antes.
+- Si `firebase.json` no tiene la sección `storage`, hay que agregarla:
+  ```json
+  { "storage": { "rules": "storage.rules" } }
+  ```
+- Patrón meta: este sprint reproduce exactamente lo que SPRINT-106 hizo para firestore.rules (P-005). Leer ese sprint como template antes de empezar.
+
+---
+
+### SPRINT-139 — Expiración de `tokenPortalCliente` (mientras orden activa + 30 días)
+
+**Estado:** PENDIENTE
+**Prioridad:** media (audit forense 2026-05-11 — hallazgo ALTO #6, mejora higiene de tokens)
+**Origen:** Cowork 2026-05-11. Audit forense detectó que `OrdenServicio.tokenPortalCliente` se genera con `crypto.randomUUID()` en `src/utils/index.ts:319` y NO tiene campo de expiración. Si el token se filtra (screenshot de WhatsApp, leak, mail forward), el acceso queda abierto para siempre.
+**Riesgo:** bajo (agrega campo opcional + check de validez, no rompe órdenes existentes).
+**Touch-list previsto:** `src/types/index.ts` (agregar `tokenPortalClienteExpiraEn?: Timestamp`), `src/utils/index.ts` (helper `calcularExpiracionTokenPortal`), `src/services/ordenes.service.ts` (setear al crear/cerrar), `src/hooks/useOrdenCreateForm.ts` (al crear orden), `src/pages/Mantenimiento.tsx` (al regenerar token), `src/pages/Reprogramaciones.tsx` (idem), `src/pages/public/PortalCliente.tsx` (check de validez antes de mostrar contenido), `src/utils/whatsapp.ts` (link incluye query string con scope si hace falta).
+
+#### Objetivo
+
+Que el `tokenPortalCliente` tenga fecha de expiración explícita: mientras la orden está activa (cualquier fase distinta de `cerrado` y `cancelado`), el token funciona. Una vez la orden pasa a `cerrado` o `cancelado`, el token sigue válido por 30 días más, después se invalida.
+
+#### Por qué
+
+- Decisión Jorge 2026-05-11: "Mientras orden activa + 30 días". Cubre el caso de garantías tempranas y reclamos.
+- Higiene de tokens: si un cliente recibe el link por WhatsApp y screenshotea, después de 30 días de cerrada la orden el link queda muerto. Reduce superficie de abuso por links leaked.
+- No requiere migración de órdenes existentes: las que no tengan `tokenPortalClienteExpiraEn` se tratan como "expira nunca" (compatible hacia atrás) o "expira al cierre + 30 días" si la orden ya está cerrada (computado dinámicamente).
+
+#### Criterios de aceptación
+
+- [ ] `src/types/index.ts` `OrdenServicio` agrega `tokenPortalClienteExpiraEn?: Timestamp | Date`. Documentar JSDoc: "Caduca 30 días después de cerrar/cancelar la orden. Mientras está abierta, el token funciona sin fecha límite. Si está ausente, se asume comportamiento legacy (sin expiración)."
+- [ ] Helper `src/utils/index.ts` `tokenPortalClienteValido(orden: OrdenServicio): boolean`:
+  - Si `orden.fase` ∈ {`cerrado`, `cancelado`} y `orden.tokenPortalClienteExpiraEn` existe y `Date.now() > expiracion.toMillis()`, retorna false.
+  - Si `orden.fase` ∈ {`cerrado`, `cancelado`} y NO hay `tokenPortalClienteExpiraEn` (legacy), calcular desde `orden.fechaCierre` o `orden.fechaCancelacion` + 30 días.
+  - Si `orden.fase` NO está cerrada/cancelada, retornar true siempre.
+- [ ] Al setear `fase: cerrado` o `fase: cancelado`, escribir `tokenPortalClienteExpiraEn = Timestamp.fromDate(addDays(new Date(), 30))`. Esto ocurre en:
+  - `CierreServicioWizard.tsx` (cierre normal).
+  - Cualquier otro punto que setee `fase: cancelado` — buscar con `grep -rn "fase: 'cancelado'" src/`.
+- [ ] `src/pages/public/PortalCliente.tsx` al cargar la orden: si `tokenPortalClienteValido(orden) === false`, mostrar pantalla "Este enlace ha caducado. Contactá con nosotros por WhatsApp" + link `wa.me` a la operaria asignada.
+- [ ] Cazadores 7/7 PASS.
+- [ ] Smoke test manual: cerrar una orden de prueba → abrir el portal con su token → debe funcionar. Setear `tokenPortalClienteExpiraEn` manualmente a ayer en Firestore Console → recargar → debe mostrar "caducado".
+
+#### Restricciones / guardarrails
+
+- NO migrar órdenes existentes. Las legacy se computan dinámicamente desde `fechaCierre`.
+- NO romper el flujo de creación: las órdenes nuevas siguen sin expiración hasta que se cierran.
+- NO mostrar la fecha de expiración al cliente — solo el cartel "caducado" cuando corresponde.
+- Tener en cuenta que `tokenPortalCliente` puede regenerarse (Mantenimiento, Reprogramaciones) — si se regenera, también se debe resetear `tokenPortalClienteExpiraEn` a null.
+
+#### Notas para el coordinator
+
+- archivist PRE-CHANGE recomendado (toca el tipo central `OrdenServicio`).
+- regression_guardian recomendado.
+- Coordinar con SPRINT-140 (garantía tiene su propio token con su propia expiración).
+
+---
+
+### SPRINT-140 — Expiración de `garantia.token` (alineado a `finFecha` + buffer 7 días)
+
+**Estado:** BLOQUEADO — depende de SPRINT-135a (refactor garantía) cerrado. Si 135a cambia el shape de `garantia`, este sprint se ajusta.
+**Prioridad:** media (audit forense 2026-05-11 — hallazgo ALTO #6, mejora higiene de tokens)
+**Origen:** Cowork 2026-05-11. Audit forense detectó que `GarantiaInfo.token` (en `src/types/index.ts:288`) es un UUID sin expiración. La garantía sí tiene `finFecha`, pero el token mismo no caduca con ella — si alguien retiene el link después de vencida la garantía, sigue viendo el contenido público y puede confundir flujos.
+**Riesgo:** bajo (agrega campo opcional + check, no rompe garantías existentes).
+**Touch-list previsto:** `src/types/index.ts` (agregar `tokenExpiraEn?: Timestamp` a `GarantiaInfo`), `src/pages/public/GarantiaCliente.tsx` (check de validez), `src/utils/index.ts` (helper `garantiaTokenValido`), `src/components/cierre/CierreServicioWizard.tsx` (setear al emitir conduce de garantía).
+
+#### Objetivo
+
+Que `garantia.token` tenga fecha de expiración alineada con `garantia.finFecha` + 7 días de buffer (para que un reclamo en el último día tenga ventana razonable). Después de eso, el link queda muerto.
+
+#### Por qué
+
+- Hoy un cliente con link viejo puede entrar a `/garantia/:token` y ver el botón de reclamo, aunque la garantía haya vencido. El botón está deshabilitado por la lógica de `finFecha`, pero la pantalla expone info de la orden + del técnico, que no debería seguir pública para siempre.
+- El buffer de 7 días post-`finFecha` cubre el caso "cliente reclama el día 60 a las 11pm" — la lógica de aceptación del reclamo es responsabilidad de 135b/c/d/e, pero el token debe seguir abriendo la pantalla unos días después por si hay disputas o si Jorge necesita revisar.
+
+#### Criterios de aceptación
+
+- [ ] `GarantiaInfo` agrega `tokenExpiraEn?: Timestamp | Date`. JSDoc: "= `finFecha` + 7 días. Si está ausente (legacy), se computa dinámicamente."
+- [ ] Helper `garantiaTokenValido(garantia: GarantiaInfo): boolean` análogo al de SPRINT-139.
+- [ ] Al emitir conduce de garantía (en `CierreServicioWizard.tsx` u homólogo), setear `tokenExpiraEn = Timestamp.fromDate(addDays(finFecha.toDate(), 7))`.
+- [ ] `src/pages/public/GarantiaCliente.tsx` al cargar: si token no válido, mostrar "Esta garantía ha expirado. Contactá con nosotros por WhatsApp."
+- [ ] Migración legacy: si `garantia.token` existe pero `tokenExpiraEn` no, computar desde `finFecha + 7 días` al vuelo.
+- [ ] Cazadores 7/7 PASS.
+
+#### Restricciones / guardarrails
+
+- **Esperar SPRINT-135a cerrado.** Si 135a renombra o cambia el shape de `GarantiaInfo`, este sprint se reescribe.
+- NO sobrescribir tokens de garantías ya emitidas (legacy). Solo aplica para emisiones nuevas.
+- NO afectar el flujo de reclamo público (esa es responsabilidad de 135b).
+
+#### Notas para el coordinator
+
+- archivist PRE-CHANGE obligatorio.
+- Coordinar con SPRINT-135b/c/d/e en cuanto al UI del reclamo.
+- Buffer de 7 días es asunción razonable. Jorge puede pedir más/menos.
+
+---
+
+### SPRINT-141 — App Check enforce (con ventana monitoreo 48h previo)
+
+**Estado:** BLOQUEADO — requiere OK Jorge después de ventana de monitoreo de 48h
+**Prioridad:** alta (audit forense 2026-05-11 — hallazgo ALTO #4)
+**Origen:** Cowork 2026-05-11. Audit forense detectó que App Check está inicializado en `src/firebase/config.ts:22-42` con reCAPTCHA v3, pero el comentario línea 19 dice *"enforcement se activa manualmente en Firebase Console tras validar"*. Está en modo soft — los requests sin token de attestation no se bloquean. Producción es vulnerable a abuso/scraping desde scripts externos con las API keys públicas.
+**Riesgo:** medio. Activar enforce mal calibrado puede bloquear usuarios legítimos si algún flujo no inicializa App Check correctamente (ej: SSR, navegadores muy viejos, modo incognito sin reCAPTCHA). Mitigación: ventana de monitoreo 48h en Firebase Console mirando "App Check verified requests vs unverified" antes de activar enforce.
+**Touch-list previsto:** Ninguno en código de la app. Solo:
+- `docs/sprints/BLOQUEOS.md` (registro de la ventana de monitoreo).
+- `CLAUDE.md` (línea que dice "App Check (currently soft enforcement, not blocking)" → invertir post-deploy).
+- `docs/sprints/DIARIO_YYYY-MM-DD.md` (registro del flip).
+
+#### Objetivo
+
+Activar enforce en Firebase Console para Firestore y Storage después de validar 48h que el % de requests "unverified" es <1%.
+
+#### Por qué
+
+- App Check soft no protege nada. Es como tener una cerradura sin trabar.
+- Con enforce activo, scripts externos que usen las API keys públicas (que están en el bundle) no pueden escribir a Firestore ni a Storage sin tener un token reCAPTCHA válido emitido por nuestro dominio.
+- La ventana de 48h evita el escenario "activé enforce y la app dejó de funcionar para usuarios reales que usan navegadores donde reCAPTCHA falla".
+
+#### Criterios de aceptación
+
+- [ ] Día 0: Jorge confirma OK explícito en BLOQUEOS.md (`OK: jorge 2026-MM-DD HH:MM`).
+- [ ] Día 0: coordinator (o Jorge) entra a Firebase Console → App Check → mira la sección "Requests" para Firestore y Storage. Anota baseline: % de requests verified vs unverified durante última semana. Documentar en BLOQUEOS.md.
+- [ ] Día 0: NO se activa enforce aún. Se documenta el baseline.
+- [ ] Día 0+48h: revisar de nuevo. Si verified >99%, OK para enforce. Si verified <99%, investigar qué flujo no envía token (probablemente algún hook o ruta que no importa `firebase/config.ts` antes de hacer requests).
+- [ ] Día 0+48h: Jorge entra a Firebase Console → App Check → Firestore → "Enforce" → ON. Lo mismo para Storage.
+- [ ] Día 0+48h: smoke test manual end-to-end con admin, coord, operaria, técnico, secretaria. Crear orden, mover fases, cerrar, abrir portal cliente.
+- [ ] Día 0+48h+1h: si todo OK, actualizar `CLAUDE.md` línea relevante: "App Check enforce activo desde YYYY-MM-DD". Si hay regresiones, revertir enforce y abrir sprint diagnóstico.
+- [ ] Postmortem-positivo si todo va bien (sub-regla de continuous improvement loop, opcional).
+
+#### Restricciones / guardarrails
+
+- **REQUIERE OK Jorge.** Esto es un cambio operacional, no código.
+- NO ejecutar autónomo. Coordinator solo escribe los pasos en BLOQUEOS.md y espera.
+- Si en cualquier momento de las 48h aparecen reportes de usuarios "no me deja entrar", abortar.
+- Tener listo el rollback: 1 click en Firebase Console para volver a soft mode.
+- Considerar activar primero solo Firestore, esperar 24h, después Storage. Reduce blast radius.
+
+#### Notas para el coordinator
+
+- Este sprint no requiere builder/tester/reviewer porque no toca código. Sí requiere devops para monitorear.
+- archivist en modo POSTMORTEM si hay incidente.
+
+---
+
+### SPRINT-142 — Refactor `PersonalPage.tsx` (1713 líneas → 3-4 componentes)
+
+**Estado:** PENDIENTE
+**Prioridad:** media (audit forense 2026-05-11 — hallazgo ALTO #5, monolito más grande del repo)
+**Origen:** Cowork 2026-05-11. Audit forense identificó 4 monolitos (PersonalPage 1713, MapaRutas 1267, Configuracion 1102, Ordenes 1001). Decisión Jorge: solo refactorizar PersonalPage como prueba; los otros 3 quedan como deuda hasta que un sprint los toque.
+**Riesgo:** medio. Refactor de archivo crítico (gestión de empleados, alta de usuarios, transferencia de órdenes al eliminar). Mitigación: dividir en 4 sub-sprints (142a..d) con QA visual entre cada uno, igual que SPRINT-117c.
+**Touch-list previsto:** `src/pages/PersonalPage.tsx` (rewire), `src/components/personal/` (NUEVO directorio con 3-4 componentes extraídos).
+
+#### Objetivo
+
+Dividir `PersonalPage.tsx` (1713 líneas) en `PersonalPage.tsx` (~300 líneas, solo orquesta) + 3-4 componentes hijos extraídos a `src/components/personal/`:
+- `TablaPersonalActivo.tsx` (tabla + filtros).
+- `ModalAltaEmpleado.tsx` (formulario alta).
+- `ModalConfirmarEliminar.tsx` (eliminación + transferencia de órdenes).
+- `GruposOperariaTecnico.tsx` (matriz 7+7 de asignaciones).
+
+#### Por qué
+
+- Archivos monolíticos son trampa de regresiones. Cada touch sobre PersonalPage tiene riesgo alto porque toca lógica de Auth + permisos + transferencia cross-collection. Recientemente SPRINT-132 + SPRINT-133 tocaron este archivo y casi rompen producción dos veces.
+- Componentes chicos permiten unit-testing futuro y revisión más fácil en PR.
+- El refactor NO cambia comportamiento — solo mueve código a archivos separados.
+
+#### Criterios de aceptación
+
+- [ ] Sub-sprint 142a — extraer `ModalAltaEmpleado` (riesgo bajo, módulo más auto-contenido).
+- [ ] Sub-sprint 142b — extraer `ModalConfirmarEliminar` (riesgo medio, contiene transferencia cross-collection con writeBatch del SPRINT-133).
+- [ ] Sub-sprint 142c — extraer `GruposOperariaTecnico` (riesgo bajo).
+- [ ] Sub-sprint 142d — extraer `TablaPersonalActivo` + cleanup final, dejar `PersonalPage.tsx` como orquestador delgado (~300 líneas).
+- [ ] Cada sub-sprint con QA visual entre deploys (admin abre página, agrega empleado de prueba, elimina, asigna operaria, verifica que todo sigue funcionando).
+- [ ] Cazadores 7/7 PASS en cada sub-sprint.
+- [ ] Cero cambios funcionales — solo reorganización de archivos. Bundle size puede subir levemente por el overhead de imports.
+- [ ] Reviewer obligatorio en cada sub-sprint (refactor de archivo crítico).
+- [ ] archivist PRE-CHANGE en cada sub-sprint.
+
+#### Restricciones / guardarrails
+
+- NO mezclar refactor con cambios de comportamiento. Si durante el refactor se encuentra un bug, abrir sprint separado.
+- NO romper imports en otros archivos. Verificar con `grep -rn "from.*PersonalPage" src/` antes de cada extracción.
+- NO refactorizar `MapaRutas.tsx`, `Configuracion.tsx`, `Ordenes.tsx` — están fuera de scope.
+- Sub-sprints procesables uno por uno con `trabaja`. NO procesar todos en una pasada.
+
+#### Notas para el coordinator
+
+- Patrón de referencia: SPRINT-117c (sidebar) usó el mismo approach "1 sub-sprint, QA visual humana, después siguiente". Postmortem-positivo en `docs/postmortems/2026-05-10-rediseno-ia-aprendizajes.md`.
+- Bundle de regresión: medir bundle size antes (con `npm run build`) y después de cada sub-sprint. Documentar en cada commit.
 
 ---
 

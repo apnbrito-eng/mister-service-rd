@@ -10,6 +10,89 @@
 
 ---
 
+## SPRINT-138 — Crear `storage.rules` versionado + flujo `deploy:storage-rules`
+
+**Tipo:** Sprint bloqueado por OK humano (toca rules de seguridad productiva — equivalente al gate de `firestore.rules`).
+**Estado:** ESPERANDO OK JORGE
+**Origen:** Audit forense Cowork 2026-05-11. `firestore.rules` está versionado en el repo, pero `storage.rules` no existe — las rules de Storage viven solo en Firebase Console. Sin archivo en el repo no hay diff en PR ni protección contra `git revert`, y el flujo `npm run deploy:rules` no las cubre.
+
+**Por qué requiere OK:**
+
+1. Toca un archivo de rules nuevo que va a deployarse a producción → riesgo de bloquear flujos legítimos si está mal escrito (técnico que sube foto, cliente que firma).
+2. Necesita que Jorge **dicte el baseline actual de las rules de consola** antes de empezar. Sin baseline, el sprint puede sobreescribir rules existentes con un default genérico.
+3. Patrón espejo de `firestore.rules` que requiere reviewer obligatorio con foco en rules.
+
+**Lo que Jorge debe hacer para desbloquear:**
+
+1. Entrar a https://console.firebase.google.com/project/mister-service-app-cloude/storage/rules
+2. Copiar el contenido completo del editor y pegarlo abajo en la sección "Baseline actual de rules" de esta entrada.
+3. Agregar `OK: jorge YYYY-MM-DD HH:MM` al final de esta sección.
+4. Pegar `procesa bloqueos` al coordinator de Claude Code.
+
+**Baseline actual de rules** (Jorge completa esta sección antes de OK):
+
+```
+<pegá acá las rules tal como están en consola hoy>
+```
+
+**Restricciones reiteradas (también en el sprint):**
+
+- archivist PRE-CHANGE obligatorio.
+- reviewer obligatorio (foco rules + defense in depth).
+- regression_guardian obligatorio.
+- `npm run deploy:storage-rules` ejecutado por Jorge — coordinator NO ejecuta autónomo.
+- Smoke test manual post-deploy: técnico sube foto, operaria sube foto, cliente firma. Si algo se rompe, revertir.
+
+**Si Jorge prefiere rechazar:** agregá `RECHAZADO: jorge YYYY-MM-DD HH:MM <motivo>` y se archiva. Las rules de Storage siguen viviendo solo en consola hasta nuevo aviso.
+
+---
+
+## SPRINT-141 — Activar App Check enforce (con ventana monitoreo 48h previo)
+
+**Tipo:** Sprint bloqueado por OK humano (cambio operacional en Firebase Console, no es código).
+**Estado:** ESPERANDO OK JORGE
+**Origen:** Audit forense Cowork 2026-05-11. App Check está inicializado en `src/firebase/config.ts:22-42` con reCAPTCHA v3 pero en modo soft (no bloquea requests sin token). Audit recomienda activar enforce, pero con ventana de monitoreo previa de 48h para evitar bloquear usuarios legítimos.
+
+**Por qué requiere OK:**
+
+1. Activar enforce puede romper la app para usuarios reales si algún flujo no inicializa App Check correctamente. Es operación de alto riesgo.
+2. El cambio se hace en consola, no en código — el coordinator no puede ejecutarlo.
+3. Necesita ventana de monitoreo humano de 48h en Firebase Console mirando "App Check verified vs unverified requests".
+
+**Lo que Jorge debe hacer para desbloquear (flujo en 3 pasos):**
+
+**Paso 1 — Día 0 (Jorge inicia ventana de monitoreo):**
+
+1. Entrar a https://console.firebase.google.com/project/mister-service-app-cloude/appcheck
+2. Ver sección "Requests" para Firestore y Storage en últimos 7 días.
+3. Anotar baseline: `% verified = ___` y `% unverified = ___` para cada producto.
+4. Agregar acá: `Día 0 baseline: jorge YYYY-MM-DD HH:MM | Firestore verified ___% | Storage verified ___%`
+5. NO activar enforce todavía. Solo iniciar la ventana.
+
+**Paso 2 — Día 0+48h (Jorge revisa de nuevo):**
+
+1. Volver a Firebase Console → App Check → Requests.
+2. Si `verified > 99%` para ambos productos → continuar al Paso 3.
+3. Si `verified < 99%` → investigar qué flujo no envía token (probablemente algún hook o ruta que no importa `firebase/config.ts` antes de hacer requests). Abrir sprint diagnóstico antes de enforce.
+
+**Paso 3 — Día 0+48h (Jorge activa enforce, ya con OK del Paso 2):**
+
+1. Firebase Console → App Check → Firestore → "Enforce" → ON.
+2. Lo mismo para Storage.
+3. Smoke test end-to-end con admin, coord, operaria, técnico, secretaria. Si todo OK:
+4. Agregar `OK enforce activado: jorge YYYY-MM-DD HH:MM — Firestore + Storage` y archivar.
+5. Si algo se rompe → desactivar enforce inmediatamente (1 click en consola) y abrir sprint diagnóstico.
+
+**Restricciones reiteradas:**
+
+- Coordinator solo registra los pasos acá y espera.
+- Considerar activar primero Firestore, esperar 24h, después Storage. Reduce blast radius.
+- Postmortem-positivo si todo OK (sub-regla continuous improvement loop, opcional).
+
+**Si Jorge prefiere rechazar:** agregá `RECHAZADO: jorge YYYY-MM-DD HH:MM <motivo>`. App Check sigue en soft mode hasta nuevo aviso (vulnerable a abuso desde scripts externos con las API keys públicas del bundle).
+
+---
+
 ## SPRINT-134-mant-QA — Validación funcional: generar orden desde mantenimiento programado (writeBatch atómico)
 
 **Tipo:** QA humana **no bloqueante** (registro de pendiente, no impide cierre del sub-sprint).
