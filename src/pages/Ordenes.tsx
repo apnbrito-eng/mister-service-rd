@@ -914,6 +914,7 @@ export default function Ordenes() {
             fotoFile={editFotoFile}
             onPickFoto={(file) => setEditFotoFile(file)}
             onQuitarFoto={() => { setEditFotoFile(null); setEditForm(f => ({ ...f, fotoEquipoUrl: '' })); }}
+            userProfile={userProfile}
           />
         )}
       </Modal>

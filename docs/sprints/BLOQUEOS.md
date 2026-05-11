@@ -10,6 +10,35 @@
 
 ---
 
+## SPRINT-130-QA — Validación visual del botón "Re-sincronizar operaria"
+
+**Tipo:** QA humana **no bloqueante** (registro de pendiente, no impide cierre del sprint).
+**Estado:** PENDIENTE VALIDACIÓN HUMANA
+**Origen:** SPRINT-130 cerró el código + cazadores 7/7 PASS + typecheck + build, pero la sub-regla CLAUDE.md "cleanup en componentes de wizard requiere QA manual" se interpreta extensivamente para feature nueva en `OrdenEditForm.tsx` (lista crítica del archivist). El coordinator NO puede ejecutar QA visual; registra acá lo que el humano debe verificar.
+
+**Casos a validar manualmente (cuando Jorge o cualquier humano abra la app post-deploy):**
+
+1. **Caso primario — Aury Mon / Wilainy** (el bug original que motivó el sprint):
+   - Abrir `/admin/ordenes` → buscar una orden de Aury Mon que aparezca sin operaria.
+   - Hacer click en "Editar" en el modal de detalle.
+   - En la sección Programación, debajo del dropdown de Técnico, debe aparecer un banner amber con texto tipo "Esta orden no tiene operaria asignada. El técnico hoy reporta a Wilainy." y un botón púrpura "Re-sincronizar operaria".
+   - Click en el botón → confirm dialog → aceptar.
+   - Toast verde "Operaria sincronizada: Wilainy". El doc en Firestore debe quedar con `operariaNombre: "Wilainy"` y un registro de auditoría `campo: 'operariaId'` con detalle "Asignó operaria...".
+
+2. **Estado "sincronizada":** abrir cualquier orden cuya operaria YA coincide con la del técnico. El botón debe aparecer disabled emerald con texto "Sincronizada" + tooltip.
+
+3. **Estado "sin operaria":** abrir una orden de un técnico sin operaria asignada en Personal. El botón debe aparecer disabled gris con texto "Sin operaria" + mensaje amber "Asigná operaria al técnico en Personal primero.".
+
+4. **Estado oculto:** abrir una orden sin técnico asignado. NO debe aparecer el botón.
+
+5. **No regresión:** confirmar que el dropdown de Técnico, los avisos "Grupo: X" / "Esta orden pasará al grupo de X" siguen funcionando como antes (cambio NO afectó el flujo derivativo del create/edit normal).
+
+**Si algún caso falla:** reportar a Cowork con captura. Cowork agregará SPRINT-130-FIX a la cola con detalle.
+
+**Si todos pasan:** Jorge edita esta sección con `OK: jorge YYYY-MM-DD HH:MM — QA visual OK` y la podemos archivar.
+
+---
+
 ## SPRINT-115 fase write — SUPERADO por SPRINT-118 (re-migración masiva acotada a 5 empleados)
 
 Conservado en histórico. El alcance original (3 notis de Yohana) queda absorbido por el OK más amplio abajo.

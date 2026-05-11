@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { MapPin, User, Wrench, Calendar, Camera, X as XIcon } from 'lucide-react';
-import { OrdenServicio, Personal } from '../../types';
+import { OrdenServicio, Personal, Usuario } from '../../types';
 import { HORARIOS, HORARIOS_LABEL, DURACIONES } from '../../utils';
 import { useTiposEquipo } from '../../hooks/useTiposEquipo';
 import MiniMapaCliente from './MiniMapaCliente';
+import BotonRederivarOperaria from './BotonRederivarOperaria';
 
 const MARCAS_SUGERIDAS = ['LG', 'Samsung', 'Mabe', 'Whirlpool', 'GE', 'Frigidaire'];
 
@@ -49,6 +50,8 @@ interface OrdenEditFormProps {
   fotoFile: File | null;
   onPickFoto: (file: File) => void;
   onQuitarFoto: () => void;
+  // SPRINT-130: usuario actual para auditoría del botón "Re-sincronizar operaria"
+  userProfile: Usuario | null;
 }
 
 export default function OrdenEditForm({
@@ -67,6 +70,7 @@ export default function OrdenEditForm({
   fotoFile,
   onPickFoto,
   onQuitarFoto,
+  userProfile,
 }: OrdenEditFormProps) {
   const tiposEquipo = useTiposEquipo();
   // Derivar operaria del técnico actualmente elegido
@@ -318,6 +322,16 @@ export default function OrdenEditForm({
                 Este técnico no tiene operaria asignada.
               </p>
             )}
+            {/* SPRINT-130: botón "Re-sincronizar operaria" para órdenes viejas
+                cuyo snapshot quedó desactualizado tras asignar operaria al
+                técnico DESPUÉS de crear la orden. Lee `selectedOrden`
+                (estado actual en Firestore, no `editForm` que es el draft
+                no guardado) para no confundirse con cambios pendientes. */}
+            <BotonRederivarOperaria
+              orden={selectedOrden}
+              personal={tecnicos}
+              userProfile={userProfile}
+            />
           </div>
 
           <div>

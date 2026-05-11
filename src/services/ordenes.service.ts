@@ -160,6 +160,105 @@ export async function reactivarOrdenPostChequeo(
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Re-sincronización de operaria — SPRINT-130
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Resultado de `resincronizarOperariaEnOrden`. `ok=false` cuando no se hizo
+ * cambio (ya sincronizada / técnico sin operaria / orden sin técnico). Las
+ * razones son discriminadas para que el caller renderice el mensaje correcto.
+ */
+export type ResincronizarOperariaResult =
+  | { ok: true; operariaIdAnterior: string | null; operariaIdNuevo: string | null }
+  | { ok: false; razon: 'orden_no_existe' | 'orden_sin_tecnico' | 'tecnico_no_encontrado' | 'tecnico_sin_operaria' | 'ya_sincronizada' | 'error_interno' };
+
+/**
+ * Re-sincroniza `operariaId` + `operariaNombre` de una orden con los valores
+ * actuales de `personal/{tecnicoUid}.operariaId/operariaNombre`. Caso de uso:
+ * cuando se asigna operaria a un técnico DESPUÉS de que ya tenga órdenes
+ * abiertas, el snapshot congelado al crear la orden queda desactualizado.
+ * Este helper permite corregirlo manualmente desde la UI (1 click = 1 orden).
+ *
+ * Atomicidad vía `runTransaction`: si dos clicks concurrentes disparan el
+ * helper, el segundo verá el estado ya sincronizado y retornará
+ * `ya_sincronizada` sin doble-escribir.
+ *
+ * IMPORTANTE: `orden.tecnicoId` se interpreta como `auth.uid` del técnico
+ * (convención post-`c4be345`/SPRINT-106). El caller debe pasarle el array
+ * `personal` para buscar el técnico por `p.uid` (no por `p.id`).
+ *
+ * NO toca el campo `tecnicoId` ni el `tecnicoNombre` de la orden — solo
+ * `operariaId` y `operariaNombre`. Eso preserva el historial: la orden
+ * siempre fue del técnico X, lo que cambia es a qué operaria reporta hoy.
+ */
+export async function resincronizarOperariaEnOrden(
+  ordenId: string,
+  personal: Personal[],
+  usuarioActual: { nombre: string },
+): Promise<ResincronizarOperariaResult> {
+  const ordenRef = doc(db, 'ordenes_servicio', ordenId);
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ordenRef);
+      if (!snap.exists()) return { ok: false, razon: 'orden_no_existe' as const };
+      const data = snap.data() as Record<string, unknown>;
+
+      const tecnicoId = typeof data.tecnicoId === 'string' ? data.tecnicoId : '';
+      if (!tecnicoId) return { ok: false, razon: 'orden_sin_tecnico' as const };
+
+      // Buscar técnico por uid (post-SPRINT-106 tecnicoId == auth.uid). Fallback
+      // a p.id solo por compatibilidad con órdenes legacy no migradas.
+      const tecnico = personal.find((p) => (p.uid || p.id) === tecnicoId);
+      if (!tecnico) return { ok: false, razon: 'tecnico_no_encontrado' as const };
+
+      const operariaIdNuevo = tecnico.operariaId ?? null;
+      const operariaNombreNuevo = tecnico.operariaNombre ?? null;
+      if (!operariaIdNuevo) return { ok: false, razon: 'tecnico_sin_operaria' as const };
+
+      const operariaIdActual = typeof data.operariaId === 'string' && data.operariaId.length > 0
+        ? data.operariaId
+        : null;
+      const operariaNombreActual = typeof data.operariaNombre === 'string' && data.operariaNombre.length > 0
+        ? data.operariaNombre
+        : null;
+
+      if (operariaIdActual === operariaIdNuevo && operariaNombreActual === operariaNombreNuevo) {
+        return { ok: false, razon: 'ya_sincronizada' as const };
+      }
+
+      const detalle = operariaNombreActual
+        ? `Re-sincronizó operaria de "${operariaNombreActual}" a "${operariaNombreNuevo}" (derivada del técnico ${tecnico.nombre || ''}).`
+        : `Asignó operaria "${operariaNombreNuevo}" (derivada del técnico ${tecnico.nombre || ''}).`;
+
+      const auditoriaEntry = crearRegistroAuditoria(
+        usuarioActual.nombre,
+        'editar',
+        detalle,
+        'operariaId',
+        operariaIdActual ?? '',
+        operariaIdNuevo,
+      );
+
+      tx.update(ordenRef, {
+        operariaId: operariaIdNuevo,
+        operariaNombre: operariaNombreNuevo,
+        auditoria: arrayUnion(auditoriaEntry),
+        updatedAt: serverTimestamp(),
+      });
+
+      return {
+        ok: true as const,
+        operariaIdAnterior: operariaIdActual,
+        operariaIdNuevo,
+      };
+    });
+  } catch (err) {
+    console.error('Error re-sincronizando operaria en orden:', err);
+    return { ok: false, razon: 'error_interno' };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Sugerencia de "solo chequeo" — flujo técnico → oficina (R4 endurecida)
 // ─────────────────────────────────────────────────────────────────────
 

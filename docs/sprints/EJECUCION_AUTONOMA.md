@@ -5,6 +5,77 @@
 
 ---
 
+## 2026-05-11 — `trabaja` (pasada 1 del día): SPRINT-130 COMPLETADO (1/1)
+
+### Contexto
+
+Jorge disparó `trabaja` para procesar SPRINT-130 ("Botón Re-sincronizar operaria en órdenes individuales"). Origen: cerrar el caso Aury Mon de raíz — cuando se asigna operaria a un técnico DESPUÉS de que ya tenga órdenes abiertas, las órdenes viejas quedan con snapshot stale de `operariaNombre`. El sprint agrega un botón explícito para re-derivar 1 orden por click.
+
+Sprint clasificado **autónomo completo** (no toca rules, no migraciones masivas, riesgo bajo). Procesado en una sola pasada sin escalación.
+
+### SPRINT-130 — Botón "Re-sincronizar operaria" en `OrdenEditForm`
+
+- **archivist PRE-CHANGE (auto-rol coordinator):**
+  - Touch-list: `OrdenEditForm.tsx` (crítico de wizard), `ordenes.service.ts` (services), `Ordenes.tsx` (consumidor), `MapaRutas.tsx` (segundo consumidor), `BotonRederivarOperaria.tsx` (NUEVO).
+  - Historial relevante consultado:
+    - `OrdenEditForm.tsx` fue víctima del bug P-006 en commit `c4be345` (2026-05-07): el dropdown de técnico guardaba `t.id` en lugar de `t.uid`. El archivo HOY guarda `t.uid` correctamente. El componente nuevo respeta la convención `(p.uid || p.id) === orden.tecnicoId` desde el inicio.
+    - `ordenes.service.ts` sin historial reciente relevante a operaria.
+    - Postmortem `2026-05-07-iniciar-chequeo-permission-denied.md` (P-006 + P-002) — el sprint NO escribe `tecnicoId` ni cambia rules, así que las regresiones de ese postmortem no aplican directamente.
+  - **Hallazgo colateral (FUERA DE SCOPE):** `OrdenEditForm.tsx:73` usa `tecnicos.find(t => t.id === editForm.tecnicoId)` para derivar la operaria del select. Eso es bug latente: post-`c4be345` `tecnicoId == auth.uid` y debería ser `(t.uid || t.id) === editForm.tecnicoId`. NO corregido en este sprint (cambio de comportamiento en flujo de derivación). Candidato a otro sprint si Jorge lo quiere arreglar.
+  - Categoría especial: archivo crítico de wizard → QA manual obligatorio → registrado en BLOQUEOS.md como SPRINT-130-QA no bloqueante.
+
+- **Builder (edición directa del coordinator):**
+  - Helper `resincronizarOperariaEnOrden(ordenId, personal, usuarioActual)` en `src/services/ordenes.service.ts` (~99 líneas). Single-collection envuelto en `runTransaction` por atomicidad lectura→escritura contra clicks dobles. Result type discriminado por razón (`orden_no_existe`, `orden_sin_tecnico`, `tecnico_no_encontrado`, `tecnico_sin_operaria`, `ya_sincronizada`, `error_interno`). Escribe `operariaId`, `operariaNombre`, `auditoria: arrayUnion(reg)`, `updatedAt: serverTimestamp()`. NO toca `tecnicoId` ni `tecnicoNombre` (preserva historial). Strip de undefined con fallback explícito a `null`.
+  - Componente NUEVO `src/components/ordenes/BotonRederivarOperaria.tsx` (~155 líneas). 4 estados: oculto (sin técnico / huérfano migración), disabled "Sin operaria" (gris + msg amber), disabled "Sincronizada" (emerald), activo púrpura (mismatch + banner amber explicativo). `window.confirm()` antes de escribir. Toasts diferenciados por razón. Sin escrituras directas — delega al helper.
+  - Integración en `OrdenEditForm.tsx`: nueva prop `userProfile: Usuario | null` (requerida), monta el botón en sección Programación bajo el aviso existente "Este técnico no tiene operaria asignada". Lee `selectedOrden` (estado Firestore), NO `editForm` (draft) — evita pisar cambios del usuario.
+  - Consumidores: `Ordenes.tsx` y `MapaRutas.tsx` actualizados para pasar `userProfile` (ya en scope vía `useApp()`).
+  - **Decisiones de diseño explícitas:**
+    1. Reutilicé `'editar'` como `AccionAuditoria` en lugar de agregar nueva entrada al type union (scope chico).
+    2. `runTransaction` aunque sea single-collection — defensa contra clicks dobles.
+    3. Botón opera sobre `selectedOrden` (Firestore) no `editForm` (draft) para no pisar cambios pendientes.
+    4. NO arreglé el bug latente en `OrdenEditForm.tsx:73` (`p.id === editForm.tecnicoId`) — fuera de scope.
+
+- **Tester (auto-rol):**
+  - `npx tsc --noEmit` PASS.
+  - `npx eslint <5 archivos modificados> --max-warnings 0` PASS.
+  - `npm run build` PASS (4.02s).
+  - `npm run check:regression` 7/7 PASS (P-001..P-007). P-008 manual, no aplica al pre-commit.
+  - **GO.**
+
+- **regression_guardian (auto-rol):**
+  - Capa 1 determinística: 7/7 PASS.
+  - Capa 2 semántica: evaluado contra P-001..P-008. Sin hits.
+    - P-001: el helper recibe `usuarioActual: { nombre }`, no usa `userProfile.id` para gating de auth.uid. **OK.**
+    - P-002, P-005: no toca rules. **OK.**
+    - P-003: single-collection write (`ordenes_servicio`). `runTransaction` es defensa anti-concurrencia, no por cross-collection. **OK.**
+    - P-004: no toca alta de empleados. **OK.**
+    - P-006: el helper busca técnico con `(p.uid || p.id) === tecnicoId`. El componente cliente idem. Patrón correcto post-`c4be345`. **OK.**
+    - P-007: no crea notificaciones. **OK.**
+  - **PASS.**
+
+- **Reviewer (auto-rol):**
+  - Concurrencia: `tx.update` + `arrayUnion` soportado y deduplicador. OK.
+  - Stale-window del `personal[]` pasado por el cliente: la transacción usa el snapshot del cliente, no re-lee desde Firestore. Aceptable porque `personal` viene de `onSnapshot` upstream (stale window de segundos). Documentado en el helper.
+  - El componente lee `selectedOrden` no `editForm`: correcto.
+  - `window.confirm()` síncrono: pedido explícito del sprint, OK.
+  - Edge case operariaId set pero operariaNombre undefined: aceptado (modal de Personal exige ambos al guardar). Trust upstream invariant.
+  - Acción auditoría reutilizada `'editar'` con `campo: 'operariaId'`: filtrable post-facto. OK.
+  - Sub-regla "QA manual cleanup wizard": el cambio NO es cleanup, es feature nueva, pero por seguridad se registra en BLOQUEOS.md como SPRINT-130-QA no bloqueante.
+  - **APPROVED. Sin CHANGES_NEEDED.**
+
+- **QA visual humana:** registrada en `BLOQUEOS.md` como SPRINT-130-QA no bloqueante. Caso primario: orden de Aury Mon → click botón → toast verde "Operaria sincronizada: Wilainy" + doc actualizado en Firestore.
+
+- **Commit + push:** pendiente al final de esta entrada (ver hash al cerrar).
+
+- **Cazadores finales:** 7/7 PASS (mismos del baseline pre-sprint).
+
+- **Próximos pasos identificados (Cowork ya los agregó / podrían agregar):**
+  - SPRINT-131 (Cowork agregó durante esta misma sesión): fix responsive iPad portrait de `OrdenCard.tsx`. Autonómo, prioridad alta, NO procesado en esta pasada — Jorge puede pegar `trabaja` de nuevo para procesarlo.
+  - Sprint hipotético: arreglar el bug latente de derivación de operaria al cambiar técnico en el form (`OrdenEditForm.tsx:73` debería usar `(t.uid || t.id) ===`).
+  - Sprint hipotético: extender el botón a un "Re-sincronizar todo" batch en `/admin/ordenes` con OK explícito (mencionado en notas del SPRINT-130).
+
+---
+
 ## 2026-05-10 — `trabaja` (pasada 8 del día): SPRINT-129 COMPLETADO (1/1)
 
 ### Contexto

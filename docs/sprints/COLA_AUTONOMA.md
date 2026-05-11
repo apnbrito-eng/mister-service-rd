@@ -3,7 +3,11 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-10 por Cowork — Jorge reportó bug específico (orden con técnico Aury Mon mostrada sin operaria, pero el modal de Personal SÍ muestra Wilainy asignada). Diagnosticada causa raíz: la orden se creó/editó antes de la asignación de Wilainy a Aury, y el sistema "congela" la operaria en el doc de la orden al momento de crear/editar — no se re-deriva en cada render. Jorge pidió auditoría sistémica de asignaciones. Agregado SPRINT-129 (auditoría read-only de asignaciones técnico↔operaria + órdenes activas con técnico-sin-operaria pero técnico-con-operaria-en-perfil + huérfanos cruzados). Las inconsistencias por rol siguen cubiertas por matriz SPRINT-112 (162 celdas, pendiente QA humano).
+**Última actualización:** 2026-05-11 por Cowork — Jorge reportó bug visual en iPad: las cards de orden en `/admin/ordenes` (Vista lista) se desbordan horizontalmente — el FaseStepper de 8 fases + botones "Cómo llegar" + "Cancelar" no entran en el ancho de iPad portrait (~810px), quedando el botón "Cancelar" cortado por la derecha. Captura del 2026-05-11 10:03 AM confirma el desborde. Agregado SPRINT-131 (fix responsive: cambiar breakpoint `md:` → `lg:` en `OrdenCard.tsx:68` para que iPad portrait use layout column, o alternativa equivalente). Bug bloquea a Wilainy/Yohana/Mariela que usan iPad para gestionar órdenes.
+
+**Última actualización previa:** 2026-05-11 por Cowork — Jorge confirmó que la división 7+7 de "Grupos operaria-técnico" en `PersonalPage.tsx` es correcta y el flujo derivativo (`personal[uid].operariaId` → UI Personal viva + snapshot en orden al crear/editar) funciona como se diseñó. Eligió SPRINT-130 (botón "Re-derivar operaria" en órdenes viejas) como próximo foco para arreglar el caso Aury de raíz y prevenir futuros incidentes similares cuando se asigna operaria a un técnico que ya tiene órdenes abiertas. Agregado SPRINT-130 a la cola con autonomía completa (no toca rules, no toca migraciones masivas).
+
+**Última actualización previa:** 2026-05-10 por Cowork — Jorge reportó bug específico (orden con técnico Aury Mon mostrada sin operaria, pero el modal de Personal SÍ muestra Wilainy asignada). Diagnosticada causa raíz: la orden se creó/editó antes de la asignación de Wilainy a Aury, y el sistema "congela" la operaria en el doc de la orden al momento de crear/editar — no se re-deriva en cada render. Jorge pidió auditoría sistémica de asignaciones. Agregado SPRINT-129 (auditoría read-only de asignaciones técnico↔operaria + órdenes activas con técnico-sin-operaria pero técnico-con-operaria-en-perfil + huérfanos cruzados). Las inconsistencias por rol siguen cubiertas por matriz SPRINT-112 (162 celdas, pendiente QA humano).
 
 **Última actualización previa:** 2026-05-10 por coordinator (autónomo `procesa bloqueos`, pasada 7) — SPRINT-128 R2 COMPLETADO. Rule `firestore.rules:378` alineada al granular `ordenesEliminar` (`userData().permisos.ordenesEliminar == true` en vez de `esAdminOCoord()`). `npm run deploy:rules` ejecutado (lock `29247a9...`). Matriz #14 marcado RESUELTO. Bloque movido a Histórico de desbloqueos en BLOQUEOS.md. SPRINT-112-QA sigue en BLOQUEOS (humano puro).
 
@@ -11,7 +15,7 @@
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-130
+**Próximo ID disponible:** SPRINT-132
 
 ---
 
@@ -550,6 +554,123 @@ Sin esta auditoría no se sabe el alcance real. Una vez con el reporte, Jorge de
 - Si Jorge corre el script y reporta el output, el sprint follow-up potencial (`--apply` para rellenar órdenes desincronizadas) puede ir a BLOQUEOS.md con scope acotado por IDs. Patrón ya usado en SPRINT-118.
 - Bug original reportado por Jorge: orden con técnico Aury Mon (uid del personal probablemente similar a otros técnicos de SPRINT-118) sin operaria asignada. La operaria correcta según modal de Personal es Wilainy. Este caso DEBE aparecer en el output como ORDEN_SIN_OPERARIA_DESINCRONIZADA.
 - Cross-check post-script: si aparece TECNICO_SIN_OPERARIA para alguien que Jorge cree que SÍ tiene operaria, hay bug en el modal de Editar Personal (no persiste el campo). Eso sería otro sprint.
+
+---
+
+### SPRINT-130 — Botón "Re-derivar operaria" en órdenes individuales
+
+**Estado:** COMPLETADO 2026-05-11 (coordinator autónomo `trabaja`; archivos `src/services/ordenes.service.ts` + `src/components/ordenes/BotonRederivarOperaria.tsx` NUEVO + `src/components/ordenes/OrdenEditForm.tsx` + `src/pages/Ordenes.tsx` + `src/pages/MapaRutas.tsx`). Cazadores 7/7 PASS, typecheck PASS, build PASS, lint staged PASS. QA visual humana del caso Aury Mon registrada en `BLOQUEOS.md` (no bloqueante).
+**Prioridad:** media (calidad de vida + previene reincidencia del caso Aury)
+**Origen:** Jorge 2026-05-11 vía Cowork. Después de confirmar que el flujo derivativo de `personal[uid].operariaId` está correcto (UI viva en Personal + snapshot en orden al crear/editar), eligió esta opción para cerrar el caso de raíz. Hoy si se asigna operaria a un técnico DESPUÉS de que ya tenga órdenes abiertas (timing exacto del bug original de Aury Mon + Wilainy), las órdenes viejas quedan permanentemente con `operariaNombre: undefined` hasta que alguien las edite manualmente. El workaround actual (Fix A: editar orden → cambiar técnico → guardar → volver al original → guardar) funciona pero es tedioso y nadie del equipo lo sabe.
+**Riesgo:** bajo (solo lectura de `personal/{tecnicoId}` + update local del doc `ordenes_servicio` ya autorizado por rules existentes — no toca rules, no toca otras colecciones).
+**Touch-list previsto:**
+- `src/components/ordenes/OrdenEditForm.tsx` (agregar botón visible cuando `tecnicoId` está set Y `personal[tecnicoId].operariaId` existe pero `orden.operariaNombre` está vacío o difiere).
+- O alternativamente nuevo helper en `src/utils/ordenes.ts` + componente nuevo `src/components/ordenes/BotonRederivarOperaria.tsx` si OrdenEditForm.tsx queda muy cargado.
+- `src/services/ordenes.service.ts` si hace falta un helper `rederivarOperariaEnOrden(ordenId)` reutilizable.
+
+#### Objetivo
+
+Agregar UI mínima (un botón) en el detalle/edit de una orden que, cuando se hace click, re-lea `personal[orden.tecnicoId].operariaId` y `operariaNombre`, y actualice el doc de la orden con esos valores. Si el técnico no tiene operaria asignada, el botón muestra estado deshabilitado con tooltip explicativo. Si la orden ya tiene la operaria correcta, el botón no aparece (o aparece deshabilitado con "ya está sincronizada").
+
+#### Por qué
+
+- Caso Aury Mon (reportado el 2026-05-10) demostró que el snapshot al crear/editar es bueno para forensia histórica pero malo cuando hay timing de asignación tardía.
+- El workaround actual (editar técnico → guardar → volver → guardar) funciona pero es invisible al usuario operativo (Mariela, Wilainy, Yohana) que no sabe del patrón snapshot.
+- Cambiar a derivación reactiva en cada render sería arquitectural y rompe historial (si la operaria cambia, las órdenes viejas perderían el contexto de quién supervisó originalmente). Botón explícito = lo mejor de ambos mundos.
+
+#### Criterios de aceptación
+
+- [ ] Botón "Re-sincronizar operaria" visible en `OrdenEditForm` cuando:
+  - `orden.tecnicoId` está set Y
+  - `personal[tecnicoId]?.operariaId` existe Y
+  - (`orden.operariaNombre` está vacío) O (`personal[tecnicoId].operariaNombre` !== `orden.operariaNombre`).
+- [ ] Click del botón hace `updateDoc(doc(db, 'ordenes_servicio', ordenId), { operariaId, operariaNombre, auditoria: [...prev, registroDeReSync] })` con `crearRegistroAuditoria()` del `utils/index.ts` describiendo "re-derivó operaria de {anterior} → {nueva}".
+- [ ] Si `personal[tecnicoId]?.operariaId` NO existe, mostrar tooltip "Este técnico todavía no tiene operaria asignada. Asignala en Personal primero." y dejar el botón deshabilitado.
+- [ ] Caso de uso primario probable: hot-fix manual del caso Aury Mon. Ese caso DEBE quedar arreglado tras un click del botón.
+- [ ] Sin loop infinito: el botón NO se auto-clickea (es UI explícita).
+- [ ] Sin escritura cuando ya está sincronizada: si los valores en orden y personal coinciden, el botón muestra "Sincronizada" estado readonly (gris).
+- [ ] Sin tocar `useOrdenCreateForm.ts` (la derivación al crear sigue como está — snapshot OK).
+- [ ] Sin tocar `firestore.rules` (los writes son a `ordenes_servicio` por usuarios con permiso de edición, ya cubierto por rules existentes).
+- [ ] `npm run build` PASS.
+- [ ] `npm run lint` PASS (max-warnings 0).
+- [ ] Cazadores 8/8 PASS.
+- [ ] Commit + push.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio (toca `OrdenEditForm.tsx` — archivo crítico de wizard según gotcha "Cleanup en componentes de wizard requiere QA manual").
+- regression_guardian obligatorio (toca componente de wizard que escribe a `ordenes_servicio`).
+- NO cambiar el comportamiento de derivación al crear/editar técnico. SOLO agregar el botón explícito.
+- NO hacer batch sobre todas las órdenes (sería sprint --apply separado con OK explícito de Jorge). Este sprint es "1 click = 1 orden".
+- NO mover el botón a `OrdenDetalle.tsx` (vista readonly) — solo en EditForm o en un modal dedicado. Aclarar con archivist si hay duda.
+- Si el reviewer detecta que el botón puede dispararse accidentalmente o que no hay confirmación visual del cambio, agregar `confirm()` antes del write.
+
+#### Notas para el coordinator
+
+- El patrón ya existe en `useOrdenCreateForm.ts:588-590` y `OrdenEditForm.tsx:72-77`:
+  ```
+  const tecnicoElegido = personal.find(p => p.id === form.tecnicoId);
+  const operariaIdDerivada = tecnicoElegido?.operariaId;
+  const operariaNombreDerivada = tecnicoElegido?.operariaNombre;
+  ```
+  El botón nuevo reutiliza esa lógica + `updateDoc`.
+- Considerar mostrar el banner "Esta orden tiene operaria desactualizada" arriba del form cuando se detecta el mismatch, con el botón debajo. UX más explícita que un botón suelto.
+- QA manual obligatorio (CLAUDE.md sub-regla cleanup wizard): commit message debe declarar "QA flujo X validado" o agregar a BLOQUEOS.md para validación humana. Caso a validar: abrir orden de Aury Mon (la del bug original), confirmar que aparece el botón, click, confirmar que aparece Wilainy en el doc.
+- Si el flujo crece (botón "Re-sincronizar todo" en /admin/ordenes que lo aplica a las N órdenes detectadas por SPRINT-129), eso es sprint separado SPRINT-132+ con OK explícito.
+
+---
+
+### SPRINT-131 — Fix responsive: cards de orden cortadas en iPad portrait
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (bug bloqueante de UX en iPad — Wilainy/Yohana/Mariela gestionan órdenes desde iPad)
+**Origen:** Jorge 2026-05-11 vía Cowork. Captura del 2026-05-11 10:03 AM en iPad portrait muestra OS-0049 en `/admin/ordenes` (Vista Lista) con el FaseStepper completo de 8 fases + botón "Cómo llegar" + botón "Cancelar" desbordando hacia la derecha del viewport. El botón "Cancelar" queda parcialmente fuera de pantalla (visible solo "✗ Car..."). El layout actual usa `md:flex-row` (breakpoint Tailwind ≥768px) que se activa en iPad portrait (~810px), pero el contenido de la derecha (stepper + 3 botones) no cabe en ese ancho.
+**Riesgo:** bajo (cambio CSS aislado en un componente; sin lógica de datos; sin rules).
+**Touch-list previsto:** `src/components/ordenes/OrdenCard.tsx` (líneas 68 y 180, ajuste de breakpoints + posibles tweaks a `flex-wrap`/`min-w-0`).
+
+#### Objetivo
+
+Que las cards de orden en `/admin/ordenes` (Vista Lista) NO se corten horizontalmente en iPad portrait. Mantener layout actual en desktop (≥1024px). En tablets (~768-1023px) caer al layout column (foto arriba, content medio, stepper+botones abajo en su propia fila wrapeable).
+
+#### Por qué
+
+- Wilainy y Yohana (operarias) y Mariela (secretaria) operan principalmente en iPad. Si no ven el botón "Cancelar" no pueden cancelar órdenes desde ese device.
+- El stepper de 8 fases + 3 botones requiere ~700px solo en su fila. En iPad portrait con sidebar abierto (~250px) queda ~560px de ancho para el card → desborde garantizado.
+- El layout actual `flex-col md:flex-row` activa la fila horizontal a partir de 768px, pero ese ancho no alcanza para el contenido.
+
+#### Criterios de aceptación
+
+- [ ] `src/components/ordenes/OrdenCard.tsx:68` cambia `flex flex-col md:flex-row md:items-center` → `flex flex-col lg:flex-row lg:items-center` (o equivalente — empuja el quiebre de columna a `lg:` ≥1024px).
+- [ ] El contenedor de stepper+botones (línea 180, `flex items-center gap-2 shrink-0 flex-wrap`) sigue con `flex-wrap` para que en pantallas chicas los botones bajen a una segunda fila si hace falta.
+- [ ] Test visual en 3 anchos:
+  - **Desktop (≥1024px)**: layout horizontal idéntico al actual — foto izquierda, content medio, stepper+botones derecha en una fila.
+  - **iPad portrait (768-1023px)**: layout column — foto arriba, content medio, stepper+botones abajo. Botón "Cancelar" 100% visible.
+  - **Mobile (<768px)**: ya estaba column, sigue column. No regresa.
+- [ ] El FaseStepper sigue mostrando todas las fases (no se ocultan en mobile). Si en mobile el stepper queda muy ancho, debe poder scrollear horizontalmente dentro de su propio contenedor (verificar comportamiento actual; si ya wrappea, no tocar).
+- [ ] La opción ALTERNATIVA si el builder descubre que `lg:` rompe casos de uso desktop reales: agregar `overflow-x-auto` al contenedor de la derecha + `min-w-0` al hermano de contenido. Pero priorizar primero la opción de cambiar `md:` → `lg:` (más limpia).
+- [ ] `npm run build` + `npm run lint` PASS.
+- [ ] Cazadores 8/8 PASS.
+- [ ] Commit + push.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio (toca componente usado en `/admin/ordenes` y posiblemente en `TecnicoVista.tsx` — verificar imports antes de tocar).
+- regression_guardian opcional (cambio CSS aislado; no hay riesgo de rules/data).
+- NO refactorizar `OrdenCard.tsx` ni `FaseStepper.tsx` más allá del breakpoint. Es fix puntual.
+- NO esconder fases del stepper (FaseStepper.tsx) — eso cambiaría la UX en todos lados. Solo ajustar el contenedor padre.
+- NO tocar `Ordenes.tsx` (archivo monolítico de ~1600 líneas — gotcha CLAUDE.md). El problema está en `OrdenCard.tsx`, no en su padre.
+- QA manual obligatorio: builder o tester debe verificar con DevTools responsive (iPad portrait 810×1080 y desktop ≥1280) que el botón "Cancelar" sea visible 100% en ambos casos.
+
+#### Notas para el coordinator
+
+- Componentes involucrados:
+  - `src/components/ordenes/OrdenCard.tsx:65-203` — el card como tal.
+  - `src/components/ordenes/FaseStepper.tsx` — el stepper de 8 fases (no tocar).
+  - `src/components/ordenes/EliminarOrdenButton.tsx` — botón papelera.
+  - `src/components/shared/BotonComoLlegar.tsx` — botón maps.
+- El card se renderiza en `Ordenes.tsx` (vista admin Lista) y posiblemente en `TecnicoVista.tsx` (verificar). Si está en ambos, el fix beneficia a los dos sin cambios extra.
+- Si después del fix las cards en desktop quedan menos densas (porque ahora el contenido baja a otra línea en iPad), eso es esperado y deseado — Wilainy gana visibilidad del botón Cancelar.
+- Captura de bug del 2026-05-11: orden OS-0049 (Aury Mon, Solo Chequeo, En Diagnóstico, hace 4 días) con el botón Cancelar cortado a "Car…". Después del fix, esa misma orden en iPad portrait debe mostrar el botón Cancelar completo.
 
 ---
 
