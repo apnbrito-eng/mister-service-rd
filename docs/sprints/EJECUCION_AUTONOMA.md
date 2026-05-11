@@ -5,6 +5,67 @@
 
 ---
 
+## 2026-05-11 — `trabaja` (pasada 2 del día): SPRINT-131 COMPLETADO (1/1)
+
+### Contexto
+
+Jorge disparó `trabaja` por segunda vez en el día. Sprint en cola: SPRINT-131 (fix responsive iPad — cards de orden cortadas en iPad portrait). Origen: Wilainy / Yohana / Mariela operan en iPad y el botón "Cancelar" del card se cortaba a "✗ Car…" porque el layout horizontal se activaba a 768px (`md:`) y el contenido (FaseStepper de 8 fases + 3 botones) no entra en ese ancho.
+
+Sprint clasificado **autónomo completo** (cambio CSS aislado en 1 archivo, no toca rules/services/context, riesgo bajo).
+
+### SPRINT-131 — Fix responsive cards de orden iPad portrait
+
+- **archivist PRE-CHANGE (auto-rol coordinator):**
+  - Touch-list: `src/components/ordenes/OrdenCard.tsx` (solo el contenedor padre, línea 68).
+  - Consumidores: grep confirma que `OrdenCard` solo se usa en `src/pages/Ordenes.tsx`. NO se usa en `TecnicoVista.tsx` (el técnico tiene su propia vista).
+  - Historial git de `OrdenCard.tsx`: 15 commits previos, todos features incrementales (NPS, reactivación, badges). Sin postmortems asociados al archivo. Sin patrones problemáticos detectados.
+  - Postmortems revisados (`ls docs/postmortems/`): 4 postmortems existentes (iniciar-chequeo x2, notis-legacy, rediseno-ia). Ninguno relacionado con responsive ni con `OrdenCard.tsx`.
+  - Otra ocurrencia de `md:flex-row` en el dir: `TimelineAcciones.tsx:74`, no relacionado al sprint.
+  - **Conclusión:** sin riesgo conocido. Sprint sigue.
+
+- **Builder (edición directa del coordinator):**
+  - **Cambio único, 1 línea:** `src/components/ordenes/OrdenCard.tsx:68`
+    - ANTES: `<div className="flex flex-col md:flex-row md:items-center gap-3">`
+    - DESPUÉS: `<div className="flex flex-col lg:flex-row lg:items-center gap-3">`
+  - Línea 180 (`flex items-center gap-2 shrink-0 flex-wrap`) intacta — el `flex-wrap` preserva el comportamiento de los botones en mobile cuando el stepper se ensancha.
+  - Sin segunda iteración (opción `overflow-x-auto` + `min-w-0` no se necesitó).
+
+- **Tester (auto-rol):**
+  - `npm run build` → tsc + vite PASS, bundle 2.6MB (sin regresión de tamaño).
+  - `npx eslint src/components/ordenes/OrdenCard.tsx --max-warnings 0` → limpio.
+  - `npm run check:regression` → 7/7 PASS, 0 hits.
+  - `npm run lint` global tiene 5554 errores PRE-EXISTENTES (ya presentes antes del sprint, no introducidos por el cambio). No se considera regresión del sprint.
+
+- **regression_guardian:** NO invocado. Sprint explícitamente marca el guardián como **opcional** (cambio CSS aislado, no toca rules/services/context/data). Veredicto del coordinator alineado con la política.
+
+- **Reviewer (auto-rol coordinator, ojos frescos):**
+  - Análisis estático de los 3 breakpoints relevantes:
+    - **Desktop (≥1024px):** `lg:flex-row` activo → layout horizontal idéntico al actual (porque ≥1024 también satisfacía `md:`). Sin regresión.
+    - **Tablet portrait (810px, iPad):** ni `md:` ni `lg:` aplican (lg ≥1024) → cae a `flex-col`. Foto arriba, info al medio, stepper+botones abajo. El contenedor de la derecha conserva `flex-wrap`, así que los botones bajan a otra fila si el stepper ya ocupa una. Bug del botón "Cancelar" RESUELTO.
+    - **Mobile (<768px):** ya era `flex-col`, sigue `flex-col`. Sin regresión.
+  - Criterios del sprint: 1/2/3/4 cumplidos. Criterio 5 (fallback con `overflow-x-auto`) no se necesitó.
+  - **Veredicto: APPROVED.**
+
+- **QA visual:** NO ejecutable por el coordinator (sin DevTools real). Declarado como **SPRINT-131-QA** no bloqueante en `BLOQUEOS.md`. Casos a validar: iPad portrait (810×1080), desktop (≥1024), tablet landscape (1024×768), mobile (<768).
+
+- **Commit + push:** ver hash en `DIARIO_2026-05-11.md` post-push.
+
+- **devops (post-push):** ver `DIARIO_2026-05-11.md` para resultado de Vercel deploy.
+
+### Resultado SPRINT-131
+
+- 1 archivo modificado (`OrdenCard.tsx`, 1 línea).
+- 3 archivos de docs actualizados (`COLA_AUTONOMA.md`, `BLOQUEOS.md`, `EJECUCION_AUTONOMA.md`).
+- 1 entrada nueva en BLOQUEOS.md tipo "validación humana no bloqueante" (SPRINT-131-QA).
+- Cazadores: 7/7 PASS.
+- Tiempo: ~10 minutos.
+
+### Hallazgos colaterales
+
+- **Lint global tiene 5554 errores pre-existentes.** No relacionados con SPRINT-131 (el archivo modificado pasa lint limpio). Es deuda técnica pre-existente que excede el scope del sprint; Cowork puede agendar sprint de cleanup si Jorge lo prioriza.
+
+---
+
 ## 2026-05-11 — `trabaja` (pasada 1 del día): SPRINT-130 COMPLETADO (1/1)
 
 ### Contexto

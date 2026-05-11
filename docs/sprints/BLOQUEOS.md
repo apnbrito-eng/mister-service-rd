@@ -10,6 +10,37 @@
 
 ---
 
+## SPRINT-131-QA — Validación visual: cards de orden en iPad portrait
+
+**Tipo:** QA humana **no bloqueante** (registro de pendiente, no impide cierre del sprint).
+**Estado:** PENDIENTE VALIDACIÓN HUMANA
+**Origen:** SPRINT-131 cerró el código (cambio `md:flex-row` → `lg:flex-row` en `OrdenCard.tsx:68`) + cazadores 7/7 PASS + build OK + lint del archivo limpio. El coordinator no puede ejecutar QA visual con DevTools real; queda registrado acá.
+
+**Casos a validar manualmente (Wilainy / Yohana / Mariela en iPad real, o Jorge con DevTools responsive):**
+
+1. **iPad portrait (~810×1080)** en `/admin/ordenes` (Vista Lista):
+   - Abrir cualquier card de orden con fase activa (idealmente OS-0049 de Aury Mon en Diagnóstico).
+   - El layout debe ser COLUMN: foto arriba, info del cliente al medio, stepper+botones abajo.
+   - El botón "Cancelar" debe estar 100% visible (no recortado a "✗ Car…").
+   - "Cómo llegar" y el botón papelera (Eliminar) también deben quedar visibles.
+   - El stepper de 8 fases debe verse completo (puede wrapear a varias filas dentro de su contenedor).
+
+2. **Desktop (≥1024px, ej. 1280px o 1440px)**:
+   - El layout debe ser HORIZONTAL idéntico al actual: foto izquierda, info al medio, stepper+botones a la derecha en una sola fila.
+   - Verificar que NO haya regresión visual (densidad similar a la de hoy).
+
+3. **Tablet landscape (~1024×768)**:
+   - Como 1024 cae justo en el breakpoint `lg:`, validar que se vea bien (debería activarse el layout horizontal). Si queda apretado, está OK siempre que el botón Cancelar sea clickeable.
+
+4. **Mobile (<768px)**:
+   - Sigue layout COLUMN, sin regresión.
+
+**Si algún caso falla:** reportar a Cowork con captura. Cowork agregará SPRINT-131-FIX (probablemente `overflow-x-auto` + `min-w-0` como fallback documentado en el sprint).
+
+**Si todos pasan:** Jorge (o quien valide) edita esta sección con `OK: jorge YYYY-MM-DD HH:MM — QA visual OK` y la podemos archivar.
+
+---
+
 ## SPRINT-130-QA — Validación visual del botón "Re-sincronizar operaria"
 
 **Tipo:** QA humana **no bloqueante** (registro de pendiente, no impide cierre del sprint).

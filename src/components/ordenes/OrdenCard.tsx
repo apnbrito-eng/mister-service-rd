@@ -65,7 +65,7 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
     <div
       className={`bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 ${estadoSimpleBorder(orden.estadoSimple)} p-4 hover:shadow-md transition-shadow`}
     >
-      <div className="flex flex-col md:flex-row md:items-center gap-3">
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
         {/* Foto del equipo — thumbnail clickeable a la izquierda */}
         {orden.fotoEquipoUrl && (
           <div onClick={(e) => e.stopPropagation()} className="shrink-0 self-start">

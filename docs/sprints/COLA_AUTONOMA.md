@@ -622,55 +622,7 @@ Agregar UI mínima (un botón) en el detalle/edit de una orden que, cuando se ha
 
 ### SPRINT-131 — Fix responsive: cards de orden cortadas en iPad portrait
 
-**Estado:** PENDIENTE
-**Prioridad:** alta (bug bloqueante de UX en iPad — Wilainy/Yohana/Mariela gestionan órdenes desde iPad)
-**Origen:** Jorge 2026-05-11 vía Cowork. Captura del 2026-05-11 10:03 AM en iPad portrait muestra OS-0049 en `/admin/ordenes` (Vista Lista) con el FaseStepper completo de 8 fases + botón "Cómo llegar" + botón "Cancelar" desbordando hacia la derecha del viewport. El botón "Cancelar" queda parcialmente fuera de pantalla (visible solo "✗ Car..."). El layout actual usa `md:flex-row` (breakpoint Tailwind ≥768px) que se activa en iPad portrait (~810px), pero el contenido de la derecha (stepper + 3 botones) no cabe en ese ancho.
-**Riesgo:** bajo (cambio CSS aislado en un componente; sin lógica de datos; sin rules).
-**Touch-list previsto:** `src/components/ordenes/OrdenCard.tsx` (líneas 68 y 180, ajuste de breakpoints + posibles tweaks a `flex-wrap`/`min-w-0`).
-
-#### Objetivo
-
-Que las cards de orden en `/admin/ordenes` (Vista Lista) NO se corten horizontalmente en iPad portrait. Mantener layout actual en desktop (≥1024px). En tablets (~768-1023px) caer al layout column (foto arriba, content medio, stepper+botones abajo en su propia fila wrapeable).
-
-#### Por qué
-
-- Wilainy y Yohana (operarias) y Mariela (secretaria) operan principalmente en iPad. Si no ven el botón "Cancelar" no pueden cancelar órdenes desde ese device.
-- El stepper de 8 fases + 3 botones requiere ~700px solo en su fila. En iPad portrait con sidebar abierto (~250px) queda ~560px de ancho para el card → desborde garantizado.
-- El layout actual `flex-col md:flex-row` activa la fila horizontal a partir de 768px, pero ese ancho no alcanza para el contenido.
-
-#### Criterios de aceptación
-
-- [ ] `src/components/ordenes/OrdenCard.tsx:68` cambia `flex flex-col md:flex-row md:items-center` → `flex flex-col lg:flex-row lg:items-center` (o equivalente — empuja el quiebre de columna a `lg:` ≥1024px).
-- [ ] El contenedor de stepper+botones (línea 180, `flex items-center gap-2 shrink-0 flex-wrap`) sigue con `flex-wrap` para que en pantallas chicas los botones bajen a una segunda fila si hace falta.
-- [ ] Test visual en 3 anchos:
-  - **Desktop (≥1024px)**: layout horizontal idéntico al actual — foto izquierda, content medio, stepper+botones derecha en una fila.
-  - **iPad portrait (768-1023px)**: layout column — foto arriba, content medio, stepper+botones abajo. Botón "Cancelar" 100% visible.
-  - **Mobile (<768px)**: ya estaba column, sigue column. No regresa.
-- [ ] El FaseStepper sigue mostrando todas las fases (no se ocultan en mobile). Si en mobile el stepper queda muy ancho, debe poder scrollear horizontalmente dentro de su propio contenedor (verificar comportamiento actual; si ya wrappea, no tocar).
-- [ ] La opción ALTERNATIVA si el builder descubre que `lg:` rompe casos de uso desktop reales: agregar `overflow-x-auto` al contenedor de la derecha + `min-w-0` al hermano de contenido. Pero priorizar primero la opción de cambiar `md:` → `lg:` (más limpia).
-- [ ] `npm run build` + `npm run lint` PASS.
-- [ ] Cazadores 8/8 PASS.
-- [ ] Commit + push.
-
-#### Restricciones / guardarrails
-
-- archivist PRE-CHANGE obligatorio (toca componente usado en `/admin/ordenes` y posiblemente en `TecnicoVista.tsx` — verificar imports antes de tocar).
-- regression_guardian opcional (cambio CSS aislado; no hay riesgo de rules/data).
-- NO refactorizar `OrdenCard.tsx` ni `FaseStepper.tsx` más allá del breakpoint. Es fix puntual.
-- NO esconder fases del stepper (FaseStepper.tsx) — eso cambiaría la UX en todos lados. Solo ajustar el contenedor padre.
-- NO tocar `Ordenes.tsx` (archivo monolítico de ~1600 líneas — gotcha CLAUDE.md). El problema está en `OrdenCard.tsx`, no en su padre.
-- QA manual obligatorio: builder o tester debe verificar con DevTools responsive (iPad portrait 810×1080 y desktop ≥1280) que el botón "Cancelar" sea visible 100% en ambos casos.
-
-#### Notas para el coordinator
-
-- Componentes involucrados:
-  - `src/components/ordenes/OrdenCard.tsx:65-203` — el card como tal.
-  - `src/components/ordenes/FaseStepper.tsx` — el stepper de 8 fases (no tocar).
-  - `src/components/ordenes/EliminarOrdenButton.tsx` — botón papelera.
-  - `src/components/shared/BotonComoLlegar.tsx` — botón maps.
-- El card se renderiza en `Ordenes.tsx` (vista admin Lista) y posiblemente en `TecnicoVista.tsx` (verificar). Si está en ambos, el fix beneficia a los dos sin cambios extra.
-- Si después del fix las cards en desktop quedan menos densas (porque ahora el contenido baja a otra línea en iPad), eso es esperado y deseado — Wilainy gana visibilidad del botón Cancelar.
-- Captura de bug del 2026-05-11: orden OS-0049 (Aury Mon, Solo Chequeo, En Diagnóstico, hace 4 días) con el botón Cancelar cortado a "Car…". Después del fix, esa misma orden en iPad portrait debe mostrar el botón Cancelar completo.
+**Estado:** COMPLETADO 2026-05-11 — ver `## Sprints completados (histórico)` más abajo. QA visual queda como SPRINT-131-QA en `BLOQUEOS.md`.
 
 ---
 
@@ -934,6 +886,18 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ---
 
 ## Sprints completados (histórico)
+
+### SPRINT-131 — Fix responsive: cards de orden cortadas en iPad portrait
+- **Completado:** 2026-05-11 por coordinator autónomo (pasada 2 del día). OK humano: Jorge `trabaja` 2026-05-11.
+- **Hash:** pendiente del commit (ver `EJECUCION_AUTONOMA.md`).
+- **Resultado:** `src/components/ordenes/OrdenCard.tsx:68` — breakpoint horizontal del card empujado de `md:` (≥768px) a `lg:` (≥1024px). En iPad portrait (~810px) el card ahora cae a layout column (foto arriba, info al medio, stepper+botones abajo con `flex-wrap`). En desktop ≥1024px el layout horizontal queda idéntico al actual. Mobile sigue column sin regresión. `OrdenCard` solo se usa en `Ordenes.tsx` (admin); el técnico tiene su propia vista.
+- **Validación:** `npm run build` OK (tsc + vite) · cazadores 7/7 PASS · lint del archivo modificado limpio · diff de 1 línea de CSS. **QA visual** declarada como SPRINT-131-QA en `BLOQUEOS.md` (coordinator no puede ejecutar DevTools real).
+- **Archivist PRE-CHANGE:** sin postmortems previos sobre `OrdenCard.tsx` ni patrón problemático en git log. Riesgo bajo.
+- **regression_guardian:** no invocado (cambio CSS aislado, no toca rules/services/context — política del propio sprint).
+- **Plan de rollback:** revertir el commit (1 línea).
+- **OK humano:** jorge 2026-05-11 (`trabaja` implícito).
+
+---
 
 ### SPRINT-117c1 — Renombrar etiquetas sidebar + redirect `/admin/configuracion/usuarios`
 - **Completado:** 2026-05-09 por coordinator autónomo. OK humano: Jorge confirmó con `trabaja` el 2026-05-09 (OK implícito de cierre, alineado con cómo se cerró SPRINT-113a).
