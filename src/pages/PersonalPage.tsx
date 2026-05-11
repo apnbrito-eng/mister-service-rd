@@ -687,23 +687,30 @@ export default function PersonalPage() {
       if (p.rol === 'tecnico') {
         const deps = getOrdenesActivasDeTecnico(p);
         if (deps.length > 0) {
-          const destino = personal.find(t => t.id === transferDestinoId);
+          // SPRINT-132: lookup contra (t.uid || t.id) — transferDestinoId ahora se setea
+          // desde el dropdown con value={d.uid || d.id} (ver más abajo).
+          const destino = personal.find(t => (t.uid || t.id) === transferDestinoId);
           if (!destino) {
             toast.error('Selecciona un técnico destino');
             setProcessingAccion(false);
             return;
           }
+          // SPRINT-132 + P-006: persistir auth.uid (no doc id de personal/) en tecnicoId/responsableId.
+          // Comparar contra ambos (p.id pre-c4be345 + p.uid post-c4be345) para detectar coincidencia.
+          const pIdAuth = p.uid || p.id;
+          const destinoIdAuth = destino.uid || destino.id;
+          const destinoNombre = destino.nombre;
           const tareas = deps.map(async (o) => {
             const updateData: Record<string, unknown> = { updatedAt: Timestamp.now() };
-            if (o.tecnicoId === p.id) {
-              updateData.tecnicoId = destino.id;
-              updateData.tecnicoNombre = destino.nombre;
+            if (o.tecnicoId === pIdAuth || o.tecnicoId === p.id) {
+              updateData.tecnicoId = destinoIdAuth;
+              updateData.tecnicoNombre = destinoNombre;
               updateData.operariaId = destino.operariaId || null;
               updateData.operariaNombre = destino.operariaNombre || null;
             }
-            if (o.responsableId === p.id) {
-              updateData.responsableId = destino.id;
-              updateData.responsableNombre = destino.nombre;
+            if (o.responsableId === pIdAuth || o.responsableId === p.id) {
+              updateData.responsableId = destinoIdAuth;
+              updateData.responsableNombre = destinoNombre;
             }
             try {
               await updateDoc(doc(db, 'ordenes_servicio', o.id), updateData);
@@ -722,7 +729,9 @@ export default function PersonalPage() {
         const tecs = getTecnicosDeOperaria(p);
         const ords = getOrdenesActivasDeOperaria(p);
         if (tecs.length > 0 || ords.length > 0) {
-          const destino = personal.find(o => o.id === transferDestinoId);
+          // SPRINT-132: lookup contra (o.uid || o.id) — transferDestinoId proviene del dropdown
+          // con value={d.uid || d.id}.
+          const destino = personal.find(o => (o.uid || o.id) === transferDestinoId);
           if (!destino) {
             toast.error('Selecciona una operaria destino');
             setProcessingAccion(false);
@@ -1450,7 +1459,9 @@ export default function PersonalPage() {
                         >
                           <option value="">Seleccionar técnico...</option>
                           {destinos.map(d => (
-                            <option key={d.id} value={d.id}>
+                            // SPRINT-132 + P-006: value={d.uid || d.id} para que el doc id final
+                            // escrito en ordenes_servicio.tecnicoId sea auth.uid (gateado por rules).
+                            <option key={d.id} value={d.uid || d.id}>
                               {d.nombre}{d.operariaNombre ? ` (grupo ${d.operariaNombre})` : ''}
                             </option>
                           ))}
@@ -1507,7 +1518,9 @@ export default function PersonalPage() {
                         >
                           <option value="">Seleccionar operaria...</option>
                           {destinos.map(d => (
-                            <option key={d.id} value={d.id}>{d.nombre}</option>
+                            // SPRINT-132: simétrico al lookup en handleConfirmarEliminar (línea ~734).
+                            // operariaId no se gatea por rules pero mantenemos el patrón uniforme.
+                            <option key={d.id} value={d.uid || d.id}>{d.nombre}</option>
                           ))}
                         </select>
                       </div>

@@ -244,7 +244,9 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
       payload.duracionMin = form.duracionMin.trim() === '' || !Number.isFinite(n) ? undefined : n;
     }
     if (modificados.has('tecnicoId')) {
-      const t = tecnicos.find(x => x.id === form.tecnicoId);
+      // SPRINT-132: comparar contra (x.uid || x.id) para soportar órdenes pre-c4be345
+      // (tecnicoId == personal.id) y post-c4be345 (tecnicoId == auth.uid).
+      const t = tecnicos.find(x => (x.uid || x.id) === form.tecnicoId);
       payload.tecnicoId = form.tecnicoId || undefined;
       payload.tecnicoNombre = t?.nombre || undefined;
     }

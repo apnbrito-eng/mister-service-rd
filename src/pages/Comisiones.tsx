@@ -381,7 +381,8 @@ export default function Comisiones() {
             </div>
           ) : porTecnico.map(g => {
             const expandido = tecnicosExpandidos.has(g.tecnicoId);
-            const tec = personal.find(p => p.id === g.tecnicoId);
+            // SPRINT-132: (p.uid || p.id) — g.tecnicoId puede ser auth.uid post-c4be345.
+            const tec = personal.find(p => (p.uid || p.id) === g.tecnicoId);
             return (
               <div key={g.tecnicoId} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                 <button type="button" onClick={() => toggleTecnico(g.tecnicoId)}

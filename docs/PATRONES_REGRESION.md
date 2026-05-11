@@ -162,42 +162,74 @@ deployó fuera de banda — ejecutar
 
 ---
 
-## P-006 — Dropdown que asigna técnico/operaria guarda `personal.id` en lugar de `auth.uid`
+## P-006 — Dropdown que asigna técnico/operaria guarda `personal.id` en lugar de `auth.uid` (+ variante `.find()`)
 
 **Bug original:** `c4be345` (Iniciar Chequeo Aury Mon, 2026-05-07). Postmortem:
 `docs/postmortems/2026-05-07-iniciar-chequeo-permission-denied.md`.
 
-**Síntoma:** Técnico/operaria recién creado (con flujo SPRINT-105 que respeta
-auto-id de Firestore en `personal/`) recibe órdenes asignadas y NO puede
-ejecutar acciones gateadas por su rol — toast `permission-denied` silencioso.
-Para empleados viejos cuyo `personal/{id}.id == auth.uid` por convención
-manual, el bug pasa desapercibido.
+**Extensión variante 2 (`.find()`):** SPRINT-132 (2026-05-11) — 14 sitios en el
+repo con el patrón `find(X => X.id === <campo>Id)` que falla post-c4be345
+(SPRINT-108). Cuando el campo persiste `auth.uid` y `X.id` sigue siendo el doc
+id de `personal/`, el `.find()` retorna `undefined`. El bug se manifiesta como
+"orden creada NUNCA pobló `operariaNombre`" en lugar de "desincronizado", por
+lo que SPRINT-129 reportó 0 inconsistencias (su definición no cubre
+"campo siempre vacío"). El caso Aury Mon fue solo la punta del iceberg.
 
-**Causa raíz:** Dropdowns de "Asignar técnico" en componentes como
-`OrdenCreateModal.tsx`, `OrdenEditForm.tsx`, `ModalEditarOrdenAdmin.tsx`,
-`AgendaDia.tsx` y `MapaRutas.tsx` usaban `<option value={t.id}>` en lugar de
-`<option value={t.uid}>`. El campo `uid` adentro del doc `personal/{id}` SÍ
-es el `auth.uid` del empleado. Las rules comparan `tecnicoId == request.auth.uid`
-y rechazan cuando `tecnicoId == personalDocId !== auth.uid`. Es el mismo
-vector que P-001, pero la causa raíz está en el WRITE upstream (cuando el
-admin asigna), no en el READ downstream (cuando el técnico ejecuta).
+**Síntoma variante 1 (dropdown WRITE):** Técnico/operaria recién creado (con
+flujo SPRINT-105 que respeta auto-id de Firestore en `personal/`) recibe órdenes
+asignadas y NO puede ejecutar acciones gateadas por su rol — toast
+`permission-denied` silencioso. Para empleados viejos cuyo
+`personal/{id}.id == auth.uid` por convención manual, el bug pasa desapercibido.
 
-**Regla:** cualquier dropdown que asigna a un técnico/operaria/secretaria/
-ayudante a un campo guardado en Firestore debe usar `t.uid`/`p.uid`, NO
-`t.id`/`p.id`. Filtrar `tecnicos.filter(t => t.uid)` para excluir empleados
-sin Auth (alta vieja sin onboarding completo). Si el dropdown es solo filtro
-UI (no escribe a Firestore), agregar comentario `// @safe-tecnicoid-id: filtro UI, no escribe Firestore`.
+**Síntoma variante 2 (`.find()` READ/DERIVATION):** la derivación de operaria
+desde el técnico elegido NUNCA se dispara en CREATE/edit de orden porque
+`personal.find(p => p.id === form.tecnicoId)` retorna undefined cuando
+`form.tecnicoId === auth.uid` post-c4be345. Resultado: la orden creada nunca
+pobló `operariaId`/`operariaNombre` aunque el técnico SÍ tenga operaria
+asignada. También afecta displays (pin de mapa, color, comisiones, cierre
+día, facturas) que muestran `—` o color default en órdenes post-c4be345.
+
+**Causa raíz (común):** El doc `personal/{auto-id}` tiene un campo `uid` adentro
+que SÍ es el `auth.uid` del empleado. La migración c4be345 cambió WRITES en
+dropdowns (`<option value={t.uid}>`) pero NO READS via `.find()`. Las rules
+comparan `tecnicoId == request.auth.uid`; los lookups deben comparar contra
+`(t.uid || t.id) === <campo>` para soportar tanto pre como post c4be345.
+
+**Regla:**
+- **WRITE (dropdowns):** `<option value={t.uid}>`, filtrar `tecnicos.filter(t => t.uid)`.
+- **READ (`.find()`):** `personal.find(p => (p.uid || p.id) === <campo>)` cuando
+  el `<campo>` puede ser `auth.uid` post-c4be345 (`tecnicoId`, `operariaId`,
+  `ayudanteId`, `responsableId`, `secretariaId`, `tecnicoDestinoId`).
+- Para lookups internamente simétricos con un dropdown UI local (no se gatea
+  por rules, ej: `Avances.tsx`), agregar comentario `// @safe-tecnicoid-id:`.
 
 **Cazador:** `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` —
-escanea `src/**/*.tsx` por `<option value={X.id}>` donde X es identificador
-corto de personal (`t`, `p`, `tec`, `op`, `sec`, etc.) y el contexto de ±20
-líneas contiene tokens como `tecnicoId`, `ayudanteId`, `tecnicos.map`,
-`personalActivo`. Falla si encuentra hits sin allowlist.
+escanea `src/**/*.{tsx,ts}` con dos pasadas:
+
+1. **Variante 1 (dropdown):** `<option value={X.id}>` en `.tsx` donde X es
+   identificador corto de personal (`t`, `p`, `tec`, `op`, `sec`, etc.) y el
+   contexto ±20 líneas contiene tokens como `tecnicoId`, `ayudanteId`,
+   `tecnicos.map`, `personalActivo`.
+2. **Variante 2 (`.find()` — SPRINT-132):** `.find(X => X.id === Y)` donde X
+   es identificador corto de personal y Y termina con sufijo de campo de
+   empleado (`tecnicoId`, `operariaId`, `ayudanteId`, `responsableId`,
+   `secretariaId`, `tecnicoDestinoId`).
+
+Falla si encuentra hits sin allowlist.
 
 **Allowlist:** comentario `// @safe-tecnicoid-id: <razón>` en la misma línea
-o hasta 5 líneas arriba del `<option>`. Útil cuando el select es solo filtro
-visual (ej: `Comisiones.tsx`, `Mantenimiento.tsx`, `FacturaItemDetallesModal.tsx`)
-y NO se persiste el valor en Firestore como `tecnicoId`.
+o hasta 5 líneas arriba. Útil cuando el lookup es intencionalmente simétrico
+con un dropdown UI local (ej: `Avances.tsx:113`, donde `form.personalId` viene
+del dropdown propio y `/avances` no se gatea por `auth.uid` en rules). Si la
+allowlist crece a >5 entradas, refactorear el cazador.
+
+**Sitios fixed en SPRINT-132 (14):** `useOrdenCreateForm.ts:588`, `Ordenes.tsx:468`,
+`MapaRutas.tsx:539,610,917,1026,1179` (+ write upstream `data-tecnico-id={t.uid || t.id}`
+en línea 1079 y `tecnicoId: destino.uid || destino.id` en línea 558),
+`OrdenEditForm.tsx:77`, `ModalEditarOrdenAdmin.tsx:247`, `Configuracion.tsx:444`,
+`Comisiones.tsx:384`, `CierreDia.tsx:315`, `FacturaItemsEditor.tsx:176`,
+`FacturaItemDetallesModal.tsx:167`, `PersonalPage.tsx:690,725` (lookup +
+dropdowns + writes a `tecnicoId/responsableId`).
 
 ---
 

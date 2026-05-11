@@ -3,7 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-11 por Cowork — Jorge reportó bug visual en iPad: las cards de orden en `/admin/ordenes` (Vista lista) se desbordan horizontalmente — el FaseStepper de 8 fases + botones "Cómo llegar" + "Cancelar" no entran en el ancho de iPad portrait (~810px), quedando el botón "Cancelar" cortado por la derecha. Captura del 2026-05-11 10:03 AM confirma el desborde. Agregado SPRINT-131 (fix responsive: cambiar breakpoint `md:` → `lg:` en `OrdenCard.tsx:68` para que iPad portrait use layout column, o alternativa equivalente). Bug bloquea a Wilainy/Yohana/Mariela que usan iPad para gestionar órdenes.
+**Última actualización:** 2026-05-11 por Cowork — Durante el cierre de SPRINT-130, el coordinator reportó un hallazgo colateral en `OrdenEditForm.tsx:77` (`tecnicos.find(t => t.id === editForm.tecnicoId)`) que NO se dispara correctamente post-`c4be345` porque `tecnicoId` ahora es `auth.uid` pero el `.find` busca por `personal.id` (doc id). Cowork verificó con grep y descubrió que **el mismo bug está en 14 sitios** del repo — incluido `useOrdenCreateForm.ts:588` que es el CREATE flow. Esto explica de raíz el caso Aury Mon (no solo timing): TODAS las órdenes creadas post-c4be345 con técnico que tenga operaria asignada vía `personal[uid].operariaId` NUNCA derivan la operaria correctamente porque el `find` falla. SPRINT-129 reportó 0 inconsistencias porque el patrón es "siempre vacío" en lugar de "desincronizado" — el cazador no detecta el caso "operariaNombre nunca poblado en orden con técnico-con-operaria". Agregado SPRINT-132 con scope sistémico (14 sitios) + cazador extendido P-006 para detectar `.find()` con el patrón.
+
+**Última actualización previa:** 2026-05-11 por Cowork — Jorge reportó bug visual en iPad: las cards de orden en `/admin/ordenes` (Vista lista) se desbordan horizontalmente — el FaseStepper de 8 fases + botones "Cómo llegar" + "Cancelar" no entran en el ancho de iPad portrait (~810px), quedando el botón "Cancelar" cortado por la derecha. Captura del 2026-05-11 10:03 AM confirma el desborde. Agregado SPRINT-131 (fix responsive: cambiar breakpoint `md:` → `lg:` en `OrdenCard.tsx:68` para que iPad portrait use layout column, o alternativa equivalente). Bug bloquea a Wilainy/Yohana/Mariela que usan iPad para gestionar órdenes.
 
 **Última actualización previa:** 2026-05-11 por Cowork — Jorge confirmó que la división 7+7 de "Grupos operaria-técnico" en `PersonalPage.tsx` es correcta y el flujo derivativo (`personal[uid].operariaId` → UI Personal viva + snapshot en orden al crear/editar) funciona como se diseñó. Eligió SPRINT-130 (botón "Re-derivar operaria" en órdenes viejas) como próximo foco para arreglar el caso Aury de raíz y prevenir futuros incidentes similares cuando se asigna operaria a un técnico que ya tiene órdenes abiertas. Agregado SPRINT-130 a la cola con autonomía completa (no toca rules, no toca migraciones masivas).
 
@@ -15,7 +17,7 @@
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-132
+**Próximo ID disponible:** SPRINT-133
 
 ---
 
@@ -623,6 +625,95 @@ Agregar UI mínima (un botón) en el detalle/edit de una orden que, cuando se ha
 ### SPRINT-131 — Fix responsive: cards de orden cortadas en iPad portrait
 
 **Estado:** COMPLETADO 2026-05-11 — ver `## Sprints completados (histórico)` más abajo. QA visual queda como SPRINT-131-QA en `BLOQUEOS.md`.
+
+---
+
+### SPRINT-132 — Bug sistémico: `find(p.id === tecnicoId)` post-c4be345 (14 sitios) + cazador P-006 extendido
+
+**Estado:** EN_EJECUCION (coordinator autónomo `trabaja`, 2026-05-11)
+**Prioridad:** crítica (rompe derivación de operaria en CREATE + edit + mapa + facturas + comisiones + avances + cierre día; afecta a TODOS los técnicos con operariaId asignada; explica el caso original Aury Mon más allá del timing)
+**Origen:** Coordinator 2026-05-11 durante el cierre de SPRINT-130. Reportó como hallazgo colateral: `OrdenEditForm.tsx:77` (`tecnicos.find(t => t.id === editForm.tecnicoId)`) no se dispara correctamente porque `editForm.tecnicoId` post-`c4be345` (SPRINT-108) es `auth.uid`, mientras `t.id` sigue siendo `personal/{docId}`. Cowork verificó con grep `find\(.*\.id === .*tecnicoId|find\(.*p\.id === form|find\(.*t\.id === editForm` y encontró **14 sitios con el mismo patrón**, incluido el CREATE flow.
+**Riesgo:** bajo-medio. El fix por sitio es 1 línea (`p.id === X` → `(p.uid || p.id) === X`). El cazador P-006 actualmente solo detecta dropdowns `<option>` — extenderlo a `.find()` requiere refinamiento de regex. No toca rules, no toca migraciones, no toca data.
+**Touch-list previsto:**
+- `src/hooks/useOrdenCreateForm.ts:588` — CREATE de orden (CRÍTICO).
+- `src/pages/Ordenes.tsx:468` — Edit dentro de la página.
+- `src/pages/MapaRutas.tsx:610` — Edit de orden en mapa.
+- `src/pages/MapaRutas.tsx:917,1026` — color de pin de mapa.
+- `src/components/ordenes/OrdenEditForm.tsx:77` — Edit form principal (origen del hallazgo).
+- `src/components/ordenes/ModalEditarOrdenAdmin.tsx:247` — Modal admin de orden.
+- `src/pages/Configuracion.tsx:444` — config vehículo-técnico.
+- `src/pages/Comisiones.tsx:384` — display de comisiones.
+- `src/pages/Avances.tsx:109` — display de avances (`personalId`, no `tecnicoId` — verificar caso).
+- `src/pages/CierreDia.tsx:315` — display cierre día.
+- `src/components/facturas/FacturaItemsEditor.tsx:176` — display tecnico en factura item.
+- `src/components/facturas/FacturaItemDetallesModal.tsx:167` — detalle item factura.
+- `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` — extender cazador P-006.
+- `docs/PATRONES_REGRESION.md` — actualizar entrada P-006 con variante `.find()`.
+
+#### Objetivo
+
+Que cualquier `.find()` sobre `personal[]` o `tecnicos[]` que use un valor de `tecnicoId`/`form.tecnicoId`/`editForm.tecnicoId`/etc. compare contra `(item.uid || item.id)` en vez de solo `item.id`, para soportar tanto órdenes pre-c4be345 (donde `tecnicoId === doc id`) como post-c4be345 (donde `tecnicoId === auth.uid`). Pattern de fix uniforme. Cazador determinístico que cace cualquier reintroducción del patrón antiguo.
+
+#### Por qué
+
+- **Bug masivo en producción no detectado por SPRINT-129.** Toda orden creada post-c4be345 con técnico que tiene operaria asignada NO deriva la operaria correctamente porque `personal.find(p => p.id === form.tecnicoId)` retorna `undefined` cuando `form.tecnicoId === auth.uid` y `p.id === personal/{docId}`.
+- **SPRINT-129 reportó 0 inconsistencias** porque su definición de inconsistencia es "orden tiene tecnicoId Y técnico tiene operariaId Y orden NO tiene operariaNombre". Cuando la orden NUNCA pobló `operariaNombre` desde el inicio (porque el `find` falla en CREATE), la auditoría no la flaggea — el bug se manifiesta como "campo siempre vacío", no como "desincronizado".
+- **Caso Aury Mon explicado de raíz**: el coordinator de SPRINT-129 lo diagnosticó como timing, pero el bug es más profundo — el CREATE flow nunca derivó la operaria porque el `find` no matcheaba.
+- **Otros sitios (mapa, facturas, comisiones)** muestran nombre/color incorrecto o vacío en órdenes post-c4be345, dependiendo de qué docs queden con qué versión de `tecnicoId`.
+
+#### Criterios de aceptación
+
+**Fase A — Fix de los 14 sitios:**
+- [ ] Para cada uno de los sitios listados, cambiar `find(X => X.id === <campo>)` por `find(X => (X.uid || X.id) === <campo>)`.
+- [ ] El fix preserva compatibilidad con órdenes pre-c4be345 (`X.uid` undefined cae al `X.id` viejo).
+- [ ] En `useOrdenCreateForm.ts:588`, después del fix, verificar manualmente con un técnico que tenga operariaId asignada que la orden creada SÍ poblada `operariaId` + `operariaNombre`. Esto es el QA core.
+- [ ] En `OrdenEditForm.tsx:77`, el banner amber "Esta orden pasará al grupo de {operaria}" se dispara cuando corresponde.
+- [ ] Verificar caso Avances `personalId` — puede ser otro patrón (no técnico). Si aplica el mismo fix, hacerlo; si no, documentar.
+
+**Fase B — Cazador P-006 extendido:**
+- [ ] Modificar `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` para detectar también el patrón `find(\w+ => \w+\.id === \w*tecnicoId\w*)` (regex extendido). El cazador actual solo cubre dropdowns `<option value="t.id">`; agregar lógica para `.find()` calls.
+- [ ] Actualizar `docs/PATRONES_REGRESION.md` entrada P-006 con la variante.
+- [ ] Allowlist vacía o con justificación si hay falso positivo (debería ser 0 después del fix).
+- [ ] El cazador retorna 0 hits tras el fix.
+
+**Fase C — Verificación + cleanup:**
+- [ ] `npm run build` PASS.
+- [ ] `npm run lint` PASS (max-warnings 0).
+- [ ] Cazadores 8/8 PASS, 0 hits.
+- [ ] Buscar con regex final si hay más sitios olvidados: `\.find\(.*\.id === .*Id\)` en src.
+- [ ] Commit + push con mensaje descriptivo + listado de los 14 sitios fixed.
+
+**Global:**
+- [ ] archivist PRE-CHANGE obligatorio (toca múltiples archivos críticos incluyendo `useOrdenCreateForm.ts`, `Ordenes.tsx`, `MapaRutas.tsx` — gotcha "cleanup wizard").
+- [ ] regression_guardian obligatorio (cambio cross-cutting que toca CREATE + edit + display).
+- [ ] reviewer obligatorio (bug sistémico, fix por lote, alto riesgo de fix incompleto).
+- [ ] QA manual obligatorio: builder o tester debe crear una orden de prueba con un técnico que tenga operariaId asignada en su perfil, y verificar que la orden creada poblada `operariaId/Nombre`. Esto NO se cubre con typecheck/lint — requiere ejecutar.
+
+#### Restricciones / guardarrails
+
+- NO migrar datos existentes en este sprint. El fix es solo lectura del campo `personal[].uid || personal[].id`. Las órdenes viejas con `operariaNombre` vacío se arreglan via SPRINT-130 (botón "Re-sincronizar operaria") o el `--apply` opcional propuesto en SPRINT-129.
+- NO cambiar el campo persistido en `ordenes_servicio.tecnicoId` — sigue siendo `auth.uid` post-c4be345. El fix es del lado de la LECTURA del array `personal[]`, no del campo de la orden.
+- NO romper compatibilidad con órdenes pre-c4be345. El patrón `(uid || id)` garantiza fallback.
+- Si algún sitio tiene comentario `// @safe-tecnicoid-id: ...` arriba del `.find()`, verificar si el comentario sigue siendo válido tras el fix. Algunos pueden ser UI filters legítimos.
+- Reviewer debe poner foco especial en `useOrdenCreateForm.ts:588` — es CREATE, lo más crítico.
+
+#### Notas para el coordinator
+
+- Pattern de fix uniforme:
+  ```typescript
+  // Antes:
+  const tecnicoElegido = personal.find(p => p.id === form.tecnicoId);
+  // Después:
+  const tecnicoElegido = personal.find(p => (p.uid || p.id) === form.tecnicoId);
+  ```
+- El cazador P-006 actual está en `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts`. Detecta `<option value={t.id}>` en dropdowns. Extender para que ALSO detecte:
+  ```typescript
+  \.find\(\s*(\w+)\s*=>\s*\1\.id\s*===?\s*\w*(?:tecnico|personal)Id\w*\)
+  ```
+  Allowlistar con comentario `// @safe-tecnicoid-find: <razón>` los sitios donde el fix no aplica (si los hay).
+- Si el builder descubre durante el fix que algún caller pasa `tecnicoId` que NUNCA es `auth.uid` (siempre doc id), documentarlo y dejar ese sitio sin tocar. Pero debería ser raro porque c4be345 migró todo.
+- Después del fix, verificar SPRINT-129 audit script — el script puede empezar a reportar `ORDEN_SIN_OPERARIA_DESINCRONIZADA` para órdenes que tenían el bug latente. Eso ES la señal de que el fix funcionó. Las órdenes viejas se arreglan con SPRINT-130 botón o sprint masivo --apply futuro.
+- Postmortem obligatorio post-sprint (sub-regla "bug masivo en producción"): documentar el aprendizaje "cazadores deben cubrir variantes sintácticas del patrón, no solo el patrón canónico" + "auditorías de datos no detectan bugs que se manifiestan como ausencia en lugar de mismatch".
 
 ---
 

@@ -312,7 +312,8 @@ export default function CierreDia() {
               {efectivoPorTecnico.length === 0 ? (
                 <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400">Sin pagos en efectivo registrados</td></tr>
               ) : efectivoPorTecnico.map(t => {
-                const tec = personal.find(p => p.id === t.tecnicoId);
+                // SPRINT-132: (p.uid || p.id) — t.tecnicoId puede ser auth.uid post-c4be345.
+                const tec = personal.find(p => (p.uid || p.id) === t.tecnicoId);
                 return (
                   <tr key={t.tecnicoId} className="border-b border-gray-50">
                     <td className="px-5 py-3.5">

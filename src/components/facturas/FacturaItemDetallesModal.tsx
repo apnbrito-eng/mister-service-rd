@@ -163,8 +163,9 @@ export default function FacturaItemDetallesModal({
       ? `${(seleccion as ServicioPrecio).nombre} (${(seleccion as ServicioPrecio).marca} · ${(seleccion as ServicioPrecio).equipoTipo})`
       : (seleccion as PiezaInventario).nombre;
 
+    // SPRINT-132: (t.uid || t.id) — tecnicoId guardado en el item puede ser auth.uid post-c4be345.
     const tecnicoNombre = tecnicoId
-      ? (tecnicos.find(t => t.id === tecnicoId)?.nombre || item.tecnicoNombre || '')
+      ? (tecnicos.find(t => (t.uid || t.id) === tecnicoId)?.nombre || item.tecnicoNombre || '')
       : '';
 
     const nuevoItem: ItemCotizacion = {

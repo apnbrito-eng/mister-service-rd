@@ -585,7 +585,9 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
 
       const numero = await siguienteNumeroOrden();
       const ahora = Timestamp.now();
-      const tecnicoElegido = personal.find(p => p.id === form.tecnicoId);
+      // SPRINT-132: comparar contra (p.uid || p.id) para soportar órdenes pre-c4be345
+      // (tecnicoId == personal.id) y post-c4be345 (tecnicoId == auth.uid).
+      const tecnicoElegido = personal.find(p => (p.uid || p.id) === form.tecnicoId);
       const operariaIdDerivada = tecnicoElegido?.operariaId;
       const operariaNombreDerivada = tecnicoElegido?.operariaNombre;
 

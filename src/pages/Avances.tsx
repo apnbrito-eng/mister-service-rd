@@ -106,6 +106,10 @@ export default function Avances() {
 
     setSaving(true);
     try {
+      // @safe-tecnicoid-id: SPRINT-132 verificado — form.personalId proviene del dropdown
+      // local `empleados.map(e => <option value={e.id}>)` y el campo persistido
+      // `avances.personalId` no se gatea por auth.uid en firestore.rules (la rule de /avances
+      // solo verifica rol). El lookup es simétrico con el dropdown y NO afecta rules.
       const emp = personal.find(p => p.id === form.personalId);
       await crearAvance({
         personalId: form.personalId,

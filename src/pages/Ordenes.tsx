@@ -464,8 +464,10 @@ export default function Ordenes() {
         ));
       }
 
-      // Re-derivar operaria a partir del técnico actualmente elegido
-      const tecnicoElegido = personal.find(p => p.id === editForm.tecnicoId);
+      // Re-derivar operaria a partir del técnico actualmente elegido.
+      // SPRINT-132: comparar contra (p.uid || p.id) para soportar órdenes pre-c4be345
+      // (tecnicoId == personal.id) y post-c4be345 (tecnicoId == auth.uid).
+      const tecnicoElegido = personal.find(p => (p.uid || p.id) === editForm.tecnicoId);
       const operariaIdDerivada = tecnicoElegido?.operariaId || null;
       const operariaNombreDerivada = tecnicoElegido?.operariaNombre || null;
 

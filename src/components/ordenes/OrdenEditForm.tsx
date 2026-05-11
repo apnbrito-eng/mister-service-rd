@@ -73,8 +73,10 @@ export default function OrdenEditForm({
   userProfile,
 }: OrdenEditFormProps) {
   const tiposEquipo = useTiposEquipo();
-  // Derivar operaria del técnico actualmente elegido
-  const tecnicoElegido = tecnicos.find(t => t.id === editForm.tecnicoId);
+  // Derivar operaria del técnico actualmente elegido.
+  // SPRINT-132: comparar contra (t.uid || t.id) para soportar órdenes pre-c4be345
+  // (tecnicoId == personal.id) y post-c4be345 (tecnicoId == auth.uid).
+  const tecnicoElegido = tecnicos.find(t => (t.uid || t.id) === editForm.tecnicoId);
   const operariaNuevaNombre = tecnicoElegido?.operariaNombre;
   const operariaPrevNombre = selectedOrden.operariaNombre;
   const cambiaDeGrupo = !!editForm.tecnicoId &&

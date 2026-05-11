@@ -172,8 +172,9 @@ export default function FacturaItemsEditor({
       <div className="space-y-2">
         {items.map((item, i) => {
           const esInventario = item.tipoItem === 'servicio' || item.tipoItem === 'pieza';
+          // SPRINT-132: (t.uid || t.id) — item.tecnicoId puede ser auth.uid post-c4be345.
           const tecnico = item.tecnicoId
-            ? tecnicos.find(t => t.id === item.tecnicoId)
+            ? tecnicos.find(t => (t.uid || t.id) === item.tecnicoId)
             : null;
           return (
             <div

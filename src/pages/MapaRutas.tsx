@@ -536,7 +536,9 @@ export default function MapaRutas() {
   const handleConfirmarReasignar = async () => {
     if (!confirmacionReasignar) return;
     const { orden, tecnicoDestinoId } = confirmacionReasignar;
-    const destino = personal.find(p => p.id === tecnicoDestinoId);
+    // SPRINT-132: comparar contra (p.uid || p.id). tecnicoDestinoId viene del data-tecnico-id
+    // del DOM, que ahora también es (t.uid || t.id) para escribir auth.uid post-c4be345.
+    const destino = personal.find(p => (p.uid || p.id) === tecnicoDestinoId);
     if (!destino) {
       toast.error('Técnico destino no encontrado');
       return;
@@ -555,7 +557,9 @@ export default function MapaRutas() {
         destino.nombre,
       );
       const payload: Record<string, unknown> = {
-        tecnicoId: destino.id,
+        // SPRINT-132 + P-006: persistir auth.uid (no doc id de personal/) para que las rules
+        // técnico-gateadas (tecnicoId == request.auth.uid) acepten writes del nuevo dueño.
+        tecnicoId: destino.uid || destino.id,
         tecnicoNombre: destino.nombre,
         auditoria: arrayUnion(registro),
         updatedAt: ahora,
@@ -606,8 +610,10 @@ export default function MapaRutas() {
       } else if (editForm.fechaCita) {
         fechaCitaTs = Timestamp.fromDate(new Date(`${editForm.fechaCita}T08:00:00`));
       }
-      // Re-derivar operaria si cambió el técnico
-      const tecnicoElegido = personal.find(p => p.id === editForm.tecnicoId);
+      // Re-derivar operaria si cambió el técnico.
+      // SPRINT-132: comparar contra (p.uid || p.id) para soportar órdenes pre-c4be345
+      // (tecnicoId == personal.id) y post-c4be345 (tecnicoId == auth.uid).
+      const tecnicoElegido = personal.find(p => (p.uid || p.id) === editForm.tecnicoId);
       const registros: Record<string, unknown>[] = [];
       if (editForm.tecnicoNombre !== (editingOrden.tecnicoNombre || '')) {
         registros.push(crearRegistroAuditoria(
@@ -914,7 +920,8 @@ export default function MapaRutas() {
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
             {marcadores.map(m => {
-              const color = personal.find(p => p.id === m.tecnicoId)?.color || getTecnicoColor(m.tecnicoNombre);
+              // SPRINT-132: (p.uid || p.id) === m.tecnicoId — m.tecnicoId puede ser auth.uid post-c4be345.
+              const color = personal.find(p => (p.uid || p.id) === m.tecnicoId)?.color || getTecnicoColor(m.tecnicoNombre);
               const fechaTexto = m.fechaCita ? format(m.fechaCita, 'yyyy-MM-dd') : '';
               const ordenCompleta = ordenes.find(o => o.id === m.id);
               const draggableMarker =
@@ -1023,7 +1030,8 @@ export default function MapaRutas() {
           {/* Ordered list */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-h-[55vh] overflow-y-auto">
             {marcadores.slice().sort((a, b) => a.orden - b.orden).map(m => {
-              const color = personal.find(p => p.id === m.tecnicoId)?.color || getTecnicoColor(m.tecnicoNombre);
+              // SPRINT-132: (p.uid || p.id) === m.tecnicoId — m.tecnicoId puede ser auth.uid post-c4be345.
+              const color = personal.find(p => (p.uid || p.id) === m.tecnicoId)?.color || getTecnicoColor(m.tecnicoNombre);
               return (
                 <div key={m.id} className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50">
                   <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
@@ -1068,11 +1076,14 @@ export default function MapaRutas() {
                 const ordenArrastrada = draggingOrdenId
                   ? ordenes.find(o => o.id === draggingOrdenId)
                   : null;
-                const esDestinoValido = !!draggingOrdenId && ordenArrastrada?.tecnicoId !== t.id;
+                // SPRINT-132 + P-006: el data-tecnico-id que se persistirá en la orden debe ser
+                // auth.uid (no el doc id de personal/) para que las rules acepten al nuevo técnico.
+                const tecnicoIdParaWrite = t.uid || t.id;
+                const esDestinoValido = !!draggingOrdenId && ordenArrastrada?.tecnicoId !== tecnicoIdParaWrite;
                 return (
                   <div
                     key={t.id}
-                    data-tecnico-id={t.id}
+                    data-tecnico-id={tecnicoIdParaWrite}
                     className={`flex items-center justify-between gap-2 text-xs text-gray-600 rounded-lg px-2 py-1 transition-all ${
                       esDestinoValido
                         ? 'ring-2 ring-blue-400 bg-blue-50/50 hover:ring-4 hover:ring-blue-600'
@@ -1176,8 +1187,9 @@ export default function MapaRutas() {
         title={confirmacionReasignar ? `Reasignar orden ${confirmacionReasignar.orden.numero || ''}` : 'Reasignar orden'}
       >
         {confirmacionReasignar && (() => {
-          const destino = personal.find(p => p.id === confirmacionReasignar.tecnicoDestinoId);
-          const conflicto = destino ? detectarConflictoHorario(destino.id, confirmacionReasignar.orden) : null;
+          // SPRINT-132: lookup contra (p.uid || p.id) — tecnicoDestinoId puede ser auth.uid post-c4be345.
+          const destino = personal.find(p => (p.uid || p.id) === confirmacionReasignar.tecnicoDestinoId);
+          const conflicto = destino ? detectarConflictoHorario(destino.uid || destino.id, confirmacionReasignar.orden) : null;
           return (
             <div className="space-y-4">
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm space-y-1">

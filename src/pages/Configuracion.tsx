@@ -441,7 +441,8 @@ export default function Configuracion() {
       toast.error('Completa ID y nombre del vehículo');
       return;
     }
-    const tec = personal.find(p => p.id === nuevoVehiculo.tecnicoId);
+    // SPRINT-132: (p.uid || p.id) — el campo persistido nuevoVehiculo.tecnicoId puede ser auth.uid post-c4be345.
+    const tec = personal.find(p => (p.uid || p.id) === nuevoVehiculo.tecnicoId);
     setGpsConfig({
       ...gpsConfig,
       vehiculos: [
