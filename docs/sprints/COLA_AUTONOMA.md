@@ -889,7 +889,7 @@ Ejercer manualmente en producción con técnico + operaria reales:
 
 ### SPRINT-131 — Fix responsive: cards de orden cortadas en iPad portrait
 - **Completado:** 2026-05-11 por coordinator autónomo (pasada 2 del día). OK humano: Jorge `trabaja` 2026-05-11.
-- **Hash:** pendiente del commit (ver `EJECUCION_AUTONOMA.md`).
+- **Hash:** `316009e`.
 - **Resultado:** `src/components/ordenes/OrdenCard.tsx:68` — breakpoint horizontal del card empujado de `md:` (≥768px) a `lg:` (≥1024px). En iPad portrait (~810px) el card ahora cae a layout column (foto arriba, info al medio, stepper+botones abajo con `flex-wrap`). En desktop ≥1024px el layout horizontal queda idéntico al actual. Mobile sigue column sin regresión. `OrdenCard` solo se usa en `Ordenes.tsx` (admin); el técnico tiene su propia vista.
 - **Validación:** `npm run build` OK (tsc + vite) · cazadores 7/7 PASS · lint del archivo modificado limpio · diff de 1 línea de CSS. **QA visual** declarada como SPRINT-131-QA en `BLOQUEOS.md` (coordinator no puede ejecutar DevTools real).
 - **Archivist PRE-CHANGE:** sin postmortems previos sobre `OrdenCard.tsx` ni patrón problemático en git log. Riesgo bajo.
