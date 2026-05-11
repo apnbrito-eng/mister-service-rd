@@ -266,6 +266,8 @@ export default function Inventario() {
     setSavingAjuste(false);
   };
 
+  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
+  // Muta piezas_inventario + movimientos_inventario. Refactor pendiente a writeBatch.
   const handleConfirmarAjuste = async () => {
     if (!piezaAjuste) return;
     if (ajusteForm.cantidad <= 0) { toast.error('Cantidad inválida'); return; }

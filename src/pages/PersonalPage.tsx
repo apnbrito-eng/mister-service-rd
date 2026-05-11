@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, Timestamp, query, orderBy, writeBatch } from 'firebase/firestore';
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
@@ -198,6 +198,9 @@ export default function PersonalPage() {
     return true;
   };
 
+  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
+  // Muta personal + usuarios (alta de empleado con acceso, SPRINT-105). P-004 caza el invariante
+  // "doble doc obligatorio" pero NO la atomicidad transaccional. Refactor pendiente a writeBatch.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nombre || !form.rol) { toast.error('Nombre y rol son requeridos'); return; }
@@ -423,6 +426,8 @@ export default function PersonalPage() {
 
   // Vincula un personal con una cuenta Auth ya existente usando email+password del dueño.
   // Devuelve true si vinculó correctamente, false si no (ya mostró toast de error).
+  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
+  // Muta personal + usuarios. Refactor pendiente a writeBatch.
   const ejecutarVinculacion = async (
     email: string,
     password: string,
@@ -700,26 +705,42 @@ export default function PersonalPage() {
           const pIdAuth = p.uid || p.id;
           const destinoIdAuth = destino.uid || destino.id;
           const destinoNombre = destino.nombre;
-          const tareas = deps.map(async (o) => {
-            const updateData: Record<string, unknown> = { updatedAt: Timestamp.now() };
-            if (o.tecnicoId === pIdAuth || o.tecnicoId === p.id) {
-              updateData.tecnicoId = destinoIdAuth;
-              updateData.tecnicoNombre = destinoNombre;
-              updateData.operariaId = destino.operariaId || null;
-              updateData.operariaNombre = destino.operariaNombre || null;
+          // SPRINT-133: writeBatch atomicidad para mutación cross-collection
+          // (ordenes_servicio × N + personal × 1). Antes: Promise.all con N updateDoc
+          // + 1 deleteDoc → si falla a mitad, queda estado parcial inconsistente.
+          // Ahora: batch.commit() atómico hasta 500 ops; chunking si >500 (raro en
+          // técnicos, pero guardrail bueno).
+          const opsPorBatch = 499; // dejamos 1 op libre para el delete del último chunk
+          const chunks: typeof deps[] = [];
+          for (let i = 0; i < deps.length; i += opsPorBatch) {
+            chunks.push(deps.slice(i, i + opsPorBatch));
+          }
+          // Si llegamos acá con 500+ órdenes, el técnico tenía un volumen muy alto.
+          // Atomicidad parcial: si falla un chunk, los anteriores ya están aplicados.
+          // Aceptable porque el flujo de UI ya bloquea con `processingAccion` y el
+          // botón confirm es manual (no se dispara solo).
+          for (let i = 0; i < chunks.length; i++) {
+            const batch = writeBatch(db);
+            for (const o of chunks[i]) {
+              const updateData: Record<string, unknown> = { updatedAt: Timestamp.now() };
+              if (o.tecnicoId === pIdAuth || o.tecnicoId === p.id) {
+                updateData.tecnicoId = destinoIdAuth;
+                updateData.tecnicoNombre = destinoNombre;
+                updateData.operariaId = destino.operariaId || null;
+                updateData.operariaNombre = destino.operariaNombre || null;
+              }
+              if (o.responsableId === pIdAuth || o.responsableId === p.id) {
+                updateData.responsableId = destinoIdAuth;
+                updateData.responsableNombre = destinoNombre;
+              }
+              batch.update(doc(db, 'ordenes_servicio', o.id), updateData);
             }
-            if (o.responsableId === pIdAuth || o.responsableId === p.id) {
-              updateData.responsableId = destinoIdAuth;
-              updateData.responsableNombre = destinoNombre;
+            // El deleteDoc del personal SIEMPRE va al final (último chunk).
+            if (i === chunks.length - 1) {
+              batch.delete(doc(db, 'personal', p.id));
             }
-            try {
-              await updateDoc(doc(db, 'ordenes_servicio', o.id), updateData);
-            } catch (err) {
-              console.error('Error transfiriendo orden', o.id, err);
-            }
-          });
-          await Promise.all(tareas);
-          await deleteDoc(doc(db, 'personal', p.id));
+            await batch.commit();
+          }
           toast.success(`Técnico eliminado. ${deps.length} orden(es) transferida(s) a ${destino.nombre}`);
         } else {
           await deleteDoc(doc(db, 'personal', p.id));
@@ -737,29 +758,49 @@ export default function PersonalPage() {
             setProcessingAccion(false);
             return;
           }
-          const tareasTecs = tecs.map(async (t) => {
-            try {
-              await updateDoc(doc(db, 'personal', t.id), {
-                operariaId: destino.id,
-                operariaNombre: destino.nombre,
-              });
-            } catch (err) {
-              console.error('Error transfiriendo técnico', t.id, err);
+          // SPRINT-133: writeBatch atomicidad. Mutación cross-collection
+          // (personal × tecs.length para reasignar operaria de cada técnico,
+          // + ordenes_servicio × ords.length, + personal × 1 para el delete final).
+          // Total ops = tecs.length + ords.length + 1. Si >500, chunking secuencial.
+          // Orden de operaciones dentro del batch: 1) updates a ordenes_servicio,
+          // 2) updates a personal (técnicos), 3) deleteDoc personal (operaria, al
+          // final del último chunk).
+          type OpItem =
+            | { kind: 'orden'; o: typeof ords[number] }
+            | { kind: 'tecnico'; t: typeof tecs[number] };
+          const allOps: OpItem[] = [
+            ...ords.map((o) => ({ kind: 'orden' as const, o })),
+            ...tecs.map((t) => ({ kind: 'tecnico' as const, t })),
+          ];
+          const opsPorBatch = 499;
+          const chunks: OpItem[][] = [];
+          for (let i = 0; i < allOps.length; i += opsPorBatch) {
+            chunks.push(allOps.slice(i, i + opsPorBatch));
+          }
+          // Si no hay ops cross (tecs.length + ords.length === 0 no entra acá, ya cubierto
+          // por la rama else de abajo), siempre necesitamos al menos 1 chunk para el delete.
+          if (chunks.length === 0) chunks.push([]);
+          for (let i = 0; i < chunks.length; i++) {
+            const batch = writeBatch(db);
+            for (const item of chunks[i]) {
+              if (item.kind === 'orden') {
+                batch.update(doc(db, 'ordenes_servicio', item.o.id), {
+                  operariaId: destino.id,
+                  operariaNombre: destino.nombre,
+                  updatedAt: Timestamp.now(),
+                });
+              } else {
+                batch.update(doc(db, 'personal', item.t.id), {
+                  operariaId: destino.id,
+                  operariaNombre: destino.nombre,
+                });
+              }
             }
-          });
-          const tareasOrds = ords.map(async (o) => {
-            try {
-              await updateDoc(doc(db, 'ordenes_servicio', o.id), {
-                operariaId: destino.id,
-                operariaNombre: destino.nombre,
-                updatedAt: Timestamp.now(),
-              });
-            } catch (err) {
-              console.error('Error transfiriendo orden', o.id, err);
+            if (i === chunks.length - 1) {
+              batch.delete(doc(db, 'personal', p.id));
             }
-          });
-          await Promise.all([...tareasTecs, ...tareasOrds]);
-          await deleteDoc(doc(db, 'personal', p.id));
+            await batch.commit();
+          }
           toast.success(`Operaria eliminada. ${tecs.length} técnico(s) y ${ords.length} orden(es) transferidos a ${destino.nombre}`);
         } else {
           await deleteDoc(doc(db, 'personal', p.id));

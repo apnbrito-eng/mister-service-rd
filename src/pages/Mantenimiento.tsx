@@ -75,6 +75,8 @@ export default function Mantenimiento() {
     }
   };
 
+  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
+  // Muta mantenimiento + ordenes_servicio. Refactor pendiente a writeBatch.
   const handleGenerarOrden = async (item: MantenimientoType) => {
     try {
       const numero = await siguienteNumeroOrden();

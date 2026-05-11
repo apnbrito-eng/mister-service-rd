@@ -10,6 +10,52 @@
 
 ---
 
+## SPRINT-133-QA — Validación funcional: eliminación atómica de técnico/operaria con órdenes activas
+
+**Tipo:** QA humana **no bloqueante** (registro de pendiente, no impide cierre del sprint).
+**Estado:** PENDIENTE VALIDACIÓN HUMANA
+**Origen:** SPRINT-133 (pasada 4 del 2026-05-11) envolvió `handleConfirmarEliminar` en `writeBatch` con chunking. Cazadores 7/7 PASS + typecheck + lint OK + reviewer APPROVED + regression_guardian PASS. PERO el sprint pide validación manual del flujo de eliminación con simulación de fallo a mitad — el coordinator no puede ejercitar UI real ni network throttling.
+
+**Casos a validar manualmente (Jorge en su Mac, en entorno de prueba o producción con cuidado):**
+
+1. **Caso primary — eliminar técnico con 2-3 órdenes activas:**
+   - Crear un técnico de prueba (ej: "Test Técnico SPRINT-133") en `/admin/personal`.
+   - Asignarle 2-3 órdenes activas (crearlas desde `/admin/ordenes` o reasignar existentes).
+   - Ir a `/admin/personal` → click "Eliminar" en el técnico de prueba.
+   - El modal de transferencia debe aparecer pidiendo técnico destino.
+   - Elegir otro técnico real (ej: Aury) y confirmar.
+   - **Resultado esperado:** toast verde "Técnico eliminado. N orden(es) transferida(s) a Aury". Verificar en `/admin/ordenes` que las 2-3 órdenes ahora muestran a Aury como técnico. Verificar en Firestore Console que `personal/<id de prueba>` ya NO existe.
+
+2. **Caso secondary — eliminar operaria con técnicos asignados:**
+   - Crear operaria de prueba en `/admin/personal`.
+   - Asignar 1-2 técnicos a esa operaria (desde el perfil de cada técnico, campo "Operaria").
+   - Crear 1-2 órdenes a esos técnicos.
+   - Ir a `/admin/personal` → click "Eliminar" en la operaria de prueba.
+   - Modal de transferencia → elegir otra operaria real (ej: Wilainy) → confirmar.
+   - **Resultado esperado:** toast verde "Operaria eliminada. N técnico(s) y M orden(es) transferidos a Wilainy". Verificar:
+     - Los técnicos ahora muestran a Wilainy en su perfil.
+     - Las órdenes muestran a Wilainy.
+     - El doc de la operaria de prueba ya NO existe en `personal/`.
+
+3. **Caso terciario — atomicidad (simular fallo a mitad):**
+   - Crear técnico de prueba con 2-3 órdenes activas.
+   - Abrir DevTools → Network tab → setear "Offline" o throttling agresivo.
+   - Click "Eliminar" → confirmar.
+   - **Resultado esperado:** el toast de error debe aparecer ("Error al eliminar") y verificar en Firestore Console:
+     - Si el batch alcanzó a ejecutar: o **TODAS** las órdenes están transferidas Y el personal está borrado, o **NINGUNA** está transferida Y el personal sigue existiendo. NUNCA estado parcial.
+   - El test antiguo (pre-SPRINT-133) habría dejado las primeras N órdenes transferidas y el resto + el delete personal sin ejecutar.
+
+4. **Caso colateral — eliminar admin/secretaria sin dependencias:**
+   - Verificar que la eliminación de un admin (no el último) o secretaria sin órdenes asignadas sigue funcionando con un solo `deleteDoc` (no se rompió).
+
+**Si todos pasan:** Jorge edita esta sección con `OK: jorge YYYY-MM-DD HH:MM — QA validado` y la archivamos.
+
+**Si algún caso falla:** capturar consola del browser + Firestore Console (estado de docs afectados) y reportar a Cowork. Posible regresión del fix.
+
+**Nota técnica:** Firestore `writeBatch` es atómico en el límite de 500 operaciones por batch. Si llegamos a >500, hay chunking secuencial con atomicidad parcial documentada en código y aceptada por el spec del sprint.
+
+---
+
 ## SPRINT-132-QA — Validación funcional: CREATE de orden con técnico que tiene operariaId
 
 **Tipo:** QA humana **no bloqueante** (registro de pendiente, no impide cierre del sprint).

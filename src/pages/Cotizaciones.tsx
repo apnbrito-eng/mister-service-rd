@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, Timestamp, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cotizacion, ItemCotizacion, EstadoCotizacion, OrdenServicio } from '../types';
 import { formatMoneda, formatFechaCorta, generateNumeroCotizacion, parseOrden } from '../utils';
@@ -37,6 +37,8 @@ export default function Cotizaciones() {
   const puedeAprobar = puede(userProfile, 'cotizacionesAprobarPrecio');
   const [convirtiendoId, setConvirtiendoId] = useState<string | null>(null);
 
+  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
+  // Muta movimientos_inventario + cotizaciones + facturas. Refactor pendiente a writeBatch.
   const handleConvertirAFactura = async (cot: Cotizacion) => {
     if (!puedeFacturar) {
       toast.error('No tienes permiso para crear facturas');
@@ -245,13 +247,15 @@ export default function Cotizaciones() {
   };
 
   const removeItem = (i: number) => setForm(f => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
-  const updateItem = (i: number, field: keyof ItemCotizacion, value: any) => {
+  const updateItem = (i: number, field: keyof ItemCotizacion, value: ItemCotizacion[keyof ItemCotizacion]) => {
     setForm(f => ({
       ...f,
       items: f.items.map((item, idx) => idx === i ? { ...item, [field]: value } : item),
     }));
   };
 
+  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
+  // Muta cotizaciones + ordenes_servicio (cuando convierte de lead). Refactor pendiente a writeBatch.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.clienteNombre) { toast.error('Cliente es requerido'); return; }

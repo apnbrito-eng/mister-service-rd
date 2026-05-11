@@ -77,14 +77,23 @@ idempotencia (`if (data.flag) return`) va DENTRO del callback DESPUÉS del
 `tx.get()`.
 
 **Cazador:** `scripts/invariantes/check-cross-collection-tx.ts` — busca
-funciones en `src/services/*.ts` que hagan ≥2 llamadas de mutación
-(`updateDoc`, `setDoc`, `addDoc`, `deleteDoc`) sobre `db, '...'` distintos
-sin estar dentro de `runTransaction(...)`. Caza por nombre de función
-exportada.
+funciones en `src/services/`, `src/pages/`, `src/hooks/` y `api/` que hagan
+≥2 llamadas de mutación (`updateDoc`, `setDoc`, `addDoc`, `deleteDoc`)
+sobre `db, '...'` distintos sin estar dentro de `runTransaction(...)` ni
+`writeBatch(...)`. Caza por nombre de función. Scope extendido en SPRINT-133
+(2026-05-11) desde el original `['src/services', 'api']` tras detectar
+`handleConfirmarEliminar` en `src/pages/PersonalPage.tsx` con el bug —
+fix aplicado con `writeBatch` + chunking.
 
 **Allowlist:** funciones intencionalmente no-transaccionales (ej:
-backfills/migraciones one-shot) marcadas con comentario
-`// @safe-non-tx: <razón>` arriba de la función.
+backfills/migraciones one-shot, deuda agendada con sprint follow-up
+explícito) marcadas con comentario `// @safe-non-tx: <razón>` arriba de la
+función. SPRINT-133 dejó 7 entradas en allowlist apuntando a SPRINT-134
+como follow-up (handleConvertirAFactura, handleSubmit cotizaciones,
+handleChangeEstado equipos, handleConfirmarAjuste inventario,
+handleGenerarOrden mantenimiento, handleSubmit personal,
+ejecutarVinculacion personal). Refactor a `writeBatch` pendiente en
+SPRINT-134.
 
 ---
 

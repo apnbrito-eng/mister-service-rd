@@ -3,7 +3,11 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-11 por Cowork — Durante el cierre de SPRINT-130, el coordinator reportó un hallazgo colateral en `OrdenEditForm.tsx:77` (`tecnicos.find(t => t.id === editForm.tecnicoId)`) que NO se dispara correctamente post-`c4be345` porque `tecnicoId` ahora es `auth.uid` pero el `.find` busca por `personal.id` (doc id). Cowork verificó con grep y descubrió que **el mismo bug está en 14 sitios** del repo — incluido `useOrdenCreateForm.ts:588` que es el CREATE flow. Esto explica de raíz el caso Aury Mon (no solo timing): TODAS las órdenes creadas post-c4be345 con técnico que tenga operaria asignada vía `personal[uid].operariaId` NUNCA derivan la operaria correctamente porque el `find` falla. SPRINT-129 reportó 0 inconsistencias porque el patrón es "siempre vacío" en lugar de "desincronizado" — el cazador no detecta el caso "operariaNombre nunca poblado en orden con técnico-con-operaria". Agregado SPRINT-132 con scope sistémico (14 sitios) + cazador extendido P-006 para detectar `.find()` con el patrón.
+**Última actualización:** 2026-05-11 por coordinator (autónomo `trabaja`, pasada 4) — SPRINT-133 COMPLETADO. `handleConfirmarEliminar` envuelto en `writeBatch` con chunking (branches técnico + operaria). Cazador P-003 extendido a `src/services/` + `src/pages/` + `src/hooks/` + `api/`. 7 hallazgos colaterales en otras funciones de `src/pages/` documentados como deuda en SPRINT-134 (allowlist `@safe-non-tx` con razón explícita). Cazadores 7/7 PASS. SPRINT-134 (refactor de los 7 a writeBatch) agendado como follow-up PENDIENTE. SPRINT-133-QA registrado en BLOQUEOS.md como validación humana no bloqueante.
+
+**Última actualización previa:** 2026-05-11 por Cowork — SPRINT-132 cerrado con saldo a favor (commit `43a2087`): fixeados 12 lookups del bug sistémico + **4 bugs P-006 originales adicionales descubiertos durante el análisis** (MapaRutas drag&drop escribía `tecnicoId: destino.id` a Firestore, PersonalPage transferencia al eliminar técnico también). Cazador P-006 extendido (ahora detecta `.find()` + escanea `.ts` y `.tsx`). Hallazgo colateral nuevo: `PersonalPage.tsx:682 handleConfirmarEliminar` hace mutación cross-collection (`ordenes_servicio` + `personal`) **sin `runTransaction`**. P-003 no lo cazó porque solo escanea `src/services/`, no `src/pages/`. Jorge eligió SPRINT-133 (recommended): envolver en runTransaction/writeBatch + extender P-003 a `src/pages/` + `src/hooks/`. Mismo patrón meta que P-006 acaba de fixear.
+
+**Última actualización previa:** 2026-05-11 por Cowork — Durante el cierre de SPRINT-130, el coordinator reportó un hallazgo colateral en `OrdenEditForm.tsx:77` (`tecnicos.find(t => t.id === editForm.tecnicoId)`) que NO se dispara correctamente post-`c4be345` porque `tecnicoId` ahora es `auth.uid` pero el `.find` busca por `personal.id` (doc id). Cowork verificó con grep y descubrió que **el mismo bug está en 14 sitios** del repo — incluido `useOrdenCreateForm.ts:588` que es el CREATE flow. Esto explica de raíz el caso Aury Mon (no solo timing): TODAS las órdenes creadas post-c4be345 con técnico que tenga operaria asignada vía `personal[uid].operariaId` NUNCA derivan la operaria correctamente porque el `find` falla. SPRINT-129 reportó 0 inconsistencias porque el patrón es "siempre vacío" en lugar de "desincronizado" — el cazador no detecta el caso "operariaNombre nunca poblado en orden con técnico-con-operaria". Agregado SPRINT-132 con scope sistémico (14 sitios) + cazador extendido P-006 para detectar `.find()` con el patrón.
 
 **Última actualización previa:** 2026-05-11 por Cowork — Jorge reportó bug visual en iPad: las cards de orden en `/admin/ordenes` (Vista lista) se desbordan horizontalmente — el FaseStepper de 8 fases + botones "Cómo llegar" + "Cancelar" no entran en el ancho de iPad portrait (~810px), quedando el botón "Cancelar" cortado por la derecha. Captura del 2026-05-11 10:03 AM confirma el desborde. Agregado SPRINT-131 (fix responsive: cambiar breakpoint `md:` → `lg:` en `OrdenCard.tsx:68` para que iPad portrait use layout column, o alternativa equivalente). Bug bloquea a Wilainy/Yohana/Mariela que usan iPad para gestionar órdenes.
 
@@ -17,7 +21,7 @@
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-133
+**Próximo ID disponible:** SPRINT-135
 
 ---
 
@@ -714,6 +718,155 @@ Que cualquier `.find()` sobre `personal[]` o `tecnicos[]` que use un valor de `t
 - Si el builder descubre durante el fix que algún caller pasa `tecnicoId` que NUNCA es `auth.uid` (siempre doc id), documentarlo y dejar ese sitio sin tocar. Pero debería ser raro porque c4be345 migró todo.
 - Después del fix, verificar SPRINT-129 audit script — el script puede empezar a reportar `ORDEN_SIN_OPERARIA_DESINCRONIZADA` para órdenes que tenían el bug latente. Eso ES la señal de que el fix funcionó. Las órdenes viejas se arreglan con SPRINT-130 botón o sprint masivo --apply futuro.
 - Postmortem obligatorio post-sprint (sub-regla "bug masivo en producción"): documentar el aprendizaje "cazadores deben cubrir variantes sintácticas del patrón, no solo el patrón canónico" + "auditorías de datos no detectan bugs que se manifiestan como ausencia en lugar de mismatch".
+
+---
+
+### SPRINT-133 — `handleConfirmarEliminar` cross-collection sin tx + extender cazador P-003
+
+**Estado:** COMPLETADO 2026-05-11 (pasada 4 del día, commit pendiente de hash en EJECUCION_AUTONOMA.md). `handleConfirmarEliminar` envuelto en `writeBatch` con chunking. Cazador P-003 ampliado a `src/services/` + `src/pages/` + `src/hooks/` + `api/`. 7 hallazgos colaterales en otras funciones cross-collection allowlist-eadas con `@safe-non-tx: SPRINT-134 follow-up`. SPRINT-134 agendado abajo. Cazadores 7/7 PASS.
+**Prioridad:** alta (bug latente real: si la eliminación de un técnico/operaria falla a mitad, deja `ordenes_servicio` parcialmente actualizadas + el doc `personal/` sin borrar — estado inconsistente que requiere intervención manual). Mismo patrón meta que P-006 acaba de fixear: cazador con scope insuficiente.
+**Origen:** Coordinator 2026-05-11 durante el cierre de SPRINT-132. Reportó como hallazgo colateral: `PersonalPage.tsx:682 handleConfirmarEliminar` hace mutaciones cross-collection (`ordenes_servicio` updateDoc × N + `personal` deleteDoc) **sin envolver en `runTransaction`** ni `writeBatch`. El cazador P-003 (`check-cross-collection-tx.ts`) NO lo cazó porque su `ROOT_DIR` solo escanea `src/services/` y `api/` — no `src/pages/` ni `src/hooks/`. Bug + falla del cazador (mismo meta-problema que SPRINT-132 acaba de resolver para P-006).
+**Riesgo:** medio. El fix toca `PersonalPage.tsx` (archivo crítico de operación — pasa el filtro de gotcha "cleanup wizard"). Hay 3 branches con cross-collection: técnico, operaria, admin (este último no es cross — solo deleteDoc). `runTransaction` permite máximo 500 ops, pero `writeBatch` es la mejor herramienta acá porque NO necesitamos reads dentro de la mutación (los datos vienen de la UI).
+**Touch-list previsto:**
+- `src/pages/PersonalPage.tsx:682-790` (`handleConfirmarEliminar`) — envolver branches "técnico" + "operaria" en `writeBatch` con chunking si N>500.
+- `scripts/invariantes/check-cross-collection-tx.ts` — extender `ROOT_DIR` a `src/pages/` y `src/hooks/` además de `src/services/` y `api/`.
+- `docs/PATRONES_REGRESION.md` — actualizar entrada P-003 con nuevo scope.
+
+#### Objetivo
+
+Que la eliminación de un técnico/operaria sea **atómica**: o se transfieren todas las órdenes Y se borra el `personal/`, o no se hace nada. Hoy si falla a mitad (timeout, permission-denied en alguna orden, conexión), queda inconsistente. + Que el cazador P-003 detecte futuras introducciones de este patrón en cualquier archivo del frontend, no solo en services.
+
+#### Por qué
+
+- **Bug latente real:** si el técnico tiene 50 órdenes activas y se cae la red después de actualizar 30, las primeras 30 ya tienen el nuevo `tecnicoId` apuntando al destino, las últimas 20 todavía apuntan al técnico viejo, y el doc `personal/` del técnico viejo sigue existiendo. Estado inconsistente que requiere intervención manual desde Firestore Console.
+- **Mismo patrón meta que P-006:** el cazador P-003 fue diseñado para escanear `src/services/` (donde estaban los bugs originales) pero el código del repo evolucionó y ahora hay mutaciones cross-collection en `src/pages/` y `src/hooks/`. Necesita ampliarse igual que P-006 con `.find()`. **Aprendizaje recurrente: los cazadores que escanean directorios fijos quedan obsoletos si el código se reorganiza.**
+- **Sin postmortem reciente que mencione esto**, pero es el mismo principio del postmortem SPRINT-118: "cazadores estáticos solo cazan donde miran". Aplica acá.
+
+#### Criterios de aceptación
+
+**Fase R1 — Fix `handleConfirmarEliminar`:**
+- [ ] Branch "técnico" (líneas 687-727): las N llamadas a `updateDoc(doc(db, 'ordenes_servicio', o.id), updateData)` + el `deleteDoc(doc(db, 'personal', p.id))` quedan envueltas en un `writeBatch`. Si `deps.length > 500`, partir en chunks de 500 y hacer múltiples `batch.commit()` secuenciales (con la advertencia de que dejaría de ser 100% atómico — documentar en el código con comentario "// Si llegamos acá con 500+ órdenes, el técnico tenía un volumen muy alto. Atomicidad parcial: si falla un chunk, los anteriores ya están aplicados. Aceptable porque el flujo de UI ya bloquea con `processingAccion`."). Realista: técnicos no van a tener >500 órdenes activas, pero el guardarrail es bueno.
+- [ ] Branch "operaria" (líneas 728-767): mismo tratamiento. N updates a `personal` + N updates a `ordenes_servicio` + 1 deleteDoc a `personal`. Total puede ser >500 en operarias con muchos técnicos+órdenes pero raro.
+- [ ] Branch "administrador" (líneas 768-778): SOLO 1 deleteDoc — NO toca otras colecciones. NO necesita writeBatch. Dejar como está. Importante: validar con regression_guardian que el cazador P-003 extendido NO lo flagea como hit (1 colección = OK).
+- [ ] Branch "secretaria" (líneas 779-783): igual, 1 deleteDoc. Dejar como está.
+- [ ] Audit log: la rule actual gatea writes con `actorUid`. El batch debe escribir un doc en `auditoria` o `auditoria_admin` para registrar la eliminación. SI esto no existe hoy, dejar para sprint follow-up — pero anotar como deuda.
+- [ ] El reviewer obligatorio verifica que el orden de operaciones del batch sea: 1) updates a ordenes, 2) updates a personal (si operaria), 3) deleteDoc personal. El delete del personal SIEMPRE al final.
+
+**Fase R2 — Extender cazador P-003:**
+- [ ] Modificar `scripts/invariantes/check-cross-collection-tx.ts` para que su lista de directorios a escanear sea `['src/services', 'src/pages', 'src/hooks', 'api']` en lugar de solo `['src/services', 'api']`.
+- [ ] Verificar que el cazador NO genera falsos positivos sobre `handleConfirmarEliminar` después del fix R1 (porque ya tendrá `runTransaction(` o `writeBatch(`).
+- [ ] Verificar que el cazador NO genera falsos positivos en otros archivos de `src/pages/` o `src/hooks/`. Si hay hits, evaluarlos: si son bugs reales, agregar al sprint o crear sprint follow-up. Si son falsos positivos, allowlistar con `// @safe-non-tx: <razón>`.
+- [ ] Actualizar entrada P-003 en `docs/PATRONES_REGRESION.md` con el nuevo scope.
+
+**Global:**
+- [ ] archivist PRE-CHANGE obligatorio (toca `PersonalPage.tsx`, gotcha "cleanup wizard").
+- [ ] regression_guardian obligatorio (toca un flujo crítico de eliminación de empleado + extiende un cazador, doble vector de riesgo).
+- [ ] reviewer obligatorio.
+- [ ] `npm run build` PASS.
+- [ ] `npm run lint` PASS.
+- [ ] Cazadores 7/7 PASS (incluyendo P-003 extendido).
+- [ ] QA manual obligatorio: builder o tester debe ejercitar el flujo de eliminación de un técnico de prueba con 2-3 órdenes activas y verificar (a) que las órdenes quedan transferidas, (b) que el `personal/` se borra, (c) que si simula un fallo a mitad (puede usar Firestore offline o un network throttle en DevTools), el estado queda atómico (todo o nada).
+- [ ] Commit + push.
+
+#### Restricciones / guardarrails
+
+- NO cambiar el comportamiento de UI ni los toasts. Solo cambiar el mecanismo interno.
+- NO agregar lógica de retry o circuit breaker en este sprint — eso es scope de otro sprint si aparece la necesidad.
+- NO meter audit log en este sprint si requiere nueva colección o nueva rule. Documentar como deuda.
+- NO extender el cazador P-003 a otros directorios fuera del repo `src/` (no incluir `scripts/`, `node_modules/`, etc).
+- Si el builder descubre que hay otra función en `src/pages/` o `src/hooks/` con el mismo problema, agregar a la touch-list o crear sprint follow-up — NO mergear sin reviewer.
+
+#### Notas para el coordinator
+
+- `writeBatch` (Firebase v9) es la elección correcta acá. NO requiere reads previos. Patrón:
+  ```typescript
+  import { writeBatch } from 'firebase/firestore';
+  const batch = writeBatch(db);
+  for (const o of deps) {
+    batch.update(doc(db, 'ordenes_servicio', o.id), updateData);
+  }
+  batch.delete(doc(db, 'personal', p.id));
+  await batch.commit();
+  ```
+- Si el sprint requiere chunking (>500 ops), patrón:
+  ```typescript
+  const chunks = [];
+  for (let i = 0; i < deps.length; i += 499) {
+    chunks.push(deps.slice(i, i + 499));
+  }
+  // El último chunk lleva el deleteDoc.
+  for (let i = 0; i < chunks.length; i++) {
+    const batch = writeBatch(db);
+    for (const o of chunks[i]) batch.update(...);
+    if (i === chunks.length - 1) batch.delete(doc(db, 'personal', p.id));
+    await batch.commit();
+  }
+  ```
+- Para extender P-003, el cambio es ínfimo — solo agregar paths al array de directorios. Smoke test antes del commit: correr `npm run check:regression` y verificar que sigue 0 hits.
+- Postmortem opcional (no es bug en producción todavía, pero es deuda crítica): se puede agregar un postmortem-positivo al estilo del SPRINT-119 documentando "cómo encontramos un bug latente sin que rompa producción primero".
+
+---
+
+### SPRINT-134 — Refactor a `writeBatch` de los 7 cross-collection en `src/pages/` (follow-up SPRINT-133)
+
+**Estado:** PENDIENTE
+**Prioridad:** media (bugs latentes reales, mismo perfil que el resuelto en SPRINT-133, pero ninguno reportado por usuarios todavía). Allowlist-eados con `@safe-non-tx` para no bloquear el commit de SPRINT-133.
+**Origen:** Coordinator 2026-05-11 (pasada 4) durante SPRINT-133. Al extender el cazador P-003 a `src/pages/`, aparecieron 7 funciones cross-collection sin envolver en `runTransaction`/`writeBatch`. Cada una es bug latente: si la red corta a mitad de las mutaciones, queda estado parcial inconsistente.
+**Riesgo:** medio. Toca 5 archivos críticos de operación (`Cotizaciones.tsx`, `EquiposTaller.tsx`, `Inventario.tsx`, `Mantenimiento.tsx`, `PersonalPage.tsx`). Cada función tiene su propio flujo (factura, ajuste de inventario, generar orden de mantenimiento, alta empleado, vinculación Auth). Hacerlo de a uno con QA visual humana entre cada uno.
+
+**Touch-list previsto:**
+- `src/pages/Cotizaciones.tsx` (`handleConvertirAFactura:42` + `handleSubmit:257`) — muta movimientos_inventario + cotizaciones + facturas (3 colecciones).
+- `src/pages/EquiposTaller.tsx` (`handleChangeEstado:91`) — muta equipos_taller + standby_piezas.
+- `src/pages/Inventario.tsx` (`handleConfirmarAjuste:271`) — muta piezas_inventario + movimientos_inventario.
+- `src/pages/Mantenimiento.tsx` (`handleGenerarOrden:80`) — muta mantenimiento + ordenes_servicio.
+- `src/pages/PersonalPage.tsx` (`handleSubmit:203` + `ejecutarVinculacion:428`) — muta personal + usuarios (alta empleado y vinculación Auth — overlap con SPRINT-105 / P-004).
+
+#### Objetivo
+
+Convertir cada una de las 7 funciones en `writeBatch` (sin reads previos) o `runTransaction` (si necesita lectura de estado pre-mutación). Remover el comentario `@safe-non-tx: SPRINT-134 follow-up` tras cada fix.
+
+#### Por qué
+
+- **Bug latente real en 7 sitios.** Mismo perfil que el resuelto en SPRINT-133 (eliminación de empleado). Si la red corta a mitad de un `handleConvertirAFactura` (movimientos_inventario + cotizaciones + facturas), queda factura sin items, o cotización marcada convertida sin factura, o stock descontado sin factura.
+- **No bloquear el commit de SPRINT-133.** Allowlist temporal con razón explícita es la convención correcta para deuda agendada.
+- **Algunos casos pueden requerir lectura previa** (ej: `handleConvertirAFactura` lee el counter de FAC antes de escribir la factura) — esos requieren `runTransaction` no `writeBatch`. Builder debe evaluar caso por caso.
+
+#### Criterios de aceptación
+
+**Por cada uno de los 7 sitios:**
+- [ ] Envolver las mutaciones cross-collection en `writeBatch` (si no requiere reads dentro de la mutación) o `runTransaction` (si lee + escribe en la misma operación).
+- [ ] Remover el comentario `// @safe-non-tx: SPRINT-134 follow-up ...` arriba de la función.
+- [ ] QA manual o test del flujo afectado (cazador no puede verificar comportamiento, solo estructura).
+
+**Global:**
+- [ ] archivist PRE-CHANGE para cada archivo tocado.
+- [ ] regression_guardian obligatorio (toca múltiples flujos críticos).
+- [ ] reviewer obligatorio con foco en orden de operaciones de cada batch.
+- [ ] `npm run build` PASS.
+- [ ] `npm run lint` PASS sobre archivos tocados.
+- [ ] Cazadores 7/7 PASS (P-003 debe seguir 0 hits).
+- [ ] Commit + push.
+
+#### Restricciones / guardarrails
+
+- NO cambiar comportamiento de UI ni toasts. Solo mecanismo interno.
+- NO meter audit logs nuevos en este sprint si requieren rules/colección nueva — documentar como deuda separada.
+- NO tocar `firestore.rules`.
+- NO refactorear opportunisticamente otras funciones del archivo (mantener scope acotado).
+- Si algún sitio requiere `runTransaction` con lectura, el patrón es el de `contadores.service.ts` (verificación de idempotencia DENTRO del callback, DESPUÉS del `tx.get()`).
+- Posible dividir SPRINT-134 en sub-sprints (134a, 134b, ...) si el coordinator lo prefiere — uno por archivo, con QA humano visual entre cada deploy. Recomendable porque el flujo de cada uno es distinto (factura ≠ inventario ≠ alta de empleado).
+
+#### Notas para el coordinator
+
+- **Orden sugerido (priorizar por impacto / riesgo):**
+  1. `Cotizaciones.tsx handleConvertirAFactura` (3 colecciones — el más riesgoso) — sub-sprint 134a.
+  2. `PersonalPage.tsx handleSubmit` + `ejecutarVinculacion` (alta empleado — bug puede dejar Auth user sin perfil o personal sin usuarios espejo) — sub-sprint 134b. **Verificar overlap con P-004**: el cazador P-004 caza "creas Auth user sin doc espejo", pero NO "creas ambos docs sin atomicidad". Son complementarios.
+  3. `Inventario.tsx handleConfirmarAjuste` (stock + log de movimientos) — sub-sprint 134c.
+  4. `Mantenimiento.tsx handleGenerarOrden` (item de mantenimiento + orden de servicio derivada) — sub-sprint 134d.
+  5. `EquiposTaller.tsx handleChangeEstado` (equipo + standby) — sub-sprint 134e.
+  6. `Cotizaciones.tsx handleSubmit` (cotización + lead orden) — sub-sprint 134f.
+- Después de cada fix individual, correr `npx tsx scripts/invariantes/check-cross-collection-tx.ts` y verificar que la cuenta de hits baja en 1. Cuando llega a 0, el sprint queda cerrado.
+- Cada sub-sprint debe registrar QA humano en BLOQUEOS.md (flujo afectado tiene impacto en datos de operación).
 
 ---
 

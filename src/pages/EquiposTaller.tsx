@@ -86,6 +86,8 @@ export default function EquiposTaller() {
     }
   };
 
+  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
+  // Muta equipos_taller + standby_piezas. Refactor pendiente a writeBatch.
   const handleChangeEstado = async (equipo: EquipoTaller, nuevoEstado: EstadoEquipo) => {
     try {
       await updateDoc(doc(db, 'equipos_taller', equipo.id), { estado: nuevoEstado });

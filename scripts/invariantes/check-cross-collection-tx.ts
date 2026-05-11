@@ -6,16 +6,18 @@
  * Estrategia (heurística, conservadora — preferimos falsos negativos a
  * falsos positivos para no joder el flujo):
  *
- * 1. Recorrer src/services/*.ts y api/*.ts.
+ * 1. Recorrer src/services, src/pages, src/hooks y api/ (extendido en
+ *    SPRINT-133 desde el scope original `src/services` + `api/` tras
+ *    detectar `handleConfirmarEliminar` en `src/pages/PersonalPage.tsx`).
  * 2. Para cada función exportada, contar mutaciones a colecciones distintas:
  *    - `updateDoc(doc(db, '<col>', ...))`
  *    - `setDoc(doc(db, '<col>', ...))`
  *    - `addDoc(collection(db, '<col>'))`
  *    - `deleteDoc(doc(db, '<col>', ...))`
  * 3. Si la función toca ≥2 colecciones distintas Y no contiene
- *    `runTransaction(` → FAIL.
+ *    `runTransaction(` ni `writeBatch(` → FAIL.
  * 4. Allowlist: comentario `// @safe-non-tx: <razón>` arriba de la función
- *    indica que es intencional (ej: backfill one-shot).
+ *    indica que es intencional (ej: backfill one-shot, UI puramente local).
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -132,10 +134,11 @@ async function walk(dir: string, files: string[] = []): Promise<string[]> {
 
 export async function check(): Promise<InvariantResult> {
   const targets: string[] = [];
-  // Sólo revisamos services/ y api/ — son los que escriben Firestore
-  // intencionalmente. Componentes pueden hacer mutaciones puntuales pero
-  // suelen ser de una sola colección.
-  for (const sub of ['src/services', 'api']) {
+  // Revisamos services/, pages/, hooks/ y api/ — son los que escriben Firestore
+  // intencionalmente desde el frontend o backend. Componentes puntuales que
+  // hagan mutaciones de una sola colección no aplican (cols.size < 2 los excluye).
+  // Extendido en SPRINT-133 tras detectar `handleConfirmarEliminar` en pages/.
+  for (const sub of ['src/services', 'src/pages', 'src/hooks', 'api']) {
     const dir = path.join(ROOT_DIR, sub);
     await walk(dir, targets);
   }
@@ -174,7 +177,7 @@ export async function check(): Promise<InvariantResult> {
     patternName: PATTERN_NAME,
     status: hits.length > 0 ? 'fail' : 'pass',
     hits,
-    notes: [`Escaneados ${targets.length} archivos en src/services y api.`],
+    notes: [`Escaneados ${targets.length} archivos en src/services, src/pages, src/hooks y api.`],
   };
 }
 
