@@ -5,67 +5,74 @@ import { auth } from './firebase/config';
 import { useApp, AppProvider } from './context/AppContext';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Ordenes from './pages/Ordenes';
-import OrdenDetalle from './pages/OrdenDetalle';
-import Citas from './pages/Citas';
-import Calendario from './pages/Calendario';
-import Standby from './pages/Standby';
-import MapaRutas from './pages/MapaRutas';
-import Clientes from './pages/Clientes';
-import Cotizaciones from './pages/Cotizaciones';
-import Facturas from './pages/Facturas';
-import EquiposTaller from './pages/EquiposTaller';
-import Rendimiento from './pages/Rendimiento';
-import Mantenimiento from './pages/Mantenimiento';
-import Gastos from './pages/Gastos';
-import PersonalPage from './pages/PersonalPage';
-import Configuracion from './pages/Configuracion';
-import CierreDia from './pages/CierreDia';
-import PreciosServicios from './pages/PreciosServicios';
-import Inventario from './pages/Inventario';
-import Comisiones from './pages/Comisiones';
-import Nomina from './pages/Nomina';
-import HistorialAnuladas from './pages/HistorialAnuladas';
-import ConfiguracionWeb from './pages/ConfiguracionWeb';
-import EmpresasAliadas from './pages/EmpresasAliadas';
-import Formularios from './pages/Formularios';
-import FormularioEditor from './pages/FormularioEditor';
-import Solicitudes from './pages/Solicitudes';
-import FormularioPublico from './pages/public/FormularioPublico';
-import TecnicoVista from './pages/TecnicoVista';
-import Calendarios from './pages/Calendarios';
-import CitaPublica from './pages/CitaPublica';
-import GestionUsuarios from './pages/GestionUsuarios';
-import TrackingCliente from './pages/TrackingCliente';
-import AgendaDia from './pages/AgendaDia';
-import MetricasMensuales from './pages/MetricasMensuales';
-import Bancos from './pages/Bancos';
-import FacturacionPendiente from './pages/FacturacionPendiente';
-import Avances from './pages/Avances';
-import Prestamos from './pages/Prestamos';
-import EstadoResultado from './pages/EstadoResultado';
-import AsistenteIA from './pages/AsistenteIA';
-import AsistenteIAHistorial from './pages/AsistenteIAHistorial';
-import Ponche from './pages/Ponche';
-import AdminPonches from './pages/AdminPonches';
-import Feedback from './pages/Feedback';
-import SugerenciasChequeo from './pages/SugerenciasChequeo';
-import Reprogramaciones from './pages/Reprogramaciones';
-import ConfiguracionMarketing from './pages/ConfiguracionMarketing';
 import BannerNuevaVersion from './components/BannerNuevaVersion';
 
-// Public website pages
-import PublicLayout from './components/public/PublicLayout';
-import HomePage from './pages/public/HomePage';
-import ServiciosPage from './pages/public/ServiciosPage';
-import ServicioDetalle from './pages/public/ServicioDetalle';
-import AgendarPage from './pages/public/AgendarPage';
-import GarantiaCliente from './pages/public/GarantiaCliente';
-import PortalCliente from './pages/public/PortalCliente';
+// SPRINT-143 (2026-05-11): rutas lazy-loaded para bajar INP.
+// Antes todo bundle inicial — al clickear sub-item del sidebar React montaba
+// la pagina destino + arrancaba 2-6 onSnapshot de Firestore simultaneos en
+// el main thread → INP 397ms. Ahora cada pagina es un chunk separado y se
+// descarga on-demand; el Suspense pinta el LoadingSpinner mientras llega.
+import { lazy, Suspense, useEffect } from 'react';
 
-import { useEffect } from 'react';
+// Páginas admin (todas lazy)
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Ordenes = lazy(() => import('./pages/Ordenes'));
+const OrdenDetalle = lazy(() => import('./pages/OrdenDetalle'));
+const Citas = lazy(() => import('./pages/Citas'));
+const Calendario = lazy(() => import('./pages/Calendario'));
+const Standby = lazy(() => import('./pages/Standby'));
+const MapaRutas = lazy(() => import('./pages/MapaRutas'));
+const Clientes = lazy(() => import('./pages/Clientes'));
+const Cotizaciones = lazy(() => import('./pages/Cotizaciones'));
+const Facturas = lazy(() => import('./pages/Facturas'));
+const EquiposTaller = lazy(() => import('./pages/EquiposTaller'));
+const Rendimiento = lazy(() => import('./pages/Rendimiento'));
+const Mantenimiento = lazy(() => import('./pages/Mantenimiento'));
+const Gastos = lazy(() => import('./pages/Gastos'));
+const PersonalPage = lazy(() => import('./pages/PersonalPage'));
+const Configuracion = lazy(() => import('./pages/Configuracion'));
+const CierreDia = lazy(() => import('./pages/CierreDia'));
+const PreciosServicios = lazy(() => import('./pages/PreciosServicios'));
+const Inventario = lazy(() => import('./pages/Inventario'));
+const Comisiones = lazy(() => import('./pages/Comisiones'));
+const Nomina = lazy(() => import('./pages/Nomina'));
+const HistorialAnuladas = lazy(() => import('./pages/HistorialAnuladas'));
+const ConfiguracionWeb = lazy(() => import('./pages/ConfiguracionWeb'));
+const EmpresasAliadas = lazy(() => import('./pages/EmpresasAliadas'));
+const Formularios = lazy(() => import('./pages/Formularios'));
+const FormularioEditor = lazy(() => import('./pages/FormularioEditor'));
+const Solicitudes = lazy(() => import('./pages/Solicitudes'));
+const FormularioPublico = lazy(() => import('./pages/public/FormularioPublico'));
+const TecnicoVista = lazy(() => import('./pages/TecnicoVista'));
+const Calendarios = lazy(() => import('./pages/Calendarios'));
+const CitaPublica = lazy(() => import('./pages/CitaPublica'));
+const GestionUsuarios = lazy(() => import('./pages/GestionUsuarios'));
+const TrackingCliente = lazy(() => import('./pages/TrackingCliente'));
+const AgendaDia = lazy(() => import('./pages/AgendaDia'));
+const MetricasMensuales = lazy(() => import('./pages/MetricasMensuales'));
+const Bancos = lazy(() => import('./pages/Bancos'));
+const FacturacionPendiente = lazy(() => import('./pages/FacturacionPendiente'));
+const Avances = lazy(() => import('./pages/Avances'));
+const Prestamos = lazy(() => import('./pages/Prestamos'));
+const EstadoResultado = lazy(() => import('./pages/EstadoResultado'));
+const AsistenteIA = lazy(() => import('./pages/AsistenteIA'));
+const AsistenteIAHistorial = lazy(() => import('./pages/AsistenteIAHistorial'));
+const Ponche = lazy(() => import('./pages/Ponche'));
+const AdminPonches = lazy(() => import('./pages/AdminPonches'));
+const Feedback = lazy(() => import('./pages/Feedback'));
+const SugerenciasChequeo = lazy(() => import('./pages/SugerenciasChequeo'));
+const Reprogramaciones = lazy(() => import('./pages/Reprogramaciones'));
+const ConfiguracionMarketing = lazy(() => import('./pages/ConfiguracionMarketing'));
+
+// Public website pages (también lazy — el sitio público es un viewport distinto)
+import PublicLayout from './components/public/PublicLayout';
+const HomePage = lazy(() => import('./pages/public/HomePage'));
+const ServiciosPage = lazy(() => import('./pages/public/ServiciosPage'));
+const ServicioDetalle = lazy(() => import('./pages/public/ServicioDetalle'));
+const AgendarPage = lazy(() => import('./pages/public/AgendarPage'));
+const GarantiaCliente = lazy(() => import('./pages/public/GarantiaCliente'));
+const PortalCliente = lazy(() => import('./pages/public/PortalCliente'));
 import { seedDatabase } from './firebase/seedData';
 import { seedWebConfig } from './services/seedWebConfig';
 import { seedPrecios } from './firebase/seedPrecios';
@@ -168,6 +175,7 @@ function AppRoutes() {
   }, [currentUser]);
 
   return (
+    <Suspense fallback={<LoadingSpinner fullPage text="Cargando..." />}>
     <Routes>
       {/* ═══════════════════════════════════════════════
           PUBLIC WEBSITE — misterservicerd.com
@@ -279,6 +287,7 @@ function AppRoutes() {
       {/* Fallback — send to public home */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   );
 }
 
