@@ -10,6 +10,45 @@
 
 ---
 
+## SPRINT-149 — Completar migración `operariaId` a `auth.uid` (movido aquí 2026-05-12 por coordinator pasada 11)
+
+**Tipo:** Sprint con instrucción explícita del usuario delegante de NO procesar autónomo.
+**Estado:** ESPERANDO OK JORGE
+**Origen:** Cowork escribió la spec completa en `COLA_AUTONOMA.md` el 2026-05-12 ("Origen: Jorge 2026-05-12 vía Cowork. ... a pedido explícito de Jorge: 'vamos con operaria'"). El coordinator pasada 11 recibió instrucción explícita en el prompt del modo autónomo: "NO toques los 3 hits `operariaId === p.id` (nomina/Ordenes/Rendimiento) — esos sí requieren decisión arquitectónica humana y van a BLOQUEOS.md si no están ya."
+
+**Por qué requiere OK humano (a pesar de que Cowork lo escribió):**
+
+Hay un conflicto de autoridad que solo Jorge puede resolver:
+
+- Cowork (vía interfaz natural con Jorge) escribió la spec dándola por aprobada con la frase "vamos con operaria".
+- El prompt del coordinator en la pasada 11 dice expresamente "NO toques los 3 hits operariaId === p.id" y los redirige a BLOQUEOS.md.
+- Ambos llegan vía Jorge. El coordinator NO puede resolverlo sin que Jorge confirme cuál instrucción es la actual.
+
+**El riesgo de procesarlo autónomo sin clarificación es alto:**
+
+1. Toca código de nómina/comisiones (riesgo financiero medio-alto, la propia spec lo declara).
+2. Requiere reviewer obligatorio + archivist PRE-CHANGE obligatorio.
+3. 13 archivos + script de migración de datos + cazador P-006 extendido.
+4. Si Jorge cambió de opinión entre el dictado a Cowork y el prompt al coordinator, procesar autónomo es ir contra una instrucción explícita posterior.
+
+**Lo que Jorge debe hacer para desbloquear:**
+
+1. Decidir si la migración `operariaId → auth.uid` se procesa autónoma O queda en BLOQUEADO para revisión humana paso a paso.
+2. Agregar al final de esta sección UNA de las dos opciones:
+   - `OK: jorge YYYY-MM-DD HH:MM | confirmo "vamos con operaria" — procesar autónomo según spec de Cowork`
+   - `MANTENER BLOQUEADO: jorge YYYY-MM-DD HH:MM | razón <X>`
+3. Si OK, pegar `procesa bloqueos` al coordinator de Claude Code.
+
+**Spec completa preservada:** la entrada original con scope, touch-list, auditoría de consumidores, script de migración y criterios sigue intacta en `COLA_AUTONOMA.md` (sección SPRINT-149). NO procesar desde acá — al desbloquear, el coordinator la mueve de vuelta a PENDIENTE en la cola.
+
+**Restricciones reiteradas:**
+- archivist PRE-CHANGE obligatorio.
+- reviewer obligatorio (riesgo financiero — nómina).
+- regression_guardian obligatorio.
+- `--apply` del script de migración NO se ejecuta autónomo. Jorge lo dispara manual cuando esté listo después del fix de código.
+
+---
+
 ## SPRINT-138 — Crear `storage.rules` versionado + flujo `deploy:storage-rules`
 
 **Tipo:** Sprint bloqueado por OK humano (toca rules de seguridad productiva — equivalente al gate de `firestore.rules`).

@@ -5,6 +5,73 @@
 
 ---
 
+## 2026-05-12 — `trabaja` (pasada 11): SPRINT-150 fix P-001 AgendaDia + SPRINT-149 movido a BLOQUEOS
+
+### Contexto
+
+Jorge invocó `trabaja` por tercera vez consecutiva sin responder al ofrecimiento de mini-sprint hecho en la pasada 10 (los 2 hits P-001 residuales en `AgendaDia.tsx:144,191`). Interpretación recibida en el prompt: cuando Jorge pega `trabaja` repetidamente sin responder ofertas, está delegando la decisión.
+
+Estado inicial de la cola:
+- 1 sprint PENDIENTE concreto: **SPRINT-149** (Cowork escribió la spec hoy mismo, "Origen: Jorge 2026-05-12 vía Cowork. ... a pedido explícito de Jorge: 'vamos con operaria'"). Scope: 13 archivos + script de migración + cazador P-006 extendido. Toca código de nómina/comisiones (riesgo medio-alto). Requiere reviewer obligatorio.
+- **Conflicto en el prompt del modo autónomo:** "NO toques los 3 hits `operariaId === p.id` (nomina/Ordenes/Rendimiento) — esos sí requieren decisión arquitectónica humana y van a BLOQUEOS.md si no están ya."
+
+Tiempo total: ~10 min.
+
+### SPRINT-149 (operariaId migración) — MOVIDO a BLOQUEOS.md
+
+- **Decisión:** ambas instrucciones llegan vía Jorge (Cowork por un lado, prompt del modo autónomo por otro). El coordinator no puede resolver el conflicto. Procesar autónomo contra una instrucción posterior y explícita ("NO toques") sería ir contra la voluntad declarada de Jorge.
+- **Acción:**
+  1. Estado en `COLA_AUTONOMA.md` cambiado de `PENDIENTE` → `BLOQUEADO — movido a BLOQUEOS.md el 2026-05-12 por coordinator pasada 11`.
+  2. Spec original envuelta en `<details>` para forensia (NO procesar desde la cola).
+  3. Entrada nueva en `docs/sprints/BLOQUEOS.md` con justificación del conflicto + dos opciones que Jorge puede usar para desbloquear (`OK: jorge ...` o `MANTENER BLOQUEADO: ...`).
+- **Sin esto:** procesar autónomo iría contra instrucción explícita del prompt del modo autónomo. Jorge no podría reclamar sin haberle preguntado primero.
+
+### SPRINT-150 — Fix mecánico P-001 en `AgendaDia.tsx` (PROCESADO)
+
+- **archivist PRE-CHANGE (auto-rol coordinator):**
+  - Historial reciente de `AgendaDia.tsx`: tocado hace 24h por SPRINT-145 (`4d32d9e`, P-006 escapado en filtros/render). Líneas modificadas por SPRINT-145 (287-309) NO se tocan en este sprint.
+  - SPRINT-150 toca solo handler `marcarSoloChequeoDesdeAgenda` (líneas 144 + 191), distinto bloque funcional.
+  - Sin postmortem específico de AgendaDia. P-001 fue causa de 2 incidentes históricos (`afc5e4a` Reactivación + `b93625d` Notificaciones) — ese es exactamente el patrón que el fix corrige.
+  - `currentUser` ya destructurado de `useApp()` (línea 31). No requiere import nuevo.
+  - Gotcha CLAUDE.md aplicada: "userProfile.id NO siempre es auth.uid". Operarias/secretarias cargadas vía cascada `personal/` tenían `userProfile.id = docId !== auth.uid` → rules rechazaban silenciosamente. Fix: `currentUser?.uid`.
+  - Patrón canónico ya validado en producción: SPRINT-114 (`EnviarFacturacionButton.tsx:45,60`).
+
+- **Builder (auto-rol coordinator):**
+  - **`src/pages/AgendaDia.tsx:144`** — payload de pago del chequeo: `registradoPorId: userProfile?.id || ''` → `registradoPorId: currentUser?.uid || ''`. Comentario referencial agregado (SPRINT-150 + SPRINT-114 + gotcha CLAUDE.md).
+  - **`src/pages/AgendaDia.tsx:191`** — update del orden: `if (userProfile?.id) updateData.enviadaAFacturacionPorId = userProfile.id;` → `if (currentUser?.uid) updateData.enviadaAFacturacionPorId = currentUser.uid;`. Comentario referencial agregado.
+  - Sin cambios a imports, sin cambios a rules, sin cambios a services compartidos.
+
+- **Tester (auto-rol coordinator):**
+  - `npx tsc --noEmit` PASS (silencioso).
+  - `npx eslint src/pages/AgendaDia.tsx --max-warnings 0` PASS (silencioso).
+  - `npm run check:regression` PASS — 7/7 cazadores, 0 hits totales. P-001 confirmado: 0 hits.
+
+- **Regression guardian (auto-rol coordinator, manual):**
+  - Fix replica el patrón canónico SPRINT-114 al pie de la letra (mismo comentario referencial).
+  - NO toca firestore.rules (la rule existente sobre `enviadaAFacturacionPorId` ya valida contra `request.auth.uid` — el bug era que el campo se escribía con valor incorrecto, no que la rule rechazara con valor correcto).
+  - NO toca cross-collection (mismo doc `ordenes_servicio`).
+  - NO toca context.
+  - Riesgo cerrado: operarias cargadas vía cascada `personal/` (`userProfile.id ≠ auth.uid`) ya no rompen al marcar chequeo desde agenda.
+  - **PASS — sin CHANGES_NEEDED.**
+
+- **Reviewer (auto-rol coordinator, manual):**
+  - Convención `currentUser?.uid` con fallback `''` o guarda `if (currentUser?.uid)` es la misma de SPRINT-114 y SPRINT-145.
+  - El campo `registradoPorId: ''` (cuando no hay user) es shape legacy preservado para backward compat. No hay regresión.
+  - Sin regresión de funcionalidad existente.
+  - **APPROVED.**
+
+- **Commit + push:** pendiente — bloque al final de esta entrada.
+
+- **archivist POSTMORTEM:** NO aplica. No es bug que rompió producción; es fix preventivo de patrón catalogado P-001 antes de exposición.
+
+### Hallazgos secundarios
+
+- El diff sin commitear en `COLA_AUTONOMA.md` ya estaba al iniciar la pasada (Cowork había editado el archivo agregando SPRINT-149). Se preservó y se completó con los cambios de esta pasada.
+- Script untracked `scripts/qa-sprint-135a-ui.ts` — no tocado (es del QA de SPRINT-135a-UI en curso, paralelo).
+- `vite.config.ts.timestamp-*.mjs` — archivos temporales de Vite, no tocados.
+
+---
+
 ## 2026-05-12 — `trabaja` (pasada 10): SPRINT-148 (UX Conduces de Garantía)
 
 ### Contexto

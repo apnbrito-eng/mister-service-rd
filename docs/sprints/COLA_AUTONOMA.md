@@ -3,7 +3,11 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-12 por coordinator autónomo (pasada 10, `trabaja`) — SPRINT-148 COMPLETADO. Componente nuevo `OrdenResumenLectura.tsx` montado en 2 puntos de Facturas.tsx. Cazadores 7/7 PASS. Hash `b45df45` pusheado a `origin/main`.
+**Última actualización:** 2026-05-12 por coordinator autónomo (pasada 11, `trabaja`) — SPRINT-150 COMPLETADO (fix mecánico P-001 en `AgendaDia.tsx:144,191`, 2 líneas, patrón SPRINT-114). SPRINT-149 (operariaId migración) MOVIDO a `BLOQUEOS.md` por conflicto entre Cowork "vamos con operaria" y prompt explícito del modo autónomo "NO toques los 3 hits operariaId === p.id". Jorge resuelve el conflicto editando `BLOQUEOS.md` con `OK: jorge ...` o `MANTENER BLOQUEADO: ...`. Cazadores 7/7 PASS. Próximo ID disponible: SPRINT-151.
+
+**Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-149 (completar migración `operariaId` a auth.uid). Jorge eligió "vamos con operaria" tras descubrir, durante auditoría de SPRINT-145, que `operariaId` está bajo el mismo patrón P-006 que tecnicoId. Re-auditoría profunda reveló hallazgo clave: el WRITE-side ya fue parcialmente migrado en SPRINT-105 (`FormAltaEditarEmpleado.tsx:226` ya emite `op.uid || op.id`), pero el READ-side NO. 20 archivos tocan `operariaId`; 13 necesitan fix de reads + 1 fix de escritura pendiente en `PersonalPage.tsx:772, 778`. Sprint incluye: (a) fix de 13 lookups + 2 escrituras pendientes, (b) script `migrar-operariaid-a-uid.ts` read-only + `--apply` para alinear datos existentes, (c) extender cazador P-006, (d) actualizar `CAMPOS_CROSS_COLLECTION.md` y `PATRONES_REGRESION.md`. Riesgo medio-alto: toca código de nómina/comisiones. Reviewer obligatorio. archivist PRE-CHANGE obligatorio. `--apply` del script NO se ejecuta autónomamente — queda en `BLOQUEOS.md` para Jorge.
+
+**Última actualización previa:** 2026-05-12 por coordinator autónomo (pasada 10, `trabaja`) — SPRINT-148 COMPLETADO. Componente nuevo `OrdenResumenLectura.tsx` montado en 2 puntos de Facturas.tsx. Cazadores 7/7 PASS. Hash `b45df45` pusheado a `origin/main`.
 
 **Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-148 (UX Conduces de Garantía: mostrar orden completa en fila expandida + modal "Marcar garantía"). Jorge observó viendo CG-00016/OS-0049 que al marcar una garantía o expandir el conduce, no se ve el contexto del trabajo original (qué piezas se usaron, fotos del cierre, si fue solo chequeo, satisfacción cliente). Esto hace que las decisiones de aprobar/rechazar reclamaciones se tomen "a ciegas". Sprint introduce componente nuevo read-only `OrdenResumenLectura.tsx` con badge prominente "Solo chequeo · sin reparación" cuando aplique. Auditoría de consumidores hecha: `Facturas.tsx` solo se importa en App.tsx:28 — cambio aislado, riesgo bajo. Touch-list completo según sub-regla CLAUDE.md "Touch-list expandido". Hallazgos laterales documentados como deuda: (a) FacturacionPendiente.tsx podría reutilizar el componente nuevo (SPRINT-150 follow-up), (b) Facturas.tsx tiene 1000+ líneas (refactor SPRINT-151).
 
@@ -39,7 +43,7 @@
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-149 (147 docs disciplina pusheado manual, 148 UX Conduces de Garantía mostrar orden completa)
+**Próximo ID disponible:** SPRINT-151 (148 UX Conduces completado, 149 operariaId BLOQUEADO en BLOQUEOS.md, 150 fix P-001 AgendaDia completado)
 
 ---
 
@@ -2009,6 +2013,213 @@ Aplica en dos puntos:
 - Si al implementar el componente nuevo el builder detecta que `ordenesVinculadas` NO carga todas las órdenes necesarias (ej: solo carga las de la página actual y la paginación rompe), ese fix es parte de este sprint, no follow-up.
 - Mantener el componente nuevo en `src/components/facturas/` (subdirectorio nuevo si no existe). NO ponerlo en `src/components/ordenes/` para evitar acoplamiento con OrdenDetailModal.
 - Si la UI queda muy cargada con `variant='completo'` en el modal, considerar agregar tabs ("Datos generales", "Cierre", "Piezas") como mejora futura — pero NO en este sprint.
+
+---
+
+### SPRINT-149 — Completar migración `operariaId` a `auth.uid` (cerrar inconsistencia post-SPRINT-105) + script de re-migración de datos
+
+**Estado:** BLOQUEADO — movido a `BLOQUEOS.md` el 2026-05-12 por coordinator pasada 11. Razón: conflicto entre instrucción de Cowork ("vamos con operaria", spec PENDIENTE) e instrucción explícita del prompt del modo autónomo en la misma pasada ("NO toques los 3 hits operariaId === p.id... van a BLOQUEOS.md si no están ya"). Sin esto, procesar autónomo iría contra instrucción posterior de Jorge. La spec sigue íntegra abajo para forensia — al desbloquear desde `BLOQUEOS.md`, el coordinator la marca PENDIENTE de nuevo.
+
+<details>
+<summary>Spec original (preservada, NO procesar desde acá)</summary>
+
+**Estado original:** PENDIENTE
+**Prioridad:** alta (bug latente activo, no futuro. Las operarias creadas post-SPRINT-105 ya tienen `operariaId = uid` en producción, pero todos los lookups en código asumen doc id. Cualquier operaria nueva queda con métricas de nómina, dashboard, rendimiento, recordatorios y filtros rotos en silencio. No estalló porque las operarias actuales son pre-SPRINT-105.)
+**Origen:** Jorge 2026-05-12 vía Cowork. Cowork detectó durante auditoría de SPRINT-145 que `operariaId` se comparaba contra `p.id` en 3 archivos (`nomina.service.ts:172`, `Ordenes.tsx:635`, `Rendimiento.tsx:297`) — mismo shape que el bug P-006 viejo de tecnicoId. Re-auditoría profunda (a pedido explícito de Jorge: "vamos con operaria") reveló 20 archivos que tocan `operariaId` y un detalle crítico: **el WRITE-side ya fue parcialmente migrado en `FormAltaEditarEmpleado.tsx:226`** que ya emite `value={op.uid || op.id}` con comentario "Las operarias nuevas (post-SPRINT-105) tienen uid; las viejas conservan id". El READ-side NO se migró. Sprint cierra el ciclo.
+**Riesgo:** medio-alto. Toca 13 archivos de páginas/services críticos (nómina, dashboard, rendimiento, recordatorios), incluye script de migración de datos sobre `ordenes_servicio` y `personal/`. La regresión potencial es alta si el fix se hace mal — afectaría cálculo de comisiones y métricas. PERO la inacción también tiene riesgo: la próxima operaria nueva tendrá métricas rotas silenciosamente.
+**Touch-list previsto:** 13 archivos de código + 1 script nuevo + 2 docs.
+
+#### Auditoría de consumidores (sub-regla obligatoria CLAUDE.md)
+
+**Hallazgos clave de la auditoría:**
+
+1. **`operariaId` se usa en DOS contextos distintos**:
+   - **`ordenes_servicio.operariaId`** → apunta a la operaria responsable de esa orden.
+   - **`personal[tecnico].operariaId`** (campo del doc del técnico) → apunta a la operaria a cargo del técnico.
+   - Ambos comparten el mismo shape ambiguo (uid post-SPRINT-105 / docId legacy).
+
+2. **WRITE-side ya migrado (parcialmente)**: `FormAltaEditarEmpleado.tsx:213, 226` ya emite `op.uid || op.id`. `useOrdenCreateForm.ts:591` y `ordenes.service.ts:214` derivan el valor del técnico (que hereda el shape). `PersonalPage.tsx:772, 778` aún usa `destino.id` directo — necesita fix.
+
+3. **READ-side roto**: todos los lookups asumen doc id. 14 puntos de comparación contra `p.id`/`op.id`/`userProfile.id` que necesitan fix.
+
+**Archivos a modificar (lookups + escrituras pendientes):**
+
+| Archivo | Líneas | Tipo | Fix |
+|---|---|---|---|
+| `src/services/nomina.service.ts` | 172 | Read: `o.operariaId === p.id` (bono mensual) | `(p.uid \|\| p.id) === o.operariaId` |
+| `src/pages/Ordenes.tsx` | 352-353, 635, 641 | Read: filtros mis órdenes + coord + comparación | Patrón fallback uid/id |
+| `src/pages/Rendimiento.tsx` | 297 | Read: lookup métricas | `(op.uid \|\| op.id) === o.operariaId` |
+| `src/pages/MetricasMensuales.tsx` | 98, 174 | Read: idem | Idem |
+| `src/pages/Dashboard.tsx` | 216, 250, 257, 400, 466 | Read: 5 lookups (recordatorios, filtros, bono, técnicos) | Idem (línea 466 es `t.operariaId === userProfile?.id`, requiere también re-evaluar comentario `@safe-userprofile-id` existente) |
+| `src/pages/PersonalPage.tsx` | 614, 618, 713, 772, 778 | Read + Write: contadores + transferencia al eliminar | Lookups con fallback + escrituras 772/778 cambiar `destino.id` → `destino.uid \|\| destino.id` |
+| `src/pages/AgendaDia.tsx` | 298, 300 | Read: filtros operaria | Idem |
+| `src/pages/MapaRutas.tsx` | 591-592 | Read: comparación | Idem |
+| `src/components/recordatorios/RecordatorioBanner.tsx` | 85, 135, 315 | Read: matching recordatorios | Idem |
+| `src/components/personal/ModalConfirmarEliminar.tsx` | 60, 64 | Read: contadores | Idem |
+| `src/components/personal/GruposOperariaTecnico.tsx` | 34 | Read: agrupamiento técnicos por operaria | Idem |
+| `src/components/ordenes/OrdenesTablero.tsx` | 202-203 | Read: comparación | Idem |
+| `src/components/ordenes/BotonRederivarOperaria.tsx` | 45, 47 | Read: comparación | Verificar — puede ser idempotente si ya pasa por el helper transaccional |
+
+**Archivos NO afectados (verificados, no necesitan fix):**
+- `src/services/ordenes.service.ts:211, 214` — Ya usa `(p.uid \|\| p.id) === tecnicoId` (patrón correcto, helper SPRINT-130). NO tocar.
+- `src/services/recordatorios.service.ts:67, 83, 244` — Solo persiste el valor recibido, no compara. No requiere fix.
+- `src/types/index.ts:877, 1774` — Type definition. No requiere fix.
+- `src/utils/index.ts:703` — parseOrden lee del raw. No requiere fix.
+- `src/components/personal/FormAltaEditarEmpleado.tsx:209-226` — Ya usa el patrón correcto post-SPRINT-105.
+- `src/hooks/useOrdenCreateForm.ts:591, 642` — Deriva del valor del técnico, no compara. No requiere fix.
+- `src/components/ordenes/IniciarChequeoButton.tsx:303` — Solo agrega a un Set, no compara. No requiere fix.
+
+**Archivos NUEVOS:**
+- `scripts/migrar-operariaid-a-uid.ts` (NUEVO) — Read-only default + `--apply` flag. Migra `ordenes_servicio.operariaId` y `personal[tecnico].operariaId` de doc id a auth.uid donde la operaria tenga `uid` poblado.
+
+**Docs a actualizar:**
+- `docs/CAMPOS_CROSS_COLLECTION.md` — cambiar fila `operariaId` de "⚠ por confirmar" a "auth.uid" con referencia a SPRINT-149.
+- `docs/PATRONES_REGRESION.md` — extender entrada P-006 mencionando que `operariaId` también está bajo este patrón.
+
+**Cazador a verificar/extender:**
+- `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` — Verificar si ya cubre `operariaId` en su lista de sufijos. Si no, agregarlo. Re-correr post-fix para confirmar 0 hits.
+
+**Hallazgos laterales (deuda documentada, NO fixear silenciosamente):**
+- Comentario `@safe-userprofile-id` en `Dashboard.tsx:464-467` dice "matchea con personalDocId, no auth.uid" — DESACTUALIZADO. Al fixear ese punto, actualizar el comentario para reflejar el shape nuevo.
+
+#### Objetivo
+
+1. **Migrar todos los reads** de `operariaId` al patrón `(p.uid || p.id) === operariaId` (igual que SPRINT-132/145 con tecnicoId).
+2. **Migrar las pocas escrituras pendientes** (`PersonalPage.tsx:772, 778`) al patrón `(destino.uid || destino.id)`.
+3. **Migrar datos existentes**: script que alinee `operariaId` legacy (doc id) a uid donde la operaria tenga `uid` poblado.
+4. **Cerrar el gotcha**: `operariaId` queda con la convención canónica `auth.uid` (igual que tecnicoId, post-SPRINT-105/c4be345).
+5. **Documentar la convención** en `CAMPOS_CROSS_COLLECTION.md` y extender cazador P-006 para detectar cualquier reintroducción del patrón viejo.
+
+#### Por qué
+
+- Sin esto: cualquier operaria nueva creada en el sistema tiene métricas rotas silenciosamente. Nómina no le suma sus órdenes (bono mensual = 0 indebidamente). Dashboard no le muestra "sus órdenes". Recordatorios no le aparecen. Filtro "mis órdenes" devuelve vacío.
+- El WRITE-side ya empezó la migración hace tiempo (SPRINT-105). Es deuda técnica clásica: empezar la migración sin completarla genera bugs híbridos peores que no migrar.
+- Patrón ya validado: SPRINT-132 + SPRINT-145 hicieron exactamente lo mismo con `tecnicoId` exitosamente. Mismo enfoque.
+
+#### Criterios de aceptación
+
+**Parte A — Migración de reads (13 archivos):**
+
+Para cada archivo del touch-list arriba, aplicar:
+
+- [ ] Si la comparación es contra `array.find(x => x.id === orden.operariaId)` o similar, cambiar a `array.find(x => (x.uid || x.id) === orden.operariaId)`.
+- [ ] Si la comparación es contra `array.filter(o => o.operariaId === op.id)`, cambiar a `array.filter(o => o.operariaId === (op.uid || op.id))`. **PERO** preferible: aplicar fallback al LADO de personal, no al lado de la orden, porque más adelante TODAS las órdenes nuevas tendrán uid. Forma final: `array.filter(o => o.operariaId === (op.uid || op.id))` y leer `o.operariaId` directo.
+- [ ] Si la comparación es contra `userProfile.id` (filtros tipo "mis órdenes" para operaria logueada), considerar usar `currentUser.uid` en lugar de `userProfile.id`. **Necesita import** de `useApp()` si no está. Patrón ya usado en SPRINT-145.
+- [ ] Si la comparación es `t.operariaId === userProfile?.id` (en `Dashboard.tsx:466` y `AgendaDia.tsx:298`) — son técnicos cuyo `operariaId` apunta a una operaria. Mismo fix: comparar contra `(userProfile?.uid || userProfile?.id)` o mejor `currentUser?.uid`.
+- [ ] Agregar comentario corto encima de cada línea modificada referenciando SPRINT-149 y la convención nueva.
+
+**Parte B — Migración de escrituras pendientes:**
+
+- [ ] **`src/pages/PersonalPage.tsx:772, 778`** (transferencia al eliminar operaria): cambiar `destino.id` por `(destino.uid || destino.id)`.
+- [ ] Verificar que no haya otras escrituras con `personal.id` directo a `operariaId` — grep `operariaId.*\.id\b` en `src/` después del fix.
+
+**Parte C — Script de migración de datos:**
+
+- [ ] `scripts/migrar-operariaid-a-uid.ts` (NUEVO) — Admin SDK, read-only por default, `--apply` para ejecutar:
+  - Lee todas las operarias activas (`personal where rol == 'operaria' or rol == 'coordinadora'`).
+  - Construye Map `{docId → uid}` para operarias que SÍ tienen uid.
+  - **Para `ordenes_servicio`**: lee todas. Para cada doc con `operariaId` = docId conocido en el map, propone update a uid.
+  - **Para `personal where rol == 'tecnico'`**: lee todos. Para cada doc con `operariaId` = docId conocido en el map, propone update a uid.
+  - **Operarias sin uid** (alta vieja sin onboarding): sus órdenes/técnicos asociados NO se tocan. Documentar en el reporte final como "no migrados, operaria sin Auth account".
+  - Output:
+    - Read-only: tabla con conteos por categoría (ya con uid / migrable / no migrable / sin operariaId) + lista de 10 ejemplos de cada categoría.
+    - Con `--apply`: ejecuta migración. Cada update incluye campo de auditoría `operariaIdMigradoDesde: <docIdViejo>` para forensia. Reporta cuántos docs se actualizaron.
+  - **Idempotente**: correr de nuevo no cambia nada.
+  - **Transaccional por batches de 100** con `writeBatch` (P-003).
+
+**Parte D — Cazador P-006 extendido:**
+
+- [ ] Leer `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` y verificar si `operariaId` ya está en su lista de campos detectados. Si no, agregarlo.
+- [ ] Re-correr `npm run check:regression` post-fix. Esperado: 0 hits sobre `operariaId === .id` o `Set.has(.id)` con sufijo operariaId.
+
+**Parte E — Documentación:**
+
+- [ ] `docs/CAMPOS_CROSS_COLLECTION.md` — actualizar fila `operariaId` (en sección `ordenes_servicio` y en sección `personal`) de "⚠ por confirmar" a "**auth.uid**" con referencia a SPRINT-149 y la migración.
+- [ ] `docs/PATRONES_REGRESION.md` entrada P-006 — agregar nota sobre `operariaId` como variante adicional del mismo patrón.
+
+**Global:**
+
+- [ ] `npm run build` PASS.
+- [ ] `npm run lint` PASS sin warnings nuevos.
+- [ ] `npm run check:regression` PASS (8/8 cazadores, +0 hits post-fix).
+- [ ] **archivist PRE-CHANGE obligatorio** (toca código de nómina/comisiones, riesgo medio-alto).
+- [ ] **regression_guardian obligatorio** (cambios cross-cutting).
+- [ ] **reviewer obligatorio** (riesgo financiero — nómina).
+- [ ] Commit del fix de código: `fix(operariaid): SPRINT-149 completar migración operariaId a auth.uid (cerrar inconsistencia post-SPRINT-105)`.
+- [ ] Commit del script: `feat(migracion): SPRINT-149 script migrar-operariaid-a-uid read-only + --apply`.
+- [ ] Commit de docs: `docs: SPRINT-149 actualizar CAMPOS_CROSS_COLLECTION y PATRONES_REGRESION con convención operariaId`.
+- [ ] Push + deploy Ready en Vercel.
+- [ ] **NO ejecutar `--apply` del script desde el coordinator**. Esa es decisión de Jorge — escribir entrada en `BLOQUEOS.md` con el comando para que él lo dispare manualmente cuando esté listo.
+
+#### Restricciones / guardarrails
+
+- NO tocar `useOrdenCreateForm.ts`, `ordenes.service.ts`, `FormAltaEditarEmpleado.tsx` (ya están bien).
+- NO cambiar `types/index.ts` ni `utils/index.ts` para `operariaId`.
+- NO cambiar el shape al ESCRIBIR — el dropdown ya emite uid correctamente desde SPRINT-105.
+- NO ejecutar `--apply` del script de migración automáticamente. Jorge decide cuándo y revisa el dry-run primero.
+- NO mergear cambios de READ y migración en el mismo PR/commit — separar commits por capa (código → script → docs) para revisión más fácil.
+- Si al hacer los cambios el reviewer detecta efectos en cálculo de comisiones (ej: ahora una operaria que antes no aparecía en nómina, va a aparecer), PARAR y reportar antes de commitear. Eso es CHANGE_NEEDED.
+- Si el script encuentra >50 órdenes para migrar, mover decisión de `--apply` a OK explícito de Jorge en `BLOQUEOS.md` (sub-regla: migraciones >500 docs requieren OK, pero por prudencia bajamos el umbral acá a 50 dado el riesgo de nómina).
+
+#### QA post-deploy (Jorge — DESPUÉS del fix de código, ANTES del --apply de migración)
+
+1. **Hard refresh** en `/admin/dashboard` y `/admin/ordenes` logueado como Yohana (operaria pre-SPRINT-105). Verificar que su filtro "mis órdenes" SIGUE mostrando sus órdenes (no cambia el comportamiento legacy).
+2. **Crear operaria nueva** desde GestionUsuarios → asignar técnico a ella → crear orden con ese técnico → verificar que la orden tiene `operariaId` poblado. (Validar shape en Firestore Console para confirmar uid.)
+3. **Logueate como esa operaria nueva** → verificar que filtro "mis órdenes" SÍ muestra la orden (esto era el bug que se cierra).
+4. **Probar nómina simulada** (si tenés ambiente staging o podés correr el cálculo sin commitear): confirmar que ambos shapes funcionan.
+
+#### QA post-`--apply` (cuando Jorge dispare la migración de datos)
+
+1. Correr el script en dry-run primero. Pegale a Cowork el output para revisar conteos.
+2. Si conteos razonables, ejecutar `--apply`.
+3. Verificar que las métricas de Dashboard/Rendimiento/Nómina no cambien para operarias pre-SPRINT-105 (sus órdenes siguen apuntando a doc id porque la operaria no tenía uid... aunque post-onboarding sí tendrá uid y se migrará).
+
+#### Notas para el coordinator
+
+- Sprint grande pero curado. Si el builder llega a un punto donde no está seguro de un cambio (ej: el comentario `@safe-userprofile-id` en Dashboard.tsx parece protegido), PARAR y consultar.
+- archivist PRE-CHANGE va a encontrar varios sprints relacionados (SPRINT-105, SPRINT-130, SPRINT-132, SPRINT-145). Leerlos para evitar reintroducir bugs.
+- Si el typecheck falla porque `currentUser` no está importado en algún archivo, agregar el import siguiendo el patrón ya usado en SPRINT-145.
+- Reviewer obligatorio antes de cerrar. Si reviewer detecta riesgo financiero (cálculo de comisiones mal), volver al builder con CHANGES_NEEDED.
+- Postmortem opcional pero recomendado al cerrar — captura el aprendizaje "migración write-side sin read-side genera bug silencioso".
+
+</details>
+
+---
+
+### SPRINT-150 — Fix mecánico P-001 en `AgendaDia.tsx` (handler "marcar solo chequeo desde agenda")
+
+**Estado:** COMPLETADO 2026-05-12 (coordinator autónomo `trabaja`, pasada 11). 1 archivo modificado, 2 fixes mecánicos sobre handler `marcarSoloChequeoDesdeAgenda` (líneas 144 + 191). Cazadores 7/7 PASS, typecheck PASS, lint PASS. Patrón establecido por SPRINT-114 replicado al pie de la letra.
+**Prioridad:** media (bug latente para operarias/secretarias cargadas vía cascada `personal/` — `userProfile.id ≠ auth.uid` les rompía marcar chequeo desde agenda)
+**Origen:** Coordinator autónomo pasada 11 (`trabaja`), tras detectar 2 hits residuales P-001 en `AgendaDia.tsx` durante la pasada 9 (SPRINT-145) que NO entraban en scope.
+**Riesgo:** muy bajo (2 líneas, patrón ya validado en producción por SPRINT-114, mismo handler ya tenía `currentUser` en scope).
+**Touch-list:** 1 archivo (`src/pages/AgendaDia.tsx`).
+
+#### Cambios aplicados
+
+1. **`src/pages/AgendaDia.tsx:144`** — campo `registradoPorId` del payload de pago del chequeo: `userProfile?.id || ''` → `currentUser?.uid || ''`.
+2. **`src/pages/AgendaDia.tsx:191`** — campo `enviadaAFacturacionPorId` del update de orden: `userProfile?.id` → `currentUser?.uid` (incluye guarda renombrada).
+
+Ambos puntos llevan comentario referenciando SPRINT-150 + SPRINT-114 (patrón canónico).
+
+#### Por qué (justificación de autonomía)
+
+- Patrón catalogado P-001 — fix mecánico de 2 líneas idéntico al de SPRINT-114 (`EnviarFacturacionButton.tsx:45,60`).
+- `currentUser` ya estaba destructurado del `useApp()` (línea 31) — no requiere import nuevo.
+- Cazador P-001 catalogado, allowlist no afectada.
+- NO toca firestore.rules, services compartidos ni cross-collection.
+- Sub-regla CLAUDE.md "cleanup en componentes de wizard requiere QA flujo X validado" NO aplica — no es wizard, no es cleanup, es fix de bug.
+
+#### Criterios de aceptación
+
+- [x] `npm run check:regression` PASS — 7/7 cazadores, 0 hits.
+- [x] `npx tsc --noEmit` PASS.
+- [x] `npx eslint src/pages/AgendaDia.tsx --max-warnings 0` PASS.
+- [x] Commit + push.
+
+#### Restricciones
+
+- NO tocar líneas 287-309 (modificadas por SPRINT-145).
+- NO tocar `operariaId` (separado en SPRINT-149 BLOQUEADO).
 
 ---
 
