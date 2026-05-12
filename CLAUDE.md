@@ -171,12 +171,27 @@ Tres capas adicionales que cierran el ciclo de aprendizaje:
 
 **Sub-regla obligatoria — postmortem completo es obligatorio antes de marcar un sprint hotfix como COMPLETADO.** Un sprint que arregla un bug de producción NO se cierra hasta tener su archivo en `docs/postmortems/`. Aplica retroactivamente: SPRINT-106 (commit `9ac9742`, 2026-05-07) tiene `docs/postmortems/2026-05-07-iniciar-chequeo-rules-sin-deploy.md` creado por SPRINT-107. Antiprecedente: sin esta regla, los hotfixes anteriores (`afc5e4a`, `b93625d`, `c7c8e34`) cerraron sin postmortem y los aprendizajes quedaron solo en gotchas — eso retrasó la creación de cazadores P-001 a P-003 hasta ya tener varios bugs de la misma clase.
 
+**Sub-regla obligatoria — Touch-list expandido + auditoría de consumidores antes de redactar el sprint.** Cualquier sprint que toque código (`.tsx` / `.ts` / `.rules`) debe declarar explícitamente, antes de pasarlo al builder:
+
+1. **Archivos a modificar** — los que se editan.
+2. **Consumidores verificados (read-only check)** — listar TODOS los archivos que importan el símbolo, leen el campo o llaman la función afectada. Usar `grep -rn` y reportar archivo + líneas relevantes. Consultar `docs/MAPA_DEPENDENCIAS.md` y `docs/CAMPOS_CROSS_COLLECTION.md` cuando aplique.
+3. **Consumidores NO afectados** — archivos que aparecen en el grep pero usan otra ruta del código que no se toca. Justificar brevemente por qué.
+4. **Hallazgos laterales** — bugs latentes descubiertos durante la auditoría pero fuera del scope del sprint actual. Documentarlos como deuda para un sprint futuro (con nombre tentativo). **NO fixear silenciosamente** dentro del sprint en curso.
+
+Si la auditoría revela >5 consumidores con cambios concretos, considerar dividir el sprint en fases. Si revela archivos no contemplados en el touch-list original, **ACTUALIZAR el sprint** antes de procesarlo — nunca procesar parcialmente y "dejar la otra mitad para después" sin volver a redactar el sprint con scope ampliado.
+
+Antiprecedente SPRINT-145 (2026-05-12): tenía 4 cambios mapeados pero faltaban 2 críticos (línea 315 + línea 432 de `AgendaDia.tsx`). Sin esta sub-regla, el fix habría dejado la página parcialmente rota (técnicos visibles pero con órdenes vacías). Jorge exigió re-auditoría y se descubrieron los 2 cambios faltantes. Esta sub-regla previene la recurrencia.
+
+Complementaria al archivist PRE-CHANGE (histórico de bugs), no lo reemplaza. PRE-CHANGE pregunta "¿qué pasó antes con esto?"; touch-list expandido pregunta "¿quién depende de esto ahora?".
+
 ## Related docs in repo
 
 - `README.md` — setup and module list.
 - `CONTEXTO_PROYECTO.md` — deeper architecture reference (some sections predate recent refactors; treat as historical context, verify against current code).
 - `CONTEXTO_PAGINA_WEB.md` — public-website requirements and Firestore-permission matrix for public pages.
 - `PROMPTS-CLAUDE-CODE.md` — saved prompts the owner reuses.
+- `docs/MAPA_DEPENDENCIAS.md` — quién consume qué en cada módulo core. Consultar antes de tocar código compartido.
+- `docs/CAMPOS_CROSS_COLLECTION.md` — tabla de campos que conectan colecciones (tecnicoId, operariaId, etc.) con su regla estricta. Consultar antes de leer/escribir un campo apuntador.
 
 ## Multi-agent workflow (`.claude/agents/`)
 
