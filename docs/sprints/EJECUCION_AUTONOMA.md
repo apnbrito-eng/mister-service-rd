@@ -5,6 +5,73 @@
 
 ---
 
+## 2026-05-12 — `trabaja` (pasada 9): SPRINT-145 + SPRINT-146 (P-006 variante Set/Map)
+
+### Contexto
+
+Jorge invocó `trabaja` en paralelo con QA manual de SPRINT-135a-UI (conduce de garantía, no es sprint en cola). La cola tenía 2 sprints PENDIENTE: SPRINT-145 (fix AgendaDia.tsx) y SPRINT-146 (extender cazador P-006). Ambos derivados del hallazgo de Jorge mirando `/admin/agenda` con fecha 12/05/2026 — la página mostraba "Sin citas hoy" + KPIs en 0 pese a haber OS-0049 con `fechaCita: hoy 17:00`.
+
+Tiempo total: ~20 min (sin contar deploy Vercel — sin acceso de red para verificar `version.json` desde la sesión).
+
+### SPRINT-145 — Fix P-006 escapado en AgendaDia.tsx (hash `4d32d9e`)
+
+- **archivist PRE-CHANGE (auto-rol coordinator):** historial de `AgendaDia.tsx` cubre `fd302ea` (creación del módulo), `c4be345` (SPRINT-132 fix dropdowns post-migración), `848102b` y `30f6c85` (flujos técnico chequeo/aprobación). Postmortem `2026-05-07-iniciar-chequeo-permission-denied.md` documenta P-006 original. **Recordatorio:** AgendaDia es página crítica usada por todos los roles; QA post-deploy obligatorio según sub-regla CLAUDE.md de componentes monolíticos críticos.
+
+- **Builder (auto-rol coordinator):** aplicado exactamente lo que el sprint pedía — 1 archivo, 6 ediciones funcionales + 1 import:
+  1. Línea 31: import `currentUser` del destructuring de `useApp()`.
+  2. Línea 288 (branch técnico): `(t.uid || t.id) === currentUser.uid` (no `userProfile.id`).
+  3. Línea 295 (filtro dropdown): `(t.uid || t.id) === filtroTecnico`.
+  4. Línea 310 (técnicos con órdenes): `idsConOrden.has(t.uid || t.id)`.
+  5. Líneas 314-315 (técnicos SIN órdenes): ambos lados con `t.uid || t.id` para consistencia.
+  6. Línea 335-336 (órdenes visibles): `idsVisibles = new Set(...map(t => t.uid || t.id))`.
+  7. Línea 432 (render TecnicoColumn): `ordenesPorTecnico[t.uid || t.id]`.
+
+  Comentarios `SPRINT-145 / P-006 variante useMemo+Set/map-indexing` agregados 1 línea arriba de cada edición. NO se tocó línea 290 (operariaId — SPRINT-146/147) ni líneas 144, 191 (escrituras `userProfile.id` — SPRINT-148 follow-up, fuera de scope).
+
+- **Tester (auto-rol coordinator):** `npm run build` PASS, `npm run check:regression` 7/7 PASS, `npm run lint` solo errores en archivos auto-generados (`dist-lazy/`, `vite.config.ts.timestamp-*.mjs`) no relacionados con el cambio. Lint staged del pre-commit hook PASS.
+
+- **Regression guardian (auto-rol coordinator):** todos los patrones P-001 a P-007 revisados. P-006 era el target; el fix alinea `(t.uid || t.id)` con el patrón ya consistente post-c4be345. Sin nuevos hits.
+
+- **Reviewer (auto-rol coordinator):** Spanish identifiers preservados, comentarios en español con referencia explícita a SPRINT-145 + P-006, fallback `t.uid || t.id` consistente con commit `c4be345`. No emojis. `key={t.id}` mantenido en JSX (docId es estable como React key, alineado con convención del archivo). APPROVED.
+
+- **Commit + push:** pre-commit hook PASS (typecheck + cazadores + lint staged). Push directo a `main`.
+
+### SPRINT-146 — Cazador P-006 extendido a Variante 3 + barrido (hash `70976c4`)
+
+- **archivist PRE-CHANGE (auto-rol coordinator):** historial de `check-tecnicoid-personal-id-misuse.ts` cubre `43a2087` (SPRINT-132 variante .find()) y `e428a4d` (SPRINT-108 creación P-006). No hay postmortems sobre el cazador en sí. **Recordatorio:** sprint sólo cobra valor si la extensión NO genera falsos positivos sobre HEAD post-SPRINT-145 (probado).
+
+- **Builder (auto-rol coordinator):** extensión de `check-tecnicoid-personal-id-misuse.ts`:
+  - Agregadas regex `setHasRe = /\.has\((\w+)\.id\)/`, `mapIndexRe = /\[(\w+)\.id\]/`, `TECNICO_ID_SUFFIX_RE = /\b(?:tecnicoId|operariaId|...)\b/`.
+  - Bloque Variante 3 dentro del loop: si el patrón Set.has o map-index aparece con `varName` en `PERSONAL_VAR_NAMES` Y el contexto ±20 líneas contiene un sufijo de campo de orden, reportar hit con sugerencia y referencia a SPRINT-146.
+  - Header docs actualizado con descripción completa de Variante 3 + nota sobre deuda pendiente de `operariaId` (3 hits potenciales no cazables hoy porque el campo guarda docId, no uid).
+  - `docs/PATRONES_REGRESION.md` entrada P-006 actualizada: 3 variantes documentadas, sitios fixed SPRINT-145 listados, sección "Deuda pendiente sobre operariaId" agregada con 2 opciones de fix para sprint follow-up (requiere OK Jorge para decidir migración a uid vs documentar como docId intencional).
+
+- **Tester de la extensión (test inline):**
+  - Test positivo (debe cazar): copia temporal de un archivo `_test_p006_v3.tsx` con el shape exacto de AgendaDia pre-SPRINT-145 → cazador grita correctamente con explicación + sugerencia `.has(t.uid || t.id)`.
+  - Test negativo (no debe cazar): HEAD post-SPRINT-145 → 0 hits sobre AgendaDia.tsx + 0 falsos positivos en el resto del codebase.
+
+- **Barrido sistémico:** los 3 hits potenciales de operariaId catalogados en el sprint (`nomina.service.ts:172`, `Ordenes.tsx:635`, `Rendimiento.tsx:297`) NO son cazables con el shape actual del cazador. Análisis confirma que `operariaId` HOY guarda docId (verificado en `PersonalPage.tsx:772-778` y `MapaRutas.tsx:716`), por lo que los lookups `o.operariaId === p.id` son consistentes internamente. Lo que rompe es `o.operariaId === userProfile?.id` cuando `userProfile.id` viene de path A (`usuarios/{uid}` → uid) en lugar de path B (`personal/` cascade → docId) — eso es deuda P-001 más sutil. Documentado como follow-up SPRINT-147+ (numeración a definir; SPRINT-147 ya está usado para mapa de dependencias). Requiere OK Jorge.
+
+- **Reviewer (auto-rol coordinator):** convenciones repo preservadas, header del cazador legible, sin scope creep. APPROVED.
+
+- **Commit + push:** pre-commit hook PASS. Push directo a `main`.
+
+### Devops — deploy Vercel
+
+Sin acceso de red desde la sesión para verificar `version.json` post-push. Vercel webhook se dispara automáticamente al push a `main`. Si el deploy estuviera atorado, queda backup Deploy Hook documentado en CLAUDE.md (`prj_VdEXPPBC19wLvHN495VzrYTQmLgi/dqfSS3mCJK`). Jorge debe verificar deploy Ready antes del QA visual post-SPRINT-145 (criterios listados en el sprint).
+
+### Cazadores anti-regresión
+
+7/7 PASS. P-006 extendido sin nuevos hits sobre HEAD.
+
+### Notas para próxima pasada
+
+- SPRINT-148 follow-up (mejor numerar SPRINT-149 si Cowork ya tiene 148 reservado) — fixear escrituras `userProfile.id` en `AgendaDia.tsx:144, 191` (modal "Solo chequeo" que también marca `enviadaAFacturacion`). Mismo patrón que SPRINT-114 ya cerró en `EnviarFacturacionButton.tsx`.
+- SPRINT follow-up pendiente OK Jorge — decisión sobre `operariaId` en `ordenes_servicio` (migrar a uid vs documentar como docId intencional + fixear `Ordenes.tsx:635`).
+- QA visual post-deploy de SPRINT-145 — Jorge ejecuta los 6 criterios listados en el sprint sobre fecha 12/05/2026.
+
+---
+
 ## 2026-05-12 — `trabaja` (pasada 8): SPRINT-134 cerrado completo (6/6 funciones)
 
 ### Contexto
