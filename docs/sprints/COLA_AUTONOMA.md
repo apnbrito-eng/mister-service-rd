@@ -3,7 +3,13 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-11 por Cowork — Implementación directa desde Cowork (en lugar de delegar al coordinator) de SPRINT-136, 137, 139 parcial, 142a, 143. Pendiente: SPRINT-142b/c/d agendados en la cola para el coordinator (Jorge pega `trabaja`). Detalle: SPRINT-136 fail-fast Firebase config (commit `d09bdbb`) + SPRINT-137 validación uploads + SPRINT-139 expiración tokenPortalCliente lado escritura + SPRINT-142a extraer FormAltaEditarEmpleado de PersonalPage (PersonalPage 1713→1430 líneas, -284) + SPRINT-143 lazy-load de rutas con React.lazy + Suspense (bundle 2.59MB→1.01MB, -61%, INP esperado <100ms). Cazador P-006 cazó un caso real en FormAltaEditarEmpleado.tsx:238 (dropdown operaria con `value={op.id}`) que se fixeó con el patrón `(op.uid || op.id)` post-c4be345. Decisión meta: Jorge recordó usar el coordinator de Claude Code en vez de programar desde Cowork — los próximos sub-sprints 142b/c/d se delegan al coordinator vía `trabaja`.
+**Última actualización:** 2026-05-12 por Cowork — Re-auditoría profunda de SPRINT-145 a pedido de Jorge ("precisión quirúrgica"). Hallazgos: el sprint inicial tenía 4 cambios mapeados pero faltaban 2 (línea 315 — filtro "Sin citas hoy", y línea 432 — render `ordenesPorTecnico[t.id]`). Sin estos dos, el fix anterior dejaba la página parcialmente rota (técnicos visibles correctamente pero con órdenes vacías; o duplicados en "Sin citas hoy"). Además ajustado el cambio de línea 288: el type `Usuario` NO tiene `uid` separado, hay que importar `currentUser` del context `useApp()` y usar `currentUser.uid` directo. Total: SPRINT-145 ahora tiene 6 ediciones funcionales + 1 import. Cazador 8/8 sigue verde post-cambio (el patrón nuevo no se caza — eso lo cubre SPRINT-146). Hallazgos laterales detectados durante la auditoría (NO incluidos en SPRINT-145, documentados como deuda): (a) líneas 144 y 191 escriben `userProfile.id` en lugar de `currentUser.uid` (gotcha P-001) — futuro SPRINT-148; (b) 3 archivos comparan `o.operariaId === p.id` (`nomina.service.ts:172`, `Ordenes.tsx:635`, `Rendimiento.tsx:297`) — SPRINT-146 investiga si `operariaId` es uid o docId y agrupa fixes.
+
+**Última actualización previa:** 2026-05-12 por Cowork — SPRINT-144 marcado ABSORBIDO (Claude Code ya entregó `scripts/qa-sprint-135a-ui.ts` directo en sesión interactiva; Caso 5 PASS 4/4 contra prod). Agregados SPRINT-145 y SPRINT-146 derivados de hallazgo de Jorge mirando OS-0049: la página `/admin/agenda` muestra todos los técnicos en "Sin citas hoy" + KPIs en 0 aunque hay órdenes con fecha de hoy. Causa raíz identificada por Cowork leyendo `src/pages/AgendaDia.tsx` líneas 295, 309-310, 336: 4 instancias del patrón P-006 escapadas al cazador determinístico (filtra `t.id` contra `tecnicoId` que es `auth.uid` post-c4be345). El cazador actual no las cazó porque están dentro de `useMemo` con sintaxis `idsConOrden.has(t.id)`, no `<option value={t.id}>`. SPRINT-145 = fix quirúrgico AgendaDia (1 archivo, riesgo bajo). SPRINT-146 = extender cazador P-006 a la variante `useMemo + Set + t.id` y barrer codebase. Ambos autónomos. Jorge sigue con QA del wizard de garantía en paralelo (casos 1 y 4 manuales).
+
+**Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-144 (prep QA manual de SPRINT-135a-UI). Jorge pidió herramientas para hacer el QA del wizard de garantía sin abrir Firestore Console campo por campo. SPRINT-144 entrega: (a) script `scripts/qa/verificar-garantia-qa.ts` que recibe ordenId y muestra período, vencimiento, fechaCierre, token y URL pública del endpoint; (b) `docs/sprints/CANDIDATOS_QA_GARANTIA_2026-05-12.md` con 3 órdenes candidatas para Casos 1/2/3 + 1 orden legacy para Caso 5 + plan paso a paso. Read-only puro (grep negativo enforced). Después de este sprint Jorge ejecuta el plan QA de BLOQUEOS.md en 15-20 min. SPRINT-135a-UI sigue EN_REVISION_HUMANA — el cierre formal lo hace Jorge cuando termine el QA.
+
+**Última actualización previa:** 2026-05-11 por Cowork — Implementación directa desde Cowork (en lugar de delegar al coordinator) de SPRINT-136, 137, 139 parcial, 142a, 143. Pendiente: SPRINT-142b/c/d agendados en la cola para el coordinator (Jorge pega `trabaja`). Detalle: SPRINT-136 fail-fast Firebase config (commit `d09bdbb`) + SPRINT-137 validación uploads + SPRINT-139 expiración tokenPortalCliente lado escritura + SPRINT-142a extraer FormAltaEditarEmpleado de PersonalPage (PersonalPage 1713→1430 líneas, -284) + SPRINT-143 lazy-load de rutas con React.lazy + Suspense (bundle 2.59MB→1.01MB, -61%, INP esperado <100ms). Cazador P-006 cazó un caso real en FormAltaEditarEmpleado.tsx:238 (dropdown operaria con `value={op.id}`) que se fixeó con el patrón `(op.uid || op.id)` post-c4be345. Decisión meta: Jorge recordó usar el coordinator de Claude Code en vez de programar desde Cowork — los próximos sub-sprints 142b/c/d se delegan al coordinator vía `trabaja`.
 
 **Última actualización previa:** 2026-05-11 por Cowork — Auditoría forense completa al codebase (4 agentes en paralelo: arquitectura, seguridad, calidad, anti-regresión). Hallazgos CRÍTICOS: secretos hardcodeados como fallback en `src/firebase/config.ts:9-15` (proyecto productivo), `subirArchivoSolicitud` sin validación de size/MIME/cantidad, `storage.rules` no versionado (solo vive en consola). HALLAZGOS ALTO: tokens `tokenPortalCliente` y `garantia.token` sin expiración, App Check en soft mode (no bloquea), 4 monolitos (PersonalPage 1713 / MapaRutas 1267 / Configuracion 1102 / Ordenes 1001). FALSOS POSITIVOS aclarados: `.env` NO está en git (sí está en `.gitignore`), `dist/` NO está en git. Sistema anti-regresión saludable: 8 cazadores en verde, recurrence rate 0%, MTBF creciente. Jorge dio OK "vamos todo" — 4 decisiones tomadas vía AskUserQuestion: max 10MB por archivo, token cliente expira "mientras orden activa + 30 días", App Check enforce con monitoreo 48h previo, solo refactorizar PersonalPage de los 4 monolitos. Agregados SPRINT-136 a 142 (7 sprints). Estados: 136/137/139/142 PENDIENTE autónomo, 138/141 BLOQUEADO esperando OK Jorge (toca rules de Storage y config de App Check), 140 BLOQUEADO esperando SPRINT-135a cerrado.
 
@@ -29,7 +35,7 @@
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-144 (SPRINT-143 usado por lazy-load de rutas, commiteado directo desde Cowork)
+**Próximo ID disponible:** SPRINT-147 (144 ABSORBIDO, 145 fix AgendaDia P-006, 146 extender cazador P-006)
 
 ---
 
@@ -1527,6 +1533,321 @@ Extraer las líneas ~865-941 de PersonalPage (sección "Grupos operaria-técnico
 - Este es el sprint con más archivos tocados del lote. Hacer en pasada única con cuidado.
 - Antes de pushear: build size diff vs antes. Documentar en el commit.
 - Postmortem-positivo opcional al cerrar el SPRINT-142 padre (sub-regla de postmortems de éxito, similar al de SPRINT-117c).
+
+---
+
+### SPRINT-144 — Preparar QA manual de SPRINT-135a-UI (script de verificación + candidatos)
+
+**Estado:** ABSORBIDO 2026-05-12 (Claude Code generó el script equivalente directo en sesión interactiva sin pasar por el coordinator: `scripts/qa-sprint-135a-ui.ts` con casos 2/3/5 reformulado read-only. Caso 5 ya PASS 4/4. Casos 2 y 3 esperan que Jorge cierre orden + emita conduce. NO procesar — el deliverable ya existe.)
+**Prioridad:** alta (bloquea cierre formal de SPRINT-135a-UI; Jorge no puede ejecutar el plan QA de BLOQUEOS.md sin estas herramientas sin abrir Firestore Console campo por campo)
+**Origen:** Jorge 2026-05-12 vía Cowork. SPRINT-135a-UI ya está deployado (commit `d0f11d4`, 2026-05-11). El plan QA está en `docs/sprints/BLOQUEOS.md` (5 casos). Jorge prefiere correr 1 comando en su Mac que le imprima los campos persistidos en lugar de abrir Firestore Console a mano. Cowork prepara las herramientas para que el QA cueste 15-20 min en lugar de 45.
+**Riesgo:** bajo (read-only Admin SDK; sin mutaciones; sin tocar código de la app; 2 archivos nuevos en `scripts/` y `docs/`)
+**Touch-list previsto:** `scripts/verificar-garantia-qa.ts` (NUEVO), `docs/sprints/CANDIDATOS_QA_GARANTIA_2026-05-12.md` (NUEVO). NO toca código de la app.
+
+#### Objetivo
+
+Generar dos artefactos read-only que faciliten el QA manual del wizard de garantía:
+
+1. Un script `npx tsx scripts/verificar-garantia-qa.ts <ordenId>` que lea el doc de la orden y su factura asociada e imprima los campos relevantes con formato humano (período, vencimiento absoluto y relativo, fechaCierre, token, URL pública del countdown). Reemplaza la necesidad de abrir Firestore Console para Casos 2 y 3 del plan.
+2. Un md con listado curado de 3 órdenes candidatas para Casos 1/2 + 1 orden legacy para Caso 5, con todos los datos necesarios (ordenId, número OS, cliente, fase, fechaCierre si aplica, token de factura si aplica, URL pública). Reemplaza la búsqueda manual.
+
+NO ejecuta el QA. NO toca datos. Solo prepara las herramientas. Jorge corre el QA después con clicks + 1 comando por orden.
+
+#### Por qué
+
+El plan QA en BLOQUEOS.md (5 casos) requiere que Jorge:
+- Encuentre orden candidata en fase `trabajo_realizado` → fricción media (abrir admin, filtrar).
+- Lea 3 campos en Firestore Console por cada orden cerrada → fricción alta (Console es lenta, los timestamps son números epoch).
+- Encuentre token de factura para llamar el endpoint público → fricción alta (factura está en otra colección).
+- Encuentre orden legacy sin `periodoGarantiaDias` para Caso 5 → fricción alta (no hay filtro UI por campo missing).
+
+Sin estas herramientas, Jorge pospone el QA y el sprint queda en limbo. Con ellas: 15-20 min total.
+
+#### Criterios de aceptación
+
+**Parte A — Script `scripts/verificar-garantia-qa.ts`:**
+
+- [ ] Inicializa Admin SDK con `service-account.json` reusando la convención de `scripts/auditoria/schema-drift.ts` o `asignaciones-tecnico-operaria.ts`.
+- [ ] Recibe `ordenId` como `process.argv[2]`. Si falta, imprime usage clara y exit 1: `Uso: npx tsx scripts/verificar-garantia-qa.ts <ordenId>`.
+- [ ] Lee `ordenes_servicio/{ordenId}`. Si no existe, exit 1 con mensaje claro.
+- [ ] Imprime sección 1 — "ORDEN":
+  - `numero` (OS-####), `clienteNombre`, `fase`, `tecnicoNombre` (si está).
+  - `cierreServicio.fechaCierre` como timestamp ISO + "hace X días/horas".
+- [ ] Imprime sección 2 — "GARANTÍA (modelo nuevo)":
+  - `periodoGarantiaDias`: el valor + comentario `[OK existe]` o `[MISSING - orden legacy]`.
+  - `garantiaVencimiento`: timestamp ISO + cuántas horas/días faltan o hace cuánto venció. Si missing: `[MISSING - se computa al vuelo desde fechaCierre + 60d]`.
+- [ ] Busca factura asociada (query `facturas where ordenId == <ordenId>`, primer match). Imprime sección 3 — "FACTURA + TOKEN":
+  - `numero` (FAC-#####), `token` (si tiene), `garantia.fechaInicio` y `garantia.fechaFin` si tiene shape legacy.
+  - URL pública lista para clickear: `https://app.misterservicerd.com/api/garantia/{token}` (usar dominio de prod hardcodeado o desde env si está claro).
+- [ ] Imprime sección 4 — "QA HINTS":
+  - Si `periodoGarantiaDias` existe y `garantiaVencimiento` también → "Caso 2 OK, verifica que coincida con lo que pusiste en el wizard."
+  - Si falta `periodoGarantiaDias` pero existe `cierreServicio.fechaCierre` → "Esta orden sirve para Caso 5 (fallback legacy). URL pública del Caso 3 también debe responder coherente."
+  - Si falta todo → "Orden sin garantía configurada. No sirve para QA."
+- [ ] NO toca Firestore con writes. Grep negativo en el archivo: cero `.set(`, `.update(`, `.delete(`, `.add(` sobre `db.collection` o `db.doc`. Solo `Map.set` en memoria si aplica.
+- [ ] Output puro stdout, sin escribir archivos.
+
+**Parte B — Documento `docs/sprints/CANDIDATOS_QA_GARANTIA_2026-05-12.md`:**
+
+- [ ] Encabezado: explica que este doc lista órdenes pre-seleccionadas para el plan QA de SPRINT-135a-UI (referenciar BLOQUEOS.md sección SPRINT-135a-UI).
+- [ ] Sección "Candidatas para Casos 1, 2, 3 (cerrar con período personalizado)":
+  - Tabla con 3 órdenes en fase `trabajo_realizado` o `agendado` que NO tengan `periodoGarantiaDias` aún. Columnas: ordenId, número OS, cliente (primer nombre), fase, técnico, comando listo para copiar: `npx tsx scripts/verificar-garantia-qa.ts <ordenId>`.
+  - Si no hay 3 candidatas en `trabajo_realizado`, completar con órdenes en fase anterior y aclarar "requiere avanzar la orden a trabajo_realizado primero".
+- [ ] Sección "Candidata para Caso 5 (fallback legacy)":
+  - 1 orden cerrada anterior al 2026-05-11 que tenga `cierreServicio.fechaCierre` pero NO tenga `periodoGarantiaDias` ni `garantiaVencimiento`. Columnas: ordenId, número, cliente, fechaCierre, token de factura, URL pública lista para clickear.
+- [ ] Sección "Plan QA paso a paso resumido" — referencia BLOQUEOS.md pero da el orden recomendado:
+  1. Abrir candidata A del Caso 1/2 → cerrar con período 1 día → correr script de verificación → verificar Caso 2.
+  2. Abrir URL pública del paso 1 → verificar Caso 3.
+  3. En Firestore Console, mover `garantiaVencimiento` de la candidata a ayer → recargar página pública → verificar botón Reclamar disabled (Caso 4).
+  4. Abrir URL pública de la candidata legacy → verificar Caso 5.
+  5. Volver al wizard con orden B → probar límites (0, 400, 1) sin completar el cierre → verificar Caso 1.
+- [ ] Sección "Si todos pasan" — pegar comando consolidado para Jorge:
+  ```
+  Pegale a Cowork: "QA de SPRINT-135a-UI completo, todos los 5 casos OK"
+  Cowork te pasa el commit+push final para cerrar el sprint en docs/sprints/.
+  ```
+- [ ] NO mostrar emails completos, teléfonos ni direcciones — solo primer nombre + sufijo ID parcial.
+
+**Global:**
+
+- [ ] archivist PRE-CHANGE obligatorio (script toca Admin SDK + lee `ordenes_servicio` + `facturas` — categoría "datos en prod").
+- [ ] regression_guardian opcional (no toca código de la app, solo scripts standalone).
+- [ ] Read-only confirmado por grep negativo sobre `.set/.update/.delete/.add` apuntando a Firestore. `Map.set` en memoria está OK.
+- [ ] `npm run build` + `npm run lint` PASS.
+- [ ] Cazadores 8/8 PASS.
+- [ ] El builder ejecuta el script una vez contra prod **solo para llenar la Parte B** (queries read-only para descubrir candidatas). Output del script para llenar el md es OK — sigue siendo read-only. Si esto rompe alguna sub-regla del coordinator, el builder genera el md como placeholder con instrucciones para que Jorge lo corra y se llene.
+- [ ] Commit + push con mensaje `feat(qa): SPRINT-144 script verificar-garantia-qa + listado candidatos para QA de SPRINT-135a-UI`.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio (toca Admin SDK + lee datos de prod).
+- Read-only puro. Si el builder se ve tentado a incluir un flag `--apply-set-vencimiento-ayer` para automatizar Caso 4, PARAR — Jorge lo hace en Firestore Console a mano, no queremos un script write para 1 doc puntual.
+- NO inferir URL del endpoint público desde código. Hardcodear `https://app.misterservicerd.com/api/garantia/{token}` o usar `process.env.VITE_APP_URL` si está claro. No hacer fetch desde el script.
+- El listado de candidatas (Parte B) no debe contener más de 5 órdenes en total. Es para QA puntual, no auditoría masiva.
+- Si la query de "facturas asociadas a una orden" no devuelve match para alguna candidata, el script imprime `[Sin factura asociada — no se puede verificar Caso 3 con esta orden]` y sigue. No es error fatal.
+- NO modificar `firestore.rules`, NO tocar tipos en `src/types/index.ts`, NO tocar helpers de garantía.
+
+#### Notas para el coordinator
+
+- Convención: `scripts/auditoria/` ya tiene scripts read-only similares. Pero este NO es auditoría, es prep de QA. Decidir: ¿va en `scripts/auditoria/` o en `scripts/qa/` (nuevo subdirectorio)? Recomendación: crear `scripts/qa/` para este tipo de scripts ad-hoc de soporte al QA manual, y poner ahí el verificar-garantia-qa.ts. Si el coordinator prefiere reusar `scripts/auditoria/`, también está bien — decidir y dejarlo justificado en el commit.
+- Si la búsqueda de candidatas (Parte B) tarda demasiado o devuelve docs huge, limitar query con `.limit(20)` y filtrar en memoria.
+- Si el archivist en PRE-CHANGE encuentra que un sprint reciente ya tocó garantía con consecuencias inesperadas, reportarlo en el output — pero seguir.
+- Al cerrar: NO marcar SPRINT-135a-UI como COMPLETADO. Eso lo hace Jorge cuando termina el QA real.
+
+---
+
+### SPRINT-145 — Fix P-006 escapado en `AgendaDia.tsx` (técnicos con órdenes aparecen en "Sin citas hoy")
+
+**Estado:** COMPLETADO 2026-05-12 (coordinator autónomo `trabaja`, hash `4d32d9e`. 1 archivo modificado, 6 ediciones funcionales + 1 import. Cazadores 7/7 PASS, build PASS, lint staged PASS. QA flujo agenda PENDIENTE — Jorge ejercita post-deploy.)
+**Prioridad:** alta (bug en producción reportado por Jorge 2026-05-12; la página "Agenda del Día" no muestra ninguna orden porque el filtro de técnicos compara `t.id` (doc id de personal) contra `tecnicoId` (auth.uid post-c4be345). Todos los técnicos quedan listados en "Sin citas hoy" aunque tengan órdenes con `fechaCita = hoy`. Los 4 KPIs (Total, Completadas, En Progreso, Ingresos) muestran 0 aunque hayan órdenes reales.)
+**Origen:** Jorge 2026-05-12 vía Cowork. Reportó que abriendo `/admin/agenda` con fecha 12/05/2026, el panel muestra "Sin citas programadas para este día" + "Sin citas hoy (14)" + KPIs en 0, pese a que sabe que Aury Mon tiene órdenes hoy (incluido OS-0049 con `fechaCita: 12/05/2026 17:00`). Cowork hizo auditoría profunda con grep sobre todo el codebase. Resultado: el patrón está concentrado en `src/pages/AgendaDia.tsx` (5 instancias en 5 puntos distintos del flujo: filtro UI + filtros internos useMemo + indexación de map). El cazador determinístico actual no captura ninguno porque están dentro de `useMemo` con sintaxis `new Set(...).has(t.id)` y `map[t.id]`, no `<option value={t.id}>` (que es lo que P-006 escanea).
+**Riesgo:** bajo (1 archivo, 5 ediciones, sin tocar shape de datos en Firestore, sin tocar rules, sin tocar storage. Cambios mantienen semántica con fallback `t.uid || t.id` para retrocompat con personal pre-onboarding sin Auth. Edita las funciones de filtrado puro sin cambiar comportamientos de escritura).
+**Touch-list previsto:** `src/pages/AgendaDia.tsx` (5 ediciones quirúrgicas + 1 import adicional)
+
+#### Objetivo
+
+Que la página "Agenda del Día" muestre las órdenes del día agrupadas por su técnico correcto (Aury Mon, etc.) en lugar de listar a todos los técnicos como "sin órdenes". Que los 4 KPIs reflejen el conteo real de órdenes. Que el dropdown de filtro por técnico funcione. Que la sección "Sin citas hoy" excluya a los técnicos que SÍ tienen órdenes.
+
+#### Por qué
+
+- SPRINT-132 fixeó 12 lookups del patrón P-006 en otros archivos. AgendaDia quedó fuera porque su patrón es distinto: en lugar de `<option value={t.id}>` (lo que P-006 escanea), usa `new Set(...).has(t.id)` dentro de `useMemo` y `map[t.id]` en el render.
+- En producción esto significa que ninguna operaria, secretaria, coordinadora o admin puede ver "qué está pasando hoy" mirando `/admin/agenda`. La página está rota para casi todos los usuarios.
+- Bug confirmado por Cowork con grep negativo de cada línea + lectura completa de AgendaDia.tsx + verificación de tipos `Personal.uid` y `Personal.id` en `src/types/index.ts:1376-1381`.
+
+#### Auditoría previa (Cowork 2026-05-12)
+
+Hallazgos de la revisión profunda:
+
+1. **5 instancias del bug P-006 confirmadas en AgendaDia.tsx** (no 4 como se pensó inicialmente):
+   - Línea 295: filtro por dropdown de técnico (`t.id === filtroTecnico` cuando `filtroTecnico` es uid)
+   - Línea 310: filtro de técnicos con órdenes (`idsConOrden.has(t.id)` cuando idsConOrden tiene uids)
+   - Línea 315: filtro de técnicos sin órdenes — duplicado por consistencia, si fijamos 310 hay que fijar 315 también
+   - Línea 336: filtro de órdenes visibles por técnicos (`idsVisibles.has(o.tecnicoId)` donde idsVisibles tiene docIds)
+   - **Línea 432 (NUEVO HALLAZGO)**: render indexa `ordenesPorTecnico[t.id]` cuando `ordenesPorTecnico` fue construido con key `o.tecnicoId` (uid). Sin esto fixeado, aunque los técnicos se muestren, sus órdenes salen vacías.
+
+2. **Type `Personal` SÍ tiene `uid?: string`** (línea 1381 de types). Por lo tanto `t.uid || t.id` compila y es semánticamente correcto. Si `t.uid` no existe (alta vieja sin Auth), cae a `t.id` (doc id) — coherente con personal sin onboarding completo.
+
+3. **Type `Usuario` NO tiene campo `uid` separado** (línea 31 de types). Por eso para línea 288 NO se puede usar `(t.uid || t.id) === (userProfile.uid || userProfile.id)`. La solución correcta es usar `currentUser.uid` del context `useApp()`.
+
+4. **Hallazgos laterales NO incluidos en este sprint** (documentados para sprints follow-up):
+   - **Línea 191** escribe `enviadaAFacturacionPorId = userProfile.id` en lugar de `currentUser.uid` — gotcha P-001 (`userProfile.id` no siempre es `auth.uid`). SPRINT-114 fixeó el botón principal `EnviarFacturacionButton.tsx:45` pero este path alternativo (modal "Solo chequeo" que también marca `enviadaAFacturacion`) quedó fuera. Esto NO causa el bug visual actual pero deja datos denormalizados. Abrir SPRINT-148 follow-up.
+   - **Línea 144** escribe `registradoPorId: userProfile?.id || ''` en el pago — mismo problema. SPRINT-148 lo cubrirá junto con línea 191.
+   - **Línea 290** (branch operaria filtrando técnicos a cargo): `t.operariaId === userProfile.id`. Es ambiguo si `t.operariaId` guarda uid o docId. Cowork detectó tres archivos más que comparan así (`nomina.service.ts:172`, `Ordenes.tsx:635`, `Rendimiento.tsx:297`). NO se toca en SPRINT-145 — SPRINT-146 (cazador extendido) va a catalogar y proponer fix por separado. Si Jorge no es operaria, esta línea no se ejercita.
+
+#### Criterios de aceptación
+
+**Cambios en `src/pages/AgendaDia.tsx`** (5 ediciones funcionales + 1 import):
+
+- [ ] **Import** — agregar `currentUser` al destructuring de `useApp()` (línea 31):
+  - Antes: `const { userProfile } = useApp();`
+  - Después: `const { userProfile, currentUser } = useApp();`
+- [ ] **Línea 288** — branch rol técnico (filtra técnicos para mostrar solo el del user actual):
+  - Antes: `lista = lista.filter(t => t.id === userProfile.id);`
+  - Después: `lista = lista.filter(t => (t.uid || t.id) === currentUser?.uid);`
+  - Justificación: `userProfile.id` NO es siempre auth.uid (cascade fallback `personal/` lo carga con personalDocId). Usar `currentUser.uid` directo del Firebase Auth context.
+- [ ] **Línea 295** — filtro por dropdown de técnico:
+  - Antes: `lista = lista.filter(t => t.id === filtroTecnico);`
+  - Después: `lista = lista.filter(t => (t.uid || t.id) === filtroTecnico);`
+  - Justificación: el dropdown emite `value={t.uid}` en línea 382 (correcto post-SPRINT-132). Acá el filtro compara contra `t.id` (docId). Mismatch.
+- [ ] **Línea 310** — filtrar técnicos con órdenes:
+  - Antes: `return tecnicosVisibles.filter(t => idsConOrden.has(t.id));`
+  - Después: `return tecnicosVisibles.filter(t => idsConOrden.has(t.uid || t.id));`
+  - Justificación: el Set se construye en línea 309 con `o.tecnicoId` (uid). Lookup contra `t.id` (docId) falla.
+- [ ] **Línea 315** — filtrar técnicos SIN órdenes (sección "Sin citas hoy"):
+  - Antes:
+    ```
+    const idsConOrden = new Set(tecnicosConOrdenes.map(t => t.id));
+    return tecnicosVisibles.filter(t => !idsConOrden.has(t.id));
+    ```
+  - Después:
+    ```
+    const idsConOrden = new Set(tecnicosConOrdenes.map(t => t.uid || t.id));
+    return tecnicosVisibles.filter(t => !idsConOrden.has(t.uid || t.id));
+    ```
+  - Justificación: este `useMemo` es internamente consistente (mismo valor en map y filter), pero usa docId. Una vez que línea 310 use uid, este NO necesita el cambio funcionalmente — pero SÍ por consistencia para evitar bugs futuros si alguien refactoriza. Cambio ambos lados de la comparación a `t.uid || t.id` para que el set y el filter usen el mismo dominio que el resto del archivo.
+- [ ] **Línea 335-336** — filtrar órdenes visibles por técnicos visibles:
+  - Antes:
+    ```
+    const idsVisibles = new Set(tecnicosVisibles.map(t => t.id));
+    return ordenesDelDia.filter(o => !o.tecnicoId || idsVisibles.has(o.tecnicoId));
+    ```
+  - Después:
+    ```
+    const idsVisibles = new Set(tecnicosVisibles.map(t => t.uid || t.id));
+    return ordenesDelDia.filter(o => !o.tecnicoId || idsVisibles.has(o.tecnicoId));
+    ```
+  - Justificación: `o.tecnicoId` es uid. `idsVisibles` debe contener uids.
+- [ ] **Línea 432** — render indexa map de órdenes por técnico:
+  - Antes: `ordenes={ordenesPorTecnico[t.id] || []}`
+  - Después: `ordenes={ordenesPorTecnico[t.uid || t.id] || []}`
+  - Justificación: `ordenesPorTecnico` se construye en líneas 318-330 con key `o.tecnicoId` (uid). Indexar por `t.id` (docId) retorna `undefined` y se renderiza `[]`.
+
+**NO tocar en este sprint:**
+
+- ❌ Línea 290 (branch operaria — `t.operariaId === userProfile.id`). Análisis separado en SPRINT-146.
+- ❌ Línea 144 y 191 (`registradoPorId`, `enviadaAFacturacionPorId` con `userProfile.id`). Sprint follow-up SPRINT-148.
+- ❌ Cualquier otra parte del archivo. Solo las 6 líneas identificadas + el import.
+
+**Comentarios de fallback en el código** (sub-regla "documentar el porqué"):
+
+- [ ] Encima de cada línea modificada agregar comentario corto referenciando SPRINT-145 + patrón P-006 variante "set/map indexing". Ejemplo:
+  ```ts
+  // SPRINT-145 / P-006 variante useMemo+Set: `tecnicoId` es auth.uid (post-c4be345),
+  // `t.id` es doc id de personal. Usar `(t.uid || t.id)` para alinear dominios.
+  return tecnicosVisibles.filter(t => idsConOrden.has(t.uid || t.id));
+  ```
+- [ ] El comentario debe estar 1 línea arriba del código modificado, NO inline al final de la línea (legibilidad).
+
+**Validaciones automáticas:**
+
+- [ ] `npm run build` PASS (typecheck completo, no solo el archivo modificado).
+- [ ] `npm run lint` PASS sin warnings nuevos (baseline preservado).
+- [ ] `npm run check:regression` — cazadores 8/8 PASS (P-001 a P-008).
+- [ ] regression_guardian invocado en el diff (toca `src/pages/` que es categoría "código con consecuencias en producción").
+- [ ] Commit con mensaje exacto: `fix(agenda): SPRINT-145 P-006 escapado en filtros y render de AgendaDia (técnicos con órdenes aparecen en "Sin citas hoy")`.
+- [ ] Push + verificar deploy Ready en Vercel.
+
+#### Restricciones / guardarrails
+
+- NO tocar la lógica de `o.tecnicoId` en órdenes (eso es correcto post-SPRINT-132).
+- NO renombrar `idsConOrden`, `idsVisibles`, `tecnicosVisibles`, `ordenesPorTecnico` ni otros identificadores.
+- NO refactorizar `useMemo` ni la estructura de los filtros — solo cambio quirúrgico de comparación.
+- NO agregar nuevos `useMemo` ni dependencias nuevas en `package.json`.
+- NO tocar el branch de operaria (línea 290) hasta validar comportamiento de `t.operariaId` en SPRINT-146.
+- NO tocar líneas 144 y 191 (escrituras `registradoPorId` y `enviadaAFacturacionPorId`). Documentado como deuda en SPRINT-148.
+- Si al ejecutar el sprint el coordinator encuentra que `t.operariaId` también rompe (porque Jorge está logueado como admin con permisos especiales y el branch de operaria se ejercita igual), PARAR y reportar.
+- Si typecheck falla por alguna inferencia perdida (`currentUser` puede ser `null`), agregar el chain operator `?.uid` y revisar si hay falsey-check necesario antes del filter.
+
+#### QA post-deploy (Jorge)
+
+- [ ] Hard refresh en `https://app.misterservicerd.com/admin/agenda`.
+- [ ] Verificar que la fecha 12/05/2026 muestra OS-0049 agrupada bajo Aury Mon (columna del técnico).
+- [ ] Verificar que KPI "Completadas" muestra ≥1 (OS-0049 está en fase `trabajo_realizado`).
+- [ ] Verificar que Aury Mon NO aparece en la sección "Sin citas hoy".
+- [ ] Filtrar por técnico Aury Mon en el dropdown — debe mostrar solo sus órdenes.
+- [ ] Cambiar fecha al pasado (ej: 7/5/2026) — debe mostrar órdenes históricas correctamente agrupadas.
+- [ ] Verificar que el agrupamiento por operaria sigue funcionando (filtro de operarias del admin).
+
+#### Notas para el coordinator
+
+- Sprint quirúrgico, 1 archivo, 6 ediciones + 1 import. NO refactor estructural.
+- archivist PRE-CHANGE OBLIGATORIO (página crítica para todos los roles + Jorge reportó bug productivo en uso normal).
+- Cazadores 8/8 deben seguir verdes — el nuevo patrón es lo que SPRINT-146 va a extender (no este sprint).
+- Después de este sprint, SPRINT-146 (extender cazador P-006) cobra prioridad — el cazador no detectó este bug y hay riesgo de más casos similares escondidos. Ya hay 3 hits adicionales potenciales catalogados (operariaId comparado contra p.id en nomina.service.ts:172, Ordenes.tsx:635, Rendimiento.tsx:297) que necesitan barrido sistémico.
+- Si el reviewer detecta efectos colaterales (ej: usuarios con permiso de operaria que ahora ven distinto), reportar y pausar antes de pushear.
+
+---
+
+### SPRINT-146 — Extender cazador P-006 para detectar patrón `useMemo + Set + t.id` + barrido sistémico
+
+**Estado:** COMPLETADO 2026-05-12 (coordinator autónomo `trabaja`, hash a definir). Cazador P-006 extendido con Variante 3 (`Set.has(X.id)` + `[X.id]` indexing con contexto de sufijo de campo de orden). Test de caza confirma que detecta el shape exacto de AgendaDia pre-SPRINT-145. Cazadores 7/7 PASS sin hits sobre HEAD post-fix. `docs/PATRONES_REGRESION.md` actualizado con Variante 3 + nota sobre deuda operariaId (SPRINT-147 follow-up, requiere OK Jorge para definir si migrar a uid o documentar como docId intencional). Barrido sistémico NO encontró hits adicionales que el cazador atrape (los 3 hits potenciales de operariaId quedan documentados como deuda — no cazables con shape actual del cazador porque `p.id` se compara contra `o.operariaId` que en el modelo HOY es docId, no uid).
+**Prioridad:** media (defensa preventiva post-SPRINT-145; el cazador P-006 falló a detectar AgendaDia. Probable que haya otros casos similares escondidos en el codebase.)
+**Origen:** Cowork 2026-05-12. Análisis post-SPRINT-145 reveló que el patrón actual de P-006 (`scripts/invariantes/check-tecnicoid-personal-id-misuse.ts`) escanea solo `<option value={t.id}>` y `.find(p => p.id === ...)`. NO detecta `new Set(arr.map(t => t.id)).has(otherUid)`, que es el shape que causó el bug en AgendaDia.tsx.
+**Riesgo:** bajo (modifica un cazador read-only + corre barrido. Si encuentra hits adicionales, los fixea en commits separados con micro-sprints o consolida.)
+**Touch-list previsto:** `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` (extensión), `docs/PATRONES_REGRESION.md` (actualizar entrada P-006), posiblemente otros archivos de `src/` si el barrido encuentra hits (commits separados con mensajes "fix(P-006): SPRINT-146 barrido encontró ... en archivo.tsx").
+
+#### Objetivo
+
+Ampliar el cazador P-006 para detectar el patrón `useMemo + Set + .has(t.id)` cuando se compara contra valores que post-c4be345 son `auth.uid`. Re-correr el cazador sobre todo el codebase. Reportar hits y proponer fix o allowlist justificada.
+
+#### Por qué
+
+- El cazador actual tiene una blind spot: solo detecta acceso directo (`<option value={t.id}>` o `.find(p => p.id === X)`). No detecta acceso indirecto vía Set/Map.
+- SPRINT-145 demuestra que el blind spot causó un bug en producción. Hay que cerrar la brecha para que el próximo refactor no reintroduzca el mismo patrón.
+- El patrón es buscable: `new Set(...map(... => ... \.id...))` seguido de `.has(o.tecnicoId)` o variantes.
+
+#### Criterios de aceptación
+
+**Parte A — Extensión del cazador:**
+
+- [ ] Leer `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` y entender la estructura actual de regex.
+- [ ] Agregar 2 nuevos patrones de detección:
+  - Patrón "Set with t.id": regex que detecta `new Set(...\.map\(\(?\w+\)? => \w+\.id\)` dentro de un `useMemo` o función que también referencia `tecnicoId`, `operariaId`, `responsableId`, `ayudanteId`, `creadaPor`.
+  - Patrón "Map.has with field": detecta `\.has\(.+\.tecnicoId\)` o `\.has\(.+\.(operariaId|responsableId|ayudanteId)\)` (cuando lo que va antes es un Set construido con `.id`).
+- [ ] Si un archivo tiene el comentario `// @safe-tecnicoid-id` arriba del patrón, allowlist (igual que con el cazador actual).
+- [ ] Agregar al menos 2 tests inline (assertions sobre código de ejemplo) para validar que el patrón se caza.
+- [ ] Documentar el patrón nuevo en el header del cazador con 1 ejemplo "antes/después".
+
+**Parte B — Actualizar catálogo:**
+
+- [ ] Actualizar `docs/PATRONES_REGRESION.md` entrada P-006:
+  - Agregar sección "Variante useMemo + Set" con el ejemplo de AgendaDia.
+  - Linkear a SPRINT-145 (fix) y SPRINT-146 (extensión cazador).
+  - Mencionar que el patrón también puede aparecer con `operariaId`, `responsableId`, `ayudanteId`.
+
+**Parte C — Barrido sistémico:**
+
+- [ ] Correr `npm run check:regression` después de la extensión. El cazador debe estar en 0 hits sobre AgendaDia (porque SPRINT-145 ya cerró el caso).
+- [ ] **Investigar 3 hits potenciales adicionales ya detectados por Cowork** (compares `o.operariaId === p.id`):
+  - `src/services/nomina.service.ts:172` — `o.operariaId === p.id` (lookup en nómina)
+  - `src/pages/Ordenes.tsx:635` — `o.operariaId === userProfile?.id` (filtro de "mis órdenes" para operaria)
+  - `src/pages/Rendimiento.tsx:297` — `o.operariaId === op.id` (lookup en métricas)
+  - Para cada uno: leer cómo se SETEA `operariaId` en ordenes_servicio (probable: derivación en `useOrdenCreateForm.ts` y `OrdenEditForm.tsx` post-SPRINT-130). Si `operariaId` guarda uid: bug, fixear. Si guarda docId: documentar y dejar.
+  - **Si fixear los 3 toma >30 min o cambia comportamiento de cálculo de comisión**: PARAR. Abrir SPRINT-147a/b/c separados con OK Jorge.
+- [ ] Si aparecen hits NO documentados en allowlist más allá de los 3 anteriores:
+  - **Si son ≤3 archivos y mismo shape**: fixearlos en este sprint con un commit hermano `fix(P-006): SPRINT-146 barrido encontró ... en archivo.tsx`.
+  - **Si son >3 archivos o shapes distintos**: PARAR. Documentarlos en el output del sprint. Abrir SPRINT-147 follow-up con OK explícito de Jorge.
+- [ ] Verificar que el cazador NO genera falsos positivos sobre patrones de UI no Firestore-bound (ej: filtros locales de tabla, autocomplete que no escribe a doc).
+- [ ] Verificar que el cazador NO ataca clientes/productos/equipos (esos NO tienen `uid` ni necesitan auth.uid). Allowlist por archivo si hace falta (`TablaReactivacion.tsx`, `TabReactivacion.tsx` ya identificados como seguros).
+
+**Global:**
+
+- [ ] `npm run build` + `npm run lint` PASS.
+- [ ] Cazadores 8/8 PASS post-extensión.
+- [ ] regression_guardian invocado.
+- [ ] Commit con mensaje: `chore(invariantes): SPRINT-146 extender P-006 para detectar Set+t.id en useMemo + barrido codebase`.
+
+#### Restricciones / guardarrails
+
+- NO modificar otros cazadores (P-001 a P-005, P-007, P-008).
+- NO desactivar P-006 mientras se extiende — agregar el patrón nuevo como condición OR adicional.
+- NO consolidar fixes de archivos distintos en un solo commit. Cada archivo tocado por barrido debe tener commit propio para forensia.
+- Si la extensión genera regex demasiado costosa (run >5s en `npm run check:regression`), considerar usar AST parser en lugar de regex puro. PERO eso es scope creep — solo si la regex es demostrablemente lenta. Si funciona bien con regex, queda con regex.
+
+#### Notas para el coordinator
+
+- Sprint preventivo, no urgent. Si la cola tiene otros sprints más críticos, este puede esperar.
+- Depende de SPRINT-145 (debe estar deployado primero — sino el cazador caza AgendaDia y bloquea pre-commit).
+- archivist PRE-CHANGE útil pero no obligatorio (toca cazador, no código de la app).
 
 ---
 

@@ -171,7 +171,7 @@ deployó fuera de banda — ejecutar
 
 ---
 
-## P-006 — Dropdown que asigna técnico/operaria guarda `personal.id` en lugar de `auth.uid` (+ variante `.find()`)
+## P-006 — Dropdown que asigna técnico/operaria guarda `personal.id` en lugar de `auth.uid` (+ variantes `.find()` y `Set/Map`)
 
 **Bug original:** `c4be345` (Iniciar Chequeo Aury Mon, 2026-05-07). Postmortem:
 `docs/postmortems/2026-05-07-iniciar-chequeo-permission-denied.md`.
@@ -183,6 +183,18 @@ id de `personal/`, el `.find()` retorna `undefined`. El bug se manifiesta como
 "orden creada NUNCA pobló `operariaNombre`" en lugar de "desincronizado", por
 lo que SPRINT-129 reportó 0 inconsistencias (su definición no cubre
 "campo siempre vacío"). El caso Aury Mon fue solo la punta del iceberg.
+
+**Extensión variante 3 (`Set/Map`):** SPRINT-145/146 (2026-05-12). Bug en
+`src/pages/AgendaDia.tsx` reportado por Jorge: la página "Agenda del Día"
+mostraba "Sin citas hoy" + KPIs en 0 pese a haber órdenes con `fechaCita = hoy`.
+5 instancias del patrón en 1 archivo:
+- `new Set(ordenesDelDia.map(o => o.tecnicoId)).has(t.id)` — Set construido
+  con uids (post-c4be345), lookup contra docId. Always false.
+- `ordenesPorTecnico[t.id]` — map keyed por `o.tecnicoId` (uid), indexado por
+  `t.id` (docId). Always undefined.
+El cazador `.find()` no atrapó esto porque el shape es `Set.has()` y `[X.id]`,
+no `.find()`. SPRINT-145 fixeó el archivo; SPRINT-146 extendió el cazador para
+detectar Variante 3.
 
 **Síntoma variante 1 (dropdown WRITE):** Técnico/operaria recién creado (con
 flujo SPRINT-105 que respeta auto-id de Firestore en `personal/`) recibe órdenes
@@ -198,10 +210,17 @@ pobló `operariaId`/`operariaNombre` aunque el técnico SÍ tenga operaria
 asignada. También afecta displays (pin de mapa, color, comisiones, cierre
 día, facturas) que muestran `—` o color default en órdenes post-c4be345.
 
+**Síntoma variante 3 (Set/Map READ):** filtros y render en `useMemo` que
+indexan/buscan por `t.id` retornan vacío. La página muestra contenido vacío
+o KPIs en 0 sin error visible — no hay `permission-denied`, no hay throw, no
+hay request rojo en Network. Diagnóstico requiere inspeccionar manualmente
+qué keys tiene el Set vs qué key se busca.
+
 **Causa raíz (común):** El doc `personal/{auto-id}` tiene un campo `uid` adentro
 que SÍ es el `auth.uid` del empleado. La migración c4be345 cambió WRITES en
-dropdowns (`<option value={t.uid}>`) pero NO READS via `.find()`. Las rules
-comparan `tecnicoId == request.auth.uid`; los lookups deben comparar contra
+dropdowns (`<option value={t.uid}>`) pero NO READS via `.find()` ni
+`Set.has()` / `map[t.id]`. Las rules comparan
+`tecnicoId == request.auth.uid`; los lookups deben comparar/indexar contra
 `(t.uid || t.id) === <campo>` para soportar tanto pre como post c4be345.
 
 **Regla:**
@@ -209,11 +228,14 @@ comparan `tecnicoId == request.auth.uid`; los lookups deben comparar contra
 - **READ (`.find()`):** `personal.find(p => (p.uid || p.id) === <campo>)` cuando
   el `<campo>` puede ser `auth.uid` post-c4be345 (`tecnicoId`, `operariaId`,
   `ayudanteId`, `responsableId`, `secretariaId`, `tecnicoDestinoId`).
+- **READ (`Set/Map`):** `new Set(personal.map(t => t.uid || t.id))` y
+  `map[t.uid || t.id]` cuando el Set/Map se compara o keyea con un campo de
+  orden post-c4be345.
 - Para lookups internamente simétricos con un dropdown UI local (no se gatea
   por rules, ej: `Avances.tsx`), agregar comentario `// @safe-tecnicoid-id:`.
 
 **Cazador:** `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` —
-escanea `src/**/*.{tsx,ts}` con dos pasadas:
+escanea `src/**/*.{tsx,ts}` con tres pasadas:
 
 1. **Variante 1 (dropdown):** `<option value={X.id}>` en `.tsx` donde X es
    identificador corto de personal (`t`, `p`, `tec`, `op`, `sec`, etc.) y el
@@ -223,6 +245,10 @@ escanea `src/**/*.{tsx,ts}` con dos pasadas:
    es identificador corto de personal y Y termina con sufijo de campo de
    empleado (`tecnicoId`, `operariaId`, `ayudanteId`, `responsableId`,
    `secretariaId`, `tecnicoDestinoId`).
+3. **Variante 3 (`Set/Map` — SPRINT-146):** `.has(X.id)` o `[X.id]` donde X
+   es identificador corto de personal y el contexto ±20 líneas contiene un
+   sufijo de campo persistido (`tecnicoId`, `operariaId`, etc.). Esto detecta
+   tanto `set.has(t.id)` como `map[t.id]` indexing.
 
 Falla si encuentra hits sin allowlist.
 
@@ -239,6 +265,32 @@ en línea 1079 y `tecnicoId: destino.uid || destino.id` en línea 558),
 `Comisiones.tsx:384`, `CierreDia.tsx:315`, `FacturaItemsEditor.tsx:176`,
 `FacturaItemDetallesModal.tsx:167`, `PersonalPage.tsx:690,725` (lookup +
 dropdowns + writes a `tecnicoId/responsableId`).
+
+**Sitios fixed en SPRINT-145 (5 + 1 import en 1 archivo):**
+`src/pages/AgendaDia.tsx` líneas 31 (import `currentUser`), 288, 295, 310,
+315, 335-336, 432. Variante 3 (Set/Map) — el cazador ahora detecta este shape.
+
+**Deuda pendiente sobre `operariaId` (SPRINT-147 follow-up, requiere OK Jorge):**
+El campo `operariaId` en `ordenes_servicio` actualmente guarda `personal.id`
+(docId), NO `auth.uid` — verificado en `PersonalPage.tsx:772-778` (escritura
+durante reasignación al eliminar operaria) y `MapaRutas.tsx:716` (copia
+`tecnicoElegido.operariaId` del doc Personal). Esto es **inconsistente** con
+`tecnicoId` que post-c4be345 guarda `auth.uid`. Casos potencialmente afectados
+(no fixeados en SPRINT-146 por scope creep + riesgo a cálculo de comisión):
+- `src/services/nomina.service.ts:172` — `o.operariaId === p.id` (lookup en
+  nómina; ambos lados son docId, consistente HOY).
+- `src/pages/Ordenes.tsx:635` — `o.operariaId === userProfile?.id` (filtro
+  "mis órdenes"; **roto** para operarias cargadas vía `usuarios/{uid}` donde
+  `userProfile.id = uid`).
+- `src/pages/Rendimiento.tsx:297` — `o.operariaId === op.id` (lookup
+  métricas; ambos lados son docId, consistente HOY).
+El cazador NO marca estos hits porque el patrón es `=== p.id` con `op.` o
+`p.` como identificador y compareTo es campo de orden — fuera del alcance de
+las 3 variantes. SPRINT-147 debe decidir: (a) migrar `operariaId` a `uid`
+(consistente con tecnicoId, requiere script de migración + rules updates), o
+(b) declarar `operariaId` como docId intencional y fixear los lookups que
+asumen otro dominio (cambiar `Ordenes.tsx:635` a comparar con
+`personalDocIdPropio || currentUser?.uid`). Decisión requiere OK Jorge.
 
 ---
 

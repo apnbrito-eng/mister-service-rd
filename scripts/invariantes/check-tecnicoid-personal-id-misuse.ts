@@ -1,13 +1,16 @@
 /**
  * P-006 — Dropdown que asigna técnico/operaria/secretaria guarda personal.id
- *         en lugar de personal.uid (auth.uid). Variante 2: lookup
- *         `personal.find(p => p.id === <campo de orden>)` que falla post-c4be345.
+ *         en lugar de personal.uid (auth.uid). Variantes 1 (dropdown),
+ *         2 (`.find()`) y 3 (Set/Map indexing en useMemo).
  *
  * Bug original: c4be345 (Iniciar Chequeo Aury Mon, 2026-05-07).
  * Extensión variante .find(): SPRINT-132 (2026-05-11) — 14 sitios en el repo
  * con el patrón `find(X => X.id === <algo>Id)` que retorna undefined cuando
  * `<algo>Id` es auth.uid post-c4be345 pero `X.id` sigue siendo personal/{docId}.
- * Ver docs/PATRONES_REGRESION.md.
+ * Extensión variante Set/Map (SPRINT-146, 2026-05-12): bug en AgendaDia.tsx
+ * pasó inadvertido porque el lookup era `new Set(...).has(t.id)` y
+ * `map[t.id]` dentro de `useMemo`, no `<option>` ni `.find()`. Ver
+ * docs/PATRONES_REGRESION.md.
  *
  * Síntoma original (variante 1, dropdown): técnico/operaria nuevo (creado
  * con flujo SPRINT-105 que respeta auto-id de Firestore en personal/) recibe
@@ -25,18 +28,28 @@
  * inconsistencia es "orden con operariaNombre desincronizado", no "siempre
  * vacío".
  *
+ * Síntoma variante 3 (Set/Map): bug AgendaDia.tsx 2026-05-12. Filtros y
+ * render usaban `new Set(arr.map(t => t.id)).has(o.tecnicoId)` y
+ * `map[t.id]` donde `map` se construía con `o.tecnicoId` como key. Como
+ * `o.tecnicoId` post-c4be345 es auth.uid y `t.id` sigue siendo personal
+ * docId, los lookups siempre retornan false/undefined. Resultado: TODOS
+ * los técnicos aparecían como "sin órdenes" pese a tener órdenes con
+ * `fechaCita = hoy`, KPIs en 0, columna del técnico vacía.
+ *
  * Causa raíz: el doc `personal/{auto-id}` tiene un campo `uid` adentro que
  * SÍ es el `auth.uid` del empleado. Los dropdowns deben hacer
  * `<option value={t.uid}>` (no `value={t.id}`). Los `.find()` deben usar
  * `(t.uid || t.id) === <campo>` para soportar tanto órdenes pre-c4be345
- * (campo === personal.id) como post-c4be345 (campo === auth.uid).
- * Filtrar `t.filter(x => x.uid)` para excluir empleados sin uid (alta vieja
- * sin Auth) si el dropdown escribe a Firestore.
+ * (campo === personal.id) como post-c4be345 (campo === auth.uid). Los
+ * `Set.has()` / `map[]` que comparan contra `o.tecnicoId` etc. deben
+ * construirse/indexar con `t.uid || t.id`. Filtrar `t.filter(x => x.uid)`
+ * para excluir empleados sin uid (alta vieja sin Auth) si el dropdown
+ * escribe a Firestore.
  *
  * Estrategia (heurística determinística):
  *
  * 1. Recorrer `src/**.{tsx,ts}`.
- * 2. Para cada archivo, dos pasadas:
+ * 2. Para cada archivo, tres pasadas:
  *    (a) Buscar `<option ... value={X.id}>` donde X es identificador
  *        corto de personal. (Original variante 1, solo .tsx.)
  *    (b) Buscar `.find(X => X.id === Y)` donde Y es identificador con
@@ -44,6 +57,10 @@
  *        `secretariaId`, `personalId`, o termina en `Id` y el archivo tiene
  *        contexto de personal. Solo reportar si X es un identificador corto
  *        de personal (mismo conjunto que la variante 1).
+ *    (c) Buscar `.has(X.id)` o `[X.id]` (indexación de map/objeto) cuando
+ *        el contexto cercano (±CTX_WINDOW líneas) tiene un Set/Map
+ *        construido con `o.tecnicoId` (o `operariaId`, etc.). Solo reportar
+ *        si X es identificador corto de personal.
  * 3. Para cada hit, leer ±20 líneas alrededor para confirmar contexto.
  * 4. Allowlist por línea: comentario `// @safe-tecnicoid-id: <razón>` en la
  *    misma línea o hasta 5 líneas arriba silencia el hit.
@@ -51,6 +68,26 @@
  * Allowlist por archivo: paths donde se sabe que TODOS los matches son
  * legítimos (no escriben a Firestore y el lookup es simétrico con el
  * dropdown UI). Mantener corto, justificar.
+ *
+ * NOTA SOBRE operariaId (SPRINT-146, deuda pendiente — SPRINT-147):
+ *   El cazador NO detecta hoy los patrones `o.operariaId === p.id` /
+ *   `o.operariaId === userProfile?.id` porque el campo `operariaId` en
+ *   `ordenes_servicio` actualmente guarda `personal.id` (docId), no
+ *   `auth.uid` — verificado en `PersonalPage.tsx:772-778` y
+ *   `MapaRutas.tsx:716` (donde se copia `tecnicoElegido.operariaId` del
+ *   doc de Personal). Para operarias cargadas vía cascada `personal/`
+ *   (path B de AppContext), `userProfile.id === personal docId` también
+ *   funciona. PERO si una operaria recibe doc espejo en `usuarios/{uid}`
+ *   (post-SPRINT-105), `userProfile.id = uid` y entonces
+ *   `o.operariaId === userProfile.id` rompe. Casos detectados (no
+ *   fixeados acá por scope creep):
+ *     - src/services/nomina.service.ts:172
+ *     - src/pages/Ordenes.tsx:635
+ *     - src/pages/Rendimiento.tsx:297
+ *   SPRINT-147 follow-up: decidir si migrar `operariaId` en orden a uid
+ *   (consistente con tecnicoId) o documentar el campo como "docId
+ *   intencional" y arreglar el lookup `o.operariaId === userProfile.id`
+ *   que asume docId pero userProfile.id puede ser uid. Requiere OK Jorge.
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -169,6 +206,16 @@ export async function check(): Promise<InvariantResult> {
   // personal y Y termina en un sufijo conocido de campo de empleado en Firestore.
   // Soporta ambos `===` y `==` (defensa de paranoia).
   const findRe = /\.find\(\s*(\w+)\s*=>\s*\1\.id\s*===?\s*([\w.[\]]+)\s*\)/;
+  // Variante 3 (SPRINT-146): Set.has(X.id) o map[X.id] dentro de archivos donde
+  // el contexto cercano tiene un Set/Map construido con un sufijo de campo de
+  // empleado (`o.tecnicoId`, `o.operariaId`, etc.). Detecta el bug AgendaDia
+  // donde `idsConOrden.has(t.id)` se compara contra un Set construido con
+  // `o.tecnicoId`. Buscamos también la construcción upstream (`new Set(...map(o
+  // => o.tecnicoId)...)` o key de map `[o.tecnicoId]` / `o.tecnicoId ||`).
+  const setHasRe = /\.has\((\w+)\.id\)/;
+  const mapIndexRe = /\[(\w+)\.id\]/;
+  // Pattern para detectar el Set/Map upstream — lo buscamos en ±CTX_WINDOW.
+  const TECNICO_ID_SUFFIX_RE = /\b(?:tecnicoId|operariaId|ayudanteId|responsableId|secretariaId|tecnicoDestinoId)\b/;
 
   for (const file of files) {
     const rel = path.relative(ROOT_DIR, file);
@@ -255,6 +302,55 @@ export async function check(): Promise<InvariantResult> {
                   `simétrico con un dropdown UI local (no escribe a Firestore gateado por rules), ` +
                   `agregá "// @safe-tecnicoid-id: ..." 1-5 líneas arriba. ` +
                   `Bug sistémico: SPRINT-132 (2026-05-11). Variante original: c4be345.`,
+              });
+            }
+          }
+        }
+      }
+
+      // ── Variante 3 (SPRINT-146): Set.has(X.id) o map[X.id] con contexto de campo empleado ──
+      // Para esta variante necesitamos confirmar que el Set/Map upstream se
+      // construyó con un sufijo conocido (`tecnicoId`, `operariaId`, etc.).
+      // Buscamos el patrón en ±CTX_WINDOW líneas alrededor.
+      const setMatch = setHasRe.exec(line);
+      const mapMatch = mapIndexRe.exec(line);
+      const v3Match = setMatch || mapMatch;
+      if (v3Match) {
+        const varName = v3Match[1];
+        if (PERSONAL_VAR_NAMES.has(varName)) {
+          // Allowlist por línea
+          const tagWindowStart = Math.max(0, i - 5);
+          const tagWindow = lines.slice(tagWindowStart, i).join('\n');
+          const allowlisted = line.includes(SAFE_LINE_TAG) || tagWindow.includes(SAFE_LINE_TAG);
+
+          if (!allowlisted) {
+            // Contexto ±CTX_WINDOW para detectar el Set/Map upstream.
+            const start = Math.max(0, i - CTX_WINDOW);
+            const end = Math.min(lines.length, i + CTX_WINDOW);
+            const ctx = lines.slice(start, end).join('\n');
+
+            // Debe haber un campo de orden (tecnicoId, etc.) cercano para que
+            // este sea un caso real. Sin esto, podría ser un Set/Map de UI
+            // pura (ej: sobre clientes, productos).
+            if (TECNICO_ID_SUFFIX_RE.test(ctx)) {
+              const variant = setMatch ? 'Set.has' : 'map indexing';
+              const suggestion = setMatch
+                ? `\`.has(${varName}.uid || ${varName}.id)\``
+                : `\`[${varName}.uid || ${varName}.id]\``;
+              hits.push({
+                file: rel,
+                line: i + 1,
+                snippet: line.trim(),
+                explanation:
+                  `[Variante 3 — ${variant}] \`${line.trim()}\` indexa/busca por ` +
+                  `${varName}.id (doc id de personal) en una estructura cuya key/elemento ` +
+                  `proviene de un campo de orden (tecnicoId, operariaId, etc.) que ` +
+                  `post-c4be345 contiene auth.uid. El lookup siempre falla y la UI ` +
+                  `renderiza vacío/falso. Cambiá a ${suggestion} para alinear dominios. ` +
+                  `Si el Set/Map se construyó intencionalmente con doc id (consistente ` +
+                  `local sin tocar campos de orden), agregá ` +
+                  `"// @safe-tecnicoid-id: ..." 1-5 líneas arriba. ` +
+                  `Bug original: AgendaDia.tsx 2026-05-12 (SPRINT-145). Cazador extendido SPRINT-146.`,
               });
             }
           }
