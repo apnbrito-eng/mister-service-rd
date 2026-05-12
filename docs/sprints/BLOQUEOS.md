@@ -47,7 +47,15 @@
 
 ---
 
-## SPRINT-135a-UI — Refactor garantía fase 1, parte UI (countdown público + wizard cierre)
+## SPRINT-135a-UI — Refactor garantía fase 1, parte UI (countdown público + wizard cierre) — DESBLOQUEADO
+
+**OK:** jorge 2026-05-11 18:25 | scope: ambos (endpoint público + wizard cierre).
+**Movido a COLA_AUTONOMA.md como PENDIENTE el 2026-05-11 por coordinator (procesa bloqueos). desbloqueadoPor: jorge 2026-05-11 18:25.**
+
+Conservado acá para histórico. NO procesar desde acá — la entrada activa está en `COLA_AUTONOMA.md`.
+
+<details>
+<summary>Spec original preservado para forensia</summary>
 
 **Tipo:** Bloqueado por restricciones de protocolo + QA visual humano.
 **Estado:** ESPERANDO OK JORGE
@@ -86,6 +94,10 @@ El criterio "Wizard de cierre tiene el input 'Período de garantía'" toca el co
 3. Abrir `/garantia/:token` en otro browser/incognito → countdown debe decir "Vence en 1 día" (rojo si <7).
 4. Setear `garantiaVencimiento` a ayer en Firestore Console → recargar → botón Reclamar debe quedar disabled.
 5. Para órdenes legacy (sin `garantiaVencimiento`), confirmar que el countdown se computa al vuelo desde `cierreServicio.fechaCierre + 60d` y muestra valor coherente o mensaje neutro.
+
+**OK: jorge 2026-05-11 18:25 | scope: ambos**
+
+</details>
 
 ---
 
@@ -474,6 +486,7 @@ Conservado acá para histórico. NO procesar desde acá — las entradas activas
 - **SPRINT-115 fase write (re-migración Yohana):** desbloqueado por jorge 2026-05-08, movido a `COLA_AUTONOMA.md` por coordinator 2026-05-08 (cuarta pasada). Re-pausado por jorge mismo día (ver entrada activa arriba). Conservado para histórico.
 - **SPRINT-118 (re-migración masiva 5 empleados + fix email Wilainy):** desbloqueado por jorge 2026-05-08, movido a `COLA_AUTONOMA.md` por coordinator 2026-05-08 (`procesa bloqueos`). Restricción del sprint conservada: el coordinator entrega scripts en DRY-RUN; Jorge ejecuta dry-run y `--apply` manualmente.
 - **SPRINT-117c (reorganización IA del sidebar):** desbloqueado por jorge 2026-05-09 con OK selectivo (5 de 6 sub-sprints). 117c1, 117c2, 117c3, 117c4, 117c6 movidos a `COLA_AUTONOMA.md` como PENDIENTE. 117c5 marcado RECHAZADO con motivo (chocaba con sistema de permisos individuales). Coordinator procesa uno por uno con QA visual humana entre cada deploy — restricción explícita del spec original.
+- **SPRINT-135a-UI (countdown público + input período en wizard cierre):** desbloqueado por jorge 2026-05-11 18:25 con `scope: ambos` (autoriza tanto endpoint público `api/garantia/[token].ts` como wizard de cierre `CierreServicioWizard.tsx`). Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-11 por coordinator (`procesa bloqueos`, pasada 7). Spec íntegro preservado en bloque colapsado arriba para forensia.
 - **SPRINT-128 (alinear rule `ordenes_servicio.delete` al granular `ordenesEliminar`):** desbloqueado por jorge 2026-05-10 vía Cowork ("puedes corregir las reglas tu por favor"). Procesado por coordinator el mismo día (`procesa bloqueos`, pasada 7) — ruta R2 ejecutada en un solo commit con archivist PRE-CHANGE auto, regression_guardian PASS, reviewer APPROVED con foco rules, deploy de rules ejecutado (lock `29247a9ac037fdc9a7398db716a15c31521a905e7438e8b857d95b12440561c6`, deployedAt `2026-05-10T23:03:57.139Z`), matriz `docs/MATRIZ_PERMISOS.md` #14 marcado RESUELTO. Cambio de 1 línea funcional + 9 líneas de comentario explicativo en `firestore.rules:369`. Sin commit follow-up (todo en un commit). Sin sprints colaterales abiertos. Spec original (R1 vs R2, criterios de aceptación detallados, riesgos R2) preservado a continuación para forensia:
 
 <details>

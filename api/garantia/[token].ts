@@ -84,10 +84,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const data = facturaDoc.data() as Record<string, unknown>;
       const garantiaRaw = (data.garantia as Record<string, unknown>) || {};
 
-      const inicioFecha = toDate(garantiaRaw.inicioFecha);
-      const finFecha = toDate(garantiaRaw.finFecha);
+      let inicioFecha = toDate(garantiaRaw.inicioFecha);
+      let finFecha = toDate(garantiaRaw.finFecha);
+      let tiempoDias = typeof garantiaRaw.tiempoDias === 'number' ? garantiaRaw.tiempoDias : 0;
       const reclamadaEn = toDate(garantiaRaw.reclamadaEn);
       const fechaServicio = toDate(data.fechaServicio);
+
+      // SPRINT-135a-UI: si la factura tiene `ordenId`, intentar leer la orden
+      // y preferir el modelo nuevo (`periodoGarantiaDias`, `garantiaVencimiento`,
+      // `cierreServicio.fechaCierre`) sobre los campos heredados de
+      // `facturas.garantia.*`. Esto permite migración progresiva sin breaking
+      // change para el front (`GarantiaCliente.tsx`).
+      const ordenIdRaw = data.ordenId;
+      if (typeof ordenIdRaw === 'string' && ordenIdRaw.length > 0) {
+        try {
+          const ordenSnap = await db.collection('ordenes_servicio').doc(ordenIdRaw).get();
+          if (ordenSnap.exists) {
+            const ordenData = ordenSnap.data() as Record<string, unknown>;
+            const periodoNuevo = ordenData.periodoGarantiaDias;
+            const vencNuevo = toDate(ordenData.garantiaVencimiento);
+            const cierreServicio = ordenData.cierreServicio as Record<string, unknown> | undefined;
+            const fechaCierreNueva = cierreServicio ? toDate(cierreServicio.fechaCierre) : null;
+            if (typeof periodoNuevo === 'number' && periodoNuevo > 0) {
+              tiempoDias = periodoNuevo;
+            }
+            if (vencNuevo) {
+              finFecha = vencNuevo;
+            }
+            if (fechaCierreNueva) {
+              inicioFecha = fechaCierreNueva;
+            }
+          }
+        } catch (ordenErr) {
+          // Fallback silencioso: si la orden no se puede leer, seguimos con
+          // los campos de `facturas.garantia.*` (modelo viejo).
+          console.warn('[garantia][GET] fallback modelo nuevo no disponible:', ordenErr);
+        }
+      }
 
       // Estado dinámico — calculado al leer (sin scheduler)
       const now = new Date();
@@ -110,7 +143,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         tecnicoNombre: (data.tecnicoNombre as string) || null,
         fechaServicio: fechaServicio ? fechaServicio.toISOString() : null,
         garantia: {
-          tiempoDias: typeof garantiaRaw.tiempoDias === 'number' ? garantiaRaw.tiempoDias : 0,
+          tiempoDias,
           inicioFecha: inicioFecha ? inicioFecha.toISOString() : null,
           finFecha: finFecha ? finFecha.toISOString() : null,
           estado,

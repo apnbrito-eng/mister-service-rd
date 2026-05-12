@@ -6,6 +6,9 @@ npm run check:regression --silent || { echo "[ABORT] regression"; exit 1; }
 STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -E "\.(ts|tsx)$" || true)
 if [ -n "$STAGED" ]; then
   echo "[hook] lint staged..."
-  echo "$STAGED" | xargs npx eslint --max-warnings 0 || { echo "[ABORT] lint"; exit 1; }
+  # --no-warn-ignored evita que archivos ignorados por eslint config (ej: api/)
+  # rompan el --max-warnings 0 con el warning "File ignored". Patrón
+  # documentado en CLAUDE.md sub-regla "Documentación viva".
+  echo "$STAGED" | xargs npx eslint --max-warnings 0 --no-warn-ignored || { echo "[ABORT] lint"; exit 1; }
 fi
 echo "[hook] OK"

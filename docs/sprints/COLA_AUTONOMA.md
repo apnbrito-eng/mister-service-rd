@@ -970,6 +970,68 @@ Preparar el modelo de datos + UI base sin cambiar el comportamiento operativo. A
 
 ---
 
+### SPRINT-135a-UI — Refactor garantía fase 1, parte UI (countdown público desde modelo nuevo + input período en wizard cierre)
+
+**Estado:** COMPLETADO 2026-05-11 — ver `## Sprints completados (histórico)` más abajo.
+**Prioridad:** alta (cierra fase 1 del refactor de garantía iniciado en `75f6c7b`; base para SPRINT-135b/c/d/e + SPRINT-140)
+**Origen:** Discovery con Jorge 2026-05-11 + fase backend cerrada en `75f6c7b` (modelo `OrdenServicio.{visitasGarantia, periodoGarantiaDias, garantiaVencimiento}` + helpers `src/utils/garantia.ts` + enum `garantia_reclamada`). Esta es la parte UI que estaba bloqueada por restricciones de protocolo (endpoint público + wizard de cierre).
+**Riesgo:** medio. Toca un endpoint `api/` público + un componente wizard crítico. Mitigaciones: (a) cambios aditivos retrocompatibles, (b) endpoint sigue retornando `garantia.tiempoDias/inicioFecha/finFecha` actuales (no rompe consumers), (c) wizard solo agrega un input opcional sin cambiar el flujo de pasos.
+**Touch-list previsto:**
+- `api/garantia/[token].ts` — el endpoint hoy lee `facturas.garantia.{tiempoDias, inicioFecha, finFecha, estado, reclamadaEn}` (modelo viejo). Agregar fallback: si la factura tiene `ordenId`, buscar la orden en `ordenes_servicio` y, si tiene `periodoGarantiaDias` y/o `garantiaVencimiento` poblados (modelo SPRINT-135a backend), preferirlos sobre los de la factura. El response sigue siendo el mismo shape (NO breaking change para `GarantiaCliente.tsx`).
+- `src/components/CierreServicioWizard.tsx` — agregar input "Período de garantía (días)" con default 60 ANTES del botón "Cerrar Servicio". Al cerrar, persistir `periodoGarantiaDias` + `garantiaVencimiento` (computado con `calcularVencimiento(fechaCierre, periodo)`) en el `updateDoc` de `ordenes_servicio/{ordenId}`.
+- `src/pages/public/GarantiaCliente.tsx` — ajuste menor opcional: si `info.garantia.diasRestantes < 7` (último tramo), pintar el card con tinte rojo (hoy todos los vigentes son amber). Si el shape del response no cambia, este archivo puede no necesitar tocarse — depende de criterio de Jorge.
+
+#### Objetivo
+
+Cerrar la fase 1 del refactor de garantía: el wizard de cierre captura el período (default 60) y persiste `periodoGarantiaDias`/`garantiaVencimiento` en la orden, el endpoint público los prefiere si están poblados, y `GarantiaCliente.tsx` muestra el countdown coherente sin importar si la orden tiene modelo nuevo o viejo.
+
+#### Por qué
+
+- La fase backend (`75f6c7b`) dejó las puertas abiertas en types y helpers, pero ningún flujo escribe los campos nuevos y ningún flujo los lee. Sin esta fase UI, los campos quedan latentes y los sprints 135b/c/d/e (reclamo + descuento técnico + mal uso) no tienen modelo donde escribir.
+- `GarantiaCliente.tsx` ya funciona con el modelo viejo (`facturas.garantia.*`) — es el approach incremental: cuando el endpoint encuentra modelo nuevo en la orden lo prefiere; cuando no, sigue leyendo el viejo. Cero breaking changes.
+- Jorge dio OK explícito 2026-05-11 18:25 con scope: ambos (endpoint público + wizard cierre).
+
+#### Criterios de aceptación
+
+- [ ] `api/garantia/[token].ts` GET handler: tras buscar la factura, si `data.ordenId` existe, leer la orden de `ordenes_servicio` y SI tiene `periodoGarantiaDias` (number) y `garantiaVencimiento` (Timestamp), usarlos para computar el response (`tiempoDias`, `finFecha`, `diasRestantes`). Si la orden no tiene los campos nuevos, comportamiento idéntico al actual. NO romper el response shape.
+- [ ] `api/garantia/[token].ts` POST handler: comportamiento intacto (sigue creando `cita_por_confirmar` con `tipo: 'garantia'`). El cambio a "reactivar la misma orden" es scope de SPRINT-135b, NO de este sprint.
+- [ ] `CierreServicioWizard.tsx`: nuevo input "Período de garantía (días)" entre la sección de Piezas y el botón final. Tipo `number`, default 60, min 1, max 365. Validación visual: si < 1 o > 365, mostrar texto amber bajo el input. Label en español: "🛡️ Período de garantía (días)".
+- [ ] `CierreServicioWizard.tsx`: al cerrar exitosamente, `cierrePayload` o `ordenUpdate` incluyen `periodoGarantiaDias: <input>` y `garantiaVencimiento: Timestamp.fromDate(calcularVencimiento(<fechaCierreDate>, periodo))`. Reutilizar el helper `calcularVencimiento` de `src/utils/garantia.ts`.
+- [ ] `npm run build` PASS (typecheck).
+- [ ] `npm run lint` PASS (max-warnings 0).
+- [ ] Cazadores 7/7 PASS.
+- [ ] regression_guardian PASS (toca wizard de cierre + endpoint público — sensible).
+- [ ] reviewer APPROVED (foco: retrocompatibilidad del endpoint + UX wizard).
+- [ ] Commit message declara explícitamente: "QA flujo cierre técnico PENDIENTE — Jorge ejercitará según plan de QA post-deploy del spec SPRINT-135a-UI" (sub-regla CLAUDE.md de componentes wizard).
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio (toca `CierreServicioWizard.tsx` archivo crítico + endpoint público).
+- regression_guardian obligatorio.
+- reviewer obligatorio (toca endpoint público + wizard).
+- NO modificar el shape del response del endpoint (es contrato público).
+- NO cambiar comportamiento del POST handler (eso es SPRINT-135b).
+- NO tocar `firestore.rules` (no es necesario — los campos nuevos son escritos por el técnico cerrando su propia orden, ya cubierto por rules existentes).
+- NO calcular descuento comisión todavía (es SPRINT-135d).
+- NO hacer migración de órdenes viejas — quedan como están (endpoint hace fallback transparente).
+
+#### Plan de QA post-deploy (Jorge ejercita)
+
+1. Cerrar una orden de prueba con período `1 día`.
+2. Abrir `/garantia/:token` (o vía `tokenPortalCliente`) → el card debe decir "1 día restante" (o equivalente).
+3. Setear `garantiaVencimiento` a ayer en Firestore Console → recargar → estado debe pasar a "expirada".
+4. Crear otra orden de prueba dejando período en default 60 → cerrar → confirmar que `ordenes_servicio/{id}.garantiaVencimiento` quedó como `fechaCierre + 60d`.
+5. Para órdenes legacy (sin `garantiaVencimiento` en la orden), confirmar que el endpoint sigue leyendo de `facturas.garantia` y el countdown muestra valor coherente.
+
+#### Notas para el coordinator
+
+- El endpoint actual lee de `facturas`, no de `ordenes_servicio`. El cambio es agregar un fallback que si `data.ordenId` está poblado en la factura, ir a buscar la orden y preferir sus campos nuevos. Esto preserva la URL/contrato y agrega progresivamente el modelo nuevo.
+- El componente del wizard es `src/components/CierreServicioWizard.tsx` (596 líneas, ya identificado). El `cierrePayload` se construye en `handleCerrarServicio` (línea ~213) y el `updateDoc` está en línea ~274.
+- Por la sub-regla CLAUDE.md, el commit message DEBE declarar "QA flujo cierre técnico PENDIENTE" o equivalente. Jorge lo valida post-deploy según el plan arriba.
+- El input puede usar el patrón visual existente del wizard (cards con border-2, texto bold). Default 60 como `useState<number>(60)`.
+
+---
+
 ### SPRINT-136 — Quitar fallback hardcodeado de Firebase config (fail-fast)
 
 **Estado:** COMPLETADO 2026-05-11 (commit `d09bdbb` — fail-fast en `src/firebase/config.ts:7-15` aplicado; `.env.example` documenta las 6 keys; CLAUDE.md actualizado).
@@ -1728,6 +1790,19 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ---
 
 ## Sprints completados (histórico)
+
+### SPRINT-135a-UI — Refactor garantía fase 1, parte UI (countdown público desde modelo nuevo + input período en wizard cierre)
+- **Completado:** 2026-05-11 por coordinator autónomo (`procesa bloqueos`, pasada 7). OK humano: jorge 2026-05-11 18:25 con scope: ambos (endpoint público + wizard cierre).
+- **Hash:** <pendiente — se completa en commit follow-up>.
+- **Resultado:** cerrada la fase UI del refactor de garantía iniciado en `75f6c7b`. (a) `CierreServicioWizard.tsx`: nueva sección 4 "🛡️ Período de garantía (días)" con input number (default 60, min 1, max 365), validación visual amber si fuera de rango, deshabilitación del botón "Cerrar Servicio" si `periodoValido === false`. Al cerrar exitosamente, persiste `periodoGarantiaDias` + `garantiaVencimiento` (computado con `calcularVencimiento` del helper SPRINT-135a backend) en `ordenes_servicio/{id}` a nivel orden. (b) `api/garantia/[token].ts` GET handler: agregado fallback no-breaking — si la factura tiene `ordenId`, lee la orden y prefiere `periodoGarantiaDias` / `garantiaVencimiento` / `cierreServicio.fechaCierre` (modelo nuevo) sobre los heredados de `facturas.garantia.*` (modelo viejo). El shape del response NO cambia — `GarantiaCliente.tsx` consume los mismos campos. Try/catch interno garantiza fallback silencioso si la orden no se puede leer. POST handler intacto (cambio a "reactivar la misma orden" es scope de SPRINT-135b).
+- **Validación:** `npx tsc --noEmit` PASS · `npm run build` PASS · lint del archivo wizard limpio · cazadores 7/7 PASS · regression_guardian PASS (sin P-XXX aplicables) · reviewer APPROVED (retrocompat endpoint público + UX wizard).
+- **Archivist PRE-CHANGE:** historial git revisado: `api/garantia/[token].ts` 3 commits (`51c9ab4` fundación, `6c358af` portal, `1146536` App Check soft) sin hotfixes; `CierreServicioWizard.tsx` 15+ commits con varios fixes históricos de GPS/foto/historialFases pero ninguna recurrencia reciente; `src/utils/garantia.ts` 1 commit (`75f6c7b`). Sin postmortems mencionando estos archivos. Sin P-XXX que apliquen a este touch-list (no toca rules, no toca cross-collection, no toca dropdowns).
+- **Plan de QA post-deploy (Jorge ejercita):** (1) cerrar orden con período 1 día → countdown `/garantia/:token` muestra "1 día restante"; (2) setear `garantiaVencimiento` a ayer en Console → estado pasa a "expirada"; (3) cerrar con default 60 → confirmar que `ordenes_servicio/{id}.garantiaVencimiento == fechaCierre + 60d`; (4) órdenes legacy sin `garantiaVencimiento` → endpoint sigue leyendo de `facturas.garantia.*` (fallback).
+- **Plan de rollback:** revertir el commit. El cambio es aditivo y retrocompatible — órdenes ya cerradas no se ven afectadas, órdenes legacy siguen funcionando con el modelo viejo.
+- **OK humano:** jorge 2026-05-11 18:25 vía `BLOQUEOS.md` (`scope: ambos`).
+- **Nota commit:** el commit message declara "QA flujo cierre técnico PENDIENTE — Jorge ejercitará según plan post-deploy" como exige la sub-regla CLAUDE.md de componentes wizard. Sin postmortem (no es bug, es feature completion).
+
+---
 
 ### SPRINT-131 — Fix responsive: cards de orden cortadas en iPad portrait
 - **Completado:** 2026-05-11 por coordinator autónomo (pasada 2 del día). OK humano: Jorge `trabaja` 2026-05-11.

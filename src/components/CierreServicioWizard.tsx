@@ -5,6 +5,7 @@ import { OrdenServicio, PiezaUsada } from '../types';
 import { subirFotoCierre, distanciaMetros, obtenerUbicacionGPS, type GpsErrorInfo } from '../services/storage.service';
 import { calcularTotales, borrarFotoPieza } from '../services/piezas.service';
 import { crearRegistroAuditoria } from '../utils';
+import { calcularVencimiento, PERIODO_GARANTIA_DEFAULT_DIAS } from '../utils/garantia';
 import { iconoCondicion, iconoOrigen, etiquetaOrigen } from '../utils/piezas';
 import { razonCerrarServicioDisabled } from '../utils/tooltipsBotones';
 import Modal from './Modal';
@@ -62,6 +63,12 @@ export default function CierreServicioWizard({
   const [modalPiezaAbierto, setModalPiezaAbierto] = useState(false);
   const [piezaEditandoIdx, setPiezaEditandoIdx] = useState<number | null>(null);
 
+  // --- Período de garantía (SPRINT-135a-UI) ---
+  // Default 60 días. Se persiste al cerrar como `periodoGarantiaDias` +
+  // `garantiaVencimiento` (computado con helper de utils/garantia.ts).
+  const [periodoGarantiaDias, setPeriodoGarantiaDias] = useState<number>(PERIODO_GARANTIA_DEFAULT_DIAS);
+  const periodoValido = periodoGarantiaDias >= 1 && periodoGarantiaDias <= 365;
+
   // Capturar GPS automáticamente al abrir (en background).
   // Usa el helper con fallback a baja precisión — evita quedarse colgado en interiores.
   useEffect(() => {
@@ -92,6 +99,7 @@ export default function CierreServicioWizard({
     setPiezasUsadas([]);
     setModalPiezaAbierto(false);
     setPiezaEditandoIdx(null);
+    setPeriodoGarantiaDias(PERIODO_GARANTIA_DEFAULT_DIAS);
   };
 
   const handleClose = () => {
@@ -114,7 +122,8 @@ export default function CierreServicioWizard({
     equipoFunciona !== null &&
     clienteSatisfecho !== null &&
     revisoConexiones !== null &&
-    piezasOk;
+    piezasOk &&
+    periodoValido;
 
   const handleCerrarServicio = async () => {
     console.log('Intentando cerrar:', {
@@ -210,8 +219,9 @@ export default function CierreServicioWizard({
       if (distancia !== null) fotoCierre.distanciaCliente = distancia;
       if (!coords) fotoCierre.sinGPS = true;
 
+      const fechaCierreTs = Timestamp.now();
       const cierrePayload: Record<string, unknown> = {
-        fechaCierre: Timestamp.now(),
+        fechaCierre: fechaCierreTs,
         tecnicoId,
         tecnicoNombre,
         equipoFunciona: equipoFunciona === 'si',
@@ -219,6 +229,15 @@ export default function CierreServicioWizard({
         revisoConexiones: revisoConexiones === 'si',
         fotoCierre,
       };
+
+      // SPRINT-135a-UI: período de garantía + vencimiento computado.
+      // Se persisten a nivel orden (no dentro de cierreServicio) según el
+      // modelo definido en SPRINT-135a fase backend (75f6c7b). El endpoint
+      // público los prefiere si están poblados; órdenes legacy siguen
+      // leyendo de `facturas.garantia.*` sin cambios.
+      const garantiaVencimientoTs = Timestamp.fromDate(
+        calcularVencimiento(fechaCierreTs.toDate(), periodoGarantiaDias),
+      );
 
       // Piezas utilizadas (A1)
       const hayPiezas = usoPiezas === 'si' && piezasUsadas.length > 0;
@@ -260,6 +279,9 @@ export default function CierreServicioWizard({
         // ya están seteados — no los pisamos.
         tipoCierre: orden.soloChequeo === true ? 'solo_chequeo' : 'reparacion_completa',
         cierreServicio: cierrePayload,
+        // SPRINT-135a-UI: campos nuevos a nivel orden (modelo 75f6c7b).
+        periodoGarantiaDias,
+        garantiaVencimiento: garantiaVencimientoTs,
         historialFases: nuevoHistorial,
         auditoria: arrayUnion(registroAuditoria),
         updatedAt: Timestamp.now(),
@@ -502,6 +524,35 @@ export default function CierreServicioWizard({
                 )}
               </div>
             )}
+          </div>
+
+          {/* SECCIÓN 4: PERÍODO DE GARANTÍA (SPRINT-135a-UI) */}
+          <div className="border-t border-gray-200 pt-4">
+            <label htmlFor="periodo-garantia" className="block text-sm font-semibold text-gray-900 mb-2">
+              🛡️ Período de garantía (días)
+            </label>
+            <input
+              id="periodo-garantia"
+              type="number"
+              min={1}
+              max={365}
+              value={periodoGarantiaDias}
+              onChange={e => {
+                const v = parseInt(e.target.value, 10);
+                setPeriodoGarantiaDias(isNaN(v) ? 0 : v);
+              }}
+              className={`w-full px-3 py-2.5 border-2 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#0f3460] ${
+                periodoValido ? 'border-gray-200' : 'border-amber-400 bg-amber-50'
+              }`}
+            />
+            {!periodoValido && (
+              <p className="text-[11px] text-amber-700 mt-1">
+                Ingresá un valor entre 1 y 365 días.
+              </p>
+            )}
+            <p className="text-[11px] text-gray-500 mt-1">
+              Default: {PERIODO_GARANTIA_DEFAULT_DIAS} días. Se cuenta desde el cierre del servicio.
+            </p>
           </div>
 
           {/* GPS status (informativo, no bloqueante) */}
