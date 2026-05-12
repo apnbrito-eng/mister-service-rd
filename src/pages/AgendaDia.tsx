@@ -28,7 +28,7 @@ import {
 
 export default function AgendaDia() {
   const navigate = useNavigate();
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
   const rol = userProfile?.rol;
   const esOperaria = rol === 'operaria';
   const esTecnico = rol === 'tecnico';
@@ -284,18 +284,29 @@ export default function AgendaDia() {
   // Técnicos visibles según rol + filtros
   const tecnicosVisibles = useMemo(() => {
     let lista = tecnicos;
-    if (esTecnico && userProfile) {
-      lista = lista.filter(t => t.id === userProfile.id);
+    if (esTecnico && currentUser) {
+      // SPRINT-145 / P-006 variante: el técnico logueado se filtra por su
+      // `auth.uid` (currentUser.uid), NO `userProfile.id` (que en cascada
+      // fallback `personal/` es el doc id, no el uid). El campo `t.uid`
+      // espeja `auth.uid` post-SPRINT-105. Fallback a `t.id` para personal
+      // pre-onboarding sin Auth.
+      lista = lista.filter(t => (t.uid || t.id) === currentUser.uid);
     } else if (esOperaria && soloMiGrupo && userProfile) {
+      // NOTA: línea NO tocada en SPRINT-145 — el campo `t.operariaId`
+      // requiere análisis separado en SPRINT-146 (puede guardar uid o
+      // docId; depende de cómo se setea en alta/edición de técnicos).
       lista = lista.filter(t => t.operariaId === userProfile.id);
     } else if (esAdminOCoord && filtroOperaria) {
       lista = lista.filter(t => t.operariaId === filtroOperaria);
     }
     if (filtroTecnico) {
-      lista = lista.filter(t => t.id === filtroTecnico);
+      // SPRINT-145 / P-006 variante: `filtroTecnico` viene del dropdown
+      // que emite `value={t.uid}` (líneas 380-383, ya correcto post-SPRINT-132).
+      // El filtro debe comparar contra `t.uid`, no `t.id`.
+      lista = lista.filter(t => (t.uid || t.id) === filtroTecnico);
     }
     return lista;
-  }, [tecnicos, esTecnico, esOperaria, esAdminOCoord, soloMiGrupo, userProfile, filtroTecnico, filtroOperaria]);
+  }, [tecnicos, esTecnico, esOperaria, esAdminOCoord, soloMiGrupo, userProfile, currentUser, filtroTecnico, filtroOperaria]);
 
   // Órdenes del día (sin eliminar)
   const ordenesDelDia = useMemo(() => {
@@ -306,13 +317,20 @@ export default function AgendaDia() {
   }, [ordenes, fechaSeleccionada]);
 
   const tecnicosConOrdenes = useMemo(() => {
+    // SPRINT-145 / P-006 variante useMemo+Set: el Set se construye con
+    // `o.tecnicoId` que post-c4be345 es `auth.uid`. Para que el lookup
+    // tenga sentido, comparar contra `t.uid || t.id` (no `t.id` que es
+    // el doc id de personal).
     const idsConOrden = new Set(ordenesDelDia.map(o => o.tecnicoId).filter(Boolean) as string[]);
-    return tecnicosVisibles.filter(t => idsConOrden.has(t.id));
+    return tecnicosVisibles.filter(t => idsConOrden.has(t.uid || t.id));
   }, [tecnicosVisibles, ordenesDelDia]);
 
   const tecnicosSinOrdenes = useMemo(() => {
-    const idsConOrden = new Set(tecnicosConOrdenes.map(t => t.id));
-    return tecnicosVisibles.filter(t => !idsConOrden.has(t.id));
+    // SPRINT-145 / P-006 variante useMemo+Set: ambos lados del compare
+    // usan `t.uid || t.id` para mantener consistencia con el resto del
+    // archivo (dominio auth.uid post-c4be345).
+    const idsConOrden = new Set(tecnicosConOrdenes.map(t => t.uid || t.id));
+    return tecnicosVisibles.filter(t => !idsConOrden.has(t.uid || t.id));
   }, [tecnicosVisibles, tecnicosConOrdenes]);
 
   const ordenesPorTecnico = useMemo(() => {
@@ -332,7 +350,10 @@ export default function AgendaDia() {
 
   // Órdenes visibles (aplicando los mismos filtros que tecnicosVisibles)
   const ordenesVisibles = useMemo(() => {
-    const idsVisibles = new Set(tecnicosVisibles.map(t => t.id));
+    // SPRINT-145 / P-006 variante useMemo+Set: `o.tecnicoId` es auth.uid
+    // post-c4be345. `idsVisibles` debe contener uids para que el lookup
+    // funcione. Usar `t.uid || t.id` para alinear dominios.
+    const idsVisibles = new Set(tecnicosVisibles.map(t => t.uid || t.id));
     return ordenesDelDia.filter(o => !o.tecnicoId || idsVisibles.has(o.tecnicoId));
   }, [ordenesDelDia, tecnicosVisibles]);
 
@@ -426,10 +447,15 @@ export default function AgendaDia() {
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-3">
           {tecnicosConOrdenes.map(t => (
+            // SPRINT-145 / P-006 variante map-indexing: `ordenesPorTecnico`
+            // se construye con key `o.tecnicoId` (auth.uid). Indexar por
+            // `t.uid || t.id` para que coincida el dominio; con `t.id`
+            // (doc id de personal) el lookup retornaba undefined y
+            // renderizaba [] aunque el técnico tuviera órdenes.
             <TecnicoColumn
               key={t.id}
               tecnico={t}
-              ordenes={ordenesPorTecnico[t.id] || []}
+              ordenes={ordenesPorTecnico[t.uid || t.id] || []}
               onSelectOrden={(o) => navigate(`/admin/ordenes/${o.id}`)}
               userProfile={userProfile}
               puedeAprobar={puedeAprobar}
