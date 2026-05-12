@@ -53,6 +53,10 @@ export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Prop
       nuevo_lead: [], en_gestion: [], agendado: [], en_diagnostico: [],
       en_cotizacion: [], aprobado: [], trabajo_realizado: [], cerrado: [],
       cancelado: [],
+      // SPRINT-135a (2026-05-11): nueva fase lateral. El tablero principal
+      // la mantiene vacía/oculta — el flujo de garantía tendrá su propio
+      // dashboard en SPRINT-135b/c. Acá solo cumplimos el exhaustive check.
+      garantia_reclamada: [],
     };
     for (const o of ordenes) {
       if (o.eliminada) continue;

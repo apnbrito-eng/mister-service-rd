@@ -96,6 +96,7 @@ export function faseLabel(fase: FaseOrden | 'reactivada_post_chequeo'): string {
     trabajo_realizado: 'Trabajo Realizado',
     cerrado: 'Cerrado',
     cancelado: 'Cancelado',
+    garantia_reclamada: 'Garantía reclamada',
     reactivada_post_chequeo: 'Reactivada (post-chequeo)',
   };
   return labels[fase] || fase;
@@ -142,6 +143,7 @@ export function faseColor(fase: FaseOrden | 'reactivada_post_chequeo'): string {
     trabajo_realizado: 'bg-teal-100 text-teal-700',
     cerrado: 'bg-green-100 text-green-700',
     cancelado: 'bg-red-100 text-red-700',
+    garantia_reclamada: 'bg-orange-100 text-orange-800',
     reactivada_post_chequeo: 'bg-blue-50 text-blue-700',
   };
   return colors[fase] || 'bg-gray-100 text-gray-700';
@@ -158,6 +160,7 @@ export function faseBgColor(fase: FaseOrden | 'reactivada_post_chequeo'): string
     trabajo_realizado: '#14b8a6',
     cerrado: '#22c55e',
     cancelado: '#ef4444',
+    garantia_reclamada: '#ea580c',
     reactivada_post_chequeo: '#3b82f6',
   };
   return colors[fase] || '#6b7280';
@@ -165,7 +168,9 @@ export function faseBgColor(fase: FaseOrden | 'reactivada_post_chequeo'): string
 
 export function faseToEstadoSimple(fase: FaseOrden): EstadoOrdenSimple {
   if (['nuevo_lead', 'en_gestion', 'aprobado', 'agendado'].includes(fase)) return 'pendiente';
-  if (['en_diagnostico', 'en_cotizacion'].includes(fase)) return 'en_proceso';
+  // SPRINT-135a: 'garantia_reclamada' es lateral pero conceptualmente "en proceso"
+  // (la orden original ya cerró, pero hay una visita activa).
+  if (['en_diagnostico', 'en_cotizacion', 'garantia_reclamada'].includes(fase)) return 'en_proceso';
   if (['trabajo_realizado', 'cerrado'].includes(fase)) return 'completado';
   return 'cancelado';
 }

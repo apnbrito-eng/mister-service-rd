@@ -14,7 +14,12 @@ export type FaseOrden =
   | 'agendado'
   | 'trabajo_realizado'
   | 'cerrado'
-  | 'cancelado';
+  | 'cancelado'
+  /** SPRINT-135a (2026-05-11): cliente reclamó garantía. La orden original
+   *  queda en este estado mientras se atiende. NO se agrega a `FASES_ORDENADAS`
+   *  porque es lateral al flujo principal. SPRINT-135b convertirá la lógica
+   *  de reclamo en cambio de fase real. */
+  | 'garantia_reclamada';
 
 export type EstadoOrdenSimple = 'pendiente' | 'en_proceso' | 'completado' | 'cancelado';
 export type EstadoCita = 'pendiente' | 'confirmada' | 'cancelada';
@@ -301,6 +306,49 @@ export interface GarantiaInfo {
   tecnicoOriginalNombre?: string;
 }
 
+/**
+ * Visita de garantía (SPRINT-135a, 2026-05-11).
+ *
+ * Modelo nuevo para el refactor de garantía: cada reclamo dentro del período
+ * agrega una `VisitaGarantia` al array `OrdenServicio.visitasGarantia[]`,
+ * preservando técnico responsable, trazabilidad histórica, conduce/ITBIS/
+ * comisión originales. Reemplazará a "orden nueva con `esGarantia=true`" como
+ * patrón en SPRINT-135b/c/d/e. En 135a SOLO se define el tipo; nadie lo
+ * escribe todavía.
+ */
+export interface VisitaGarantia {
+  /** UUID generado con crypto.randomUUID() al crear la visita. */
+  id: string;
+  /** Fecha en que el cliente reclamó. */
+  fecha: Timestamp | Date;
+  /** Texto que el cliente escribió en /garantia/:token */
+  motivoCliente: string;
+  /** Técnico asignado por la operaria. Se completa post-asignación. */
+  tecnicoUid?: string;
+  tecnicoNombre?: string;
+  /** Fecha de la visita física del técnico a la casa del cliente. */
+  fechaVisita?: Timestamp | Date;
+  /** Piezas instaladas en esta visita. */
+  piezas?: PiezaUsada[];
+  /** Suma de costos de piezas (RD$). */
+  costoPiezas?: number;
+  /** True = garantía gratis (cubre el negocio). False = mal uso cobrable. */
+  cubrioNegocio?: boolean;
+  /** Marcado por técnico en wizard cierre si detecta mal uso. */
+  malUso?: boolean;
+  /** Si malUso=true, monto extra cobrado al cliente. */
+  cobroExtra?: number;
+  /** Descuento aplicado a comisión del técnico (costoPiezas × % técnico). 135d. */
+  descuentoComisionAplicado?: number;
+  /** ID de quincena donde se aplicó el descuento. 135d. */
+  quincenaAplicaDescuento?: string;
+  notas?: string;
+  /** Cuándo el técnico cerró esta visita. */
+  fechaCierre?: Timestamp | Date;
+  /** Estado de la visita en el sub-flujo. */
+  estado: 'reclamada' | 'asignada' | 'en_visita' | 'cerrada_defecto' | 'cerrada_mal_uso';
+}
+
 export type MetodoPago = 'efectivo' | 'transferencia' | 'tarjeta' | 'link' | 'otro';
 
 export interface RegistroAuditoria {
@@ -444,6 +492,14 @@ export interface OrdenServicio {
   referenciaConduce?: string;        // número del conduce original (CG-####)
   referenciaFacturaId?: string;      // id del doc factura original
   referenciaOrdenId?: string;        // id de la orden original
+  // SPRINT-135a (2026-05-11) — refactor garantía fase 1 (preparación del modelo).
+  // Todos opcionales para retrocompatibilidad. El cierre los puebla en 135b/c.
+  /** Array de visitas dentro del período de garantía. Cada reclamo es una visita. */
+  visitasGarantia?: VisitaGarantia[];
+  /** Días del período de garantía configurados al cerrar (default 60 — Jorge). */
+  periodoGarantiaDias?: number;
+  /** Fecha de vencimiento computada al cerrar la orden (fechaCierre + periodoGarantiaDias). */
+  garantiaVencimiento?: Timestamp | Date;
   /**
    * Metadatos de la cita pública que originó esta orden (cuando la orden se
    * creó vía "Confirmar y Agendar" desde `citas_por_confirmar`). Permite
