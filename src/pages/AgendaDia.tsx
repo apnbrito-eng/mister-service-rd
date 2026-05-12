@@ -141,7 +141,10 @@ export default function AgendaDia() {
         metodo: chequeoForm.metodoPago,
         monto: precio,
         fecha: ahora,
-        registradoPorId: userProfile?.id || '',
+        // SPRINT-150 (2026-05-12): auth.uid en vez de userProfile.id (P-001).
+        // Patrón establecido por SPRINT-114 (`EnviarFacturacionButton.tsx:45`).
+        // Gotcha CLAUDE.md "userProfile.id NO siempre es auth.uid".
+        registradoPorId: currentUser?.uid || '',
         registradoPorNombre: usuario,
       } : null;
       const pagosTotal = [
@@ -188,7 +191,9 @@ export default function AgendaDia() {
         // Marcar como enviada a facturación para que admin/coord emita CG-#####
         updateData.enviadaAFacturacion = true;
         updateData.enviadaAFacturacionAt = ahora;
-        if (userProfile?.id) updateData.enviadaAFacturacionPorId = userProfile.id;
+        // SPRINT-150 (2026-05-12): auth.uid en vez de userProfile.id (P-001).
+        // Patrón establecido por SPRINT-114 (`EnviarFacturacionButton.tsx:45,60`).
+        if (currentUser?.uid) updateData.enviadaAFacturacionPorId = currentUser.uid;
         updateData.enviadaAFacturacionPorNombre = usuario;
       }
       await updateDoc(doc(db, 'ordenes_servicio', ordenChequeo.id), updateData);
