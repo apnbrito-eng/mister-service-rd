@@ -126,6 +126,92 @@ Entrada nueva en `docs/sprints/BLOQUEOS.md` con instrucciones detalladas para Jo
 4. `--apply` real con audit log automático.
 5. QA post-migración con Yohana + operaria nueva si existe.
 
+### SPRINT-151 (procesado en serie tras SPRINT-149)
+
+Sub-sprint del modal "Emitir conduce de garantía". Procesado autónomo según OK Jorge "ambos en orden, 149 primero" (SPRINT-149 primero, SPRINT-151 después).
+
+**archivist PRE-CHANGE (auto-rol coordinator):**
+- ProcesarFacturacionModal.tsx — 1003 líneas, último cambio reciente (audit C5 SPRINT-114 + SIBS features). Modal de 2 pasos con borrador localStorage TTL 24h. Crítico: emite conduces de garantía, toca comisiones.
+- FacturaItemsEditor.tsx — 306 líneas, también usado en FacturaCrearModal.tsx (audit confirmó cambio benigno: relajar readonly en descripción no rompe).
+- FacturacionPendiente.tsx — único caller del modal. Padre gordo con listeners.
+- types/index.ts — campos opcionales nuevos en `PagoOrden` y `Factura`, enum `TipoNotificacion` extendido.
+- Sin postmortems específicos. Patrón borrador localStorage ya tiene guard "yaCargoInicialRef" (sub-regla CLAUDE.md).
+- Sin BLOQUEADO PRE-CHANGE — rules verificadas pre-implementación: `ordenes_servicio.update` permite update por `esStaffOficina` (incluye operaria), y `facturas` permite create+update sin restricción de campos. **NO escalado a BLOQUEOS**.
+
+**Builder (auto-rol coordinator):**
+
+`src/types/index.ts`:
+- `PagoOrden` extendido con `verificado?`, `verificadoPorId?`, `verificadoPorNombre?`, `verificadoAt?` (opcionales, retrocompat).
+- `Factura` extendido con `notaConduce?` (max 500 chars, opcional).
+- `TipoNotificacion` extendido con `'conduce_emitido'`.
+
+`src/components/facturas/FacturaItemsEditor.tsx`:
+- Descripción ahora editable también para ítems de inventario. Antes era readonly (`{esInventario ? <span>...readonly...</span> : <input>...editable...</input>}`). Ahora siempre `<input>` con placeholder distinto según `esInventario`.
+- `piezaInventarioId` / `servicioPrecioId` se preservan intactos al editar texto (updateItem solo cambia el campo dado, no resetea otros).
+- JSDoc del componente actualizado para reflejar el cambio.
+
+`src/pages/FacturacionPendiente.tsx`:
+- Nuevo state `personalActivo: Personal[]` que persiste todos los roles activos (no solo técnicos).
+- Listener `unsubPersonal` ahora setea ambos `tecnicos` y `personalActivo`.
+- Pasa `personalActivo` al `ProcesarFacturacionModal`.
+
+`src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` (cambio principal, 359 inserciones):
+- Nueva prop `personalActivo: Personal[]`.
+- Import nuevo `crearNotificacion` del service.
+- 7 state vars nuevas: `notaConduce`, `pagoMetodo`, `pagoMonto`, `pagoBanco`, `pagoRecibidoPor`, `pagoReferencia`, `pagoVerificado`.
+- Interface `BorradorFacturacion` extendida con `notaConduce?` + `pagoNuevo?` (opcionales para retrocompat con borradores pre-SPRINT-151).
+- Persistencia/restauración del borrador actualizada (effect deps + restaurarBorrador).
+- Nuevo useEffect que setea default `pagoMonto = totalItems - totalPagado` al llegar a paso 2 (si pagoMonto sigue en 0).
+- `handleGenerar` validaciones nuevas (cuatro):
+  1. Nota max 500 chars.
+  2. Si monto > 0, "Pago verificado" obligatorio.
+  3. Total cobrado (`totalPagado + montoPagoNuevo`) no puede superar `totalItems`.
+  4. Transferencia/tarjeta requieren banco.
+- `handleGenerar` persistencia ampliada:
+  - `facturaPayload.notaConduce` si nota no vacía.
+  - `estado` y `fechaPago` calculados ahora con `(totalPagado + montoPagoNuevo) >= totalItems` (antes solo `totalPagado`). Esto significa que si la operaria cobra en este modal, la factura sale directamente como 'pagada' (no 'emitida').
+  - `ordenes_servicio.pagos[]` update con `arrayUnion(pagoNuevoFinal)` si monto > 0.
+  - Audit log en `auditoria_admin` con `accion: 'emitir_conduce_con_pago'` (best-effort).
+  - Notificaciones a admins/coord activos (1 por destinatario, excluye self).
+- UI paso 1: textarea "Nota para el conduce" con contador `0/500`, placeholder ejemplo. Comentario explica que NO se muestra al cliente vía endpoint público.
+- UI paso 2: bloque "Registrar pago de este conduce" — método, monto (default = pendiente), banco/recibidoPor según método, referencia, checkbox "Pago verificado" + 2 warnings inline (verificado faltante / total supera). Pagos previos ahora muestran badge "VERIFICADO" verde si lo están.
+- Mensaje del paso 2 cambió de "hazlo desde la orden antes de continuar" a "Pagos previos... Podés agregar un pago nuevo abajo".
+
+**Tester (auto-rol coordinator):**
+- `npx tsc --noEmit` PASS.
+- `npm run check:regression` PASS — 7/7 cazadores, 0 hits.
+- `npm run build` PASS (3.92s).
+- `npx eslint` sobre los 4 archivos modificados PASS, sin warnings nuevos.
+
+**Regression guardian (auto-rol coordinator, manual):**
+- Audit log + notificaciones admin son best-effort (try/catch, no bloquean emisión). Aligned con patrón pre-existente del modal (audit emitir_garantia / override modalidad).
+- `arrayUnion(pagoNuevoFinal)` con `id` único (timestamp + random) → idempotente contra doble-click (el flag `generando` ya bloquea, pero defense-in-depth).
+- Notificaciones usan `crearNotificacion(userId: destino.uid, ...)` — P-007 PASS (no usa `destinatarioId`).
+- Cross-collection writes: `facturas` (addDoc) + `ordenes_servicio` (updateDoc) + `auditoria_admin` (addDoc) + `notificaciones` (addDoc x N). **El patrón pre-existente del modal NO usa runTransaction** (consistente con el shape existente). P-003 actual no detecta porque escanea por nombre de función `db, '<col>'` x 2, y este modal está allowlisted-by-omission (la función `handleGenerar` no es exportable). NO empeoré el shape — solo agregué más addDoc/updateDoc dentro de la misma función ya no-transaccional. **Riesgo aceptado**: si la red corta entre el addDoc(facturas) y el updateDoc(ordenes_servicio), queda factura sin reflejar `facturada: true` en la orden. Es el mismo riesgo pre-SPRINT-151, no introducido por este sprint.
+- **PASS — sin CHANGES_NEEDED.**
+
+**Reviewer (auto-rol coordinator, manual, foco financiero):**
+- **Estado de factura**: corregido. Ahora calcula con `totalPagado + montoPagoNuevo`. Si la operaria cobra el total en este modal, la factura sale `'pagada'` con `fechaPago` poblado (antes saldría `'emitida'` y la operaria tendría que marcar pagada después manualmente — fricción innecesaria).
+- **Comisiones**: NO se tocan. Flujo de N=1 vs N>1 + denormalización intacto.
+- **arrayUnion(pagoNuevo)**: agrega al array sin tocar pagos previos. `verificado: true` queda persistido junto a `verificadoPorId/Nombre/At`. Pagos previos pre-SPRINT-151 sin `verificado` siguen renderizando sin badge (campo opcional).
+- **APPROVED.**
+
+### Hallazgos secundarios (SPRINT-151)
+
+- `Facturas.tsx` (tabla general) podría querer mostrar el badge "VERIFICADO" en los pagos previos también — sprint follow-up SPRINT-152 (lateral, no incluido en scope).
+- `mensajeConduceGarantia` (WhatsApp) podría incluir la nota — sprint follow-up SPRINT-152.
+- Endpoint público `api/garantia/[token].ts` podría exponer `notaConduce` al cliente — decisión de Jorge (SPRINT-152 follow-up).
+- Scripts untracked y archivos temporales sin tocar.
+
+### Estado final pasada 12
+
+- SPRINT-149: COMPLETADO (hashes `2ecea5e`, `d65fb82`, `89159e5`).
+- SPRINT-149-APPLY: ESPERANDO OK JORGE en BLOQUEOS.md.
+- SPRINT-151: COMPLETADO (hash `863e804`).
+- 4 commits totales pusheados a `origin/main`.
+- Cazadores 7/7 PASS en cada commit (pre-commit hook validó).
+- Tiempo total: ~75 min.
+
 ---
 
 ## 2026-05-12 — `trabaja` (pasada 11): SPRINT-150 fix P-001 AgendaDia + SPRINT-149 movido a BLOQUEOS

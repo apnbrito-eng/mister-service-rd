@@ -3,7 +3,7 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-12 por coordinator (pasada 12, `trabaja`) — SPRINT-149 desbloqueado por jorge ("ambos en orden, 149 primero") y movido de `BLOQUEOS.md` a PENDIENTE. Coordinator inicia procesamiento autónomo con archivist PRE-CHANGE + builder + tester + regression_guardian + reviewer. `--apply` del script de migración queda en BLOQUEOS para OK separado de Jorge. SPRINT-151 PENDIENTE detrás de 149.
+**Última actualización:** 2026-05-12 por coordinator (pasada 12, `trabaja`) — SPRINT-149 + SPRINT-151 COMPLETADOS en serie tras OK Jorge "ambos en orden, 149 primero". SPRINT-149: 13 archivos + 1 script migración + cazador P-006 variante 4 + 2 docs. Hashes `2ecea5e` + `d65fb82` + `89159e5`. SPRINT-149-APPLY (ejecución de `--apply` del script) en BLOQUEOS esperando OK Jorge. SPRINT-151: 4 archivos (modal + editor + parent + types). Hash `863e804`. Cazadores 7/7 PASS post-cada commit. Push verificado. Próximo ID disponible: SPRINT-152.
 
 **Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-151 (Editar ítems + nota + verificación de pago en el modal "Emitir conduce de garantía"). Jorge mirando OS-0054 detectó que la operaria no puede editar la descripción de un ítem que viene del inventario (queda readonly), no puede dejar una nota que aparezca en el conduce, no puede confirmar el pago desde el modal (hoy dice "hazlo desde la orden antes de continuar"), y el admin no recibe notificación cuando se emite. Auditoría de consumidores hecha: `ProcesarFacturacionModal.tsx` solo se importa desde `FacturacionPendiente.tsx`; `FacturaItemsEditor` se reusa además en `FacturaCrearModal.tsx` (cambio benigno: solo se relaja la propiedad readonly de la descripción para items de inventario, no rompe el modal de factura manual). Sprint con touch-list expandido + criterios + reviewer obligatorio. Riesgo medio: toca `PagoOrden` (cross-collection con `ordenes_servicio.pagos[]`), audit log y notificación.
 
@@ -55,7 +55,7 @@
 
 ### SPRINT-151 — Editar ítems + nota + verificación de pago en modal "Emitir conduce de garantía"
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-12 (coordinator pasada 12, `trabaja`). 4 archivos modificados (ProcesarFacturacionModal, FacturaItemsEditor, FacturacionPendiente, types/index.ts). Cazadores 7/7 PASS, typecheck PASS, build PASS, lint sin warnings nuevos. Hash `863e804`. **NO tocó firestore.rules** (verificado: las rules existentes ya permiten `arrayUnion(pagos)` por `esStaffOficina` y `facturas` permite cualquier update por staffOficina). NO escalado a BLOQUEOS. Plan de QA manual queda para Jorge/Wilainy según spec.
 **Prioridad:** alta (la operaria emite varios conduces por día desde este modal — hoy debe abrir la orden aparte para corregir cualquier cosa antes de emitir).
 **Origen:** Cowork 2026-05-12. Jorge revisando OS-0054 detectó que el modal de "Emitir conduce de garantía" tiene 4 huecos de UX:
 1. Si el ítem viene del inventario (caso normal — "Lavadora samsung — cuando está lavando..."), la descripción queda readonly. La operaria no puede ajustar el texto que sale impreso en el conduce.
