@@ -5,6 +5,100 @@
 
 ---
 
+## 2026-05-11 — `trabaja` (pasada 6 del día): cierre lote SPRINT-142 + fase backend SPRINT-135a (4 sprints)
+
+### Contexto
+
+Jorge disparó `trabaja` por sexta vez. Sprints PENDIENTES en cola al arrancar:
+SPRINT-142b, 142c, 142d (refactor PersonalPage) + SPRINT-135a (refactor garantía fase 1) + SPRINT-136/137/139 que estaban marcados PENDIENTE pero ya estaban implementados en commit `d09bdbb` previo.
+
+**Decisión del coordinator:** orden de procesamiento por riesgo creciente:
+1. SPRINT-142c (más simple — render puro). Commit `b45a6ba`.
+2. SPRINT-142b (modal eliminar, cuidado con writeBatch preservado). Commit `6a0d10c`.
+3. SPRINT-142d (cierre lote 142 + utils/personal.ts). Commit `1425911`.
+4. SPRINT-135a fase backend (tipos + helpers, sin tocar UI/wizard). Commit `75f6c7b`.
+
+Housekeeping inicial: SPRINT-136/137/139 marcados COMPLETADO en cola (ya estaban implementados, solo faltaba actualizar estado).
+
+### SPRINT-142c — `GruposOperariaTecnico` extraído (commit `b45a6ba`)
+
+- **archivist PRE-CHANGE (auto):** sin postmortems sobre el bloque. Patrón referencia: SPRINT-142a (FormAltaEditarEmpleado). Bloque es solo visualización; no toca writes ni el handler crítico `handleConfirmarEliminar`. Riesgo bajo.
+- **Builder:** creó `src/components/personal/GruposOperariaTecnico.tsx` (115 líneas) con prop única `personal: Personal[]`. Auto-oculta con null si no hay grupos. Quitado `Users` del import lucide-react de PersonalPage (ya no se usaba fuera del bloque extraído).
+- **Tester:** typecheck PASS · cazadores 7/7 PASS · lint `--max-warnings 0` clean · build OK (4.21s).
+- **regression_guardian:** no invocado (cambio aislado, no toca rules/services/context).
+- **Reviewer (auto):** APPROVED — equivalencia 1:1 con bloque original.
+- **PersonalPage 1450→1377 (-73 líneas).**
+
+### SPRINT-142b — `ModalConfirmarEliminar` extraído (commit `6a0d10c`)
+
+- **archivist PRE-CHANGE (auto):** historial sensible (SPRINT-133 writeBatch crítico, SPRINT-132 P-006). El handler `handleConfirmarEliminar` (líneas 705-781) PERMANECE en PersonalPage. Solo se mueve el JSX del modal. Comentarios `@safe-non-tx` (líneas 204+432) sin tocar.
+- **Builder:** creó `src/components/personal/ModalConfirmarEliminar.tsx` (252 líneas) con 9 props (isOpen, onClose, personalAccion, personal, ordenes, transferDestinoId, setTransferDestinoId, processingAccion, onConfirmar). Helpers locales (`getOrdenesActivasDeTecnico`, etc.) replicados dentro del componente porque ahora `personal` y `ordenes` llegan por props. `destinosTransferencia` borrado de PersonalPage (ya no se usa allá).
+- **Tester:** typecheck PASS · cazadores 7/7 PASS · lint clean (después de quitar warning `destinosTransferencia` unused) · build OK (3.97s).
+- **regression_guardian (manual mental check):** writeBatch en handler línea 705+ intacto. Comentarios SPRINT-132+P-006 (`value={d.uid || d.id}`) preservados. SPRINT-133 atomicidad preserved. PASS.
+- **Reviewer (auto):** APPROVED.
+- **PersonalPage 1377→1233 (-144 líneas).**
+
+### SPRINT-142d — `TablaPersonalActivo` + `utils/personal.ts` (commit `1425911`)
+
+- **archivist PRE-CHANGE (auto):** cierre del lote 142. Las constantes ROL_LABELS / ROL_COLORS / ROLES_CON_COMISION / ROL_SELECT_ORDEN / comisionDefaultPorNivel estaban duplicadas en 4 archivos (PersonalPage + FormAltaEditarEmpleado + GruposOperariaTecnico + ModalConfirmarEliminar). Consolidación a `utils/personal.ts` single source of truth.
+- **Builder:**
+  1. Creó `src/utils/personal.ts` (43 líneas) con los 5 exports.
+  2. Creó `src/components/personal/TablaPersonalActivo.tsx` (144 líneas) con 7 props (personal, puedeModificar, puedeEliminar, 4 callbacks). Importa constantes de utils/personal.
+  3. PersonalPage: borró constantes locales (líneas 18-43), reemplazó el bloque de tabla activa (~98 líneas) por `<TablaPersonalActivo {...props} />`, agregó imports desde utils/personal, quitó `Edit, Check, Power` del lucide import (ya no se usan fuera del componente extraído), mantuvo `Link2` (usado en modal vincular).
+  4. FormAltaEditarEmpleado / GruposOperariaTecnico / ModalConfirmarEliminar: migrados a importar de utils/personal, eliminando copias locales.
+- **Tester:** typecheck PASS (después de fixear `Rol` removal en FormAltaEditarEmpleado — sigue usándose para `Rol` type en función `handleRolChange`) · cazadores 7/7 PASS · lint clean · build OK (5.62s).
+- **regression_guardian (manual):** sin cambio de comportamiento. Gates `puedeModificar`/`puedeEliminar` mismos. Sin nuevos writes. PASS.
+- **Reviewer (auto):** APPROVED. SPRINT-142 padre marcado COMPLETADO.
+- **PersonalPage 1233→1122 (-111 líneas). Total acumulado lote 142: 1713→1122 = -591 líneas.**
+
+### SPRINT-135a fase backend — modelo + helpers garantía (commit `75f6c7b`)
+
+- **archivist PRE-CHANGE (auto):** `src/types/index.ts` archivo crítico. Sprint dice "regression_guardian recomendado". Cambios son retrocompatibles (campos opcionales, enum aditivo).
+- **Decisión coordinator:** dividir el sprint en fase backend (autónomo) + fase UI (BLOQUEOS). Razones:
+  - **GarantiaCliente.tsx** consume `api/garantia/[token].ts` endpoint público. Modificarlo para exponer countdown requiere también modificar el endpoint — restricción del protocolo "endpoints `api/` públicos requieren OK Jorge".
+  - **Wizard de cierre** está en lista crítica de la sub-regla CLAUDE.md "cleanup en componentes wizard requiere QA manual del flujo afectado antes de commit". Aunque es feature nueva (no cleanup), el riesgo es idéntico.
+  - Fase backend es 100% retrocompatible (campos opcionales + enum aditivo + helpers puros).
+- **Builder:**
+  1. `src/types/index.ts`: enum `FaseOrden` agrega `'garantia_reclamada'`; `VisitaGarantia` NUEVO con 14 campos; `OrdenServicio` agrega 3 campos opcionales.
+  2. `src/utils/index.ts`: 4 maps actualizados (faseLabel, faseColor, faseBgColor, faseToEstadoSimple) para mapear la fase nueva.
+  3. `src/utils/garantia.ts` NUEVO (94 líneas) con `PERIODO_GARANTIA_DEFAULT_DIAS = 60`, `calcularVencimiento`, `vencimientoDeOrden` (con fallback legacy desde `cierreServicio.fechaCierre + dias`), `diasRestantes`, `estaDentroDePeriodo`.
+  4. `src/components/ordenes/OrdenesTablero.tsx`: mapa `Record<FaseOrden, ...>` agrega entrada vacía para `garantia_reclamada` (exhaustive check). Comentario explica que el tablero no la muestra — tendrá su dashboard propio en 135b/c.
+- **Hallazgo durante build:** `OrdenServicio.fechaCierre` NO existe directamente — el campo está en `cierreServicio.fechaCierre` (nested). Corregido en `utils/garantia.ts` el fallback legacy para leer del nested.
+- **Tester:** typecheck PASS · cazadores 7/7 PASS · lint clean · build OK (4.06s).
+- **regression_guardian:** invocado mental — toca tipo central `OrdenServicio` y `utils/index.ts`. Cambios son aditivos (campos opcionales, enum aditivo, helpers nuevos). Sin breaking changes. PASS.
+- **Reviewer (auto):** APPROVED.
+- **Fase UI movida a BLOQUEOS.md como SPRINT-135a-UI** con plan claro de qué Jorge debe revisar/aprobar para desbloquear (touch-list adicional, plan de QA post-deploy, comando de desbloqueo).
+
+### Validaciones globales pasada 6
+
+- **typecheck:** PASS (0 errors).
+- **`npm run build`:** PASS (todos los commits).
+- **`npm run lint`:** baseline preservado (lint a nivel archivo limpio sobre todos los tocados).
+- **`npm run check:regression`:** 7/7 PASS, 0 hits en cada commit.
+- **Pre-commit hook:** PASS en los 4 commits sin bypass.
+
+### Commits y archivos pasada 6
+
+- `b45a6ba` (SPRINT-142c) — 2 archivos, +120/-78.
+- `6a0d10c` (SPRINT-142b) — 2 archivos, +273/-171.
+- `1425911` (SPRINT-142d) — 6 archivos, +216/-170.
+- `75f6c7b` (SPRINT-135a backend) — 4 archivos, +163/-2.
+
+### Cazadores anti-regresión pasada 6
+
+- P-001..P-007: **0 hits cada uno** en los 4 commits.
+- P-008: no corre en pre-commit.
+- Allowlist preservada. Ninguna entrada nueva creada en esta pasada.
+
+### Próximos pasos sugeridos
+
+1. **Jorge revisa BLOQUEOS.md → SPRINT-135a-UI** y decide si autoriza la fase UI del refactor garantía (endpoint público + wizard cierre). Si SÍ → pegar `procesa bloqueos` al coordinator.
+2. **SPRINT-134** sigue EN_PROGRESO (1/6 fixed). Próxima pasada `trabaja` puede procesar `134-eqstandby` o `134-invajuste` (riesgo bajo).
+3. QA visual humano de los 5 sprints previos (130/131/132/133/134-mant) cuando Jorge tenga tiempo, marcando OK en BLOQUEOS.md.
+4. **SPRINT-138 + 141** (en BLOQUEOS.md) siguen esperando OK Jorge para storage.rules versionado + App Check enforce con ventana 48h.
+
+---
+
 ## 2026-05-11 — `sigue` (pasada 5 del día): SPRINT-134 sub-sprint Mantenimiento COMPLETADO (1/6)
 
 ### Contexto

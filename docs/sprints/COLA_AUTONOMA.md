@@ -880,7 +880,7 @@ Convertir cada una de las 7 funciones en `writeBatch` (sin reads previos) o `run
 
 ### SPRINT-135a — Refactor garantía (fase 1): modelo de datos + countdown público + período configurable
 
-**Estado:** PENDIENTE
+**Estado:** PARCIAL 2026-05-11 (fase backend COMPLETADA; fase UI movida a `BLOQUEOS.md` como SPRINT-135a-UI por restricciones de endpoint público y wizard de cierre — ambos requieren OK Jorge según protocolo + sub-regla CLAUDE.md).
 **Prioridad:** alta (es la base de los sub-sprints 135b-e; sin esto el refactor no puede arrancar). Riesgo bajo porque solo prepara estructura sin tocar comportamiento productivo.
 **Origen:** Discovery con Jorge 2026-05-11 (~60min back-and-forth via Cowork). Confirmó que el comportamiento actual de "garantía = orden nueva con flag `esGarantia`" NO es lo que quiere — quiere reactivación de la misma orden con array de visitas para preservar técnico responsable, trazabilidad histórica, conduce/ITBIS/comisión originales intactos, y soporte para múltiples reclamos dentro del período sin reiniciarlo.
 **Riesgo:** bajo. Solo agrega tipos + campos opcionales en `OrdenServicio` + UI countdown pública. NO toca rules, NO toca lógica de cierre, NO toca facturación. Las órdenes existentes con `esGarantia=true` quedan como están (migración es deuda futura, NO scope de este sprint).
@@ -972,7 +972,7 @@ Preparar el modelo de datos + UI base sin cambiar el comportamiento operativo. A
 
 ### SPRINT-136 — Quitar fallback hardcodeado de Firebase config (fail-fast)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-11 (commit `d09bdbb` — fail-fast en `src/firebase/config.ts:7-15` aplicado; `.env.example` documenta las 6 keys; CLAUDE.md actualizado).
 **Prioridad:** alta (audit forense 2026-05-11 — hallazgo CRÍTICO #3)
 **Origen:** Cowork 2026-05-11. Audit forense detectó `src/firebase/config.ts:7-15` con credenciales reales del proyecto `mister-service-app-cloude` como fallback `||` de cada `import.meta.env.VITE_*`. Si alguien clona el repo sin `.env`, la app arranca pegada al proyecto productivo. Las API keys de Firebase web son públicas por diseño (Vite las inyecta al bundle), pero el fallback hardcodeado igual es mala práctica: facilita forks accidentales que escriben a producción real.
 **Riesgo:** bajo (cambio simple, blast radius limitado a entornos sin `.env`).
@@ -1024,7 +1024,7 @@ Que `src/firebase/config.ts` falle al arrancar (`throw new Error('Missing VITE_F
 
 ### SPRINT-137 — Validación de archivos en uploads públicos (size + MIME + cantidad)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-11 (commit `d09bdbb` — `src/utils/uploads.ts` NUEVO con helpers + validaciones aplicadas en `solicitudes.service.ts` y `storage.service.ts`).
 **Prioridad:** alta (audit forense 2026-05-11 — hallazgo CRÍTICO #4)
 **Origen:** Cowork 2026-05-11. Audit forense detectó que `src/services/solicitudes.service.ts:122-133 subirArchivoSolicitud` y `src/services/storage.service.ts:1-23 subirFotoCierre/subirFirma` aceptan cualquier `File`/`Blob` sin validar tamaño, MIME real, ni cantidad de archivos por solicitud. Vector de abuso: atacante sube un .exe disfrazado de .jpg de 500MB y entra al bucket. También: cliente legítimo desde móvil sube foto sin comprimir de 30MB y satura Storage.
 **Riesgo:** bajo (agrega checks defensivos, no cambia el happy path).
@@ -1132,7 +1132,7 @@ Tener `storage.rules` en la raíz del repo como fuente de verdad, con flujo `npm
 
 ### SPRINT-139 — Expiración de `tokenPortalCliente` (mientras orden activa + 30 días)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-11 (commit `d09bdbb` — `tokenPortalClienteExpiraEn` agregado a `OrdenServicio`, helper `tokenPortalClienteValido` en `utils/index.ts`, expiración aplicada al cerrar/cancelar/reprogramar en 4 sitios).
 **Prioridad:** media (audit forense 2026-05-11 — hallazgo ALTO #6, mejora higiene de tokens)
 **Origen:** Cowork 2026-05-11. Audit forense detectó que `OrdenServicio.tokenPortalCliente` se genera con `crypto.randomUUID()` en `src/utils/index.ts:319` y NO tiene campo de expiración. Si el token se filtra (screenshot de WhatsApp, leak, mail forward), el acceso queda abierto para siempre.
 **Riesgo:** bajo (agrega campo opcional + check de validez, no rompe órdenes existentes).
@@ -1266,7 +1266,7 @@ Activar enforce en Firebase Console para Firestore y Storage después de validar
 
 ### SPRINT-142 — Refactor `PersonalPage.tsx` (1713 líneas → 3-4 componentes)
 
-**Estado:** EN_PROGRESO (1/4 sub-sprints completados)
+**Estado:** COMPLETADO 2026-05-11 (4/4 sub-sprints). PersonalPage 1713→1122 líneas (-591). 4 componentes extraídos a `src/components/personal/`: FormAltaEditarEmpleado (142a `723d0ea`), GruposOperariaTecnico (142c `b45a6ba`), ModalConfirmarEliminar (142b `6a0d10c`), TablaPersonalActivo (142d `1425911`). `src/utils/personal.ts` NUEVO con constantes compartidas.
 **Prioridad:** media (audit forense 2026-05-11 — hallazgo ALTO #5, monolito más grande del repo)
 **Origen:** Cowork 2026-05-11. Audit forense identificó 4 monolitos (PersonalPage 1713, MapaRutas 1267, Configuracion 1102, Ordenes 1001). Decisión Jorge: solo refactorizar PersonalPage como prueba; los otros 3 quedan como deuda hasta que un sprint los toque.
 **Riesgo:** medio. Refactor de archivo crítico (gestión de empleados, alta de usuarios, transferencia de órdenes al eliminar). Mitigación: dividir en 4 sub-sprints (142a..d) con QA visual entre cada uno, igual que SPRINT-117c.
@@ -1309,7 +1309,7 @@ Dividir `PersonalPage.tsx` (1713 líneas) en `PersonalPage.tsx` (~300 líneas, s
 
 ### SPRINT-142b — Extraer `ModalConfirmarEliminar` de PersonalPage
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-11 (commit `6a0d10c`, coordinator autónomo `trabaja`). PersonalPage 1377→1233 líneas (-144). Cazadores 7/7 PASS, build OK. writeBatch + chunking del SPRINT-133 preservados intactos en `handleConfirmarEliminar`. Comentarios `@safe-non-tx` SPRINT-134 follow-up sin tocar.
 **Prioridad:** media (sub-sprint de SPRINT-142)
 **Origen:** Cowork 2026-05-11. Sub-sprint del refactor PersonalPage. SPRINT-142a ya completado (FormAltaEditarEmpleado extraído).
 **Riesgo:** medio. El modal de eliminar contiene la transferencia cross-collection con `writeBatch` que se fixeó en SPRINT-133 (eliminación atómica de técnico/operaria con órdenes activas). Cualquier rewire mal hecho puede dejar el patrón allowlist `@safe-non-tx` colgando o romper la atomicidad. archivist PRE-CHANGE obligatorio.
@@ -1363,7 +1363,7 @@ Extraer del archivo `PersonalPage.tsx` (líneas ~1197-1359 del JSX + handler `ha
 
 ### SPRINT-142c — Extraer `GruposOperariaTecnico` de PersonalPage
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-11 (commit `b45a6ba`, coordinator autónomo `trabaja`). PersonalPage 1450→1377 líneas (-73). Cazadores 7/7 PASS, build OK.
 **Prioridad:** baja (sub-sprint de SPRINT-142, bloque solo de render)
 **Origen:** Cowork 2026-05-11. Sub-sprint del refactor PersonalPage.
 **Riesgo:** bajo. El bloque solo renderiza la matriz operaria→técnicos. Toda la edición vive en `FormAltaEditarEmpleado.tsx` (selectora). No tiene handlers locales ni listeners.
@@ -1405,7 +1405,7 @@ Extraer las líneas ~865-941 de PersonalPage (sección "Grupos operaria-técnico
 
 ### SPRINT-142d — Extraer `TablaPersonalActivo` + consolidar constantes a `utils/personal.ts`
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-11 (commit `1425911`, coordinator autónomo `trabaja`). PersonalPage 1233→1122 líneas (-111). Total acumulado lote 142: 1713→1122 = -591 líneas en 4 sub-sprints. `utils/personal.ts` NUEVO single source of truth para ROL_LABELS/ROL_COLORS/ROLES_CON_COMISION/ROL_SELECT_ORDEN/comisionDefaultPorNivel; 4 archivos migrados al import central. Cazadores 7/7 PASS, build OK. **SPRINT-142 padre cerrado como COMPLETADO** (tabla de personal INACTIVO sigue inline — extraerla queda como deuda si Jorge lo prioriza).
 **Prioridad:** media (sub-sprint final de SPRINT-142, incluye cleanup de duplicación)
 **Origen:** Cowork 2026-05-11. Sub-sprint final del refactor PersonalPage. Cierra la deuda de constantes duplicadas que dejé en SPRINT-142a (`ROL_LABELS`, `ROLES_CON_COMISION`, etc. están en PersonalPage Y en FormAltaEditarEmpleado).
 **Riesgo:** medio. Toca varios archivos (PersonalPage + FormAltaEditarEmpleado + módulo nuevo). El módulo `utils/personal.ts` nuevo importa tipos de `types/index.ts`. Sin esto el refactor queda incompleto.

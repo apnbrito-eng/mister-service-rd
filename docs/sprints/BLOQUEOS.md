@@ -47,6 +47,48 @@
 
 ---
 
+## SPRINT-135a-UI — Refactor garantía fase 1, parte UI (countdown público + wizard cierre)
+
+**Tipo:** Bloqueado por restricciones de protocolo + QA visual humano.
+**Estado:** ESPERANDO OK JORGE
+**Origen:** Coordinator autónomo 2026-05-11. La fase backend de SPRINT-135a (tipos `VisitaGarantia` + enum `garantia_reclamada` + `OrdenServicio.{visitasGarantia, periodoGarantiaDias, garantiaVencimiento}` + `src/utils/garantia.ts` helpers puros + maps `faseLabel`/`faseColor`/`faseBgColor`/`faseToEstadoSimple`) quedó cerrada autónoma. La parte UI (criterios 5 y 6 del spec original) requiere OK por dos motivos independientes:
+
+**Motivo 1 — Endpoint público (regla protocolo "endpoints `api/` públicos"):**
+
+El criterio "GarantiaCliente.tsx muestra countdown legible + botón Reclamar con estado disabled correcto" requiere modificar también el endpoint `api/garantia/[token].ts` para que retorne los campos nuevos (`periodoGarantiaDias`, `garantiaVencimiento`, días restantes computados server-side). El endpoint es público (consumido desde `/garantia/:token` sin auth), y la sub-regla CLAUDE.md/protocolo dice "Cambios a endpoints `api/` públicos" requieren OK Jorge.
+
+**Motivo 2 — Wizard de cierre (sub-regla CLAUDE.md "cleanup en componentes wizard"):**
+
+El criterio "Wizard de cierre tiene el input 'Período de garantía'" toca el componente del wizard de cierre (probablemente `CierreServicioWizard.tsx` o homólogo en `src/components/cierre/`). La sub-regla CLAUDE.md dice explícitamente que "cleanup de 'dead code' en archivos de páginas críticas requiere QA manual del flujo afectado antes de commit. Para cualquier cleanup sobre... `CierreServicio*` o componentes de wizard, el commit message debe declarar 'QA flujo X validado' o agregar a BLOQUEOS.md para validación humana." Si bien NO es cleanup sino feature nueva, el riesgo es idéntico: tocar el wizard de cierre sin QA visual puede romper el flujo crítico técnico→cierre.
+
+**Lo que Jorge debe hacer para desbloquear:**
+
+1. Decidir si autoriza el cambio al endpoint público `api/garantia/[token].ts`. Si SÍ → confirmar el shape del response que se agrega: `garantia.periodoGarantiaDias`, `garantia.garantiaVencimiento`, `garantia.diasRestantes` (estos ya existen como mock retornado por el endpoint — verificar coherencia).
+2. Autorizar la modificación del wizard de cierre, sabiendo que el coordinator NO puede ejercitar el flujo end-to-end con técnico real.
+3. Comprometerse a hacer un smoke test post-deploy:
+   - Cerrar una orden de prueba con período 1 día.
+   - Abrir `/garantia/:token` → countdown muestra "Vence en 1 día".
+   - Setear manualmente `garantiaVencimiento` a ayer en Firestore Console → recargar → botón disabled.
+4. Agregar `OK: jorge YYYY-MM-DD HH:MM | scope: ambos | tests acepta: <descripción>` al final de esta sección.
+5. Pegar `procesa bloqueos` al coordinator de Claude Code.
+
+**Si Jorge prefiere rechazar:** agregar `RECHAZADO: jorge YYYY-MM-DD HH:MM <motivo>`. La fase backend ya está mergeada y es retrocompatible (campos opcionales); el sprint queda como "parcial". La UI nueva puede esperar a SPRINT-135b en bloque.
+
+**Touch-list adicional (cuando se desbloquee):**
+- `api/garantia/[token].ts` — exponer campos nuevos en el response.
+- `src/pages/public/GarantiaCliente.tsx` — UI countdown + botón disabled.
+- `src/components/cierre/CierreServicioWizard.tsx` (o el componente real del wizard nuevo, identificar primero) — input "Período de garantía (días)" con default 60.
+- Posiblemente `src/hooks/useCierreServicio.ts` u homólogo si la lógica vive en hook.
+
+**Plan de QA post-deploy** (a ejecutar por Jorge):
+1. Crear orden de prueba con cliente test.
+2. Cerrar con `equipoFunciona=true` + `clienteSatisfecho=true` + período `1 día`.
+3. Abrir `/garantia/:token` en otro browser/incognito → countdown debe decir "Vence en 1 día" (rojo si <7).
+4. Setear `garantiaVencimiento` a ayer en Firestore Console → recargar → botón Reclamar debe quedar disabled.
+5. Para órdenes legacy (sin `garantiaVencimiento`), confirmar que el countdown se computa al vuelo desde `cierreServicio.fechaCierre + 60d` y muestra valor coherente o mensaje neutro.
+
+---
+
 ## SPRINT-141 — Activar App Check enforce (con ventana monitoreo 48h previo)
 
 **Tipo:** Sprint bloqueado por OK humano (cambio operacional en Firebase Console, no es código).
