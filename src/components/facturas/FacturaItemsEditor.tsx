@@ -32,12 +32,19 @@ interface FacturaItemsEditorProps {
  *
  * C3b — features SIBS sobre el split:
  *  - Distingue items 'manual' (edición inline rápida: descripción + cant + precio)
- *    de items de Inventario (descripción readonly, modalidad y técnico vía modal).
+ *    de items de Inventario (descripción ~~readonly~~ ahora editable post-SPRINT-151,
+ *    modalidad y técnico vía modal).
  *  - Modal `FacturaItemDetallesModal` se abre para configurar líneas de Inventario.
  *  - Botón papelera con confirmación si la línea ya tiene técnico asignado
  *    (no borrar comisiones por accidente).
  *  - Botón "+ Agregar" con dropdown: Manual o de Inventario.
  *  - Quick-win 9: segmentado Mayoreo/Detalle dentro del modal.
+ *
+ * SPRINT-151 (2026-05-12): la descripción de ítems de inventario ahora es
+ * editable inline. El vínculo `piezaInventarioId` / `servicioPrecioId` se
+ * preserva intacto al editar el texto — solo cambia lo que se imprime en
+ * el conduce. Si la operaria quiere reemplazar la pieza por otra del
+ * catálogo, debe usar el botón papelera + "Agregar de inventario".
  *
  * El editor NO abre listeners. Los catálogos y la lista de técnicos vienen
  * por props desde el padre (`FacturaCrearModal` / `Facturas.tsx`).
@@ -196,21 +203,17 @@ export default function FacturaItemsEditor({
                   {esInventario ? 'Inv' : 'Lib'}
                 </span>
 
-                {/* Descripción: readonly para Inventario, editable para Manual */}
-                {esInventario ? (
-                  <span className="flex-1 px-2 py-1.5 text-sm text-gray-900 truncate">
-                    {item.descripcion || <span className="text-gray-400 italic">Sin seleccionar</span>}
-                  </span>
-                ) : (
-                  <input
-                    type="text"
-                    value={item.descripcion}
-                    onChange={e => updateItem(i, 'descripcion', e.target.value)}
-                    placeholder="Descripción del item manual"
-                    disabled={disabled}
-                    className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
-                  />
-                )}
+                {/* Descripción: editable para ambos (manual e inventario) post-SPRINT-151.
+                    Para inventario, el placeholder muestra "Sin seleccionar" cuando vacío.
+                    El vínculo piezaInventarioId/servicioPrecioId se preserva al editar. */}
+                <input
+                  type="text"
+                  value={item.descripcion}
+                  onChange={e => updateItem(i, 'descripcion', e.target.value)}
+                  placeholder={esInventario ? 'Sin seleccionar' : 'Descripción del item manual'}
+                  disabled={disabled}
+                  className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                />
 
                 {/* Cantidad — siempre editable inline */}
                 <input

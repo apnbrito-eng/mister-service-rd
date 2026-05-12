@@ -41,6 +41,9 @@ export default function FacturacionPendiente() {
   const [catalogoServicios, setCatalogoServicios] = useState<ServicioPrecio[]>([]);
   const [catalogoPiezas, setCatalogoPiezas] = useState<PiezaInventario[]>([]);
   const [tecnicos, setTecnicos] = useState<Personal[]>([]);
+  // SPRINT-151: personal completo (todos los roles activos) para que el modal
+  // pueda listar admins/coord como destinatarios de la notificación "conduce_emitido".
+  const [personalActivo, setPersonalActivo] = useState<Personal[]>([]);
 
   const esAdmin = userProfile?.rol === 'administrador';
 
@@ -90,6 +93,9 @@ export default function FacturacionPendiente() {
       snapPersonal => {
         const todos = snapPersonal.docs.map(d => ({ id: d.id, ...d.data() } as Personal));
         setTecnicos(todos.filter(p => p.rol === 'tecnico' && p.activo !== false));
+        // SPRINT-151: persistir personal activo completo para que el modal
+        // pueda armar destinatarios de notificación admin/coord.
+        setPersonalActivo(todos.filter(p => p.activo !== false));
       },
     );
 
@@ -343,6 +349,7 @@ export default function FacturacionPendiente() {
         catalogoServicios={catalogoServicios}
         catalogoPiezas={catalogoPiezas}
         tecnicos={tecnicos}
+        personalActivo={personalActivo}
         onClose={() => setProcesando(null)}
       />
 

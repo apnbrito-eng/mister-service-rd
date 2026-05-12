@@ -27,6 +27,7 @@ import { useApp } from '../../context/AppContext';
 import { crearRegistroAuditoria, formatMonedaPrecisa, parseCliente } from '../../utils';
 import { abrirWhatsApp, mensajeConduceGarantia } from '../../utils/whatsapp';
 import { siguienteNumeroFactura } from '../../services/contadores.service';
+import { crearNotificacion } from '../../services/notificaciones.service';
 import {
   registrarComisionPorFactura,
   registrarComisionesPorItems,
@@ -53,6 +54,17 @@ interface BorradorFacturacion {
   items: ItemCotizacion[];
   tiempoGarantiaDias: number | null;
   paso: 1 | 2;
+  // SPRINT-151: nota del conduce + estado del pago en construcción.
+  // Opcionales para retrocompat con borradores pre-SPRINT-151 (default vacíos).
+  notaConduce?: string;
+  pagoNuevo?: {
+    metodo: 'efectivo' | 'transferencia' | 'tarjeta';
+    monto: number;
+    bancoNombre?: string;
+    recibidoPorNombre?: string;
+    referencia?: string;
+    verificado?: boolean;
+  };
   guardadoEn: number;
 }
 
@@ -66,6 +78,8 @@ interface ModalProps {
   catalogoServicios: ServicioPrecio[];
   catalogoPiezas: PiezaInventario[];
   tecnicos: Personal[];
+  /** SPRINT-151: personal activo completo para notificación admin/coord al emitir. */
+  personalActivo: Personal[];
   onClose: () => void;
 }
 
@@ -100,6 +114,7 @@ export default function ProcesarFacturacionModal({
   catalogoServicios,
   catalogoPiezas,
   tecnicos,
+  personalActivo,
   onClose,
 }: ModalProps) {
   const { currentUser } = useApp();
@@ -109,6 +124,14 @@ export default function ProcesarFacturacionModal({
   const [generando, setGenerando] = useState(false);
   const [tiempoGarantiaDias, setTiempoGarantiaDias] = useState<number | null>(null);
   const [cliente, setCliente] = useState<Cliente | null>(null);
+  // SPRINT-151: nota para el conduce (max 500 chars, opcional) + pago en construcción.
+  const [notaConduce, setNotaConduce] = useState<string>('');
+  const [pagoMetodo, setPagoMetodo] = useState<'efectivo' | 'transferencia' | 'tarjeta'>('efectivo');
+  const [pagoMonto, setPagoMonto] = useState<number>(0);
+  const [pagoBanco, setPagoBanco] = useState<string>('');
+  const [pagoRecibidoPor, setPagoRecibidoPor] = useState<string>('');
+  const [pagoReferencia, setPagoReferencia] = useState<string>('');
+  const [pagoVerificado, setPagoVerificado] = useState<boolean>(false);
 
   // Borrador localStorage (TTL 24h)
   const [borradorEncontrado, setBorradorEncontrado] = useState<BorradorFacturacion | null>(null);
@@ -230,6 +253,16 @@ export default function ProcesarFacturacionModal({
           items,
           tiempoGarantiaDias,
           paso,
+          // SPRINT-151: persistir nota + estado del pago en construcción.
+          notaConduce,
+          pagoNuevo: {
+            metodo: pagoMetodo,
+            monto: pagoMonto,
+            bancoNombre: pagoBanco,
+            recibidoPorNombre: pagoRecibidoPor,
+            referencia: pagoReferencia,
+            verificado: pagoVerificado,
+          },
           guardadoEn: Date.now(),
         };
         localStorage.setItem(`${BORRADOR_KEY_PREFIX}${orden.id}`, JSON.stringify(payload));
@@ -240,13 +273,27 @@ export default function ProcesarFacturacionModal({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [orden, items, tiempoGarantiaDias, paso, borradorEncontrado]);
+  }, [orden, items, tiempoGarantiaDias, paso, borradorEncontrado,
+    notaConduce, pagoMetodo, pagoMonto, pagoBanco, pagoRecibidoPor, pagoReferencia, pagoVerificado]);
 
   const restaurarBorrador = () => {
     if (!borradorEncontrado) return;
     setItems(borradorEncontrado.items);
     setTiempoGarantiaDias(borradorEncontrado.tiempoGarantiaDias);
     setPaso(borradorEncontrado.paso);
+    // SPRINT-151: restaurar nota + pago si existían en el borrador (retrocompat).
+    if (typeof borradorEncontrado.notaConduce === 'string') {
+      setNotaConduce(borradorEncontrado.notaConduce);
+    }
+    if (borradorEncontrado.pagoNuevo) {
+      const pn = borradorEncontrado.pagoNuevo;
+      setPagoMetodo(pn.metodo);
+      setPagoMonto(Number(pn.monto || 0));
+      setPagoBanco(pn.bancoNombre || '');
+      setPagoRecibidoPor(pn.recibidoPorNombre || '');
+      setPagoReferencia(pn.referencia || '');
+      setPagoVerificado(!!pn.verificado);
+    }
     setBorradorEncontrado(null);
     toast.success('Borrador restaurado');
   };
@@ -283,6 +330,17 @@ export default function ProcesarFacturacionModal({
     [pagosPrevios],
   );
 
+  // SPRINT-151: default del monto del pago nuevo = pendiente actual (totalItems - totalPagado).
+  // Se setea cuando el usuario llega a paso 2 si pagoMonto sigue en 0 y no hay borrador
+  // que lo pisó. La operaria puede sobrescribir manualmente después.
+  useEffect(() => {
+    if (paso !== 2) return;
+    if (pagoMonto > 0) return; // ya se setteó (por borrador o manual)
+    const pendiente = Math.max(0, totalItems - totalPagado);
+    if (pendiente > 0) setPagoMonto(pendiente);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paso, totalItems, totalPagado]);
+
   // Técnicos prioritarios para el dropdown del modal de detalles.
   const tecnicosPrioritarios = useMemo<string[]>(() => {
     return orden?.tecnicoId ? [orden.tecnicoId] : [];
@@ -301,6 +359,30 @@ export default function ProcesarFacturacionModal({
     if (puedeConfigurarGarantia && !tiempoGarantiaDias) {
       toast.error('Selecciona un tiempo de garantía antes de emitir el conduce');
       return;
+    }
+    // SPRINT-151: validación de nota (max 500 chars).
+    if (notaConduce.length > 500) {
+      toast.error('La nota del conduce no puede superar 500 caracteres.');
+      return;
+    }
+    // SPRINT-151: validación del pago nuevo.
+    const montoPagoNuevo = Math.max(0, Number(pagoMonto) || 0);
+    if (montoPagoNuevo > 0) {
+      // Si hay pago en construcción, "Pago verificado" debe estar tildado.
+      if (!pagoVerificado) {
+        toast.error('Tildá "Pago verificado" antes de emitir, o dejá el monto en 0.');
+        return;
+      }
+      // El total cobrado (pagos previos + pago nuevo) no puede superar el total del conduce.
+      if (totalPagado + montoPagoNuevo > totalItems) {
+        toast.error('Total cobrado supera el total del conduce. Ajustá el monto.');
+        return;
+      }
+      // Si es transferencia/tarjeta, requerir banco; si efectivo, recibidoPor (opcional pero útil).
+      if ((pagoMetodo === 'transferencia' || pagoMetodo === 'tarjeta') && !pagoBanco.trim()) {
+        toast.error('Seleccioná o ingresá el banco del pago.');
+        return;
+      }
     }
 
     // Quick-win 11: si la orden tiene técnico asignado y hay líneas sin técnico,
@@ -404,7 +486,10 @@ export default function ProcesarFacturacionModal({
         itbisMonto: desglose.itbis,
         costoPiezas,
         gananciaNeta,
-        estado: totalPagado >= totalItems ? 'pagada' : 'emitida',
+        // SPRINT-151: incluir el pago nuevo en el cálculo de estado/fechaPago.
+        // Si la operaria cobró el saldo completo en este modal, la factura
+        // sale directamente como 'pagada' (no como 'emitida').
+        estado: (totalPagado + montoPagoNuevo) >= totalItems ? 'pagada' : 'emitida',
         fechaEmision: ahora,
         createdAt: ahora,
         emitidaPorId: usuarioId,
@@ -425,7 +510,9 @@ export default function ProcesarFacturacionModal({
       if (orden.tipoCierre) facturaPayload.tipoCierre = orden.tipoCierre;
       else if (orden.soloChequeo) facturaPayload.tipoCierre = 'solo_chequeo';
       else facturaPayload.tipoCierre = 'reparacion_completa';
-      if (totalPagado >= totalItems) facturaPayload.fechaPago = ahora;
+      // SPRINT-151: idem — fechaPago se setea si el cobro queda completo
+      // (sumando el pago nuevo del modal a los previos).
+      if ((totalPagado + montoPagoNuevo) >= totalItems) facturaPayload.fechaPago = ahora;
       // Denormalización para el endpoint público de garantía
       if (orden.clienteTelefono) facturaPayload.clienteTelefono = orden.clienteTelefono;
       if (orden.equipoTipo) facturaPayload.equipoTipo = orden.equipoTipo;
@@ -435,6 +522,9 @@ export default function ProcesarFacturacionModal({
       if (orden.tecnicoNombre) facturaPayload.tecnicoNombre = orden.tecnicoNombre;
       if (fechaServicio) facturaPayload.fechaServicio = fechaServicio;
       if (garantia) facturaPayload.garantia = garantia;
+      // SPRINT-151: nota del conduce (opcional, max 500 chars validados arriba).
+      const notaTrim = notaConduce.trim();
+      if (notaTrim) facturaPayload.notaConduce = notaTrim;
 
       // Quitar undefined recursivamente
       const facturaLimpia = Object.fromEntries(
@@ -647,7 +737,34 @@ export default function ProcesarFacturacionModal({
         'no',
         'sí',
       );
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+      // SPRINT-151: construir pago nuevo si la operaria registró cobro en el paso 2.
+      // Validaciones de monto/verificado/banco ya pasaron al inicio de handleGenerar.
+      const pagoNuevoFinal: PagoOrden | null = montoPagoNuevo > 0 ? (() => {
+        const pagoBase: PagoOrden = {
+          id: `pago_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          metodo: pagoMetodo,
+          monto: montoPagoNuevo,
+          fecha: ahora.toDate(),
+          registradoPorId: usuarioId,
+          registradoPorNombre: usuario,
+          verificado: pagoVerificado,
+          verificadoPorId: usuarioId,
+          verificadoPorNombre: usuario,
+          verificadoAt: ahora.toDate(),
+        };
+        if (pagoMetodo === 'efectivo' && pagoRecibidoPor.trim()) {
+          pagoBase.recibidoPorNombre = pagoRecibidoPor.trim();
+        }
+        if (pagoMetodo === 'transferencia' || pagoMetodo === 'tarjeta') {
+          pagoBase.bancoNombre = pagoBanco.trim();
+        }
+        if (pagoReferencia.trim()) {
+          pagoBase.referencia = pagoReferencia.trim();
+        }
+        return pagoBase;
+      })() : null;
+
+      const ordenUpdate: Record<string, unknown> = {
         facturada: true,
         facturaId: facturaRef.id,
         facturaNumero: numero,
@@ -656,7 +773,68 @@ export default function ProcesarFacturacionModal({
         facturadaPorNombre: usuario,
         auditoria: arrayUnion(registro),
         updatedAt: ahora,
-      });
+      };
+      if (pagoNuevoFinal) {
+        // arrayUnion para mantener pagos previos intactos + agregar el nuevo.
+        ordenUpdate.pagos = arrayUnion(pagoNuevoFinal);
+      }
+      await updateDoc(doc(db, 'ordenes_servicio', orden.id), ordenUpdate);
+
+      // SPRINT-151: audit log en auditoria_admin (best-effort, no bloquea).
+      try {
+        await addDoc(collection(db, 'auditoria_admin'), {
+          accion: 'emitir_conduce_con_pago',
+          solicitanteUid: currentUser?.uid || null,
+          solicitanteNombre: usuario,
+          objetivoTipo: 'factura',
+          objetivoId: facturaRef.id,
+          conduceNumero: numero,
+          ordenId: orden.id,
+          ordenNumero: orden.numero,
+          totalConduce: totalItems,
+          tieneNota: !!notaTrim,
+          notaPreview: notaTrim.substring(0, 100), // primeros 100 chars para auditoría liviana
+          pagoNuevo: pagoNuevoFinal
+            ? {
+                metodo: pagoNuevoFinal.metodo,
+                monto: pagoNuevoFinal.monto,
+                verificado: pagoNuevoFinal.verificado === true,
+                banco: pagoNuevoFinal.bancoNombre || null,
+                referencia: pagoNuevoFinal.referencia || null,
+              }
+            : null,
+          timestamp: Timestamp.now(),
+        });
+      } catch (err) {
+        console.warn('[facturacion-pendiente] audit emitir_conduce_con_pago falló (no bloquea):', err);
+      }
+
+      // SPRINT-151: notificar a admins/coord activos (1 doc por destinatario).
+      // Si la operaria es admin/coord ella misma, no se auto-notifica (ahorra ruido).
+      try {
+        const destinatarios = personalActivo.filter(p =>
+          (p.rol === 'administrador' || p.rol === 'coordinadora') &&
+          p.uid && // requiere auth account
+          p.uid !== currentUser?.uid // no auto-notificarse
+        );
+        const verificadoLabel = pagoNuevoFinal?.verificado === true ? 'sí' : (pagoNuevoFinal ? 'no' : 'sin pago');
+        const mensajeBase = `${orden.clienteNombre} · ${formatMonedaPrecisa(totalItems)} · Pago verificado: ${verificadoLabel}`;
+        for (const destino of destinatarios) {
+          await crearNotificacion({
+            userId: destino.uid!,
+            destinatarioNombre: destino.nombre,
+            tipo: 'conduce_emitido',
+            titulo: `Conduce ${numero} emitido`,
+            mensaje: mensajeBase,
+            ordenId: orden.id,
+            ordenNumero: orden.numero || undefined,
+          }).catch(err =>
+            console.warn(`[facturacion-pendiente] notif conduce_emitido a ${destino.nombre} falló:`, err),
+          );
+        }
+      } catch (notifErr) {
+        console.warn('[facturacion-pendiente] error preparando notif conduce_emitido:', notifErr);
+      }
 
       // Limpiar borrador en éxito.
       limpiarBorrador();
@@ -673,7 +851,8 @@ export default function ProcesarFacturacionModal({
           clienteTelefono: telefono,
           items: itemsLimpios as unknown as ItemCotizacion[],
           total: totalItems,
-          estado: totalPagado >= totalItems ? 'pagada' : 'emitida',
+          // SPRINT-151: idem cálculo de estado.
+          estado: (totalPagado + montoPagoNuevo) >= totalItems ? 'pagada' : 'emitida',
           fechaEmision: ahora.toDate(),
           equipoTipo: orden.equipoTipo,
           equipoMarca: orden.equipoMarca,
@@ -804,6 +983,29 @@ export default function ProcesarFacturacionModal({
               <span className="text-sm font-medium text-[#0f3460]">Total conduce</span>
               <span className="text-lg font-bold text-[#0f3460]">{formatMonedaPrecisa(totalItems)}</span>
             </div>
+            {/* SPRINT-151: nota libre para el conduce (max 500 chars). */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label htmlFor="notaConduce" className="text-xs font-medium text-gray-700">
+                  Nota para el conduce <span className="text-gray-400">(opcional)</span>
+                </label>
+                <span className={`text-[11px] ${notaConduce.length > 500 ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                  {notaConduce.length}/500
+                </span>
+              </div>
+              <textarea
+                id="notaConduce"
+                value={notaConduce}
+                onChange={e => setNotaConduce(e.target.value.slice(0, 500))}
+                disabled={generando}
+                rows={2}
+                placeholder="Ej: Cliente solicita pasar factura legal aparte."
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50 resize-none"
+              />
+              <p className="text-[11px] text-gray-500 mt-1">
+                Aparece impresa en el conduce de garantía. No se muestra al cliente en el link público.
+              </p>
+            </div>
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
@@ -826,12 +1028,14 @@ export default function ProcesarFacturacionModal({
 
         {paso === 2 && (
           <div className="space-y-3">
+            {/* SPRINT-151: ya no decimos "hazlo desde la orden antes de continuar".
+                Ahora la operaria puede registrar el pago directamente acá. */}
             <p className="text-xs text-gray-600">
-              Pagos registrados por la operaria. Si necesitas agregar o modificar algún pago, hazlo desde la orden antes de continuar.
+              Pagos previos registrados en la orden. Podés agregar un pago nuevo abajo (opcional).
             </p>
             {pagosPrevios.length === 0 ? (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-                Esta orden no tiene pagos registrados. El conduce de garantía se generará igual con estado "Emitido" (pago pendiente).
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs text-gray-600">
+                Esta orden no tiene pagos previos. Si la operaria está cobrando ahora, registralo en el bloque "Registrar pago de este conduce" más abajo.
               </div>
             ) : (
               <div className="space-y-2">
@@ -851,6 +1055,11 @@ export default function ProcesarFacturacionModal({
                           <span className="text-gray-500"> → {p.bancoNombre}</span>
                         )}
                         {p.referencia && <span className="text-gray-500"> · Ref {p.referencia}</span>}
+                        {p.verificado === true && (
+                          <span className="ml-2 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                            VERIFICADO
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -866,6 +1075,101 @@ export default function ProcesarFacturacionModal({
                 <div className="text-[11px] text-blue-700 uppercase">Total conduce</div>
                 <div className="text-base font-semibold text-[#0f3460]">{formatMonedaPrecisa(totalItems)}</div>
               </div>
+            </div>
+
+            {/* SPRINT-151: bloque "Registrar pago de este conduce" — pago activo
+                editable + checkbox "Pago verificado". Si el monto = 0, no se
+                crea pago nuevo. Si monto > 0, "verificado" es obligatorio. */}
+            <div className="bg-white border border-gray-200 rounded-lg p-3">
+              <div className="text-sm font-semibold text-gray-900 mb-2">
+                Registrar pago de este conduce
+                <span className="text-xs font-normal text-gray-500 ml-2">(opcional · dejá monto en 0 si no hay cobro)</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-medium text-gray-600">Método</label>
+                  <select
+                    value={pagoMetodo}
+                    onChange={e => setPagoMetodo(e.target.value as typeof pagoMetodo)}
+                    disabled={generando}
+                    className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                  >
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="tarjeta">Tarjeta</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-gray-600">Monto</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={pagoMonto}
+                    onChange={e => setPagoMonto(parseFloat(e.target.value) || 0)}
+                    disabled={generando}
+                    className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                  />
+                </div>
+                {pagoMetodo === 'efectivo' ? (
+                  <div>
+                    <label className="text-[11px] font-medium text-gray-600">Recibido por</label>
+                    <input
+                      type="text"
+                      value={pagoRecibidoPor}
+                      onChange={e => setPagoRecibidoPor(e.target.value)}
+                      disabled={generando}
+                      placeholder="Nombre de quien recibió el efectivo"
+                      className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-[11px] font-medium text-gray-600">Banco</label>
+                    <input
+                      type="text"
+                      value={pagoBanco}
+                      onChange={e => setPagoBanco(e.target.value)}
+                      disabled={generando}
+                      placeholder="BHD, Popular, Scotiabank..."
+                      className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="text-[11px] font-medium text-gray-600">Referencia / Recibo</label>
+                  <input
+                    type="text"
+                    value={pagoReferencia}
+                    onChange={e => setPagoReferencia(e.target.value)}
+                    disabled={generando}
+                    placeholder="Opcional"
+                    className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                  />
+                </div>
+              </div>
+              <label className={`mt-3 flex items-center gap-2 text-sm font-medium select-none ${pagoMonto > 0 ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
+                <input
+                  type="checkbox"
+                  checked={pagoVerificado}
+                  disabled={generando || pagoMonto <= 0}
+                  onChange={e => setPagoVerificado(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <span className={pagoVerificado ? 'text-emerald-700' : 'text-gray-700'}>
+                  Pago verificado (cotejado con banco / efectivo en mano)
+                </span>
+              </label>
+              {pagoMonto > 0 && !pagoVerificado && (
+                <p className="mt-1 text-[11px] text-amber-700">
+                  Tildá "Pago verificado" para poder emitir, o dejá el monto en 0 si todavía no se cobró.
+                </p>
+              )}
+              {pagoMonto > 0 && (totalPagado + pagoMonto > totalItems) && (
+                <p className="mt-1 text-[11px] text-red-600 font-medium">
+                  Total cobrado supera el total del conduce ({formatMonedaPrecisa(totalPagado + pagoMonto)} {' > '} {formatMonedaPrecisa(totalItems)}). Ajustá el monto.
+                </p>
+              )}
             </div>
 
             {/* Selector de tiempo de garantía (sólo coord/admin, requerido para emitir) */}

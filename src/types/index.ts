@@ -1166,6 +1166,16 @@ export interface Factura {
    * se persiste 'particular' (mismo default que `parseCliente`).
    */
   clienteTipoEnEmision?: 'particular' | 'b2b';
+  /**
+   * SPRINT-151: nota para el conduce. Texto libre que la operaria escribe al
+   * emitir el conduce desde la bandeja pendiente (paso 1 del modal). Aparece
+   * en el conduce impreso. Max 500 caracteres. Opcional.
+   *
+   * NO se expone al cliente vía endpoint público de garantía por ahora
+   * (decisión scope SPRINT-151 — abrir SPRINT-152 si Jorge quiere extenderlo
+   * a WhatsApp o `/garantia/:token`).
+   */
+  notaConduce?: string;
   createdAt: Date;
 }
 
@@ -1503,6 +1513,13 @@ export interface PagoOrden {
   // Quién registró el pago (operaria/admin)
   registradoPorId: string;
   registradoPorNombre: string;
+  // SPRINT-151: verificación de pago (operaria coteja con banco/efectivo
+  // antes de emitir conduce). Campos opcionales para retrocompatibilidad
+  // con pagos pre-SPRINT-151 que no tienen el flag.
+  verificado?: boolean;
+  verificadoPorId?: string;
+  verificadoPorNombre?: string;
+  verificadoAt?: Date;
 }
 
 export type EstadoPagoOrden = 'pendiente' | 'parcial' | 'completo';
@@ -1731,6 +1748,9 @@ export type TipoNotificacion =
   | 'sugerencia_solo_chequeo_resuelta'
   | 'reprogramacion_solicitada'
   | 'reprogramacion_resuelta'
+  // SPRINT-151: emitida desde ProcesarFacturacionModal al admin/coord cuando
+  // se emite un conduce de garantía (incluye flag verificado del pago).
+  | 'conduce_emitido'
   | 'otro';
 
 export interface Notificacion {
