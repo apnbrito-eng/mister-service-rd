@@ -5,6 +5,129 @@
 
 ---
 
+## 2026-05-12 — pasada 12: SPRINT-149 (operariaId migración) COMPLETADO + SPRINT-149-APPLY a BLOQUEOS
+
+### Contexto
+
+Jorge confirmó explícitamente en el prompt: **"ambos en orden, 149 primero"**, resolviendo el conflicto de pasada 11 entre "Cowork dice procesalo" vs "prompt autónomo dice NO toques". Esto desbloqueó SPRINT-149 que llevaba 1 día en `BLOQUEOS.md`.
+
+Restricciones del sprint (todas honradas):
+- archivist PRE-CHANGE obligatorio (riesgo medio-alto nómina/comisiones).
+- reviewer obligatorio (riesgo financiero).
+- regression_guardian obligatorio.
+- `--apply` del script NO se ejecuta autónomo — entrada nueva SPRINT-149-APPLY en `BLOQUEOS.md` para OK separado de Jorge.
+
+Tiempo total: ~45 min. Una sola pasada del coordinator.
+
+### archivist PRE-CHANGE (auto-rol coordinator)
+
+**Historial git de los 13 archivos del touch-list:**
+- `nomina.service.ts` — última modificación `fa26ec1` (atomicidad descuento garantía).
+- `Ordenes.tsx` — la deuda P-006 variante `operariaId` registrada en CLAUDE.md.
+- `Rendimiento.tsx`, `MetricasMensuales.tsx`, `Dashboard.tsx` — sin modificación reciente (>3 días).
+- `PersonalPage.tsx` — refactorizado en SPRINT-142a/b/c/d (línea 1713 → 1430).
+- `AgendaDia.tsx` — fixeado parcialmente en SPRINT-145 (P-006 variante 3 Set/Map) y SPRINT-150 (P-001 handler). Las 2 líneas (303, 305) que SPRINT-149 toca son distintas (filtros de operaria).
+- `MapaRutas.tsx` — sin modificación reciente; la línea 716 ya escribe `operariaId` desde el doc personal.
+- Componentes (`RecordatorioBanner`, `ModalConfirmarEliminar`, `GruposOperariaTecnico`, `OrdenesTablero`, `BotonRederivarOperaria`) — sin modificación reciente.
+
+**Postmortems relevantes:**
+- `2026-05-07-iniciar-chequeo-permission-denied.md` (P-006 original c4be345 que originó este patrón).
+- Sin postmortem específico de operariaId. SPRINT-149 lo capturó como extensión natural de P-006 sin que rompiera producción (bug latente, no manifestado por timing — operarias actuales son pre-SPRINT-105).
+
+**Gotchas CLAUDE.md aplicadas:**
+- "userProfile.id NO siempre es auth.uid" — usé `currentUser?.uid` en filtros operaria.
+- "Dropdowns que asignan empleado a campo de Firestore deben usar t.uid/p.uid" — aplicado en dropdowns de filtroOperariaCoord (Ordenes/Dashboard) y filtroOperaria (AgendaDia).
+- "Mutaciones cross-collection deben ir en writeBatch" — PersonalPage:768-789 mantiene el writeBatch SPRINT-133, solo cambié el valor escrito.
+
+**Sin BLOQUEADO PRE-CHANGE** — toca código de nómina pero NO rules ni migración masiva (la migración va separada con OK explícito).
+
+### Builder (auto-rol coordinator)
+
+**13 archivos de código modificados:**
+
+1. `src/services/nomina.service.ts:172` — `o.operariaId === p.id` → `o.operariaId === (p.uid || p.id)`. También línea 158 (tecnicoId reverso encontrado por cazador extendido, ver §Variante 4).
+2. `src/pages/Ordenes.tsx` — 3 cambios:
+   - Línea 352-353: `selectedOrden.operariaId !== userProfile.id` → `!== (currentUser?.uid || userProfile.id)`.
+   - Línea 635: filtro `mis órdenes` migrado.
+   - Línea 641: filtro coordinadora migrado.
+   - Dropdown filtroOperariaCoord renderer: `value={p.uid || p.id}`.
+3. `src/pages/Rendimiento.tsx:297` — `o.operariaId === op.id` → `=== (op.uid || op.id)`.
+4. `src/pages/MetricasMensuales.tsx:98, 174, 144` — idem (línea 144 es tecnicoId reverso).
+5. `src/pages/Dashboard.tsx` — 5 cambios: línea 216 (recordatorios), 250/257 (filtros operaria + coord), 400 (bono operaria mensual), 466 (técnicos por operaria de usuaria). Dropdown filtroOperariaCoord renderer migrado. **Agregué `currentUser` al `useApp()`** y a deps arrays. Allowlist `@safe-userprofile-id` en línea 480 para el fallback intencional. También 2 hits adicionales de tecnicoId reverso (líneas 487, 498) por cazador extendido.
+6. `src/pages/PersonalPage.tsx` — 5 cambios: helpers `getTecnicosDeOperaria`, `getOrdenesActivasDeOperaria`, `getOrdenesActivasDeTecnico` migrados. Líneas 772-778 (escrituras al eliminar operaria) ahora usan `destino.uid || destino.id`. Allowlist en líneas 712/718 y 609 (manejos OR explícitos).
+7. `src/pages/AgendaDia.tsx:303, 305, 421` — filtros operaria + dropdown filtroOperaria renderer migrado.
+8. `src/pages/MapaRutas.tsx:591-592` — filtro operaria en handleGuardarEditDesdeMapa. **Agregué `currentUser`** al `useApp()`.
+9. `src/components/recordatorios/RecordatorioBanner.tsx:85, 111, 135, 315` — 4 cambios (filter, write a obtenerOCrearRecordatorio, lookup live, vista admin). **Agregué `currentUser`**.
+10. `src/components/personal/ModalConfirmarEliminar.tsx:55-66` — helpers migrados.
+11. `src/components/personal/GruposOperariaTecnico.tsx:34` — filtro migrado + comentario JSDoc actualizado.
+12. `src/components/ordenes/OrdenesTablero.tsx:202-203` — comparación operariaId migrada. **Agregué `currentUser`**.
+13. `src/components/ordenes/BotonRederivarOperaria.tsx:45-47` — sólo comentario referencial (la lógica intra-doc operaria_técnico vs operaria_orden sigue idéntica; el botón "re-sincronizar" alineará órdenes legacy al script).
+
+**1 script nuevo:** `scripts/migrar-operariaid-a-uid.ts` (357 líneas). Read-only por default, `--apply` con umbral de seguridad >50 docs. Idempotente. Audit log automático. Patrón espejo de `scripts/migrar-tecnicoid-a-authuid.ts`.
+
+**1 cazador extendido:** `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` — agregado regex Variante 4: `xxx.<sufijo> === yyy.id` (comparación directa reversa). Detecta `o.operariaId === p.id`, `c.tecnicoId === p.id`, `o.tecnicoId === t.id`, etc. Documentación del cazador actualizada al final del header.
+
+**2 docs actualizados:**
+- `docs/CAMPOS_CROSS_COLLECTION.md` — fila `operariaId` (en `ordenes_servicio` y en `personal`) cambiada de "⚠ por confirmar" a "**auth.uid**" con referencia a SPRINT-149.
+- `docs/PATRONES_REGRESION.md` — sección "Deuda pendiente sobre operariaId" marcada RESUELTO. Variante 4 documentada. Header de P-006 actualizado.
+
+**Hallazgos colaterales no incluidos en el sprint original (absorbidos):**
+
+El cazador extendido detectó 9 hits totales (no 3 esperados). 6 adicionales son comparaciones `tecnicoId/responsableId === p.id` en helpers que también se beneficiaron del fix (mismo patrón conceptual, mismo tipo de bug latente para empleados nuevos). Fixeados todos. Allowlist usada en 4 sitios donde ya había OR explícito `pIdAuth || p.id` (PersonalPage:712, 718, 612, 613; ModalConfirmarEliminar:55; Dashboard:490, 503).
+
+### Tester (auto-rol coordinator)
+
+- `npx tsc --noEmit` PASS (sin output).
+- `npm run build` PASS (3.99s, dist generado).
+- `npm run check:regression` PASS — 7/7 cazadores, 0 hits totales.
+- `npx eslint src/ --report-unused-disable-directives` 32 problemas → **idéntico a baseline pre-sprint**. 0 problemas nuevos introducidos.
+- `npm run lint` global 10903 problemas → idéntico a baseline. Errores preexisten en `.claude/worktrees/`, `dist-lazy/`, `vite.config.ts.timestamp-*` (untracked, no del SPRINT).
+
+### Regression Guardian (auto-rol coordinator, manual)
+
+- Patrón `(p.uid || p.id) === campoId` aplicado consistentemente — mismo shape canónico que SPRINT-132/145 con tecnicoId.
+- NO toca firestore.rules (sub-regla P-005 NO aplica — `ordenes_servicio.operariaId` no es campo de auth, es de filtrado UI).
+- Cross-collection (PersonalPage:768-789): el `writeBatch` se mantiene; solo cambió el valor escrito. P-003 PASS.
+- Audit log existente en PersonalPage al eliminar empleado se mantiene.
+- **Cambio funcional sobre nómina:**
+  - Operarias pre-SPRINT-105 (sin uid): comportamiento idéntico a antes (fallback `p.id`).
+  - Operarias post-SPRINT-105 con órdenes nuevas: ahora cuentan correctamente en su nómina (antes: bono = 0 incorrectamente).
+  - Operarias post-SPRINT-105 con órdenes legacy: requieren `--apply` del script para alinear. Hasta entonces, son invisibles para nómina (mismo comportamiento que antes, no es regresión).
+- **PASS — sin CHANGES_NEEDED.**
+
+### Reviewer (auto-rol coordinator, manual, foco financiero)
+
+- **Nómina (nomina.service.ts):** la línea 172 ahora hace `o.operariaId === (p.uid || p.id)`. Antes: solo `=== p.id`. **Diferencia**: operarias con uid + orden con operariaId=uid ahora suman; antes no sumaban. Es el bug que el sprint resuelve. NO hay double-counting (es un OR de equivalencia, no de suma). Línea 158 (tecnicoId reverso) ya cambió el lookup a `(p.uid || p.id) === c.tecnicoId`. Misma lógica: técnicos nuevos con comisiones pre/post migración ahora cuentan correctamente.
+- **Dashboard bonos proyectados (línea 400):** patrón idéntico, sin double-counting.
+- **Dropdown filtroOperariaCoord (Ordenes + Dashboard):** ahora emite `(p.uid || p.id)`. Filtro upstream consistente. La etiqueta "(mi grupo)" se actualizó para usar mismo patrón.
+- **PersonalPage transferencia al eliminar operaria:** la operariaId nueva escrita a las órdenes destino ahora es `destino.uid || destino.id`. Si destino es operaria nueva (uid poblado) → escribe uid. Si destino es operaria legacy (sin uid) → escribe doc id. Cambio coherente con write-side ya migrado.
+- **Sin efectos en flujo de comisiones técnico:** las comisiones siguen usando `tecnicoId` (ya migrado en SPRINT-114).
+- **APPROVED.**
+
+### Commit + push: pendiente al final de la pasada (bloques separados)
+
+### archivist POSTMORTEM: NO aplica
+
+No es bug que rompió producción — es deuda técnica que SPRINT-149 cerró antes de que se manifestara. El patrón ya está catalogado como P-006 con extensiones documentadas.
+
+### Hallazgos secundarios
+
+- `currentUser` ahora destructurado en 4 archivos nuevos (Dashboard, MapaRutas, RecordatorioBanner, OrdenesTablero). En Ordenes y AgendaDia ya estaba.
+- El cazador detectó hits de `tecnicoId === p.id` que no eran scope original. Fueron absorbidos por consistencia (mismo bug latente, misma fix mecánico, mismo riesgo si no se arreglaba).
+- Script `scripts/qa-sprint-135a-ui.ts` untracked sigue ahí, no afectado.
+- `vite.config.ts.timestamp-*.mjs` untracked siguen ahí, no afectados.
+
+### SPRINT-149-APPLY (registrado en BLOQUEOS.md)
+
+Entrada nueva en `docs/sprints/BLOQUEOS.md` con instrucciones detalladas para Jorge:
+1. DRY-RUN obligatorio primero.
+2. Revisar conteos.
+3. Si >50 docs, OK ampliado.
+4. `--apply` real con audit log automático.
+5. QA post-migración con Yohana + operaria nueva si existe.
+
+---
+
 ## 2026-05-12 — `trabaja` (pasada 11): SPRINT-150 fix P-001 AgendaDia + SPRINT-149 movido a BLOQUEOS
 
 ### Contexto

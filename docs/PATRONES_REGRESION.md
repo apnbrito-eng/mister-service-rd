@@ -171,7 +171,7 @@ deployó fuera de banda — ejecutar
 
 ---
 
-## P-006 — Dropdown que asigna técnico/operaria guarda `personal.id` en lugar de `auth.uid` (+ variantes `.find()` y `Set/Map`)
+## P-006 — Dropdown que asigna técnico/operaria guarda `personal.id` en lugar de `auth.uid` (+ variantes `.find()`, `Set/Map`, comparación directa reversa)
 
 **Bug original:** `c4be345` (Iniciar Chequeo Aury Mon, 2026-05-07). Postmortem:
 `docs/postmortems/2026-05-07-iniciar-chequeo-permission-denied.md`.
@@ -235,7 +235,7 @@ dropdowns (`<option value={t.uid}>`) pero NO READS via `.find()` ni
   por rules, ej: `Avances.tsx`), agregar comentario `// @safe-tecnicoid-id:`.
 
 **Cazador:** `scripts/invariantes/check-tecnicoid-personal-id-misuse.ts` —
-escanea `src/**/*.{tsx,ts}` con tres pasadas:
+escanea `src/**/*.{tsx,ts}` con cuatro pasadas:
 
 1. **Variante 1 (dropdown):** `<option value={X.id}>` en `.tsx` donde X es
    identificador corto de personal (`t`, `p`, `tec`, `op`, `sec`, etc.) y el
@@ -249,6 +249,9 @@ escanea `src/**/*.{tsx,ts}` con tres pasadas:
    es identificador corto de personal y el contexto ±20 líneas contiene un
    sufijo de campo persistido (`tecnicoId`, `operariaId`, etc.). Esto detecta
    tanto `set.has(t.id)` como `map[t.id]` indexing.
+4. **Variante 4 (comparación directa reversa — SPRINT-149):** `xxx.<sufijo> === yyy.id`
+   donde `xxx.<sufijo>` es campo persistido de empleado e `yyy` es identificador
+   corto de personal. Captura `.filter()` y condicionales fuera de `.find()`/`Set.has()`.
 
 Falla si encuentra hits sin allowlist.
 
@@ -270,27 +273,34 @@ dropdowns + writes a `tecnicoId/responsableId`).
 `src/pages/AgendaDia.tsx` líneas 31 (import `currentUser`), 288, 295, 310,
 315, 335-336, 432. Variante 3 (Set/Map) — el cazador ahora detecta este shape.
 
-**Deuda pendiente sobre `operariaId` (SPRINT-147 follow-up, requiere OK Jorge):**
-El campo `operariaId` en `ordenes_servicio` actualmente guarda `personal.id`
-(docId), NO `auth.uid` — verificado en `PersonalPage.tsx:772-778` (escritura
-durante reasignación al eliminar operaria) y `MapaRutas.tsx:716` (copia
-`tecnicoElegido.operariaId` del doc Personal). Esto es **inconsistente** con
-`tecnicoId` que post-c4be345 guarda `auth.uid`. Casos potencialmente afectados
-(no fixeados en SPRINT-146 por scope creep + riesgo a cálculo de comisión):
-- `src/services/nomina.service.ts:172` — `o.operariaId === p.id` (lookup en
-  nómina; ambos lados son docId, consistente HOY).
-- `src/pages/Ordenes.tsx:635` — `o.operariaId === userProfile?.id` (filtro
-  "mis órdenes"; **roto** para operarias cargadas vía `usuarios/{uid}` donde
-  `userProfile.id = uid`).
-- `src/pages/Rendimiento.tsx:297` — `o.operariaId === op.id` (lookup
-  métricas; ambos lados son docId, consistente HOY).
-El cazador NO marca estos hits porque el patrón es `=== p.id` con `op.` o
-`p.` como identificador y compareTo es campo de orden — fuera del alcance de
-las 3 variantes. SPRINT-147 debe decidir: (a) migrar `operariaId` a `uid`
-(consistente con tecnicoId, requiere script de migración + rules updates), o
-(b) declarar `operariaId` como docId intencional y fixear los lookups que
-asumen otro dominio (cambiar `Ordenes.tsx:635` a comparar con
-`personalDocIdPropio || currentUser?.uid`). Decisión requiere OK Jorge.
+**Extensión variante 4 (comparación directa reversa — SPRINT-149):**
+~~Deuda pendiente sobre `operariaId`~~ **[RESUELTO en SPRINT-149 el 2026-05-12]**
+— Jorge eligió ruta (a): migrar `operariaId` a `auth.uid` para alinear con
+`tecnicoId`. Cambios aplicados:
+- **Write-side:** ya migrado parcialmente en SPRINT-105
+  (`FormAltaEditarEmpleado.tsx` emite `op.uid || op.id`); SPRINT-149 completó
+  la escritura pendiente en `PersonalPage.tsx:772-778` (reasignación al
+  eliminar operaria), que ahora persiste `destino.uid || destino.id`.
+- **Read-side:** 13 archivos migrados al patrón `(op.uid || op.id) === operariaId`
+  (`nomina.service.ts`, `Ordenes.tsx`, `Rendimiento.tsx`, `MetricasMensuales.tsx`,
+  `Dashboard.tsx`, `PersonalPage.tsx`, `AgendaDia.tsx`, `MapaRutas.tsx`,
+  `RecordatorioBanner.tsx`, `ModalConfirmarEliminar.tsx`, `GruposOperariaTecnico.tsx`,
+  `OrdenesTablero.tsx`, `BotonRederivarOperaria.tsx`).
+- **Script de migración:** `scripts/migrar-operariaid-a-uid.ts` (DRY-RUN por
+  default, `--apply` para escribir). Alinea `ordenes_servicio.operariaId` y
+  `personal[tecnico].operariaId` legacy a uid. Umbral de seguridad: aborta si
+  >50 docs. Jorge dispara `--apply` cuando esté listo (queda en `BLOQUEOS.md`).
+
+El cazador ahora detecta la **variante 4** = comparación directa reversa
+`xxx.<sufijo> === yyy.id` donde `xxx.<sufijo>` es campo persistido de empleado
+(`tecnicoId`, `operariaId`, etc.) e `yyy` es identificador corto de personal
+(`p`, `t`, `op`, etc.). Esto captura los patrones de filter/condicional que
+el findRe de variante 2 no cazaba porque están en `.filter()`/`if` directos,
+no en `.find()`. SPRINT-149 fixeó también ~6 hits residuales de `tecnicoId`
+(no operariaId) que estaban en este shape (ej: `c.tecnicoId === p.id` en
+nomina.service.ts, `o.tecnicoId === t.id` en Dashboard.tsx).
+
+**Sitios fixed en SPRINT-149 (13 archivos + 1 script):** ver lista arriba.
 
 ---
 

@@ -3,7 +3,11 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-12 por coordinator autónomo (pasada 11, `trabaja`) — SPRINT-150 COMPLETADO (fix mecánico P-001 en `AgendaDia.tsx:144,191`, 2 líneas, patrón SPRINT-114, hash `92f4b93`). SPRINT-149 (operariaId migración) MOVIDO a `BLOQUEOS.md` por conflicto entre Cowork "vamos con operaria" y prompt explícito del modo autónomo "NO toques los 3 hits operariaId === p.id". Jorge resuelve el conflicto editando `BLOQUEOS.md` con `OK: jorge ...` o `MANTENER BLOQUEADO: ...`. Cazadores 7/7 PASS. Hashes `92f4b93` (fix) + `79111f1` (docs) pusheados a `origin/main`. Próximo ID disponible: SPRINT-151.
+**Última actualización:** 2026-05-12 por coordinator (pasada 12, `trabaja`) — SPRINT-149 desbloqueado por jorge ("ambos en orden, 149 primero") y movido de `BLOQUEOS.md` a PENDIENTE. Coordinator inicia procesamiento autónomo con archivist PRE-CHANGE + builder + tester + regression_guardian + reviewer. `--apply` del script de migración queda en BLOQUEOS para OK separado de Jorge. SPRINT-151 PENDIENTE detrás de 149.
+
+**Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-151 (Editar ítems + nota + verificación de pago en el modal "Emitir conduce de garantía"). Jorge mirando OS-0054 detectó que la operaria no puede editar la descripción de un ítem que viene del inventario (queda readonly), no puede dejar una nota que aparezca en el conduce, no puede confirmar el pago desde el modal (hoy dice "hazlo desde la orden antes de continuar"), y el admin no recibe notificación cuando se emite. Auditoría de consumidores hecha: `ProcesarFacturacionModal.tsx` solo se importa desde `FacturacionPendiente.tsx`; `FacturaItemsEditor` se reusa además en `FacturaCrearModal.tsx` (cambio benigno: solo se relaja la propiedad readonly de la descripción para items de inventario, no rompe el modal de factura manual). Sprint con touch-list expandido + criterios + reviewer obligatorio. Riesgo medio: toca `PagoOrden` (cross-collection con `ordenes_servicio.pagos[]`), audit log y notificación.
+
+**Última actualización previa:** 2026-05-12 por coordinator autónomo (pasada 11, `trabaja`) — SPRINT-150 COMPLETADO (fix mecánico P-001 en `AgendaDia.tsx:144,191`, 2 líneas, patrón SPRINT-114, hash `92f4b93`). SPRINT-149 (operariaId migración) MOVIDO a `BLOQUEOS.md` por conflicto entre Cowork "vamos con operaria" y prompt explícito del modo autónomo "NO toques los 3 hits operariaId === p.id". Jorge resuelve el conflicto editando `BLOQUEOS.md` con `OK: jorge ...` o `MANTENER BLOQUEADO: ...`. Cazadores 7/7 PASS. Hashes `92f4b93` (fix) + `79111f1` (docs) pusheados a `origin/main`. Próximo ID disponible: SPRINT-152.
 
 **Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-149 (completar migración `operariaId` a auth.uid). Jorge eligió "vamos con operaria" tras descubrir, durante auditoría de SPRINT-145, que `operariaId` está bajo el mismo patrón P-006 que tecnicoId. Re-auditoría profunda reveló hallazgo clave: el WRITE-side ya fue parcialmente migrado en SPRINT-105 (`FormAltaEditarEmpleado.tsx:226` ya emite `op.uid || op.id`), pero el READ-side NO. 20 archivos tocan `operariaId`; 13 necesitan fix de reads + 1 fix de escritura pendiente en `PersonalPage.tsx:772, 778`. Sprint incluye: (a) fix de 13 lookups + 2 escrituras pendientes, (b) script `migrar-operariaid-a-uid.ts` read-only + `--apply` para alinear datos existentes, (c) extender cazador P-006, (d) actualizar `CAMPOS_CROSS_COLLECTION.md` y `PATRONES_REGRESION.md`. Riesgo medio-alto: toca código de nómina/comisiones. Reviewer obligatorio. archivist PRE-CHANGE obligatorio. `--apply` del script NO se ejecuta autónomamente — queda en `BLOQUEOS.md` para Jorge.
 
@@ -43,11 +47,108 @@
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-151 (148 UX Conduces completado, 149 operariaId BLOQUEADO en BLOQUEOS.md, 150 fix P-001 AgendaDia completado)
+**Próximo ID disponible:** SPRINT-152 (148 UX Conduces completado, 149 operariaId BLOQUEADO en BLOQUEOS.md, 150 fix P-001 AgendaDia completado, 151 modal emitir conduce PENDIENTE)
 
 ---
 
 ## Sprints
+
+### SPRINT-151 — Editar ítems + nota + verificación de pago en modal "Emitir conduce de garantía"
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (la operaria emite varios conduces por día desde este modal — hoy debe abrir la orden aparte para corregir cualquier cosa antes de emitir).
+**Origen:** Cowork 2026-05-12. Jorge revisando OS-0054 detectó que el modal de "Emitir conduce de garantía" tiene 4 huecos de UX:
+1. Si el ítem viene del inventario (caso normal — "Lavadora samsung — cuando está lavando..."), la descripción queda readonly. La operaria no puede ajustar el texto que sale impreso en el conduce.
+2. No hay campo "Nota" que se imprima en el conduce.
+3. El paso 2 "Confirmar pagos" solo muestra los pagos previos en read-only — dice "hazlo desde la orden antes de continuar". La operaria tiene que cerrar el modal, ir a la orden, agregar el pago, volver al modal. Fricción innecesaria.
+4. No hay checkbox "Pago verificado" (que la operaria tilda después de cotejar con banco/efectivo). Y no se notifica al admin cuando se emite el conduce.
+
+**Riesgo:** medio. Toca `PagoOrden` (cross-collection con `ordenes_servicio.pagos[]`), audit log y notificación al admin. NO toca rules.
+
+#### Touch-list expandido (sub-regla CLAUDE.md)
+
+**Archivos a modificar (5):**
+
+1. `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` (947 líneas) — agregar:
+   - Campo "Nota para el conduce" en paso 1 (textarea, ≤500 caracteres, opcional).
+   - Reemplazar el read-only del paso 2 por un editor de pago activo: selector de método (efectivo/transferencia/tarjeta) + monto (editable, default = `totalItems - totalPagado`) + banco/recibido-por según método + referencia + checkbox "Pago verificado" (obligatorio si monto > 0).
+   - En `handleGenerar`: persistir `notaConduce` en doc factura, agregar/actualizar pago en `ordenes_servicio.pagos[]` (vía `arrayUnion` o reemplazo si edita uno existente), escribir notificación al admin (ver paso 5).
+   - Borrador localStorage extendido para incluir `notaConduce` + estado del pago en construcción.
+
+2. `src/components/facturas/FacturaItemsEditor.tsx` (~300 líneas) — relajar readonly:
+   - Hoy: ítems con `tipoItem === 'pieza'` o `'servicio'` (catálogo) tienen descripción readonly; solo ítems manuales son editables.
+   - Cambio: permitir editar el texto de la descripción incluso para ítems de inventario, **manteniendo** el vínculo `piezaInventarioId` / `servicioPrecioId` intacto (la edición solo cambia el texto que sale impreso, no el ID del catálogo).
+   - Reemplazar pieza por otra del inventario: ya funciona vía botón papelera + botón "Agregar de inventario". NO requiere cambio nuevo, solo documentar en JSDoc.
+
+3. `src/types/index.ts` — extender 2 tipos:
+   - `PagoOrden`: agregar campos opcionales `verificado?: boolean`, `verificadoPorId?: string`, `verificadoPorNombre?: string`, `verificadoAt?: Date`.
+   - `Factura`: agregar campo opcional `notaConduce?: string` (≤500 caracteres).
+
+4. `src/services/notificaciones.service.ts` (sin cambios al service) + uso desde el modal — escribir notificación con `userId` = uid de cada admin/coord activo, tipo `'conduce_emitido'`, título `"Conduce ${numero} emitido"`, descripción con nombre cliente + total + verificado sí/no.
+
+5. `firestore.rules` — verificar si `ordenes_servicio.update` con `arrayUnion(pagos)` ya está cubierto por la rule actual o necesita ajuste. Si necesita, ESCALAR A BLOQUEOS.md (no tocar rules autónomo).
+
+**Consumidores verificados (read-only check):**
+
+- `ProcesarFacturacionModal` — solo se monta desde `src/pages/FacturacionPendiente.tsx:438` (1 punto, audited).
+- `FacturaItemsEditor` — se monta desde:
+  - `ProcesarFacturacionModal.tsx:791` (el caso de este sprint).
+  - `FacturaCrearModal.tsx:454` (factura manual desde `/admin/facturas`). El cambio "permitir editar texto de items de inventario" se propaga acá — verificado que es comportamiento deseado también para facturas manuales (la operaria/admin puede ajustar el texto antes de emitir factura manual). Riesgo nulo: si nadie edita el texto, el comportamiento es idéntico al actual.
+- `PagoOrden`:
+  - Lecturas: `Ordenes.tsx`, `OrdenDetalle.tsx`, `OrdenDetailModal.tsx`, `FacturacionPendiente.tsx`, `PortalCliente.tsx`. Los campos nuevos son opcionales — el render existente no se rompe (ya están sin ese flag y siguen funcionando).
+  - Escrituras: 2 sitios — `OrdenEditForm.tsx` (modal de orden, agregar pago manual hoy) y `ProcesarFacturacionModal.tsx` (este sprint). El primero queda sin tocar; sigue creando pagos sin `verificado` (válido porque es opcional).
+- `Factura.notaConduce`:
+  - Lecturas: `Facturas.tsx` (tabla de facturas), `FacturacionPendiente.tsx`, endpoint público `api/garantia/[token].ts` (verificar si lo expone). Si el endpoint público lo expone, sale en `/garantia/:token` — Jorge debe confirmar si quiere que aparezca acá también o solo en el conduce impreso.
+  - Escrituras: 2 sitios — `FacturaCrearModal.tsx` (factura manual — hallazgo lateral, ver abajo) y `ProcesarFacturacionModal.tsx` (este sprint).
+
+**Consumidores NO afectados:**
+
+- `whatsapp.ts mensajeConduceGarantia`: el mensaje sigue siendo el mismo; si quisiéramos meter la nota acá, sería un sprint follow-up (deuda menor).
+- Reportes de facturación, comisiones, ITBIS: no leen `notaConduce` ni los campos nuevos de `PagoOrden`, ignorables.
+
+**Hallazgos laterales (deuda fuera de scope, NO tocar acá):**
+
+- `FacturaCrearModal.tsx` (factura manual) podría reusar el mismo campo "Nota" — sprint follow-up `SPRINT-152` cuando aplique.
+- `mensajeConduceGarantia` no incluye la nota en el WhatsApp generado — sprint follow-up.
+- El endpoint público `api/garantia/[token].ts` podría exponer la nota al cliente (decisión de Jorge: ¿querés que el cliente vea la nota en el countdown público o solo en el papel impreso?).
+- `Ordenes.tsx` línea ~635 sigue con `o.operariaId === p.id` (P-006 variante) — cubierto por SPRINT-149 (bloqueado en BLOQUEOS.md, no tocar acá).
+
+#### Criterios de aceptación
+
+- [ ] Paso 1 del modal: textarea "Nota para el conduce" debajo de la tabla de ítems, max 500 chars, contador visible. Persistir en borrador localStorage.
+- [ ] Paso 1 del modal: la descripción de cualquier ítem (manual O de inventario) es editable. El `piezaInventarioId` / `servicioPrecioId` se mantiene intacto al editar el texto.
+- [ ] Paso 2 del modal: bloque "Registrar pago de este conduce" — selector método (efectivo/transferencia/tarjeta), monto editable (default = `totalItems - totalPagado`), campo dinámico (banco o recibido-por), referencia, checkbox "Pago verificado".
+- [ ] Si la operaria deja monto = 0 → no se crea pago nuevo (estado de la factura = `emitida`, sin pago). Si monto > 0 → checkbox "Pago verificado" obligatorio para emitir.
+- [ ] Validación: si monto del pago nuevo + totalPagado previo > totalItems → bloquear emisión con toast "Total cobrado supera el total del conduce. Ajustá el monto."
+- [ ] Al emitir: agregar pago al array `ordenes_servicio.pagos` (arrayUnion), escribir factura con `notaConduce`, escribir audit log en `auditoria_admin` con `accion: 'emitir_conduce_con_pago'` y campos clave (monto, método, verificado), escribir 1 notificación por cada admin/coord activo con `userId: <uid del admin>`, tipo `'conduce_emitido'`.
+- [ ] Si la rule de update sobre `ordenes_servicio` requiere ajuste por el `arrayUnion(pagos)`: el sprint se PAUSA acá, builder reporta a coordinator, coordinator escala a BLOQUEOS.md. NO tocar rules autónomo.
+- [ ] Typecheck + lint + cazadores 7/7 PASS al cerrar.
+- [ ] regression_guardian PASS (toca audit + cross-collection write — patrón sensible).
+- [ ] reviewer obligatorio (toca contabilidad: pagos + factura + comisiones; riesgo financiero medio).
+- [ ] archivist PRE-CHANGE obligatorio (touch-list ≥1 archivo).
+- [ ] Commit message en Spanish, Conventional Commit: `feat: editar ítems + nota + verificación pago en modal emitir conduce (SPRINT-151)`.
+
+#### Plan de QA manual post-deploy (Jorge / Wilainy)
+
+1. **Caso primary — emitir con todo:** abrir orden con cierre listo desde `/admin/facturacion-pendiente`, click "Procesar". En paso 1: editar el texto del ítem (era "Lavadora samsung — cuando está lavando..." → reescribir libre). Agregar nota "Cliente solicita pasar factura legal aparte". Paso 2: método transferencia, monto = total, banco BHD, referencia "REF-12345", tildar "Pago verificado". Emitir.
+2. **Resultado esperado:** toast "Conduce CG-XXXX generado". Verificar:
+   - En Firestore: doc `facturas/{id}` tiene `notaConduce`, `items[0].descripcion` con el texto editado, `items[0].piezaInventarioId` intacto.
+   - En `ordenes_servicio/{ordenId}.pagos[]`: aparece el nuevo pago con `verificado: true` + `verificadoPorNombre` = la operaria.
+   - En `notificaciones/{...}`: 1 doc por cada admin/coord con `userId: <su uid>`, `tipo: 'conduce_emitido'`. Admin/coord ven la notificación en su campanita.
+3. **Caso secondary — emitir sin pago:** dejar monto = 0 en paso 2. Emitir. Verificar: factura queda `estado: 'emitida'`, NO se agregó nada a `pagos[]`, sí se notificó al admin.
+4. **Caso terciario — pago supera total:** total conduce = 1000, monto pago = 1200. Verificar bloqueo con toast.
+
+#### Restricciones / guardarrails
+
+- archivist PRE-CHANGE obligatorio.
+- reviewer obligatorio (foco: cross-collection writes + audit consistency + impacto en comisiones — verificar que el flujo de comisiones no cambia).
+- regression_guardian obligatorio.
+- NO tocar rules autónomo. Si surge necesidad, PAUSAR y escalar.
+- NO tocar comportamiento del flujo de comisiones existente (N=1 vs N>1).
+- NO romper el borrador localStorage existente (debe migrar grácilmente — si el borrador viejo no tiene `notaConduce`, default a string vacío).
+- Si el reviewer encuentra que `notaConduce` debe ir también en WhatsApp / endpoint público / factura manual, abrir SPRINT-152 follow-up, NO ampliar este sprint.
+
+---
 
 ### SPRINT-119 — Postmortem-positivo del lote 117c (rediseño IA del sidebar)
 
@@ -2018,10 +2119,16 @@ Aplica en dos puntos:
 
 ### SPRINT-149 — Completar migración `operariaId` a `auth.uid` (cerrar inconsistencia post-SPRINT-105) + script de re-migración de datos
 
-**Estado:** BLOQUEADO — movido a `BLOQUEOS.md` el 2026-05-12 por coordinator pasada 11. Razón: conflicto entre instrucción de Cowork ("vamos con operaria", spec PENDIENTE) e instrucción explícita del prompt del modo autónomo en la misma pasada ("NO toques los 3 hits operariaId === p.id... van a BLOQUEOS.md si no están ya"). Sin esto, procesar autónomo iría contra instrucción posterior de Jorge. La spec sigue íntegra abajo para forensia — al desbloquear desde `BLOQUEOS.md`, el coordinator la marca PENDIENTE de nuevo.
+**Estado:** COMPLETADO 2026-05-12 (coordinator pasada 12, `trabaja`). 13 archivos de código + 1 script de migración + 1 cazador extendido (P-006 variante 4) + 2 docs actualizados. Cazadores 7/7 PASS, typecheck PASS, build PASS, lint sin diff vs main. `--apply` del script de migración NO ejecutado autónomo — entrada nueva en `BLOQUEOS.md` para OK de Jorge. Histórico de bloqueo preservado en bloque colapsado más abajo en esta misma entrada.
 
 <details>
-<summary>Spec original (preservada, NO procesar desde acá)</summary>
+<summary>Historial de bloqueo (preservado para forensia)</summary>
+
+**Estado anterior:** BLOQUEADO — movido a `BLOQUEOS.md` el 2026-05-12 por coordinator pasada 11. Razón: conflicto entre instrucción de Cowork ("vamos con operaria", spec PENDIENTE) e instrucción explícita del prompt del modo autónomo en la misma pasada ("NO toques los 3 hits operariaId === p.id... van a BLOQUEOS.md si no están ya"). Sin esto, procesar autónomo iría contra instrucción posterior de Jorge.
+
+**Resolución:** Jorge confirmó explícitamente en pasada 12 ("ambos en orden, 149 primero") que SPRINT-149 procesa autónomo según spec de Cowork.
+
+</details>
 
 **Estado original:** PENDIENTE
 **Prioridad:** alta (bug latente activo, no futuro. Las operarias creadas post-SPRINT-105 ya tienen `operariaId = uid` en producción, pero todos los lookups en código asumen doc id. Cualquier operaria nueva queda con métricas de nómina, dashboard, rendimiento, recordatorios y filtros rotos en silencio. No estalló porque las operarias actuales son pre-SPRINT-105.)

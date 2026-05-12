@@ -26,7 +26,7 @@
 | `clienteId` | ordenes_servicio | clientes | clienteDocId | Doc id de `clientes/`. Cliente NO tiene auth. | (histórico) |
 | `tecnicoId` | ordenes_servicio | personal/usuarios | **auth.uid** | SIEMPRE auth.uid post-c4be345. NO usar `personal.id`. Dropdowns deben emitir `value={t.uid}`. Lookups `(t.uid \|\| t.id) === orden.tecnicoId`. | c4be345 / SPRINT-132 |
 | `ayudanteId` | ordenes_servicio | personal/usuarios | **auth.uid** | Idéntico a `tecnicoId`. | c4be345 / SPRINT-132 |
-| `operariaId` | ordenes_servicio | personal/usuarios | ⚠ **por confirmar** | El alta en `useOrdenCreateForm.ts` deriva desde `personal[tecnicoId].operariaId`. Tres callers comparan `o.operariaId === p.id` (`nomina.service:172`, `Ordenes.tsx:635`, `Rendimiento.tsx:297`). Hipótesis: guarda `personalDocId`, no uid. **SPRINT-146 aclara** y SPRINT-147 actualiza esta fila. | SPRINT-146 (pendiente) |
+| `operariaId` | ordenes_servicio | personal/usuarios | **auth.uid** | Post-SPRINT-105 persiste auth.uid (write-side ya migrado: `FormAltaEditarEmpleado.tsx` emite `op.uid \|\| op.id`, `useOrdenCreateForm.ts` deriva de `personal[tecnico].operariaId` que también guarda uid). Lookups `(op.uid \|\| op.id) === orden.operariaId` (compatibilidad pre/post migración). Script `scripts/migrar-operariaid-a-uid.ts` alinea datos legacy (pendiente `--apply` de Jorge). | SPRINT-149 |
 | `responsableId` | ordenes_servicio | personal/usuarios | **auth.uid** | Migrado en SPRINT-114. | SPRINT-114 |
 | `enviadaAFacturacionPorId` | ordenes_servicio | personal/usuarios | **auth.uid** | Quien envió a facturación. Migrado en SPRINT-114. **Deuda**: `AgendaDia.tsx:191` y `:144` aún escriben `userProfile.id` aquí — SPRINT-148 los migra. | SPRINT-114 / deuda SPRINT-148 |
 | `facturadaPorId` | ordenes_servicio | personal/usuarios | **auth.uid** | Quien emitió el conduce. Migrado en SPRINT-114. | SPRINT-114 |
@@ -52,7 +52,7 @@
 | Campo | Vive en | Apunta a | Tipo de id | Regla | Sprint origen |
 |---|---|---|---|---|---|
 | `uid` | personal | (es auth.uid del empleado) | **auth.uid** | El doc `personal/{auto-id}` tiene un campo `uid` adentro = auth.uid. Es la "puerta" para resolver ambos lados. | SPRINT-105 |
-| `operariaId` (en doc de técnico) | personal | personal (otra fila) | **personalDocId** | Apunta al doc id de la operaria a cargo del técnico. ⚠ Confirmado por análisis de `useOrdenCreateForm.ts` que lee `tecnicoElegido?.operariaId`. NO es auth.uid. **Pendiente: SPRINT-146 valida y actualiza si distinto.** | SPRINT-146 (en curso) |
+| `operariaId` (en doc de técnico) | personal | personal (otra fila) | **auth.uid** | Post-SPRINT-105 persiste auth.uid (el form `FormAltaEditarEmpleado.tsx:226` emite `op.uid \|\| op.id`). Operarias pre-SPRINT-105 sin uid conservan el docId legacy hasta onboarding. Lookups `(op.uid \|\| op.id) === t.operariaId`. Script de migración: `scripts/migrar-operariaid-a-uid.ts` (Jorge dispara `--apply`). | SPRINT-149 |
 
 ### Colección `usuarios`
 

@@ -10,7 +10,65 @@
 
 ---
 
-## SPRINT-149 — Completar migración `operariaId` a `auth.uid` (movido aquí 2026-05-12 por coordinator pasada 11)
+## SPRINT-149-APPLY — Ejecución de `--apply` del script de migración operariaId (post-fix de código)
+
+**Tipo:** Migración de datos — Jorge dispara manualmente (sub-regla CLAUDE.md "migraciones >50 docs sobre flujo de nómina").
+**Estado:** ESPERANDO OK JORGE
+**Origen:** SPRINT-149 completado por coordinator pasada 12 (2026-05-12). El fix de código está pusheado y deployado. Falta alinear datos legacy: cualquier `ordenes_servicio.operariaId` o `personal[tecnico].operariaId` que sea docId de una operaria con uid poblado debe migrarse a uid.
+
+**Cómo ejecutar (Jorge en su Mac, después del deploy del fix de código):**
+
+1. **DRY-RUN primero (obligatorio):**
+   ```bash
+   cd /Users/jorgeluisbritogarcia/Desktop/mister-service-rd
+   npx tsx scripts/migrar-operariaid-a-uid.ts
+   ```
+   Output esperado: tabla con conteos `Total/Sin operariaId/Ya correcto/Migrable/Huérfano/Sin uid destino` para `ordenes_servicio` y para `personal` (técnicos). Listado de primeros 10 cambios propuestos.
+
+2. **Revisión:**
+   - Si `totalMigrables == 0` → nada que migrar, archivar este sprint.
+   - Si `totalMigrables > 0 && <= 50` → seguir al paso 3.
+   - Si `totalMigrables > 50` → el script abortará al ver `--apply`. Jorge debe agregar OK adicional en este mismo sprint: `OK ampliado: jorge YYYY-MM-DD HH:MM — autorizo migrar N docs (>50)`.
+   - Si aparecen huérfanos → revisar manualmente (probablemente operarias eliminadas). El script NO los toca.
+
+3. **`--apply` real:**
+   ```bash
+   npx tsx scripts/migrar-operariaid-a-uid.ts --apply
+   ```
+   El script:
+   - Migra en batches de 200 docs con `writeBatch` atómico.
+   - Setea `operariaId: <uid>` + `operariaIdMigradoDesde: <docIdViejo>` (forensia).
+   - Escribe audit log en `auditoria_admin` con accion `migracion_operariaid_a_uid`.
+   - Reporta progreso `[BATCH N] N docs actualizados (total X/Y)`.
+
+4. **QA post-`--apply`:**
+   - Hard refresh en `/admin/dashboard` y `/admin/ordenes` como Yohana (operaria pre-SPRINT-105). Verificar que "mis órdenes" sigue mostrando lo correcto.
+   - Si tenés ambiente de prueba: crear operaria nueva → asignar técnico → crear orden → verificar shape en Firestore Console.
+
+**Lo que ya está pusheado (no requiere acción humana):**
+
+- 13 archivos de código con lookups migrados a `(p.uid || p.id) === operariaId` (compatibles pre/post migración).
+- Cazador P-006 extendido (variante 4) con 0 hits.
+- Docs actualizados.
+
+**Restricciones:**
+
+- NO ejecutar `--apply` antes del DRY-RUN.
+- NO ejecutar `--apply` si conteos no parecen razonables (>200 docs migrables sin explicación).
+- NO desactivar el umbral de 50 sin OK explícito acá.
+
+**Si Jorge prefiere rechazar:** agregar `RECHAZADO: jorge YYYY-MM-DD HH:MM <motivo>`. El código actual con fallback `(p.uid || p.id)` funciona correctamente para órdenes pre y post migración — los datos legacy siguen apuntando a docId pero los reads los matchean. La migración es óptima pero no urgente.
+
+---
+
+## SPRINT-149 — DESBLOQUEADO 2026-05-12 (OK: jorge "ambos en orden, 149 primero")
+
+**Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-12 por coordinator (pasada 12). desbloqueadoPor: jorge 2026-05-12 vía "ambos en orden, 149 primero".**
+
+Conservado acá para histórico. NO procesar desde acá — la entrada activa está en `COLA_AUTONOMA.md`.
+
+<details>
+<summary>Spec original + decisión humana (preservada para forensia)</summary>
 
 **Tipo:** Sprint con instrucción explícita del usuario delegante de NO procesar autónomo.
 **Estado:** ESPERANDO OK JORGE
@@ -39,6 +97,10 @@ Hay un conflicto de autoridad que solo Jorge puede resolver:
    - `MANTENER BLOQUEADO: jorge YYYY-MM-DD HH:MM | razón <X>`
 3. Si OK, pegar `procesa bloqueos` al coordinator de Claude Code.
 
+OK: jorge 2026-05-12 — confirmo SPRINT-149, procesalo según spec de Cowork ("vamos con operaria")
+
+**OK adicional pasada 12:** jorge 2026-05-12 vía "ambos en orden, 149 primero" — confirma re-procesamiento de SPRINT-149 según spec de Cowork.
+
 **Spec completa preservada:** la entrada original con scope, touch-list, auditoría de consumidores, script de migración y criterios sigue intacta en `COLA_AUTONOMA.md` (sección SPRINT-149). NO procesar desde acá — al desbloquear, el coordinator la mueve de vuelta a PENDIENTE en la cola.
 
 **Restricciones reiteradas:**
@@ -46,6 +108,8 @@ Hay un conflicto de autoridad que solo Jorge puede resolver:
 - reviewer obligatorio (riesgo financiero — nómina).
 - regression_guardian obligatorio.
 - `--apply` del script de migración NO se ejecuta autónomo. Jorge lo dispara manual cuando esté listo después del fix de código.
+
+</details>
 
 ---
 
@@ -526,6 +590,7 @@ Conservado acá para histórico. NO procesar desde acá — las entradas activas
 - **SPRINT-118 (re-migración masiva 5 empleados + fix email Wilainy):** desbloqueado por jorge 2026-05-08, movido a `COLA_AUTONOMA.md` por coordinator 2026-05-08 (`procesa bloqueos`). Restricción del sprint conservada: el coordinator entrega scripts en DRY-RUN; Jorge ejecuta dry-run y `--apply` manualmente.
 - **SPRINT-117c (reorganización IA del sidebar):** desbloqueado por jorge 2026-05-09 con OK selectivo (5 de 6 sub-sprints). 117c1, 117c2, 117c3, 117c4, 117c6 movidos a `COLA_AUTONOMA.md` como PENDIENTE. 117c5 marcado RECHAZADO con motivo (chocaba con sistema de permisos individuales). Coordinator procesa uno por uno con QA visual humana entre cada deploy — restricción explícita del spec original.
 - **SPRINT-135a-UI (countdown público + input período en wizard cierre):** desbloqueado por jorge 2026-05-11 18:25 con `scope: ambos` (autoriza tanto endpoint público `api/garantia/[token].ts` como wizard de cierre `CierreServicioWizard.tsx`). Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-11 por coordinator (`procesa bloqueos`, pasada 7). Spec íntegro preservado en bloque colapsado arriba para forensia.
+- **SPRINT-149 (completar migración `operariaId` a `auth.uid`):** desbloqueado por jorge 2026-05-12 vía "ambos en orden, 149 primero". Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-12 por coordinator (pasada 12). Restricciones del sprint conservadas: archivist PRE-CHANGE obligatorio, reviewer obligatorio (riesgo financiero — nómina), regression_guardian obligatorio. `--apply` del script de migración NO se ejecuta autónomo — queda en `BLOQUEOS.md` como entrada nueva una vez el coordinator termine el fix de código. Spec íntegro preservado en bloque colapsado arriba para forensia.
 - **SPRINT-128 (alinear rule `ordenes_servicio.delete` al granular `ordenesEliminar`):** desbloqueado por jorge 2026-05-10 vía Cowork ("puedes corregir las reglas tu por favor"). Procesado por coordinator el mismo día (`procesa bloqueos`, pasada 7) — ruta R2 ejecutada en un solo commit con archivist PRE-CHANGE auto, regression_guardian PASS, reviewer APPROVED con foco rules, deploy de rules ejecutado (lock `29247a9ac037fdc9a7398db716a15c31521a905e7438e8b857d95b12440561c6`, deployedAt `2026-05-10T23:03:57.139Z`), matriz `docs/MATRIZ_PERMISOS.md` #14 marcado RESUELTO. Cambio de 1 línea funcional + 9 líneas de comentario explicativo en `firestore.rules:369`. Sin commit follow-up (todo en un commit). Sin sprints colaterales abiertos. Spec original (R1 vs R2, criterios de aceptación detallados, riesgos R2) preservado a continuación para forensia:
 
 <details>
