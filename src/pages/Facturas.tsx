@@ -11,6 +11,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import FacturaCrearModal from '../components/facturas/FacturaCrearModal';
+import OrdenResumenLectura from '../components/facturas/OrdenResumenLectura';
 import FiltroAvanzadoFinanzas, {
   type FiltroAvanzadoFinanzasRef,
   type FiltroActivo,
@@ -174,8 +175,8 @@ export default function Facturas() {
     }
   };
 
-  // Mark as voided
-  const handleAnular = async (factura: Factura) => {
+  // Mark as voided — preservado para uso futuro, sin caller actual (eslint allowed via prefijo _)
+  const _handleAnular = async (factura: Factura) => {
     if (!confirm(`¿Anular la factura ${factura.numero}?`)) return;
     try {
       await updateDoc(doc(db, 'facturas', factura.id), {
@@ -875,6 +876,19 @@ export default function Facturas() {
                             </div>
                           </div>
                         )}
+
+                        {/* SPRINT-148 — Contexto de la orden original (read-only) */}
+                        {factura.ordenId && (
+                          <div className="border-t border-gray-100 mt-4 pt-4">
+                            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+                              Orden original
+                            </h4>
+                            <OrdenResumenLectura
+                              orden={ordenesVinculadas[factura.ordenId] ?? null}
+                              variant="compacto"
+                            />
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -907,10 +921,17 @@ export default function Facturas() {
           setGarantiaManualRazon('');
         }}
         title="Marcar como garantía manual"
-        size="md"
+        size="lg"
       >
         {facturaGarantiaManual && (
           <div className="space-y-4">
+            {/* SPRINT-148 — Contexto de la orden original arriba del form */}
+            {facturaGarantiaManual.ordenId && (
+              <OrdenResumenLectura
+                orden={ordenesVinculadas[facturaGarantiaManual.ordenId] ?? null}
+                variant="completo"
+              />
+            )}
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">
               <p className="font-semibold mb-1">¿Iniciar trabajo de garantía sin reclamo del cliente?</p>
               <p className="text-xs">
@@ -919,19 +940,6 @@ export default function Facturas() {
                 estado <strong>"reclamada"</strong> sin necesidad de que el cliente la reclame
                 remotamente.
               </p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-700 space-y-0.5">
-              <p><span className="font-semibold">Cliente:</span> {facturaGarantiaManual.clienteNombre}</p>
-              {facturaGarantiaManual.equipoTipo && (
-                <p>
-                  <span className="font-semibold">Equipo:</span> {facturaGarantiaManual.equipoTipo}
-                  {facturaGarantiaManual.equipoMarca ? ` ${facturaGarantiaManual.equipoMarca}` : ''}
-                  {facturaGarantiaManual.equipoModelo ? ` · ${facturaGarantiaManual.equipoModelo}` : ''}
-                </p>
-              )}
-              {facturaGarantiaManual.tecnicoNombre && (
-                <p><span className="font-semibold">Técnico que atendió:</span> {facturaGarantiaManual.tecnicoNombre}</p>
-              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

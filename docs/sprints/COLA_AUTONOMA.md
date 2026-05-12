@@ -3,7 +3,11 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-12 por Cowork — Re-auditoría profunda de SPRINT-145 a pedido de Jorge ("precisión quirúrgica"). Hallazgos: el sprint inicial tenía 4 cambios mapeados pero faltaban 2 (línea 315 — filtro "Sin citas hoy", y línea 432 — render `ordenesPorTecnico[t.id]`). Sin estos dos, el fix anterior dejaba la página parcialmente rota (técnicos visibles correctamente pero con órdenes vacías; o duplicados en "Sin citas hoy"). Además ajustado el cambio de línea 288: el type `Usuario` NO tiene `uid` separado, hay que importar `currentUser` del context `useApp()` y usar `currentUser.uid` directo. Total: SPRINT-145 ahora tiene 6 ediciones funcionales + 1 import. Cazador 8/8 sigue verde post-cambio (el patrón nuevo no se caza — eso lo cubre SPRINT-146). Hallazgos laterales detectados durante la auditoría (NO incluidos en SPRINT-145, documentados como deuda): (a) líneas 144 y 191 escriben `userProfile.id` en lugar de `currentUser.uid` (gotcha P-001) — futuro SPRINT-148; (b) 3 archivos comparan `o.operariaId === p.id` (`nomina.service.ts:172`, `Ordenes.tsx:635`, `Rendimiento.tsx:297`) — SPRINT-146 investiga si `operariaId` es uid o docId y agrupa fixes.
+**Última actualización:** 2026-05-12 por coordinator autónomo (pasada 10, `trabaja`) — SPRINT-148 COMPLETADO. Componente nuevo `OrdenResumenLectura.tsx` montado en 2 puntos de Facturas.tsx. Cazadores 7/7 PASS. Hash pendiente push.
+
+**Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-148 (UX Conduces de Garantía: mostrar orden completa en fila expandida + modal "Marcar garantía"). Jorge observó viendo CG-00016/OS-0049 que al marcar una garantía o expandir el conduce, no se ve el contexto del trabajo original (qué piezas se usaron, fotos del cierre, si fue solo chequeo, satisfacción cliente). Esto hace que las decisiones de aprobar/rechazar reclamaciones se tomen "a ciegas". Sprint introduce componente nuevo read-only `OrdenResumenLectura.tsx` con badge prominente "Solo chequeo · sin reparación" cuando aplique. Auditoría de consumidores hecha: `Facturas.tsx` solo se importa en App.tsx:28 — cambio aislado, riesgo bajo. Touch-list completo según sub-regla CLAUDE.md "Touch-list expandido". Hallazgos laterales documentados como deuda: (a) FacturacionPendiente.tsx podría reutilizar el componente nuevo (SPRINT-150 follow-up), (b) Facturas.tsx tiene 1000+ líneas (refactor SPRINT-151).
+
+**Última actualización previa:** 2026-05-12 por Cowork — Re-auditoría profunda de SPRINT-145 a pedido de Jorge ("precisión quirúrgica"). Hallazgos: el sprint inicial tenía 4 cambios mapeados pero faltaban 2 (línea 315 — filtro "Sin citas hoy", y línea 432 — render `ordenesPorTecnico[t.id]`). Sin estos dos, el fix anterior dejaba la página parcialmente rota (técnicos visibles correctamente pero con órdenes vacías; o duplicados en "Sin citas hoy"). Además ajustado el cambio de línea 288: el type `Usuario` NO tiene `uid` separado, hay que importar `currentUser` del context `useApp()` y usar `currentUser.uid` directo. Total: SPRINT-145 ahora tiene 6 ediciones funcionales + 1 import. Cazador 8/8 sigue verde post-cambio (el patrón nuevo no se caza — eso lo cubre SPRINT-146). Hallazgos laterales detectados durante la auditoría (NO incluidos en SPRINT-145, documentados como deuda): (a) líneas 144 y 191 escriben `userProfile.id` en lugar de `currentUser.uid` (gotcha P-001) — futuro SPRINT-149; (b) 3 archivos comparan `o.operariaId === p.id` (`nomina.service.ts:172`, `Ordenes.tsx:635`, `Rendimiento.tsx:297`) — SPRINT-146 investiga si `operariaId` es uid o docId y agrupa fixes.
 
 **Última actualización previa:** 2026-05-12 por Cowork — SPRINT-144 marcado ABSORBIDO (Claude Code ya entregó `scripts/qa-sprint-135a-ui.ts` directo en sesión interactiva; Caso 5 PASS 4/4 contra prod). Agregados SPRINT-145 y SPRINT-146 derivados de hallazgo de Jorge mirando OS-0049: la página `/admin/agenda` muestra todos los técnicos en "Sin citas hoy" + KPIs en 0 aunque hay órdenes con fecha de hoy. Causa raíz identificada por Cowork leyendo `src/pages/AgendaDia.tsx` líneas 295, 309-310, 336: 4 instancias del patrón P-006 escapadas al cazador determinístico (filtra `t.id` contra `tecnicoId` que es `auth.uid` post-c4be345). El cazador actual no las cazó porque están dentro de `useMemo` con sintaxis `idsConOrden.has(t.id)`, no `<option value={t.id}>`. SPRINT-145 = fix quirúrgico AgendaDia (1 archivo, riesgo bajo). SPRINT-146 = extender cazador P-006 a la variante `useMemo + Set + t.id` y barrer codebase. Ambos autónomos. Jorge sigue con QA del wizard de garantía en paralelo (casos 1 y 4 manuales).
 
@@ -35,7 +39,7 @@
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-147 (144 ABSORBIDO, 145 fix AgendaDia P-006, 146 extender cazador P-006)
+**Próximo ID disponible:** SPRINT-149 (147 docs disciplina pusheado manual, 148 UX Conduces de Garantía mostrar orden completa)
 
 ---
 
@@ -1848,6 +1852,163 @@ Ampliar el cazador P-006 para detectar el patrón `useMemo + Set + .has(t.id)` c
 - Sprint preventivo, no urgent. Si la cola tiene otros sprints más críticos, este puede esperar.
 - Depende de SPRINT-145 (debe estar deployado primero — sino el cazador caza AgendaDia y bloquea pre-commit).
 - archivist PRE-CHANGE útil pero no obligatorio (toca cazador, no código de la app).
+
+---
+
+### SPRINT-148 — UX Conduces de Garantía: mostrar orden completa al expandir fila + modal "Marcar garantía"
+
+**Estado:** COMPLETADO 2026-05-12 (coordinator autónomo `trabaja` pasada 10, hash pendiente). Componente nuevo `src/components/facturas/OrdenResumenLectura.tsx` (puro display, soporta shape nuevo + legacy + badges "Solo chequeo" / "Orden eliminada" / "Visita de garantía"). 2 puntos de montaje en `Facturas.tsx`: fila expandida (variant compacto) y modal Marcar garantía (variant completo, modal `size="md"` → `"lg"`, bloque Cliente/Equipo/Técnico redundante removido). Cazadores 7/7 PASS. typecheck PASS. Build PASS (Facturas chunk 55.88 kB). Lint del archivo nuevo PASS limpio. Warning preexistente `handleAnular` (línea 178) intacto — NO introducido por este sprint. QA visual humana pendiente (Jorge ejercita post-deploy según QA-1 a QA-7 del spec).
+**Prioridad:** media (no hay bug actual; es mejora UX. Pero importante: cuando llegue una reclamación real, sin esto la operaria/admin decide a ciegas. Riesgo de aprobar garantía sobre orden de chequeo donde no aplica.)
+**Origen:** Jorge 2026-05-12 vía Cowork. Observación viendo CG-00016 (vinculado a OS-0049, que fue marcada como "Solo chequeo"). Al hacer clic en el botón "Marcar garantía" o expandir la fila, el sistema NO muestra el contexto de la orden original — solo subtotal, ITBIS, items resumidos. Para decidir si una garantía aplica, hay que ver la orden completa (qué se hizo, qué piezas, fotos del cierre, satisfacción cliente, si fue solo chequeo, etc.). Sin esto: decisiones inconsistentes y riesgo de aprobar garantías sobre trabajos sin reparación.
+**Riesgo:** bajo (1 archivo modificado + 1 componente nuevo. Sin tocar lógica de garantía, sin tocar Firestore, sin tocar shape de datos. Solo agrega UI de display read-only.)
+**Touch-list previsto:** `src/components/facturas/OrdenResumenLectura.tsx` (NUEVO), `src/pages/Facturas.tsx` (2 puntos de montaje: línea ~730 expandible y líneas 900-960 modal)
+
+#### Auditoría de consumidores (sub-regla obligatoria CLAUDE.md)
+
+**Archivos a modificar:**
+- `src/pages/Facturas.tsx`
+- `src/components/facturas/OrdenResumenLectura.tsx` (NUEVO)
+
+**Consumidores verificados (read-only check):**
+- `src/pages/Facturas.tsx` es importado SOLO en `src/App.tsx:28` (lazy import). Ruta única: `/admin/facturas`. NO es importado por ningún otro componente. Cambio aislado.
+- Type `OrdenServicio`: usado en 50+ archivos pero solo lectura. NO cambia shape — solo se lee `cierreServicio`, `piezasUsadas`, `notasTecnico`, `tipoCierre`, `soloChequeo`, `periodoGarantiaDias`, `garantiaVencimiento`, `descripcionFalla`, etc. (todos campos ya existentes).
+- `ordenesVinculadas` state ya existe en `Facturas.tsx:45` y se popula con las órdenes asociadas a las facturas visibles. Solo hay que consumirlo, no agregarlo.
+- `OrdenDetailModal` existente: NO se va a reutilizar ni tocar. Es para otro contexto (vista admin con botones de acción). Componente nuevo es independiente.
+
+**Consumidores NO afectados:**
+- `src/components/ordenes/OrdenDetailModal.tsx` — vive en otra ruta, otro propósito.
+- `src/pages/FacturacionPendiente.tsx` (Conduces Pendientes) — podría beneficiarse del mismo componente, pero está FUERA DE SCOPE en este sprint. Si Jorge quiere extenderlo, abrir SPRINT-150 follow-up que reutilice `OrdenResumenLectura` ahí.
+
+**Hallazgos laterales (deuda documentada, NO fixear silenciosamente):**
+- `Facturas.tsx` tiene ~1000 líneas. Refactor en módulos más chicos podría ser SPRINT-151 futuro.
+- El modal "Marcar garantía" actual muestra cliente/equipo/técnico solo del Factura — duplica info que aparecerá en `OrdenResumenLectura`. Después de este sprint, conviene limpiar esa redundancia. NO en scope.
+
+#### Objetivo
+
+Cuando la operaria/admin esté evaluando un conduce de garantía, ver el contexto completo del trabajo original sin tener que abrir otra pestaña ni navegar a la orden.
+
+Aplica en dos puntos:
+1. **Al expandir la fila** de un conduce (clic en la fila completa) → debajo del resumen contable existente, agregar sección "Orden original" con todo el detalle.
+2. **Al hacer clic en "Marcar garantía"** → el modal debe mostrar primero la orden completa, después el form de razón.
+
+#### Por qué
+
+- CG-00016 (vinculado a OS-0049) tiene como único item "Chequeo de Secadora (sin reparación)". Si un cliente reclama garantía sobre eso, la operaria NO debería poder aprobar la garantía sin saber que no hubo reparación → no hay nada que cubrir.
+- Sin contexto, se aprueba/rechaza a ciegas. Riesgo de decisiones inconsistentes o conflictos con clientes.
+- La info ya existe en el doc de la orden — solo falta mostrarla acá.
+
+#### Criterios de aceptación
+
+**Componente nuevo `src/components/facturas/OrdenResumenLectura.tsx`:**
+
+- [ ] Props:
+  ```typescript
+  interface Props {
+    orden: OrdenServicio | null | undefined;
+    variant?: 'compacto' | 'completo'; // default 'completo'
+  }
+  ```
+- [ ] Read-only puro: NO renderea botones de acción. NO permite editar nada.
+- [ ] Si `orden` es `null`/`undefined`: mostrar mensaje "Orden original no disponible" o "Cargando..." según contexto.
+- [ ] Si `orden.eliminada === true`: mostrar todo igual pero con badge "Orden eliminada" arriba.
+- [ ] Secciones a mostrar (en orden):
+  1. **Encabezado**: `numero` (OS-####) + `clienteNombre` + `cierreServicio.fechaCierre` formateada (si existe, sino "Sin cierre") + `tecnicoNombre`.
+  2. **Equipo**: `equipoTipo` / `equipoMarca` / `equipoModelo` (formato consistente con `formatearEquipoLabel` de `utils/index.ts`).
+  3. **Falla reportada**: `descripcionFalla`.
+  4. **Fecha de cita original**: `fechaCita`.
+  5. **Cierre del técnico** (solo si `cierreServicio` existe):
+     - Equipo funciona: Sí / No / sin dato (badge color)
+     - Cliente satisfecho: Sí / No / sin dato (badge color)
+     - Revisó conexiones: Sí / No / sin dato (badge color)
+     - Foto del cierre (`cierreServicio.fotoCierre` URL) si existe — thumbnail clickeable que abre en nueva pestaña.
+     - Soporte para shape legacy: si `cierreServicio` tiene `piezasRetiradas` / `checklist` / `satisfaccionCliente`, mostrarlos en sección colapsable "Datos legacy del cierre".
+  6. **Piezas utilizadas**: leer `cierreServicio.piezasUsadas` (nuevo) o caer a `costoPiezasTotal`/`cantidadPiezasUsadas` si no existe el array. Lista de piezas con cantidad + costo + total. Si no hay piezas, "Sin piezas".
+  7. **Notas del técnico** (`notasTecnico`) si existen.
+  8. **Período de garantía configurado** (`periodoGarantiaDias` + `garantiaVencimiento`) si existen. Formato: "60 días · vence el 12/07/2026 (faltan 45 días)". Si la orden es legacy sin esos campos: "No configurado (orden previa al SPRINT-135a-UI)".
+  9. **Indicador "Solo chequeo"**: si `tipoCierre === 'solo_chequeo'` o `soloChequeo === true`, mostrar **badge prominente arriba de todo** con texto "⚠ SOLO CHEQUEO · SIN REPARACIÓN" (color amber o rojo, según importancia visual). Razón: este es el caso de CG-00016/OS-0049 — debe gritar visualmente para que la operaria no apruebe garantía sobre eso.
+- [ ] Diferencias `variant='compacto'` vs `'completo'`:
+  - Compacto (en fila expandible): omite encabezado (redundante con la card padre); las secciones se renderean en grid de 2 columnas en desktop, 1 en mobile.
+  - Completo (en modal): todo lleno, secciones apiladas verticalmente.
+- [ ] Mobile responsive: probado mentalmente en iPad portrait (~810px) y mobile (~390px).
+- [ ] Sin imports de servicios de Firestore, sin imports de context. Componente PURO de display.
+
+**Cambios en `src/pages/Facturas.tsx`:**
+
+1. **Import** del nuevo componente al principio del archivo.
+
+2. **Fila expandible** (zona donde aparece subtotal/ITBIS/comisión, después de línea ~730):
+   - Después del bloque actual de "comisión total" + "items", agregar:
+     ```tsx
+     {factura.ordenId && (
+       <div className="border-t border-gray-100 mt-4 pt-4">
+         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+           Orden original
+         </h4>
+         <OrdenResumenLectura
+           orden={ordenesVinculadas[factura.ordenId] ?? null}
+           variant="compacto"
+         />
+       </div>
+     )}
+     ```
+
+3. **Modal "Marcar como garantía manual"** (líneas 900-960):
+   - Antes del bloque actual de "¿Iniciar trabajo de garantía sin reclamo del cliente?", insertar:
+     ```tsx
+     {facturaGarantiaManual?.ordenId && (
+       <OrdenResumenLectura
+         orden={ordenesVinculadas[facturaGarantiaManual.ordenId] ?? null}
+         variant="completo"
+       />
+     )}
+     ```
+   - Cambiar `size="md"` a `size="lg"` o `size="xl"` para acomodar la info adicional sin scroll excesivo.
+   - El bloque actual "Cliente / Equipo / Técnico" en `bg-gray-50` (líneas 923-934) puede quedar como redundancia visual — eliminar para evitar duplicación con `OrdenResumenLectura`.
+
+**Carga de órdenes vinculadas (verificar):**
+
+- [ ] Verificar que `ordenesVinculadas: Record<string, OrdenServicio>` (línea 45 de Facturas.tsx) se popula con TODAS las órdenes vinculadas a las facturas visibles (no solo algunas). Si no, ajustar el effect que lo llena. NO romper rendimiento — usar `getDocs` por chunks de 10 si es muchas.
+- [ ] Si se demuestra que el effect actual ya carga todas, NO modificar nada.
+
+**Validaciones automáticas:**
+
+- [ ] `npm run build` PASS (typecheck completo).
+- [ ] `npm run lint` PASS sin warnings nuevos.
+- [ ] `npm run check:regression` PASS (8/8 cazadores en verde + nuevo cazador P-006 variante 3 que SPRINT-146 instaló).
+- [ ] regression_guardian invocado (toca `src/pages/`, categoría sensible).
+- [ ] archivist PRE-CHANGE recomendado pero no obligatorio (es UI nueva, no había bugs históricos sobre este flujo específico).
+- [ ] Commit: `feat(garantia-ui): SPRINT-148 mostrar orden completa en conduces de garantía (fila expandida + modal marcar garantía)`.
+- [ ] Push + verificar deploy Ready en Vercel.
+
+#### Restricciones / guardarrails
+
+- NO tocar `OrdenDetailModal.tsx` existente.
+- NO importar `OrdenDetailModal` en `Facturas.tsx` — es para otro contexto con botones de acción.
+- NO agregar botones de acción dentro del componente nuevo. Solo display.
+- NO tocar `handleAbrirGarantiaManual`, `handleConfirmarGarantiaManual` ni similares.
+- NO cambiar shape de Firestore. Solo lectura.
+- NO agregar dependencias nuevas a `package.json`.
+- NO modificar el icono ni la posición del botón "Marcar garantía".
+- Si una orden tiene MUCHA información (>50 piezas, notas larguísimas), considerar paginación o "Ver más" — pero NO bloquear el sprint por eso.
+- Si el effect que popula `ordenesVinculadas` no carga la orden necesaria, expandir su scope **es parte de este sprint** (no se documenta como deuda — es requisito para que el feature funcione).
+
+#### QA post-deploy (Jorge)
+
+1. Hard refresh en `/admin/facturas` (Conduces de Garantía).
+2. **QA-1 — Fila expandible**: clic en CG-00016 (cualquier conduce existente) → debe expandirse Y mostrar la sección "Orden original" abajo, con todo el detalle.
+3. **QA-2 — Solo chequeo es obvio**: para CG-00016 (vinculado a OS-0049 que es Solo chequeo), debe aparecer un badge prominente "SOLO CHEQUEO · SIN REPARACIÓN" arriba del detalle.
+4. **QA-3 — Modal marcar garantía**: clic en botón "Marcar garantía" en un conduce vigente → el modal debe mostrar PRIMERO la orden completa, DESPUÉS el form de razón.
+5. **QA-4 — Conduce de reparación con piezas**: si tenés un conduce de reparación real con piezas, expandirlo debe mostrar las piezas listadas con cantidad y costo.
+6. **QA-5 — Orden eliminada**: si hay un conduce cuya orden fue soft-deleteada, debe mostrar el resumen igualmente con badge "Orden eliminada".
+7. **QA-6 — Sin orden vinculada**: si hay un conduce huérfano (sin `ordenId`), debe NO romper — solo no mostrar la sección o mostrar "Sin orden vinculada".
+8. **QA-7 — Mobile**: probar en iPad portrait — todo debe verse bien.
+
+#### Notas para el coordinator
+
+- Sprint UX, riesgo bajo. archivist PRE-CHANGE útil pero no obligatorio.
+- Si al implementar el componente nuevo el builder detecta que `ordenesVinculadas` NO carga todas las órdenes necesarias (ej: solo carga las de la página actual y la paginación rompe), ese fix es parte de este sprint, no follow-up.
+- Mantener el componente nuevo en `src/components/facturas/` (subdirectorio nuevo si no existe). NO ponerlo en `src/components/ordenes/` para evitar acoplamiento con OrdenDetailModal.
+- Si la UI queda muy cargada con `variant='completo'` en el modal, considerar agregar tabs ("Datos generales", "Cierre", "Piezas") como mejora futura — pero NO en este sprint.
 
 ---
 
