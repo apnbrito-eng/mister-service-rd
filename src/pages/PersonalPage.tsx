@@ -9,7 +9,8 @@ import { formatTelefono, parseOrden } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import FormAltaEditarEmpleado from '../components/personal/FormAltaEditarEmpleado';
-import { Plus, Edit, Check, Users, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Link2 } from 'lucide-react';
+import GruposOperariaTecnico from '../components/personal/GruposOperariaTecnico';
+import { Plus, Edit, Check, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Link2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 import { puede, iaHabilitadaDefaultPorRol } from '../utils/permisos';
@@ -862,83 +863,9 @@ export default function PersonalPage() {
         );
       })()}
 
-      {esAdmin && (() => {
-        const tecnicos = personal.filter(p => p.rol === 'tecnico' && p.activo);
-        const operarias = personal.filter(p => (p.rol === 'operaria' || p.rol === 'coordinadora' || p.rol === 'administrador') && p.activo);
-        const operariasConTecnicos = operarias
-          .map(op => ({
-            operaria: op,
-            tecnicos: tecnicos.filter(t => t.operariaId === op.id),
-          }))
-          .filter(g => g.tecnicos.length > 0);
-        const tecnicosSinAsignar = tecnicos.filter(t => !t.operariaId);
-        const hayGrupos = operariasConTecnicos.length > 0 || tecnicosSinAsignar.length > 0;
-
-        if (!hayGrupos) return null;
-
-        return (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Users size={18} className="text-[#1a5fa8]" />
-              <h2 className="text-lg font-semibold text-[#0f3460]">Grupos operaria-técnico</h2>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {operariasConTecnicos.map(({ operaria, tecnicos: tecs }) => (
-                <div key={operaria.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                      style={{ backgroundColor: operaria.color || '#0f3460' }}
-                    >
-                      {operaria.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{operaria.nombre}</p>
-                      <p className="text-[10px] text-gray-500">{ROL_LABELS[operaria.rol]} · {tecs.length} técnico{tecs.length !== 1 ? 's' : ''}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {tecs.map(t => (
-                      <span
-                        key={t.id}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium"
-                        style={{
-                          backgroundColor: `${t.color || '#3b82f6'}22`,
-                          color: t.color || '#3b82f6',
-                        }}
-                      >
-                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color || '#3b82f6' }} />
-                        {t.nombre}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {tecnicosSinAsignar.length > 0 && (
-                <div className="bg-white rounded-2xl shadow-sm border-2 border-dashed border-amber-200 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700 text-xs font-bold">?</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-amber-900">Sin asignar</p>
-                      <p className="text-[10px] text-amber-700">{tecnicosSinAsignar.length} técnico{tecnicosSinAsignar.length !== 1 ? 's' : ''} sin operaria</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {tecnicosSinAsignar.map(t => (
-                      <span
-                        key={t.id}
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-gray-100 text-gray-700"
-                      >
-                        {t.nombre}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
+      {/* SPRINT-142c (2026-05-11): bloque "Grupos operaria-técnico" extraído a componente puro.
+          Plan de rollback: revertir el commit. El componente vuelve a vivir inline acá. */}
+      {esAdmin && <GruposOperariaTecnico personal={personal} />}
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
