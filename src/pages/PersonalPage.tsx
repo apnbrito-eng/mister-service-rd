@@ -6,42 +6,23 @@ import { getAuth } from 'firebase/auth';
 import { db, auth } from '../firebase/config';
 import { Personal, Rol, OrdenServicio, ROLES_CON_ACCESO, PERMISOS_DEFAULT_TECNICO } from '../types';
 import { formatTelefono, parseOrden } from '../utils';
+import { ROL_LABELS, ROL_COLORS, ROLES_CON_COMISION, comisionDefaultPorNivel } from '../utils/personal';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import FormAltaEditarEmpleado from '../components/personal/FormAltaEditarEmpleado';
 import GruposOperariaTecnico from '../components/personal/GruposOperariaTecnico';
 import ModalConfirmarEliminar from '../components/personal/ModalConfirmarEliminar';
-import { Plus, Edit, Check, Power, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Link2 } from 'lucide-react';
+import TablaPersonalActivo from '../components/personal/TablaPersonalActivo';
+import { Plus, Trash2, RotateCcw, ChevronDown, ChevronRight, AlertTriangle, Link2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 import { puede, iaHabilitadaDefaultPorRol } from '../utils/permisos';
 import { agruparPorRol } from '../utils/roles';
 
-const ROL_LABELS: Record<Rol, string> = {
-  administrador: 'Administrador',
-  coordinadora: 'Coordinadora',
-  secretaria: 'Secretaria',
-  operaria: 'Operaria',
-  tecnico: 'Técnico',
-  ayudante: 'Ayudante',
-};
-
-const ROL_COLORS: Record<Rol, string> = {
-  administrador: 'bg-purple-100 text-purple-700',
-  coordinadora: 'bg-violet-100 text-violet-700',
-  secretaria: 'bg-blue-100 text-blue-700',
-  operaria: 'bg-teal-100 text-teal-700',
-  tecnico: 'bg-orange-100 text-orange-700',
-  ayudante: 'bg-slate-100 text-slate-700',
-};
-
-const ROLES_CON_COMISION: Rol[] = ['tecnico', 'operaria', 'secretaria', 'coordinadora'];
-// Orden del select de rol en el formulario vive ahora dentro de
-// `components/personal/FormAltaEditarEmpleado.tsx` (SPRINT-142a).
-
-function comisionDefaultPorNivel(nivel: 'junior' | 'senior'): number {
-  return nivel === 'senior' ? 10 : 8;
-}
+// Constantes ROL_LABELS / ROL_COLORS / ROLES_CON_COMISION / comisionDefaultPorNivel
+// movidas a `utils/personal.ts` en SPRINT-142d (single source of truth compartido
+// con FormAltaEditarEmpleado, GruposOperariaTecnico, ModalConfirmarEliminar y
+// TablaPersonalActivo).
 
 export default function PersonalPage() {
   const { userProfile } = useApp();
@@ -862,104 +843,18 @@ export default function PersonalPage() {
           Plan de rollback: revertir el commit. El componente vuelve a vivir inline acá. */}
       {esAdmin && <GruposOperariaTecnico personal={personal} />}
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Nombre</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Rol</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 hidden md:table-cell">Teléfono</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 hidden md:table-cell">Email</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 hidden lg:table-cell">Especialidad</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3 hidden lg:table-cell">Zona</th>
-                <th className="text-left text-xs font-semibold text-gray-500 px-4 py-3">Estado</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {agruparPorRol(personal.filter(p => p.activo)).map(grupo => (
-                <Fragment key={grupo.rol}>
-                  <tr className="bg-[#0f3460]/5 border-t border-b border-[#0f3460]/10">
-                    <td colSpan={8} className="px-4 py-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{grupo.icono}</span>
-                        <h3 className="text-sm font-semibold text-[#0f3460]">
-                          {grupo.label}
-                        </h3>
-                        <span className="ml-auto text-xs text-gray-600 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
-                          {grupo.items.length}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  {grupo.items.map(p => (
-                    <tr key={p.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: p.color || '#0f3460' }}>
-                            {p.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                          </div>
-                          <span className="text-sm font-medium text-gray-900">{p.nombre}</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col gap-0.5">
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full w-fit ${ROL_COLORS[p.rol]}`}>
-                            {ROL_LABELS[p.rol]}
-                          </span>
-                          {ROLES_CON_COMISION.includes(p.rol) && p.nivel && (
-                            <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 w-fit">
-                              {p.nivel === 'senior' ? 'Senior' : 'Junior'} · {typeof p.comisionPorcentaje === 'number' ? p.comisionPorcentaje : comisionDefaultPorNivel(p.nivel)}%
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.telefono ? formatTelefono(p.telefono) : '—'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600 hidden md:table-cell">{p.email || '—'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-600 hidden lg:table-cell">{p.especialidad || '—'}</td>
-                      <td className="px-4 py-3 text-xs text-gray-600 hidden lg:table-cell">{p.zona || '—'}</td>
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full bg-green-100 text-green-700">
-                          <Check size={10} /> Activo
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          {puedeModificarPersonal && (
-                            <button onClick={() => handleEdit(p)} title="Editar"
-                              className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors">
-                              <Edit size={14} />
-                            </button>
-                          )}
-                          {puedeModificarPersonal && p.rol !== 'ayudante' && ROLES_CON_ACCESO.includes(p.rol) && !p.uid && p.email && (
-                            <button onClick={() => abrirVincularExistente(p)} title="Vincular cuenta existente"
-                              className="p-2 hover:bg-indigo-50 rounded-lg text-indigo-600 transition-colors">
-                              <Link2 size={14} />
-                            </button>
-                          )}
-                          {puedeEliminarPersonal && (
-                            <button onClick={() => abrirModalDesactivar(p)} title="Desactivar"
-                              className="p-2 hover:bg-amber-50 rounded-lg text-amber-600 transition-colors">
-                              <Power size={14} />
-                            </button>
-                          )}
-                          {puedeEliminarPersonal && (
-                            <button onClick={() => abrirModalEliminar(p)} title="Eliminar"
-                              className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors">
-                              <Trash2 size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {/* SPRINT-142d (2026-05-11): tabla del personal activo extraída a componente
+          puro. Handlers de Edit/Vincular/Desactivar/Eliminar se quedan acá y se
+          pasan como callbacks. Plan de rollback: revertir el commit. */}
+      <TablaPersonalActivo
+        personal={personal}
+        puedeModificar={puedeModificarPersonal}
+        puedeEliminar={puedeEliminarPersonal}
+        onEdit={handleEdit}
+        onAbrirVincular={abrirVincularExistente}
+        onAbrirDesactivar={abrirModalDesactivar}
+        onAbrirEliminar={abrirModalEliminar}
+      />
 
       {/* Sección Personal inactivo */}
       {(() => {

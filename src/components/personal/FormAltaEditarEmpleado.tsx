@@ -1,6 +1,7 @@
 import { Key, Eye, EyeOff, Link2 } from 'lucide-react';
 import type { Personal, Rol } from '../../types';
 import { ROLES_CON_ACCESO } from '../../types';
+import { ROL_LABELS, ROLES_CON_COMISION, ROL_SELECT_ORDEN } from '../../utils/personal';
 
 /**
  * Form interno del modal de alta / edición de empleados de PersonalPage.
@@ -12,26 +13,9 @@ import { ROLES_CON_ACCESO } from '../../types';
  * porque PersonalPage controla el ciclo de vida del modal y persiste el
  * payload final hacia Firestore.
  *
- * No es un componente "tonto" perfecto: importa algunas constantes locales
- * duplicadas con PersonalPage (ROL_LABELS, ROL_SELECT_ORDEN, etc.) para no
- * cambiar el resto del archivo en este sub-sprint. La consolidación a un
- * módulo compartido `utils/personal.ts` queda como deuda para 142d.
+ * SPRINT-142d (2026-05-11): constantes ROL_LABELS / ROLES_CON_COMISION /
+ * ROL_SELECT_ORDEN movidas a `utils/personal.ts` (single source of truth).
  */
-
-// Constantes duplicadas con PersonalPage.tsx. La consolidación a un módulo
-// compartido queda para SPRINT-142d (cleanup final). No tocar antes — romper
-// equivalencia entre el form y el resto del archivo es un vector de regresión.
-const ROL_LABELS: Record<Rol, string> = {
-  administrador: 'Administrador',
-  coordinadora: 'Coordinadora',
-  secretaria: 'Secretaria',
-  operaria: 'Operaria',
-  tecnico: 'Técnico',
-  ayudante: 'Ayudante',
-};
-
-const ROLES_CON_COMISION: Rol[] = ['tecnico', 'operaria', 'secretaria', 'coordinadora'];
-const ROL_SELECT_ORDEN: Rol[] = ['administrador', 'coordinadora', 'operaria', 'secretaria', 'tecnico', 'ayudante'];
 
 export type FormPersonal = Omit<Personal, 'id'>;
 

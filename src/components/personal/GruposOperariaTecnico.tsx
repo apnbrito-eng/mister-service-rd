@@ -1,5 +1,6 @@
 import { Users } from 'lucide-react';
-import type { Personal, Rol } from '../../types';
+import type { Personal } from '../../types';
+import { ROL_LABELS } from '../../utils/personal';
 
 /**
  * Sección "Grupos operaria-técnico" extraída de `PersonalPage.tsx` (SPRINT-142c, 2026-05-11).
@@ -14,20 +15,8 @@ import type { Personal, Rol } from '../../types';
  * Comportamiento auto-oculto: si no hay ningún grupo con técnicos NI técnicos sin
  * asignar, retorna `null` (idéntico al `if (!hayGrupos) return null` del original).
  *
- * Constante `ROL_LABELS` duplicada con PersonalPage / FormAltaEditarEmpleado.tsx —
- * la consolidación a `utils/personal.ts` queda para SPRINT-142d.
+ * SPRINT-142d (2026-05-11): `ROL_LABELS` consolidada en `utils/personal.ts`.
  */
-
-// Constante duplicada con PersonalPage.tsx + FormAltaEditarEmpleado.tsx.
-// SPRINT-142d consolida a `utils/personal.ts`.
-const ROL_LABELS: Record<Rol, string> = {
-  administrador: 'Administrador',
-  coordinadora: 'Coordinadora',
-  secretaria: 'Secretaria',
-  operaria: 'Operaria',
-  tecnico: 'Técnico',
-  ayudante: 'Ayudante',
-};
 
 export interface GruposOperariaTecnicoProps {
   /** Lista completa de personal (activos e inactivos). El componente filtra activos. */

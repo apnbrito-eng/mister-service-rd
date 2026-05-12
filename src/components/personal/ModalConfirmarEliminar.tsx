@@ -1,6 +1,7 @@
 import { AlertTriangle } from 'lucide-react';
 import Modal from '../Modal';
-import type { Personal, Rol, OrdenServicio } from '../../types';
+import type { Personal, OrdenServicio } from '../../types';
+import { ROL_LABELS } from '../../utils/personal';
 
 /**
  * Modal de confirmación de eliminación de empleado extraído de PersonalPage.tsx
@@ -17,19 +18,8 @@ import type { Personal, Rol, OrdenServicio } from '../../types';
  *
  * Plan de rollback: revertir el commit. Modal vuelve inline a PersonalPage.
  *
- * Constante ROL_LABELS duplicada con PersonalPage / FormAltaEditarEmpleado /
- * GruposOperariaTecnico. Consolidación a `utils/personal.ts` queda para 142d.
+ * SPRINT-142d (2026-05-11): `ROL_LABELS` consolidada en `utils/personal.ts`.
  */
-
-// Constante duplicada — consolidación SPRINT-142d.
-const ROL_LABELS: Record<Rol, string> = {
-  administrador: 'Administrador',
-  coordinadora: 'Coordinadora',
-  secretaria: 'Secretaria',
-  operaria: 'Operaria',
-  tecnico: 'Técnico',
-  ayudante: 'Ayudante',
-};
 
 export interface ModalConfirmarEliminarProps {
   isOpen: boolean;
