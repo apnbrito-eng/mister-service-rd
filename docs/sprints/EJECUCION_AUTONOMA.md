@@ -5,6 +5,75 @@
 
 ---
 
+## 2026-05-11 — `procesa bloqueos` (pasada 7 del día): SPRINT-135a-UI cerrado tras OK Jorge (1 sprint)
+
+### Contexto
+
+Jorge agregó `OK: jorge 2026-05-11 18:25 | scope: ambos` a SPRINT-135a-UI en BLOQUEOS.md y pegó `procesa bloqueos`. El sprint cierra la fase UI del refactor de garantía iniciado en `75f6c7b` (fase backend de la pasada 6). Bloqueado originalmente por dos motivos: (a) endpoint público `api/garantia/[token].ts` (restricción protocolo), (b) componente wizard de cierre (sub-regla CLAUDE.md sobre componentes wizard).
+
+Otros bloqueos revisados al arrancar: SPRINT-138 (storage.rules), SPRINT-141 (App Check enforce) — ambos siguen ESPERANDO OK Jorge. QA sprints 130/131/132/133/134-mant — humano puro, no aplica al procesar bloqueos. No hay otros OKs frescos.
+
+### SPRINT-135a-UI — countdown público desde modelo nuevo + input período en wizard cierre
+
+- **archivist PRE-CHANGE (auto-rol coordinator):**
+  - `api/garantia/[token].ts`: 3 commits (`51c9ab4` fundación, `6c358af` portal cliente, `1146536` App Check soft). Sin hotfixes.
+  - `src/components/CierreServicioWizard.tsx`: 15+ commits con fixes históricos de GPS/foto/historialFases pero ninguna recurrencia reciente. Archivo crítico de operación diaria — sub-regla "QA flujo X validado o agregar a BLOQUEOS.md" aplica.
+  - `src/utils/garantia.ts`: 1 commit (`75f6c7b` fase backend).
+  - Postmortems: ninguno menciona estos archivos.
+  - Patrones P-XXX: ninguno aplicable directamente al touch-list (no toca rules, no toca cross-collection, no toca dropdowns).
+  - **Recordatorio especial:** commit message DEBE declarar "QA flujo cierre técnico PENDIENTE" (sub-regla CLAUDE.md wizard cleanup). Plan QA está en el spec.
+
+- **Builder (auto-rol coordinator):**
+  1. `src/components/CierreServicioWizard.tsx`: import de `calcularVencimiento` + `PERIODO_GARANTIA_DEFAULT_DIAS` desde `utils/garantia`. Nuevo state `periodoGarantiaDias` (default 60) + `periodoValido` (1-365). `todoListo` incluye `periodoValido`. `reset()` lo restaura al default. Al cerrar, computa `garantiaVencimientoTs = Timestamp.fromDate(calcularVencimiento(fechaCierreTs.toDate(), periodoGarantiaDias))` y agrega `periodoGarantiaDias` + `garantiaVencimiento` al `ordenUpdate` (nivel orden, no anidado en cierreServicio — consistente con modelo SPRINT-135a backend). Nueva "SECCIÓN 4" en el JSX entre piezas y GPS status: input `type="number"` min/max/border amber si inválido, texto explicativo "Default: 60 días. Se cuenta desde el cierre del servicio."
+  2. `api/garantia/[token].ts`: en el GET handler, tras leer la factura, si `data.ordenId` es string no vacío, `db.collection('ordenes_servicio').doc(ordenIdRaw).get()` con try/catch interno. Si la orden existe y tiene `periodoGarantiaDias`/`garantiaVencimiento`/`cierreServicio.fechaCierre`, los prefiere para `tiempoDias`/`finFecha`/`inicioFecha` del response. Shape del response sin cambios. Fallback silencioso si la orden no se puede leer (warn + sigue con modelo viejo). POST handler intacto.
+  3. `.husky/pre-commit`: agregado flag `--no-warn-ignored` a eslint para que archivos ignorados por config (carpeta `api/`) no rompan `--max-warnings 0` con warning "File ignored". Bug latente del hook revelado en este sprint — commits previos a `api/` (mayo 2026) eran anteriores al hook (mayo 6 2026).
+
+- **Tester:**
+  - `npx tsc --noEmit` PASS (0 errors).
+  - `npm run build` PASS (4.05s).
+  - `npx eslint src/components/CierreServicioWizard.tsx --max-warnings 0` PASS (clean).
+  - `npm run check:regression` 7/7 PASS, 0 hits.
+
+- **regression_guardian (auto-rol coordinator):**
+  - P-001: el wizard usa `tecnicoId` recibido por prop (post-`c4be345` ya es uid). Sin nuevo uso. ✓
+  - P-002: no toca rules. ✓
+  - P-003: el wizard sigue haciendo un solo `updateDoc`. El endpoint solo agrega un `get()` read-only previo en el GET; el POST (que es donde había cross-collection: factura + cita + audit) NO se modifica. ✓
+  - P-004/P-005/P-006/P-007: N/A.
+  - Endpoint retrocompatible: try/catch interno → fallback al modelo viejo si la orden no se puede leer. Shape del response idéntico (front consume mismos campos). ✓
+  - `cierrePayload` shape sin cambios — los campos nuevos van a nivel orden en `ordenUpdate`. ✓
+  - Input number protegido contra NaN con `isNaN(v) ? 0 : v` y `periodoValido` gateando el botón. ✓
+  - **PASS.**
+
+- **Reviewer (auto-rol coordinator), foco retrocompat endpoint público + UX wizard:**
+  - Endpoint: cambio aditivo, fallback silencioso, sin breaking changes. Si la orden tiene `garantiaVencimiento` (nuevo) vs `facturas.fechaServicio` diverge, el cliente ve modelo nuevo — correcto.
+  - Wizard: input entre piezas y GPS, default 60 explícito, texto helper, validación visual. Sin fricción adicional para técnicos (botón sigue habilitándose con default 60).
+  - Retrocompat: órdenes pre-SPRINT-135a-UI siguen funcionando vía fallback. Sin migración necesaria.
+  - Commit message declara QA flujo PENDIENTE. ✓
+  - **APPROVED.**
+
+- **Hook fix:** durante el primer commit, el pre-commit hook abortó con "File ignored because of a matching ignore pattern" sobre `api/garantia/[token].ts`. Eslint config en raíz ignora `api/` (por diseño — endpoint Vercel tiene su propio tsconfig), pero el hook llamaba `eslint --max-warnings 0` sin `--no-warn-ignored`. Bug latente revelado por este sprint (los commits previos a `api/` en mayo 2026 son anteriores al hook commiteado en `1e9ec62` el 6 mayo). Agregado el flag y re-ejecutado — PASS. Documentado en el commit message como cambio (c).
+
+- **Validaciones globales pasada 7:**
+  - typecheck PASS · cazadores 7/7 PASS · lint del archivo wizard limpio · build PASS · pre-commit hook PASS sin bypass.
+
+- **Commit:** `d0f11d4` — 5 archivos, +182/-7. (api/garantia/[token].ts, src/components/CierreServicioWizard.tsx, .husky/pre-commit, docs/sprints/BLOQUEOS.md, docs/sprints/COLA_AUTONOMA.md).
+
+- **Push:** OK a `main` (`56f8a5f..d0f11d4`).
+
+- **Deploy Vercel:** Ready en ~120s. `version.json` serving `d0f11d4` confirmado al sexto poll.
+
+- **Postmortem:** N/A — no es bug, es feature completion. Sub-regla CLAUDE.md "postmortem obligatorio sólo si el sprint era hotfix de bug en producción" no aplica.
+
+### Próximos pasos sugeridos
+
+1. **Jorge ejercita Plan de QA post-deploy** del spec SPRINT-135a-UI (en COLA_AUTONOMA.md sección histórico). 4 casos: cerrar con período 1d → countdown ok; setear venc ayer → "expirada"; cerrar default 60 → `fechaCierre + 60d`; órdenes legacy → fallback al modelo viejo.
+2. **SPRINT-135b/c/d/e** (refactor garantía siguientes fases — reclamo dentro de la misma orden + descuento técnico + toggle mal uso) ya pueden diseñarse y agendarse en cola por Cowork. La base ya está en producción.
+3. **SPRINT-140** (expiración `garantia.token`) sigue BLOQUEADO depende de SPRINT-135a cerrado — ahora podría desbloquearse para evaluación.
+4. **SPRINT-138 + 141** siguen ESPERANDO OK Jorge en BLOQUEOS.md.
+5. **SPRINT-134** sigue EN_PROGRESO (1/6 sub-sprints fixed). Próxima pasada `trabaja` puede continuar.
+
+---
+
 ## 2026-05-11 — `trabaja` (pasada 6 del día): cierre lote SPRINT-142 + fase backend SPRINT-135a (4 sprints)
 
 ### Contexto
