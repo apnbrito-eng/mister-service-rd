@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { EquipoTaller, EstadoEquipo } from '../types';
 import { formatFechaCorta, formatMoneda, whatsappLink } from '../utils';
@@ -86,21 +86,29 @@ export default function EquiposTaller() {
     }
   };
 
-  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
-  // Muta equipos_taller + standby_piezas. Refactor pendiente a writeBatch.
+  // SPRINT-134-equipos: writeBatch atómico cuando hay mutación cross-collection
+  // (equipos_taller + standby_piezas). El único caso cross-collection es la
+  // transición a 'en_standby'. Los otros cambios de estado son single-collection
+  // y mantienen el updateDoc directo. Sin batch, si la red corta entre el update
+  // del equipo y el create del standby, queda un equipo "en standby" sin
+  // registro de stand-by — operaria queda ciega al equipo bloqueado.
   const handleChangeEstado = async (equipo: EquipoTaller, nuevoEstado: EstadoEquipo) => {
     try {
-      await updateDoc(doc(db, 'equipos_taller', equipo.id), { estado: nuevoEstado });
       if (nuevoEstado === 'en_standby') {
-        await addDoc(collection(db, 'standby_piezas'), {
+        const batch = writeBatch(db);
+        batch.update(doc(db, 'equipos_taller', equipo.id), { estado: nuevoEstado });
+        const standbyRef = doc(collection(db, 'standby_piezas'));
+        batch.set(standbyRef, {
           clienteNombre: equipo.clienteNombre, equipoTipo: equipo.equipoTipo,
           equipoMarca: equipo.equipoMarca, piezaFaltante: 'Pieza por definir',
           tecnicoNombre: equipo.tecnicoNombre || '', fechaInicio: Timestamp.now(),
           estado: 'buscando', notas: `Desde equipo taller S/N: ${equipo.numeroSerie}`,
           createdAt: Timestamp.now(),
         });
+        await batch.commit();
         toast.success('Estado cambiado y registro stand-by creado');
       } else {
+        await updateDoc(doc(db, 'equipos_taller', equipo.id), { estado: nuevoEstado });
         toast.success(`Estado: ${ESTADO_LABELS[nuevoEstado]}`);
       }
     } catch {

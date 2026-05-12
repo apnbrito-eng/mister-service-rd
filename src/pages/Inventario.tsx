@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy, where, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy, where, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { PiezaInventario, MovimientoInventario } from '../types';
 import { formatMoneda, formatFecha, parsePiezaInventario } from '../utils';
@@ -266,8 +266,13 @@ export default function Inventario() {
     setSavingAjuste(false);
   };
 
-  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
-  // Muta piezas_inventario + movimientos_inventario. Refactor pendiente a writeBatch.
+  // SPRINT-134-inv: writeBatch atómico para mutación cross-collection
+  // (piezas_inventario + movimientos_inventario). Si la red corta a mitad,
+  // ni el movimiento ni el ajuste de stock se aplican — evita stock
+  // desincronizado del log de movimientos. Sin reads previos en el batch
+  // (el cálculo de nuevoStock usa state del cliente — la única forma
+  // segura sería runTransaction si dos ajustes concurrentes son posibles,
+  // pero el modal bloquea con setSavingAjuste mientras procesa).
   const handleConfirmarAjuste = async () => {
     if (!piezaAjuste) return;
     if (ajusteForm.cantidad <= 0) { toast.error('Cantidad inválida'); return; }
@@ -297,12 +302,17 @@ export default function Inventario() {
         fecha: ahora,
       };
       if (ajusteForm.notas) movData.notas = ajusteForm.notas.trim();
-      await addDoc(collection(db, 'movimientos_inventario'), movData);
-      // Actualizar stock en la pieza
-      await updateDoc(doc(db, 'piezas_inventario', piezaAjuste.id), {
+
+      const batch = writeBatch(db);
+      // Movimiento (doc con id autogenerado)
+      const movRef = doc(collection(db, 'movimientos_inventario'));
+      batch.set(movRef, movData);
+      // Stock pieza
+      batch.update(doc(db, 'piezas_inventario', piezaAjuste.id), {
         stockActual: nuevoStock,
         updatedAt: ahora,
       });
+      await batch.commit();
       toast.success('Stock actualizado');
       cerrarAjuste();
     } catch (err) {

@@ -182,9 +182,11 @@ export default function PersonalPage() {
     return true;
   };
 
-  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
-  // Muta personal + usuarios (alta de empleado con acceso, SPRINT-105). P-004 caza el invariante
-  // "doble doc obligatorio" pero NO la atomicidad transaccional. Refactor pendiente a writeBatch.
+  // Alta con acceso delega a endpoint Admin SDK (`api/admin/crear-usuario`).
+  // El cliente no controla la atomicidad de personal + usuarios — viven dentro
+  // de la lambda. Branches alternativos (ayudante sin acceso, edit normal) son
+  // single-collection. P-004 valida el invariante "doble doc obligatorio".
+  // @safe-non-tx: writeBatch del cliente NO aplica (server-side escrituras). SPRINT-134.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.nombre || !form.rol) { toast.error('Nombre y rol son requeridos'); return; }
@@ -410,8 +412,12 @@ export default function PersonalPage() {
 
   // Vincula un personal con una cuenta Auth ya existente usando email+password del dueño.
   // Devuelve true si vinculó correctamente, false si no (ya mostró toast de error).
-  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
-  // Muta personal + usuarios. Refactor pendiente a writeBatch.
+  // Usa `secondaryDb` (initializeApp + signInWithEmailAndPassword) para escribir
+  // `usuarios/{uid}` con la sesión del propio user vinculado, y `db` (sesión admin)
+  // para `personal/{id}`. Heredado de SPRINT-105 para evitar deslogueo del admin.
+  // Degradación graceful: si setDoc(usuarios) falla, se loguea warn y P-004 cazaría
+  // la inconsistencia. Allowlist permanente — cerrado por SPRINT-134 (2026-05-12).
+  // @safe-non-tx: writeBatch sólo soporta una instancia de Firestore, no cross-instance.
   const ejecutarVinculacion = async (
     email: string,
     password: string,

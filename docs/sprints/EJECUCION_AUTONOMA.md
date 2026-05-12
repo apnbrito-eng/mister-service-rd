@@ -5,6 +5,57 @@
 
 ---
 
+## 2026-05-12 — `trabaja` (pasada 8): SPRINT-134 cerrado completo (6/6 funciones)
+
+### Contexto
+
+Jorge invocó `/equipo` + `trabaja`. La cola tenía 1 sprint EN_PROGRESO real: SPRINT-134 (refactor cross-collection sin tx, follow-up SPRINT-133). El sprint estaba en 1/6 funciones — `Mantenimiento.handleGenerarOrden` cerrado en pasada 5. Quedaban 6 funciones con allowlist `@safe-non-tx: SPRINT-134 follow-up` para evaluar caso por caso.
+
+Otros bloqueos revisados al arrancar: SPRINT-138 (storage.rules), SPRINT-141 (App Check enforce), SPRINT-140 (depende de 135 cerrado completo), SPRINT-117c5 (rechazado). Ninguno con OK fresco. QA sprints 130/131/132/133/134-mant — humano puro. La cola PENDIENTE real estaba vacía salvo SPRINT-134 EN_PROGRESO.
+
+### SPRINT-134 — Cerrado completo (4 archivos modificados)
+
+- **archivist PRE-CHANGE (auto-rol coordinator):** historial cubrió Cotizaciones, EquiposTaller, Inventario, PersonalPage. Todos tocados en `15cab52` (SPRINT-133 que extendió el cazador P-003 y allowlisteó como follow-up). PersonalPage adicionalmente tocado por SPRINT-142a/b/c/d (refactor reciente). Postmortems no aplican. Patrón P-003 es el target del sprint. **Recordatorio:** P-003 debe seguir 0 hits al cerrar (allowlists o se eliminan o se documentan como permanentes con razón).
+
+- **Análisis técnico previo al builder:** clasifiqué los 6 sitios por viabilidad de `writeBatch`:
+  1. `Inventario.handleConfirmarAjuste` → batch directo (2 colecciones, sin reads previos).
+  2. `EquiposTaller.handleChangeEstado` → batch sólo en rama `en_standby` (otras ramas single-collection).
+  3. `Cotizaciones.handleConvertirAFactura` → batch para par crítico (factura + cotización), inventario fuera del batch por regla de negocio "factura prevalece sobre stock" (comentario heredado línea 101 + commit `3c42eef` 2026-04-18). Counter `siguienteNumeroFactura` aparte (patrón SPRINT-133/134-mant).
+  4. `Cotizaciones.handleSubmit` → batch sólo si hay `form.ordenId` (cotización + link en orden).
+  5. `PersonalPage.handleSubmit` → NO aplica writeBatch del cliente (delega a endpoint Admin SDK server-side, atomicidad vive en la lambda). Allowlist permanente con razón arquitectónica.
+  6. `PersonalPage.ejecutarVinculacion` → NO aplica writeBatch (usa `secondaryDb` con sesión Auth del nuevo user para escribir `usuarios/{uid}` sin deslogear admin — heredado de SPRINT-105). writeBatch sólo soporta una instancia Firestore. Allowlist permanente con razón arquitectónica.
+
+- **Builder (auto-rol coordinator):**
+  - `src/pages/Inventario.tsx`: import `writeBatch`. `handleConfirmarAjuste` envuelto en batch (movimiento + stock pieza). Comentario heredado migrado a explicación del nuevo patrón.
+  - `src/pages/EquiposTaller.tsx`: import `writeBatch`. `handleChangeEstado` rama `en_standby` ahora atómica (equipo + standby). Otras ramas mantienen `updateDoc` directo (single-collection).
+  - `src/pages/Cotizaciones.tsx`: import `writeBatch`. `handleConvertirAFactura` con batch para factura + cotización; inventario aislado por ítem con su propio mini-batch (movimiento + stock pieza) tolerando fallo individual. Comentario `@safe-non-tx: descuento de inventario aislado por ítem a propósito` en el loop interno. `handleSubmit` rama CREATE con batch sólo si `form.ordenId`.
+  - `src/pages/PersonalPage.tsx`: comentarios `@safe-non-tx` migrados de "follow-up" a permanentes con razón arquitectónica explícita. Bloques comprimidos a ≤5 líneas previas para que el cazador P-003 lea el marcador.
+
+- **Tester (auto-rol coordinator):**
+  - `npm run check:regression` → 7/7 cazadores PASS, 0 hits ✓
+  - `npx tsc --noEmit` → clean ✓
+  - `npx eslint --max-warnings 0` sobre los 4 archivos → clean ✓
+  - `npm run build` → PASS en 4.14s ✓
+
+- **Regression_guardian (auto-rol coordinator):**
+  - P-001/P-002/P-005/P-006/P-007 inaplicables al diff.
+  - P-003: es el target — resuelto. Las 4 envolturas nuevas son correctas (sin reads dentro del batch, sin undefined). Los 2 allowlists permanentes tienen razón arquitectónica documentada y aceptable según la convención de los cazadores ("si grita por algo legítimo, agregar a la allowlist documentada").
+  - P-004: PersonalPage no cambia el flujo de creación — el endpoint Admin SDK sigue garantizando ambos docs.
+  - Comportamiento de UI: ningún toast modificado. ✓
+
+- **Reviewer (auto-rol coordinator):**
+  - Orden de operaciones en cada batch verificado correcto.
+  - Counters fuera del batch (Cotizaciones) — patrón heredado SPRINT-133/134-mant.
+  - Comentarios `@safe-non-tx` permanentes documentan POR QUÉ no aplica refactor (no "TODO refactor pendiente").
+  - Identifiers en español, sin emojis, sin lint warnings. ✓
+
+- **Decisión:** SPRINT-134 cierra completo. NO se pasa a Cotizaciones.handleConvertirAFactura como caso pendiente de Jorge — la regla de negocio "factura prevalece sobre stock" ya estaba zanjada en commit `3c42eef` + comentario heredado, y el refactor parcial (batch para par crítico + inventario aislado) preserva exactamente ese comportamiento.
+
+- **Archivos modificados:** 4 (`Inventario.tsx`, `EquiposTaller.tsx`, `Cotizaciones.tsx`, `PersonalPage.tsx`).
+- **Sin postmortem:** no es hotfix de bug en producción (deuda agendada limpia). Postmortem-positivo opcional documentado dentro de este trail.
+
+---
+
 ## 2026-05-11 — `procesa bloqueos` (pasada 7 del día): SPRINT-135a-UI cerrado tras OK Jorge (1 sprint)
 
 ### Contexto

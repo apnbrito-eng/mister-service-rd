@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, Timestamp, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, Timestamp, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cotizacion, ItemCotizacion, EstadoCotizacion, OrdenServicio } from '../types';
 import { formatMoneda, formatFechaCorta, generateNumeroCotizacion, parseOrden } from '../utils';
@@ -37,8 +37,22 @@ export default function Cotizaciones() {
   const puedeAprobar = puede(userProfile, 'cotizacionesAprobarPrecio');
   const [convirtiendoId, setConvirtiendoId] = useState<string | null>(null);
 
-  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
-  // Muta movimientos_inventario + cotizaciones + facturas. Refactor pendiente a writeBatch.
+  // SPRINT-134-cot: writeBatch atómico para el par crítico
+  // (facturas + cotizaciones). La factura y el flag `convertida` en la
+  // cotización deben aparecer juntos o ninguno — sin esto, una falla de red
+  // tras crear la factura dejaba la cotización como "no convertida" pero
+  // con factura emitida, causando doble facturación al reintentar.
+  //
+  // El descuento de inventario se mantiene FUERA del batch, con `try/catch`
+  // per-item, porque la regla de negocio acordada con Jorge (commit 3c42eef
+  // y comentario heredado) es "la factura prevalece sobre el stock — el admin
+  // concilia manualmente si un descuento falla". Si se metiera todo en un solo
+  // batch, una pieza con problema reventaría toda la factura, comportamiento
+  // NO deseado.
+  //
+  // El counter de FAC (`siguienteNumeroFactura`) consume su propia transacción
+  // ANTES del batch. Si el batch falla post-counter, queda un hueco numérico
+  // — consistente con SPRINT-133/134-mant y aceptado por el spec.
   const handleConvertirAFactura = async (cot: Cotizacion) => {
     if (!puedeFacturar) {
       toast.error('No tienes permiso para crear facturas');
@@ -67,10 +81,21 @@ export default function Cotizaciones() {
       };
       if (cot.clienteId) facturaData.clienteId = cot.clienteId;
       if (cot.ordenId) facturaData.ordenId = cot.ordenId;
-      // ordenNumero opcional — Cotizacion no lo declara, pero algunos usos pueden incluirlo
-      const facturaRef = await addDoc(collection(db, 'facturas'), facturaData);
 
-      // Descontar inventario por items con tipoItem === 'pieza'
+      // Batch atómico: factura + flag `convertida` en cotización.
+      const batch = writeBatch(db);
+      const facturaRef = doc(collection(db, 'facturas'));
+      batch.set(facturaRef, facturaData);
+      batch.update(doc(db, 'cotizaciones', cot.id), {
+        convertida: true,
+        facturaId: facturaRef.id,
+        updatedAt: Timestamp.now(),
+      });
+      await batch.commit();
+
+      // Descontar inventario por items con tipoItem === 'pieza'.
+      // FUERA del batch a propósito: la factura prevalece sobre el stock
+      // (regla de negocio — admin concilia manualmente si falla).
       const itemsPieza = cot.items.filter(i => i.tipoItem === 'pieza' && i.piezaInventarioId);
       let piezasDescontadas = 0;
       const usuario = userProfile?.nombre || 'Sistema';
@@ -82,7 +107,12 @@ export default function Cotizaciones() {
           if (!piezaSnap.exists()) continue;
           const stockActual: number = (piezaSnap.data().stockActual as number) || 0;
           const nuevoStock = stockActual - item.cantidad;
-          await updateDoc(piezaRef, { stockActual: nuevoStock, updatedAt: ahora });
+          // @safe-non-tx: descuento de inventario aislado por ítem a propósito.
+          // La factura ya quedó commiteada arriba; si una pieza falla, otras
+          // siguen procesándose. El admin reconcilia manualmente con el
+          // movimiento faltante (regla de negocio explícita — SPRINT-134-cot).
+          const piezaBatch = writeBatch(db);
+          piezaBatch.update(piezaRef, { stockActual: nuevoStock, updatedAt: ahora });
           const movData: Record<string, unknown> = {
             piezaId: item.piezaInventarioId!,
             piezaNombre: piezaSnap.data().nombre || item.descripcion,
@@ -95,7 +125,9 @@ export default function Cotizaciones() {
           if (cot.ordenId) movData.ordenId = cot.ordenId;
           if (numero) movData.ordenNumero = numero;
           if (nuevoStock < 0) movData.notas = 'Venta con stock negativo — verificar reposición';
-          await addDoc(collection(db, 'movimientos_inventario'), movData);
+          const movRef = doc(collection(db, 'movimientos_inventario'));
+          piezaBatch.set(movRef, movData);
+          await piezaBatch.commit();
           piezasDescontadas++;
         } catch (err) {
           // No revertir la factura: el admin debe conciliar manualmente
@@ -103,11 +135,6 @@ export default function Cotizaciones() {
         }
       }
 
-      await updateDoc(doc(db, 'cotizaciones', cot.id), {
-        convertida: true,
-        facturaId: facturaRef.id,
-        updatedAt: Timestamp.now(),
-      });
       const sufijoInv = piezasDescontadas > 0
         ? ` · ${piezasDescontadas} pieza(s) descontadas del inventario`
         : '';
@@ -254,8 +281,15 @@ export default function Cotizaciones() {
     }));
   };
 
-  // @safe-non-tx: SPRINT-134 follow-up (hallazgo P-003 ext, 2026-05-11).
-  // Muta cotizaciones + ordenes_servicio (cuando convierte de lead). Refactor pendiente a writeBatch.
+  // SPRINT-134-cotsubmit: writeBatch atómico para crear cotización + vincularla
+  // a la orden originaria (cuando el flujo viene desde un lead). Sin batch,
+  // si la red corta entre el addDoc(cotizaciones) y el updateDoc(orden),
+  // queda una cotización huérfana sin link en la orden — la operaria no la
+  // ve listada al abrir la orden y duplica el trabajo.
+  //
+  // El branch EDIT (1 sola escritura) mantiene updateDoc directo — no es
+  // cross-collection. El branch CREATE sin orden originaria (cotización
+  // suelta) también es 1 sola escritura.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.clienteNombre) { toast.error('Cliente es requerido'); return; }
@@ -291,17 +325,19 @@ export default function Cotizaciones() {
         };
         if (form.ordenId) data.ordenId = form.ordenId;
         if (form.clienteId) data.clienteId = form.clienteId;
-        const ref = await addDoc(collection(db, 'cotizaciones'), data);
-        // Si vino desde una orden, vincular en el doc de orden también
         if (form.ordenId) {
-          try {
-            await updateDoc(doc(db, 'ordenes_servicio', form.ordenId), {
-              cotizacionId: ref.id,
-              updatedAt: Timestamp.now(),
-            });
-          } catch (err) {
-            console.warn('No se pudo vincular cotización a la orden:', err);
-          }
+          // Cross-collection: cotización + vínculo en orden → writeBatch atómico
+          const batch = writeBatch(db);
+          const cotRef = doc(collection(db, 'cotizaciones'));
+          batch.set(cotRef, data);
+          batch.update(doc(db, 'ordenes_servicio', form.ordenId), {
+            cotizacionId: cotRef.id,
+            updatedAt: Timestamp.now(),
+          });
+          await batch.commit();
+        } else {
+          // Sin orden originaria: cotización suelta, una sola escritura
+          await addDoc(collection(db, 'cotizaciones'), data);
         }
         toast.success(`Cotización ${numero} creada · ${formatMoneda(total)}`);
       }
