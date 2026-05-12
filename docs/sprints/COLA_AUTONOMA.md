@@ -3,7 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-11 por Cowork — Auditoría forense completa al codebase (4 agentes en paralelo: arquitectura, seguridad, calidad, anti-regresión). Hallazgos CRÍTICOS: secretos hardcodeados como fallback en `src/firebase/config.ts:9-15` (proyecto productivo), `subirArchivoSolicitud` sin validación de size/MIME/cantidad, `storage.rules` no versionado (solo vive en consola). HALLAZGOS ALTO: tokens `tokenPortalCliente` y `garantia.token` sin expiración, App Check en soft mode (no bloquea), 4 monolitos (PersonalPage 1713 / MapaRutas 1267 / Configuracion 1102 / Ordenes 1001). FALSOS POSITIVOS aclarados: `.env` NO está en git (sí está en `.gitignore`), `dist/` NO está en git. Sistema anti-regresión saludable: 8 cazadores en verde, recurrence rate 0%, MTBF creciente. Jorge dio OK "vamos todo" — 4 decisiones tomadas vía AskUserQuestion: max 10MB por archivo, token cliente expira "mientras orden activa + 30 días", App Check enforce con monitoreo 48h previo, solo refactorizar PersonalPage de los 4 monolitos. Agregados SPRINT-136 a 142 (7 sprints). Estados: 136/137/139/142 PENDIENTE autónomo, 138/141 BLOQUEADO esperando OK Jorge (toca rules de Storage y config de App Check), 140 BLOQUEADO esperando SPRINT-135a cerrado.
+**Última actualización:** 2026-05-11 por Cowork — Implementación directa desde Cowork (en lugar de delegar al coordinator) de SPRINT-136, 137, 139 parcial, 142a, 143. Pendiente: SPRINT-142b/c/d agendados en la cola para el coordinator (Jorge pega `trabaja`). Detalle: SPRINT-136 fail-fast Firebase config (commit `d09bdbb`) + SPRINT-137 validación uploads + SPRINT-139 expiración tokenPortalCliente lado escritura + SPRINT-142a extraer FormAltaEditarEmpleado de PersonalPage (PersonalPage 1713→1430 líneas, -284) + SPRINT-143 lazy-load de rutas con React.lazy + Suspense (bundle 2.59MB→1.01MB, -61%, INP esperado <100ms). Cazador P-006 cazó un caso real en FormAltaEditarEmpleado.tsx:238 (dropdown operaria con `value={op.id}`) que se fixeó con el patrón `(op.uid || op.id)` post-c4be345. Decisión meta: Jorge recordó usar el coordinator de Claude Code en vez de programar desde Cowork — los próximos sub-sprints 142b/c/d se delegan al coordinator vía `trabaja`.
+
+**Última actualización previa:** 2026-05-11 por Cowork — Auditoría forense completa al codebase (4 agentes en paralelo: arquitectura, seguridad, calidad, anti-regresión). Hallazgos CRÍTICOS: secretos hardcodeados como fallback en `src/firebase/config.ts:9-15` (proyecto productivo), `subirArchivoSolicitud` sin validación de size/MIME/cantidad, `storage.rules` no versionado (solo vive en consola). HALLAZGOS ALTO: tokens `tokenPortalCliente` y `garantia.token` sin expiración, App Check en soft mode (no bloquea), 4 monolitos (PersonalPage 1713 / MapaRutas 1267 / Configuracion 1102 / Ordenes 1001). FALSOS POSITIVOS aclarados: `.env` NO está en git (sí está en `.gitignore`), `dist/` NO está en git. Sistema anti-regresión saludable: 8 cazadores en verde, recurrence rate 0%, MTBF creciente. Jorge dio OK "vamos todo" — 4 decisiones tomadas vía AskUserQuestion: max 10MB por archivo, token cliente expira "mientras orden activa + 30 días", App Check enforce con monitoreo 48h previo, solo refactorizar PersonalPage de los 4 monolitos. Agregados SPRINT-136 a 142 (7 sprints). Estados: 136/137/139/142 PENDIENTE autónomo, 138/141 BLOQUEADO esperando OK Jorge (toca rules de Storage y config de App Check), 140 BLOQUEADO esperando SPRINT-135a cerrado.
 
 **Última actualización previa:** 2026-05-11 por Cowork — Discovery completo del refactor de garantía con Jorge (~60min de back-and-forth). Decisión: garantía DEBE reactivar la orden original (no crear nueva), preservando técnico responsable + trazabilidad + datos contables intactos. Modelo final: nueva fase `garantia_reclamada` + array `visitasGarantia[]` + período configurable + countdown público + descuento técnico automático = `comisionPorcentaje × costo_piezas_garantía` aplicado a próxima quincena + toggle "mal uso" en wizard que reactiva flujo cobrable dentro del mismo doc. ITBIS aclarado: es interno, NO se muestra en conduce de garantía (facturación fiscal va por sistema externo). Jorge eligió approach incremental: empieza con SPRINT-135a (modelo + countdown UI, bajo riesgo, sin tocar comportamiento crítico). Sub-sprints 135b/c/d/e diseñados pero NO escritos todavía — se agregan tras QA visual de 135a. Discovery también identificó decisión pendiente sobre WhatsApp (Business app vs Cloud API) — Q1/Q2/Q3 pendientes.
 
@@ -27,7 +29,7 @@
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-143
+**Próximo ID disponible:** SPRINT-144 (SPRINT-143 usado por lazy-load de rutas, commiteado directo desde Cowork)
 
 ---
 
@@ -1264,19 +1266,19 @@ Activar enforce en Firebase Console para Firestore y Storage después de validar
 
 ### SPRINT-142 — Refactor `PersonalPage.tsx` (1713 líneas → 3-4 componentes)
 
-**Estado:** PENDIENTE
+**Estado:** EN_PROGRESO (1/4 sub-sprints completados)
 **Prioridad:** media (audit forense 2026-05-11 — hallazgo ALTO #5, monolito más grande del repo)
 **Origen:** Cowork 2026-05-11. Audit forense identificó 4 monolitos (PersonalPage 1713, MapaRutas 1267, Configuracion 1102, Ordenes 1001). Decisión Jorge: solo refactorizar PersonalPage como prueba; los otros 3 quedan como deuda hasta que un sprint los toque.
 **Riesgo:** medio. Refactor de archivo crítico (gestión de empleados, alta de usuarios, transferencia de órdenes al eliminar). Mitigación: dividir en 4 sub-sprints (142a..d) con QA visual entre cada uno, igual que SPRINT-117c.
-**Touch-list previsto:** `src/pages/PersonalPage.tsx` (rewire), `src/components/personal/` (NUEVO directorio con 3-4 componentes extraídos).
+**Touch-list previsto:** `src/pages/PersonalPage.tsx` (rewire), `src/components/personal/` (componentes extraídos).
 
 #### Objetivo
 
 Dividir `PersonalPage.tsx` (1713 líneas) en `PersonalPage.tsx` (~300 líneas, solo orquesta) + 3-4 componentes hijos extraídos a `src/components/personal/`:
-- `TablaPersonalActivo.tsx` (tabla + filtros).
-- `ModalAltaEmpleado.tsx` (formulario alta).
-- `ModalConfirmarEliminar.tsx` (eliminación + transferencia de órdenes).
-- `GruposOperariaTecnico.tsx` (matriz 7+7 de asignaciones).
+- `FormAltaEditarEmpleado.tsx` (form alta/edición) ✅ COMPLETADO 142a.
+- `ModalConfirmarEliminar.tsx` (eliminación + transferencia de órdenes) → SPRINT-142b.
+- `GruposOperariaTecnico.tsx` (matriz 7+7 de asignaciones) → SPRINT-142c.
+- `TablaPersonalActivo.tsx` (tabla agrupada por rol con acciones) → SPRINT-142d + cleanup constantes.
 
 #### Por qué
 
@@ -1286,15 +1288,10 @@ Dividir `PersonalPage.tsx` (1713 líneas) en `PersonalPage.tsx` (~300 líneas, s
 
 #### Criterios de aceptación
 
-- [ ] Sub-sprint 142a — extraer `ModalAltaEmpleado` (riesgo bajo, módulo más auto-contenido).
-- [ ] Sub-sprint 142b — extraer `ModalConfirmarEliminar` (riesgo medio, contiene transferencia cross-collection con writeBatch del SPRINT-133).
-- [ ] Sub-sprint 142c — extraer `GruposOperariaTecnico` (riesgo bajo).
-- [ ] Sub-sprint 142d — extraer `TablaPersonalActivo` + cleanup final, dejar `PersonalPage.tsx` como orquestador delgado (~300 líneas).
-- [ ] Cada sub-sprint con QA visual entre deploys (admin abre página, agrega empleado de prueba, elimina, asigna operaria, verifica que todo sigue funcionando).
-- [ ] Cazadores 7/7 PASS en cada sub-sprint.
-- [ ] Cero cambios funcionales — solo reorganización de archivos. Bundle size puede subir levemente por el overhead de imports.
-- [ ] Reviewer obligatorio en cada sub-sprint (refactor de archivo crítico).
-- [ ] archivist PRE-CHANGE en cada sub-sprint.
+- [X] **Sub-sprint 142a — `FormAltaEditarEmpleado`** ✅ COMPLETADO 2026-05-11 (commits implementados directo desde Cowork; PersonalPage 1713→1430 líneas, -284).
+- [ ] **Sub-sprint 142b — `ModalConfirmarEliminar`** (riesgo medio, contiene transferencia cross-collection con writeBatch del SPRINT-133).
+- [ ] **Sub-sprint 142c — `GruposOperariaTecnico`** (riesgo bajo, bloque solo de render sin handlers locales).
+- [ ] **Sub-sprint 142d — `TablaPersonalActivo` + cleanup constantes a `utils/personal.ts`** (riesgo medio, dejar `PersonalPage.tsx` como orquestador delgado ~1067 líneas).
 
 #### Restricciones / guardarrails
 
@@ -1307,6 +1304,167 @@ Dividir `PersonalPage.tsx` (1713 líneas) en `PersonalPage.tsx` (~300 líneas, s
 
 - Patrón de referencia: SPRINT-117c (sidebar) usó el mismo approach "1 sub-sprint, QA visual humana, después siguiente". Postmortem-positivo en `docs/postmortems/2026-05-10-rediseno-ia-aprendizajes.md`.
 - Bundle de regresión: medir bundle size antes (con `npm run build`) y después de cada sub-sprint. Documentar en cada commit.
+
+---
+
+### SPRINT-142b — Extraer `ModalConfirmarEliminar` de PersonalPage
+
+**Estado:** PENDIENTE
+**Prioridad:** media (sub-sprint de SPRINT-142)
+**Origen:** Cowork 2026-05-11. Sub-sprint del refactor PersonalPage. SPRINT-142a ya completado (FormAltaEditarEmpleado extraído).
+**Riesgo:** medio. El modal de eliminar contiene la transferencia cross-collection con `writeBatch` que se fixeó en SPRINT-133 (eliminación atómica de técnico/operaria con órdenes activas). Cualquier rewire mal hecho puede dejar el patrón allowlist `@safe-non-tx` colgando o romper la atomicidad. archivist PRE-CHANGE obligatorio.
+**Touch-list previsto:** `src/pages/PersonalPage.tsx`, `src/components/personal/ModalConfirmarEliminar.tsx` (NUEVO).
+
+#### Objetivo
+
+Extraer del archivo `PersonalPage.tsx` (líneas ~1197-1359 del JSX + handler `handleConfirmarEliminar` líneas ~688-743) a un componente nuevo `src/components/personal/ModalConfirmarEliminar.tsx`. El componente nuevo encapsula el JSX del modal de confirmación de eliminación. El handler `handleConfirmarEliminar` se queda en PersonalPage por su complejidad (writeBatch + chunking + branches por rol del empleado) y se pasa como callback `onConfirmar`.
+
+#### Por qué
+
+- El modal de eliminar tiene UI específica (input de transferencia, lista de órdenes afectadas, confirmación) que no se reutiliza en otro lado.
+- Aislar el JSX permite que el handler complejo (que sí queda en PersonalPage) quede más fácil de leer.
+- Reduce ~163 líneas de PersonalPage.
+
+#### Criterios de aceptación
+
+- [ ] Archivo `src/components/personal/ModalConfirmarEliminar.tsx` NUEVO con props:
+  - `isOpen: boolean`
+  - `onClose: () => void`
+  - `personalAccion: Personal | null` (la persona que se va a eliminar)
+  - `personal: Personal[]` (lista completa para resolver lista de destinos de transferencia)
+  - `ordenes: OrdenServicio[]` (para mostrar cuántas órdenes se transfieren)
+  - `transferDestinoId: string` + `setTransferDestinoId: (v: string) => void`
+  - `processingAccion: boolean`
+  - `onConfirmar: () => Promise<void>`
+- [ ] El componente NUEVO solo renderiza JSX (Modal + form de transferencia + botones). NO contiene lógica de DB ni handler de submit.
+- [ ] PersonalPage.tsx reemplaza el bloque `<Modal isOpen={showDeleteModal}...>...</Modal>` (líneas ~1197-1359) por `<ModalConfirmarEliminar {...props} />`.
+- [ ] `handleConfirmarEliminar` (con `writeBatch` + chunking + branches admin/técnico/operaria/secretaria) SE QUEDA en PersonalPage — solo se renombra a callback que se pasa como prop.
+- [ ] El comentario `@safe-non-tx: SPRINT-134 follow-up` y el comentario allowlist de P-003 PERMANECEN exactamente donde están — son críticos para el cazador.
+- [ ] PersonalPage reduce de 1430 a ~1267 líneas (-163).
+- [ ] Cazadores 7/7 PASS al cerrar. Especialmente P-003 NO debe regresionar (la rule del cazador busca el comentario `@safe-non-tx` o el patrón `writeBatch` — verificar que sigue presente).
+- [ ] Typecheck verde. Lint --max-warnings 0 verde.
+- [ ] Build OK. Bundle puede subir 1-2kB por overhead de componente.
+- [ ] Reviewer obligatorio (toca `handleConfirmarEliminar` que es crítico).
+
+#### Restricciones / guardarrails
+
+- NO refactorizar `handleConfirmarEliminar` para "limpiarlo" — solo se mueve el JSX, NO la lógica. Si el handler se ve feo, queda para otro sprint.
+- NO mover el comentario `@safe-non-tx` ni el JSDoc de la mutación cross-collection. Esos comentarios son indicadores para los cazadores.
+- NO cambiar el shape de la transferencia (`transferDestinoId` sigue siendo el id del destino — el flujo del SPRINT-133 NO se toca).
+- QA manual obligatorio post-deploy: eliminar un técnico de prueba con 2-3 órdenes activas. Verificar que las órdenes se transfieren atómicamente al destino. Si el browser pierde red a mitad, NINGUNA orden debe quedar transferida.
+
+#### Notas para el coordinator
+
+- archivist PRE-CHANGE obligatorio (toca `handleConfirmarEliminar` listado como crítico en CLAUDE.md + sub-regla cleanup).
+- regression_guardian obligatorio (toca services flow indirectamente via PersonalPage).
+- Patrón: el componente recibe `personal: Personal[]` para listar destinos, NO una función helper. Mantener cohesión local.
+
+---
+
+### SPRINT-142c — Extraer `GruposOperariaTecnico` de PersonalPage
+
+**Estado:** PENDIENTE
+**Prioridad:** baja (sub-sprint de SPRINT-142, bloque solo de render)
+**Origen:** Cowork 2026-05-11. Sub-sprint del refactor PersonalPage.
+**Riesgo:** bajo. El bloque solo renderiza la matriz operaria→técnicos. Toda la edición vive en `FormAltaEditarEmpleado.tsx` (selectora). No tiene handlers locales ni listeners.
+**Touch-list previsto:** `src/pages/PersonalPage.tsx`, `src/components/personal/GruposOperariaTecnico.tsx` (NUEVO).
+
+#### Objetivo
+
+Extraer las líneas ~865-941 de PersonalPage (sección "Grupos operaria-técnico" + tarjeta "Sin asignar") a un componente nuevo `GruposOperariaTecnico.tsx` que solo recibe `personal: Personal[]`.
+
+#### Por qué
+
+- Bloque self-contained de visualización pura.
+- Reduce ~77 líneas de PersonalPage.
+- Mejora legibilidad — la sección tiene su propio scope semántico.
+
+#### Criterios de aceptación
+
+- [ ] Archivo `src/components/personal/GruposOperariaTecnico.tsx` NUEVO con prop única:
+  - `personal: Personal[]`
+- [ ] El componente importa `agruparPorRol` desde `utils/roles.ts` (ya existe) y `getTecnicosDeOperaria` (probablemente también, verificar).
+- [ ] Renderea heading + grid de tarjetas operaria→técnicos + tarjeta "Sin asignar" para técnicos sin operaria.
+- [ ] PersonalPage reemplaza el bloque por `<GruposOperariaTecnico personal={personal} />`.
+- [ ] Cazadores 7/7 PASS. Typecheck verde. Lint verde.
+- [ ] PersonalPage baja de ~1267 a ~1190 líneas (-77).
+- [ ] reviewer recomendado pero NO obligatorio (riesgo bajo, solo JSX).
+
+#### Restricciones / guardarrails
+
+- NO cambiar el algoritmo de agrupación. Mismo `agruparPorRol` que ya se usa.
+- NO mover lógica de asignar/quitar operaria (vive en `FormAltaEditarEmpleado` y se queda allí).
+- Si la sección usa hooks (`useMemo` para listas filtradas), mantener equivalencia.
+
+#### Notas para el coordinator
+
+- Es el sub-sprint más simple del lote. Procesar rápido para mantener momentum.
+- QA manual: abrir `/admin/personal`, verificar que la sección "Grupos operaria-técnico" aparece igual que antes con la matriz 7+7 correcta.
+
+---
+
+### SPRINT-142d — Extraer `TablaPersonalActivo` + consolidar constantes a `utils/personal.ts`
+
+**Estado:** PENDIENTE
+**Prioridad:** media (sub-sprint final de SPRINT-142, incluye cleanup de duplicación)
+**Origen:** Cowork 2026-05-11. Sub-sprint final del refactor PersonalPage. Cierra la deuda de constantes duplicadas que dejé en SPRINT-142a (`ROL_LABELS`, `ROLES_CON_COMISION`, etc. están en PersonalPage Y en FormAltaEditarEmpleado).
+**Riesgo:** medio. Toca varios archivos (PersonalPage + FormAltaEditarEmpleado + módulo nuevo). El módulo `utils/personal.ts` nuevo importa tipos de `types/index.ts`. Sin esto el refactor queda incompleto.
+**Touch-list previsto:** `src/pages/PersonalPage.tsx`, `src/components/personal/FormAltaEditarEmpleado.tsx`, `src/components/personal/TablaPersonalActivo.tsx` (NUEVO), `src/utils/personal.ts` (NUEVO).
+
+#### Objetivo
+
+1. **Crear `src/utils/personal.ts`** con las constantes y helpers que hoy están duplicados:
+   - `ROL_LABELS: Record<Rol, string>`
+   - `ROL_COLORS: Record<Rol, string>`
+   - `ROLES_CON_COMISION: Rol[]`
+   - `ROL_SELECT_ORDEN: Rol[]` (hoy solo en FormAltaEditarEmpleado)
+   - `comisionDefaultPorNivel(nivel: 'junior' | 'senior'): number`
+2. **Modificar `FormAltaEditarEmpleado.tsx`** para importar de `utils/personal.ts` en vez de declarar las constantes localmente.
+3. **Modificar `PersonalPage.tsx`** para idem.
+4. **Crear `src/components/personal/TablaPersonalActivo.tsx`** y mover líneas ~943-1040 del JSX (tabla agrupada por rol con acciones Edit/Link/Desactivar/Eliminar).
+5. PersonalPage reduce a ~1067 líneas.
+
+#### Por qué
+
+- Cerrar el refactor: PersonalPage queda como orquestador delgado.
+- Eliminar la duplicación de constantes (un solo source of truth).
+- Bundle queda más limpio: las constantes se cargan una sola vez.
+
+#### Criterios de aceptación
+
+- [ ] `src/utils/personal.ts` NUEVO con los 5 exports listados.
+- [ ] `FormAltaEditarEmpleado.tsx` importa de `utils/personal.ts`. Las declaraciones locales se borran. El comentario "Constantes duplicadas..." se actualiza para reflejar que ya viven en utils.
+- [ ] `PersonalPage.tsx` idem.
+- [ ] `src/components/personal/TablaPersonalActivo.tsx` NUEVO recibe props:
+  - `personal: Personal[]`
+  - `onEdit: (p: Personal) => void`
+  - `onDesactivar: (p: Personal) => void`
+  - `onEliminar: (p: Personal) => void`
+  - `onAbrirVincular: (p: Personal) => void`
+  - `currentUserId?: string` (para resaltar fila propia si aplica)
+- [ ] El componente solo renderiza la tabla agrupada por rol (usa `agruparPorRol` de `utils/roles.ts`).
+- [ ] Los handlers `handleEdit`, `abrirModalDesactivar`, `abrirModalEliminar`, `abrirVincularExistente` SE QUEDAN en PersonalPage y se pasan como callbacks.
+- [ ] PersonalPage reemplaza el bloque líneas ~943-1040 por `<TablaPersonalActivo {...props} />`.
+- [ ] Cazadores 7/7 PASS. Typecheck verde. Lint --max-warnings 0 verde.
+- [ ] PersonalPage baja a ~1067 líneas (objetivo del padre SPRINT-142).
+- [ ] Bundle build OK. Levantar `npm run build` y confirmar que no aparecen warnings nuevos.
+- [ ] Reviewer obligatorio (es el cierre del refactor).
+- [ ] archivist PRE-CHANGE obligatorio.
+- [ ] Marcar SPRINT-142 padre como COMPLETADO al cerrar.
+
+#### Restricciones / guardarrails
+
+- NO mover handlers (`handleEdit`, etc.) al componente nuevo. Solo el JSX se mueve. Los handlers se quedan en PersonalPage y se pasan como callbacks.
+- NO eliminar los comentarios sobre patrones cazadores (`@safe-tecnicoid-id`, `@safe-non-tx`).
+- NO romper el orden visual de columnas/filtros de la tabla. Equivalencia 1:1.
+- Si hay otros archivos que importen `ROL_LABELS` de PersonalPage o de FormAltaEditarEmpleado, actualizar también esos imports. `grep -rn "ROL_LABELS\|ROL_COLORS\|ROLES_CON_COMISION\|ROL_SELECT_ORDEN\|comisionDefaultPorNivel" src/` antes de empezar.
+- QA manual post-deploy: abrir `/admin/personal`, confirmar que la tabla sigue mostrando todos los activos con sus colores de badge correctos, click en cada acción funciona.
+
+#### Notas para el coordinator
+
+- Este es el sprint con más archivos tocados del lote. Hacer en pasada única con cuidado.
+- Antes de pushear: build size diff vs antes. Documentar en el commit.
+- Postmortem-positivo opcional al cerrar el SPRINT-142 padre (sub-regla de postmortems de éxito, similar al de SPRINT-117c).
 
 ---
 
