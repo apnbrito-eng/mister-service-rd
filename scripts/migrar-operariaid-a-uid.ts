@@ -47,6 +47,7 @@ import * as path from 'path';
 
 const SERVICE_ACCOUNT_PATH = path.resolve('service-account.json');
 const APPLY = process.argv.includes('--apply');
+const OK_AMPLIADO = process.argv.includes('--ok-ampliado');
 const DRY_RUN = !APPLY;
 
 if (!getApps().length) {
@@ -256,13 +257,21 @@ async function main() {
     console.log(`[WARN] ${tecHuerfana} técnicos tienen operariaId huérfano.`);
   }
 
-  // Umbral de seguridad: >50 docs requieren OK explícito de Jorge (sub-regla SPRINT-149)
-  if (totalMigrables > 50 && APPLY) {
+  // Umbral de seguridad: >50 docs requieren OK explícito de Jorge (sub-regla SPRINT-149).
+  // Pasar --ok-ampliado salta el gate, solo válido si BLOQUEOS.md tiene la entrada
+  // "OK ampliado: jorge YYYY-MM-DD HH:MM" firmada en SPRINT-149-APPLY.
+  if (totalMigrables > 50 && APPLY && !OK_AMPLIADO) {
     console.log('');
     console.log(`[ABORT] ${totalMigrables} docs migrables superan el umbral de 50 declarado en SPRINT-149.`);
-    console.log('        Jorge debe agregar OK explícito en BLOQUEOS.md antes de re-ejecutar --apply.');
-    console.log('        Volvé a correr sin --apply para revisar el listado.');
+    console.log('        Jorge debe agregar OK explícito en BLOQUEOS.md (entrada SPRINT-149-APPLY) y');
+    console.log('        re-ejecutar con --apply --ok-ampliado.');
+    console.log('        O volvé a correr sin --apply para revisar el listado.');
     process.exit(2);
+  }
+  if (totalMigrables > 50 && APPLY && OK_AMPLIADO) {
+    console.log('');
+    console.log(`[OK AMPLIADO] ${totalMigrables} docs > 50 — procediendo con --ok-ampliado. Asumiendo`);
+    console.log('              que BLOQUEOS.md tiene la entrada firmada para SPRINT-149-APPLY.');
   }
 
   if (DRY_RUN) {

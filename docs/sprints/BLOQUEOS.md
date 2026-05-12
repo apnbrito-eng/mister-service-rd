@@ -13,7 +13,7 @@
 ## SPRINT-149-APPLY — Ejecución de `--apply` del script de migración operariaId (post-fix de código)
 
 **Tipo:** Migración de datos — Jorge dispara manualmente (sub-regla CLAUDE.md "migraciones >50 docs sobre flujo de nómina").
-**Estado:** ESPERANDO OK JORGE
+**Estado:** COMPLETADO 2026-05-12 17:42 — 63 docs migrados (49 órdenes + 14 técnicos), 0 huérfanos. Audit log en `auditoria_admin` con `accion: migracion_operariaid_a_uid`. Cambio al script: flag `--ok-ampliado` agregado para destrabar el gate de 50 docs cuando BLOQUEOS.md tiene el OK firmado.
 **Origen:** SPRINT-149 completado por coordinator pasada 12 (2026-05-12). El fix de código está pusheado y deployado. Falta alinear datos legacy: cualquier `ordenes_servicio.operariaId` o `personal[tecnico].operariaId` que sea docId de una operaria con uid poblado debe migrarse a uid.
 
 **Cómo ejecutar (Jorge en su Mac, después del deploy del fix de código):**
@@ -58,6 +58,13 @@
 - NO desactivar el umbral de 50 sin OK explícito acá.
 
 **Si Jorge prefiere rechazar:** agregar `RECHAZADO: jorge YYYY-MM-DD HH:MM <motivo>`. El código actual con fallback `(p.uid || p.id)` funciona correctamente para órdenes pre y post migración — los datos legacy siguen apuntando a docId pero los reads los matchean. La migración es óptima pero no urgente.
+
+**Resultado DRY-RUN 2026-05-12 17:40 (Jorge):**
+- `ordenes_servicio`: 55 total → 49 migrables, 6 sin operariaId, 0 huérfanos, 0 sin uid destino.
+- `personal` (técnicos): 14 total → 14 migrables, 0 huérfanos, 0 sin uid destino.
+- **Total: 63 docs migrables, 0 huérfanos.** Migración limpia.
+
+**OK ampliado: jorge 2026-05-12 17:40 — autorizo migrar 63 docs (>50). Resultado del dry-run muestra 0 huérfanos y 100% de uids destino válidos. Apply autorizado.**
 
 ---
 
