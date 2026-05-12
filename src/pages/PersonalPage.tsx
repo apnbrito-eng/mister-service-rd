@@ -604,18 +604,26 @@ export default function PersonalPage() {
   };
 
   // ───── Dependencias por rol ─────
-  const getOrdenesActivasDeTecnico = (p: Personal): OrdenServicio[] =>
-    ordenes.filter(o =>
-      (o.tecnicoId === p.id || o.responsableId === p.id) &&
+  // SPRINT-149 (P-006 variante reversa): `o.tecnicoId` y `o.responsableId`
+  // post-c4be345 persisten auth.uid; fallback `p.id` para órdenes pre-migración.
+  // @safe-tecnicoid-id: OR explícito ya soporta pre/post c4be345 (pIdAuth || p.id).
+  const getOrdenesActivasDeTecnico = (p: Personal): OrdenServicio[] => {
+    const pIdAuth = p.uid || p.id;
+    return ordenes.filter(o =>
+      (o.tecnicoId === pIdAuth || o.tecnicoId === p.id ||
+       o.responsableId === pIdAuth || o.responsableId === p.id) &&
       !['cerrado', 'cancelado'].includes(o.fase)
     );
+  };
 
+  // SPRINT-149 (P-006 variante operariaId): `t.operariaId` y `o.operariaId`
+  // post-SPRINT-105 persisten `auth.uid`; fallback a `p.id` para operarias legacy.
   const getTecnicosDeOperaria = (p: Personal): Personal[] =>
-    personal.filter(t => t.operariaId === p.id && t.activo);
+    personal.filter(t => t.operariaId === (p.uid || p.id) && t.activo);
 
   const getOrdenesActivasDeOperaria = (p: Personal): OrdenServicio[] =>
     ordenes.filter(o =>
-      o.operariaId === p.id &&
+      o.operariaId === (p.uid || p.id) &&
       !['cerrado', 'cancelado'].includes(o.fase)
     );
 
@@ -707,12 +715,14 @@ export default function PersonalPage() {
             const batch = writeBatch(db);
             for (const o of chunks[i]) {
               const updateData: Record<string, unknown> = { updatedAt: Timestamp.now() };
+              // @safe-tecnicoid-id: OR explícito ya soporta pre/post c4be345 (pIdAuth || p.id).
               if (o.tecnicoId === pIdAuth || o.tecnicoId === p.id) {
                 updateData.tecnicoId = destinoIdAuth;
                 updateData.tecnicoNombre = destinoNombre;
                 updateData.operariaId = destino.operariaId || null;
                 updateData.operariaNombre = destino.operariaNombre || null;
               }
+              // @safe-tecnicoid-id: OR explícito ya soporta pre/post c4be345.
               if (o.responsableId === pIdAuth || o.responsableId === p.id) {
                 updateData.responsableId = destinoIdAuth;
                 updateData.responsableNombre = destinoNombre;
@@ -764,18 +774,23 @@ export default function PersonalPage() {
           // Si no hay ops cross (tecs.length + ords.length === 0 no entra acá, ya cubierto
           // por la rama else de abajo), siempre necesitamos al menos 1 chunk para el delete.
           if (chunks.length === 0) chunks.push([]);
+          // SPRINT-149 (P-006 variante operariaId): persistir `auth.uid` en
+          // `operariaId` (no doc id de personal). El campo se alinea con la
+          // convención post-SPRINT-105 (write-side ya migrado en FormAltaEditarEmpleado
+          // y useOrdenCreateForm). Fallback a `destino.id` para destinos legacy sin uid.
+          const destinoOperariaIdAuth = destino.uid || destino.id;
           for (let i = 0; i < chunks.length; i++) {
             const batch = writeBatch(db);
             for (const item of chunks[i]) {
               if (item.kind === 'orden') {
                 batch.update(doc(db, 'ordenes_servicio', item.o.id), {
-                  operariaId: destino.id,
+                  operariaId: destinoOperariaIdAuth,
                   operariaNombre: destino.nombre,
                   updatedAt: Timestamp.now(),
                 });
               } else {
                 batch.update(doc(db, 'personal', item.t.id), {
-                  operariaId: destino.id,
+                  operariaId: destinoOperariaIdAuth,
                   operariaNombre: destino.nombre,
                 });
               }

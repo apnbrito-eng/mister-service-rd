@@ -49,7 +49,10 @@ type PeriodoVentas = 'hoy' | 'semana' | 'mes' | 'año';
 export default function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { userProfile } = useApp();
+  // SPRINT-149: `currentUser` necesario para filtros operaria que comparan
+  // contra `o.operariaId` (post-SPRINT-105 persiste auth.uid). `userProfile.id`
+  // puede ser docId en cascada `personal/` (path B de AppContext).
+  const { userProfile, currentUser } = useApp();
 
   // Toast cuando el usuario es redirigido aquí por falta de permisos
   useEffect(() => {
@@ -213,7 +216,10 @@ export default function Dashboard() {
           for (const tipo of ['ruta_manana', 'horarios_clientes'] as const) {
             if (tipo === 'ruta_manana' && !pasoVentanaRuta) continue;
             if (tipo === 'horarios_clientes' && !pasoVentanaAvisos) continue;
-            const rec = recs.find(r => r.operariaId === op.id && r.tipo === tipo);
+            // SPRINT-149 (P-006 variante operariaId): `r.operariaId` proviene del
+            // recordatorios.service que en SPRINT-105+ persiste auth.uid; fallback
+            // a `op.id` legacy.
+            const rec = recs.find(r => r.operariaId === (op.uid || op.id) && r.tipo === tipo);
             if (!rec) continue;
             if (rec.completado) continue;
             if (rec.notificadoAAdmin) continue;
@@ -247,18 +253,22 @@ export default function Dashboard() {
     // Excluir órdenes eliminadas (soft delete) en todas las métricas del dashboard
     let lista = ordenesRaw.filter(o => !o.eliminada);
     if (filtroOperariaActivo) {
-      lista = lista.filter(o => o.operariaId === userProfile?.id);
+      // SPRINT-149 (P-006 variante operariaId): comparar contra `currentUser?.uid` con
+      // fallback a `userProfile?.id` para operarias pre-SPRINT-105 cargadas vía cascada
+      // `personal/` (path B de AppContext, donde userProfile.id es docId, no uid).
+      lista = lista.filter(o => o.operariaId === (currentUser?.uid || userProfile?.id));
     }
     // Filtro por operaria seleccionada (coordinadora)
     if (esCoordinadora && filtroOperariaCoord) {
       if (filtroOperariaCoord === '__sin_asignar__') {
         lista = lista.filter(o => !o.operariaId);
       } else {
+        // SPRINT-149: el dropdown ahora emite `(op.uid || op.id)` (ver renderer abajo).
         lista = lista.filter(o => o.operariaId === filtroOperariaCoord);
       }
     }
     return lista;
-  }, [ordenesRaw, filtroOperariaActivo, userProfile?.id, esCoordinadora, filtroOperariaCoord]);
+  }, [ordenesRaw, filtroOperariaActivo, userProfile?.id, currentUser?.uid, esCoordinadora, filtroOperariaCoord]);
 
   // ---- derived data ----
   const now = new Date();
@@ -396,8 +406,9 @@ export default function Dashboard() {
     // Bonos proyectados: operarias con desempeño >= 70% + secretarias por tiers
     let bonos = 0;
     for (const op of activos.filter(p => p.rol === 'operaria' || p.rol === 'coordinadora')) {
+      // SPRINT-149 (P-006 variante operariaId): fallback `op.uid || op.id`.
       const ordsMes = ordenesRaw.filter(o =>
-        o.operariaId === op.id && !o.eliminada &&
+        o.operariaId === (op.uid || op.id) && !o.eliminada &&
         ((o.fase === 'cerrado') || o.soloChequeo) &&
         o.updatedAt >= inicio && o.updatedAt <= fin,
       );
@@ -461,16 +472,23 @@ export default function Dashboard() {
   const tecnicos = useMemo(() => {
     const base = personal.filter(p => p.rol === 'tecnico' && p.activo);
     if (!filtroOperariaActivo) return base;
-    // @safe-userprofile-id: filtro client-side por personal.operariaId
-    // (que matchea con personalDocId, no auth.uid). No escribe a Firestore.
-    return base.filter(t => t.operariaId === userProfile?.id);
-  // @safe-userprofile-id: deps array de useMemo, no es write a Firestore.
-  }, [personal, filtroOperariaActivo, userProfile?.id]);
+    // SPRINT-149: `t.operariaId` post-SPRINT-105 persiste auth.uid (alineado con
+    // `ordenes_servicio.operariaId`). Patrón canónico: `currentUser?.uid` primero,
+    // fallback a `userProfile?.id` solo para operarias legacy sin doc espejo en
+    // usuarios/{uid}. No es write a Firestore — filtro client-side puro.
+    // @safe-userprofile-id: filtro client-side con fallback intencional post-SPRINT-149.
+    return base.filter(t => t.operariaId === (currentUser?.uid || userProfile?.id));
+    // @safe-userprofile-id: deps array de useMemo, no escribe a Firestore.
+  }, [personal, filtroOperariaActivo, userProfile?.id, currentUser?.uid]);
 
   // Estado de casos por tecnico
   const casosPorTecnico = useMemo(() => {
     return tecnicos.map(t => {
-      const ordenesT = ordenes.filter(o => o.tecnicoId === t.id || o.tecnicoNombre === t.nombre);
+      // SPRINT-149 (P-006 variante reversa): `o.tecnicoId` post-c4be345 persiste auth.uid;
+      // fallback `t.id` legacy + tecnicoNombre como red de seguridad UI.
+      // @safe-tecnicoid-id: OR explícito ya soporta pre/post c4be345 (tIdAuth || t.id).
+      const tIdAuth = t.uid || t.id;
+      const ordenesT = ordenes.filter(o => o.tecnicoId === tIdAuth || o.tecnicoId === t.id || o.tecnicoNombre === t.nombre);
       const pendientes = ordenesT.filter(o => ['nuevo_lead', 'en_gestion', 'aprobado', 'agendado'].includes(o.fase) && o.estado === 'activo').length;
       const enProceso = ordenesT.filter(o => ['en_diagnostico', 'en_cotizacion'].includes(o.fase) && o.estado === 'activo').length;
       const completados = ordenesT.filter(o => ['trabajo_realizado', 'cerrado'].includes(o.fase)).length;
@@ -481,7 +499,10 @@ export default function Dashboard() {
   // Rendimiento por tecnico
   const rendimientoTecnicos = useMemo(() => {
     return tecnicos.map(t => {
-      const ordenesT = ordenes.filter(o => o.tecnicoId === t.id || o.tecnicoNombre === t.nombre);
+      // SPRINT-149: idem casosPorTecnico — fallback pre/post c4be345.
+      // @safe-tecnicoid-id: OR explícito ya soporta pre/post c4be345 (tIdAuth || t.id).
+      const tIdAuth = t.uid || t.id;
+      const ordenesT = ordenes.filter(o => o.tecnicoId === tIdAuth || o.tecnicoId === t.id || o.tecnicoNombre === t.nombre);
       const total = ordenesT.length;
       const completadas = ordenesT.filter(o => ['trabajo_realizado', 'cerrado'].includes(o.fase)).length;
       const pct = total > 0 ? Math.round((completadas / total) * 100) : 0;
@@ -572,8 +593,11 @@ export default function Dashboard() {
             {personal
               .filter(p => p.activo && (p.rol === 'operaria' || p.rol === 'coordinadora'))
               .map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.nombre}{p.id === userProfile?.id ? ' (mi grupo)' : ''}
+                // SPRINT-149 (P-006 variante operariaId): emitir `p.uid || p.id` para
+                // que el filtro upstream compare contra `o.operariaId` que persiste
+                // auth.uid post-SPRINT-105 (fallback docId legacy).
+                <option key={p.id} value={p.uid || p.id}>
+                  {p.nombre}{(p.uid || p.id) === (currentUser?.uid || userProfile?.id) ? ' (mi grupo)' : ''}
                 </option>
               ))}
           </select>

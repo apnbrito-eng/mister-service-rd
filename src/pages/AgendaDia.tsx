@@ -297,11 +297,13 @@ export default function AgendaDia() {
       // pre-onboarding sin Auth.
       lista = lista.filter(t => (t.uid || t.id) === currentUser.uid);
     } else if (esOperaria && soloMiGrupo && userProfile) {
-      // NOTA: línea NO tocada en SPRINT-145 — el campo `t.operariaId`
-      // requiere análisis separado en SPRINT-146 (puede guardar uid o
-      // docId; depende de cómo se setea en alta/edición de técnicos).
-      lista = lista.filter(t => t.operariaId === userProfile.id);
+      // SPRINT-149 (P-006 variante operariaId): `t.operariaId` post-SPRINT-105
+      // persiste auth.uid (no docId). Comparar contra `currentUser?.uid` con
+      // fallback a `userProfile.id` para operarias legacy.
+      lista = lista.filter(t => t.operariaId === (currentUser?.uid || userProfile.id));
     } else if (esAdminOCoord && filtroOperaria) {
+      // SPRINT-149: `filtroOperaria` viene del dropdown que emite `op.uid || op.id`
+      // (alineado con `t.operariaId` post-SPRINT-105).
       lista = lista.filter(t => t.operariaId === filtroOperaria);
     }
     if (filtroTecnico) {
@@ -416,7 +418,11 @@ export default function AgendaDia() {
               className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
             >
               <option value="">Todas las operarias</option>
-              {operarias.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+              {operarias.map(o => (
+                // SPRINT-149 (P-006 variante operariaId): emitir `o.uid || o.id`
+                // para alinear con `t.operariaId` que persiste auth.uid post-SPRINT-105.
+                <option key={o.id} value={o.uid || o.id}>{o.nombre}</option>
+              ))}
             </select>
           )}
           {esOperaria && (

@@ -50,18 +50,26 @@ export default function ModalConfirmarEliminar({
 }: ModalConfirmarEliminarProps) {
   // Helpers locales — mismo shape que los originales en PersonalPage.
   // Replicados acá porque ahora `personal` y `ordenes` llegan por props.
-  const getOrdenesActivasDeTecnico = (p: Personal): OrdenServicio[] =>
-    ordenes.filter(o =>
-      (o.tecnicoId === p.id || o.responsableId === p.id) &&
+  // SPRINT-149 (P-006 variante reversa): `o.tecnicoId` y `o.responsableId`
+  // post-c4be345 persisten auth.uid; fallback `p.id` para órdenes pre-migración.
+  // @safe-tecnicoid-id: OR explícito ya soporta pre/post c4be345 (pIdAuth || p.id).
+  const getOrdenesActivasDeTecnico = (p: Personal): OrdenServicio[] => {
+    const pIdAuth = p.uid || p.id;
+    return ordenes.filter(o =>
+      (o.tecnicoId === pIdAuth || o.tecnicoId === p.id ||
+       o.responsableId === pIdAuth || o.responsableId === p.id) &&
       !['cerrado', 'cancelado'].includes(o.fase)
     );
+  };
 
+  // SPRINT-149 (P-006 variante operariaId): `t.operariaId` y `o.operariaId`
+  // post-SPRINT-105 persisten auth.uid; fallback a `p.id` legacy.
   const getTecnicosDeOperaria = (p: Personal): Personal[] =>
-    personal.filter(t => t.operariaId === p.id && t.activo);
+    personal.filter(t => t.operariaId === (p.uid || p.id) && t.activo);
 
   const getOrdenesActivasDeOperaria = (p: Personal): OrdenServicio[] =>
     ordenes.filter(o =>
-      o.operariaId === p.id &&
+      o.operariaId === (p.uid || p.id) &&
       !['cerrado', 'cancelado'].includes(o.fase)
     );
 

@@ -11,6 +11,12 @@
  * pasó inadvertido porque el lookup era `new Set(...).has(t.id)` y
  * `map[t.id]` dentro de `useMemo`, no `<option>` ni `.find()`. Ver
  * docs/PATRONES_REGRESION.md.
+ * Extensión variante reversa "campo === X.id" (SPRINT-149, 2026-05-12):
+ * detecta el patrón `o.operariaId === p.id` / `t.operariaId === userProfile.id`
+ * en filter/comparison directos (no .find()). El campo `operariaId` post-SPRINT-105
+ * persiste auth.uid, así que comparar contra `p.id` (doc id de personal) siempre
+ * falla para operarias nuevas. Patrón sintetiza variantes 2 y 3 pero captura la
+ * comparación directa en filter/condicionales fuera de `.find()`/`Set.has()`.
  *
  * Síntoma original (variante 1, dropdown): técnico/operaria nuevo (creado
  * con flujo SPRINT-105 que respeta auto-id de Firestore en personal/) recibe
@@ -69,25 +75,14 @@
  * legítimos (no escriben a Firestore y el lookup es simétrico con el
  * dropdown UI). Mantener corto, justificar.
  *
- * NOTA SOBRE operariaId (SPRINT-146, deuda pendiente — SPRINT-147):
- *   El cazador NO detecta hoy los patrones `o.operariaId === p.id` /
- *   `o.operariaId === userProfile?.id` porque el campo `operariaId` en
- *   `ordenes_servicio` actualmente guarda `personal.id` (docId), no
- *   `auth.uid` — verificado en `PersonalPage.tsx:772-778` y
- *   `MapaRutas.tsx:716` (donde se copia `tecnicoElegido.operariaId` del
- *   doc de Personal). Para operarias cargadas vía cascada `personal/`
- *   (path B de AppContext), `userProfile.id === personal docId` también
- *   funciona. PERO si una operaria recibe doc espejo en `usuarios/{uid}`
- *   (post-SPRINT-105), `userProfile.id = uid` y entonces
- *   `o.operariaId === userProfile.id` rompe. Casos detectados (no
- *   fixeados acá por scope creep):
- *     - src/services/nomina.service.ts:172
- *     - src/pages/Ordenes.tsx:635
- *     - src/pages/Rendimiento.tsx:297
- *   SPRINT-147 follow-up: decidir si migrar `operariaId` en orden a uid
- *   (consistente con tecnicoId) o documentar el campo como "docId
- *   intencional" y arreglar el lookup `o.operariaId === userProfile.id`
- *   que asume docId pero userProfile.id puede ser uid. Requiere OK Jorge.
+ * NOTA SOBRE operariaId — [RESUELTO en SPRINT-149 el 2026-05-12]:
+ *   Jorge eligió ruta (a): migrar `operariaId` a `auth.uid` consistente con
+ *   `tecnicoId`. SPRINT-149 cerró el ciclo:
+ *   - 13 reads migrados al patrón `(p.uid || p.id) === operariaId`.
+ *   - 2 writes pendientes (PersonalPage.tsx:772-778) migrados a `(destino.uid || destino.id)`.
+ *   - Script `scripts/migrar-operariaid-a-uid.ts` alinea datos legacy.
+ *   - Variante 4 agregada al cazador (comparación directa reversa
+ *     `xxx.<sufijo> === yyy.id`).
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -216,6 +211,14 @@ export async function check(): Promise<InvariantResult> {
   const mapIndexRe = /\[(\w+)\.id\]/;
   // Pattern para detectar el Set/Map upstream — lo buscamos en ±CTX_WINDOW.
   const TECNICO_ID_SUFFIX_RE = /\b(?:tecnicoId|operariaId|ayudanteId|responsableId|secretariaId|tecnicoDestinoId)\b/;
+  // Variante 4 (SPRINT-149): comparación directa reversa
+  // `xxx.<sufijo> === yyy.id` (filter/condicional) donde `xxx.<sufijo>` es campo
+  // persistido de empleado (post-SPRINT-105/c4be345 contiene auth.uid) e `yyy` es
+  // identificador corto de personal. Captura los casos `o.operariaId === p.id`
+  // de nomina/Rendimiento/Dashboard/MetricasMensuales/MapaRutas/etc. que el
+  // findRe de variante 2 no cazaba porque están en `.filter()`/comparación directa.
+  // Captura solo `=== `, no `==` (no asume forma).
+  const reverseCmpRe = /([\w.[\]]+\.(?:tecnicoId|operariaId|ayudanteId|responsableId|secretariaId|tecnicoDestinoId))\s*===?\s*(\w+)\.id\b/;
 
   for (const file of files) {
     const rel = path.relative(ROOT_DIR, file);
@@ -304,6 +307,35 @@ export async function check(): Promise<InvariantResult> {
                   `Bug sistémico: SPRINT-132 (2026-05-11). Variante original: c4be345.`,
               });
             }
+          }
+        }
+      }
+
+      // ── Variante 4 (SPRINT-149): xxx.<sufijo> === yyy.id (comparación directa reversa) ──
+      const rcm = reverseCmpRe.exec(line);
+      if (rcm) {
+        const lhs = rcm[1]; // ej: "o.operariaId" o "selectedOrden.operariaId"
+        const rhsVar = rcm[2]; // ej: "p" en "p.id"
+        if (PERSONAL_VAR_NAMES.has(rhsVar)) {
+          const tagWindowStart = Math.max(0, i - 5);
+          const tagWindow = lines.slice(tagWindowStart, i).join('\n');
+          const allowlisted = line.includes(SAFE_LINE_TAG) || tagWindow.includes(SAFE_LINE_TAG);
+
+          if (!allowlisted) {
+            hits.push({
+              file: rel,
+              line: i + 1,
+              snippet: line.trim(),
+              explanation:
+                `[Variante 4 — comparación directa reversa] \`${lhs} === ${rhsVar}.id\` ` +
+                `compara campo persistido de empleado (post-c4be345/SPRINT-105 contiene auth.uid) ` +
+                `contra doc id de personal/. Para empleados nuevos (con uid poblado) el lookup ` +
+                `siempre falla. Cambiá a \`${lhs} === (${rhsVar}.uid || ${rhsVar}.id)\` para ` +
+                `soportar tanto órdenes pre como post migración. Si es solo filtro UI ` +
+                `(no escribe a Firestore gateado por rules), agregá ` +
+                `"// @safe-tecnicoid-id: ..." 1-5 líneas arriba. ` +
+                `Bug sistémico: SPRINT-149 (2026-05-12, operariaId migración).`,
+            });
           }
         }
       }

@@ -76,7 +76,10 @@ interface MarcadorConRuta {
 }
 
 export default function MapaRutas() {
-  const { userProfile } = useApp();
+  // SPRINT-149: `currentUser` necesario para comparar contra `operariaId` que
+  // post-SPRINT-105 persiste auth.uid. `userProfile.id` puede ser docId en
+  // cascada `personal/` (path B de AppContext).
+  const { userProfile, currentUser } = useApp();
   const puedeEditar =
     userProfile?.rol === 'administrador' ||
     userProfile?.rol === 'coordinadora' ||
@@ -586,10 +589,13 @@ export default function MapaRutas() {
   const handleGuardarEditDesdeMapa = async () => {
     if (!editingOrden) return;
     // Aviso cuando una operaria modifica orden fuera de su grupo
+    // SPRINT-149 (P-006 variante operariaId): `editingOrden.operariaId`
+    // post-SPRINT-105 persiste auth.uid. Comparar contra `currentUser?.uid` con
+    // fallback a `userProfile.id` para operarias pre-onboarding sin doc espejo.
     if (
       userProfile?.rol === 'operaria' &&
       editingOrden.operariaId &&
-      editingOrden.operariaId !== userProfile.id
+      editingOrden.operariaId !== (currentUser?.uid || userProfile.id)
     ) {
       const otra = editingOrden.operariaNombre || 'otra operaria';
       const ok = window.confirm(`Esta orden pertenece al grupo de ${otra}. ¿Confirmar el cambio?`);

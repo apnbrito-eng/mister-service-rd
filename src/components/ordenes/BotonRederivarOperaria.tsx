@@ -42,6 +42,11 @@ export default function BotonRederivarOperaria({ orden, personal, userProfile }:
   // Técnico ya no está en personal (huérfano migración): no podemos derivar.
   if (!tecnico) return null;
 
+  // SPRINT-149: `tecnico.operariaId` y `orden.operariaId` post-SPRINT-105
+  // persisten ambos auth.uid. Si una orden legacy tiene operariaId=docId y el
+  // técnico tiene operariaId=uid, el botón aparecerá como "no sincronizada"
+  // y el handler de re-sincronización escribirá el uid correcto a la orden
+  // (alineando ambos lados). Comportamiento esperado post-SPRINT-149.
   const operariaIdTecnico = tecnico.operariaId || null;
   const operariaNombreTecnico = tecnico.operariaNombre || null;
   const operariaIdOrden = orden.operariaId || null;

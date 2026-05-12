@@ -155,7 +155,10 @@ export async function generarLiquidacion(
     let citasCompletadasMes: number | undefined;
 
     if (p.rol === 'tecnico') {
-      const comisionesT = comisionesEnRango.filter(c => c.tecnicoId === p.id);
+      // SPRINT-149 (P-006 variante reversa): `c.tecnicoId` post-c4be345 persiste auth.uid;
+      // fallback `p.id` para comisiones registradas pre-migración. Sin esto, técnicos
+      // nuevos no acumulan comisiones en su nómina aunque la comisión SÍ exista.
+      const comisionesT = comisionesEnRango.filter(c => c.tecnicoId === (p.uid || p.id));
       comisionesIds = comisionesT.map(c => c.id);
       // Sumar comisión + descuentoPorGarantia.monto (que ya es negativo). Si la nómina del técnico
       // original ya cerró cuando se aplica el descuento, queda flotante y se recoge en la próxima
@@ -168,8 +171,12 @@ export async function generarLiquidacion(
     } else if (p.rol === 'operaria' || p.rol === 'coordinadora') {
       // Bono operaria es MENSUAL: solo se paga en Q2, medido sobre todo el mes calendario.
       if (esQ2) {
+        // SPRINT-149 (P-006 variante operariaId): post-SPRINT-105 las operarias
+        // nuevas tienen `personal.uid` poblado; el campo `ordenes_servicio.operariaId`
+        // ahora persiste auth.uid (no doc id). Fallback a `p.id` para órdenes
+        // pre-migración. Ver docs/PATRONES_REGRESION.md P-006.
         const ordsMes = ordenes.filter(o =>
-          o.operariaId === p.id &&
+          o.operariaId === (p.uid || p.id) &&
           !o.eliminada &&
           ((o.fase === 'cerrado') || o.soloChequeo) &&
           o.updatedAt >= rangoMes.inicio && o.updatedAt <= rangoMes.fin

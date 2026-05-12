@@ -33,7 +33,9 @@ function mapearEstadoSimple(fase: FaseOrden): EstadoOrdenSimple {
 }
 
 export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Props) {
-  const { userProfile } = useApp();
+  // SPRINT-149: `currentUser` para comparar contra `orden.operariaId` que
+  // post-SPRINT-105 persiste auth.uid (no docId).
+  const { userProfile, currentUser } = useApp();
   const rol = userProfile?.rol;
 
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -197,10 +199,13 @@ export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Prop
     }
 
     // Grupo operaria
+    // SPRINT-149 (P-006 variante operariaId): `orden.operariaId` post-SPRINT-105
+    // persiste auth.uid. Comparar contra `currentUser?.uid` con fallback `userProfile?.id`
+    // legacy.
     if (
       rol === 'operaria' &&
       orden.operariaId &&
-      orden.operariaId !== userProfile?.id
+      orden.operariaId !== (currentUser?.uid || userProfile?.id)
     ) {
       const nombreDueño = orden.operariaNombre || 'otra operaria';
       const ok = window.confirm(

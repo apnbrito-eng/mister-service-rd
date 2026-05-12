@@ -22,7 +22,9 @@ const BONO_OPERARIA = 5000;
 
 export default function MetricasMensuales() {
   const navigate = useNavigate();
-  const { userProfile } = useApp();
+  // SPRINT-149: userProfile preservado para futuras tarjetas personalizadas
+  // por rol logueado. Hoy no se usa en el render, prefix _ silencia el warning.
+  const { userProfile: _userProfile } = useApp();
   const [loading, setLoading] = useState(true);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
@@ -94,8 +96,10 @@ export default function MetricasMensuales() {
   // Desempeño operaria en el mes
   const operariasData = useMemo(() => {
     return operarias.map(op => {
+      // SPRINT-149 (P-006 variante operariaId): `o.operariaId` post-SPRINT-105 persiste
+      // auth.uid; fallback a `op.id` para operarias legacy pre-onboarding sin uid.
       const ordsMes = ordenes.filter(o =>
-        o.operariaId === op.id &&
+        o.operariaId === (op.uid || op.id) &&
         !o.eliminada &&
         ((o.fase === 'cerrado') || o.soloChequeo) &&
         o.updatedAt >= rango.inicio && o.updatedAt <= rango.fin,
@@ -138,8 +142,10 @@ export default function MetricasMensuales() {
 
   const tecnicosData = useMemo(() => {
     return tecnicos.map(t => {
+      // SPRINT-149 (P-006 variante reversa): `c.tecnicoId` post-c4be345 persiste auth.uid;
+      // fallback `t.id` para comisiones registradas pre-migración.
       const comsMes = comisiones.filter(c =>
-        c.tecnicoId === t.id &&
+        c.tecnicoId === (t.uid || t.id) &&
         c.fechaCobro >= rango.inicio && c.fechaCobro <= rango.fin,
       );
       const totalComision = comsMes.reduce((s, c) => s + c.comisionMonto, 0);
@@ -170,8 +176,9 @@ export default function MetricasMensuales() {
     // Bonos del mes previo (proyectados con mismas reglas)
     let bonosPrev = 0;
     for (const op of operarias) {
+      // SPRINT-149 (P-006 variante operariaId): fallback `op.uid || op.id` (mismo motivo).
       const ordsPrev = ordenes.filter(o =>
-        o.operariaId === op.id &&
+        o.operariaId === (op.uid || op.id) &&
         !o.eliminada &&
         ((o.fase === 'cerrado') || o.soloChequeo) &&
         o.updatedAt >= rangoPrev.inicio && o.updatedAt <= rangoPrev.fin,

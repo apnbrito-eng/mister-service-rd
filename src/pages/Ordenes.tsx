@@ -347,10 +347,13 @@ export default function Ordenes() {
   const handleGuardarEdicion = async () => {
     if (!selectedOrden) return;
     // Aviso cuando una operaria modifica orden fuera de su grupo
+    // SPRINT-149 (P-006 variante operariaId): `selectedOrden.operariaId` post-SPRINT-105
+    // persiste `auth.uid`. Comparar contra `currentUser?.uid` (uid actual) con fallback
+    // a `userProfile.id` para operarias pre-onboarding sin doc espejo en usuarios/{uid}.
     if (
       userProfile?.rol === 'operaria' &&
       selectedOrden.operariaId &&
-      selectedOrden.operariaId !== userProfile.id
+      selectedOrden.operariaId !== (currentUser?.uid || userProfile.id)
     ) {
       const otra = selectedOrden.operariaNombre || 'otra operaria';
       const ok = window.confirm(`Esta orden pertenece al grupo de ${otra}. ¿Confirmar el cambio?`);
@@ -632,17 +635,21 @@ export default function Ordenes() {
       lista = lista.filter(o => !o.eliminada);
     }
     if (filtroOperariaActivo) {
-      lista = lista.filter(o => o.operariaId === userProfile?.id);
+      // SPRINT-149 (P-006 variante operariaId): comparar contra `currentUser?.uid` con
+      // fallback `userProfile?.id` para soportar operarias pre-SPRINT-105 sin doc espejo.
+      lista = lista.filter(o => o.operariaId === (currentUser?.uid || userProfile?.id));
     }
     if (esCoordinadora && filtroOperariaCoord) {
       if (filtroOperariaCoord === '__sin_asignar__') {
         lista = lista.filter(o => !o.operariaId);
       } else {
+        // SPRINT-149: `filtroOperariaCoord` viene del dropdown que emite `op.uid || op.id`.
+        // El campo `o.operariaId` persiste auth.uid post-SPRINT-105 (fallback docId legacy).
         lista = lista.filter(o => o.operariaId === filtroOperariaCoord);
       }
     }
     return lista;
-  }, [ordenes, filtroOperariaActivo, userProfile?.id, verEliminadasFinal, esCoordinadora, filtroOperariaCoord]);
+  }, [ordenes, filtroOperariaActivo, userProfile?.id, currentUser?.uid, verEliminadasFinal, esCoordinadora, filtroOperariaCoord]);
 
   // Today's orders.
   // `hoy` envuelto en useMemo para que la referencia sea estable mientras
@@ -746,8 +753,12 @@ export default function Ordenes() {
               {personal
                 .filter(p => p.activo && (p.rol === 'operaria' || p.rol === 'coordinadora'))
                 .map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.nombre}{p.id === userProfile?.id ? ' (mi grupo)' : ''}
+                  // SPRINT-149 (P-006 variante operariaId): emitir `p.uid || p.id` para
+                  // alinear el filtro con `o.operariaId` que ahora persiste auth.uid
+                  // post-SPRINT-105. La etiqueta "(mi grupo)" se mantiene comparando
+                  // contra `currentUser?.uid || userProfile?.id` para soportar pre/post.
+                  <option key={p.id} value={p.uid || p.id}>
+                    {p.nombre}{(p.uid || p.id) === (currentUser?.uid || userProfile?.id) ? ' (mi grupo)' : ''}
                   </option>
                 ))}
             </select>

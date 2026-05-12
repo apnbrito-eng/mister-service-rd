@@ -4,11 +4,12 @@ import { db } from '../firebase/config';
 import { OrdenServicio, Personal, Factura } from '../types';
 import { formatMoneda, parseOrden } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
-import { TrendingUp, Users, CheckCircle, XCircle, Clock, BarChart3, Calendar, RefreshCw, UserPlus, Award } from 'lucide-react';
+// SPRINT-149: cleanup imports legacy unused (BarChart3, isWithinInterval, format, parseISO, es)
+// detectados al stagear el archivo en el fix de operariaId. No afectan render.
+import { TrendingUp, Users, CheckCircle, XCircle, Clock, Calendar, RefreshCw, UserPlus, Award } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { calcularQuincenaActual, listarUltimasQuincenas, rangoQuincena } from '../utils/comisiones';
-import { differenceInMinutes, startOfWeek, startOfMonth, startOfDay, isWithinInterval, format, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { differenceInMinutes, startOfWeek, startOfMonth, startOfDay } from 'date-fns';
 
 export default function Rendimiento() {
   const [loading, setLoading] = useState(true);
@@ -293,8 +294,11 @@ function DesempenoOperariasSection({ ordenes, personal }: { ordenes: OrdenServic
   const datos = useMemo(() => {
     const { inicio, fin } = rangoQuincena(quincena);
     return operarias.map(op => {
+      // SPRINT-149 (P-006 variante operariaId): `o.operariaId` post-SPRINT-105
+      // persiste auth.uid; fallback a `op.id` para operarias pre-onboarding sin
+      // doc espejo en usuarios/{uid}.
       const ordenesEnRango = ordenes.filter(o =>
-        o.operariaId === op.id &&
+        o.operariaId === (op.uid || op.id) &&
         !o.eliminada &&
         ((o.fase === 'cerrado') || o.soloChequeo) &&
         o.updatedAt >= inicio && o.updatedAt <= fin

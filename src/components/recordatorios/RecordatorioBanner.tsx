@@ -33,7 +33,9 @@ function formatFechaLarga(d: Date): string {
 }
 
 export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
-  const { userProfile } = useApp();
+  // SPRINT-149: `currentUser` necesario para comparar contra `operariaId` que
+  // post-SPRINT-105 persiste auth.uid (no docId).
+  const { userProfile, currentUser } = useApp();
   const navigate = useNavigate();
   const rol = userProfile?.rol;
 
@@ -78,11 +80,14 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
   const itemsParaMiRecordatorio = useMemo((): ItemAviso[] => {
     if (tipo !== 'horarios_clientes') return [];
     if (rol !== 'operaria' || !userProfile) return [];
+    // SPRINT-149 (P-006 variante operariaId): `o.operariaId` post-SPRINT-105
+    // persiste auth.uid. Comparar contra `currentUser?.uid` con fallback
+    // a `userProfile.id` para operarias legacy pre-onboarding.
     const ordenesManana = ordenes.filter(o =>
       !o.eliminada &&
       !['cerrado', 'cancelado'].includes(o.fase) &&
       o.fechaCita && isSameDay(o.fechaCita, diaManana) &&
-      o.operariaId === userProfile.id,
+      o.operariaId === (currentUser?.uid || userProfile.id),
     );
     return ordenesManana.map(o => ({
       ordenId: o.id,
@@ -92,7 +97,7 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
       horaEstimada: o.fechaCita ? formatHora(o.fechaCita) : undefined,
       avisado: false,
     }));
-  }, [tipo, rol, userProfile, ordenes, diaManana]);
+  }, [tipo, rol, userProfile, currentUser, ordenes, diaManana]);
 
   // Crear / sincronizar recordatorio para operaria actual
   useEffect(() => {
@@ -102,8 +107,12 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
       return;
     }
     let cancelled = false;
+    // SPRINT-149 (P-006 variante operariaId): persistir auth.uid (no docId)
+    // en `operariaId` del recordatorio para alinear con `o.operariaId` que
+    // post-SPRINT-105 persiste auth.uid. Fallback `userProfile.id` legacy.
+    const operariaIdAuth = currentUser?.uid || userProfile.id;
     obtenerOCrearRecordatorio(
-      userProfile.id,
+      operariaIdAuth,
       userProfile.nombre,
       tipo,
       itemsParaMiRecordatorio,
@@ -127,14 +136,17 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
       }
     }).catch(console.error);
     return () => { cancelled = true; };
-  }, [rolRelevante, esDomingo, rol, userProfile, tipo, itemsParaMiRecordatorio]);
+  }, [rolRelevante, esDomingo, rol, userProfile, currentUser, tipo, itemsParaMiRecordatorio]);
 
   // Reflejar updates live del miRecordatorio desde la suscripción consolidada
   useEffect(() => {
     if (rol !== 'operaria' || !userProfile) return;
-    const match = recordatorios.find(r => r.operariaId === userProfile.id);
+    // SPRINT-149 (P-006 variante operariaId): `r.operariaId` post-SPRINT-105
+    // persiste auth.uid (escrito desde recordatorios.service.ts cuando crea/actualiza).
+    // Fallback a `userProfile.id` para operarias legacy.
+    const match = recordatorios.find(r => r.operariaId === (currentUser?.uid || userProfile.id));
     if (match) setMiRecordatorio(match);
-  }, [recordatorios, rol, userProfile]);
+  }, [recordatorios, rol, userProfile, currentUser]);
 
   if (!rolRelevante || esDomingo || dismissed) return null;
 
@@ -312,7 +324,9 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
   if (estadoVentana === 'antes') return null;
 
   const porOperaria = operariasActivas.map(op => {
-    const rec = recordatorios.find(r => r.operariaId === op.id);
+    // SPRINT-149 (P-006 variante operariaId): `r.operariaId` post-SPRINT-105
+    // persiste auth.uid. Fallback `op.id` para operarias legacy.
+    const rec = recordatorios.find(r => r.operariaId === (op.uid || op.id));
     const itemsCount = rec?.items?.length || 0;
     const avisados = rec?.items?.filter(i => i.avisado).length || 0;
     return { op, rec, itemsCount, avisados };

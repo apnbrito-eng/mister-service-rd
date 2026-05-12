@@ -6,8 +6,9 @@ import { ROL_LABELS } from '../../utils/personal';
  * Sección "Grupos operaria-técnico" extraída de `PersonalPage.tsx` (SPRINT-142c, 2026-05-11).
  *
  * Render puro: solo recibe `personal` y muestra una tarjeta por operaria/coordinadora/admin
- * activa con los técnicos asignados (`tecnico.operariaId === operaria.id`), más una
- * tarjeta "Sin asignar" para técnicos sin operariaId. Sin handlers, sin escrituras.
+ * activa con los técnicos asignados (post-SPRINT-149: `tecnico.operariaId === (operaria.uid || operaria.id)`),
+ * más una tarjeta "Sin asignar" para técnicos sin operariaId. Sin handlers, sin escrituras.
+ * @safe-tecnicoid-id: descripción en JSDoc, el código real usa `(op.uid || op.id)`.
  *
  * La edición de operaria→técnico vive en `FormAltaEditarEmpleado.tsx` (campo
  * `operariaId` del form). Acá solo se visualiza el estado actual.
@@ -28,10 +29,12 @@ export default function GruposOperariaTecnico({ personal }: GruposOperariaTecnic
   const operarias = personal.filter(
     p => (p.rol === 'operaria' || p.rol === 'coordinadora' || p.rol === 'administrador') && p.activo
   );
+  // SPRINT-149 (P-006 variante operariaId): `t.operariaId` post-SPRINT-105 persiste
+  // auth.uid; fallback `op.id` legacy.
   const operariasConTecnicos = operarias
     .map(op => ({
       operaria: op,
-      tecnicos: tecnicos.filter(t => t.operariaId === op.id),
+      tecnicos: tecnicos.filter(t => t.operariaId === (op.uid || op.id)),
     }))
     .filter(g => g.tecnicos.length > 0);
   const tecnicosSinAsignar = tecnicos.filter(t => !t.operariaId);
