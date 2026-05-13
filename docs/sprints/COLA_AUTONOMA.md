@@ -187,7 +187,7 @@ El modal llama a `crearNotificacion` (`ProcesarFacturacionModal.tsx:823`) pero e
 
 ### SPRINT-152 — UX checkbox "Pago verificado" cuando monto = 0 en modal Emitir conduce
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO (commit `053c137`, 2026-05-12)
 **Prioridad:** baja (mejora UX, no bug funcional)
 **Origen:** Cowork 2026-05-12. Durante el QA browser de SPRINT-151 ejecutado por Claude del sidepanel sobre OS-0054, se detectó: cuando la orden ya está 100% pagada, el monto default = 0 (correcto), pero el checkbox "Pago verificado" queda deshabilitado/gris sin tooltip ni helper text que explique por qué. El usuario tiene que deducirlo. La sub-observación textual del reporte: *"el copy del bloque dice '(opcional · dejá monto en 0 si no hay cobro)', pero el comportamiento del checkbox 'Pago verificado' cuando el monto = 0 no está explicado visualmente (aparece gris sin tooltip). No es bug, pero podría confundir."*
 

@@ -5,6 +5,54 @@
 
 ---
 
+## 2026-05-12 — pasada 13: SPRINT-152 (UX helper text checkbox "Pago verificado") COMPLETADO
+
+### Contexto
+
+Sprint trivial post-SPRINT-151. QA browser de SPRINT-151 detectó que cuando la orden ya está pagada (monto = 0), el checkbox "Pago verificado" queda disabled en gris sin explicación visible. Cowork pidió microcopy contextual.
+
+### Restricciones (todas honradas)
+
+- NO tocar lógica de habilitación (`disabled={generando || pagoMonto <= 0}` intacto).
+- NO cambiar copy del bloque "Registrar pago de este conduce...".
+- Cambio cosmético / aria.
+- archivist PRE-CHANGE: NO obligatorio. Consulté git log igual: 3 commits recientes sobre el archivo (SPRINT-151, 153, 154) — todos sobre lógica, no copy. Sin riesgo histórico relevante.
+- regression_guardian: NO obligatorio (no toca services, rules, context).
+- reviewer: SÍ obligatorio (modal facturación).
+
+### Cambios aplicados
+
+**Commit:** `053c137` (pushed a `main`)
+**Archivo:** `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` (+13 / -3)
+
+Líneas reales modificadas (post-SPRINT-153, el bloque migró de ~1151-1162 a ~1168-1199):
+
+1. **Línea 1168-1171** — `<label>` ahora tiene `title` attr condicional: `pagoMonto <= 0 ? 'Sin monto a verificar (la orden ya está pagada)' : undefined`.
+2. **Línea 1177** — `<input type="checkbox">` mismo `title` attr (algunos browsers respetan tooltip del input por encima del label).
+3. **Línea 1184-1189 (NUEVO)** — helper text gris `text-slate-400 text-xs` cuando `pagoMonto <= 0`: "Sin monto a verificar — orden ya está pagada."
+4. **Línea 1190-1194 (REEMPLAZADO)** — helper amber existente: copy + clase actualizados según spec del sprint (`text-amber-600` en lugar de `text-amber-700`; nuevo copy "Tildá para confirmar que cotejaste con banco/efectivo antes de emitir.").
+5. Cuando `pagoMonto > 0 && pagoVerificado` → ningún helper renderiza (estado limpio), gracias a render condicional mutuamente exclusivo.
+
+Nota de ubicación: el sprint estimaba "~1151-1162" pero el archivo creció en SPRINT-153 (fix nota render + notif operarias) — el bloque del checkbox está ahora en `~1168-1199`.
+
+### Validaciones
+
+- typecheck: PASS (npx tsc --noEmit, sin errores).
+- lint: PASS (eslint --max-warnings 0, sin warnings).
+- cazadores P-001..P-007: 7/7 PASS.
+- reviewer (re-lectura del bloque modificado): APPROVED. Tres estados visuales mutuamente exclusivos, lógica de habilitación intacta, copy del bloque "Registrar pago..." intocado.
+- Pre-commit hook: PASS (typecheck + cazadores + lint).
+
+### Deploy
+
+Pendiente verificación con `devops`. Push a `main` 053c137 → Vercel debería buildear y desplegar en ~2 min.
+
+### Tiempo
+
+~10 minutos coordinator end-to-end. Sprint trivial confirmado.
+
+---
+
 ## 2026-05-12 — pasada 12: SPRINT-149 (operariaId migración) COMPLETADO + SPRINT-149-APPLY a BLOQUEOS
 
 ### Contexto
