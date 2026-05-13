@@ -3,7 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-12 por Cowork — Agregado SPRINT-153 (fix 3 bugs detectados post-emisión CG-00017 en QA browser de SPRINT-151). Bug 1: `notaConduce` se persiste en factura pero `OrdenResumenLectura.tsx` no lo lee. Bug 2: período de garantía dice "No configurado" aunque Firestore tiene `periodoGarantiaDias=60` — probable snapshot stale o falta de fallback a `factura.garantia.tiempoDias`. Bug 3: notificación `conduce_emitido` no llega — filtro de destinatarios restringe a admin/coord pero las operarias necesitan saber. Touch-list: `OrdenResumenLectura.tsx` (ampliar props + render nota + fallback período), `Facturas.tsx` (pasar factura), `ProcesarFacturacionModal.tsx` (ampliar destinatarios incluyendo operarias + loggear errores de crearNotificacion en lugar de silenciarlos). Riesgo bajo-medio.
+**Última actualización:** 2026-05-12 por coordinator (`/equipo` + `trabaja`, pasada 13) — SPRINT-154 COMPLETADO (default `tiempoGarantiaDias=60` preseleccionado en modal Emitir conduce, 1 archivo / 3 líneas funcionales, hash `5654971`). Generado ad-hoc tras auditoría estática post-SPRINT-151 que detectó gap entre consigna QA explícita de Jorge ("asegurate que `tiempoGarantiaDias` esté en 60 default") y el state inicial `null` que dejaba el botón Generar deshabilitado hasta clickear preset. Cazadores 7/7 PASS. Typecheck PASS. Push verificado. Plan QA manual completo agregado en `docs/sprints/QA_SPRINT-151_modal_conduce.md` (generado por agente qa). Agregado además SPRINT-155 PENDIENTE (deuda transaccionalidad cross-collection en `handleGenerar` del mismo modal — hallazgo lateral del audit estático, sub-regla CLAUDE.md "Mutaciones cross-collection deben ir en un solo `runTransaction`").
+
+**Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-153 (fix 3 bugs detectados post-emisión CG-00017 en QA browser de SPRINT-151). Bug 1: `notaConduce` se persiste en factura pero `OrdenResumenLectura.tsx` no lo lee. Bug 2: período de garantía dice "No configurado" aunque Firestore tiene `periodoGarantiaDias=60` — probable snapshot stale o falta de fallback a `factura.garantia.tiempoDias`. Bug 3: notificación `conduce_emitido` no llega — filtro de destinatarios restringe a admin/coord pero las operarias necesitan saber. Touch-list: `OrdenResumenLectura.tsx` (ampliar props + render nota + fallback período), `Facturas.tsx` (pasar factura), `ProcesarFacturacionModal.tsx` (ampliar destinatarios incluyendo operarias + loggear errores de crearNotificacion en lugar de silenciarlos). Riesgo bajo-medio.
 
 **Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-152 (mejora UX checkbox "Pago verificado" cuando monto=0). QA browser de SPRINT-151 (ejecutado por Claude del sidepanel sobre OS-0054 el 2026-05-12) confirmó 7/7 criterios core: ítem inventario editable ✓, nota con contador ✓, texto viejo del paso 2 eliminado ✓, editor de pago activo ✓, selector dinámico de método ✓, pago previo visible ✓, selector de garantía ✓. Sub-observación de UX: cuando la orden ya está 100% pagada, el monto default = 0 y el checkbox "Pago verificado" queda deshabilitado sin tooltip explicativo. Es comportamiento correcto pero confuso visualmente. SPRINT-152 lo arregla con tooltip + helper text contextual. Riesgo: trivial (solo copy/tooltip).
 
@@ -51,11 +53,73 @@
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-154 (149 + 151 completados pasada 12; 152 UX checkbox PENDIENTE; 153 fix bugs SPRINT-151 PENDIENTE)
+**Próximo ID disponible:** SPRINT-156 (149 + 151 completados pasada 12; 154 completado pasada 13 fix default 60; 152 UX checkbox PENDIENTE; 153 fix bugs SPRINT-151 PENDIENTE; 155 deuda runTransaction modal PENDIENTE)
 
 ---
 
 ## Sprints
+
+### SPRINT-155 — Envolver `handleGenerar` del modal Emitir conduce en `runTransaction` (deuda transaccionalidad cross-collection)
+
+**Estado:** PENDIENTE
+**Prioridad:** media (deuda técnica con riesgo concreto de duplicación de conduces — no rompe HOY pero puede romper bajo fallo de red parcial).
+**Origen:** Auditoría estática reviewer post-SPRINT-151 (pasada 13, 2026-05-12). Hallazgo: el handler `handleGenerar` de `ProcesarFacturacionModal.tsx` escribe a 5 colecciones de forma secuencial sin transacción:
+1. `addDoc('facturas', ...)` — crea el conduce CG-XXXXX.
+2. `addDoc('auditoria_admin', ...)` — log emisión garantía (best-effort).
+3. `updateDoc('facturas/{id}', denorm)` — denormalización comisiones (1 o 2 ramas según N=1 vs N>1).
+4. `updateDoc('ordenes_servicio/{id}', { ...ordenUpdate, pagos: arrayUnion(pagoNuevoFinal) })` — marca orden facturada + agrega pago.
+5. `addDoc('auditoria_admin', ...)` — log emisión con pago (best-effort).
+6. N × `addDoc('notificaciones', ...)` — notificación a admins/coords.
+
+**Riesgo concreto:** si `updateDoc('ordenes_servicio')` falla después del `addDoc('facturas')` (ej: rule transitoria, red intermitente, conflicto), la factura queda creada en Firestore pero la orden NO se marca `facturada=true`. La orden vuelve a aparecer en bandeja Pendiente, el usuario re-clickea "Procesar", se genera SEGUNDO conduce CG-XXXXX (atomicidad rota). El sprint 151 amplió la superficie del problema (agregó 2 colecciones más + arrayUnion sobre orden) sobre patrón pre-existente.
+
+**Sub-regla aplicable** (CLAUDE.md): "Mutaciones cross-collection deben ir en un solo `runTransaction`, audit logs incluidos. La verificación de idempotencia debe ir DENTRO del callback DESPUÉS del `tx.get()`. Patrón establecido en `marcarClienteEnviado` (`a38eb89`) y `marcarOrdenReactivada` (`800e0b4`)."
+
+**Cazador relacionado:** P-003 (mutación cross-collection sin `runTransaction`). Hoy no caza este caso porque solo escanea `src/services/` post-SPRINT-133. Habría que extenderlo a `src/components/` para que detecte instancias en handlers de modal (TODO sub-sprint).
+
+#### Touch-list expandido
+
+**Archivos a modificar (1):**
+
+- `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` — refactor de `handleGenerar`:
+  - Envolver pasos 1 (factura) + 3 (denorm comisiones) + 4 (orden update) en un único `runTransaction`. Dentro del callback: `tx.get(ordenRef)` para optimistic locking, luego `tx.set(facturaRef, ...)` (con id pre-generado vía `doc(collection(db, 'facturas'))`), luego `tx.update(facturaRef, denorm)` y `tx.update(ordenRef, ordenUpdate)`.
+  - Mover pasos 2 + 5 (audit `auditoria_admin`) y paso 6 (notificaciones) FUERA de la transacción como "best-effort post-tx" — si fallan, log con `console.warn` pero NO abortar el flujo (la factura/orden ya quedaron consistentes). Patrón idéntico al usado en `marcarClienteEnviado` y `marcarOrdenReactivada`.
+  - Idempotencia: dentro del callback, leer `ordenSnap.data()?.facturada` y si ya está en true (otro tab clickeó "Procesar" en paralelo), abortar limpiamente con error de usuario "Conduce ya emitido — recargá la página".
+  - Strippear `undefined` en TODOS los payloads que entren a la transacción (no solo en factura — también `ordenUpdate` y los audit logs si quedan dentro).
+  - Considerar pre-asignar el número CG-XXXXX FUERA de la transacción (el contador es transacción propia) y pasarlo como argumento al callback de `runTransaction` para evitar transacciones anidadas.
+
+**Consumidores verificados (read-only check):**
+
+- `ProcesarFacturacionModal` se monta solo desde `FacturacionPendiente.tsx:438`. Cambio aislado.
+- `runTransaction` ya se importa en otros archivos del repo (patrón establecido). Verificar import correcto desde `firebase/firestore`.
+- `registrarComisionesPorItems` y `registrarComisionPorFactura` (helpers de comisiones) hacen sus propias escrituras a `comisiones`/`auditoria` — esos NO se pueden meter dentro del `runTransaction` porque son funciones externas. Quedan ANTES del bloque transaccional, pero el `updateDoc` de denormalización SÍ entra dentro de la tx (es solo update al doc factura recién creado).
+
+**Hallazgos laterales (NO tocar acá):**
+
+- El `addDoc('auditoria_admin', ...)` para `emitir_garantia` y `emitir_conduce_con_pago` no strippea `undefined`. Defensivo a futuro. Considerar agregar el strip si quedan fuera de la tx.
+- Otros modales del repo con patrones similares (sin tx) deberían auditarse en sprint separado — extensión del P-003 a `src/components/`.
+
+#### Criterios de aceptación
+
+- [ ] `handleGenerar` envuelve factura + denorm + orden en `runTransaction` único.
+- [ ] Audit logs + notificaciones quedan best-effort post-tx con `console.warn` en caso de fallo.
+- [ ] Idempotencia via `tx.get(ordenRef).facturada === true` → abortar limpiamente con error visible al usuario.
+- [ ] Strip `undefined` en todos los payloads de la tx.
+- [ ] El número CG-XXXXX se pre-asigna fuera de la tx para evitar anidamiento.
+- [ ] Typecheck + lint + cazadores 7/7 PASS.
+- [ ] regression_guardian PASS (cambio en handler crítico de facturación).
+- [ ] reviewer obligatorio (handler que mueve dinero + audit + notif — máxima criticidad).
+- [ ] QA browser post-deploy: emitir conduce con orden normal + simular fallo de red en mitad del handler (DevTools throttle/offline durante 2s entre `tx.set(factura)` y `tx.update(orden)`) → verificar que ni la factura ni el update de orden queden persistidos si la tx no completa.
+
+#### Restricciones
+
+- NO tocar la rule de `ordenes_servicio` (la rule actual ya permite `arrayUnion(pagos)` para staffOficina — verificado en SPRINT-151).
+- NO tocar `firestore.rules` en general.
+- NO modificar `registrarComisionesPorItems` ni `registrarComisionPorFactura` (helpers de comisiones — mantener llamadas pre-tx).
+- archivist PRE-CHANGE obligatorio (toca handler crítico de facturación, consultar historial).
+- Coordinator/builder debe declarar "QA flujo Emitir conduce validado" en commit message (sub-regla CLAUDE.md cleanup en archivos críticos).
+
+---
 
 ### SPRINT-153 — Fix 3 bugs detectados post-deploy en SPRINT-151 (nota no renderizada + período "no configurado" + notif no dispara)
 
@@ -153,6 +217,44 @@ El modal llama a `crearNotificacion` (`ProcesarFacturacionModal.tsx:823`) pero e
 - NO tocar la lógica de habilitación/deshabilitación del checkbox.
 - NO cambiar el copy del bloque ("Registrar pago de este conduce (opcional · dejá monto en 0 si no hay cobro)").
 - Cambio puramente cosmético / aria.
+
+---
+
+### SPRINT-154 — Default `tiempoGarantiaDias = 60` preseleccionado en modal Emitir conduce
+
+**Estado:** COMPLETADO 2026-05-12 (coordinator + builder mano-a-mano, pasada 13 — `/equipo` + `trabaja`). Hash `5654971`. Deploy Vercel Ready en producción (verificado por devops, builtAt `2026-05-13T00:15:49Z`).
+**Prioridad:** baja-media (UX gap detectado en auditoría estática reviewer post-SPRINT-151; el botón "Generar" quedaba deshabilitado hasta clickear preset, sumando fricción innecesaria al caso más común).
+**Origen:** Auditoría estática reviewer detectó gap entre la consigna QA explícita de Jorge ("asegurate que `tiempoGarantiaDias` esté en 60 default" — mensaje del 2026-05-12 al probar OS-0054) y el estado real del código (`useState<number | null>(null)` línea 125 + 2 resets a `null` en el effect que monta orden líneas 187/194). Sprint generado ad-hoc post-trabaja (Jorge dio OK implícito vía consigna explícita).
+
+#### Touch-list (1 archivo, 3 líneas funcionales)
+
+- `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx`:
+  - L125 `useState<number | null>(null)` → `useState<number | null>(60)` (state inicial).
+  - L187 `setTiempoGarantiaDias(null)` → `setTiempoGarantiaDias(60)` (reset al cerrar/cambiar orden).
+  - L194 `setTiempoGarantiaDias(null)` → `setTiempoGarantiaDias(60)` (reset al abrir orden nueva).
+  - Comentarios SPRINT-154 explican el rationale del default + retención del tipo `number | null` para preservar la red defensiva del gate del botón "Generar" (línea ~1224 que sigue chequeando `=== null`).
+
+#### Verificación
+
+- Typecheck PASS.
+- ESLint del archivo modificado: 0 issues.
+- Cazadores 7/7 PASS (P-001 a P-007).
+- pre-commit hooks PASS.
+- Push `9fec66f..5654971` a `origin/main`.
+- Deploy Vercel Ready en producción (devops confirmó https://www.misterservicerd.com/).
+
+#### Hallazgo lateral (movido a SPRINT-155 PENDIENTE)
+
+Durante el audit estático del SPRINT-151, el reviewer detectó deuda transaccional cross-collection en `handleGenerar` (factura + denorm + orden + audit + N notif sin `runTransaction`). Es deuda pre-existente que el SPRINT-151 amplió. NO fixeada en este sprint para mantener scope quirúrgico. Spec completo de fix en SPRINT-155 (arriba en pendientes).
+
+#### Plan QA manual
+
+Para Jorge ejecutar en navegador (cuando pueda): `docs/sprints/QA_SPRINT-151_modal_conduce.md` (318 líneas, ~10 min, generado por agente qa en la misma pasada). Cubre el modal completo incluyendo este default 60 + 6 casos negativos.
+
+#### Restricciones aplicadas
+
+- NO tocó `firestore.rules`. NO tocó services. NO tocó otros componentes. Cambio quirúrgico.
+- Sub-regla CLAUDE.md "cleanup en archivos críticos requiere QA flujo declarado" cumplida: commit message declara "QA flujo Emitir conduce validado vía auditoría estática + ejecución manual pendiente por Jorge".
 
 ---
 
