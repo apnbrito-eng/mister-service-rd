@@ -3,7 +3,11 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-12 por coordinator (pasada 12, `trabaja`) — SPRINT-149 + SPRINT-151 COMPLETADOS en serie tras OK Jorge "ambos en orden, 149 primero". SPRINT-149: 13 archivos + 1 script migración + cazador P-006 variante 4 + 2 docs. Hashes `2ecea5e` + `d65fb82` + `89159e5`. SPRINT-149-APPLY (ejecución de `--apply` del script) en BLOQUEOS esperando OK Jorge. SPRINT-151: 4 archivos (modal + editor + parent + types). Hash `863e804`. Cazadores 7/7 PASS post-cada commit. Push verificado. Próximo ID disponible: SPRINT-152.
+**Última actualización:** 2026-05-12 por Cowork — Agregado SPRINT-153 (fix 3 bugs detectados post-emisión CG-00017 en QA browser de SPRINT-151). Bug 1: `notaConduce` se persiste en factura pero `OrdenResumenLectura.tsx` no lo lee. Bug 2: período de garantía dice "No configurado" aunque Firestore tiene `periodoGarantiaDias=60` — probable snapshot stale o falta de fallback a `factura.garantia.tiempoDias`. Bug 3: notificación `conduce_emitido` no llega — filtro de destinatarios restringe a admin/coord pero las operarias necesitan saber. Touch-list: `OrdenResumenLectura.tsx` (ampliar props + render nota + fallback período), `Facturas.tsx` (pasar factura), `ProcesarFacturacionModal.tsx` (ampliar destinatarios incluyendo operarias + loggear errores de crearNotificacion en lugar de silenciarlos). Riesgo bajo-medio.
+
+**Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-152 (mejora UX checkbox "Pago verificado" cuando monto=0). QA browser de SPRINT-151 (ejecutado por Claude del sidepanel sobre OS-0054 el 2026-05-12) confirmó 7/7 criterios core: ítem inventario editable ✓, nota con contador ✓, texto viejo del paso 2 eliminado ✓, editor de pago activo ✓, selector dinámico de método ✓, pago previo visible ✓, selector de garantía ✓. Sub-observación de UX: cuando la orden ya está 100% pagada, el monto default = 0 y el checkbox "Pago verificado" queda deshabilitado sin tooltip explicativo. Es comportamiento correcto pero confuso visualmente. SPRINT-152 lo arregla con tooltip + helper text contextual. Riesgo: trivial (solo copy/tooltip).
+
+**Última actualización previa:** 2026-05-12 por coordinator (pasada 12, `trabaja`) — SPRINT-149 + SPRINT-151 COMPLETADOS en serie tras OK Jorge "ambos en orden, 149 primero". SPRINT-149: 13 archivos + 1 script migración + cazador P-006 variante 4 + 2 docs. Hashes `2ecea5e` + `d65fb82` + `89159e5`. SPRINT-149-APPLY (ejecución de `--apply` del script) en BLOQUEOS esperando OK Jorge. SPRINT-151: 4 archivos (modal + editor + parent + types). Hash `863e804`. Cazadores 7/7 PASS post-cada commit. Push verificado. Próximo ID disponible: SPRINT-153.
 
 **Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-151 (Editar ítems + nota + verificación de pago en el modal "Emitir conduce de garantía"). Jorge mirando OS-0054 detectó que la operaria no puede editar la descripción de un ítem que viene del inventario (queda readonly), no puede dejar una nota que aparezca en el conduce, no puede confirmar el pago desde el modal (hoy dice "hazlo desde la orden antes de continuar"), y el admin no recibe notificación cuando se emite. Auditoría de consumidores hecha: `ProcesarFacturacionModal.tsx` solo se importa desde `FacturacionPendiente.tsx`; `FacturaItemsEditor` se reusa además en `FacturaCrearModal.tsx` (cambio benigno: solo se relaja la propiedad readonly de la descripción para items de inventario, no rompe el modal de factura manual). Sprint con touch-list expandido + criterios + reviewer obligatorio. Riesgo medio: toca `PagoOrden` (cross-collection con `ordenes_servicio.pagos[]`), audit log y notificación.
 
@@ -47,11 +51,110 @@
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-152 (148 UX Conduces completado, 149 operariaId BLOQUEADO en BLOQUEOS.md, 150 fix P-001 AgendaDia completado, 151 modal emitir conduce PENDIENTE)
+**Próximo ID disponible:** SPRINT-154 (149 + 151 completados pasada 12; 152 UX checkbox PENDIENTE; 153 fix bugs SPRINT-151 PENDIENTE)
 
 ---
 
 ## Sprints
+
+### SPRINT-153 — Fix 3 bugs detectados post-deploy en SPRINT-151 (nota no renderizada + período "no configurado" + notif no dispara)
+
+**Estado:** PENDIENTE
+**Prioridad:** alta (SPRINT-151 cerró como completado pero 3 criterios de aceptación no se cumplen end-to-end).
+**Origen:** Cowork 2026-05-12. QA browser de SPRINT-151 ejecutado por Claude del sidepanel sobre OS-0054 → CG-00017 detectó 3 desconexiones:
+
+**Bug 1 — Nota para el conduce NO aparece en el detalle.**
+El modal SÍ escribe `facturaPayload.notaConduce` (`ProcesarFacturacionModal.tsx:527`). Pero el componente de detalle `OrdenResumenLectura.tsx` (montado en `Facturas.tsx` por SPRINT-148) NO lee ni renderiza `factura.notaConduce`. Búsqueda `grep notaConduce src/pages/Facturas.tsx` dio 0 hits. Y `OrdenResumenLectura.tsx` recibe `orden`, no `factura` — necesita ampliar la prop interface o renderizar la nota en otro nivel (ej: directamente en la fila expandida de `Facturas.tsx`).
+
+**Bug 2 — Período de garantía dice "No configurado (orden previa al SPRINT-135a-UI)".**
+En `OrdenResumenLectura.tsx:128-143` el componente lee `typeof orden.periodoGarantiaDias === 'number' && garantiaVenc`. Para OS-0054 el script QA confirmó que ambos campos existen en Firestore (`periodoGarantiaDias = 60`, `garantiaVencimiento = 2026-07-11 20:34:28Z`). Posibles causas: (a) la `orden` que llega al componente desde `Facturas.tsx` viene de un snapshot stale o de una colección distinta, (b) `garantiaVenc` se computa null por mal parseo del Timestamp, (c) hay otro fallback que pisa el render. Investigación pendiente al builder.
+
+**Bug 3 — Notificación "Conduce CG-XXXXX emitido" NO se dispara.**
+El modal llama a `crearNotificacion` (`ProcesarFacturacionModal.tsx:823`) pero el filtro de destinatarios (`p.rol === 'administrador' || p.rol === 'coordinadora') && p.uid && p.uid !== currentUser?.uid`) es restrictivo. En el taller actual: vos sos el único administrador, las operarias (Wilainy, Yohana) tienen `rol === 'operaria'`, María Teresa es coordinadora pero quizás está marcada como inactiva o falta su uid. Resultado: 0 destinatarios → 0 notificaciones. Reportado: el contador de campanita NO subió de 45 a 46 después de emitir CG-00017.
+
+**Riesgo:** bajo-medio. Cambios concentrados en 2-3 archivos. Tocan UI render (no rules ni mutaciones cross-collection).
+
+#### Touch-list expandido
+
+**Archivos a modificar (3-4):**
+
+1. `src/components/facturas/OrdenResumenLectura.tsx`
+   - Investigar por qué `orden.periodoGarantiaDias` se evalúa como ausente para OS-0054 cuando Firestore SÍ lo tiene. Probablemente `Facturas.tsx` pasa una orden derivada de `factura.ordenId` lookup que está stale, o no incluye los campos nuevos.
+   - Agregar **fallback** al detalle de período: si `orden.periodoGarantiaDias` no está pero la factura asociada tiene `garantia.tiempoDias`, usar eso. Mostrar etiqueta "(según conduce emitido)" pequeña al lado.
+   - Ampliar props para recibir opcionalmente `factura` Y `orden`. Si factura está presente, renderizar `factura.notaConduce` en un bloque nuevo "Nota del conduce" al final del componente (con fondo gris claro para diferenciarlo del cierre del técnico).
+
+2. `src/pages/Facturas.tsx`
+   - Pasar `factura={f}` al `<OrdenResumenLectura>` que se monta en la fila expandida del conduce (además de la `orden` que ya pasa).
+   - Verificar de dónde toma `orden` para asegurar que es la versión más reciente de Firestore (no un snapshot de hace minutos).
+
+3. `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx`
+   - **Ampliar filtro de destinatarios** de notificación: incluir `operaria` además de `administrador` y `coordinadora`. La justificación: en el taller actual las operarias son quienes coordinan los conduces — necesitan saber cuándo se emite uno (especialmente si fue un admin/coord quien lo emitió). Resultado esperado: notificación a Wilainy, Yohana, María Teresa.
+   - Cambiar `await crearNotificacion(...)` → guardar el resultado y loggear si falla con `console.error` en lugar de `console.warn` (visibilidad). El `.catch` actual silencia errores.
+   - Considerar agregar `tipoOrden` o algo que permita en el futuro filtrar quién recibe qué.
+
+4. `src/services/notificaciones.service.ts` (sólo verificar, probablemente sin cambios) — confirmar que `crearNotificacion` no esté fallando silenciosamente por shape inválido o rule denegando.
+
+**Consumidores verificados (read-only):**
+- `OrdenResumenLectura.tsx` se monta solo desde `Facturas.tsx` (búsqueda confirmada en SPRINT-148). Cambio de prop interface no rompe nada externo.
+- `crearNotificacion` se usa desde varios módulos — el cambio NO toca el service, solo el llamador del modal. Otros llamadores (ej: marketing, reactivación) siguen igual.
+- `Facturas.tsx` solo se importa desde `App.tsx:28` (SPRINT-148 verificado).
+
+**Hallazgos laterales NO incluidos:**
+- En el reporte Jorge anotó UX gap: "el copy del bloque dice '(opcional · dejá monto en 0 si no hay cobro)', pero el comportamiento del checkbox 'Pago verificado' cuando el monto = 0 no está explicado visualmente". Ya está en SPRINT-152 pendiente.
+- "Notas del técnico" en el detalle muestra notas viejas de chequeo ("[12/05 15:12 - Aury Mon] Necesita soportes carga frontal") — eso está OK, viene de otro flujo. No confundir con `notaConduce` que es del SPRINT-151.
+
+#### Criterios de aceptación
+
+- [ ] **Bug 1 fixed:** después de emitir conduce con nota, la nota aparece en la fila expandida de `/admin/facturas` (sección dedicada "Nota del conduce" o similar).
+- [ ] **Bug 2 fixed:** después de emitir conduce con tiempoGarantiaDias = 60, el detalle del conduce muestra "60 días · vence el DD/MM/YYYY (faltan N días)" en lugar de "No configurado".
+- [ ] **Bug 3 fixed:** después de emitir conduce, todos los admins, coords y operarias activas con uid (excepto el emisor) reciben notificación tipo `conduce_emitido` en la campanita.
+- [ ] Typecheck + lint + cazadores 7/7 PASS.
+- [ ] regression_guardian PASS (cambio sensible — notificaciones cross-collection).
+- [ ] reviewer obligatorio (toca render de datos financieros + notificaciones).
+- [ ] QA browser post-deploy: re-emitir un conduce sobre orden de prueba, confirmar que las 3 cosas funcionan (la Claude del sidepanel ejecuta el FLUJO 1 del kit y reporta).
+
+#### Restricciones
+
+- NO tocar el modal en lo que ya funciona (descripción editable, nota textarea, paso 2 editor de pago) — eso ya pasó QA.
+- NO tocar la rule de `notificaciones` (sigue siendo `userId == auth.uid`).
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-152 — UX checkbox "Pago verificado" cuando monto = 0 en modal Emitir conduce
+
+**Estado:** PENDIENTE
+**Prioridad:** baja (mejora UX, no bug funcional)
+**Origen:** Cowork 2026-05-12. Durante el QA browser de SPRINT-151 ejecutado por Claude del sidepanel sobre OS-0054, se detectó: cuando la orden ya está 100% pagada, el monto default = 0 (correcto), pero el checkbox "Pago verificado" queda deshabilitado/gris sin tooltip ni helper text que explique por qué. El usuario tiene que deducirlo. La sub-observación textual del reporte: *"el copy del bloque dice '(opcional · dejá monto en 0 si no hay cobro)', pero el comportamiento del checkbox 'Pago verificado' cuando el monto = 0 no está explicado visualmente (aparece gris sin tooltip). No es bug, pero podría confundir."*
+
+**Riesgo:** trivial. Solo copy / tooltip / helper text. No toca lógica.
+
+#### Touch-list
+
+**Archivos a modificar (1):**
+
+- `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` — bloque de checkbox "Pago verificado". Agregar:
+  - `title` attribute en el checkbox cuando está disabled, con texto tipo "Sin monto a verificar (la orden ya está pagada)".
+  - Helper text debajo del checkbox cuando monto === 0: en gris claro, "Sin monto a verificar — orden ya está pagada".
+  - Helper text debajo cuando monto > 0 pero NO está tildado: en amber, "Tildá para confirmar que cotejaste con banco/efectivo antes de emitir".
+
+**Consumidores verificados:** ninguno fuera del modal. Cambio aislado.
+
+#### Criterios de aceptación
+
+- [ ] Cuando monto = 0: checkbox disabled + tooltip "Sin monto a verificar (la orden ya está pagada)" al hover + helper text gris debajo.
+- [ ] Cuando monto > 0 y NO tildado: checkbox enabled + helper text amber "Tildá para confirmar...".
+- [ ] Cuando monto > 0 y tildado: helper text desaparece (estado limpio).
+- [ ] Typecheck + lint + cazadores 7/7 PASS.
+- [ ] Commit message: `feat(modal-conduce): SPRINT-152 helper text contextual para checkbox Pago verificado`.
+
+#### Restricciones
+
+- NO tocar la lógica de habilitación/deshabilitación del checkbox.
+- NO cambiar el copy del bloque ("Registrar pago de este conduce (opcional · dejá monto en 0 si no hay cobro)").
+- Cambio puramente cosmético / aria.
+
+---
 
 ### SPRINT-151 — Editar ítems + nota + verificación de pago en modal "Emitir conduce de garantía"
 
