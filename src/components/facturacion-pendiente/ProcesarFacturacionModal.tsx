@@ -1165,21 +1165,31 @@ export default function ProcesarFacturacionModal({
                   />
                 </div>
               </div>
-              <label className={`mt-3 flex items-center gap-2 text-sm font-medium select-none ${pagoMonto > 0 ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}>
+              <label
+                className={`mt-3 flex items-center gap-2 text-sm font-medium select-none ${pagoMonto > 0 ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                title={pagoMonto <= 0 ? 'Sin monto a verificar (la orden ya está pagada)' : undefined}
+              >
                 <input
                   type="checkbox"
                   checked={pagoVerificado}
                   disabled={generando || pagoMonto <= 0}
                   onChange={e => setPagoVerificado(e.target.checked)}
+                  title={pagoMonto <= 0 ? 'Sin monto a verificar (la orden ya está pagada)' : undefined}
                   className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                 />
                 <span className={pagoVerificado ? 'text-emerald-700' : 'text-gray-700'}>
                   Pago verificado (cotejado con banco / efectivo en mano)
                 </span>
               </label>
+              {/* SPRINT-152: helper text contextual según estado del checkbox */}
+              {pagoMonto <= 0 && (
+                <p className="mt-1 text-xs text-slate-400">
+                  Sin monto a verificar — orden ya está pagada.
+                </p>
+              )}
               {pagoMonto > 0 && !pagoVerificado && (
-                <p className="mt-1 text-[11px] text-amber-700">
-                  Tildá "Pago verificado" para poder emitir, o dejá el monto en 0 si todavía no se cobró.
+                <p className="mt-1 text-xs text-amber-600">
+                  Tildá para confirmar que cotejaste con banco/efectivo antes de emitir.
                 </p>
               )}
               {pagoMonto > 0 && (totalPagado + pagoMonto > totalItems) && (
