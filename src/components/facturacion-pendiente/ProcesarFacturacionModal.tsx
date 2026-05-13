@@ -4,10 +4,10 @@ import {
   doc,
   getDoc,
   addDoc,
-  updateDoc,
   Timestamp,
   arrayUnion,
   serverTimestamp,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import {
@@ -538,35 +538,36 @@ export default function ProcesarFacturacionModal({
         Object.entries(facturaPayload).filter(([, v]) => v !== undefined),
       );
 
-      const facturaRef = await addDoc(collection(db, 'facturas'), facturaLimpia);
+      // SPRINT-155: handleGenerar envuelto en runTransaction para atomicidad
+      // cross-collection (factura + denorm + orden). Patrón alineado con
+      // marcarClienteEnviado (a38eb89) y marcarOrdenReactivada (800e0b4).
+      //
+      // Lo que vive DENTRO de la tx:
+      //   - tx.get(ordenRef) — optimistic locking + idempotencia (facturada===true).
+      //   - tx.set(facturaRef, facturaLimpia) — crea conduce CG-XXXXX.
+      //   - tx.update(facturaRef, denormLimpio) — denormalización comisiones (si aplica).
+      //   - tx.update(ordenRef, ordenUpdateLimpio) — facturada=true + arrayUnion(pagos).
+      //
+      // Lo que vive FUERA (PRE-tx):
+      //   - siguienteNumeroFactura() — tiene runTransaction interno propio (anidación
+      //     prohibida).
+      //   - registrarComisionesPorItems / registrarComisionPorFactura — helpers
+      //     externos que escriben a `comisiones`/`auditoria`. Si su tx ok pero la
+      //     nuestra aborta, queda comisión huérfana. Riesgo aceptado: alternativas
+      //     (meter helper dentro de tx; pre-validar todo) son más costosas que la
+      //     probabilidad real de fallo entre escrituras consecutivas.
+      //
+      // Lo que vive FUERA (POST-tx, best-effort con try/catch):
+      //   - addDoc audit `emitir_garantia` — fallo log warn, no aborta.
+      //   - addDoc audit `override_modalidad_precio_factura` — idem.
+      //   - addDoc audit `emitir_conduce_con_pago` — idem.
+      //   - crearNotificacion loop — fallo log error (visibilidad SPRINT-153).
 
-      // Audit log de emisión de garantía (no bloquea si falla)
-      if (garantia) {
-        try {
-          await addDoc(collection(db, 'auditoria_admin'), {
-            accion: 'emitir_garantia',
-            // SPRINT-114: unificado a currentUser.uid (auth.uid). Antes era
-            // userProfile?.id que podía ser personalDocId — gotcha CLAUDE.md.
-            solicitanteUid: currentUser?.uid || null,
-            solicitanteNombre: usuario,
-            objetivoTipo: 'factura',
-            objetivoId: facturaRef.id,
-            conduceNumero: numero,
-            ordenId: orden.id,
-            ordenNumero: orden.numero,
-            garantia: {
-              tiempoDias: garantia.tiempoDias,
-              finFecha: garantia.finFecha,
-              token: (garantia.token || '').substring(0, 8) + '...',
-            },
-            timestamp: Timestamp.now(),
-          });
-        } catch (err) {
-          console.warn('[facturacion-pendiente] audit emitir_garantia falló (no bloquea):', err);
-        }
-      }
+      // Pre-generar la ref de factura (sin escribir aún — la escritura ocurre
+      // dentro del runTransaction más abajo).
+      const facturaRef = doc(collection(db, 'facturas'));
 
-      // ─── Comisiones: detectar N=1 vs N>1 y denormalizar ───
+      // ─── Comisiones: detectar N=1 vs N>1 y construir denormalización ───
       // Detección: si CUALQUIER item trae tecnicoId Y hay > 1 técnico distinto,
       // es N>1. Si todos los items con tecnicoId comparten el mismo (o nadie
       // trae) — flujo legacy N=1 vía `registrarComisionPorFactura`.
@@ -580,6 +581,10 @@ export default function ProcesarFacturacionModal({
       const algunoConTecnico = tecnicoIdsDistintos.length > 0;
       const esNMultiple = tecnicoIdsDistintos.length > 1;
 
+      // SPRINT-155: los helpers escriben a `comisiones`/`auditoria` PRE-tx
+      // (anidación prohibida). El payload de denormalización se captura acá
+      // y se aplica dentro del runTransaction como tx.update(facturaRef, ...).
+      let denormParaTx: Record<string, unknown> | null = null;
       try {
         if (esNMultiple) {
           // N>1: usar helper específico y denormalizar como agregado.
@@ -598,71 +603,60 @@ export default function ProcesarFacturacionModal({
           // hubo cleanup de huérfanas (preservadas/eliminadas). Eso dejaba
           // `comisionTecnicoMonto` con valor viejo aunque la realidad post-
           // recálculo es "sin comisiones nuevas". Ahora denormalizamos
-          // siempre que haya actividad y wrap en try/catch defensivo —
-          // si la denorm falla, la factura ya quedó emitida y las comisiones
-          // están en su colección, así que no debemos abortar la emisión.
+          // siempre que haya actividad. SPRINT-155: la denorm entra a la tx,
+          // así que si falla, toda la tx aborta (comportamiento más estricto
+          // que el try/catch interno previo, que solo logueaba).
           const tuvoActividad =
             result.comisiones.length > 0 ||
             result.preservadasPorLiquidacion > 0 ||
             result.eliminadasHuerfanas > 0;
           if (tuvoActividad) {
-            try {
-              let denorm: Record<string, unknown> | null = null;
-              if (result.comisiones.length === 1) {
-                // Caso degenerado: N>1 detectado pero terminó en 1 comisión
-                // válida (el otro técnico tenía 0% o no existía). Render legacy.
-                denorm = {
-                  comisionTecnicoId: result.comisiones[0].tecnicoId,
-                  comisionTecnicoNombre: result.comisiones[0].tecnicoNombre,
-                  comisionTecnicoMonto: result.comisiones[0].monto,
-                  comisionTecnicoPorcentaje: result.comisiones[0].porcentaje,
-                  comisionRegistroId: result.comisiones[0].comisionId,
-                };
-              } else if (result.comisiones.length > 1) {
-                // N>1 real: agregado.
-                denorm = {
-                  comisionTecnicoId: '',
-                  comisionTecnicoNombre: 'N técnicos',
-                  comisionTecnicoMonto: result.totalAgregado,
-                  comisionTecnicoPorcentaje: 0,
-                };
-              } else {
-                // Caso edge: tuvoActividad === true pero comisiones.length === 0.
-                // Significa que TODAS las comisiones nuevas son 0% (técnicos sin
-                // porcentaje) y el cleanup limpió/preservó huérfanas anteriores.
-                // Decisión coordinator (audit C5): sobrescribir con shape "sin
-                // comisión" para que la factura refleje el estado real post-
-                // recálculo en lugar de mostrar el monto viejo de una emisión
-                // anterior. La auditoría detallada queda en colección comisiones.
-                console.warn(
-                  '[procesar-facturacion] tuvoActividad sin comisiones nuevas, denormalizando con shape vacío',
-                  {
-                    facturaId: facturaRef.id,
-                    totalAgregado: result.totalAgregado,
-                    preservadas: result.preservadasPorLiquidacion,
-                    eliminadas: result.eliminadasHuerfanas,
-                  },
-                );
-                denorm = {
-                  comisionTecnicoId: '',
-                  comisionTecnicoNombre: '—',
-                  comisionTecnicoMonto: 0,
-                  comisionTecnicoPorcentaje: 0,
-                };
-              }
-              if (denorm) {
-                const denormLimpio = Object.fromEntries(
-                  Object.entries(denorm).filter(([, v]) => v !== undefined),
-                );
-                await updateDoc(doc(db, 'facturas', facturaRef.id), denormLimpio);
-              }
-            } catch (err) {
-              console.error('[procesar-facturacion] error denormalizando comisiones:', err);
-              // NO bloquear emisión — la factura ya se creó, audit queda en
-              // colección comisiones. Avisar al admin para revisión manual.
-              toast(
-                'Conduce emitido. Las comisiones se guardaron pero hubo problema sincronizando el resumen. Verificá en Comisiones.',
-                { duration: 7000, icon: '!' },
+            let denorm: Record<string, unknown> | null = null;
+            if (result.comisiones.length === 1) {
+              // Caso degenerado: N>1 detectado pero terminó en 1 comisión
+              // válida (el otro técnico tenía 0% o no existía). Render legacy.
+              denorm = {
+                comisionTecnicoId: result.comisiones[0].tecnicoId,
+                comisionTecnicoNombre: result.comisiones[0].tecnicoNombre,
+                comisionTecnicoMonto: result.comisiones[0].monto,
+                comisionTecnicoPorcentaje: result.comisiones[0].porcentaje,
+                comisionRegistroId: result.comisiones[0].comisionId,
+              };
+            } else if (result.comisiones.length > 1) {
+              // N>1 real: agregado.
+              denorm = {
+                comisionTecnicoId: '',
+                comisionTecnicoNombre: 'N técnicos',
+                comisionTecnicoMonto: result.totalAgregado,
+                comisionTecnicoPorcentaje: 0,
+              };
+            } else {
+              // Caso edge: tuvoActividad === true pero comisiones.length === 0.
+              // Significa que TODAS las comisiones nuevas son 0% (técnicos sin
+              // porcentaje) y el cleanup limpió/preservó huérfanas anteriores.
+              // Decisión coordinator (audit C5): sobrescribir con shape "sin
+              // comisión" para que la factura refleje el estado real post-
+              // recálculo en lugar de mostrar el monto viejo de una emisión
+              // anterior. La auditoría detallada queda en colección comisiones.
+              console.warn(
+                '[procesar-facturacion] tuvoActividad sin comisiones nuevas, denormalizando con shape vacío',
+                {
+                  facturaId: facturaRef.id,
+                  totalAgregado: result.totalAgregado,
+                  preservadas: result.preservadasPorLiquidacion,
+                  eliminadas: result.eliminadasHuerfanas,
+                },
+              );
+              denorm = {
+                comisionTecnicoId: '',
+                comisionTecnicoNombre: '—',
+                comisionTecnicoMonto: 0,
+                comisionTecnicoPorcentaje: 0,
+              };
+            }
+            if (denorm) {
+              denormParaTx = Object.fromEntries(
+                Object.entries(denorm).filter(([, v]) => v !== undefined),
               );
             }
           }
@@ -680,62 +674,20 @@ export default function ProcesarFacturacionModal({
           });
           // Denormalizar SOLO si hay comisión efectiva (técnico válido + monto > 0).
           if (comisionInfo && comisionInfo.comisionId && comisionInfo.tecnicoId) {
-            await updateDoc(doc(db, 'facturas', facturaRef.id), {
+            denormParaTx = {
               comisionRegistroId: comisionInfo.comisionId,
               comisionTecnicoId: comisionInfo.tecnicoId,
               comisionTecnicoNombre: comisionInfo.tecnicoNombre,
               comisionTecnicoPorcentaje: comisionInfo.porcentaje,
               comisionTecnicoMonto: comisionInfo.comisionMonto,
-            });
+            };
           }
         }
       } catch (err) {
         console.warn('Error registrando comisión por factura:', err);
       }
 
-      // Audit log override modalidad (best-effort, no bloquea emisión).
-      // Una entry por cada línea overrideada respecto al default que dictaba
-      // el tipo del cliente.
-      try {
-        const modalidadDefaultPorTipo: 'mayoreo' | 'detalle' =
-          clienteTipoEnEmision === 'b2b' ? 'mayoreo' : 'detalle';
-        const overrides = items
-          .map((it, idx) => ({ it, idx }))
-          .filter(({ it }) =>
-            (it.tipoItem === 'servicio' || it.tipoItem === 'pieza') &&
-            it.precioModalidad &&
-            it.precioModalidad !== modalidadDefaultPorTipo,
-          );
-        if (overrides.length > 0) {
-          for (const { it, idx } of overrides) {
-            const auditPayload: Record<string, unknown> = {
-              accion: 'override_modalidad_precio_factura',
-              lineaIndex: idx,
-              modalidadOriginal: modalidadDefaultPorTipo,
-              modalidadOverride: it.precioModalidad,
-              clienteTipo: clienteTipoEnEmision,
-              // SPRINT-114: auth.uid en vez de userProfile.id (consistencia).
-              solicitanteUid: currentUser?.uid || null,
-              solicitanteNombre: userProfile?.nombre || null,
-              facturaNumero: numero,
-              ordenId: orden.id,
-              ordenNumero: orden.numero || null,
-              timestamp: serverTimestamp(),
-            };
-            const auditLimpio = Object.fromEntries(
-              Object.entries(auditPayload).filter(([, v]) => v !== undefined),
-            );
-            // Sin await en paralelo: no bloqueamos la UX del usuario.
-            addDoc(collection(db, 'auditoria_admin'), auditLimpio).catch(err =>
-              console.warn('Audit log override modalidad falló:', err),
-            );
-          }
-        }
-      } catch (auditErr) {
-        console.warn('Error preparando audit log de override modalidad:', auditErr);
-      }
-
-      // Marcar la orden
+      // Marcar la orden — payload construido PRE-tx (se aplica con tx.update).
       const registro = crearRegistroAuditoria(
         usuario,
         'editar',
@@ -785,7 +737,113 @@ export default function ProcesarFacturacionModal({
         // arrayUnion para mantener pagos previos intactos + agregar el nuevo.
         ordenUpdate.pagos = arrayUnion(pagoNuevoFinal);
       }
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), ordenUpdate);
+      const ordenUpdateLimpio = Object.fromEntries(
+        Object.entries(ordenUpdate).filter(([, v]) => v !== undefined),
+      );
+
+      // ─── Transacción atómica: crear factura + denorm + update orden ───
+      try {
+        await runTransaction(db, async (tx) => {
+          const ordenRef = doc(db, 'ordenes_servicio', orden.id);
+          const ordenSnap = await tx.get(ordenRef);
+          if (!ordenSnap.exists()) {
+            throw new Error('La orden ya no existe.');
+          }
+          // Idempotencia: si otro tab/usuario ya emitió conduce, abortar limpio.
+          if (ordenSnap.data()?.facturada === true) {
+            throw new Error('CONDUCE_YA_EMITIDO');
+          }
+          // 1. Crear factura con id pre-generado.
+          tx.set(facturaRef, facturaLimpia);
+          // 2. Denormalización de comisiones (si helpers PRE-tx generaron payload).
+          if (denormParaTx) {
+            tx.update(facturaRef, denormParaTx);
+          }
+          // 3. Update orden con arrayUnion(pagos) + auditoria.
+          tx.update(ordenRef, ordenUpdateLimpio);
+        });
+      } catch (txErr) {
+        const msg = (txErr as Error)?.message || '';
+        if (msg === 'CONDUCE_YA_EMITIDO') {
+          toast.error('Este conduce ya fue emitido en otra pestaña. Recargá la página.');
+          setGenerando(false);
+          return;
+        }
+        console.error('[procesar-facturacion] runTransaction emisión conduce falló:', txErr);
+        toast.error('Error al generar el conduce de garantía');
+        setGenerando(false);
+        return;
+      }
+
+      // ─── POST-tx: audit logs + notificaciones (best-effort, no bloquean) ───
+
+      // Audit log de emisión de garantía (no bloquea si falla)
+      if (garantia) {
+        try {
+          await addDoc(collection(db, 'auditoria_admin'), {
+            accion: 'emitir_garantia',
+            // SPRINT-114: unificado a currentUser.uid (auth.uid). Antes era
+            // userProfile?.id que podía ser personalDocId — gotcha CLAUDE.md.
+            solicitanteUid: currentUser?.uid || null,
+            solicitanteNombre: usuario,
+            objetivoTipo: 'factura',
+            objetivoId: facturaRef.id,
+            conduceNumero: numero,
+            ordenId: orden.id,
+            ordenNumero: orden.numero,
+            garantia: {
+              tiempoDias: garantia.tiempoDias,
+              finFecha: garantia.finFecha,
+              token: (garantia.token || '').substring(0, 8) + '...',
+            },
+            timestamp: Timestamp.now(),
+          });
+        } catch (err) {
+          console.warn('[facturacion-pendiente] audit emitir_garantia falló (no bloquea):', err);
+        }
+      }
+
+      // Audit log override modalidad (best-effort, no bloquea emisión).
+      // Una entry por cada línea overrideada respecto al default que dictaba
+      // el tipo del cliente.
+      try {
+        const modalidadDefaultPorTipo: 'mayoreo' | 'detalle' =
+          clienteTipoEnEmision === 'b2b' ? 'mayoreo' : 'detalle';
+        const overrides = items
+          .map((it, idx) => ({ it, idx }))
+          .filter(({ it }) =>
+            (it.tipoItem === 'servicio' || it.tipoItem === 'pieza') &&
+            it.precioModalidad &&
+            it.precioModalidad !== modalidadDefaultPorTipo,
+          );
+        if (overrides.length > 0) {
+          for (const { it, idx } of overrides) {
+            const auditPayload: Record<string, unknown> = {
+              accion: 'override_modalidad_precio_factura',
+              lineaIndex: idx,
+              modalidadOriginal: modalidadDefaultPorTipo,
+              modalidadOverride: it.precioModalidad,
+              clienteTipo: clienteTipoEnEmision,
+              // SPRINT-114: auth.uid en vez de userProfile.id (consistencia).
+              solicitanteUid: currentUser?.uid || null,
+              solicitanteNombre: userProfile?.nombre || null,
+              facturaNumero: numero,
+              ordenId: orden.id,
+              ordenNumero: orden.numero || null,
+              timestamp: serverTimestamp(),
+            };
+            const auditLimpio = Object.fromEntries(
+              Object.entries(auditPayload).filter(([, v]) => v !== undefined),
+            );
+            // Sin await en paralelo: no bloqueamos la UX del usuario.
+            addDoc(collection(db, 'auditoria_admin'), auditLimpio).catch(err =>
+              console.warn('Audit log override modalidad falló:', err),
+            );
+          }
+        }
+      } catch (auditErr) {
+        console.warn('Error preparando audit log de override modalidad:', auditErr);
+      }
 
       // SPRINT-151: audit log en auditoria_admin (best-effort, no bloquea).
       try {
