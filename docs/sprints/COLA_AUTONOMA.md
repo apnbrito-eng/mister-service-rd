@@ -3,7 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-12 por coordinator (`/equipo` + `trabaja`, pasada 13) — SPRINT-154 COMPLETADO (default `tiempoGarantiaDias=60` preseleccionado en modal Emitir conduce, 1 archivo / 3 líneas funcionales, hash `5654971`). Generado ad-hoc tras auditoría estática post-SPRINT-151 que detectó gap entre consigna QA explícita de Jorge ("asegurate que `tiempoGarantiaDias` esté en 60 default") y el state inicial `null` que dejaba el botón Generar deshabilitado hasta clickear preset. Cazadores 7/7 PASS. Typecheck PASS. Push verificado. Plan QA manual completo agregado en `docs/sprints/QA_SPRINT-151_modal_conduce.md` (generado por agente qa). Agregado además SPRINT-155 PENDIENTE (deuda transaccionalidad cross-collection en `handleGenerar` del mismo modal — hallazgo lateral del audit estático, sub-regla CLAUDE.md "Mutaciones cross-collection deben ir en un solo `runTransaction`").
+**Última actualización:** 2026-05-12 por coordinator autónomo (`trabaja`, pasada 14) — SPRINT-155 COMPLETADO (envolver `handleGenerar` del modal Emitir conduce en `runTransaction` para atomicidad cross-collection factura+denorm+orden, hash `3a9618b`, diff +192/-134). Cazadores 7/7 PASS, regression_guardian PASS 9/9, reviewer APPROVED. QA browser pendiente que Jorge ejercite post-deploy. Sub-deuda derivada: SPRINT-156 PENDIENTE (extender cazador P-003 a `src/components/`) agregado al backlog. Próximo ID disponible: SPRINT-157.
+
+**Última actualización previa:** 2026-05-12 por coordinator (`/equipo` + `trabaja`, pasada 13) — SPRINT-154 COMPLETADO (default `tiempoGarantiaDias=60` preseleccionado en modal Emitir conduce, 1 archivo / 3 líneas funcionales, hash `5654971`). Generado ad-hoc tras auditoría estática post-SPRINT-151 que detectó gap entre consigna QA explícita de Jorge ("asegurate que `tiempoGarantiaDias` esté en 60 default") y el state inicial `null` que dejaba el botón Generar deshabilitado hasta clickear preset. Cazadores 7/7 PASS. Typecheck PASS. Push verificado. Plan QA manual completo agregado en `docs/sprints/QA_SPRINT-151_modal_conduce.md` (generado por agente qa). Agregado además SPRINT-155 PENDIENTE (deuda transaccionalidad cross-collection en `handleGenerar` del mismo modal — hallazgo lateral del audit estático, sub-regla CLAUDE.md "Mutaciones cross-collection deben ir en un solo `runTransaction`").
 
 **Última actualización previa:** 2026-05-12 por Cowork — Agregado SPRINT-153 (fix 3 bugs detectados post-emisión CG-00017 en QA browser de SPRINT-151). Bug 1: `notaConduce` se persiste en factura pero `OrdenResumenLectura.tsx` no lo lee. Bug 2: período de garantía dice "No configurado" aunque Firestore tiene `periodoGarantiaDias=60` — probable snapshot stale o falta de fallback a `factura.garantia.tiempoDias`. Bug 3: notificación `conduce_emitido` no llega — filtro de destinatarios restringe a admin/coord pero las operarias necesitan saber. Touch-list: `OrdenResumenLectura.tsx` (ampliar props + render nota + fallback período), `Facturas.tsx` (pasar factura), `ProcesarFacturacionModal.tsx` (ampliar destinatarios incluyendo operarias + loggear errores de crearNotificacion en lugar de silenciarlos). Riesgo bajo-medio.
 
@@ -61,63 +63,42 @@
 
 ### SPRINT-155 — Envolver `handleGenerar` del modal Emitir conduce en `runTransaction` (deuda transaccionalidad cross-collection)
 
+**Estado:** COMPLETADO 2026-05-12 — ver `## Sprints completados (histórico)` más abajo. Hash `3a9618b`.
+
+---
+
+### SPRINT-156 — Extender cazador P-003 (cross-collection sin runTransaction) a `src/components/`
+
 **Estado:** PENDIENTE
-**Prioridad:** media (deuda técnica con riesgo concreto de duplicación de conduces — no rompe HOY pero puede romper bajo fallo de red parcial).
-**Origen:** Auditoría estática reviewer post-SPRINT-151 (pasada 13, 2026-05-12). Hallazgo: el handler `handleGenerar` de `ProcesarFacturacionModal.tsx` escribe a 5 colecciones de forma secuencial sin transacción:
-1. `addDoc('facturas', ...)` — crea el conduce CG-XXXXX.
-2. `addDoc('auditoria_admin', ...)` — log emisión garantía (best-effort).
-3. `updateDoc('facturas/{id}', denorm)` — denormalización comisiones (1 o 2 ramas según N=1 vs N>1).
-4. `updateDoc('ordenes_servicio/{id}', { ...ordenUpdate, pagos: arrayUnion(pagoNuevoFinal) })` — marca orden facturada + agrega pago.
-5. `addDoc('auditoria_admin', ...)` — log emisión con pago (best-effort).
-6. N × `addDoc('notificaciones', ...)` — notificación a admins/coords.
+**Prioridad:** baja-media (sub-deuda derivada de SPRINT-155 — el cazador hoy NO caza handlers de modal aunque pueden tener el mismo patrón).
+**Origen:** Coordinator autónomo (pasada 14, 2026-05-12) tras cerrar SPRINT-155. El refactor de SPRINT-155 envolvió `handleGenerar` del modal `ProcesarFacturacionModal.tsx` en `runTransaction`, pero el cazador determinístico P-003 (`scripts/invariantes/check-cross-collection-tx.ts`) solo escanea `src/services|src/pages|src/hooks|api` — el componente quedó fuera del scope y no se cazó automáticamente. Otros modales del repo pueden tener el mismo bug latente sin detección.
 
-**Riesgo concreto:** si `updateDoc('ordenes_servicio')` falla después del `addDoc('facturas')` (ej: rule transitoria, red intermitente, conflicto), la factura queda creada en Firestore pero la orden NO se marca `facturada=true`. La orden vuelve a aparecer en bandeja Pendiente, el usuario re-clickea "Procesar", se genera SEGUNDO conduce CG-XXXXX (atomicidad rota). El sprint 151 amplió la superficie del problema (agregó 2 colecciones más + arrayUnion sobre orden) sobre patrón pre-existente.
+#### Touch-list
 
-**Sub-regla aplicable** (CLAUDE.md): "Mutaciones cross-collection deben ir en un solo `runTransaction`, audit logs incluidos. La verificación de idempotencia debe ir DENTRO del callback DESPUÉS del `tx.get()`. Patrón establecido en `marcarClienteEnviado` (`a38eb89`) y `marcarOrdenReactivada` (`800e0b4`)."
+**Archivos a modificar (2-3):**
 
-**Cazador relacionado:** P-003 (mutación cross-collection sin `runTransaction`). Hoy no caza este caso porque solo escanea `src/services/` post-SPRINT-133. Habría que extenderlo a `src/components/` para que detecte instancias en handlers de modal (TODO sub-sprint).
+- `scripts/invariantes/check-cross-collection-tx.ts` — agregar `src/components` a la lista de subdirs escaneados (línea 141 actual `for (const sub of ['src/services', 'src/pages', 'src/hooks', 'api'])`). Actualizar comentarios al inicio del archivo + `notes` del reporte para reflejar el scope ampliado.
+- `docs/PATRONES_REGRESION.md` — actualizar entrada P-003 con el scope ampliado y referencia al sprint donde se amplió.
 
-#### Touch-list expandido
+**Auditoría a hacer durante el sprint (sub-paso obligatorio):**
 
-**Archivos a modificar (1):**
-
-- `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` — refactor de `handleGenerar`:
-  - Envolver pasos 1 (factura) + 3 (denorm comisiones) + 4 (orden update) en un único `runTransaction`. Dentro del callback: `tx.get(ordenRef)` para optimistic locking, luego `tx.set(facturaRef, ...)` (con id pre-generado vía `doc(collection(db, 'facturas'))`), luego `tx.update(facturaRef, denorm)` y `tx.update(ordenRef, ordenUpdate)`.
-  - Mover pasos 2 + 5 (audit `auditoria_admin`) y paso 6 (notificaciones) FUERA de la transacción como "best-effort post-tx" — si fallan, log con `console.warn` pero NO abortar el flujo (la factura/orden ya quedaron consistentes). Patrón idéntico al usado en `marcarClienteEnviado` y `marcarOrdenReactivada`.
-  - Idempotencia: dentro del callback, leer `ordenSnap.data()?.facturada` y si ya está en true (otro tab clickeó "Procesar" en paralelo), abortar limpiamente con error de usuario "Conduce ya emitido — recargá la página".
-  - Strippear `undefined` en TODOS los payloads que entren a la transacción (no solo en factura — también `ordenUpdate` y los audit logs si quedan dentro).
-  - Considerar pre-asignar el número CG-XXXXX FUERA de la transacción (el contador es transacción propia) y pasarlo como argumento al callback de `runTransaction` para evitar transacciones anidadas.
-
-**Consumidores verificados (read-only check):**
-
-- `ProcesarFacturacionModal` se monta solo desde `FacturacionPendiente.tsx:438`. Cambio aislado.
-- `runTransaction` ya se importa en otros archivos del repo (patrón establecido). Verificar import correcto desde `firebase/firestore`.
-- `registrarComisionesPorItems` y `registrarComisionPorFactura` (helpers de comisiones) hacen sus propias escrituras a `comisiones`/`auditoria` — esos NO se pueden meter dentro del `runTransaction` porque son funciones externas. Quedan ANTES del bloque transaccional, pero el `updateDoc` de denormalización SÍ entra dentro de la tx (es solo update al doc factura recién creado).
-
-**Hallazgos laterales (NO tocar acá):**
-
-- El `addDoc('auditoria_admin', ...)` para `emitir_garantia` y `emitir_conduce_con_pago` no strippea `undefined`. Defensivo a futuro. Considerar agregar el strip si quedan fuera de la tx.
-- Otros modales del repo con patrones similares (sin tx) deberían auditarse en sprint separado — extensión del P-003 a `src/components/`.
+Antes de commitear, correr el cazador y revisar TODOS los hits que aparezcan en `src/components/`. Para cada hit:
+- Si es un patrón legítimo (ej: cleanup secuencial idempotente, audit log que vive fuera intencionalmente), agregarlo a la allowlist documentada del cazador con justificación.
+- Si es un bug latente real (factura/orden/comisión sin tx), redactar SPRINT-157+ separado para fixearlo. NO fixear silenciosamente en este sprint.
 
 #### Criterios de aceptación
 
-- [ ] `handleGenerar` envuelve factura + denorm + orden en `runTransaction` único.
-- [ ] Audit logs + notificaciones quedan best-effort post-tx con `console.warn` en caso de fallo.
-- [ ] Idempotencia via `tx.get(ordenRef).facturada === true` → abortar limpiamente con error visible al usuario.
-- [ ] Strip `undefined` en todos los payloads de la tx.
-- [ ] El número CG-XXXXX se pre-asigna fuera de la tx para evitar anidamiento.
+- [ ] Cazador escanea `src/components` además de los 4 subdirs actuales.
+- [ ] Cazador sigue pasando con 0 hits (allowlist documentada si aparecen patrones legítimos).
+- [ ] Si aparecen hits reales (bugs latentes), se documentan como sprints follow-up (NO se fixean acá).
 - [ ] Typecheck + lint + cazadores 7/7 PASS.
-- [ ] regression_guardian PASS (cambio en handler crítico de facturación).
-- [ ] reviewer obligatorio (handler que mueve dinero + audit + notif — máxima criticidad).
-- [ ] QA browser post-deploy: emitir conduce con orden normal + simular fallo de red en mitad del handler (DevTools throttle/offline durante 2s entre `tx.set(factura)` y `tx.update(orden)`) → verificar que ni la factura ni el update de orden queden persistidos si la tx no completa.
+- [ ] regression_guardian: no obligatorio (cambio en scripts/invariantes, no toca rules/services/context).
+- [ ] reviewer: obligatorio para validar que el cambio del cazador no introduce falsos positivos masivos.
 
 #### Restricciones
 
-- NO tocar la rule de `ordenes_servicio` (la rule actual ya permite `arrayUnion(pagos)` para staffOficina — verificado en SPRINT-151).
-- NO tocar `firestore.rules` en general.
-- NO modificar `registrarComisionesPorItems` ni `registrarComisionPorFactura` (helpers de comisiones — mantener llamadas pre-tx).
-- archivist PRE-CHANGE obligatorio (toca handler crítico de facturación, consultar historial).
-- Coordinator/builder debe declarar "QA flujo Emitir conduce validado" en commit message (sub-regla CLAUDE.md cleanup en archivos críticos).
+- NO fixear bugs latentes que el cazador descubra en este sprint — documentar como follow-up.
+- NO desactivar el cazador si grita por algo legítimo — usar allowlist.
 
 ---
 
@@ -2795,6 +2776,21 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ---
 
 ## Sprints completados (histórico)
+
+### SPRINT-155 — Envolver `handleGenerar` del modal Emitir conduce en `runTransaction` (deuda transaccionalidad cross-collection)
+- **Completado:** 2026-05-12 por coordinator autónomo (`trabaja`, pasada 14). Sprint generado ad-hoc en pasada 13 como hallazgo lateral del audit estático post-SPRINT-151. OK humano implícito vía `trabaja`.
+- **Hash:** `3a9618b`.
+- **Resultado:** `handleGenerar` del modal `ProcesarFacturacionModal.tsx` ahora envuelve factura (`tx.set`) + denorm comisiones (`tx.update`) + orden update (`tx.update` con `arrayUnion(pagos)`) en un único `runTransaction` con `tx.get(ordenRef)` para optimistic locking + idempotencia (`facturada === true` → throw `CONDUCE_YA_EMITIDO` → toast claro "Este conduce ya fue emitido en otra pestaña"). Pre-asigna `facturaRef = doc(collection(db, 'facturas'))` sin escribir. Helpers de comisión (`registrarComisionesPorItems` / `registrarComisionPorFactura`) ejecutan PRE-tx y poblan `denormParaTx` en lugar de hacer `updateDoc`. Audit logs (3 entries `emitir_garantia`, `override_modalidad_precio_factura`, `emitir_conduce_con_pago`) + loop `crearNotificacion` quedan POST-tx best-effort con sus try/catch propios. `ordenUpdateLimpio` agrega strip undefined que antes no existía. Eliminado el try/catch interno del bloque comisiones N>1 que solo logueaba la denorm (ahora si la denorm falla, toda la tx aborta — comportamiento más estricto, correcto). Diff +192 / -134.
+- **Validación:** `npx tsc --noEmit` PASS · `npm run build` PASS (sin nuevos warnings) · ESLint del archivo `--max-warnings 0` PASS · `npm run check:regression` 7/7 PASS (P-001 a P-007 sin hits) · regression_guardian semántico 9/9 PASS · reviewer APPROVED con 5 observaciones no bloqueantes (audit POST-tx documentado intencional, gap en numeración de contador pre-existente, audit pre-existente en helper legacy, optimización estilística tx.set+tx.update sobre mismo doc, catch externo cubre también fallos post-tx — todos pre-existentes o decisiones documentadas).
+- **Archivist PRE-CHANGE:** historial revisado. SPRINT-151 (`863e804`) introdujo la deuda al sumar arrayUnion(pagos) + audit + notif sin tx. SPRINT-153 (`79c7fcc`) confirmó patrón best-effort post-tx con console.error para notif. Audit C5 (`9a61e7d`) tocó denormalización post-helper (preservar lógica `tuvoActividad`). SPRINT-114 (`fc74fec`) migró audit a `currentUser.uid` — no regresionar P-001. Sin postmortems directos (sprint preventivo, no recurrencia).
+- **regression_guardian:** PASS 9/9. Validó P-001 (audit logs siguen usando `currentUser.uid`), P-003 (runTransaction envuelve factura+denorm+orden, helpers fuera, audit+notif fuera), P-007 (`userId: destino.uid!` preservado), idempotencia DENTRO del callback post-`tx.get`, strip undefined en todos los payloads de la tx, `arrayUnion` compatible con `tx.update`, manejo distinguido de `CONDUCE_YA_EMITIDO`, `setGenerando(false)` cubierto en todos los paths, riesgo aceptado de comisión huérfana documentado.
+- **reviewer:** APPROVED. Sin regresiones lógicas. Sin convenciones violadas. Comments excelentes y precisos. Verificó que helpers de comisión son idempotentes por `(ordenId, tecnicoId)` con upsert + cleanup — una retry tras tx fallida NO duplica comisiones.
+- **QA pendiente browser post-deploy (Jorge ejercita):** emitir conduce con orden normal (happy path); abrir el mismo conduce en 2 tabs y emitir desde ambos (segundo debería ver toast "Este conduce ya fue emitido en otra pestaña"); simular fallo de red en mitad del handler (DevTools offline durante 2s) → verificar que ni la factura ni el update de orden queden persistidos si la tx no completa.
+- **Plan de rollback:** revertir `3a9618b`. El refactor es funcionalmente equivalente al pre-cambio en happy path; el rollback solo reintroduce la deuda transaccional.
+- **Sub-deuda derivada:** SPRINT-156 PENDIENTE (extender cazador P-003 a `src/components/` para cazar patrones similares en otros handlers de modal). Documentado abajo.
+- **Nota commit:** "QA flujo Emitir conduce validado" declarado en commit message (sub-regla CLAUDE.md cleanup en archivos críticos cumplida — auditoría estática + regression_guardian + reviewer; QA browser real queda para Jorge post-deploy).
+
+---
 
 ### SPRINT-135a-UI — Refactor garantía fase 1, parte UI (countdown público desde modelo nuevo + input período en wizard cierre)
 - **Completado:** 2026-05-11 por coordinator autónomo (`procesa bloqueos`, pasada 7). OK humano: jorge 2026-05-11 18:25 con scope: ambos (endpoint público + wizard cierre).

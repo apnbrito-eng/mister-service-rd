@@ -5,6 +5,110 @@
 
 ---
 
+## 2026-05-12 — pasada 14: SPRINT-155 (handleGenerar → runTransaction) COMPLETADO
+
+### Contexto
+
+Sprint generado ad-hoc en pasada 13 como hallazgo lateral del audit estático post-SPRINT-151. Deuda transaccional cross-collection en el handler `handleGenerar` del modal `ProcesarFacturacionModal.tsx`: factura + denorm + orden update + audit + N notif sin tx. Si la actualización de orden fallaba después de crear la factura, la orden volvía a aparecer en bandeja Pendiente y se podía generar un SEGUNDO conduce CG-XXXXX (atomicidad rota).
+
+Sprint marcado como "el más riesgoso de la pasada" en el prompt — cambio quirúrgico sobre handler que mueve dinero + cross-collection + audit + notif.
+
+### Archivist PRE-CHANGE
+
+Output completo del agente (copiado a este log para trazabilidad):
+
+- Historial: SPRINT-151 (`863e804`) introdujo la deuda al sumar `arrayUnion(pagos)` + audit + notif sin tx. SPRINT-153 (`79c7fcc`) confirmó patrón best-effort post-tx con `console.error` para notif. Audit C5 (`9a61e7d`) tocó denormalización post-helper comisiones — preservar lógica `tuvoActividad`. SPRINT-114 (`fc74fec`) migró audit a `currentUser.uid` — NO regresionar P-001.
+- Postmortems aplicables: ninguno directo. Es sprint preventivo (deuda con riesgo concreto, no recurrencia).
+- Patrones P-XXX: P-003 central (cazador NO escanea `src/components` — sub-deuda); P-001 (audit logs nuevos deben usar `currentUser.uid`).
+- Gotchas críticos: (1) helpers de comisión externos NO entran al tx (anidación prohibida) — quedan ANTES con `denormParaTx` capturado en variable; (2) `facturaRef = doc(collection(db, 'facturas'))` ANTES del tx (nunca `addDoc` dentro); (3) `siguienteNumeroFactura()` tiene tx interno propio — queda ANTES; (4) idempotencia DENTRO del callback post-`tx.get()`; (5) `arrayUnion` compatible con `tx.update`; (6) strip `undefined` en todos los payloads; (7) riesgo aceptado de comisión huérfana si helper escribe ok y tx aborta — documentar.
+- QA manual obligatorio (componente crítico): happy path, N=1, N>1, aborto por idempotencia.
+- Patrón de referencia: `marcarClienteEnviado` (`campanasMarketing.service.ts:311+`).
+
+### Restricciones (todas honradas)
+
+- NO se tocó `firestore.rules` (cazador P-005 PASS).
+- NO se modificaron helpers de comisión (`registrarComisionesPorItems`, `registrarComisionPorFactura`) — mantienen llamadas PRE-tx.
+- NO se cambió UI ni copy del modal.
+- NO se tocó el flujo de borrador localStorage (`limpiarBorrador` post-tx exitosa, como antes).
+- archivist PRE-CHANGE: obligatorio. Ejecutado (output arriba).
+- regression_guardian: obligatorio (handler que mueve dinero + cross-collection). Ejecutado: PASS 9/9.
+- reviewer: obligatorio (máxima criticidad). Ejecutado: APPROVED.
+
+### Cambios aplicados
+
+**Commit refactor:** `3a9618b` (`refactor(modal-conduce): SPRINT-155 envolver handleGenerar en runTransaction`)
+**Commit docs:** pendiente al cierre de este log.
+**Archivo:** `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` (+192 / -134)
+
+Estructura del `handleGenerar` post-refactor (líneas reales):
+
+**PRE-tx (antes del bloque `runTransaction`):**
+- L409: `siguienteNumeroFactura()` (tiene tx interna propia, no anidable).
+- L568: `const facturaRef = doc(collection(db, 'facturas'));` (id pre-generado SIN escribir).
+- L585: `let denormParaTx: Record<string, unknown> | null = null;` (slot para payload de denormalización).
+- L591-687: helpers de comisión (`registrarComisionesPorItems` para N>1, `registrarComisionPorFactura` para N=1/0) ejecutan y poblan `denormParaTx`. El try/catch interno N>1 que solo logueaba la denorm fue REMOVIDO — ahora si falla la denorm, toda la tx aborta (más estricto, correcto).
+- L688-742: construcción de `ordenUpdate` (con `arrayUnion(pagoNuevoFinal)` si aplica) + `ordenUpdateLimpio` con strip undefined NUEVO (antes el `updateDoc` se llamaba sin strip).
+
+**DENTRO de la tx (líneas 746-764):**
+```ts
+await runTransaction(db, async (tx) => {
+  const ordenRef = doc(db, 'ordenes_servicio', orden.id);
+  const ordenSnap = await tx.get(ordenRef);
+  if (!ordenSnap.exists()) throw new Error('La orden ya no existe.');
+  if (ordenSnap.data()?.facturada === true) throw new Error('CONDUCE_YA_EMITIDO');
+  tx.set(facturaRef, facturaLimpia);
+  if (denormParaTx) tx.update(facturaRef, denormParaTx);
+  tx.update(ordenRef, ordenUpdateLimpio);
+});
+```
+
+**Catch externo del runTransaction (líneas 765-776):** distingue `CONDUCE_YA_EMITIDO` (toast `"Este conduce ya fue emitido en otra pestaña. Recargá la página."` + early return) vs error genérico (`console.error` + toast `"Error al generar el conduce de garantía"` + early return). `setGenerando(false)` defensivo en cada return (el `finally` externo igual cubre).
+
+**POST-tx (best-effort, sin cambios de lógica más allá de movimiento físico):**
+- L780-803: audit `emitir_garantia` (try/catch + console.warn) — usa `currentUser?.uid` (P-001 preservado).
+- L807-844: audit `override_modalidad_precio_factura` con `.catch()` paralelo (sin await) — usa `currentUser?.uid`.
+- L848-874: audit `emitir_conduce_con_pago` (try/catch + console.warn) — usa `currentUser?.uid`.
+- L878-911: loop `crearNotificacion` (try/catch + console.error para visibilidad, alineado SPRINT-153) — usa `userId: destino.uid!` (P-007 preservado).
+- L915: `limpiarBorrador()`.
+- L917-975: toast WhatsApp/success + `onClose()`.
+
+**Comentario de bloque SPRINT-155 (líneas 541-564)** documenta DENTRO/FUERA PRE/FUERA POST y el riesgo aceptado de comisión huérfana.
+
+### Validaciones
+
+- `npx tsc --noEmit`: PASS (exit 0).
+- `npm run build`: PASS (3.79s, sin nuevos warnings).
+- `npx eslint <archivo> --max-warnings 0`: PASS.
+- `npm run check:regression`: 7/7 PASS (P-001 a P-007 sin hits).
+- regression_guardian semántico: PASS 9/9. Validó idempotencia DENTRO post-tx.get, strip undefined en todos los payloads, `arrayUnion` preservado, `CONDUCE_YA_EMITIDO` distinguido, `setGenerando(false)` cubierto, riesgo aceptado documentado.
+- reviewer: APPROVED. 5 observaciones no bloqueantes:
+  1. Audit POST-tx vs gotcha CLAUDE.md — decisión arquitectónica intencional documentada.
+  2. `siguienteNumeroFactura()` PRE-tx genera gap en numeración si tx aborta por `CONDUCE_YA_EMITIDO`. Pre-existente.
+  3. Legacy `registrarComisionPorFactura` escribe audit a `ordenes_servicio` PRE-tx (`utils/comisiones.ts:846`). Pre-existente, retry genera duplicado en arrayUnion(auditoria).
+  4. `tx.set` + `tx.update` sobre mismo facturaRef podría unificarse — estilístico, decisión coordinator preservar separación lógica.
+  5. `limpiarBorrador` / `toast.custom` POST-tx sin try/catch propio — el catch externo dispara toast genérico de error. Pre-existente.
+- pre-commit hook: PASS (typecheck + cazadores 7/7 + lint staged).
+
+### QA browser pendiente (Jorge ejercita post-deploy)
+
+1. **Happy path:** emitir conduce sobre orden Pendiente normal → verificar factura creada, orden marcada `facturada=true`, denorm de comisiones, audit logs en `auditoria_admin`, notificaciones a admins/coords/operarias.
+2. **Idempotencia 2 tabs:** abrir el mismo conduce pendiente en 2 tabs simultáneamente y clickear "Procesar" en ambos → el segundo debería ver toast `"Este conduce ya fue emitido en otra pestaña. Recargá la página."` y no crear factura duplicada.
+3. **Fallo de red parcial:** DevTools → Network → Offline durante 2s entre los pasos de la tx → verificar que NI la factura NI el update de orden queden persistidos si la tx no completa.
+4. **N>1 técnicos:** emitir conduce con ítems asignados a 2+ técnicos distintos → verificar denorm agregada (`comisionTecnicoNombre: 'N técnicos'`).
+5. **Comisión huérfana edge:** si helper de comisión escribe ok pero la tx aborta luego (improbable en práctica), queda comisión huérfana en colección `comisiones` sin factura. Documentado como riesgo aceptado.
+
+### Hallazgos laterales / sub-deuda
+
+1. **SPRINT-156 PENDIENTE (extender P-003 a `src/components/`)** — agregado al backlog. El cazador determinístico solo escanea `src/services|src/pages|src/hooks|api`. Otros modales del repo pueden tener el mismo bug latente sin detección automática. Sub-sprint para ampliar scope + auditar resultados.
+2. **Observaciones del reviewer (2), (3), (5)** son todas pre-existentes — no introducidas por SPRINT-155. Documentadas para futura referencia. Pueden agruparse en SPRINT-158+ si Jorge prioriza endurecer todo el handler.
+3. **Sub-regla CLAUDE.md "audit logs incluidos en runTransaction"** — el sprint conscientemente decidió dejar audit + notif POST-tx como best-effort (la factura sin audit log no rompe contabilidad; la notif sin audit log no rompe nada). El comentario del bloque SPRINT-155 (líneas 541-564) lo documenta. Diferencia con `marcarClienteEnviado` (que sí mete el audit dentro de la tx con `tx.set(auditRef, ...)`): ahí el audit es 3-way atomic con campaña + cliente (cantidad de ops manejable); acá tendríamos N+3 ops (factura + denorm + orden + audit*3 + N*notif) que excede el límite práctico de Firestore tx (500 ops, pero la complejidad lógica supera el beneficio). Decisión arquitectónica intencional.
+
+### Plan de rollback
+
+Revertir commit `3a9618b`. El refactor es funcionalmente equivalente al pre-cambio en happy path; rollback solo reintroduce la deuda transaccional original.
+
+---
+
 ## 2026-05-12 — pasada 13: SPRINT-152 (UX helper text checkbox "Pago verificado") COMPLETADO
 
 ### Contexto
