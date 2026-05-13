@@ -122,7 +122,12 @@ export default function ProcesarFacturacionModal({
   const [items, setItems] = useState<ItemCotizacion[]>([]);
   const [cargandoCotizacion, setCargandoCotizacion] = useState(false);
   const [generando, setGenerando] = useState(false);
-  const [tiempoGarantiaDias, setTiempoGarantiaDias] = useState<number | null>(null);
+  // SPRINT-154: default 60 días preseleccionado (caso más común).
+  // El tipo sigue siendo `number | null` para retrocompat con borradores viejos
+  // (pre-SPRINT-154) que pudieron guardar null, y para preservar la red
+  // defensiva del gate del botón "Generar" (línea ~1224) que aún chequea
+  // `=== null` para evitar emisión sin garantía si algo lo limpia.
+  const [tiempoGarantiaDias, setTiempoGarantiaDias] = useState<number | null>(60);
   const [cliente, setCliente] = useState<Cliente | null>(null);
   // SPRINT-151: nota para el conduce (max 500 chars, opcional) + pago en construcción.
   const [notaConduce, setNotaConduce] = useState<string>('');
@@ -178,13 +183,15 @@ export default function ProcesarFacturacionModal({
     if (!orden) {
       setItems([]);
       setPaso(1);
-      setTiempoGarantiaDias(null);
+      // SPRINT-154: default 60 días al cerrar/cambiar orden (coherente con state inicial).
+      setTiempoGarantiaDias(60);
       setBorradorEncontrado(null);
       yaCargoInicialRef.current = false;
       return;
     }
     setPaso(1);
-    setTiempoGarantiaDias(null);
+    // SPRINT-154: idem en el reset al abrir una orden nueva.
+    setTiempoGarantiaDias(60);
     yaCargoInicialRef.current = false;
 
     // Buscar borrador antes de pisar items
