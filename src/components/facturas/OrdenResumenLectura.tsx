@@ -1,10 +1,18 @@
-import type { OrdenServicio } from '../../types';
+import type { OrdenServicio, Factura } from '../../types';
 import { formatMoneda, formatFechaCorta, formatearEquipoLabel } from '../../utils';
-import { AlertTriangle, CheckCircle2, XCircle, MinusCircle, Camera, Trash2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, XCircle, MinusCircle, Camera, Trash2, StickyNote } from 'lucide-react';
 
 interface Props {
   orden: OrdenServicio | null | undefined;
   variant?: 'compacto' | 'completo';
+  /**
+   * SPRINT-153 (2026-05-12) — factura asociada al conduce.
+   * Cuando está presente, habilita:
+   *  - Render del bloque "Nota del conduce" si `factura.notaConduce` existe (Bug 1).
+   *  - Fallback del período de garantía cuando `orden.periodoGarantiaDias`
+   *    no está hidratado pero la factura tiene `garantia.tiempoDias` (Bug 2).
+   */
+  factura?: Factura | null;
 }
 
 /**
@@ -18,8 +26,11 @@ interface Props {
  * `revisoConexiones`, `fotoCierre`, `tipoCierre`, `periodoGarantiaDias`,
  * `garantiaVencimiento`) y soporta shape legacy (`piezasRetiradas`,
  * `checklist`, `satisfaccionCliente`) en sección colapsable.
+ *
+ * SPRINT-153 (2026-05-12) — recibe opcionalmente `factura` para renderizar
+ * la nota del conduce y proveer fallback del período de garantía.
  */
-export default function OrdenResumenLectura({ orden, variant = 'completo' }: Props) {
+export default function OrdenResumenLectura({ orden, variant = 'completo', factura }: Props) {
   if (!orden) {
     return (
       <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm text-gray-500 italic">
@@ -43,9 +54,22 @@ export default function OrdenResumenLectura({ orden, variant = 'completo' }: Pro
   const cantidadPiezasFallback = typeof orden.cantidadPiezasUsadas === 'number' ? orden.cantidadPiezasUsadas : null;
 
   // Fecha de vencimiento de garantía con días restantes.
-  const garantiaVenc = cierre && orden.garantiaVencimiento
+  // SPRINT-153: si `orden.garantiaVencimiento` falta pero la factura asociada
+  // tiene `garantia.finFecha`, usamos esa como fallback. Lo mismo para
+  // `periodoGarantiaDias` → `factura.garantia.tiempoDias`.
+  const periodoGarantiaDias = typeof orden.periodoGarantiaDias === 'number'
+    ? orden.periodoGarantiaDias
+    : typeof factura?.garantia?.tiempoDias === 'number'
+      ? factura.garantia.tiempoDias
+      : null;
+  const garantiaVenc = orden.garantiaVencimiento
     ? toDate(orden.garantiaVencimiento)
-    : null;
+    : factura?.garantia?.finFecha
+      ? toDate(factura.garantia.finFecha)
+      : null;
+  const periodoDesdeFactura =
+    typeof orden.periodoGarantiaDias !== 'number' &&
+    typeof factura?.garantia?.tiempoDias === 'number';
   const diasRestantes = garantiaVenc
     ? Math.ceil((garantiaVenc.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
@@ -125,14 +149,19 @@ export default function OrdenResumenLectura({ orden, variant = 'completo' }: Pro
 
         {/* Período de garantía */}
         <Bloque titulo="Período de garantía">
-          {typeof orden.periodoGarantiaDias === 'number' && garantiaVenc ? (
+          {periodoGarantiaDias !== null && garantiaVenc ? (
             <div className="text-gray-800">
-              {orden.periodoGarantiaDias} días
+              {periodoGarantiaDias} días
               <span className="mx-1 text-gray-400">·</span>
               vence el {formatFechaCorta(garantiaVenc)}
               {diasRestantes !== null && (
                 <span className={`ml-1.5 text-[11px] font-medium ${diasRestantes >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                   ({diasRestantes >= 0 ? `faltan ${diasRestantes} días` : `venció hace ${Math.abs(diasRestantes)} días`})
+                </span>
+              )}
+              {periodoDesdeFactura && (
+                <span className="ml-1.5 text-[10px] text-gray-500 italic">
+                  (según conduce emitido)
                 </span>
               )}
             </div>
@@ -210,6 +239,22 @@ export default function OrdenResumenLectura({ orden, variant = 'completo' }: Pro
         <Bloque titulo="Notas del técnico">
           <div className="text-xs text-gray-700 whitespace-pre-wrap">{orden.notasTecnico}</div>
         </Bloque>
+      )}
+
+      {/* SPRINT-153 — Nota del conduce (texto que la operaria escribió al
+          emitirlo, persistido en factura.notaConduce desde SPRINT-151).
+          Render diferenciado con fondo gris claro y borde para no confundirlo
+          con "Notas del técnico" (que viene del flujo de cierre). */}
+      {factura?.notaConduce && (
+        <div className="bg-gray-50 rounded-xl border border-gray-200 p-3">
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+            <StickyNote size={12} />
+            <span>Nota del conduce</span>
+          </div>
+          <div className="text-xs text-gray-700 whitespace-pre-wrap">
+            {factura.notaConduce}
+          </div>
+        </div>
       )}
 
       {/* Datos legacy del cierre (colapsable) */}

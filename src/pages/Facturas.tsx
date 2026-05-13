@@ -886,6 +886,7 @@ export default function Facturas() {
                             <OrdenResumenLectura
                               orden={ordenesVinculadas[factura.ordenId] ?? null}
                               variant="compacto"
+                              factura={factura}
                             />
                           </div>
                         )}
@@ -930,6 +931,7 @@ export default function Facturas() {
               <OrdenResumenLectura
                 orden={ordenesVinculadas[facturaGarantiaManual.ordenId] ?? null}
                 variant="completo"
+                factura={facturaGarantiaManual}
               />
             )}
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-900">

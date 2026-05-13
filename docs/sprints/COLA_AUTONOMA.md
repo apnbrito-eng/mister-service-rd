@@ -123,7 +123,7 @@
 
 ### SPRINT-153 — Fix 3 bugs detectados post-deploy en SPRINT-151 (nota no renderizada + período "no configurado" + notif no dispara)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-12 (coordinator, pasada 13). 4 archivos modificados (touch-list original 3 + hallazgo lateral en `utils/index.ts` causa raíz del Bug 2). Typecheck PASS, build PASS, lint 0 issues, cazadores 7/7 PASS. NO tocó firestore.rules. NO escalado a BLOQUEOS. **Hallazgo lateral:** `parseOrden` no hidrataba `periodoGarantiaDias` ni `garantiaVencimiento` — campos definidos en `types/index.ts:500-502` desde SPRINT-135a pero nunca leídos del raw doc. Fix raíz + fallback desde factura = defense-in-depth.
 **Prioridad:** alta (SPRINT-151 cerró como completado pero 3 criterios de aceptación no se cumplen end-to-end).
 **Origen:** Cowork 2026-05-12. QA browser de SPRINT-151 ejecutado por Claude del sidepanel sobre OS-0054 → CG-00017 detectó 3 desconexiones:
 

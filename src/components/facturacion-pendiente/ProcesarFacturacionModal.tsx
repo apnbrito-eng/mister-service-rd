@@ -816,12 +816,22 @@ export default function ProcesarFacturacionModal({
         console.warn('[facturacion-pendiente] audit emitir_conduce_con_pago falló (no bloquea):', err);
       }
 
-      // SPRINT-151: notificar a admins/coord activos (1 doc por destinatario).
-      // Si la operaria es admin/coord ella misma, no se auto-notifica (ahorra ruido).
+      // SPRINT-151 / SPRINT-153: notificar a admins/coord/operarias activos
+      // (1 doc por destinatario). Si quien emite es admin/coord/operaria ella
+      // misma, no se auto-notifica (ahorra ruido).
+      //
+      // SPRINT-153 (2026-05-12): se amplió el filtro para incluir `operaria`.
+      // En el taller actual las operarias coordinan los conduces — necesitan
+      // saber cuándo se emite uno (especialmente si fue un admin/coord). Antes
+      // del cambio: Wilainy/Yohana NO recibían el doc → contador no subía.
+      //
+      // Política de logging: el catch usa console.error (no warn) para que los
+      // fallos de Firestore (rules denegando, doc inválido) sean visibles en
+      // DevTools. Sin esto los errores quedaban silenciados (SPRINT-153 Bug 3).
       try {
         const destinatarios = personalActivo.filter(p =>
-          (p.rol === 'administrador' || p.rol === 'coordinadora') &&
-          p.uid && // requiere auth account
+          (p.rol === 'administrador' || p.rol === 'coordinadora' || p.rol === 'operaria') &&
+          p.uid && // requiere auth account (P-006: uid = auth.uid, no doc id)
           p.uid !== currentUser?.uid // no auto-notificarse
         );
         const verificadoLabel = pagoNuevoFinal?.verificado === true ? 'sí' : (pagoNuevoFinal ? 'no' : 'sin pago');
@@ -836,11 +846,11 @@ export default function ProcesarFacturacionModal({
             ordenId: orden.id,
             ordenNumero: orden.numero || undefined,
           }).catch(err =>
-            console.warn(`[facturacion-pendiente] notif conduce_emitido a ${destino.nombre} falló:`, err),
+            console.error(`[facturacion-pendiente] notif conduce_emitido a ${destino.nombre} falló:`, err),
           );
         }
       } catch (notifErr) {
-        console.warn('[facturacion-pendiente] error preparando notif conduce_emitido:', notifErr);
+        console.error('[facturacion-pendiente] error preparando notif conduce_emitido:', notifErr);
       }
 
       // Limpiar borrador en éxito.

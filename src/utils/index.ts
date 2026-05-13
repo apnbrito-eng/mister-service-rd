@@ -881,6 +881,12 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     standbyHasta: parseFirestoreDate(raw.standbyHasta) || undefined,
     standbyNotas: (raw.standbyNotas as string) || undefined,
     standbyPor: (raw.standbyPor as string) || undefined,
+    // SPRINT-153 (2026-05-12) — hidratar período de garantía desde Firestore.
+    // Sin este parsing, OrdenResumenLectura caía al fallback "No configurado
+    // (orden previa al SPRINT-135a-UI)" aunque Firestore SÍ tuviera ambos
+    // campos. Definidos en types/index.ts:500-502 desde SPRINT-135a.
+    periodoGarantiaDias: typeof raw.periodoGarantiaDias === 'number' ? raw.periodoGarantiaDias : undefined,
+    garantiaVencimiento: parseFirestoreDate(raw.garantiaVencimiento) || undefined,
     // Garantía — orden reasignada (checks defensivos: tipo exacto)
     esGarantia: raw.esGarantia === true ? true : undefined,
     tecnicoOriginalUid: typeof raw.tecnicoOriginalUid === 'string' && raw.tecnicoOriginalUid.length > 0 ? raw.tecnicoOriginalUid : undefined,
