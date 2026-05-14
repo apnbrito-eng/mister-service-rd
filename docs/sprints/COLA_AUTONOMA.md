@@ -3,7 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-14 por Cowork — Jorge eligió "vamos a solucionarlos todos" tras cerrar SPRINT-163 en coordinator. 6 sprints escritos en orden de criticidad: **SPRINT-159 (BLOQUEADOR go-live: firma del cliente) → SPRINT-161 (fase no avanza) → SPRINT-153-FIX (regresión nota conduce) → SPRINT-162 (KPI dashboard=0) → SPRINT-158 (9 hallazgos UX) → SPRINT-160 (modal 60 default UX)**. Coordinator procesa en este orden al hacer `trabaja`. **QA E2E distribuido (4 Claudes + humanos) se activa SOLO después del SPRINT-159** — los otros 5 son menores y bastan con tester+reviewer+regression_guardian del coordinator. Auditoría de consumidores hecha por Cowork antes de redactar (memoria "Revisar dependencias antes de modificar"): paths verificados, hipótesis de causa raíz documentadas, hallazgos laterales catalogados como deuda separada. SPRINT-161 + SPRINT-162 son fixes triviales (1 archivo cada uno). SPRINT-159 toca Storage + types + 3-5 componentes (riesgo medio, archivist obligatorio). SPRINT-153-FIX requiere diagnóstico previo en Firestore Console antes del fix.
+**Última actualización:** 2026-05-14 por coordinator (interactivo end-to-end, pedido explícito de Jorge) — **SPRINT-158a COMPLETADO** (hash `1ddb20e`, 1 archivo, +136/-1, ~25 min). Bugs 4+5 del SPRINT-158 (foto cierre + período garantía no renderizados en modal admin) cerrados con bloque "Cierre del servicio" inline en `OrdenDetailModal.tsx`. NO se reusó `OrdenResumenLectura` para evitar duplicar info ya mostrada. **SPRINT-158 DIVIDIDO** en 5 sub-sprints: 158a (cerrado), 158b/c/d (PENDIENTES en cola), 158e (BLOQUEOS.md — decisión negocio GPS bloqueante). Hallazgo lateral documentado: `OrdenDetalle.tsx` (página standalone) también carece de render de `periodoGarantiaDias` (foto cierre + firma SÍ las tiene). Deuda separada como SPRINT-158a-FIX-pagina si Jorge la prioriza. Cazadores 8/8 PASS (P-001 a P-007 + P-009). Typecheck + build PASS. Reviewer APPROVED.
+
+**Última actualización previa:** 2026-05-14 por Cowork — Jorge eligió "vamos a solucionarlos todos" tras cerrar SPRINT-163 en coordinator. 6 sprints escritos en orden de criticidad: **SPRINT-159 (BLOQUEADOR go-live: firma del cliente) → SPRINT-161 (fase no avanza) → SPRINT-153-FIX (regresión nota conduce) → SPRINT-162 (KPI dashboard=0) → SPRINT-158 (9 hallazgos UX) → SPRINT-160 (modal 60 default UX)**. Coordinator procesa en este orden al hacer `trabaja`. **QA E2E distribuido (4 Claudes + humanos) se activa SOLO después del SPRINT-159** — los otros 5 son menores y bastan con tester+reviewer+regression_guardian del coordinator. Auditoría de consumidores hecha por Cowork antes de redactar (memoria "Revisar dependencias antes de modificar"): paths verificados, hipótesis de causa raíz documentadas, hallazgos laterales catalogados como deuda separada. SPRINT-161 + SPRINT-162 son fixes triviales (1 archivo cada uno). SPRINT-159 toca Storage + types + 3-5 componentes (riesgo medio, archivist obligatorio). SPRINT-153-FIX requiere diagnóstico previo en Firestore Console antes del fix.
 
 **Última actualización previa:** 2026-05-13 por coordinator (interactivo end-to-end por pedido explícito de Jorge) — SPRINT-157 (runTransaction `FacturaCrearModal.handleSubmit`) COMPLETADO. Hash `8b783ce`, diff +124/-79. Refactor paralelo a SPRINT-155: `tx.set(facturaRef) + tx.update(denormParaTx)` en runTransaction único; comisiones helper queda PRE-tx capturando denormParaTx; audit `override_modalidad_precio_factura` queda POST-tx best-effort. Allowlist `@safe-non-tx:` del modal removida (deuda P-003 cerrada). Cazadores 7/7 PASS post-commit. **NOTA — colisión de ID:** Cowork escribió el 2026-05-13 un sprint distinto reusando el mismo ID "SPRINT-157" (notificación `orden_asignada` desde secretaria). Esa entrada queda pendiente bajo otro ID — sugerido SPRINT-163 según el conteo del header del 2026-05-13. Próximo ID disponible: SPRINT-163 (mantener el del header previo).
 
@@ -338,63 +340,163 @@ El filtro restringe a `estado === 'emitida'`. Tras el flujo de Aury (verificaci�
 
 ---
 
-### SPRINT-158 — 9 hallazgos UX combinados del QA E2E distribuido 2026-05-13
+### SPRINT-158 — DIVIDIDO 2026-05-14 (9 hallazgos UX combinados del QA E2E distribuido 2026-05-13)
+
+**Estado:** DIVIDIDO 2026-05-14 por coordinator (interactivo, pedido explícito de Jorge) tras evaluar scope. Spec original cubría 9 hallazgos que tocan 6-8 archivos atravesando 3 capas (UI render + denormalización + notificaciones + transiciones de fase + decisión negocio). Para no procesar parcialmente y respetar la sub-regla CLAUDE.md "Touch-list expandido + auditoría de consumidores antes de redactar", se dividió en:
+
+- **SPRINT-158a** — Bugs 4 + 5 (render foto cierre + período garantía en modal admin). **COMPLETADO** hash `1ddb20e`.
+- **SPRINT-158b** — Bugs 3 + 6 (denormalización `operariaNombre` + display correcto en chip). PENDIENTE.
+- **SPRINT-158c** — Bugs 1 + 2 + 9 (notificaciones nuevas + transición automática `en_cotizacion`). PENDIENTE.
+- **SPRINT-158d** — Bug 7 (perfilamiento timeout 30s "Enviar a conduce"). PENDIENTE.
+- **SPRINT-158e** — Bug 8 (decisión GPS bloqueante). En **BLOQUEOS.md** (requiere OK negocio de Jorge).
+
+Bug 8 era explícitamente decisión de negocio en la spec original ("¿Cambiar a bloqueante? ¿O dejar como alerta informativa?"). Los otros 8 son técnicos pero suficientemente independientes entre sí para procesarse en sprints diminutos.
+
+---
+
+### SPRINT-158a — Render foto cierre + período garantía en modal admin de orden (bugs 4+5 del SPRINT-158)
+
+**Estado:** COMPLETADO 2026-05-14 (coordinator interactivo end-to-end). Hash `1ddb20e`. 1 archivo modificado: `src/components/ordenes/OrdenDetailModal.tsx` (+136/-1). Bloque "Cierre del servicio" inline agregado antes de "Piezas utilizadas" con: foto del cierre (con GPS info + distancia cliente), firma del cliente (post-SPRINT-159), período de garantía + fecha vencimiento + días restantes, y checks (equipoFunciona / clienteSatisfecho / revisoConexiones). Render inline (NO reusa `OrdenResumenLectura` para evitar duplicar equipo/falla/notas que el modal ya muestra en otras secciones). Typecheck PASS, build PASS, lint del archivo limpio, cazadores 8/8 PASS (P-001 a P-007 + P-009). Reviewer APPROVED. Pusheado a `origin/main`.
+
+**Hallazgo lateral documentado:** `src/pages/OrdenDetalle.tsx` (página `/admin/ordenes/:id`) YA renderiza foto cierre (líneas 741-756) y firma cliente (762+) pero NO renderiza `periodoGarantiaDias`. Bug equivalente al 5 pero en la página standalone. NO fixeado en SPRINT-158a (estaba fuera del scope explícito "modal admin"). Deuda para sprint futuro tentativo SPRINT-158a-FIX-pagina (toca 1 archivo, ~10 líneas) si Jorge lo prioriza. Decisión: NO fixear silenciosamente fue lo correcto según sub-regla CLAUDE.md "Touch-list expandido".
+
+---
+
+### SPRINT-158b — Denormalización `operariaNombre` correctamente al crear orden + display en chip (bugs 3+6 del SPRINT-158)
 
 **Estado:** PENDIENTE
-**Prioridad:** 🟢 BAJA-MEDIA — bugs cosméticos + render + notificaciones. Pueden dividirse en sub-sprints si scope crece.
-**Origen:** QA E2E distribuido 2026-05-13 sobre OS-0055 → CG-00018. 9 hallazgos reportados desde Maria (coord), Wilainy (operaria PC #2), Yohana (operaria PC #3).
+**Prioridad:** 🟡 MEDIA — bug visual confirmado por 2 roles (Wilainy + Yohana). El chip "Operaria" en card de `/admin/ordenes` muestra "Op: Operaria" (string literal del rol) en lugar del nombre real ("Wilainy"). Bug 6 sugiere que además se está copiando el nombre del CREADOR de la orden (Angelica Secretaria) en lugar de la operaria asignada al técnico. Ambos hallazgos posiblemente comparten causa raíz: la denormalización al crear orden no deriva correctamente `operariaNombre` a partir de `operariaId` (el uid de la operaria del grupo del técnico).
 
-#### Lista de hallazgos
+**Origen:** QA E2E distribuido 2026-05-13 sobre OS-0055. Reportado por Wilainy (Bug 3) y confirmado por Yohana desde otro rol (Bug 6).
 
-1. **No hay notificación `cotizacion_lista` / `diagnostico_completado`** cuando técnico sugiere precio. Solo se dispara `tecnico_inicio_chequeo`. La operaria solo se entera si entra a mirar manualmente.
-2. **La fase NO avanza automáticamente a `en_cotizacion`** cuando el técnico sugiere precio + agrega nota. Queda en `en_diagnostico` hasta que la operaria aprueba (entonces pasa a `aprobado`). Falta transición intermedia.
-3. **Chip de operaria en card de `/admin/ordenes` muestra "Op: Operaria"** (string literal, no el nombre real "Wilainy"). Probablemente la card lee `operariaRol` en vez de `operariaNombre`, o `operariaNombre` no está denormalizado al crear orden.
-4. **Foto del cierre del técnico NO se muestra en modal admin de la orden** (sí solo la del chequeo inicial). Los datos están en `cierreServicio.fotoCierre` pero `OrdenDetalle.tsx` (o componente equivalente del modal) no lo lee.
-5. **Período de garantía NO se muestra en modal admin de la orden.** Mismo patrón que bug 4: el dato está (`orden.periodoGarantiaDias = 30`) pero el modal no lo renderiza. En `/admin/facturas` sí aparece — el modal de la orden necesita fix análogo.
-6. **El chip "Operaria" muestra "Angelica Secretaria"** (la CREADORA de la orden) en lugar de "Wilainy" (la operaria del grupo). Bug confirmado por 2 roles (Wilainy + Yohana). Posiblemente `operariaNombre` denormaliza mal: copia el nombre del CREADOR en lugar de la operaria asignada al técnico.
-7. **Timeout 30s CDP al click "Enviar a conduce"** en algunas instancias. El backend completó la operación pero la UI tardó mucho. Verificar performance del handler.
-8. **Alerta "Aury Mon cerró OS-0055 sin verificación GPS"** aparece en dashboard. La app SÍ controla GPS al cerrar pero NO es bloqueante. **DECISIÓN JORGE PENDIENTE:** ¿Cambiar a bloqueante? ¿O dejar como alerta informativa? Si bloqueante, sub-sprint.
-9. **Falta notificación en TODOS estos eventos** (confirmados desde 3 roles):
-   - Aprobación de precio (operaria aprueba) — no notifica al técnico ni al coord.
-   - Cierre del servicio (técnico cierra wizard) — no notifica a operaria ni coord.
-   - Pago registrado — no notifica al admin/coord.
-   - Envío a facturación — no notifica a admin/coord.
+#### Hipótesis de causa raíz (auditar ANTES de fixear)
 
-#### Touch-list expandido
+1. **Bug 3 — "Op: Operaria":** la card lee `operariaRol` en lugar de `operariaNombre`, O `operariaNombre` no está denormalizado y el render cae a un placeholder con el rol. Verificar `src/components/ordenes/OrdenCard.tsx` (o equivalente — el chip podría estar en `Ordenes.tsx` directamente, archivo monolítico 1600 líneas).
+2. **Bug 6 — copia nombre del creador:** en `src/hooks/useOrdenCreateForm.ts`, el handler que persiste la orden probablemente toma el `nombre` del `currentUser` (creador) y lo asigna a `operariaNombre`, en lugar de derivar el nombre desde `personal[tecnico].operariaId`. Verificar lookup.
 
-**Archivos a tocar (estimado 5-8):**
+#### Touch-list provisional (ajustar tras auditoría)
 
-1. `src/hooks/useOrdenCreateForm.ts` — denormalizar `operariaNombre` correctamente al crear (bugs 3 + 6).
-2. `src/components/ordenes/OrdenCard.tsx` (o equivalente) — leer `operariaNombre` no `operariaRol` (bug 3).
-3. `src/pages/OrdenDetalle.tsx` o modal admin de orden — renderizar `cierreServicio.fotoCierre` + `periodoGarantiaDias` (bugs 4 + 5). Posible reuso de `OrdenResumenLectura.tsx`.
-4. Handlers que cambian fase: agregar `crearNotificacion` para cada evento del bug 9. Tipos ya existen en `types/index.ts` (verificar `'cotizacion_lista'`, `'cierre_completado'`, `'pago_registrado'`, `'envio_facturacion'`).
-5. Handler que sugiere precio del técnico (`TecnicoVista.tsx` o equivalente): agregar transición a `fase: 'en_cotizacion'` (bug 2).
-6. Handler "Enviar a conduce" (`FacturacionPendiente.tsx`?): perfilar tiempo de respuesta para bug 7.
+**Archivos a modificar (estimado 2-3):**
 
-**Consumidores verificados (read-only check):** ALERTA — toca múltiples flujos. Auditoría detallada por bug requerida ANTES de empezar.
+1. `src/hooks/useOrdenCreateForm.ts` — auditar el lookup que deriva operaria del técnico. Si el patrón es `personal[uid].operariaId` → buscar el `personal[operariaUid].nombre` con `(p.uid || p.id) === operariaUid` (patrón post-SPRINT-149) y persistir `operariaNombre` correctamente en el doc.
+2. `src/components/ordenes/OrdenCard.tsx` (o donde renderice el chip) — confirmar que lee `operariaNombre` no `operariaRol`. Si el chip no existe en este componente, buscar en `Ordenes.tsx`.
+3. Posible: `src/pages/Ordenes.tsx` (monolítico) — si el chip está allí.
 
-**Hallazgos laterales:**
-- Posible que `Ordenes.tsx` (1600 líneas, monolítico) también renderice el chip "Op:" mal — auditar en paralelo.
+**Consumidores verificados:** auditoría obligatoria ANTES de redactar el sprint final. Consultar `docs/MAPA_DEPENDENCIAS.md` y `docs/CAMPOS_CROSS_COLLECTION.md` por `operariaNombre`.
+
+**Hallazgos laterales esperados:**
+- Posible que el campo `operariaNombre` esté mal denormalizado para órdenes históricas (creadas con el bug presente). Si es así, script de re-derivación análogo a SPRINT-130 (`docs/sprints/...`) como deuda separada.
+- `Ordenes.tsx` monolítico podría reusar mismo render mal — caza paralela.
 
 #### Criterios de aceptación
 
-- [ ] Bug 1: notificación `cotizacion_lista` se dispara al sugerir precio. Verificable en `/admin/notificaciones` y campanita.
-- [ ] Bug 2: fase avanza a `en_cotizacion` automáticamente. Verificar en Firestore + chip de fase.
-- [ ] Bug 3: chip muestra "Wilainy" (nombre real) no "Operaria" (rol genérico).
-- [ ] Bug 4: foto del cierre aparece en modal de orden admin.
-- [ ] Bug 5: período de garantía aparece en modal de orden admin.
-- [ ] Bug 6: chip muestra nombre de la operaria asignada (Wilainy), no de la creadora (Angelica).
-- [ ] Bug 7: handle "Enviar a conduce" responde en <5s. Si >5s, perfilar y reportar.
-- [ ] Bug 8: decisión Jorge documentada en sprint.
-- [ ] Bug 9: 4 notificaciones nuevas implementadas + verificadas con QA distribuido.
-- [ ] Typecheck + lint + cazadores 7/7 PASS.
-- [ ] reviewer obligatorio (toca cross-collection en denormalización + notis).
+- [ ] Chip muestra el nombre real de la operaria asignada al técnico de la orden ("Wilainy"), NO el rol genérico ("Operaria") NI el nombre del creador ("Angelica").
+- [ ] `useOrdenCreateForm` deriva `operariaNombre` desde `personal[tecnico].operariaId` → `personal[operariaUid].nombre`, NO desde `currentUser.nombre`.
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+- [ ] reviewer obligatorio (toca denormalización cross-collection — campo crítico para reportes y nómina).
 
 #### Restricciones
 
-- archivist PRE-CHANGE obligatorio.
-- Si scope se expande a >8 archivos, dividir en SPRINT-158a/b/c.
-- **Sub-regla:** auditar consumidores ANTES de tocar `useOrdenCreateForm.ts` o `OrdenCard.tsx` — ambos son críticos.
+- archivist PRE-CHANGE obligatorio (toca hook de creación de orden + componente de UI crítico).
+- **Auditoría de consumidores obligatoria ANTES de procesar** — sub-regla CLAUDE.md "Touch-list expandido".
+- NO crear script de re-derivación retroactiva (eso es deuda separada si Jorge lo prioriza).
+- NO tocar el patrón `(p.uid || p.id)` post-SPRINT-149 sin auditoría (P-006 variante 4).
+
+---
+
+### SPRINT-158c — Notificaciones faltantes + transición automática a `en_cotizacion` (bugs 1+2+9 del SPRINT-158)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟡 MEDIA-ALTA — afecta visibilidad operativa en 3 roles confirmados (Maria coord, Wilainy operaria, Yohana operaria). Sin estas notificaciones, los handoffs en el flujo de orden quedan invisibles hasta que alguien entra a mirar manualmente.
+
+**Origen:** QA E2E distribuido 2026-05-13 sobre OS-0055 → CG-00018. Reportado desde 3 roles independientemente.
+
+#### Hallazgos cubiertos
+
+1. **Bug 1 — Sugerir precio NO notifica:** cuando el técnico sugiere precio post-diagnóstico, solo se dispara `tecnico_inicio_chequeo` (que es el evento ANTERIOR al diagnóstico). Falta notificación `cotizacion_lista` o `diagnostico_completado` que avise a la operaria. Verificar handler en `TecnicoVista.tsx` o `OrdenDetalle.tsx` que persiste el precio sugerido.
+2. **Bug 2 — Fase NO avanza:** cuando el técnico sugiere precio + agrega nota, la fase queda en `en_diagnostico`. Debería transicionar automáticamente a `en_cotizacion` (esa es exactamente la semántica de la fase). La operaria aprueba después y pasa a `aprobado`. Falta transición intermedia.
+3. **Bug 9 — 4 eventos sin notificación:**
+   - Aprobación de precio (operaria aprueba) → no notifica al técnico ni al coord.
+   - Cierre del servicio (técnico cierra wizard) → no notifica a operaria ni coord.
+   - Pago registrado → no notifica al admin/coord.
+   - Envío a facturación → no notifica al admin/coord. **Verificar SPRINT-153** que ya cubrió notificación `conduce_emitido` — el envío a conduce (antes de emitir) podría seguir sin notificación, regresión separada.
+
+#### Hipótesis de causa raíz
+
+Los tipos de notificación posiblemente ya existen en `src/types/index.ts:1742-...` (`'cotizacion_lista'`, `'cierre_completado'`, `'pago_registrado'`, `'envio_facturacion'`, `'precio_aprobado'`). Patrón SPRINT-157 (notificación `orden_asignada` que existía como tipo pero ningún `crearNotificacion` la emitía) sugiere que el problema es estructural: los handlers no llaman a `crearNotificacion` con los tipos correctos.
+
+#### Touch-list provisional (auditar ANTES de redactar definitivo)
+
+**Archivos a modificar (estimado 4-6):**
+
+1. **Bug 1 + 2 (precio sugerido + fase):** handler que persiste precio sugerido. Probable: `src/components/TecnicoVista.tsx` (o `src/pages/TecnicoVista.tsx`), `src/components/ordenes/OrdenDetailModal.tsx` (sección de precio sugerido por técnico), o un servicio dedicado en `src/services/ordenes.service.ts`.
+2. **Bug 9 aprobación de precio:** handler `onAprobarPrecio` en `OrdenDetailModal.tsx` o equivalente. Notificar al técnico (`orden.tecnicoId`) + coord (todos coord activos).
+3. **Bug 9 cierre del servicio:** handler de submit del wizard `src/components/CierreServicioWizard.tsx` (o donde persista el cierre). Notificar a operaria del técnico + coord.
+4. **Bug 9 pago registrado:** handler `RegistrarPagoModal.tsx` (o equivalente). Notificar al admin + coord.
+5. **Bug 9 envío a facturación:** handler `EnviarFacturacionButton.tsx` (existe — visible en imports de OrdenDetailModal). Verificar regresión post-SPRINT-153.
+
+**Consumidores verificados:** auditoría obligatoria ANTES de redactar. Consultar `crearNotificacion` callers existentes y `docs/MAPA_DEPENDENCIAS.md`. Cazador P-007 (`crearNotificacion({ userId: <X>.id })`) ya pasa — cualquier caller nuevo debe usar `.uid`, no `.id`.
+
+**Hallazgos laterales esperados:**
+- Algunos eventos del bug 9 podrían NECESITAR nuevos tipos de notificación si no existen en types. Verificar antes.
+- La transición a `en_cotizacion` (bug 2) debe usar `crearRegistroAuditoria` + actualizar `historialFases` (sub-regla CLAUDE.md "mantener fase + estadoSimple + historialFases sincronizados").
+
+#### Criterios de aceptación
+
+- [ ] Bug 1: notificación `cotizacion_lista` se dispara al sugerir precio. Verificable en campanita de operaria.
+- [ ] Bug 2: fase avanza a `en_cotizacion` automáticamente al sugerir precio. Verificable en chip de fase + Firestore.
+- [ ] Bug 9.a: notificación a técnico cuando operaria aprueba precio.
+- [ ] Bug 9.b: notificación a operaria + coord cuando técnico cierra wizard.
+- [ ] Bug 9.c: notificación a admin + coord cuando se registra pago.
+- [ ] Bug 9.d: notificación a admin + coord cuando se envía a facturación (verificar si SPRINT-153 ya lo cubre).
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+- [ ] reviewer obligatorio (toca múltiples handlers críticos + notificaciones cross-rol).
+- [ ] regression_guardian PASS (toca services/handlers de orden — cross-collection).
+
+#### Restricciones
+
+- **archivist PRE-CHANGE OBLIGATORIO** — toca múltiples handlers críticos del flujo de orden. Sub-regla CLAUDE.md "antes de cualquier sprint con touch-list ≥1 archivo".
+- **Auditoría de consumidores obligatoria ANTES de procesar** — esperable que descubra 4-6 archivos con cambios concretos. Si excede 6, dividir en sub-sprints SPRINT-158c1/c2.
+- NO modificar el shape de `Notificacion` ni el filtro de destinatarios (eso ya se ajustó en SPRINT-153 + SPRINT-127). Solo agregar callers nuevos.
+- Usar siempre `userId: <X>.uid` (no `.id`) — cazador P-007 enforce.
+- La transición de fase debe acompañarse de entrada en `historialFases` + `crearRegistroAuditoria`.
+
+---
+
+### SPRINT-158d — Perfilamiento timeout 30s "Enviar a conduce" (bug 7 del SPRINT-158)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟢 BAJA — operación completó correctamente en backend (conduce CG-00018 emitido), pero la UI tardó 30s en confirmar. UX degradada para Wilainy pero NO bloqueo funcional.
+
+**Origen:** QA E2E distribuido 2026-05-13. Wilainy (operaria PC #2) reportó timeout de 30s al click "Enviar a conduce" en el flujo T+18 (registro de pago + envío a conduce). El backend completó la operación correctamente — solo la UI quedó en estado pendiente.
+
+#### Tareas de diagnóstico (sprint mayoritariamente de investigación)
+
+1. Identificar el handler exacto. Probable: `src/components/ordenes/EnviarFacturacionButton.tsx::onClick` o handler equivalente en `OrdenDetailModal.tsx`.
+2. Perfilar con `performance.mark`/`performance.measure` en local, o agregar `console.time`/`console.timeEnd` temporal en cada `await` del handler.
+3. Identificar el cuello de botella: ¿query sin índice? ¿suscripción bloqueante? ¿múltiples `await` secuenciales que podrían paralelizarse? ¿reads de `personal` para destinatarios de notificación que escanea toda la colección?
+4. Documentar hallazgos en el sprint + proponer fix en sprint follow-up (SPRINT-158d-FIX).
+
+#### Touch-list provisional
+
+**Archivos a auditar (read-only inicialmente):**
+
+- `src/components/ordenes/EnviarFacturacionButton.tsx`
+- Handler que recibe el click en `OrdenDetailModal.tsx` o `Ordenes.tsx`.
+- `src/services/ordenes.service.ts` — buscar función que persiste el envío.
+- `src/services/notificaciones.service.ts` — perfilar query de destinatarios (¿lee toda `personal` cada vez?).
+
+#### Criterios de aceptación
+
+- [ ] Identificado el cuello de botella con timing concreto (ej: "el `await getDocs(query(personal))` toma 12s con 50+ docs").
+- [ ] Propuesta de fix documentada (caché de destinatarios, paralelizar awaits, etc.).
+- [ ] Sprint follow-up SPRINT-158d-FIX redactado si requiere cambios estructurales.
+- [ ] Si el fix es trivial (<5 líneas), aplicar en este mismo sprint.
+
+#### Restricciones
+
+- **Sprint NO autónomo si requiere cambios estructurales** — solo si el fix es trivial (ej: agregar índice Firestore, paralelizar 2 awaits). Si toca arquitectura de notificaciones o servicios → BLOQUEOS.md.
+- NO modificar lógica de negocio del envío — solo performance.
 
 ---
 

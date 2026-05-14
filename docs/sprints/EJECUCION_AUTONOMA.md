@@ -5,6 +5,98 @@
 
 ---
 
+## 2026-05-14 — interactivo end-to-end: SPRINT-158a (render foto cierre + período garantía en modal admin) + división de SPRINT-158 en 5 sub-sprints
+
+### Contexto
+
+QA E2E distribuido 2026-05-13 detectó 9 hallazgos sobre OS-0055 → CG-00018 (SPRINT-158 padre). Jorge pidió procesar el subset trivial (bugs 4+5 = SPRINT-158a) end-to-end interactivo, y dejar el resto dividido en sub-sprints PENDIENTES en cola para futuros `trabaja`. Bug 8 (decisión negocio GPS bloqueante) escalado a `BLOQUEOS.md` como SPRINT-158e.
+
+Bugs cerrados:
+- **Bug 4:** foto del cierre del técnico NO se mostraba en modal admin (sí solo en `/admin/facturas`).
+- **Bug 5:** período de garantía NO se mostraba en modal admin (sí en `/admin/facturas` post-SPRINT-148/153-FIX).
+
+### Archivist PRE-CHANGE
+
+- `git log --oneline -10 -- src/components/ordenes/OrdenDetailModal.tsx`:
+  - `1b75ca6` rename Stand-by → Pendiente de piezas (cosmético).
+  - `800e0b4` feat reactivación ROI tracking.
+  - `399ab63` botón "Cómo llegar" cliente.
+  - `6c358af` portal cliente Hito 1.
+  - `7ac27be` NPS feedback.
+  - Sin postmortems específicos para este archivo.
+- Cazadores P-001 a P-009: ninguno aplica al cambio (es render only).
+- Riesgo declarado: bajo. Archivo monolítico 857 líneas pero el cambio agrega un bloque autónomo sin tocar lógica existente. Cuidado: NO romper layout — render condicional triple-guard.
+
+### Diagnóstico estático
+
+- Identificado `OrdenDetailModal.tsx` como el modal admin reportado (vs `OrdenDetalle.tsx` página standalone). Verificado: `Ordenes.tsx` lo monta como modal.
+- `OrdenResumenLectura.tsx` (componente reusable post-SPRINT-148/153) NO estaba montado en el modal — solo en `Facturas.tsx`.
+- Decisión arquitectónica: NO reusar `OrdenResumenLectura` porque duplicaría info ya mostrada en el modal (equipo, falla, notas técnico, cliente). Reusarlo solo en `Facturas.tsx` donde no hay secciones previas. Patrón consistente con la spec de Cowork ("REUSAR si aplica" — no aplica aquí por duplicación).
+- Hallazgo lateral documentado: `OrdenDetalle.tsx` (página `/admin/ordenes/:id`) YA renderiza foto cierre + firma (líneas 741-756, 762+), pero NO `periodoGarantiaDias`. Bug equivalente al 5 fuera de scope del SPRINT-158a explícito. Documentado como deuda separada en COLA_AUTONOMA.md (tentativo SPRINT-158a-FIX-pagina).
+
+### Builder
+
+1 archivo modificado: `src/components/ordenes/OrdenDetailModal.tsx`.
+
+**Cambio 1 — Imports (línea 3):**
+- Agregados íconos `Camera`, `CheckCircle2`, `Shield`, `FileSignature` de lucide-react.
+
+**Cambio 2 — Bloque "Cierre del servicio" inline (líneas 720-855):**
+- Render condicional: muestra bloque si AL MENOS UNO de `fotoCierre.url | firmaClienteUrl | periodoGarantiaDias | equipoFunciona | clienteSatisfecho | revisoConexiones` existe.
+- Sub-secciones internas:
+  - Checks `equipoFunciona / clienteSatisfecho / revisoConexiones` con íconos verdes/rojos.
+  - **Foto del cierre:** thumbnail clickeable + GPS info (distancia cliente + flag `gpsVerificado`).
+  - **Firma del cliente:** link "Ver firma del cliente" (post-SPRINT-159).
+  - **Período de garantía:** días + fecha de vencimiento + días restantes con color según signo.
+- Manejo defensivo de Timestamp para `garantiaVencimiento` (instanceof Date + check `.toDate()`).
+- Inserción posicional: antes de "Piezas utilizadas" (línea 720 original).
+- Diff: +136/-1.
+
+### Tester
+
+- `npm run build` (tsc + vite): PASS.
+- `npx eslint src/components/ordenes/OrdenDetailModal.tsx --max-warnings 0`: PASS sin output.
+- `npm run check:regression`: PASS 8/8 (P-001 a P-007 + P-009).
+
+### Reviewer (interno, ojos frescos)
+
+APPROVED. Verificaciones:
+- Render-only, sin escrituras a Firestore.
+- Reusa shape ya validado en `OrdenDetalle.tsx` línea 741-756 (mismos campos).
+- Conditional rendering guard cubre el caso "orden sin cierre" (no rompe layout).
+- Manejo de Timestamp consistente con resto del archivo.
+- No introduce gotchas P-001 a P-009.
+- Decisión de NO-reuso de `OrdenResumenLectura` justificada con comentario inline.
+- Sin emojis. Comentario explícito vincula al SPRINT-158a y a los bugs 4+5.
+
+### Commit + push
+
+- Hash: `1ddb20e`.
+- Mensaje: `fix(modal-orden): SPRINT-158a render foto cierre + período garantía en modal admin`.
+- Pre-commit hook: typecheck PASS, cazadores 8/8 PASS, lint staged PASS.
+- Push a `origin/main`: `8118235..1ddb20e`.
+
+### División del SPRINT-158 padre
+
+- SPRINT-158 marcado como **DIVIDIDO 2026-05-14** en `COLA_AUTONOMA.md` con referencia a sub-sprints.
+- **SPRINT-158a** marcado COMPLETADO (este sprint).
+- **SPRINT-158b** redactado PENDIENTE: bugs 3+6 (denormalización `operariaNombre` + display chip). Touch-list provisional: `useOrdenCreateForm.ts` + `OrdenCard.tsx` o equivalente.
+- **SPRINT-158c** redactado PENDIENTE: bugs 1+2+9 (notificaciones nuevas + transición automática `en_cotizacion`). Touch-list provisional: 4-6 handlers + posibles tipos nuevos.
+- **SPRINT-158d** redactado PENDIENTE: bug 7 (perfilamiento timeout 30s "Enviar a conduce"). Sprint mayoritariamente de diagnóstico.
+- **SPRINT-158e** escalado a `BLOQUEOS.md`: bug 8 (decisión negocio GPS bloqueante). 4 opciones presentadas a Jorge (A informativo, B bloqueante absoluto, C parametrizable por rol, D bloqueante con umbral).
+
+### Tiempo total
+
+~30 min (sprint trivial + redacción extensa de sub-sprints).
+
+### Métricas
+
+- Archivos modificados: 1 (código).
+- Archivos de docs editados: 3 (COLA_AUTONOMA.md, BLOQUEOS.md, este).
+- Tests humanos pendientes: validación visual del modal admin con orden cerrada que tenga `cierreServicio.fotoCierre` + `periodoGarantiaDias`. Sugerido: OS-0055 (CG-00018) post hard refresh.
+
+---
+
 ## 2026-05-12 — autónomo end-to-end: SPRINT-162 (KPI "Conduces Emitidos" cuenta 0 con conduces pagados)
 
 ### Contexto

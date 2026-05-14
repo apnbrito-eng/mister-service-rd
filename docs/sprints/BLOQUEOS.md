@@ -10,6 +10,62 @@
 
 ---
 
+## SPRINT-158e — GPS bloqueante o informativo al cerrar orden (bug 8 del SPRINT-158, decisión de negocio)
+
+**Tipo:** Decisión de negocio — Jorge decide la política. NO se puede procesar autónomo.
+**Estado:** ESPERANDO_OK_JORGE
+**Origen:** QA E2E distribuido 2026-05-13 sobre OS-0055 → CG-00018. Aury Mon (técnico) cerró la orden sin verificación GPS en su ubicación. Sistema detectó el cierre sin GPS verificado pero NO lo bloqueó: solo generó alerta informativa en dashboard ("Aury Mon cerró OS-0055 sin verificación GPS").
+
+#### Estado actual del comportamiento
+
+- La app SÍ controla GPS en el cierre del wizard (`CierreServicioWizard.tsx`).
+- El check de distancia al cliente se persiste en `cierreServicio.fotoCierre.distanciaCliente` + `gpsVerificado`.
+- Si el GPS no se verifica (técnico fuera de zona, sin permisos, distancia >500m), la alerta aparece en dashboard pero **el cierre se permite**.
+- Comportamiento intencional o omisión histórica — no documentado en CLAUDE.md.
+
+#### Opciones para Jorge
+
+**Opción A — Mantener como alerta informativa (status quo):**
+- Pro: Flexibilidad operativa. Técnico que está en zona con mal GPS no queda bloqueado.
+- Pro: Alerta visible permite auditoría posterior.
+- Contra: Riesgo de cierres fraudulentos (técnico cierra desde su casa, no del cliente).
+
+**Opción B — Bloqueante absoluto (siempre exige GPS verificado):**
+- Pro: Defense-in-depth contra cierres fraudulentos.
+- Contra: Puede bloquear cierres legítimos en zonas con mala señal. UX degradada en RD donde muchas casas tienen poca cobertura indoor.
+- Contra: Requiere desarrollar UI/flujo de "override con razón" para casos excepcionales.
+
+**Opción C — Parametrizable por rol o por tipo de servicio:**
+- Pro: Técnicos juniors → bloqueante. Técnicos seniors (Aury, etc.) → con override.
+- Pro: Servicios de mantenimiento (rutinario) → flexible. Servicios de reparación con conduce → bloqueante (más valor monetario).
+- Contra: Complejidad de implementación. Requiere matriz de permisos nueva.
+
+**Opción D — Bloqueante solo si distancia >X metros (umbral parametrizable):**
+- Pro: Tolerancia a GPS impreciso pero detecta cierres remotos.
+- Pro: Implementación más simple que C.
+- Contra: Aún permite cierre desde la casa del vecino si está a <X metros.
+
+#### Decisión solicitada a Jorge
+
+1. ¿Cuál opción (A/B/C/D u otra)?
+2. Si B/C/D: ¿cuál es el umbral aceptable de distancia? (sugerido: 200m si urbano, 500m si rural — actual es 500m según código).
+3. Si C: ¿qué roles son los privilegiados (con override) vs gateados (sin override)?
+4. ¿Aplica retroactivamente a órdenes legacy con GPS no verificado? (sugerido: NO — solo nuevas).
+
+#### Implementación post-OK Jorge
+
+Una vez decidida la política, redactar SPRINT-158e-IMPL en `COLA_AUTONOMA.md` con:
+
+- Touch-list (probable: `CierreServicioWizard.tsx`, `firestore.rules` si gating server-side, `Dashboard.tsx` para ajustar el banner de alerta).
+- Si toca `firestore.rules` → ese sub-sprint también requiere OK separado (sub-regla CLAUDE.md).
+- archivist PRE-CHANGE obligatorio.
+
+#### OK / RECHAZADO de Jorge
+
+_(pendiente — esperando decisión)_
+
+---
+
 ## SPRINT-149-APPLY — Ejecución de `--apply` del script de migración operariaId (post-fix de código)
 
 **Tipo:** Migración de datos — Jorge dispara manualmente (sub-regla CLAUDE.md "migraciones >50 docs sobre flujo de nómina").
