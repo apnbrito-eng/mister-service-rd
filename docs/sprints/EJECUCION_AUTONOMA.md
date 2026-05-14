@@ -5,6 +5,113 @@
 
 ---
 
+## 2026-05-13 — autónomo: SPRINT-153-FIX (nota del conduce no renderiza — regresión SPRINT-153)
+
+### Contexto
+
+QA E2E del 2026-05-13 sobre OS-0055 → CG-00018 confirmó que la nota "Cliente solicita pasar factura legal aparte" (47/500 chars) NO aparecía en `/admin/facturas` (búsqueda DOM: 0 hits). SPRINT-153 (`79c7fcc`, 2026-05-12) había declarado el render arreglado, pero el bug persistía.
+
+### Archivist PRE-CHANGE (manual, ejecutado por coordinator)
+
+- Historial relevante de los 3 archivos del touch-list:
+  - `ProcesarFacturacionModal.tsx`: SPRINTS-151 (`863e804`, persiste el campo), SPRINT-153 (`79c7fcc`), SPRINT-155 (`3a9618b`, envuelve en runTransaction), SPRINT-161 (`4015fe1`, fase=cerrado).
+  - `OrdenResumenLectura.tsx`: SPRINT-148 (`b45df45`, creación), SPRINT-153 (`79c7fcc`, agrega render notaConduce + fallback período), SPRINT-159 (`fd5e685`).
+  - `Facturas.tsx`: idem SPRINT-148 + SPRINT-153 + varios anteriores.
+- No hay postmortems específicos para este flujo. SPRINT-153 cerró sin postmortem (aplicable: la sub-regla CLAUDE.md de "hotfix sin postmortem no se cierra" se introdujo después).
+- Cazadores P-001 a P-007: ninguno cubre la clase "campo en tipo pero ausente en parser". → bug fue invisible para el sistema anti-regresión actual.
+
+### Diagnóstico estático (decisivo)
+
+Hipótesis ordenadas por la spec del sprint:
+1. Persistencia falla.
+2. Doc factura llega stale al render.
+3. Render condicionado por variant.
+4. Falso negativo del QA.
+
+Auditoría línea-a-línea descartó las 4 y reveló una quinta NO contemplada en la spec:
+
+- `ProcesarFacturacionModal.tsx:533-534` — `notaTrim = notaConduce.trim()` + `if (notaTrim) facturaPayload.notaConduce = notaTrim`. Guard correcto, asignación correcta.
+- `ProcesarFacturacionModal.tsx:537-539` — strip `undefined` (NO strings vacíos) antes del `tx.set`. Correcto.
+- `ProcesarFacturacionModal.tsx:785` — `tx.set(facturaRef, facturaLimpia)` dentro de `runTransaction`. Correcto.
+- `Facturas.tsx:77-83` — `onSnapshot` sobre `collection('facturas')` y `setFacturas(snap.docs.map(d => parseFactura(d.id, d.data())))`. **PUNTO CRÍTICO**: el doc llega bien desde Firestore pero pasa por `parseFactura`.
+- `src/utils/index.ts:1124-1170` — `parseFactura` lista campos explícitamente en su `return {...}`. **El campo `notaConduce` NO está listado.**
+- `OrdenResumenLectura.tsx:259-269` — `{factura?.notaConduce && (...)}`. Render correcto, pero recibe siempre `undefined` porque el parser lo filtró.
+
+Cadena del bug: persistencia ✓ + parser ❌ + render ✓ = nota se persiste pero nunca llega al componente. Verificado en commits — SPRINT-151 (`863e804`) agregó el tipo `Factura.notaConduce` (`types/index.ts:1178`) y la persistencia, SPRINT-153 (`79c7fcc`) agregó el render. Ningún sprint actualizó `parseFactura`.
+
+### Builder
+
+Cambio 1 — fix de 1 línea en `src/utils/index.ts:1139-1146` (dentro de `parseFactura`):
+
+```ts
+notas: (raw.notas as string) || undefined,
+// SPRINT-153-FIX (2026-05-13): el parser omitía `notaConduce` silenciosamente.
+// ...comentario completo con contexto y referencia al QA E2E...
+notaConduce: (raw.notaConduce as string) || undefined,
+metodoPago: ...
+```
+
+Patrón idéntico al de los otros 36 campos `string` opcionales del parser. NO altera ningún campo existente.
+
+Cambio 2 — cazador determinístico nuevo P-009 en `scripts/invariantes/check-parser-campos-faltantes.ts` (333 líneas):
+
+- Extrae claves del shape `Factura` en `types/index.ts` (parser TypeScript heurístico).
+- Extrae claves asignadas en el `return {...}` final de `parseFactura` en `utils/index.ts` (asignación explícita `clave:` o property shorthand `clave,`).
+- Reporta como hit cada clave del tipo ausente en el parser, salvo allowlist `SKIP_FACTURA_FIELDS` (vacía inicialmente).
+- Limitación documentada: solo cubre `Factura ↔ parseFactura`. Extensión a `OrdenServicio`, `ServicioPrecio`, `PiezaInventario` queda como follow-up.
+
+Validación bidireccional del cazador:
+- Con fix aplicado: 39/39 campos match → PASS.
+- `git stash` del fix → status FAIL con hit preciso sobre `notaConduce?: string;` línea 1178. Stash pop restaura fix.
+
+Cambio 3 — registro en `scripts/invariantes/run-all.ts`:
+- Agregado import + entrada al array `checks`. 8 cazadores ahora corren en pre-commit (eran 7).
+
+Cambio 4 — entrada P-009 en `docs/PATRONES_REGRESION.md`:
+- Bug original, síntoma, causa raíz, regla, cazador, allowlist. Sigue el shape de P-001 a P-008.
+
+### Tester
+
+- `npm run check:regression`: 8/8 cazadores PASS en 147ms (P-009 incluido).
+- `npx tsc --noEmit`: 0 errores.
+- `npx eslint src/utils/index.ts scripts/invariantes/check-parser-campos-faltantes.ts scripts/invariantes/run-all.ts --max-warnings 0`: 0 errores, 0 warnings.
+- Lint global del repo tiene errores pre-existentes en `dist-lazy/` y archivos timestamp de Vite (untracked, NO los toca este sprint).
+
+### Regression guardian
+
+PASS. Cambios en parser son lectura pura (no toca rules, no toca cross-collection, no toca dropdowns). Patrón vigente del parser respetado. Cazador nuevo es read-only sobre el repo, determinístico, <50ms.
+
+### Reviewer (foco en regresión de SPRINT-153)
+
+APPROVED. SPRINT-153 (`79c7fcc`) tocó 3 archivos:
+1. `OrdenResumenLectura.tsx:259-269` (render notaConduce) — NO se tocó en este fix.
+2. `OrdenResumenLectura.tsx:60-72` (fallback período garantía) — NO se tocó.
+3. `ProcesarFacturacionModal.tsx:905-930` (notif a operarias) — NO se tocó.
+
+Mi fix completa la cadena: `parseFactura` ahora preserva `notaConduce` → el render existente recibe el dato. Sin re-romper nada.
+
+### Decisión clave
+
+El bug NO estaba en persistencia ni en render (las dos hipótesis principales de la spec). Estaba en el parser intermedio — una clase no contemplada por la spec. Esto refuerza el valor de NO fixear ciego: si el builder hubiera agregado un `console.log('notaConduce a persistir')` en el handler (sugerencia de la spec) habría confirmado que la persistencia funcionaba bien y el bug seguía sin diagnóstico.
+
+### Commit + push
+
+- Hash: pendiente (commit al final).
+- Archivos: `src/utils/index.ts` (+8/-0), `scripts/invariantes/check-parser-campos-faltantes.ts` (+333 nuevo), `scripts/invariantes/run-all.ts` (+2/-0), `docs/PATRONES_REGRESION.md` (+30/-0), `docs/sprints/COLA_AUTONOMA.md` (estado), `docs/sprints/EJECUCION_AUTONOMA.md` (trazabilidad).
+- Pre-commit hook: typecheck + 8 cazadores + lint staged → PASS.
+- Deploy: pendiente verificación de devops post-push.
+
+### Cazador nuevo (sub-regla CLAUDE.md)
+
+P-009 cubre exactamente la clase del bug: "campo persistido pero filtrado por el parser". Previene la próxima ocurrencia de este patrón sobre el tipo `Factura`. Si el bug aparece sobre `OrdenServicio` o catálogos en el futuro, el cazador se extiende — la infraestructura del check ya está, solo se agregan 2-3 líneas para procesar otro tipo.
+
+### Notas
+
+- Tiempo total: ~25 min (audit estático + fix + cazador + validación bidireccional + docs).
+- Cobertura del antiprecedente: 24h de feature visible-pero-inerte en producción no se repetirá para campos nuevos del tipo `Factura` mientras el pre-commit hook esté activo.
+
+---
+
 ## 2026-05-12 — interactivo: SPRINT-161 (fase orden no avanza a 'cerrado' tras emitir conduce)
 
 ### Contexto

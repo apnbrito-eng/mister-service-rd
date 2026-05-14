@@ -1136,6 +1136,13 @@ export function parseFactura(id: string, raw: Record<string, unknown>): Factura 
     fechaVencimiento: parseFirestoreDate(raw.fechaVencimiento) || undefined,
     fechaPago: parseFirestoreDate(raw.fechaPago) || undefined,
     notas: (raw.notas as string) || undefined,
+    // SPRINT-153-FIX (2026-05-13): el parser omitía `notaConduce` silenciosamente.
+    // SPRINT-151 persistió el campo en `facturas/{id}.notaConduce` desde el modal
+    // de emisión de conduce y SPRINT-153 agregó el render en `OrdenResumenLectura.tsx:259`,
+    // pero ningún sprint actualizó este parser → el campo se perdía en el cargado
+    // por `onSnapshot` y el componente recibía siempre `undefined`. Resultado:
+    // 0 hits del texto en DOM en QA E2E del 2026-05-13 para CG-00018.
+    notaConduce: (raw.notaConduce as string) || undefined,
     metodoPago: (raw.metodoPago as MetodoPago) || undefined,
     bancoDestino: (raw.bancoDestino as string) || undefined,
     cotizacionId: (raw.cotizacionId as string) || undefined,

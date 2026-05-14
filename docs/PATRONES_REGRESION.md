@@ -351,6 +351,24 @@ nomina.service.ts, `o.tecnicoId === t.id` en Dashboard.tsx).
 
 ---
 
+## P-009 — Campo persistido en Firestore pero omitido por el parser correspondiente
+
+**Bug original:** SPRINT-153-FIX (2026-05-13). Fix en `src/utils/index.ts` (parser `parseFactura`). Hash del fix: pendiente al momento del commit.
+
+**Síntoma:** una feature nueva escribe un campo a Firestore (verificado en docs reales) y los componentes tienen el render correcto del campo, pero el bloque jamás aparece en la UI. NO hay error, NO hay warning — el componente recibe `undefined` y el guard `{factura?.notaConduce && ...}` evalúa false. QA E2E busca el texto en DOM y obtiene 0 hits.
+
+**Causa raíz:** los parsers defensivos `parseFactura` / `parseOrden` / `parseServicioPrecio` / `parsePiezaInventario` en `src/utils/index.ts` listan campos explícitamente en el `return {...}` (no usan `...raw`). Cuando un sprint agrega un campo al tipo (`src/types/index.ts`) y a la persistencia (modal/handler), es fácil olvidar actualizar el parser intermedio. El `onSnapshot` carga los docs vía `parseFactura(d.id, d.data())` → cualquier campo no listado en el parser se filtra silenciosamente.
+
+**Caso concreto:** SPRINT-151 (`863e804`, 2026-05-12) persistió `notaConduce` en `facturas/{id}` desde `ProcesarFacturacionModal.tsx:534`. SPRINT-153 (`79c7fcc`, 2026-05-12) agregó el render en `OrdenResumenLectura.tsx:259`. Type `Factura.notaConduce?: string` añadido en `types/index.ts:1178`. Pero ningún sprint actualizó `parseFactura` en `utils/index.ts:1124-1170`. Resultado: 24h de feature visible en código pero inerte en producción. QA E2E del 2026-05-13 sobre CG-00018 (texto "Cliente solicita pasar factura legal aparte", 47/500 chars) confirmó 0 hits del texto en DOM.
+
+**Regla:** cada campo del tipo `Factura` declarado en `src/types/index.ts` debe tener una asignación correspondiente en `parseFactura` (asignación explícita `clave: ...` o property shorthand `clave,`). Excepciones válidas: campos derivados o computados — deben agregarse a `SKIP_FACTURA_FIELDS` en el cazador con justificación.
+
+**Cazador:** `scripts/invariantes/check-parser-campos-faltantes.ts`. Limita scope a `Factura ↔ parseFactura` por ahora. Extensión natural a `OrdenServicio`, `ServicioPrecio`, `PiezaInventario` queda como sprint follow-up si el bug se reproduce sobre esos tipos.
+
+**Allowlist:** `SKIP_FACTURA_FIELDS = []`. Sumar campos solo con justificación documentada en comentario inline (campo derivado, alias legacy, etc.).
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:

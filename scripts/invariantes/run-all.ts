@@ -25,6 +25,7 @@ import { check as checkAltaEmpleadoDobleDoc } from './check-alta-empleado-doble-
 import { check as checkRulesPendientesDeploy } from './check-rules-pendientes-deploy.js';
 import { check as checkTecnicoidPersonalIdMisuse } from './check-tecnicoid-personal-id-misuse.js';
 import { check as checkCrearnotificacionUseridShape } from './check-crearnotificacion-userid-shape.js';
+import { check as checkParserCamposFaltantes } from './check-parser-campos-faltantes.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -43,6 +44,7 @@ async function main() {
     checkRulesPendientesDeploy,
     checkTecnicoidPersonalIdMisuse,
     checkCrearnotificacionUseridShape,
+    checkParserCamposFaltantes,
   ];
 
   const t0 = Date.now();

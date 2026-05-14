@@ -236,7 +236,9 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-153-FIX — Nota del conduce no renderiza (regresión SPRINT-153)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO (2026-05-13, hash pendiente al momento del commit). Causa raíz: `parseFactura` en `src/utils/index.ts` omitía silenciosamente el campo `notaConduce` (clase no contemplada en la spec — NO era persistencia ni render). Fix: 1 línea agregada al parser + cazador determinístico nuevo P-009 (`scripts/invariantes/check-parser-campos-faltantes.ts`) que previene la misma clase a futuro para cualquier campo del tipo `Factura`. Validación: 8/8 cazadores PASS, typecheck PASS, lint sobre archivos del sprint PASS, reviewer + regression_guardian APPROVED. Trazabilidad: `docs/sprints/EJECUCION_AUTONOMA.md` entrada 2026-05-13.
+
+**Estado anterior:** PENDIENTE → EN_EJECUCION → COMPLETADO.
 **Prioridad:** 🔴 ALTA — regresión confirmada. SPRINT-153 cerró como completado pero el bug persiste para CG-00018 (segunda iteración del QA E2E).
 **Origen:** QA E2E distribuido 2026-05-13. Maria escribió nota "Cliente solicita pasar factura legal aparte" (47/500 chars) en modal Emitir conduce de OS-0055. Conduce CG-00018 emitido. En fila expandida de `/admin/facturas` la nota NO aparece. Búsqueda DOM con `find` desde sidepanel: 0 hits del texto.
 
