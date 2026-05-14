@@ -123,6 +123,9 @@ export default function ProcesarFacturacionModal({
   const [cargandoCotizacion, setCargandoCotizacion] = useState(false);
   const [generando, setGenerando] = useState(false);
   // SPRINT-154: default 60 días preseleccionado (caso más común).
+  // SPRINT-160: si la orden trae `periodoGarantiaDias` desde el wizard del técnico,
+  // el effect que monta orden lo aplica como default (ver ~línea 187/194). El state
+  // inicial mantiene 60 porque el componente puede montarse sin orden (caso null).
   // El tipo sigue siendo `number | null` para retrocompat con borradores viejos
   // (pre-SPRINT-154) que pudieron guardar null, y para preservar la red
   // defensiva del gate del botón "Generar" (línea ~1224) que aún chequea
@@ -190,8 +193,11 @@ export default function ProcesarFacturacionModal({
       return;
     }
     setPaso(1);
-    // SPRINT-154: idem en el reset al abrir una orden nueva.
-    setTiempoGarantiaDias(60);
+    // SPRINT-154 + SPRINT-160: si la orden trae `periodoGarantiaDias` del wizard del
+    // técnico (cierre), usarlo como default. Si no, fallback a 60. La lógica de
+    // submit (handleGenerar) ya respetaba `orden.periodoGarantiaDias` correctamente;
+    // este cambio sincroniza la UI con el valor real que se va a emitir.
+    setTiempoGarantiaDias(orden.periodoGarantiaDias ?? 60);
     yaCargoInicialRef.current = false;
 
     // Buscar borrador antes de pisar items
@@ -1320,6 +1326,12 @@ export default function ProcesarFacturacionModal({
                     );
                   })}
                 </div>
+                {/* SPRINT-160: leyenda visual para diferenciar origen del valor preseleccionado. */}
+                {orden?.periodoGarantiaDias != null && tiempoGarantiaDias === orden.periodoGarantiaDias && (
+                  <p className="mt-2 text-[11px] text-amber-700 italic">
+                    Sugerido desde wizard del técnico ({orden.periodoGarantiaDias} días).
+                  </p>
+                )}
               </div>
             )}
 
