@@ -3,7 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-13 por coordinator (interactivo end-to-end por pedido explícito de Jorge) — SPRINT-157 (runTransaction `FacturaCrearModal.handleSubmit`) COMPLETADO. Hash `8b783ce`, diff +124/-79. Refactor paralelo a SPRINT-155: `tx.set(facturaRef) + tx.update(denormParaTx)` en runTransaction único; comisiones helper queda PRE-tx capturando denormParaTx; audit `override_modalidad_precio_factura` queda POST-tx best-effort. Allowlist `@safe-non-tx:` del modal removida (deuda P-003 cerrada). Cazadores 7/7 PASS post-commit. **NOTA — colisión de ID:** Cowork escribió el 2026-05-13 un sprint distinto reusando el mismo ID "SPRINT-157" (notificación `orden_asignada` desde secretaria). Esa entrada queda pendiente bajo otro ID — sugerido SPRINT-163 según el conteo del header del 2026-05-13. Próximo ID disponible: SPRINT-163 (mantener el del header previo).
+**Última actualización:** 2026-05-14 por Cowork — Jorge eligió "vamos a solucionarlos todos" tras cerrar SPRINT-163 en coordinator. 6 sprints escritos en orden de criticidad: **SPRINT-159 (BLOQUEADOR go-live: firma del cliente) → SPRINT-161 (fase no avanza) → SPRINT-153-FIX (regresión nota conduce) → SPRINT-162 (KPI dashboard=0) → SPRINT-158 (9 hallazgos UX) → SPRINT-160 (modal 60 default UX)**. Coordinator procesa en este orden al hacer `trabaja`. **QA E2E distribuido (4 Claudes + humanos) se activa SOLO después del SPRINT-159** — los otros 5 son menores y bastan con tester+reviewer+regression_guardian del coordinator. Auditoría de consumidores hecha por Cowork antes de redactar (memoria "Revisar dependencias antes de modificar"): paths verificados, hipótesis de causa raíz documentadas, hallazgos laterales catalogados como deuda separada. SPRINT-161 + SPRINT-162 son fixes triviales (1 archivo cada uno). SPRINT-159 toca Storage + types + 3-5 componentes (riesgo medio, archivist obligatorio). SPRINT-153-FIX requiere diagnóstico previo en Firestore Console antes del fix.
+
+**Última actualización previa:** 2026-05-13 por coordinator (interactivo end-to-end por pedido explícito de Jorge) — SPRINT-157 (runTransaction `FacturaCrearModal.handleSubmit`) COMPLETADO. Hash `8b783ce`, diff +124/-79. Refactor paralelo a SPRINT-155: `tx.set(facturaRef) + tx.update(denormParaTx)` en runTransaction único; comisiones helper queda PRE-tx capturando denormParaTx; audit `override_modalidad_precio_factura` queda POST-tx best-effort. Allowlist `@safe-non-tx:` del modal removida (deuda P-003 cerrada). Cazadores 7/7 PASS post-commit. **NOTA — colisión de ID:** Cowork escribió el 2026-05-13 un sprint distinto reusando el mismo ID "SPRINT-157" (notificación `orden_asignada` desde secretaria). Esa entrada queda pendiente bajo otro ID — sugerido SPRINT-163 según el conteo del header del 2026-05-13. Próximo ID disponible: SPRINT-163 (mantener el del header previo).
 
 **Última actualización previa:** 2026-05-13 por Cowork — Test E2E distribuido OS-0055 → CG-00018 completado con 4 Claudes (admin Jorge, coord Maria, operarias Wilainy + Yohana) + 2 manuales (Aury técnico, Angelica secretaria). Resultado: flujo completo funcionó end-to-end. **SPRINT-153 confirmado operativo** (notificación "Conduce CG-00018 emitido" SÍ llegó esta vez, a diferencia de CG-00017 anterior). **SPRINT-154 confirmado operativo** (60 días preseleccionado). **SPRINT-155 runTransaction confirmado operativo** (CG-00018 emitido sin duplicar). Bugs detectados, priorizados:
 
@@ -109,6 +111,323 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 ---
 
 ## Sprints
+
+### SPRINT-159 — Implementar firma del cliente en wizard cierre del técnico (BLOQUEADOR go-live)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🔴 CRÍTICA — bloqueador go-live. Sin esto, los conduces de garantía no tienen prueba de aceptación del cliente y la app no puede salir a producción.
+**Origen:** QA E2E distribuido 2026-05-13 (OS-0055 / CG-00018). El wizard `CierreServicioWizard.tsx` actual NO tiene paso de firma. SPRINT-135a-UI implementó wizard nuevo (foto + 3 preguntas + piezas + período de garantía) pero omitió firma. En RD el técnico va a casa del cliente y el cliente firma una hoja de servicio como prueba de aceptación. Sin firma, el conduce de garantía pierde valor legal y no hay defensa documentada si cliente reclama.
+
+#### Touch-list expandido
+
+**Archivos a modificar:**
+
+1. `src/components/CierreServicioWizard.tsx` (existe, NO `src/components/cierre/` que no existe como dir):
+   - Agregar nuevo step "Firma del cliente" al final del wizard, ANTES del submit final.
+   - Usar canvas HTML5 nativo (sin dependencia externa para mantener bundle bajo — alternativa `react-signature-canvas` si es necesario, evaluar tamaño).
+   - Validar que la firma no esté vacía antes de permitir avanzar (detectar canvas en blanco).
+   - Capturar como PNG blob → subir a Storage (`firmas_cierre/{ordenId}/{timestamp}.png`) → persistir URL en `cierreServicio.firmaClienteUrl`.
+   - Botón "Limpiar firma" + botón "Repetir firma" para mejor UX.
+   - En tablet/móvil debe responder al touch (pen + finger). Probar en iPad de Aury.
+
+2. `src/types/index.ts`:
+   - Extender `CierreServicio` con `firmaClienteUrl?: string` y `firmaClienteAt?: Timestamp`.
+
+3. `src/services/storage.service.ts`:
+   - Agregar función `subirFirmaCierre(blob: Blob, ordenId: string)` análoga a `subirFotoCierre`. Path Storage: `firmas_cierre/{ordenId}/{timestamp}.png`. Validar size <500KB (firma debería ser muy chica).
+
+4. `src/components/facturas/OrdenResumenLectura.tsx`:
+   - Renderizar la firma del cliente como bloque al final si `cierre.firmaClienteUrl` existe. Link "Ver firma" o thumbnail.
+
+5. `src/pages/OrdenDetalle.tsx`:
+   - Render análogo en el detalle de orden para admin/coord.
+
+6. `firestore.rules` — **verificar**: si las rules actuales permiten `cierreServicio.firmaClienteUrl` como nuevo campo. **Si requiere ajuste → ESCALAR a BLOQUEOS.md** (no tocar rules autónomo).
+
+**Consumidores verificados (read-only check):**
+- `CierreServicioWizard.tsx` se monta desde `TecnicoVista.tsx` (búsqueda confirmada — único caller del wizard).
+- `cierreServicio` se lee desde: `OrdenResumenLectura.tsx`, `OrdenDetalle.tsx`, `Facturas.tsx`, `FacturacionPendiente.tsx`, `Dashboard.tsx`, `nomina.service.ts`. Los campos nuevos son opcionales — el render existente no se rompe.
+- `subirFotoCierre` ya existe en `storage.service.ts` — la función nueva sigue su template.
+
+**Hallazgos laterales NO incluidos:**
+- El PDF del conduce de garantía (si existe) debería incluir la firma. Sprint follow-up.
+- El countdown público `/garantia/:token` podría mostrar la firma como evidencia. Sprint follow-up.
+
+#### Criterios de aceptación
+
+- [ ] El wizard ahora tiene paso "Firma del cliente" como último step antes del submit.
+- [ ] Canvas funciona en touch (iPad) + mouse (desktop).
+- [ ] Botón "Limpiar" resetea el canvas.
+- [ ] Submit bloqueado si firma vacía (canvas en blanco).
+- [ ] PNG blob se sube a Storage path `firmas_cierre/{ordenId}/{ts}.png`.
+- [ ] Doc `cierreServicio.firmaClienteUrl` + `firmaClienteAt` persistido en `ordenes_servicio`.
+- [ ] `OrdenResumenLectura` muestra "Ver firma" si está presente.
+- [ ] Typecheck + lint + cazadores 7/7 PASS.
+- [ ] archivist PRE-CHANGE obligatorio (toca wizard crítico — flujo técnico).
+- [ ] regression_guardian PASS (toca cross-collection: ordenes_servicio + Storage).
+- [ ] reviewer obligatorio (campo crítico legal).
+- [ ] Si toca rules → BLOQUEOS.md.
+
+#### Plan QA manual post-deploy
+
+- **Caso primary (Aury en iPad):** abrir wizard de cierre sobre orden de prueba, completar fotos + preguntas + piezas + período, llegar a paso firma, firmar con dedo. Verificar que se guarda + se ve en `/admin/facturas`.
+- **Caso negativo:** intentar avanzar sin firmar → debe bloquear.
+- **Caso edge:** firmar, limpiar, firmar de nuevo → debe persistir la última.
+- **QA E2E distribuido (4 Claudes + humanos) post-fix** según plan `docs/QA_E2E_DISTRIBUIDO.md`.
+
+#### Restricciones
+
+- NO tocar otros steps del wizard (foto, preguntas, piezas, período) — eso ya pasó QA.
+- NO cambiar el shape de `cierreServicio` más allá de los 2 campos opcionales.
+- archivist PRE-CHANGE obligatorio (toca `CierreServicioWizard.tsx`, archivo crítico — sub-regla CLAUDE.md).
+
+---
+
+### SPRINT-161 — Fase orden no avanza a `cerrado` tras emitir conduce (datos inconsistentes)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟡 MEDIA — datos inconsistentes en Firestore (pipeline visual ≠ estado real). No rompe operación pero queda historial sucio.
+**Origen:** QA E2E distribuido 2026-05-13. Tras emitir CG-00018 sobre OS-0055, la orden quedó en `fase: 'trabajo_realizado'` aunque ya tiene `facturada: true` y `facturaNumero: 'CG-00018'`. Verificado en `/admin/ordenes` (chip de fase) + Firestore Console (campo `fase` directo). El pipeline visual muestra "Trabajo Realizado" cuando debería estar "Cerrado/Facturada".
+
+**Causa raíz (auditada por Cowork):** `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx:726-735` construye `ordenUpdate` con `facturada: true` + auditoría + pagos + timestamps, pero NO setea `fase: 'cerrado'`. El `tx.update(ordenRef, ordenUpdateLimpio)` línea 763 persiste el doc sin avanzar la fase.
+
+#### Touch-list expandido
+
+**Archivos a modificar (1):**
+
+1. `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx`:
+   - Línea ~726-735: agregar `fase: 'cerrado'` al `ordenUpdate`.
+   - Agregar también `estadoSimple: 'completado'` y `estado: 'cerrado'` para mantener sincronía con el patrón del repo (ver `seedData.ts:200`).
+   - Append entry a `historialFases` con timestamp + actor + razón "Conduce emitido CG-XXXXX".
+   - Sub-regla CLAUDE.md "registros sincronizados": `historialFases` + `fase` + `estadoSimple` + `estado` deben mantenerse alineados.
+
+**Consumidores verificados (read-only check):**
+- `ordenes_servicio.fase` se lee desde 50+ sitios (chips, filtros, dashboards, queries). El cambio NO toca lecturas — solo agrega valor `'cerrado'` al ordenUpdate.
+- `parseOrden()` en `utils/index.ts` ya soporta fase `'cerrado'`.
+- `getAlertasFromOrdenes()` filtra órdenes activas — las cerradas no entran (comportamiento deseado).
+- `nomina.service.ts:181,185` cuenta órdenes `fase === 'cerrado'` para comisiones — el cambio AYUDA a contabilizar correctamente.
+- `Ordenes.tsx:371` filtra `fase !== 'cerrado'` para vista lista — las cerradas se ocultan (comportamiento deseado tras emitir conduce).
+- `OrdenesTablero.tsx:118,126` ya espera transición a `'cerrado'` — funciona.
+
+**Consumidores NO afectados:**
+- `useOrdenCreateForm.ts`: solo el flujo de creación de órdenes nuevas, no impacta.
+- `CierreDia.tsx`: filtra por fecha y fase — debería contar más órdenes cerradas (correcto).
+
+**Hallazgos laterales NO incluidos:**
+- Otros handlers de cierre/facturación quizá tampoco actualizan fase correctamente. Auditar con grep `tx.update(ordenRef` y `facturada: true` — pero NO fixear en este sprint (scope cerrado).
+
+#### Criterios de aceptación
+
+- [ ] Tras emitir conduce, `ordenes_servicio/{id}.fase === 'cerrado'` confirmado en Firestore Console.
+- [ ] `historialFases` incluye entry con razón "Conduce emitido CG-XXXXX".
+- [ ] `/admin/ordenes` muestra la orden en chip "Cerrado" tras emitir.
+- [ ] Las 2 órdenes ya cerradas pero stuck en `trabajo_realizado` (OS-0055 entre otras) pueden migrarse con script ad-hoc si Jorge lo pide — o queda como cola legacy aceptable. **DECISIÓN JORGE PENDIENTE.**
+- [ ] Typecheck + lint + cazadores 7/7 PASS.
+- [ ] regression_guardian PASS (cambio cross-collection ya en tx — no toca pattern).
+- [ ] reviewer obligatorio (cambio en pipeline crítico).
+
+#### Restricciones
+
+- NO tocar otros handlers de transición de fase — solo el emitir conduce.
+- NO tocar `firestore.rules` (la rule ya permite update de fase para staff oficina).
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-153-FIX — Nota del conduce no renderiza (regresión SPRINT-153)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🔴 ALTA — regresión confirmada. SPRINT-153 cerró como completado pero el bug persiste para CG-00018 (segunda iteración del QA E2E).
+**Origen:** QA E2E distribuido 2026-05-13. Maria escribió nota "Cliente solicita pasar factura legal aparte" (47/500 chars) en modal Emitir conduce de OS-0055. Conduce CG-00018 emitido. En fila expandida de `/admin/facturas` la nota NO aparece. Búsqueda DOM con `find` desde sidepanel: 0 hits del texto.
+
+**Hipótesis (Cowork verificó código):**
+- `OrdenResumenLectura.tsx:248-258` SÍ tiene el render `factura?.notaConduce`.
+- `Facturas.tsx:889` SÍ pasa `factura={factura}` a `<OrdenResumenLectura>`.
+- `ProcesarFacturacionModal.tsx:534` SÍ persiste con `if (notaTrim) facturaPayload.notaConduce = notaTrim;`.
+- El render NO está condicionado por `variant === 'compacto'` (verificado línea 112: solo encabezado lo está).
+
+**Causas posibles a investigar (orden):**
+1. **El campo NO se persiste** — el `notaTrim` evalúa vacío por bug del trim o por borrador localStorage mal restaurado.
+2. **El doc factura llega stale** — `Facturas.tsx` lee facturas vía `onSnapshot` pero quizá el state no se actualiza tras el commit.
+3. **`ordenesVinculadas[factura.ordenId]` se pasa al componente pero el campo `factura` queda truthy pero con `notaConduce === ""`** — el guard `factura?.notaConduce` falla en string vacío (esperado) — pero entonces el bug es la persistencia.
+4. **CG-00018 sí tiene el campo pero el componente lo renderiza en otra fila/elemento** — la búsqueda DOM 0 hits podría ser falso negativo si el componente se monta colapsado.
+
+#### Touch-list
+
+**Diagnóstico obligatorio antes del fix:**
+
+1. Builder debe verificar manualmente en Firestore Console (vía script si es necesario) el doc `facturas/{id de CG-00018}` y reportar:
+   - ¿Tiene campo `notaConduce`? Sí/No.
+   - Si sí, ¿qué valor? (texto exacto vs vacío vs `null`).
+2. Si NO tiene campo: bug está en persistencia (`ProcesarFacturacionModal.tsx`). Fix probable: `notaConduce` se borra por algún `Object.fromEntries(filter undefined)` que también filtra strings vacíos.
+3. Si SÍ tiene campo: bug está en render. Fix probable: `<OrdenResumenLectura>` se monta con factura stale o el guard `factura?.notaConduce` evalúa false por un edge case.
+
+**Archivos potencialmente a modificar (1-3):**
+
+1. Si bug de persistencia: `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx:534` + posibles filtros undefined.
+2. Si bug de stale state: `src/pages/Facturas.tsx` — verificar que la fila expandida lea el doc actualizado post-commit (refresh del `onSnapshot`).
+3. Si bug de prop pasada: `src/components/facturas/OrdenResumenLectura.tsx:248` + verificar shape de prop.
+
+**Consumidores verificados (read-only check):**
+- `notaConduce` solo se persiste desde `ProcesarFacturacionModal.tsx:534` (único punto de escritura).
+- `notaConduce` solo se renderiza desde `OrdenResumenLectura.tsx:248-258` (único punto de lectura UI).
+- Type `Factura.notaConduce?: string` en `types/index.ts:1178`.
+
+#### Criterios de aceptación
+
+- [ ] Builder ejecuta diagnóstico paso 1-2 y reporta hipótesis confirmada en commit message.
+- [ ] Re-emitir un conduce de prueba con nota → la nota aparece visible en fila expandida `/admin/facturas` Y en `OrdenResumenLectura` montado en modal "Marcar garantía manual".
+- [ ] Typecheck + lint + cazadores 7/7 PASS.
+- [ ] regression_guardian PASS.
+- [ ] reviewer obligatorio (regresión de sprint anterior — riesgo de re-romper).
+- [ ] QA browser post-deploy: Maria/Wilainy escriben nota distinta y confirman render.
+
+#### Restricciones
+
+- NO re-fixear el componente sin diagnóstico previo — el código actual ya tiene el render correcto y un fix ciego puede agregar deuda.
+- archivist PRE-CHANGE obligatorio (lee historial de SPRINT-153 y 148 que ya tocaron el componente).
+
+---
+
+### SPRINT-162 — KPI "Conduces Emitidos" del dashboard cuenta 0 cuando hay conduces pagados
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟢 BAJA — bug de visibilidad, no rompe operación. Inconsistencia interna del dashboard.
+**Origen:** QA E2E distribuido 2026-05-13. Dashboard de admin muestra "Conduces Emitidos: RD$0 / 0 conduces" cuando hay 2 conduces (CG-00017 + CG-00018) emitidos en el mes en curso. "Ingresos del Mes" sí cuenta los 2 (RD$17,000).
+
+**Causa raíz (auditada por Cowork):** `src/pages/Dashboard.tsx:297-305`:
+```typescript
+const facturasEmitidas = useMemo(
+  () => facturas.filter(f => f.estado === 'emitida'),
+  [facturas]
+);
+```
+El filtro restringe a `estado === 'emitida'`. Tras el flujo de Aury (verificación de pago dentro del modal Emitir conduce de SPRINT-151), los 2 conduces pasan directamente a `estado === 'pagada'`. Por eso el KPI cuenta 0.
+
+#### Touch-list
+
+**Archivos a modificar (1):**
+
+1. `src/pages/Dashboard.tsx:297-305`:
+   - Cambiar semántica del KPI: "Conduces Emitidos" = total facturas creadas en el mes en curso (independiente del estado de pago).
+   - Filtro nuevo: `facturas.filter(f => f.createdAt && f.createdAt >= inicioMes)` o equivalente por `fechaEmision`.
+   - Renombrar variable si ayuda claridad (`facturasEmitidasMes` en vez de `facturasEmitidas`).
+   - El subtitle debería seguir mostrando count de conduces.
+   - El valor total (RD$X) debería sumar el `total` de todas (emitidas + pagadas) en el mes.
+
+**Consumidores verificados (read-only check):**
+- `facturasEmitidas` solo se consume en el KPI card de Dashboard.tsx:631-637. Cambio aislado.
+- No hay otros consumidores del memo.
+- `totalFacturasEmitidas` solo se usa en el mismo card (línea 633).
+
+**Hallazgos laterales NO incluidos:**
+- Pueden existir queries de reportes (`/admin/reportes`) o nómina que también filtren por `estado === 'emitida'` — si la operaria cambia siempre a `pagada` en el modal, esos reportes pueden tener el mismo gap. Auditar pero NO fixear acá.
+
+#### Criterios de aceptación
+
+- [ ] Con 2 conduces en el mes (1 emitida + 1 pagada), el KPI muestra "2 conduces" y suma el monto de ambos.
+- [ ] Subtitle del KPI: "2 conduces" (plural correcto, ya está implementado).
+- [ ] Typecheck + lint + cazadores 7/7 PASS.
+
+#### Restricciones
+
+- NO tocar el KPI "Ingresos del Mes" (ese sí debe seguir contando solo pagadas).
+- Cambio puramente local en el memo + KPI card.
+
+---
+
+### SPRINT-158 — 9 hallazgos UX combinados del QA E2E distribuido 2026-05-13
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟢 BAJA-MEDIA — bugs cosméticos + render + notificaciones. Pueden dividirse en sub-sprints si scope crece.
+**Origen:** QA E2E distribuido 2026-05-13 sobre OS-0055 → CG-00018. 9 hallazgos reportados desde Maria (coord), Wilainy (operaria PC #2), Yohana (operaria PC #3).
+
+#### Lista de hallazgos
+
+1. **No hay notificación `cotizacion_lista` / `diagnostico_completado`** cuando técnico sugiere precio. Solo se dispara `tecnico_inicio_chequeo`. La operaria solo se entera si entra a mirar manualmente.
+2. **La fase NO avanza automáticamente a `en_cotizacion`** cuando el técnico sugiere precio + agrega nota. Queda en `en_diagnostico` hasta que la operaria aprueba (entonces pasa a `aprobado`). Falta transición intermedia.
+3. **Chip de operaria en card de `/admin/ordenes` muestra "Op: Operaria"** (string literal, no el nombre real "Wilainy"). Probablemente la card lee `operariaRol` en vez de `operariaNombre`, o `operariaNombre` no está denormalizado al crear orden.
+4. **Foto del cierre del técnico NO se muestra en modal admin de la orden** (sí solo la del chequeo inicial). Los datos están en `cierreServicio.fotoCierre` pero `OrdenDetalle.tsx` (o componente equivalente del modal) no lo lee.
+5. **Período de garantía NO se muestra en modal admin de la orden.** Mismo patrón que bug 4: el dato está (`orden.periodoGarantiaDias = 30`) pero el modal no lo renderiza. En `/admin/facturas` sí aparece — el modal de la orden necesita fix análogo.
+6. **El chip "Operaria" muestra "Angelica Secretaria"** (la CREADORA de la orden) en lugar de "Wilainy" (la operaria del grupo). Bug confirmado por 2 roles (Wilainy + Yohana). Posiblemente `operariaNombre` denormaliza mal: copia el nombre del CREADOR en lugar de la operaria asignada al técnico.
+7. **Timeout 30s CDP al click "Enviar a conduce"** en algunas instancias. El backend completó la operación pero la UI tardó mucho. Verificar performance del handler.
+8. **Alerta "Aury Mon cerró OS-0055 sin verificación GPS"** aparece en dashboard. La app SÍ controla GPS al cerrar pero NO es bloqueante. **DECISIÓN JORGE PENDIENTE:** ¿Cambiar a bloqueante? ¿O dejar como alerta informativa? Si bloqueante, sub-sprint.
+9. **Falta notificación en TODOS estos eventos** (confirmados desde 3 roles):
+   - Aprobación de precio (operaria aprueba) — no notifica al técnico ni al coord.
+   - Cierre del servicio (técnico cierra wizard) — no notifica a operaria ni coord.
+   - Pago registrado — no notifica al admin/coord.
+   - Envío a facturación — no notifica a admin/coord.
+
+#### Touch-list expandido
+
+**Archivos a tocar (estimado 5-8):**
+
+1. `src/hooks/useOrdenCreateForm.ts` — denormalizar `operariaNombre` correctamente al crear (bugs 3 + 6).
+2. `src/components/ordenes/OrdenCard.tsx` (o equivalente) — leer `operariaNombre` no `operariaRol` (bug 3).
+3. `src/pages/OrdenDetalle.tsx` o modal admin de orden — renderizar `cierreServicio.fotoCierre` + `periodoGarantiaDias` (bugs 4 + 5). Posible reuso de `OrdenResumenLectura.tsx`.
+4. Handlers que cambian fase: agregar `crearNotificacion` para cada evento del bug 9. Tipos ya existen en `types/index.ts` (verificar `'cotizacion_lista'`, `'cierre_completado'`, `'pago_registrado'`, `'envio_facturacion'`).
+5. Handler que sugiere precio del técnico (`TecnicoVista.tsx` o equivalente): agregar transición a `fase: 'en_cotizacion'` (bug 2).
+6. Handler "Enviar a conduce" (`FacturacionPendiente.tsx`?): perfilar tiempo de respuesta para bug 7.
+
+**Consumidores verificados (read-only check):** ALERTA — toca múltiples flujos. Auditoría detallada por bug requerida ANTES de empezar.
+
+**Hallazgos laterales:**
+- Posible que `Ordenes.tsx` (1600 líneas, monolítico) también renderice el chip "Op:" mal — auditar en paralelo.
+
+#### Criterios de aceptación
+
+- [ ] Bug 1: notificación `cotizacion_lista` se dispara al sugerir precio. Verificable en `/admin/notificaciones` y campanita.
+- [ ] Bug 2: fase avanza a `en_cotizacion` automáticamente. Verificar en Firestore + chip de fase.
+- [ ] Bug 3: chip muestra "Wilainy" (nombre real) no "Operaria" (rol genérico).
+- [ ] Bug 4: foto del cierre aparece en modal de orden admin.
+- [ ] Bug 5: período de garantía aparece en modal de orden admin.
+- [ ] Bug 6: chip muestra nombre de la operaria asignada (Wilainy), no de la creadora (Angelica).
+- [ ] Bug 7: handle "Enviar a conduce" responde en <5s. Si >5s, perfilar y reportar.
+- [ ] Bug 8: decisión Jorge documentada en sprint.
+- [ ] Bug 9: 4 notificaciones nuevas implementadas + verificadas con QA distribuido.
+- [ ] Typecheck + lint + cazadores 7/7 PASS.
+- [ ] reviewer obligatorio (toca cross-collection en denormalización + notis).
+
+#### Restricciones
+
+- archivist PRE-CHANGE obligatorio.
+- Si scope se expande a >8 archivos, dividir en SPRINT-158a/b/c.
+- **Sub-regla:** auditar consumidores ANTES de tocar `useOrdenCreateForm.ts` o `OrdenCard.tsx` — ambos son críticos.
+
+---
+
+### SPRINT-160 — Modal Emitir conduce muestra 60 default cuando wizard tiene otro valor (UX visual)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟢 BAJA — UX confusa pero funcionalmente correcto. Reclasificado de bug a UX en QA E2E 2026-05-13.
+**Origen:** QA E2E distribuido 2026-05-13. El wizard del técnico capturó período = 30 días para OS-0055. Modal Emitir conduce mostró 60 default (SPRINT-154). Maria emitió pensando que 60 estaba correcto — el conduce final usó 30 correctamente (verificado en CG-00018) porque al click "Generar" se respeta `orden.periodoGarantiaDias`. UX confusa pero datos correctos.
+
+#### Touch-list
+
+**Archivos a modificar (1):**
+
+1. `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx`:
+   - Línea 125: en lugar de `useState<number | null>(60)`, leer `orden.periodoGarantiaDias` como default si existe. Sino caer a 60.
+   - Lo mismo en líneas 187, 194 (reset al cerrar/cambiar/abrir orden).
+   - Patrón sugerido: derivar default desde prop `orden` en cada render del modal: `const defaultGarantia = orden?.periodoGarantiaDias ?? 60`.
+   - Mostrar leyenda discreta al lado del preset: "Sugerido desde wizard del técnico" si vino de orden.
+
+**Consumidores verificados:** ninguno fuera del modal. Cambio aislado.
+
+#### Criterios de aceptación
+
+- [ ] Si orden tiene `periodoGarantiaDias = 30`, modal precarga 30 (no 60).
+- [ ] Si orden NO tiene `periodoGarantiaDias` (legacy), modal precarga 60 (default actual).
+- [ ] Leyenda visual diferencia "sugerido desde wizard" vs "default 60 días".
+- [ ] Typecheck + lint + cazadores 7/7 PASS.
+
+#### Restricciones
+
+- NO tocar la lógica de submit (eso ya respeta el valor seleccionado correctamente).
+- NO tocar el wizard del técnico.
+- Cambio puramente UX visual.
+
+---
 
 ### SPRINT-155 — Envolver `handleGenerar` del modal Emitir conduce en `runTransaction` (deuda transaccionalidad cross-collection)
 
