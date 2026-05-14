@@ -2847,7 +2847,7 @@ Ejercer manualmente en producción con técnico + operaria reales:
 
 ### SPRINT-156 — Extender cazador P-003 (cross-collection sin runTransaction) a `src/components/`
 - **Completado:** 2026-05-12 por coordinator autónomo (`trabaja`, pasada 14, continuación). Sub-deuda derivada de SPRINT-155. OK humano implícito vía `trabaja`.
-- **Hash:** pendiente al commit (se completa con `git log` post-push).
+- **Hash:** `3cc01e8`.
 - **Resultado:** `scripts/invariantes/check-cross-collection-tx.ts` ahora escanea 5 subdirs (`src/services`, `src/pages`, `src/hooks`, **`src/components`** (nuevo), `api`). Ventana de detección de allowlist `@safe-non-tx:` ampliada de 5 a 10 líneas previas para permitir justificaciones multilínea. `docs/PATRONES_REGRESION.md` entrada P-003 actualizada con scope ampliado + sub-regla "remediar con sprints follow-up de refactor, no flexibilizar el cazador". Baseline pre-ampliación: 99 archivos escaneados / 0 hits. Post-ampliación: 171 archivos / 1 hit categorizado VP → allowlist temporal + SPRINT-157 follow-up redactado.
 - **Hits encontrados al ampliar scope:**
   - `src/components/facturas/FacturaCrearModal.tsx::handleSubmit` (línea ~166-386): muta `facturas` (addDoc + updateDoc denorm comisiones) + `auditoria_admin` (addDoc audit log override modalidad, deliberadamente fire-and-forget sin await). **Categorización:** VERDADERO POSITIVO con severidad baja. Forma estructural idéntica al `handleGenerar` que SPRINT-155 refactorizó en el modal hermano `ProcesarFacturacionModal`. **Decisión:** NO fixear acá (regla del sprint); allowlist `@safe-non-tx:` temporal apuntando a SPRINT-157; SPRINT-157 redactado en cola pendiente como follow-up explícito.
@@ -2872,7 +2872,7 @@ Ejercer manualmente en producción con técnico + operaria reales:
 - **reviewer:** APPROVED. Sin regresiones lógicas. Sin convenciones violadas. Comments excelentes y precisos. Verificó que helpers de comisión son idempotentes por `(ordenId, tecnicoId)` con upsert + cleanup — una retry tras tx fallida NO duplica comisiones.
 - **QA pendiente browser post-deploy (Jorge ejercita):** emitir conduce con orden normal (happy path); abrir el mismo conduce en 2 tabs y emitir desde ambos (segundo debería ver toast "Este conduce ya fue emitido en otra pestaña"); simular fallo de red en mitad del handler (DevTools offline durante 2s) → verificar que ni la factura ni el update de orden queden persistidos si la tx no completa.
 - **Plan de rollback:** revertir `3a9618b`. El refactor es funcionalmente equivalente al pre-cambio en happy path; el rollback solo reintroduce la deuda transaccional.
-- **Sub-deuda derivada:** SPRINT-156 PENDIENTE (extender cazador P-003 a `src/components/` para cazar patrones similares en otros handlers de modal). Documentado abajo.
+- **Sub-deuda derivada:** ~~SPRINT-156 PENDIENTE~~ **[RESUELTO en `3cc01e8` el 2026-05-12]** (cazador P-003 ampliado a `src/components/`; 1 hallazgo VP delegado a SPRINT-157 follow-up). Documentado abajo.
 - **Nota commit:** "QA flujo Emitir conduce validado" declarado en commit message (sub-regla CLAUDE.md cleanup en archivos críticos cumplida — auditoría estática + regression_guardian + reviewer; QA browser real queda para Jorge post-deploy).
 
 ---
