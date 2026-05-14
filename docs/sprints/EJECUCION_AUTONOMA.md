@@ -5,6 +5,88 @@
 
 ---
 
+## 2026-05-12 — autónomo end-to-end: SPRINT-162 (KPI "Conduces Emitidos" cuenta 0 con conduces pagados)
+
+### Contexto
+
+QA E2E distribuido 2026-05-13 reveló inconsistencia interna del dashboard: card "Conduces Emitidos" mostraba "RD$0 / 0 conduces" cuando había 2 conduces (CG-00017 + CG-00018) emitidos en el mes en curso. Mismo dataset, otra card ("Ingresos del Mes") sí los contaba correctamente (RD$17,000). Bug introducido implícitamente por SPRINT-151 (verificación de pago en modal Emitir conduce) — desde ese sprint, el flujo natural marca los conduces como `estado='pagada'` directo en lugar de `estado='emitida'`, dejando el filtro original (`estado === 'emitida'`) sin hits permanentemente.
+
+### Archivist PRE-CHANGE (ejecutado por coordinator)
+
+- `git log --oneline -15 -- src/pages/Dashboard.tsx`:
+  - `2ecea5e` SPRINT-149 (operariaId migration, no toca lógica KPI)
+  - `c5b4107` SPRINT-118 (fix dashboard + cazador P-007)
+  - `43f2ef2` rename "Facturas Emitidas" → "Conduces Emitidos" (label cosmético, no toca filtro)
+  - Nada anterior tocó la lógica del KPI específicamente.
+- Postmortems aplicables: ninguno específico para este archivo. SPRINT-118 cerró con postmortem en `docs/postmortems/` por el bug de notificaciones, no por el KPI.
+- Cazadores P-001 a P-009: ninguno cubre la clase "filtro por estado discreto que queda vacío cuando el flujo del negocio salta estados". Bug fue invisible al sistema anti-regresión actual (no requiere cazador nuevo — semántica de negocio, no patrón estructural).
+- Riesgo declarado: bajo. Archivo no crítico, cambio aislado al memo + render del KPI.
+
+### Builder
+
+1 archivo editado: `src/pages/Dashboard.tsx`.
+
+**Cambio 1 — memo (líneas 297-308):**
+- Antes: `facturas.filter(f => f.estado === 'emitida')`
+- Después: `facturas.filter(f => f.fechaEmision && f.fechaEmision >= inicioMes)`
+- Variables renombradas: `facturasEmitidas` → `facturasEmitidasMes`, `totalFacturasEmitidas` → `totalFacturasEmitidasMes`.
+- Comentario agregado explicando relación con SPRINT-151 y distinción con KPI "Ingresos del Mes".
+
+**Cambio 2 — render (líneas 631-638, ahora 637-638):**
+- `value={formatMoneda(totalFacturasEmitidas)}` → `value={formatMoneda(totalFacturasEmitidasMes)}`
+- `${facturasEmitidas.length}` → `${facturasEmitidasMes.length}` (en subtitle).
+
+**Decisión clave:** `Factura.fechaEmision: Date` está garantizado en `types/index.ts:1112` (no opcional). El guard `f.fechaEmision &&` es puramente defensivo — protege ante parseo legacy hipotético que retorne undefined sin romper TS.
+
+Diff: +13/-9.
+
+### Tester
+
+- `npx tsc --noEmit`: PASS (sin output = sin errores).
+- `npm run check:regression`: PASS 8/8 (P-001 a P-009 sin hits).
+- `npx eslint src/pages/Dashboard.tsx --max-warnings 0`: PASS.
+- Grep `facturasEmitidas|totalFacturasEmitidas` en todo `src/`: solo las 6 referencias nuevas con sufijo `Mes`, 0 referencias huérfanas.
+
+### regression_guardian
+
+SKIP — sprint trivial, no toca services/rules/context, solo lógica local de KPI dentro de un único memo.
+
+### Reviewer (ejecutado por coordinator, obligatorio por ser KPI financiero)
+
+APPROVED. Checklist:
+1. KPI "Ingresos del Mes" intacto ✓ — sigue usando `facturasPagadasMes` (filtro `estado === 'pagada' && fechaPago >= inicioMes`).
+2. `fechaEmision` garantizado en types ✓ — guard defensivo es bonus.
+3. Sin doble conteo ✓ — semánticas separadas: volumen de emisión vs cash flow.
+4. Subtitle plural ✓ — patrón `length !== 1` ya existente, intacto.
+5. Rename consistente ✓ — 2/2 ocurrencias actualizadas, 0 huérfanas en todo el repo.
+6. Comentario explicativo ✓ — referencia SPRINT-151/SPRINT-162 y aclara distinción.
+
+### Commit + push
+
+- `git add src/pages/Dashboard.tsx`
+- `git commit` con mensaje SPRINT-162 (hook PASS: typecheck + 8/8 cazadores + lint staged).
+- Hash: `97022f6`.
+- `git push origin main`: `c8f8ac8..97022f6 main -> main`.
+
+### Devops
+
+Deploy hook automático del repo→Vercel debería disparar. Verificación humana queda como checkpoint post-deploy (Jorge: hard refresh + comparar KPI).
+
+### Hallazgos laterales declarados (NO fixeados — scope cerrado)
+
+- **`src/pages/Dashboard.tsx:465`** — `facturasPendientes` filtra por `emitida || vencida` para KPI de "días pendientes promedio". Con flujo SPRINT-151, este filtro también puede infrareportar. **NO es el mismo bug** (semántica distinta — "pendientes de cobro reales"). Sugerido: SPRINT-XXX follow-up post-decisión de negocio con Jorge.
+- **`src/pages/Facturas.tsx:646`** — gate UI por `estado === 'emitida'` para mostrar botón modificar. NO es bug.
+- Ningún hit en `/admin/reportes` ni nómina con este patrón.
+
+### Métricas
+
+- Tiempo total: ~10 min (archivist PRE-CHANGE rápido + builder + tester + reviewer mental + commit + push + docs).
+- Archivos modificados: 1 (src/pages/Dashboard.tsx).
+- Líneas: +13 / -9.
+- Cazadores: 8/8 PASS.
+
+---
+
 ## 2026-05-13 — autónomo: SPRINT-153-FIX (nota del conduce no renderiza — regresión SPRINT-153)
 
 ### Contexto

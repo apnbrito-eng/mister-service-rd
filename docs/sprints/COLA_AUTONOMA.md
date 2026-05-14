@@ -293,7 +293,7 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-162 — KPI "Conduces Emitidos" del dashboard cuenta 0 cuando hay conduces pagados
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-12 — ver `## Sprints completados (histórico)` más abajo. Hash `97022f6`.
 **Prioridad:** 🟢 BAJA — bug de visibilidad, no rompe operación. Inconsistencia interna del dashboard.
 **Origen:** QA E2E distribuido 2026-05-13. Dashboard de admin muestra "Conduces Emitidos: RD$0 / 0 conduces" cuando hay 2 conduces (CG-00017 + CG-00018) emitidos en el mes en curso. "Ingresos del Mes" sí cuenta los 2 (RD$17,000).
 
@@ -3167,6 +3167,29 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ---
 
 ## Sprints completados (histórico)
+
+### SPRINT-162 — KPI "Conduces Emitidos" del dashboard cuenta 0 cuando hay conduces pagados
+- **Completado:** 2026-05-12 por coordinator (autónomo, pedido explícito de Jorge end-to-end). OK humano implícito vía `trabaja`-equivalente.
+- **Hash:** `97022f6`.
+- **Resultado:** `src/pages/Dashboard.tsx:297-308` reemplaza el filtro `estado === 'emitida'` (que daba 0 hits tras flujo SPRINT-151 marcar conduces como `pagada` directo) por filtro temporal `f.fechaEmision && f.fechaEmision >= inicioMes`. El KPI ahora cuenta TODAS las facturas creadas en el mes en curso (emitidas + pagadas). Variables renombradas a `facturasEmitidasMes` / `totalFacturasEmitidasMes` para reflejar la nueva semántica. KPI "Ingresos del Mes" (línea 308+) queda INTACTO usando `facturasPagadasMes` (filtro `estado === 'pagada' && fechaPago >= inicioMes`) — semánticas separadas: este KPI mide volumen de emisión del mes, el otro mide cash flow del mes. Diff +13/-9 (1 archivo, refactor local + render update).
+- **Validación:** `npx tsc --noEmit` PASS · `npm run check:regression` 8/8 PASS (P-001 a P-009 sin hits) · `npx eslint src/pages/Dashboard.tsx --max-warnings 0` PASS · pre-commit hook PASS.
+- **Archivist PRE-CHANGE (ejecutado por coordinator):** Historial de Dashboard.tsx muestra `43f2ef2` (rename "Facturas Emitidas" → "Conduces Emitidos", solo label cosmético) y `c5b4107` (SPRINT-118 fix relacionado con notificaciones, P-007). El filtro del KPI es virgen — sin incidentes previos en esta lógica. Riesgo bajo, archivo no crítico para flujos blockers.
+- **regression_guardian:** SKIP (sprint trivial, no toca services/rules/context, solo lógica local de KPI).
+- **reviewer (ejecutado por coordinator, obligatorio por ser lógica de KPI financiero):** APPROVED.
+  - 1. KPI "Ingresos del Mes" intacto ✓ (sigue usando `facturasPagadasMes` con filtro pagada + fechaPago)
+  - 2. `Factura.fechaEmision: Date` garantizado en `types/index.ts:1112` ✓ (no opcional; guard defensivo `f.fechaEmision &&` por si parser legacy retorna undefined)
+  - 3. Sin doble conteo entre KPIs ✓ (cards separadas con propósitos distintos — volumen de emisión vs cash flow)
+  - 4. Subtitle plural ✓ (`length !== 1` patrón ya existente)
+  - 5. Rename consistente ✓ (2/2 ocurrencias actualizadas; 0 referencias huérfanas en todo el repo via grep)
+  - 6. Comentario explicativo ✓ (cita SPRINT-151 y aclara distinción semántica con "Ingresos del Mes")
+- **Plan de rollback:** revertir `97022f6`. KPI vuelve a mostrar 0 mientras los conduces se marquen como `pagada` directo. Sin otros efectos.
+- **Hallazgos laterales declarados (no resueltos aquí, scope cerrado):**
+  - `src/pages/Dashboard.tsx:465` — `facturasPendientes` filtra por `emitida || vencida` para calcular "días pendientes promedio". Con flujo SPRINT-151 marcando todo como `pagada` directo, este KPI puede infrareportar pendientes. NO es el mismo bug (semántica distinta — "pendientes de cobro reales"), pero merece sprint follow-up auditando con Jorge la regla de negocio. Sugerido: **SPRINT-XXX — Auditar KPI `facturasPendientes` post-SPRINT-151**.
+  - `src/pages/Facturas.tsx:646` — gate UI por `estado === 'emitida'` para mostrar acción de modificar. NO es bug, comportamiento esperado.
+  - No hay referencias en `/admin/reportes` ni nómina con este patrón.
+- **Nota commit:** QA browser manual queda como verificación humana post-deploy (ver dashboard tras refresh: KPI debe mostrar "2 conduces" y monto sumado en lugar de "0 / RD$0").
+
+---
 
 ### SPRINT-161 — Fase orden no avanza a `cerrado` tras emitir conduce (datos inconsistentes)
 - **Completado:** 2026-05-12 por coordinator (interactivo, pedido explícito de Jorge end-to-end). OK humano implícito vía `trabaja`-equivalente.
