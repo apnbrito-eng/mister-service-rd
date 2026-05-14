@@ -77,7 +77,7 @@ Jorge pidió end-to-end interactivo siguiendo el flujo completo (archivist → t
 
 ### Estado final del sprint
 
-- Hash commit: pendiente — escrito post-push.
+- Hash commit: `fd5e685` (push a main 2026-05-13).
 - COMPLETADO: NO. Sprint queda **EN_REVISION_HUMANA**.
 - Qué falta:
   1. Jorge verifica storage.rules en consola Firebase (instrucciones en `BLOQUEOS.md` SPRINT-138 sección "Dependencia explícita SPRINT-159").
