@@ -723,6 +723,29 @@ export default function ProcesarFacturacionModal({
         return pagoBase;
       })() : null;
 
+      // SPRINT-161: tras emitir conduce, avanzar fase a 'cerrado' y mantener
+      // sincronía con `estadoSimple`/`estado`/`historialFases` (sub-regla CLAUDE.md
+      // "registros sincronizados"). Antes el modal dejaba la orden en
+      // `fase: 'trabajo_realizado'` con `facturada: true` — inconsistencia visible
+      // en `/admin/ordenes` y en queries que filtran por fase.
+      // Patrón del entry tomado de `OrdenDetalle.tsx:373-386` y `AgendaDia.tsx:114-127`:
+      // shape `{ fase, timestamp, usuario, nota }`, array reemplazado completo
+      // (no `arrayUnion`).
+      const nuevoHistorialFases = [
+        ...(orden.historialFases || []).map((h) => ({
+          fase: h.fase,
+          timestamp: h.timestamp instanceof Date ? Timestamp.fromDate(h.timestamp) : h.timestamp,
+          usuario: h.usuario || '',
+          ...(h.nota ? { nota: h.nota } : {}),
+        })),
+        {
+          fase: 'cerrado' as const,
+          timestamp: ahora,
+          usuario,
+          nota: `Conduce emitido ${numero}`,
+        },
+      ];
+
       const ordenUpdate: Record<string, unknown> = {
         facturada: true,
         facturaId: facturaRef.id,
@@ -730,6 +753,11 @@ export default function ProcesarFacturacionModal({
         facturadaAt: ahora,
         facturadaPorId: usuarioId,
         facturadaPorNombre: usuario,
+        // SPRINT-161: avanzar fase + estados duplicados + append a historial.
+        fase: 'cerrado',
+        estadoSimple: 'completado',
+        estado: 'cerrado',
+        historialFases: nuevoHistorialFases,
         auditoria: arrayUnion(registro),
         updatedAt: ahora,
       };
