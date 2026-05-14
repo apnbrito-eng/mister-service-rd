@@ -96,7 +96,7 @@ El bug NO estaba en persistencia ni en render (las dos hipótesis principales de
 
 ### Commit + push
 
-- Hash: pendiente (commit al final).
+- Hash: `02bfded`.
 - Archivos: `src/utils/index.ts` (+8/-0), `scripts/invariantes/check-parser-campos-faltantes.ts` (+333 nuevo), `scripts/invariantes/run-all.ts` (+2/-0), `docs/PATRONES_REGRESION.md` (+30/-0), `docs/sprints/COLA_AUTONOMA.md` (estado), `docs/sprints/EJECUCION_AUTONOMA.md` (trazabilidad).
 - Pre-commit hook: typecheck + 8 cazadores + lint staged → PASS.
 - Deploy: pendiente verificación de devops post-push.

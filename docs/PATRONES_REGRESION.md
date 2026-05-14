@@ -353,7 +353,7 @@ nomina.service.ts, `o.tecnicoId === t.id` en Dashboard.tsx).
 
 ## P-009 — Campo persistido en Firestore pero omitido por el parser correspondiente
 
-**Bug original:** SPRINT-153-FIX (2026-05-13). Fix en `src/utils/index.ts` (parser `parseFactura`). Hash del fix: pendiente al momento del commit.
+**Bug original:** SPRINT-153-FIX (2026-05-13). Fix en `src/utils/index.ts` (parser `parseFactura`). Hash del fix: `02bfded`.
 
 **Síntoma:** una feature nueva escribe un campo a Firestore (verificado en docs reales) y los componentes tienen el render correcto del campo, pero el bloque jamás aparece en la UI. NO hay error, NO hay warning — el componente recibe `undefined` y el guard `{factura?.notaConduce && ...}` evalúa false. QA E2E busca el texto en DOM y obtiene 0 hits.
 
