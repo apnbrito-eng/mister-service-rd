@@ -114,7 +114,7 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-159 — Implementar firma del cliente en wizard cierre del técnico (BLOQUEADOR go-live)
 
-**Estado:** PENDIENTE
+**Estado:** EN_REVISION_HUMANA (código mergeado 2026-05-13 — pendiente QA E2E distribuido en iPad de Aury + verificación storage.rules en consola)
 **Prioridad:** 🔴 CRÍTICA — bloqueador go-live. Sin esto, los conduces de garantía no tienen prueba de aceptación del cliente y la app no puede salir a producción.
 **Origen:** QA E2E distribuido 2026-05-13 (OS-0055 / CG-00018). El wizard `CierreServicioWizard.tsx` actual NO tiene paso de firma. SPRINT-135a-UI implementó wizard nuevo (foto + 3 preguntas + piezas + período de garantía) pero omitió firma. En RD el técnico va a casa del cliente y el cliente firma una hoja de servicio como prueba de aceptación. Sin firma, el conduce de garantía pierde valor legal y no hay defensa documentada si cliente reclama.
 

@@ -155,6 +155,35 @@ OK: jorge 2026-05-12 — confirmo SPRINT-149, procesalo según spec de Cowork ("
 
 **Si Jorge prefiere rechazar:** agregá `RECHAZADO: jorge YYYY-MM-DD HH:MM <motivo>` y se archiva. Las rules de Storage siguen viviendo solo en consola hasta nuevo aviso.
 
+### Dependencia explícita — SPRINT-159 (firma del cliente) agregó nuevo path
+
+**Agregado:** 2026-05-13 por coordinator post-SPRINT-159.
+
+SPRINT-159 implementó captura de firma del cliente en el wizard de cierre. El upload escribe a un path nuevo de Storage:
+
+```
+firmas_cierre/{ordenId}/firma-{timestamp}.png
+```
+
+**Acción manual requerida ANTES del QA E2E en iPad de Aury** (Jorge ajusta directamente en la consola Firebase):
+
+1. Entrar a https://console.firebase.google.com/project/mister-service-app-cloude/storage/rules
+2. Verificar/agregar regla que permita writes desde técnico autenticado al path `firmas_cierre/{ordenId}/{cualquier-nombre}`. Si las rules actuales permiten escrituras desde cualquier usuario autenticado a cualquier path (común en setups iniciales), no requiere cambio — el code ya valida MIME + size lado cliente vía `validarFirma()`.
+3. Si las rules tienen whitelist explícita de paths, agregar:
+
+```javascript
+match /firmas_cierre/{ordenId}/{archivo} {
+  allow read: if request.auth != null;       // staff lee para ver el cierre
+  allow write: if request.auth != null
+              && request.resource.size < 2 * 1024 * 1024
+              && request.resource.contentType.matches('image/.*');
+}
+```
+
+4. Si Aury intenta firmar en iPad y obtiene `permission-denied` o `unauthorized` al subir la firma → es exactamente este gap. Toast del wizard muestra "Error de permisos al subir la foto. Contacta al administrador." (mensaje genérico, no específico para firma — deuda menor).
+
+**Cuando SPRINT-138 se desbloquee:** este path queda permanentemente cubierto en el archivo versionado `storage.rules`. Hasta entonces vive solo en consola.
+
 ---
 
 ## SPRINT-135a-UI — Refactor garantía fase 1, parte UI (countdown público + wizard cierre) — DESBLOQUEADO

@@ -1,7 +1,7 @@
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 import { calcularDistanciaKm } from '../utils/rutas';
-import { validarFoto } from '../utils/uploads';
+import { validarFirma, validarFoto } from '../utils/uploads';
 
 /**
  * Valida el archivo (size + MIME) si es un `File` real. Los `Blob` puros
@@ -33,6 +33,47 @@ export async function subirFotoCierre(
   const uploadPromise = uploadBytes(ref, file);
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error('Timeout: la subida de la foto tardó más de 30 segundos')), 30000)
+  );
+
+  await Promise.race([uploadPromise, timeoutPromise]);
+  return await getDownloadURL(ref);
+}
+
+/**
+ * Sube la firma del cliente (canvas PNG) a Firebase Storage y retorna URL pública.
+ * SPRINT-159 (BLOQUEADOR go-live, 2026-05-13) — prueba legal de aceptación.
+ *
+ * El blob viene del canvas HTML5 del wizard de cierre (export PNG con
+ * `canvas.toBlob`). Validado con `validarFirma()` (max 2 MB, whitelist
+ * PNG/SVG/JPEG; en la práctica siempre PNG). Path estructurado por orden
+ * para facilitar permisos en `storage.rules`:
+ * `firmas_cierre/{ordenId}/firma-{timestamp}.png`.
+ *
+ * Nota: `storage.rules` aún vive solo en consola Firebase (SPRINT-138
+ * BLOQUEADO). Si el path `firmas_cierre/` no está cubierto por rules de
+ * técnico autenticado, este upload falla con permission-denied en producción
+ * — el coordinator escala manualmente a BLOQUEOS.md para que Jorge ajuste
+ * la consola antes del go-live. En cliente esto se ve como `errMsg` con
+ * 'storage' o 'unauthorized'.
+ */
+export async function subirFirmaCierre(
+  ordenId: string,
+  blob: Blob
+): Promise<string> {
+  const res = validarFirma(blob);
+  if (!res.ok) {
+    throw new Error(`[firma cierre] ${res.error}`);
+  }
+
+  const timestamp = Date.now();
+  const fileName = `firma-${timestamp}.png`;
+  const path = `firmas_cierre/${ordenId}/${fileName}`;
+  const ref = storageRef(storage, path);
+
+  // Timeout 30s, idéntico al patrón de `subirFotoCierre`.
+  const uploadPromise = uploadBytes(ref, blob, { contentType: 'image/png' });
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Timeout: la subida de la firma tardó más de 30 segundos')), 30000)
   );
 
   await Promise.race([uploadPromise, timeoutPromise]);

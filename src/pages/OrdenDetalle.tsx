@@ -758,6 +758,27 @@ export default function OrdenDetalle() {
                   </div>
                 )}
 
+                {/* SPRINT-159: firma del cliente (prueba legal de aceptación) */}
+                {orden.cierreServicio.firmaClienteUrl && (
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">✍️ Firma del cliente</p>
+                    <img
+                      src={orden.cierreServicio.firmaClienteUrl}
+                      alt="Firma del cliente"
+                      className="w-full max-w-xs rounded-xl border border-gray-200 bg-white"
+                    />
+                    {orden.cierreServicio.firmaClienteAt && (
+                      <p className="mt-1 text-xs text-gray-500">
+                        Firmada el {formatFecha(
+                          orden.cierreServicio.firmaClienteAt instanceof Date
+                            ? orden.cierreServicio.firmaClienteAt
+                            : (orden.cierreServicio.firmaClienteAt as unknown as { toDate: () => Date }).toDate()
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Preguntas de cierre simplificado */}
                 {(orden.cierreServicio.equipoFunciona !== undefined ||
                   orden.cierreServicio.clienteSatisfecho !== undefined ||

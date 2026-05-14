@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, PiezaUsada } from '../types';
-import { subirFotoCierre, distanciaMetros, obtenerUbicacionGPS, type GpsErrorInfo } from '../services/storage.service';
+import { subirFirmaCierre, subirFotoCierre, distanciaMetros, obtenerUbicacionGPS, type GpsErrorInfo } from '../services/storage.service';
 import { calcularTotales, borrarFotoPieza } from '../services/piezas.service';
 import { crearRegistroAuditoria } from '../utils';
 import { calcularVencimiento, PERIODO_GARANTIA_DEFAULT_DIAS } from '../utils/garantia';
@@ -57,6 +57,15 @@ export default function CierreServicioWizard({
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // --- Firma del cliente (SPRINT-159, BLOQUEADOR go-live) ---
+  // Canvas HTML5 nativo. Pointer Events soportan touch (iPad de Aury) + mouse +
+  // pen en una sola API. `dibujandoRef` (no state) evita re-render por cada
+  // movimiento del trazo. `tieneTrazos` es el flag de "canvas no vacío" — más
+  // barato que `getImageData()` y suficiente para gatear el submit.
+  const canvasFirmaRef = useRef<HTMLCanvasElement>(null);
+  const dibujandoRef = useRef(false);
+  const [tieneTrazos, setTieneTrazos] = useState(false);
+
   // --- Piezas utilizadas (Fase A1) ---
   const [usoPiezas, setUsoPiezas] = useState<'si' | 'no' | null>(null);
   const [piezasUsadas, setPiezasUsadas] = useState<PiezaUsada[]>([]);
@@ -88,6 +97,34 @@ export default function CierreServicioWizard({
     return () => { cancelado = true; };
   }, [isOpen]);
 
+  // Setup del canvas de firma (SPRINT-159). Ejecuta al abrir el modal y al
+  // cambiar el devicePixelRatio (rotación de iPad). Backing store en DPR
+  // físico, transformación CSS aplicada vía `ctx.scale(dpr, dpr)` para que
+  // el trazo se vea nítido en retina. Sin esto, en iPad la firma se ve
+  // pixelada/borrosa.
+  useEffect(() => {
+    if (!isOpen) return;
+    const canvas = canvasFirmaRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0f3460';
+    // Fondo blanco explícito — sin esto el PNG sale transparente y se ve
+    // raro al renderizar sobre fondos distintos (admin tiene fondo claro,
+    // pero un futuro PDF de conduce podría tener fondo distinto).
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+  }, [isOpen]);
+
   const reset = () => {
     setFotoBlob(null);
     setFotoPreview('');
@@ -100,6 +137,80 @@ export default function CierreServicioWizard({
     setModalPiezaAbierto(false);
     setPiezaEditandoIdx(null);
     setPeriodoGarantiaDias(PERIODO_GARANTIA_DEFAULT_DIAS);
+    setTieneTrazos(false);
+    // El canvas se reinicializa solo via useEffect al re-abrir el modal.
+  };
+
+  // --- Firma: handlers de canvas (Pointer Events para touch + mouse + pen) ---
+  const getCanvasPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasFirmaRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const handleFirmaPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (saving) return;
+    e.preventDefault();
+    const canvas = canvasFirmaRef.current;
+    if (!canvas) return;
+    // Capturar pointer evita que el evento se "escape" del canvas si el dedo
+    // sale del área antes del pointerup — clave en touch.
+    try { canvas.setPointerCapture(e.pointerId); } catch { /* algunos browsers tiran si ya tomado */ }
+    dibujandoRef.current = true;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getCanvasPos(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    if (!tieneTrazos) setTieneTrazos(true);
+  };
+
+  const handleFirmaPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!dibujandoRef.current) return;
+    e.preventDefault();
+    const ctx = canvasFirmaRef.current?.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getCanvasPos(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const handleFirmaPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!dibujandoRef.current) return;
+    dibujandoRef.current = false;
+    try { canvasFirmaRef.current?.releasePointerCapture(e.pointerId); } catch { /* idem */ }
+  };
+
+  const limpiarFirma = () => {
+    if (saving) return;
+    const canvas = canvasFirmaRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    // Reset al estado inicial (fondo blanco, sin trazos).
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    ctx.scale(dpr, dpr);
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#0f3460';
+    setTieneTrazos(false);
+  };
+
+  // Convierte el canvas a Blob PNG. Async porque `canvas.toBlob` lo es.
+  const obtenerFirmaBlob = (): Promise<Blob | null> => {
+    return new Promise(resolve => {
+      const canvas = canvasFirmaRef.current;
+      if (!canvas) { resolve(null); return; }
+      canvas.toBlob(blob => resolve(blob), 'image/png');
+    });
   };
 
   const handleClose = () => {
@@ -123,7 +234,8 @@ export default function CierreServicioWizard({
     clienteSatisfecho !== null &&
     revisoConexiones !== null &&
     piezasOk &&
-    periodoValido;
+    periodoValido &&
+    tieneTrazos; // SPRINT-159: firma obligatoria
 
   const handleCerrarServicio = async () => {
     console.log('Intentando cerrar:', {
@@ -135,10 +247,11 @@ export default function CierreServicioWizard({
       revisoConexiones,
       usoPiezas,
       cantidadPiezas: piezasUsadas.length,
+      tieneFirma: tieneTrazos,
     });
 
     if (!todoListo) {
-      toast.error('Completa la foto, las 3 preguntas y la sección de piezas');
+      toast.error('Completá foto, preguntas, piezas, garantía y firma del cliente');
       return;
     }
     if (!fotoBlob) return;
@@ -197,6 +310,25 @@ export default function CierreServicioWizard({
       const fotoUrl = await subirFotoCierre(orden.id, fotoBlob);
       console.log('Foto subida OK:', fotoUrl);
 
+      // SPRINT-159: capturar firma del cliente como blob PNG y subir a Storage.
+      // BLOQUEADOR go-live — sin esto, el conduce no tiene prueba documentada
+      // de aceptación. Si el upload falla acá, la foto ya subió pero el cierre
+      // NO se persiste a Firestore (catch abajo + return) — la foto queda
+      // huérfana pero el técnico puede reintentar; el callback `obtenerFirmaBlob`
+      // re-exporta el canvas en memoria (no se pierde la firma) y `subirFotoCierre`
+      // genera nuevo timestamp en la próxima vuelta.
+      console.log('Capturando firma del cliente...');
+      const firmaBlob = await obtenerFirmaBlob();
+      if (!firmaBlob) {
+        toast.error('No pudimos exportar la firma. Reintentá.');
+        setSaving(false);
+        return;
+      }
+      console.log('Subiendo firma...', { ordenId: orden.id, fileSize: firmaBlob.size });
+      const firmaUrl = await subirFirmaCierre(orden.id, firmaBlob);
+      const firmaTimestamp = Timestamp.now();
+      console.log('Firma subida OK:', firmaUrl);
+
       // Calcular distancia solo si tenemos coords (puede ser null si el user eligió continuar sin GPS)
       const distancia = coords && clienteLat && clienteLng
         ? distanciaMetros(coords.lat, coords.lng, clienteLat, clienteLng)
@@ -228,6 +360,9 @@ export default function CierreServicioWizard({
         clienteSatisfecho: clienteSatisfecho === 'si',
         revisoConexiones: revisoConexiones === 'si',
         fotoCierre,
+        // SPRINT-159: firma del cliente (prueba legal de aceptación).
+        firmaClienteUrl: firmaUrl,
+        firmaClienteAt: firmaTimestamp,
       };
 
       // SPRINT-135a-UI: período de garantía + vencimiento computado.
@@ -264,7 +399,7 @@ export default function CierreServicioWizard({
       const registroAuditoria = crearRegistroAuditoria(
         tecnicoNombre,
         'cierre',
-        `Cerró el servicio. Equipo funciona: ${equipoFunciona === 'si' ? 'Sí' : 'No'}, Cliente satisfecho: ${clienteSatisfecho === 'si' ? 'Sí' : 'No'}, Revisó conexiones: ${revisoConexiones === 'si' ? 'Sí' : 'No'}${hayPiezas ? `, Piezas: ${piezasUsadas.length}` : ''}`,
+        `Cerró el servicio. Equipo funciona: ${equipoFunciona === 'si' ? 'Sí' : 'No'}, Cliente satisfecho: ${clienteSatisfecho === 'si' ? 'Sí' : 'No'}, Revisó conexiones: ${revisoConexiones === 'si' ? 'Sí' : 'No'}${hayPiezas ? `, Piezas: ${piezasUsadas.length}` : ''}, Firma cliente: sí`,
       );
 
       console.log('Payload cierre:', { fase: 'trabajo_realizado', cierrePayload });
@@ -555,6 +690,48 @@ export default function CierreServicioWizard({
             </p>
           </div>
 
+          {/* SECCIÓN 5: FIRMA DEL CLIENTE (SPRINT-159, BLOQUEADOR go-live) */}
+          <div className="border-t border-gray-200 pt-4">
+            <p className="text-sm font-semibold text-gray-900 mb-1">✍️ Firma del cliente</p>
+            <p className="text-xs text-gray-500 mb-3">
+              Pasale el equipo al cliente y pedile que firme acá abajo con el dedo o stylus.
+              Su firma queda como prueba de aceptación del trabajo.
+            </p>
+
+            {tieneTrazos && (
+              <div className="mb-2 inline-flex items-center gap-1 text-[11px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
+                <Check size={12} /> Firma capturada
+              </div>
+            )}
+
+            <canvas
+              ref={canvasFirmaRef}
+              role="img"
+              aria-label="Área de firma del cliente"
+              className="block w-full h-[200px] rounded-xl border-2 touch-none cursor-crosshair bg-white"
+              style={{ borderColor: tieneTrazos ? '#86efac' : '#e5e7eb' }}
+              onPointerDown={handleFirmaPointerDown}
+              onPointerMove={handleFirmaPointerMove}
+              onPointerUp={handleFirmaPointerUp}
+              onPointerCancel={handleFirmaPointerUp}
+              onPointerLeave={handleFirmaPointerUp}
+            />
+
+            <div className="mt-2 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={limpiarFirma}
+                disabled={!tieneTrazos || saving}
+                className="text-xs text-gray-500 hover:text-gray-700 underline disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Limpiar firma
+              </button>
+              {!tieneTrazos && (
+                <span className="text-[11px] text-amber-700">⚠️ Pendiente de firma</span>
+              )}
+            </div>
+          </div>
+
           {/* GPS status (informativo, no bloqueante) */}
           {!gpsCoords && (
             <div className="flex items-center gap-2 text-[10px] text-gray-400 justify-center">
@@ -576,6 +753,7 @@ export default function CierreServicioWizard({
                 revisoConexiones,
                 usoPiezas,
                 cantidadPiezas: piezasUsadas.length,
+                firmada: tieneTrazos,
               }) || 'Cerrar la orden y registrar la comisión.'
             }
             className="w-full flex items-center justify-center gap-2 py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold text-base transition-colors disabled:opacity-40 disabled:cursor-not-allowed"

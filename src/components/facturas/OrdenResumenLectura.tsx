@@ -192,6 +192,17 @@ export default function OrdenResumenLectura({ orden, variant = 'completo', factu
               Ver foto del cierre
             </a>
           )}
+          {/* SPRINT-159: link a la firma del cliente. Órdenes legacy no la tienen. */}
+          {cierre.firmaClienteUrl && (
+            <a
+              href={cierre.firmaClienteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 ml-3 inline-flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 underline"
+            >
+              ✍️ Ver firma del cliente
+            </a>
+          )}
         </Bloque>
       )}
 

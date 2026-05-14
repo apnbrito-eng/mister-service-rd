@@ -41,6 +41,7 @@ export function razonIniciarChequeoDisabled(args: {
  *  - falta marcar "cliente satisfecho".
  *  - falta marcar "revisó conexiones".
  *  - eligió "usé piezas" pero no agregó ninguna pieza.
+ *  - falta firma del cliente (SPRINT-159, BLOQUEADOR go-live).
  *
  * Si hay varias razones, devuelve la primera no resuelta en el orden de
  * arriba — coincide con cómo el técnico ve el wizard de arriba a abajo.
@@ -53,6 +54,7 @@ export function razonCerrarServicioDisabled(args: {
   revisoConexiones: 'si' | 'no' | null;
   usoPiezas: 'si' | 'no' | null;
   cantidadPiezas: number;
+  firmada?: boolean;
 }): string | null {
   if (args.saving) return 'Cerrando servicio… esperá un momento.';
   if (!args.fotoTomada) return 'Falta tomar la foto del cierre.';
@@ -63,6 +65,7 @@ export function razonCerrarServicioDisabled(args: {
   if (args.usoPiezas === 'si' && args.cantidadPiezas === 0) {
     return 'Agregá al menos una pieza o cambiá a "No usé piezas".';
   }
+  if (args.firmada === false) return 'Falta la firma del cliente.';
   return null;
 }
 

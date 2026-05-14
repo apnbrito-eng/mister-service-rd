@@ -1612,6 +1612,14 @@ export interface CierreServicio {
   descripcionTrabajo?: string;
   trabajoPendiente?: string;
   satisfaccionCliente?: number;
+  // SPRINT-159 (BLOQUEADOR go-live): firma del cliente como prueba legal de
+  // aceptación. Sin firma, el conduce de garantía no tiene defensa documentada
+  // si el cliente reclama. El técnico captura la firma vía canvas HTML5 al
+  // final del wizard de cierre; se persiste como PNG en Storage
+  // (`firmas_cierre/{ordenId}/firma-{timestamp}.png`) y la URL queda acá.
+  // Campos opcionales — órdenes legacy cerradas antes del sprint no los tienen.
+  firmaClienteUrl?: string;
+  firmaClienteAt?: Timestamp;
 }
 
 export type CondicionPieza = 'nueva' | 'usada';

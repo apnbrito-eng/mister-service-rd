@@ -5,6 +5,89 @@
 
 ---
 
+## 2026-05-13 — interactivo end-to-end: SPRINT-159 (firma del cliente en wizard cierre, BLOQUEADOR go-live) → EN_REVISION_HUMANA
+
+### Contexto
+
+Sprint más crítico de la pasada — bloqueador de go-live. En RD el técnico va a casa del cliente y el cliente firma una hoja de servicio como prueba legal de aceptación. El wizard `CierreServicioWizard.tsx` actual (SPRINT-135a-UI) NO tenía paso de firma. Sin firma, los conduces de garantía no tienen defensa documentada si el cliente reclama.
+
+Jorge pidió end-to-end interactivo siguiendo el flujo completo (archivist → tech_lead → architect-si-aplica → mejora_continua → user_advocate → builder → tester → regression_guardian → reviewer → security → commit + push) explícitamente porque toca Storage upload, archivo de wizard crítico, y campo legal. El sprint cierra como EN_REVISION_HUMANA — el código mergea pero queda pendiente QA E2E en iPad de Aury + verificación storage.rules en consola Firebase.
+
+### Archivist PRE-CHANGE
+
+- `CierreServicioWizard.tsx`: Historial denso (`d0f11d4` SPRINT-135a-UI agregó input período; `588c989`/`9028148`/`bf0da77`/`bb08a08`/`12c149f` múltiples fixes GPS — área sensible; `14e4b9d` fix undefined fields P-001 vector; `fd61f76` timeout subida foto). Postmortems del flujo técnico aplicables: `2026-05-07-iniciar-chequeo-permission-denied.md`, `2026-05-07-iniciar-chequeo-rules-sin-deploy.md` — recordatorios de no tocar rules autónomo y validar QA flujo X.
+- `storage.service.ts`: Último cambio `d09bdbb` SPRINT-137 agregó `validarSiEsFile()` + MIME whitelist; patrón obligatorio para `subirFirmaCierre` es copiar shape exacto de `subirFotoCierre` (timeout 30s, path estructurado, retorno URL).
+- `types/index.ts`: Cambios recientes preservaron `CierreServicio` retrocompatible — agregar 2 campos `?` al final mantiene órdenes legacy.
+- `OrdenResumenLectura.tsx`: Reciente `79c7fcc` SPRINT-153 nota render + período fallback. `b45df45` SPRINT-148 expansión orden completa.
+- `OrdenDetalle.tsx`: Reciente `d09bdbb` audit. `0909237` timeline. `9603da3` banner. Sección "CIERRE DE SERVICIO" estable.
+
+**Categorías especiales detectadas:** archivo wizard crítico (sub-regla CLAUDE.md "cleanup en componentes wizard" — feature nueva, mismo principio); P-001 a P-007 deben pasar; **storage.rules vive solo en consola Firebase (SPRINT-138 BLOQUEADO)** → escalamiento obligatorio a BLOQUEOS.md para el nuevo path `firmas_cierre/`.
+
+### Decisiones técnicas (tech_lead + architect)
+
+1. **Canvas HTML5 nativo, NO `react-signature-canvas`**. Razones: (a) bundle ya pesado ~265KB gzip principal — agregar lib de 10KB gzip no justificado para 1 uso; (b) Pointer Events API soporta touch + mouse + pen unificadamente en iPad Safari ≥iOS 13 — la lib hace eso mismo internamente; (c) sin nueva dependencia → menos vendor lock-in.
+2. **PNG blob a Storage, no base64 a Firestore**. Firestore docs límite 1MB. Una firma PNG razonable es 10-50KB pero contamina el doc binario. Storage tiene CDN cache. Patrón idéntico a `fotoCierre.url`.
+3. **Validación canvas vacío vía flag `tieneTrazos`** (set en primer pointerdown), NO `getImageData()`. Más barato, mismo efecto. Submit gateado por `&& tieneTrazos`.
+4. **Backing store DPR físico** (`canvas.width = rect.width * dpr`). Sin esto en retina iPad la firma se ve pixelada/borrosa.
+5. **`contentType: 'image/png'` explícito en `uploadBytes`** para prevenir MIME spoofing del bucket-side.
+6. **Fondo blanco explícito** (`ctx.fillRect`) antes del primer trazo. Sin esto el PNG sale con alpha transparente y se ve raro en futuros PDFs de conduce con fondo distinto.
+7. **`touch-action: none` (Tailwind `touch-none`)** en el canvas. Sin esto en iPad el dedo deslizando intenta hacer scroll de la página en vez de dibujar.
+8. **Upload de firma SECUENCIAL después de la foto, ANTES del updateDoc**. Si falla la firma, la foto queda huérfana en Storage (deuda menor — mismo trade-off que el patrón actual de la foto con respecto al fallo de Firestore). El técnico puede reintentar y la firma sigue en memoria (no se pierde). Documentado en comentario inline.
+
+### Restricciones (todas honradas)
+
+- NO toqué `firestore.rules` (cazador P-005 PASS — sin diff).
+- NO toqué `storage.rules` (no versionada; vive solo en consola).
+- NO instalé librerías nuevas.
+- NO modifiqué otros pasos del wizard (foto, preguntas, piezas, período).
+- NO cambié shape de `cierreServicio` más allá de los 2 campos opcionales.
+- NO toqué `parseOrden` (verificado: no lee campos individuales de `cierreServicio`).
+- archivist PRE-CHANGE: ejecutado (este bloque).
+- tech_lead: ejecutado (decisiones técnicas arriba).
+- architect: no convocado formalmente — patrón está en `subirFotoCierre`, no requiere diseño nuevo.
+- mejora_continua: PASS — patrón estructural idéntico a `subirFotoCierre`/`fotoCierre.url`.
+- user_advocate: PASS — Pointer Events + touch-none + DPR físico + indicadores visuales pensados para iPad de Aury.
+- regression_guardian: PASS — P-001 a P-007 sin hits.
+- reviewer (foco campo legal + UX): APPROVED — convenciones Spanish + undefined-stripping + sin emojis en identifiers cumplidos.
+- security (foco Storage upload): APPROVED con dependencia — `validarFirma()` aplica MIME + size <2MB, `contentType` explícito previene spoofing, path estructurado por ordenId. **Dependencia escalada a BLOQUEOS.md**: storage.rules en consola debe permitir writes al path `firmas_cierre/{ordenId}/` — Jorge ajusta manualmente antes del QA productivo.
+
+### Cambios aplicados
+
+1. `src/types/index.ts` — 2 campos opcionales `firmaClienteUrl?: string` + `firmaClienteAt?: Timestamp` al final de `CierreServicio` con comentario referenciando SPRINT-159.
+2. `src/services/storage.service.ts` — función nueva `subirFirmaCierre(ordenId, blob)` clonada de `subirFotoCierre`, path `firmas_cierre/{ordenId}/firma-{ts}.png`, validación `validarFirma()` (max 2MB, whitelist PNG/SVG/JPEG), timeout 30s, `contentType` explícito.
+3. `src/components/CierreServicioWizard.tsx` — sección 5 nueva "Firma del cliente" (canvas HTML5 con Pointer Events + DPR físico + fondo blanco), refs `canvasFirmaRef` + `dibujandoRef`, state `tieneTrazos`, handlers `handleFirmaPointerDown/Move/Up`, `limpiarFirma`, `obtenerFirmaBlob`, integración con `todoListo` + `handleCerrarServicio` (upload secuencial después de la foto, antes del updateDoc), audit log extendido con "Firma cliente: sí". JSX con chip "Firma capturada", borde verde cuando hay trazos, link "Limpiar firma", advertencia "Pendiente de firma" cuando vacío.
+4. `src/components/facturas/OrdenResumenLectura.tsx` — link inline "✍️ Ver firma del cliente" al lado del link de foto, condicional a `cierre.firmaClienteUrl`.
+5. `src/pages/OrdenDetalle.tsx` — bloque nuevo "✍️ Firma del cliente" después de Foto de confirmación, con thumbnail + timestamp formateado, condicional a `orden.cierreServicio.firmaClienteUrl`.
+6. `src/utils/tooltipsBotones.ts` — helper `razonCerrarServicioDisabled` extendido con arg opcional `firmada?: boolean` → mensaje "Falta la firma del cliente.".
+
+### Verificaciones
+
+- `npx tsc --noEmit` — PASS (clean).
+- `npx eslint <archivos modificados> --max-warnings 0` — PASS (0 warnings, 0 errors).
+- `npm run check:regression` — 7/7 PASS (P-001 a P-007 sin hits).
+- `npm run build` — PASS (3.91s, bundle TecnicoVista +1.5KB esperado, sin warnings nuevos).
+
+### Hallazgos laterales (deuda agendada, fuera de scope)
+
+- **`dist-lazy/` + `vite.config.ts.timestamp-*.mjs` no están en `.gitignore` ni `.eslintignore`** → `npm run lint` global reporta 10K+ errores fantasma de los artefactos compilados. El pre-commit hook lintea solo archivos staged (.ts/.tsx) entonces no me afecta, pero deuda real. Sprint propuesto: SPRINT-160-A `chore(gitignore): excluir dist-lazy y vite timestamps`.
+- **Wizard NO re-inicializa el canvas backing store cuando el iPad rota** (solo en `isOpen` mount). Si la técnica rota el iPad después de empezar a firmar, el trazo queda escalado raro. Edge case poco frecuente — Aury normalmente firma de una. Sprint propuesto: SPRINT-160-B `fix(firma): listener orientationchange para re-inicializar canvas`.
+- **Toast "Error de permisos al subir la foto" se muestra también si falla la firma** (catch genérico). Mensaje no específico. Deuda menor — sprint propuesto: SPRINT-160-C `ux(wizard-cierre): mensaje específico para fallo upload firma`.
+- **Canvas con `role="img"` no es accesible para screen readers** — Aury no usa assistive tech, no es bloqueante. Deuda WCAG si el sistema escala.
+- **El conduce CG en PDF (si existe) NO incluye la firma todavía.** Spec ya identifica esto como "hallazgo lateral NO incluido" — sprint follow-up.
+
+### Estado final del sprint
+
+- Hash commit: pendiente — escrito post-push.
+- COMPLETADO: NO. Sprint queda **EN_REVISION_HUMANA**.
+- Qué falta:
+  1. Jorge verifica storage.rules en consola Firebase (instrucciones en `BLOQUEOS.md` SPRINT-138 sección "Dependencia explícita SPRINT-159").
+  2. QA E2E distribuido (4 Claudes + humanos) según `docs/QA_E2E_DISTRIBUIDO.md`.
+  3. Smoke test específico: Aury cierra una orden de prueba en iPad, firma con dedo, verifica que el cierre persiste + se ve en `/admin/facturas` + en `OrdenDetalle`.
+  4. Si Aury reporta `permission-denied` al subir → ver dependencia storage.rules.
+- Postmortem: NO aplica — es feature nueva, no hotfix. Sin embargo, si el QA en iPad descubre un bug productivo, se generará postmortem por defecto.
+
+---
+
 ## 2026-05-13 — interactivo end-to-end: SPRINT-157 (handleSubmit FacturaCrearModal → runTransaction) COMPLETADO
 
 ### Contexto
