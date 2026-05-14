@@ -16,7 +16,7 @@
 | PC #2 | Maria | Coordinadora | ✅ |
 | PC #3 | Yohana | Operaria | ✅ |
 | PC #4 | Wilainy | Operaria | ✅ |
-| iPad #1 | Aury | Técnico | ❌ (manual) |
+| MacBook Pro | Aury | Técnico | ❌ (manual) |
 | Celular #1 | Jesus | Técnico | ❌ (manual) |
 | iPad #2 | Angelica | Secretaria | ❌ (manual) |
 | iPad #3 | Luisa | Secretaria | ❌ (manual) |
@@ -44,7 +44,7 @@
 ```
 T+0min   Angelica crea orden (manual en iPad #2)
 T+2min   Maria verifica desde Claude PC #2
-T+5min   Aury inicia chequeo en iPad #1 (manual)
+T+5min   Aury inicia chequeo en MacBook (manual)
 T+10min  Aury completa diagnóstico (manual)
 T+12min  Wilainy revisa cotización desde Claude PC #4
 T+15min  Aury cierra con wizard 30 días (manual)
@@ -63,7 +63,7 @@ T+25min  Jorge valida desde Claude PC #1 (matriz de simetría)
 Pegar en su sidepanel **después de T+25min**:
 
 ```
-Estoy logueado como ADMIN en https://app.misterservicerd.com.
+Estoy logueado como ADMIN en (usuario ya logueado en su tab).
 Ambiente pre-producción, datos de prueba.
 
 Acaba de procesarse una orden completa "de cero a conduce" con varios roles.
@@ -96,7 +96,7 @@ Pegar en su sidepanel **al comenzar T+2min** y **otra vez en T+20min** (dos fase
 **Fase A — T+2min (verificar asignación):**
 
 ```
-Estoy logueado como COORDINADORA (Maria) en https://app.misterservicerd.com.
+Estoy logueado como COORDINADORA (Maria) en (usuario ya logueado en su tab).
 Ambiente pre-producción.
 
 Angelica (secretaria) acaba de crear una orden nueva y asignarla al técnico Aury.
@@ -141,7 +141,7 @@ Reportá.
 Pegar **al comenzar T+18min**:
 
 ```
-Estoy logueada como OPERARIA (Yohana) en https://app.misterservicerd.com.
+Estoy logueada como OPERARIA (Yohana) en (usuario ya logueado en su tab).
 Ambiente pre-producción.
 
 Aury acaba de cerrar la orden OS-XXXX en su iPad. Necesito que la envíes a
@@ -166,7 +166,7 @@ Reportá.
 Pegar **al comenzar T+12min**:
 
 ```
-Estoy logueada como OPERARIA (Wilainy) en https://app.misterservicerd.com.
+Estoy logueada como OPERARIA (Wilainy) en (usuario ya logueado en su tab).
 Ambiente pre-producción.
 
 Aury acaba de hacer el diagnóstico de la orden OS-XXXX en su iPad. Verificá
@@ -206,9 +206,9 @@ Reportá.
 5. Guardar.
 6. Anotá el OS-XXXX que se generó. **Avisame por WhatsApp/chat ese número.**
 
-### Aury (Técnico, iPad #1) — T+5min
+### Aury (Técnico, MacBook Pro) — T+5min
 
-1. Login como Aury en iPad.
+1. Login como Aury en su MacBook.
 2. Ir a /tecnico.
 3. Buscar la orden OS-XXXX (la que Angelica creó).
 4. Click "Iniciar chequeo".
@@ -220,7 +220,7 @@ Reportá.
 
 **Esperá hasta T+15min para el siguiente paso.**
 
-### Aury (Técnico, iPad #1) — T+15min
+### Aury (Técnico, MacBook Pro) — T+15min (cerrar orden)
 
 1. Volver a OS-XXXX en /tecnico.
 2. Click "Cerrar orden" o "Trabajo realizado".

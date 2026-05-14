@@ -55,7 +55,7 @@ Cada plantilla arranca con el contexto del usuario. Después de pegar el prompt,
 ### ADMIN
 
 ```
-Estoy logueado como ADMIN en https://app.misterservicerd.com.
+Estoy logueado como ADMIN en (usuario ya logueado en su tab).
 Esto es ambiente de pruebas pre-producción (todos los datos son test).
 Probá lo siguiente paso por paso. Reportá en español simple después de cada paso.
 Si algo falla, parate, describime qué viste, y esperá mi respuesta antes de seguir.
@@ -66,7 +66,7 @@ Si algo falla, parate, describime qué viste, y esperá mi respuesta antes de se
 ### COORDINADORA
 
 ```
-Estoy logueado como COORDINADORA en https://app.misterservicerd.com.
+Estoy logueado como COORDINADORA en (usuario ya logueado en su tab).
 Esto es ambiente de pruebas pre-producción.
 La coord puede emitir conduces, ver dashboard, gestionar clientes,
 asignar técnicos. NO puede modificar permisos ni rules.
@@ -79,7 +79,7 @@ Si encontrás un botón o sección que dice "no autorizado", reportámelo.
 ### TÉCNICO
 
 ```
-Estoy logueado como TÉCNICO en https://app.misterservicerd.com.
+Estoy logueado como TÉCNICO en (usuario ya logueado en su tab).
 Esto es ambiente de pruebas pre-producción.
 La interfaz del técnico está en /tecnico (no en /admin). Probá lo siguiente.
 Si caés en /admin algún momento, reportámelo porque el rol técnico nunca
@@ -91,7 +91,7 @@ debería ver esa sección.
 ### OPERARIA
 
 ```
-Estoy logueado como OPERARIA en https://app.misterservicerd.com.
+Estoy logueado como OPERARIA en (usuario ya logueado en su tab).
 La operaria gestiona órdenes, agenda, ruta, comisiones de su grupo
 de técnicos. Puede emitir conduces de garantía si tiene el permiso
 ordenesEliminar = false por defecto.
@@ -104,7 +104,7 @@ que la operaria no debería ver, reportámelo.
 ### SECRETARIA
 
 ```
-Estoy logueado como SECRETARIA en https://app.misterservicerd.com.
+Estoy logueado como SECRETARIA en (usuario ya logueado en su tab).
 La secretaria recibe leads, agenda citas, gestiona la bandeja de
 entrada. Tiene acceso limitado al dashboard.
 Probá lo siguiente paso por paso. Si ves algún flujo financiero
@@ -223,7 +223,7 @@ Reportá.
 NO estoy logueado. Voy a probar el flujo del cliente que reclama garantía.
 
 1. Conseguí un token de garantía válido. Pidemelo si no lo tenés.
-2. Andá a https://app.misterservicerd.com/garantia/<TOKEN>.
+2. Andá a (usuario ya logueado en su tab)/garantia/<TOKEN>.
 3. Reportame qué ves:
    - ¿Aparece el countdown de días restantes?
    - ¿Muestra cliente, equipo, fecha del servicio?

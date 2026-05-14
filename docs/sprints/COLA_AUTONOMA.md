@@ -3,7 +3,52 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-12 por coordinator autónomo (`trabaja`, pasada 14) — SPRINT-155 COMPLETADO (envolver `handleGenerar` del modal Emitir conduce en `runTransaction` para atomicidad cross-collection factura+denorm+orden, hash `3a9618b`, diff +192/-134). Cazadores 7/7 PASS, regression_guardian PASS 9/9, reviewer APPROVED. QA browser pendiente que Jorge ejercite post-deploy. Sub-deuda derivada: SPRINT-156 PENDIENTE (extender cazador P-003 a `src/components/`) agregado al backlog. Próximo ID disponible: SPRINT-157.
+**Última actualización:** 2026-05-13 por Cowork — Test E2E distribuido OS-0055 → CG-00018 completado con 4 Claudes (admin Jorge, coord Maria, operarias Wilainy + Yohana) + 2 manuales (Aury técnico, Angelica secretaria). Resultado: flujo completo funcionó end-to-end. **SPRINT-153 confirmado operativo** (notificación "Conduce CG-00018 emitido" SÍ llegó esta vez, a diferencia de CG-00017 anterior). **SPRINT-154 confirmado operativo** (60 días preseleccionado). **SPRINT-155 runTransaction confirmado operativo** (CG-00018 emitido sin duplicar). Bugs detectados, priorizados:
+
+🔴 **CRÍTICO #1 — Re-abrir SPRINT-153 (bug nota del conduce regresión):** la "Nota para el conduce" SÍ se captura en el modal (47/500 chars confirmado) pero NO aparece en la fila expandida de `/admin/facturas` (búsqueda DOM 0 hits). SPRINT-153 modificó `OrdenResumenLectura.tsx` para renderizar `notaConduce` pero **ese componente se monta en otro lugar**. La fila expandida de `Facturas.tsx` lee otro shape. Touch-list: verificar dónde está el render real de la fila expandida del conduce + agregar render de `factura.notaConduce` ahí.
+
+🔴 **CRÍTICO #2 — SPRINT-159 (firma del cliente):** ya anotado. Bloqueador go-live.
+
+🟡 **MEDIO — SPRINT-161 (NUEVO):** la fase de la orden NO avanza a "Cerrado/Facturada" tras emitir conduce. Queda en "Trabajo Realizado" aunque ya tiene `facturada: true` y `facturaNumero: CG-XXXXX`. Inconsistencia entre pipeline visual y estado real. Touch-list: handler que emite conduce (`ProcesarFacturacionModal.handleGenerar` tx callback) debe agregar `fase: 'cerrado'` al `ordenUpdate` cuando facturada=true.
+
+🟢 **BAJO — SPRINT-160 reclasificado a UX visual (NO bloqueador):** el modal muestra 60 días default pero el conduce final usa 30 días del wizard correctamente (verificado en CG-00018). Es UX confusa para coord/operaria pero funcionalmente correcto. Sigue valiendo el fix (leer `orden.periodoGarantiaDias` como default si existe) pero baja de prioridad.
+
+🟢 **BAJO — SPRINT-162 (NUEVO):** KPI "Conduces Emitidos" del dashboard muestra RD$0 / 0 cuando hay 2 conduces (CG-00017 + CG-00018) emitidos en el mes. "Ingresos del Mes" sí cuenta los 2 (RD$17,000). Inconsistencia interna del dashboard. Probablemente el KPI cuenta solo `estado === 'emitida'` (no pagada) y los dos están en `pagada`. Revisar.
+
+🟢 **DECISIÓN NEGOCIO:** alerta "Aury Mon cerró OS-0055 sin verificación GPS" aparece en dashboard. La app SÍ controla GPS al cerrar pero NO bloquea. ¿Cambiar a bloqueante? Decisión de Jorge.
+
+Próximo ID disponible: SPRINT-163.
+
+**Última actualización previa:** 2026-05-13 por Cowork — Agregado SPRINT-159 (implementar firma del cliente en wizard de cierre del técnico).
+
+**Última actualización previa:** 2026-05-13 por Cowork — Agregado SPRINT-159 (implementar firma del cliente en wizard de cierre del técnico). **Bloqueador para go-live.** El test E2E distribuido sobre OS-0055 reveló que el wizard `/tecnico` "Cerrar Servicio" actual NO tiene paso de firma del cliente. Búsqueda en `src/components/cierre/` y `src/types/index.ts` confirma 0 hits para `firma`/`signature`/`canvas`/`firmaCliente`. El SPRINT-135a-UI implementó wizard nuevo (foto + 3 preguntas + piezas + período de garantía) pero omitió firma. En RD el técnico va a casa del cliente y el cliente firma una hoja de servicio como prueba de aceptación — la app digital debe replicar eso. Sin firma, el conduce de garantía pierde valor legal y no hay defensa documentada si cliente reclama. Touch-list inicial: librería tipo `react-signature-canvas` o canvas HTML5 + nuevo step en wizard + persistir firma como blob en Storage o base64 en `cierreServicio.firmaClienteUrl` + render en detalle de orden + en PDF del conduce. Riesgo medio: agrega Storage upload y campo nuevo en `cierreServicio`. archivist PRE-CHANGE obligatorio. Próximo ID disponible: SPRINT-160.
+
+**Última actualización previa:** 2026-05-13 por Cowork — Agregado SPRINT-158 (3 hallazgos del test E2E sobre OS-0055 reportados por Claude del sidepanel de Wilainy):
+1. **No hay notificación "cotizacion_lista" / "diagnostico_completado"** cuando técnico sugiere precio. Solo se dispara "tecnico_inicio_chequeo". La operaria solo se entera si entra a mirar manualmente. Verificar si los tipos existen en `src/types/index.ts` y agregar el `crearNotificacion` correspondiente al handler donde Aury submite el precio sugerido.
+2. **La fase NO avanza automáticamente a "en_cotizacion"** cuando el técnico sugiere precio + agrega nota. Queda en "en_diagnostico" hasta que la operaria aprueba (entonces pasa a "aprobado"). Falta transición intermedia. Verificar el handler que persiste el precio sugerido del técnico — debería actualizar `orden.fase = 'en_cotizacion'`.
+3. **Chip de operaria en card de `/admin/ordenes` muestra "Op: Operaria"** (string literal, no el nombre real "Wilainy"). Probablemente la card lee `operariaRol` en vez de `operariaNombre`, o `operariaNombre` no está denormalizado. Buscar en `OrdenCard.tsx` o componente equivalente.
+
+**Hallazgos adicionales del mismo test E2E reportados por Yohana (operaria PC #3, vista en /admin/ordenes con modo apoyo):**
+4. **Foto del cierre del técnico NO se muestra en modal admin de la orden** (sí solo la del chequeo inicial). Los datos están en `cierreServicio.fotoCierre` (verificado en SPRINT-148) pero el modal de OrdenDetalle parece no leer ese campo. Inconsistencia: en `/admin/facturas` (fila expandida del conduce, post-SPRINT-148) sí se ve la foto del cierre; en el modal de la orden no.
+5. **Período de garantía NO se muestra en modal admin de la orden.** Mismo patrón que bug 4: el dato está (`orden.periodoGarantiaDias = 30`, verificado) pero el modal no lo renderiza. En `/admin/facturas` sí aparece (post-fix SPRINT-153). El modal de la orden necesita fix análogo.
+6. **El chip "Operaria" muestra "Angelica Secretaria"** (la CREADORA de la orden) en lugar de "Wilainy" (la operaria del grupo). Es el mismo bug que vio Wilainy pero confirmado desde otro rol. Posiblemente el campo `operariaNombre` esté denormalizando mal: copia el nombre de la persona que CREÓ la orden en lugar de la operaria asignada al técnico.
+
+**Hallazgos adicionales reportados por Wilainy (T+18, registro de pago + envío a conduce):**
+7. **Timeout 30s CDP al click "Enviar a conduce"**. El backend completó la operación pero la UI tardó mucho en confirmar. Verificar performance del handler `handleEnviarAConduce` (o equivalente) — puede haber un `await` largo, suscripción bloqueante o query sin índice.
+8. **Alerta interesante: "Aury Mon cerró OS-0055 sin verificación GPS"** aparece en dashboard. La app SÍ controla GPS en cierre pero NO es bloqueante. Revisar si es alerta informativa o si debería forzar GPS (decisión de negocio).
+9. **Falta notificación en TODOS estos eventos confirmados desde 3 roles (Maria, Wilainy, Yohana):**
+   - Aprobación de precio (operaria aprueba) — no notifica al técnico ni al coord.
+   - Cierre del servicio (técnico cierra wizard) — no notifica a operaria ni coord.
+   - Pago registrado — no notifica al admin/coord.
+   - Envío a facturación — no notifica a admin/coord (en teoría SPRINT-153 debería haber cubierto algo de esto, verificar regresión).
+
+Tipo de cambio para los 9 hallazgos combinados: principalmente cosmético + agregar render + agregar notificaciones. NO toca lógica de negocio ni rules. Riesgo bajo-medio. El sprint puede dividirse en sub-sprints si toca muchos archivos.
+
+Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notificación `orden_asignada` cuando secretaria crea orden — sigue PENDIENTE). Próximo ID disponible: SPRINT-159.
+
+**Última actualización previa:** 2026-05-13 por Cowork — Agregado SPRINT-157 (disparar notificación `orden_asignada` cuando secretaria crea orden + asigna técnico). Bug detectado por Claude del sidepanel de Maria durante test E2E distribuido 2026-05-13 sobre OS-0055: el tipo `'orden_asignada'` existe en `src/types/index.ts:1742` pero NINGÚN `crearNotificacion` en el codebase lo emite. Resultado: Maria no recibe notificación cuando Angelica crea OS-0055 + asigna a Aury (campanita tiene 50 notis acumuladas de otros tipos pero ninguna para OS-0055). Touch-list inicial probable: `useOrdenCreateForm.ts` (donde se hace `addDoc('ordenes_servicio')`) + agregar `crearNotificacion({ tipo: 'orden_asignada', userId: <coord>.uid })` para coordinadores activos + opcional al técnico asignado. Riesgo bajo: solo agrega notificaciones, no toca lógica de orden. Próximo ID disponible: SPRINT-158.
+
+**Última actualización previa:** 2026-05-12 por coordinator autónomo (`trabaja`, pasada 14) — SPRINT-155 COMPLETADO (envolver `handleGenerar` del modal Emitir conduce en `runTransaction` para atomicidad cross-collection factura+denorm+orden, hash `3a9618b`, diff +192/-134). Cazadores 7/7 PASS, regression_guardian PASS 9/9, reviewer APPROVED. QA browser pendiente que Jorge ejercite post-deploy. Sub-deuda derivada: SPRINT-156 PENDIENTE (extender cazador P-003 a `src/components/`) agregado al backlog. Próximo ID disponible: SPRINT-157.
 
 **Última actualización previa:** 2026-05-12 por coordinator (`/equipo` + `trabaja`, pasada 13) — SPRINT-154 COMPLETADO (default `tiempoGarantiaDias=60` preseleccionado en modal Emitir conduce, 1 archivo / 3 líneas funcionales, hash `5654971`). Generado ad-hoc tras auditoría estática post-SPRINT-151 que detectó gap entre consigna QA explícita de Jorge ("asegurate que `tiempoGarantiaDias` esté en 60 default") y el state inicial `null` que dejaba el botón Generar deshabilitado hasta clickear preset. Cazadores 7/7 PASS. Typecheck PASS. Push verificado. Plan QA manual completo agregado en `docs/sprints/QA_SPRINT-151_modal_conduce.md` (generado por agente qa). Agregado además SPRINT-155 PENDIENTE (deuda transaccionalidad cross-collection en `handleGenerar` del mismo modal — hallazgo lateral del audit estático, sub-regla CLAUDE.md "Mutaciones cross-collection deben ir en un solo `runTransaction`").
 
