@@ -294,14 +294,18 @@ export default function Dashboard() {
     [ordenes]
   );
 
-  // KPI 3 - Conduces emitidos
-  const facturasEmitidas = useMemo(
-    () => facturas.filter(f => f.estado === 'emitida'),
-    [facturas]
+  // KPI 3 - Conduces emitidos en el mes (independiente del estado de pago)
+  // SPRINT-162: tras flujo SPRINT-151 los conduces pasan directo a 'pagada' al
+  // verificar pago en el modal Emitir; filtrar por estado='emitida' daba 0.
+  // Ahora cuenta TODAS las facturas creadas en el mes en curso (emitidas + pagadas).
+  // El KPI "Ingresos del Mes" (abajo) sigue contando solo pagadas — semántica distinta.
+  const facturasEmitidasMes = useMemo(
+    () => facturas.filter(f => f.fechaEmision && f.fechaEmision >= inicioMes),
+    [facturas, inicioMes]
   );
-  const totalFacturasEmitidas = useMemo(
-    () => facturasEmitidas.reduce((s, f) => s + (f.total || 0), 0),
-    [facturasEmitidas]
+  const totalFacturasEmitidasMes = useMemo(
+    () => facturasEmitidasMes.reduce((s, f) => s + (f.total || 0), 0),
+    [facturasEmitidasMes]
   );
 
   // KPI 4 - Ingresos mes
@@ -630,8 +634,8 @@ export default function Dashboard() {
         />
         <KpiCard
           title="Conduces Emitidos"
-          value={formatMoneda(totalFacturasEmitidas)}
-          subtitle={`${facturasEmitidas.length} conduce${facturasEmitidas.length !== 1 ? 's' : ''}`}
+          value={formatMoneda(totalFacturasEmitidasMes)}
+          subtitle={`${facturasEmitidasMes.length} conduce${facturasEmitidasMes.length !== 1 ? 's' : ''}`}
           icon={<Receipt size={22} />}
           color="bg-purple-500"
           onClick={() => navigate('/admin/facturas')}
