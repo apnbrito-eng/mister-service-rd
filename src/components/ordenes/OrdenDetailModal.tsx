@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, MapPin, Edit2, AlertTriangle, XCircle, Package, RotateCcw, TrendingUp } from 'lucide-react';
+import { Phone, MapPin, Edit2, AlertTriangle, XCircle, Package, RotateCcw, TrendingUp, Camera, CheckCircle2, Shield, FileSignature } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrdenServicio, Usuario, StandbyPieza } from '../../types';
@@ -716,6 +716,141 @@ export default function OrdenDetailModal({
         orden={orden}
         userProfile={userProfile}
       />
+
+      {/* Cierre del servicio — foto + firma + período de garantía + checks.
+          SPRINT-158a (2026-05-14, bugs 4+5 del SPRINT-158): el modal admin
+          de la orden no mostraba foto de cierre ni período de garantía,
+          aunque los datos existen en Firestore y se muestran en /admin/facturas.
+          Render inline (NO se reusa OrdenResumenLectura para no duplicar
+          equipo/falla/notas que el modal ya muestra en otras secciones). */}
+      {(orden.cierreServicio?.fotoCierre?.url ||
+        orden.cierreServicio?.firmaClienteUrl ||
+        typeof orden.periodoGarantiaDias === 'number' ||
+        typeof orden.cierreServicio?.equipoFunciona === 'boolean' ||
+        typeof orden.cierreServicio?.clienteSatisfecho === 'boolean' ||
+        typeof orden.cierreServicio?.revisoConexiones === 'boolean') && (() => {
+        const cierre = orden.cierreServicio;
+        const periodoDias = typeof orden.periodoGarantiaDias === 'number'
+          ? orden.periodoGarantiaDias
+          : null;
+        const venc = orden.garantiaVencimiento
+          ? (orden.garantiaVencimiento instanceof Date
+              ? orden.garantiaVencimiento
+              : typeof (orden.garantiaVencimiento as { toDate?: () => Date }).toDate === 'function'
+                ? (orden.garantiaVencimiento as { toDate: () => Date }).toDate()
+                : null)
+          : null;
+        const diasRestantes = venc
+          ? Math.ceil((venc.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          : null;
+        return (
+          <div>
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <CheckCircle2 size={14} /> Cierre del servicio
+            </h3>
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 space-y-3">
+              {/* Checks del cierre */}
+              {(typeof cierre?.equipoFunciona === 'boolean' ||
+                typeof cierre?.clienteSatisfecho === 'boolean' ||
+                typeof cierre?.revisoConexiones === 'boolean') && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+                  {typeof cierre?.equipoFunciona === 'boolean' && (
+                    <span className={`inline-flex items-center gap-1 ${cierre.equipoFunciona ? 'text-emerald-700' : 'text-red-700'}`}>
+                      {cierre.equipoFunciona ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                      <span>Equipo funciona: {cierre.equipoFunciona ? 'Sí' : 'No'}</span>
+                    </span>
+                  )}
+                  {typeof cierre?.clienteSatisfecho === 'boolean' && (
+                    <span className={`inline-flex items-center gap-1 ${cierre.clienteSatisfecho ? 'text-emerald-700' : 'text-red-700'}`}>
+                      {cierre.clienteSatisfecho ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                      <span>Cliente satisfecho: {cierre.clienteSatisfecho ? 'Sí' : 'No'}</span>
+                    </span>
+                  )}
+                  {typeof cierre?.revisoConexiones === 'boolean' && (
+                    <span className={`inline-flex items-center gap-1 ${cierre.revisoConexiones ? 'text-emerald-700' : 'text-red-700'}`}>
+                      {cierre.revisoConexiones ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
+                      <span>Revisó conexiones: {cierre.revisoConexiones ? 'Sí' : 'No'}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Foto del cierre */}
+              {cierre?.fotoCierre?.url && (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Foto del cierre
+                  </p>
+                  <a
+                    href={cierre.fotoCierre.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block"
+                    title="Ver foto completa"
+                  >
+                    <img
+                      src={cierre.fotoCierre.url}
+                      alt="Foto del cierre"
+                      className="w-32 h-32 rounded-lg object-cover border border-gray-200 hover:opacity-90 transition-opacity"
+                    />
+                  </a>
+                  <div className="mt-1 text-[11px] text-gray-600">
+                    {typeof cierre.fotoCierre.distanciaCliente === 'number' && (
+                      <span className={cierre.fotoCierre.distanciaCliente > 500 ? 'text-orange-600' : 'text-green-600'}>
+                        <Camera size={11} className="inline mr-1" />
+                        A {cierre.fotoCierre.distanciaCliente}m del cliente
+                        {cierre.fotoCierre.gpsVerificado === false && ' · GPS no verificado'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Firma del cliente (SPRINT-159) */}
+              {cierre?.firmaClienteUrl && (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Firma del cliente
+                  </p>
+                  <a
+                    href={cierre.firmaClienteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 underline"
+                  >
+                    <FileSignature size={13} />
+                    Ver firma del cliente
+                  </a>
+                </div>
+              )}
+
+              {/* Período de garantía */}
+              {periodoDias !== null && (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                    Período de garantía
+                  </p>
+                  <div className="flex items-center gap-1.5 text-sm text-gray-800">
+                    <Shield size={14} className="text-gray-500" />
+                    <span className="font-medium">{periodoDias} días</span>
+                    {venc && (
+                      <>
+                        <span className="text-gray-400">·</span>
+                        <span className="text-gray-600">vence el {formatFecha(venc)}</span>
+                        {diasRestantes !== null && (
+                          <span className={`text-[11px] font-medium ${diasRestantes >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            ({diasRestantes >= 0 ? `faltan ${diasRestantes} días` : `venció hace ${Math.abs(diasRestantes)} días`})
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Piezas utilizadas — resumen compacto (link al detalle para ver/validar) */}
       {orden.cierreServicio?.piezasUsadas && orden.cierreServicio.piezasUsadas.length > 0 && (() => {
