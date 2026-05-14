@@ -5,6 +5,80 @@
 
 ---
 
+## 2026-05-14 — interactivo end-to-end: SPRINT-160 (default tiempoGarantiaDias hereda valor del wizard)
+
+### Contexto
+
+UX visual reclasificada de QA E2E 2026-05-13. Wizard del técnico capturó 30 días en OS-0055 pero modal Emitir conduce mostró 60 default (introducido por SPRINT-154). Maria emitió pensando que 60 era correcto. Verificado en CG-00018 que los datos finales fueron correctos (lógica de submit ya respetaba `orden.periodoGarantiaDias`). Funcionalmente OK, UX confusa.
+
+### Archivist PRE-CHANGE
+
+- `git log --oneline -10 -- src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx`:
+  - `4015fe1` SPRINT-161 fase orden avanza a 'cerrado' (tocó tx callback, no presets).
+  - `3a9618b` SPRINT-155 envolver handleGenerar en runTransaction (no toca UI).
+  - `053c137` SPRINT-152 helper text checkbox Pago verificado (cosmético).
+  - `79c7fcc` SPRINT-153 nota render + período fallback + notif (no toca presets).
+  - `5654971` SPRINT-154 default tiempoGarantiaDias=60 — el sprint que ahora refinamos.
+  - `863e804` SPRINT-151 split (refactor base).
+- Sin postmortems pendientes. Sin recurrencias previas sobre `tiempoGarantiaDias`.
+- Riesgo: bajo. Cambio cosmético + 1 línea de lógica. No toca submit ni rules.
+
+### Builder
+
+1 archivo modificado: `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx`.
+
+**Cambio 1 — Comentario actualizado en state inicial (líneas 125-133):**
+- Documenta que `60` se mantiene como state inicial porque el componente puede montarse sin `orden`. El effect aplica el valor real cuando llega `orden`.
+
+**Cambio 2 — Effect que monta orden (líneas 195-199):**
+- Reemplaza `setTiempoGarantiaDias(60)` por `setTiempoGarantiaDias(orden.periodoGarantiaDias ?? 60)`.
+- Si la orden trae `periodoGarantiaDias` del wizard (30, 90, etc), se respeta; sino fallback a 60 (default actual).
+- El effect del reset `orden=null` mantiene `60` (estado limpio entre aperturas).
+
+**Cambio 3 — Leyenda visual condicional (líneas 1329-1334):**
+- Bajo el grid de presets, render condicional: si `orden.periodoGarantiaDias != null` AND `tiempoGarantiaDias === orden.periodoGarantiaDias`, mostrar `<p>` italic ámbar "Sugerido desde wizard del técnico (X días)".
+- Si el usuario cambia manualmente el preset (ej: clickea 60 cuando wizard dijo 30), la leyenda desaparece — comunicación honesta, sin mentir al operador.
+
+### Tester
+
+- `npm run lint` sobre archivo modificado: PASS (0 warnings).
+- `npx tsc --noEmit`: PASS (sin output = sin errores).
+- `npm run check:regression`: 8/8 cazadores PASS (P-001 a P-007 + P-009).
+
+### Regression guardian
+
+- Skipped (sprint cosmético, no toca rules/services/context según sub-regla del CLAUDE.md). Cambio aislado a 1 componente de UI.
+
+### Reviewer
+
+- State inicial `60` justificado (componente puede montarse sin orden).
+- Effect reset `orden=null` mantiene 60 — correcto (estado limpio).
+- Effect orden presente usa `?? 60` (nullish coalescing) — respeta `0` técnicamente, pero el wizard del técnico no permite 0.
+- Leyenda con doble guard (`!= null` AND `=== orden.periodoGarantiaDias`) — desaparece si el usuario cambia manualmente. UX honesta.
+- Borrador localStorage prevalece sobre wizard si existe — correcto, es la última intención del usuario.
+- Submit (`handleGenerar`) sin cambios — sigue usando `tiempoGarantiaDias` del state local, ahora derivado del wizard.
+- APPROVED.
+
+### Commit + push
+
+- Hash: `7cae400`.
+- Pre-commit hook: PASS (typecheck + 8/8 cazadores + lint staged).
+- `git push origin main`: OK (`77fbbf1..7cae400`).
+
+### Devops
+
+- `version.json` en producción aún `77fbbf1` al momento del check (~10s post-push). Build de `7cae400` en cola/building. Banner de nueva versión avisará a operadores activos cuando termine.
+
+### Tiempo total
+
+~10 minutos.
+
+### Archivos modificados
+
+- `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` (+14 / −2)
+
+---
+
 ## 2026-05-14 — interactivo end-to-end: SPRINT-158a (render foto cierre + período garantía en modal admin) + división de SPRINT-158 en 5 sub-sprints
 
 ### Contexto

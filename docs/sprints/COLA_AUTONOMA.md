@@ -502,8 +502,8 @@ Los tipos de notificación posiblemente ya existen en `src/types/index.ts:1742-.
 
 ### SPRINT-160 — Modal Emitir conduce muestra 60 default cuando wizard tiene otro valor (UX visual)
 
-**Estado:** PENDIENTE
-**Prioridad:** 🟢 BAJA — UX confusa pero funcionalmente correcto. Reclasificado de bug a UX en QA E2E 2026-05-13.
+**Estado:** COMPLETADO 2026-05-14 — hash `7cae400`. Default ahora deriva de `orden.periodoGarantiaDias ?? 60` en el effect que monta orden. Leyenda visual "Sugerido desde wizard del técnico (X días)" aparece cuando el preset activo coincide con el del wizard, desaparece si el usuario cambia manualmente. NO toca lógica de submit ni wizard del técnico. Cazadores 8/8 PASS.
+**Prioridad original:** 🟢 BAJA — UX confusa pero funcionalmente correcto. Reclasificado de bug a UX en QA E2E 2026-05-13.
 **Origen:** QA E2E distribuido 2026-05-13. El wizard del técnico capturó período = 30 días para OS-0055. Modal Emitir conduce mostró 60 default (SPRINT-154). Maria emitió pensando que 60 estaba correcto — el conduce final usó 30 correctamente (verificado en CG-00018) porque al click "Generar" se respeta `orden.periodoGarantiaDias`. UX confusa pero datos correctos.
 
 #### Touch-list
