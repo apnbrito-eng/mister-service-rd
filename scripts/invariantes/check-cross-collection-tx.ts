@@ -86,11 +86,12 @@ function splitFunctions(content: string): FunctionBlock[] {
     }
 
     // ¿Comentario @safe-non-tx en líneas previas?
-    // Ventana ampliada a 10 líneas en SPRINT-156: la allowlist de
-    // FacturaCrearModal.handleSubmit requiere un comentario explicativo
-    // multilínea (qué colecciones, por qué best-effort, referencia al
-    // sprint follow-up). 5 líneas era demasiado restrictivo y forzaba
-    // a comprimir la justificación.
+    // Ventana ampliada a 10 líneas en SPRINT-156 para permitir comentarios
+    // multilínea explicativos (qué colecciones, por qué best-effort,
+    // referencia a sprint follow-up). Allowlist viviente actual (post
+    // SPRINT-157 que cerró FacturaCrearModal.handleSubmit): 4 entradas
+    // distribuidas en src/pages/PersonalPage.tsx (x2), src/pages/Cotizaciones.tsx,
+    // y src/components/personal/ModalConfirmarEliminar.tsx (JSDoc no-op).
     const prevCtx = lines.slice(Math.max(0, i - 10), i).join('\n');
     const safeNonTx = /@safe-non-tx:/.test(prevCtx);
 

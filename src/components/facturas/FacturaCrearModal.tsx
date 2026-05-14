@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { addDoc, collection, doc, Timestamp, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, Timestamp, serverTimestamp, runTransaction } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { db } from '../../firebase/config';
 import {
@@ -154,15 +154,6 @@ export default function FacturaCrearModal({
     return { prefillTelefono: '', prefillNombre: busq };
   }, [form.clienteBusqueda]);
 
-  // @safe-non-tx: handleSubmit muta `facturas` (addDoc + updateDoc de denorm
-  // comisiones) y `auditoria_admin` (addDoc best-effort de override modalidad,
-  // deliberadamente fire-and-forget sin await — comentario línea ~357). El
-  // audit log es no-bloqueante por diseño UX: la factura es la operación
-  // principal y un fallo del audit no debe romper la emisión. Refactor a
-  // runTransaction queda como SPRINT-157 follow-up (paralelo al SPRINT-155
-  // que ya refactorizó el handler hermano `handleGenerar` del modal
-  // ProcesarFacturacionModal). Cazador P-003 detectó esto al ampliar scope
-  // a src/components en SPRINT-156.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const clienteNombreFinal = form.cliente?.nombre || form.clienteBusqueda.trim();
@@ -185,6 +176,7 @@ export default function FacturaCrearModal({
 
     setSaving(true);
     try {
+      // ─── PRE-tx: contador transaccional (tiene runTransaction interno) ───
       const numero = await siguienteNumeroFactura();
 
       // Snapshot defensivo del tipo de cliente al momento de emitir (security #2).
@@ -218,15 +210,53 @@ export default function FacturaCrearModal({
       }
 
       // Strip undefined defensivo (Firestore rechaza undefined).
-      const docLimpio = Object.fromEntries(
+      const facturaLimpia = Object.fromEntries(
         Object.entries(docData).filter(([, v]) => v !== undefined),
       );
-      const facturaRef = await addDoc(collection(db, 'facturas'), docLimpio);
 
-      // Comisiones por items (best-effort, no bloquea emisión si falla).
+      // SPRINT-157: handleSubmit envuelto en runTransaction para atomicidad
+      // cross-collection (factura + denorm comisiones). Paralelo al SPRINT-155
+      // que refactorizó el handler hermano `handleGenerar` del modal
+      // ProcesarFacturacionModal. Patrón alineado con marcarClienteEnviado
+      // (a38eb89) y marcarOrdenReactivada (800e0b4).
+      //
+      // Lo que vive DENTRO de la tx:
+      //   - tx.set(facturaRef, facturaLimpia) — crea conduce manual.
+      //   - tx.update(facturaRef, denormParaTx) — denormalización comisiones
+      //     (si registrarComisionesPorItems generó payload PRE-tx).
+      //
+      // Lo que vive FUERA (PRE-tx):
+      //   - siguienteNumeroFactura() — tiene runTransaction interno propio
+      //     (anidación prohibida).
+      //   - registrarComisionesPorItems — helper externo que escribe a
+      //     `comisiones`/`auditoria`. Tolera órdenes sintéticas
+      //     (`factura-manual-{id}`). Si su tx ok pero la nuestra aborta,
+      //     queda comisión huérfana; riesgo aceptado (alternativas más
+      //     costosas que la probabilidad real entre escrituras consecutivas).
+      //
+      // Lo que vive FUERA (POST-tx, best-effort con try/catch):
+      //   - addDoc audit `override_modalidad_precio_factura` — fallo log warn,
+      //     no aborta el flujo principal (diseño UX, era fire-and-forget).
+      //
+      // Idempotencia: NO hay orden para gatear con `facturada===true` (factura
+      // manual, no conduce de orden). El doble-click ya está bloqueado por
+      // state `saving` + el contador atómico `siguienteNumeroFactura` genera
+      // numeros únicos. No agregamos lookup por `numeroFactura` (paranoia
+      // innecesaria).
+
+      // Pre-generar la ref de factura (sin escribir aún — la escritura ocurre
+      // dentro del runTransaction más abajo).
+      const facturaRef = doc(collection(db, 'facturas'));
+
+      // ─── Comisiones por items: helper externo PRE-tx, captura denorm ───
       // Como este flujo NO tiene una orden vinculada en Firestore, sintetizamos
       // un objeto `OrdenServicio`-like mínimo para el helper. registrarComisionesPorItems
-      // tolera campos faltantes (los maneja como '' / undefined).
+      // tolera campos faltantes (los maneja como '' / undefined) y skipea el
+      // updateDoc de la orden sintética (line 438-445 en comisiones.ts).
+      //
+      // SPRINT-157: el payload de denormalización se captura acá y se aplica
+      // dentro del runTransaction como tx.update(facturaRef, denormParaTx).
+      let denormParaTx: Record<string, unknown> | null = null;
       try {
         const ordenSintetica = {
           id: `factura-manual-${facturaRef.id}`,
@@ -262,79 +292,93 @@ export default function FacturaCrearModal({
           // Audit fix C5: guarda anterior `result.comisiones.length > 0`
           // saltaba la denormalización si todos los técnicos tenían 0% pero
           // hubo cleanup de huérfanas. Ahora denormalizamos siempre que haya
-          // actividad y wrap defensivo (try/catch dentro del try mayor) para
-          // no bloquear con toast.error si solo falla la sync del resumen.
+          // actividad. SPRINT-157: la denorm entra a la tx, así que si falla,
+          // toda la tx aborta (comportamiento más estricto que el try/catch
+          // interno previo, que solo logueaba).
           const tuvoActividad =
             result.comisiones.length > 0 ||
             result.preservadasPorLiquidacion > 0 ||
             result.eliminadasHuerfanas > 0;
           if (tuvoActividad) {
-            try {
-              let denorm: Record<string, unknown> | null = null;
-              if (result.comisiones.length === 1) {
-                // N=1: campos completos (compatibles con el render legacy).
-                denorm = {
-                  comisionTecnicoId: result.comisiones[0].tecnicoId,
-                  comisionTecnicoNombre: result.comisiones[0].tecnicoNombre,
-                  comisionTecnicoMonto: result.comisiones[0].monto,
-                  comisionTecnicoPorcentaje: result.comisiones[0].porcentaje,
-                  comisionRegistroId: result.comisiones[0].comisionId,
-                };
-              } else if (result.comisiones.length > 1) {
-                // N>1: agregado. El render expande el desglose por técnico
-                // a partir de los items (`tecnicoId` por línea).
-                denorm = {
-                  comisionTecnicoId: '',
-                  comisionTecnicoNombre: 'N técnicos',
-                  comisionTecnicoMonto: result.totalAgregado,
-                  comisionTecnicoPorcentaje: 0,
-                };
-              } else {
-                // Caso edge: tuvoActividad === true pero comisiones.length === 0.
-                // En el flujo manual esto es muy raro (la factura recién se creó,
-                // no debería tener huérfanas previas), pero cubrimos por simetría
-                // con ProcesarFacturacionModal. Sobrescribir con shape vacío
-                // refleja el estado real post-recálculo.
-                console.warn(
-                  '[factura-crear] tuvoActividad sin comisiones nuevas, denormalizando con shape vacío',
-                  {
-                    facturaId: facturaRef.id,
-                    totalAgregado: result.totalAgregado,
-                    preservadas: result.preservadasPorLiquidacion,
-                    eliminadas: result.eliminadasHuerfanas,
-                  },
-                );
-                denorm = {
-                  comisionTecnicoId: '',
-                  comisionTecnicoNombre: '—',
-                  comisionTecnicoMonto: 0,
-                  comisionTecnicoPorcentaje: 0,
-                };
-              }
-              if (denorm) {
-                // Strip undefined defensivo (Firestore rechaza undefined).
-                const denormLimpio = Object.fromEntries(
-                  Object.entries(denorm).filter(([, v]) => v !== undefined),
-                );
-                await updateDoc(doc(db, 'facturas', facturaRef.id), denormLimpio);
-              }
-            } catch (err) {
-              console.error('[factura-crear] error denormalizando comisiones:', err);
-              // NO bloquear emisión — la factura ya se creó, audit queda en
-              // colección comisiones. Toast de warning para verificación manual.
-              toast(
-                'Conduce emitido. Las comisiones se guardaron pero hubo problema sincronizando el resumen. Verificá en Comisiones.',
-                { duration: 7000, icon: '!' },
+            let denorm: Record<string, unknown> | null = null;
+            if (result.comisiones.length === 1) {
+              // N=1: campos completos (compatibles con el render legacy).
+              denorm = {
+                comisionTecnicoId: result.comisiones[0].tecnicoId,
+                comisionTecnicoNombre: result.comisiones[0].tecnicoNombre,
+                comisionTecnicoMonto: result.comisiones[0].monto,
+                comisionTecnicoPorcentaje: result.comisiones[0].porcentaje,
+                comisionRegistroId: result.comisiones[0].comisionId,
+              };
+            } else if (result.comisiones.length > 1) {
+              // N>1: agregado. El render expande el desglose por técnico
+              // a partir de los items (`tecnicoId` por línea).
+              denorm = {
+                comisionTecnicoId: '',
+                comisionTecnicoNombre: 'N técnicos',
+                comisionTecnicoMonto: result.totalAgregado,
+                comisionTecnicoPorcentaje: 0,
+              };
+            } else {
+              // Caso edge: tuvoActividad === true pero comisiones.length === 0.
+              // En el flujo manual esto es muy raro (la factura recién se creó,
+              // no debería tener huérfanas previas), pero cubrimos por simetría
+              // con ProcesarFacturacionModal. Sobrescribir con shape vacío
+              // refleja el estado real post-recálculo.
+              console.warn(
+                '[factura-crear] tuvoActividad sin comisiones nuevas, denormalizando con shape vacío',
+                {
+                  facturaId: facturaRef.id,
+                  totalAgregado: result.totalAgregado,
+                  preservadas: result.preservadasPorLiquidacion,
+                  eliminadas: result.eliminadasHuerfanas,
+                },
+              );
+              denorm = {
+                comisionTecnicoId: '',
+                comisionTecnicoNombre: '—',
+                comisionTecnicoMonto: 0,
+                comisionTecnicoPorcentaje: 0,
+              };
+            }
+            if (denorm) {
+              denormParaTx = Object.fromEntries(
+                Object.entries(denorm).filter(([, v]) => v !== undefined),
               );
             }
           }
         }
       } catch (comErr) {
         console.error('Error registrando comisiones por items:', comErr);
-        toast.error('Conduce creado, pero hubo problema registrando comisiones. Revisar logs.');
+        // SPRINT-157: el helper falla PRE-tx ahora — la factura aún no se
+        // creó. Mostramos warn al usuario pero no abortamos: la tx más abajo
+        // creará el doc factura sin denorm (denormParaTx queda null). Si la
+        // tx también falla, su catch mostrará el toast.error definitivo. Si
+        // la tx ok, el toast.success se sobreescribe a este.
+        toast('Hubo problema preparando comisiones. La factura se crea igual; verificá en Comisiones.', {
+          duration: 7000,
+          icon: '!',
+        });
       }
 
-      // Audit log de override de modalidad (security #1, best-effort).
+      // ─── Transacción atómica: crear factura + denorm comisiones ───
+      try {
+        await runTransaction(db, async (tx) => {
+          // 1. Crear factura con id pre-generado.
+          tx.set(facturaRef, facturaLimpia);
+          // 2. Denormalización de comisiones (si helper PRE-tx generó payload).
+          if (denormParaTx) {
+            tx.update(facturaRef, denormParaTx);
+          }
+        });
+      } catch (txErr) {
+        console.error('[factura-crear] runTransaction crear conduce manual falló:', txErr);
+        toast.error('Error al crear el conduce de garantía');
+        setSaving(false);
+        return;
+      }
+
+      // ─── POST-tx: audit log override modalidad (best-effort, no bloquea) ───
       // Una entry por cada línea overrideada respecto al default que dictaba
       // el tipo del cliente. NO bloquea el flujo principal.
       try {
