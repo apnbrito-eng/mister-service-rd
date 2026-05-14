@@ -5,6 +5,96 @@
 
 ---
 
+## 2026-05-13 — interactivo end-to-end: SPRINT-157 (handleSubmit FacturaCrearModal → runTransaction) COMPLETADO
+
+### Contexto
+
+Sprint follow-up de SPRINT-156 (cazador P-003 ampliado a `src/components/` detectó 1 VP en `FacturaCrearModal.handleSubmit`). Paralelo a SPRINT-155 (`ProcesarFacturacionModal.handleGenerar`) — misma forma estructural, diferente modal. Deuda transaccional cross-collection: `addDoc(facturas)` + `updateDoc(denorm)` + `addDoc(auditoria_admin, fire-and-forget)` secuenciales sin tx → si la denorm fallaba, factura quedaba creada sin comisión denormalizada.
+
+Jorge pidió end-to-end interactivo (no `trabaja`) por ser handler de dinero. Patrón ya validado en SPRINT-155 → ejecución más directa.
+
+### Colisión de ID detectada
+
+Cowork escribió el 2026-05-13 (después de redactar el SPRINT-157 original que yo procesé) OTRO sprint reusando el mismo ID "SPRINT-157" para "notificación orden_asignada". El header de la cola del 2026-05-13 menciona "SPRINT-157" en 2 párrafos distintos refiriendo a 2 sprints distintos. Mi tarea explícita de Jorge era el del runTransaction (la sección `###` real en línea 123). La otra entrada queda como deuda re-numerable (sugerido SPRINT-163).
+
+### Archivist PRE-CHANGE
+
+- Historial: `3cc01e8` (SPRINT-156) agregó allowlist `@safe-non-tx:` apuntando a este sprint. `9a61e7d` (C5) tocó denormalización defensiva — preservar lógica `tuvoActividad`/`length===1/>1/===0`. `170b5a3` split original del modal.
+- Postmortems aplicables: ninguno directo. Sprint preventivo (deuda P-003).
+- Patrones P-XXX: P-003 central (cazado por SPRINT-156); P-001 hallazgo lateral (audit log usa `userProfile?.id` en vez de `currentUser.uid`) — NO arreglado acá, scope quirúrgico.
+- Gotchas críticos: (1) `siguienteNumeroFactura()` PRE-tx (tx interno); (2) `registrarComisionesPorItems` PRE-tx, tolera órdenes sintéticas `factura-manual-{id}`; (3) `facturaRef = doc(collection(db, 'facturas'))` PRE-tx, escritura dentro de tx; (4) **NO hay orden vinculada → NO `tx.get` + idempotencia** — el flag `saving` + contador atómico bastan; (5) audit log override modalidad queda POST-tx (era fire-and-forget intencional).
+- Patrón de referencia: `3a9618b` SPRINT-155 (template directo).
+
+### Restricciones (todas honradas)
+
+- NO se tocó `firestore.rules` (cazador P-005 PASS).
+- NO se modificaron helpers de comisión.
+- NO se cambió UI ni copy user-facing del modal (sólo se ajustó copy de un toast de error que ahora dice "factura se crea igual" en lugar de "factura creada" — refleja el momento real post-refactor: helper falla ANTES de crear la factura).
+- NO hay borrador localStorage en `FacturaCrearModal` (verificado con grep) — no requiere guard.
+- archivist PRE-CHANGE: ejecutado.
+- mejora_continua (validar coherencia con SPRINT-155): PASS — patrón estructural idéntico, subset estricto (sin update orden, sin notificaciones).
+- regression_guardian: PASS.
+- reviewer: APPROVED (1 fix aplicado — copy del toast de error de comisiones).
+
+### Cambios aplicados
+
+**Commit:** `8b783ce` (`refactor(modal-factura): SPRINT-157 envolver handleSubmit en runTransaction`).
+
+**Diff: +124/-79, 2 archivos.**
+
+#### `src/components/facturas/FacturaCrearModal.tsx`
+
+Estructura post-refactor:
+
+1. **PRE-tx:**
+   - `siguienteNumeroFactura()` (tx interno propio).
+   - `facturaRef = doc(collection(db, 'facturas'))` pre-generado.
+   - `registrarComisionesPorItems` con `ordenSintetica` ejecuta PRE-tx, devuelve `result`, se construye `denormParaTx` siguiendo lógica `tuvoActividad` / `length === 1 / > 1 / === 0`. Si helper falla, toast warn (copy ajustado vs reviewer feedback) y `denormParaTx` queda `null` — no aborta.
+
+2. **Dentro tx (`runTransaction`):**
+   - `tx.set(facturaRef, facturaLimpia)` — crea conduce manual.
+   - `tx.update(facturaRef, denormParaTx)` si `denormParaTx` no null.
+   - **NO `tx.get(ordenRef)` ni idempotencia `facturada===true`** porque es factura manual, sin orden vinculada.
+
+3. **POST-tx (best-effort):**
+   - `addDoc('auditoria_admin', ...)` para audit `override_modalidad_precio_factura` con `.catch(console.warn)` — fire-and-forget preservado (diseño UX original).
+
+**Imports:** `updateDoc` removido (ya no se usa fuera de tx; `tx.update` no requiere import); `runTransaction` agregado.
+
+**Idempotencia adicional:** **NO se agregó.** El flag `saving` ya bloquea doble-click. El contador atómico `siguienteNumeroFactura` garantiza numero único. `facturaRef` se genera con id de Firestore (único). Lookup por `numeroFactura` previo a la tx sería paranoia.
+
+#### `scripts/invariantes/check-cross-collection-tx.ts`
+
+Comentario explicativo de la ventana de 10 líneas actualizado: refleja allowlist viviente post-157 = 4 entradas (no 8 ni 7 como decía el spec — la cuenta real es 4 porque algunas entradas en docs no eran código viviente).
+
+**Allowlist viviente actual:**
+- `src/pages/PersonalPage.tsx:189` — writeBatch del cliente no aplica (server-side).
+- `src/pages/PersonalPage.tsx:420` — writeBatch sólo soporta una instancia de Firestore.
+- `src/pages/Cotizaciones.tsx:110` — descuento de inventario aislado por ítem a propósito.
+- `src/components/personal/ModalConfirmarEliminar.tsx:16` — JSDoc histórico (no-op funcional).
+
+### Tests
+
+- `npx tsc --noEmit`: 0 errores.
+- `npx eslint src/components/facturas/FacturaCrearModal.tsx scripts/invariantes/check-cross-collection-tx.ts --max-warnings 0`: 0 issues.
+- `npm run build`: PASS (4.40s).
+- `npm run check:regression`: 7/7 PASS, 0 hits, 147ms.
+- Lint global post-sprint: idéntico count de errores que pre-sprint (10826) — todos en archivos no comiteados (timestamp Vite, dist-lazy, scripts ad-hoc). 0 regresiones de touch-list.
+
+### Hallazgos laterales NO incluidos (deuda futura)
+
+- **`userProfile?.id` en audit log línea 396** en lugar de `currentUser?.uid`. SPRINT-114 / SPRINT-155 unificaron este patrón en otros lugares. Acá quedó pre-existente fuera de scope — sprint follow-up sugerido si Cowork lo prioriza.
+
+### Push
+
+`9f5ff4b..8b783ce` a `origin/main`.
+
+### QA browser pendiente
+
+Para Jorge / Wilainy: crear conduce manual desde `/admin/facturas` con técnico asignado a item + override de modalidad → confirmar (a) factura aparece con número CG-XXXXX, (b) comisión denormalizada visible en tabla (no "—"), (c) audit log en `auditoria_admin` con `accion: 'override_modalidad_precio_factura'`. Caso negativo a probar: simular fallo de red entre helper comisiones y tx → confirmar que la factura NO se crea (tx aborta) → recargar y reintentar.
+
+---
+
 ## 2026-05-12 — pasada 14: SPRINT-155 (handleGenerar → runTransaction) COMPLETADO
 
 ### Contexto
