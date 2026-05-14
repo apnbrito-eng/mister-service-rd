@@ -154,6 +154,15 @@ export default function FacturaCrearModal({
     return { prefillTelefono: '', prefillNombre: busq };
   }, [form.clienteBusqueda]);
 
+  // @safe-non-tx: handleSubmit muta `facturas` (addDoc + updateDoc de denorm
+  // comisiones) y `auditoria_admin` (addDoc best-effort de override modalidad,
+  // deliberadamente fire-and-forget sin await — comentario línea ~357). El
+  // audit log es no-bloqueante por diseño UX: la factura es la operación
+  // principal y un fallo del audit no debe romper la emisión. Refactor a
+  // runTransaction queda como SPRINT-157 follow-up (paralelo al SPRINT-155
+  // que ya refactorizó el handler hermano `handleGenerar` del modal
+  // ProcesarFacturacionModal). Cazador P-003 detectó esto al ampliar scope
+  // a src/components en SPRINT-156.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const clienteNombreFinal = form.cliente?.nombre || form.clienteBusqueda.trim();

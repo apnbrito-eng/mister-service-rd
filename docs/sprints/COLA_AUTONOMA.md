@@ -100,7 +100,9 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 **Última actualización previa:** 2026-05-10 por Cowork — Jorge eligió "pagar deuda técnica conocida" como próximo foco. Agregados SPRINT-127 y SPRINT-128. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) NO van en la cola autónoma — requieren QA humano. Pendientes humano-presenciales: SPRINT-100, SPRINT-112 QA por rol, SPRINT-113 padre.
 
-**Próximo ID disponible:** SPRINT-156 (149 + 151 completados pasada 12; 154 completado pasada 13 fix default 60; 152 UX checkbox PENDIENTE; 153 fix bugs SPRINT-151 PENDIENTE; 155 deuda runTransaction modal PENDIENTE)
+**Próximo ID disponible:** SPRINT-158 (156 completado pasada 14 continuación — ampliar cazador P-003 a src/components/; 157 redactado como follow-up runTransaction en FacturaCrearModal)
+
+**Última actualización previa:** 2026-05-12 por coordinator autónomo (pasada 14 continuación, `trabaja`) — SPRINT-156 COMPLETADO. Cazador P-003 ahora escanea 5 subdirs (incluye `src/components/`). 1 VP detectado: `FacturaCrearModal.handleSubmit` (mismo patrón que SPRINT-155 ya fixeó en modal hermano) → allowlist temporal + SPRINT-157 follow-up redactado. Cazadores 7/7 PASS.
 
 ---
 
@@ -114,36 +116,57 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-156 — Extender cazador P-003 (cross-collection sin runTransaction) a `src/components/`
 
+**Estado:** COMPLETADO 2026-05-12 — ver `## Sprints completados (histórico)` más abajo. Hash pendiente al commit.
+
+---
+
+### SPRINT-157 — Envolver `handleSubmit` de `FacturaCrearModal.tsx` en `runTransaction` (paralelo a SPRINT-155)
+
 **Estado:** PENDIENTE
-**Prioridad:** baja-media (sub-deuda derivada de SPRINT-155 — el cazador hoy NO caza handlers de modal aunque pueden tener el mismo patrón).
-**Origen:** Coordinator autónomo (pasada 14, 2026-05-12) tras cerrar SPRINT-155. El refactor de SPRINT-155 envolvió `handleGenerar` del modal `ProcesarFacturacionModal.tsx` en `runTransaction`, pero el cazador determinístico P-003 (`scripts/invariantes/check-cross-collection-tx.ts`) solo escanea `src/services|src/pages|src/hooks|api` — el componente quedó fuera del scope y no se cazó automáticamente. Otros modales del repo pueden tener el mismo bug latente sin detección.
+**Prioridad:** baja-media (sub-deuda derivada de SPRINT-156 — único VP detectado al ampliar el cazador P-003 a `src/components/`. Misma forma estructural que SPRINT-155 ya fixeó en el modal hermano).
+**Origen:** Coordinator autónomo (SPRINT-156, 2026-05-12). El cazador P-003 con scope ampliado detectó que `FacturaCrearModal.tsx::handleSubmit` muta 2 colecciones (`facturas` + `auditoria_admin`) sin `runTransaction` ni `writeBatch`. Mismo patrón que el handler hermano `ProcesarFacturacionModal.tsx::handleGenerar` que SPRINT-155 envolvió con `runTransaction`. Diferencia: el audit log es deliberadamente fire-and-forget (sin await, `.catch` que solo loggea) — se considera best-effort por diseño UX. SPRINT-156 dejó marcado con `@safe-non-tx:` apuntando a este sprint para evitar bloquear el cazador.
 
-#### Touch-list
+**Contexto del handler:**
+- `FacturaCrearModal.tsx` es el modal "Nuevo Conduce de Garantía" disparado desde `/admin/facturas` (NO desde el flujo de cierre de orden, ese es ProcesarFacturacionModal).
+- Líneas ~166-386 (post-comentario `@safe-non-tx` agregado en SPRINT-156).
+- Mutations cross-collection:
+  1. `addDoc(collection(db, 'facturas'), docLimpio)` línea ~224.
+  2. `updateDoc(doc(db, 'facturas', facturaRef.id), denormLimpio)` línea ~319 (denormalización comisiones).
+  3. `addDoc(collection(db, 'auditoria_admin'), auditLimpio)` línea ~367 (audit log override modalidad, fire-and-forget).
 
-**Archivos a modificar (2-3):**
+**Riesgo de NO fixear:** si la red corta entre `addDoc(facturas)` y `addDoc(auditoria_admin)`, la factura queda creada sin su audit log de override de modalidad — vector idéntico al que motivó SPRINT-155. Severidad baja porque el audit log es best-effort y el flujo principal (creación factura + comisiones) ya funciona sin tx. Pero es deuda real y el cazador grita por algo legítimo.
 
-- `scripts/invariantes/check-cross-collection-tx.ts` — agregar `src/components` a la lista de subdirs escaneados (línea 141 actual `for (const sub of ['src/services', 'src/pages', 'src/hooks', 'api'])`). Actualizar comentarios al inicio del archivo + `notes` del reporte para reflejar el scope ampliado.
-- `docs/PATRONES_REGRESION.md` — actualizar entrada P-003 con el scope ampliado y referencia al sprint donde se amplió.
+#### Touch-list previsto
 
-**Auditoría a hacer durante el sprint (sub-paso obligatorio):**
+**Archivos a modificar (1):**
 
-Antes de commitear, correr el cazador y revisar TODOS los hits que aparezcan en `src/components/`. Para cada hit:
-- Si es un patrón legítimo (ej: cleanup secuencial idempotente, audit log que vive fuera intencionalmente), agregarlo a la allowlist documentada del cazador con justificación.
-- Si es un bug latente real (factura/orden/comisión sin tx), redactar SPRINT-157+ separado para fixearlo. NO fixear silenciosamente en este sprint.
+- `src/components/facturas/FacturaCrearModal.tsx::handleSubmit` — envolver las 3 mutaciones en `runTransaction`. Manejar el caso del audit log que hoy es fire-and-forget: decidir si se incluye en la tx (rompe el fire-and-forget pero asegura atomicidad) o se mantiene fuera con el patrón actual + se documenta explícitamente. Recomendación builder: replicar el patrón de SPRINT-155 (`runTransaction` para factura + denormalización + audit log dentro del callback, eliminar fire-and-forget).
+- Remover el comentario `@safe-non-tx:` agregado en SPRINT-156 cuando se cierre el refactor.
+
+**Consumidores verificados (read-only check, debe hacer el builder antes del refactor):**
+- `FacturaCrearModal` se importa desde `src/pages/Facturas.tsx` (búsqueda confirmada — único caller).
+- `registrarComisionesPorItems` se llama dentro del flujo — su comportamiento NO cambia (sigue escribiendo a `comisiones`). El service ya está fuera de la tx y debe seguir así porque tiene su propia lógica idempotente.
+- `siguienteNumeroFactura()` se llama ANTES de entrar a la tx (línea ~228) — sigue siendo correcto: contador transaccional aparte.
+
+**Hallazgos laterales NO incluidos:**
+- El sprint NO toca la lógica de comisiones ni el denormalize — solo agrupa las 3 escrituras Firestore en una tx atómica.
+- Si el comentario inline existente en líneas ~336-352 sobre la denormalización deja de aplicar (porque cambia el shape al ir adentro de tx), actualizarlo.
 
 #### Criterios de aceptación
 
-- [ ] Cazador escanea `src/components` además de los 4 subdirs actuales.
-- [ ] Cazador sigue pasando con 0 hits (allowlist documentada si aparecen patrones legítimos).
-- [ ] Si aparecen hits reales (bugs latentes), se documentan como sprints follow-up (NO se fixean acá).
+- [ ] `handleSubmit` envuelto en `runTransaction` que abarca `addDoc(facturas)` + `updateDoc(facturas)` + `addDoc(auditoria_admin)`.
+- [ ] Comentario `// @safe-non-tx:` removido del handler.
+- [ ] Cazador P-003 sigue pasando 0 hits (sin necesidad de allowlist).
 - [ ] Typecheck + lint + cazadores 7/7 PASS.
-- [ ] regression_guardian: no obligatorio (cambio en scripts/invariantes, no toca rules/services/context).
-- [ ] reviewer: obligatorio para validar que el cambio del cazador no introduce falsos positivos masivos.
+- [ ] regression_guardian PASS (toca service-equivalente — mutación crítica de facturas).
+- [ ] reviewer obligatorio (cambio cross-collection con riesgo financiero).
+- [ ] Validación manual: crear conduce manual desde /admin/facturas con override de modalidad → confirmar que la factura se crea, las comisiones se denormalizan, y el audit log aparece en `auditoria_admin` con `accion: 'override_modalidad_precio_factura'`.
 
 #### Restricciones
 
-- NO fixear bugs latentes que el cazador descubra en este sprint — documentar como follow-up.
-- NO desactivar el cazador si grita por algo legítimo — usar allowlist.
+- NO tocar la lógica de cálculo de comisiones (`registrarComisionesPorItems`) — solo cómo se denormaliza al doc factura.
+- NO cambiar el shape de los docs creados (factura, audit log) — solo agrupar las escrituras en tx.
+- Si por alguna razón el refactor revela que el audit log NO debe entrar en tx (ej: arquitectura de defense-in-depth), documentar explícitamente la decisión y mantener la entrada en allowlist `@safe-non-tx:` (no rompe el sprint, lo cierra como "evaluado y mantenido fuera de tx con justificación").
 
 ---
 
@@ -2821,6 +2844,23 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ---
 
 ## Sprints completados (histórico)
+
+### SPRINT-156 — Extender cazador P-003 (cross-collection sin runTransaction) a `src/components/`
+- **Completado:** 2026-05-12 por coordinator autónomo (`trabaja`, pasada 14, continuación). Sub-deuda derivada de SPRINT-155. OK humano implícito vía `trabaja`.
+- **Hash:** pendiente al commit (se completa con `git log` post-push).
+- **Resultado:** `scripts/invariantes/check-cross-collection-tx.ts` ahora escanea 5 subdirs (`src/services`, `src/pages`, `src/hooks`, **`src/components`** (nuevo), `api`). Ventana de detección de allowlist `@safe-non-tx:` ampliada de 5 a 10 líneas previas para permitir justificaciones multilínea. `docs/PATRONES_REGRESION.md` entrada P-003 actualizada con scope ampliado + sub-regla "remediar con sprints follow-up de refactor, no flexibilizar el cazador". Baseline pre-ampliación: 99 archivos escaneados / 0 hits. Post-ampliación: 171 archivos / 1 hit categorizado VP → allowlist temporal + SPRINT-157 follow-up redactado.
+- **Hits encontrados al ampliar scope:**
+  - `src/components/facturas/FacturaCrearModal.tsx::handleSubmit` (línea ~166-386): muta `facturas` (addDoc + updateDoc denorm comisiones) + `auditoria_admin` (addDoc audit log override modalidad, deliberadamente fire-and-forget sin await). **Categorización:** VERDADERO POSITIVO con severidad baja. Forma estructural idéntica al `handleGenerar` que SPRINT-155 refactorizó en el modal hermano `ProcesarFacturacionModal`. **Decisión:** NO fixear acá (regla del sprint); allowlist `@safe-non-tx:` temporal apuntando a SPRINT-157; SPRINT-157 redactado en cola pendiente como follow-up explícito.
+- **Sanity check post-ampliación:** `ProcesarFacturacionModal.tsx` (refactor SPRINT-155 con `runTransaction`) NO dispara el cazador — confirmado vía grep + ejecución del cazador con 0 hits post-allowlist.
+- **Validación:** `npx tsc --noEmit` PASS · cazadores 7/7 PASS post-cambio · lint del archivo modificado limpio.
+- **Archivist PRE-CHANGE:** historial git del cazador revisado: último cambio `15cab52` (SPRINT-133) extendió a `src/pages` tras detectar `handleConfirmarEliminar`. `1e9ec62` creación inicial. Sin postmortems específicos. Patrón a respetar: heurística conservadora (preferir falsos negativos), allowlist via comentario `@safe-non-tx:`. SPRINT-133 dejó 7 entradas pendientes apuntando a SPRINT-134 — SPRINT-156 suma una más (`FacturaCrearModal.handleSubmit`) apuntando a SPRINT-157. Total allowlist post-156: 8. CLAUDE.md sub-regla "Política de falsos positivos" sugiere refactorear el cazador si allowlist >5; la actualización del doc deja constancia de que el remedio correcto es ejecutar los sprints follow-up, no flexibilizar el cazador.
+- **regression_guardian:** N/A (sprint del propio sprint declara "no obligatorio — cambio en script de validación, no en código de runtime"). El touch-list NO toca rules/services/context.
+- **reviewer:** APPROVED — el cambio del cazador es mínimo y conservador: (a) un sub-dir más en el array de paths, (b) comentarios actualizados, (c) `notes` del reporte ampliado, (d) ventana de allowlist de 5 a 10 líneas. La ampliación de ventana no introduce falsos negativos (sigue siendo enforced "el comentario tiene que estar arriba de la función"); solo permite más espacio para explicar la razón. El único hit detectado se gestionó con allowlist documentada + sprint follow-up redactado, no con desactivación.
+- **Plan de rollback:** revertir el commit. El cazador vuelve a escanear 4 subdirs y la allowlist temporal del modal queda como dead-code (no afecta nada). SPRINT-157 sigue siendo válido como deuda visible.
+- **Sub-deuda derivada:** SPRINT-157 PENDIENTE — envolver `FacturaCrearModal.handleSubmit` en `runTransaction` (mismo patrón que SPRINT-155).
+- **Nota commit:** sin "QA flujo X validado" requerido (no toca componentes críticos de runtime — solo el script de validación). El cambio al modal es 1 bloque de comentario, no toca lógica.
+
+---
 
 ### SPRINT-155 — Envolver `handleGenerar` del modal Emitir conduce en `runTransaction` (deuda transaccionalidad cross-collection)
 - **Completado:** 2026-05-12 por coordinator autónomo (`trabaja`, pasada 14). Sprint generado ad-hoc en pasada 13 como hallazgo lateral del audit estático post-SPRINT-151. OK humano implícito vía `trabaja`.

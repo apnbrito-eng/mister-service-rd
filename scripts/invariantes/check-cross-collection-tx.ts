@@ -6,9 +6,13 @@
  * Estrategia (heurística, conservadora — preferimos falsos negativos a
  * falsos positivos para no joder el flujo):
  *
- * 1. Recorrer src/services, src/pages, src/hooks y api/ (extendido en
- *    SPRINT-133 desde el scope original `src/services` + `api/` tras
- *    detectar `handleConfirmarEliminar` en `src/pages/PersonalPage.tsx`).
+ * 1. Recorrer src/services, src/pages, src/hooks, src/components y api/
+ *    (extendido en SPRINT-133 desde el scope original `src/services` + `api/`
+ *    tras detectar `handleConfirmarEliminar` en `src/pages/PersonalPage.tsx`;
+ *    extendido en SPRINT-156 a `src/components` tras SPRINT-155 que refactorizó
+ *    `handleGenerar` del modal `ProcesarFacturacionModal.tsx` con runTransaction
+ *    pero quedó fuera del scope del cazador — modales que mutan ≥2 colecciones
+ *    son el mismo vector que handlers de page).
  * 2. Para cada función exportada, contar mutaciones a colecciones distintas:
  *    - `updateDoc(doc(db, '<col>', ...))`
  *    - `setDoc(doc(db, '<col>', ...))`
@@ -82,7 +86,12 @@ function splitFunctions(content: string): FunctionBlock[] {
     }
 
     // ¿Comentario @safe-non-tx en líneas previas?
-    const prevCtx = lines.slice(Math.max(0, i - 5), i).join('\n');
+    // Ventana ampliada a 10 líneas en SPRINT-156: la allowlist de
+    // FacturaCrearModal.handleSubmit requiere un comentario explicativo
+    // multilínea (qué colecciones, por qué best-effort, referencia al
+    // sprint follow-up). 5 líneas era demasiado restrictivo y forzaba
+    // a comprimir la justificación.
+    const prevCtx = lines.slice(Math.max(0, i - 10), i).join('\n');
     const safeNonTx = /@safe-non-tx:/.test(prevCtx);
 
     fns.push({
@@ -134,11 +143,13 @@ async function walk(dir: string, files: string[] = []): Promise<string[]> {
 
 export async function check(): Promise<InvariantResult> {
   const targets: string[] = [];
-  // Revisamos services/, pages/, hooks/ y api/ — son los que escriben Firestore
-  // intencionalmente desde el frontend o backend. Componentes puntuales que
-  // hagan mutaciones de una sola colección no aplican (cols.size < 2 los excluye).
-  // Extendido en SPRINT-133 tras detectar `handleConfirmarEliminar` en pages/.
-  for (const sub of ['src/services', 'src/pages', 'src/hooks', 'api']) {
+  // Revisamos services/, pages/, hooks/, components/ y api/ — son los que
+  // escriben Firestore intencionalmente desde el frontend o backend.
+  // Componentes que mutan una sola colección no aplican (cols.size < 2 los
+  // excluye). Extendido en SPRINT-133 tras detectar `handleConfirmarEliminar`
+  // en pages/. Extendido en SPRINT-156 a components/ tras SPRINT-155
+  // (handler de modal ProcesarFacturacionModal con runTransaction).
+  for (const sub of ['src/services', 'src/pages', 'src/hooks', 'src/components', 'api']) {
     const dir = path.join(ROOT_DIR, sub);
     await walk(dir, targets);
   }
@@ -177,7 +188,7 @@ export async function check(): Promise<InvariantResult> {
     patternName: PATTERN_NAME,
     status: hits.length > 0 ? 'fail' : 'pass',
     hits,
-    notes: [`Escaneados ${targets.length} archivos en src/services, src/pages, src/hooks y api.`],
+    notes: [`Escaneados ${targets.length} archivos en src/services, src/pages, src/hooks, src/components y api.`],
   };
 }
 

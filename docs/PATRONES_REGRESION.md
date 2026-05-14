@@ -77,23 +77,36 @@ idempotencia (`if (data.flag) return`) va DENTRO del callback DESPUÉS del
 `tx.get()`.
 
 **Cazador:** `scripts/invariantes/check-cross-collection-tx.ts` — busca
-funciones en `src/services/`, `src/pages/`, `src/hooks/` y `api/` que hagan
-≥2 llamadas de mutación (`updateDoc`, `setDoc`, `addDoc`, `deleteDoc`)
-sobre `db, '...'` distintos sin estar dentro de `runTransaction(...)` ni
-`writeBatch(...)`. Caza por nombre de función. Scope extendido en SPRINT-133
+funciones en `src/services/`, `src/pages/`, `src/hooks/`, `src/components/`
+y `api/` que hagan ≥2 llamadas de mutación (`updateDoc`, `setDoc`, `addDoc`,
+`deleteDoc`) sobre `db, '...'` distintos sin estar dentro de `runTransaction(...)`
+ni `writeBatch(...)`. Caza por nombre de función. Scope extendido en SPRINT-133
 (2026-05-11) desde el original `['src/services', 'api']` tras detectar
 `handleConfirmarEliminar` en `src/pages/PersonalPage.tsx` con el bug —
-fix aplicado con `writeBatch` + chunking.
+fix aplicado con `writeBatch` + chunking. Extendido nuevamente en SPRINT-156
+(2026-05-12) a `src/components/` tras SPRINT-155 (refactor de `handleGenerar`
+en `ProcesarFacturacionModal.tsx` con `runTransaction`, que quedó fuera del
+scope del cazador — un día después se detectó el handler hermano en
+`FacturaCrearModal.handleSubmit`). En SPRINT-156 también se amplió la
+ventana de detección de allowlist `@safe-non-tx:` de 5 a 10 líneas previas
+para permitir justificaciones multilínea.
 
 **Allowlist:** funciones intencionalmente no-transaccionales (ej:
 backfills/migraciones one-shot, deuda agendada con sprint follow-up
 explícito) marcadas con comentario `// @safe-non-tx: <razón>` arriba de la
-función. SPRINT-133 dejó 7 entradas en allowlist apuntando a SPRINT-134
-como follow-up (handleConvertirAFactura, handleSubmit cotizaciones,
+función (hasta 10 líneas previas). SPRINT-133 dejó 7 entradas apuntando a
+SPRINT-134 como follow-up (handleConvertirAFactura, handleSubmit cotizaciones,
 handleChangeEstado equipos, handleConfirmarAjuste inventario,
 handleGenerarOrden mantenimiento, handleSubmit personal,
 ejecutarVinculacion personal). Refactor a `writeBatch` pendiente en
-SPRINT-134.
+SPRINT-134. SPRINT-156 agregó una más:
+`src/components/facturas/FacturaCrearModal.tsx::handleSubmit` apuntando a
+SPRINT-157 como follow-up (paralelo a SPRINT-155). Total allowlist: 8.
+Sub-regla CLAUDE.md "Política de falsos positivos" recomienda refactorear el
+cazador si la allowlist crece >5 — el cazador YA es heurístico para detectar
+estos shapes; el remedio cuando la allowlist crece es ejecutar los sprints
+follow-up de refactor a `runTransaction`/`writeBatch` para sacar entradas,
+no flexibilizar el cazador.
 
 ---
 
