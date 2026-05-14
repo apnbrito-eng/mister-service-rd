@@ -5,6 +5,77 @@
 
 ---
 
+## 2026-05-12 — interactivo: SPRINT-161 (fase orden no avanza a 'cerrado' tras emitir conduce)
+
+### Contexto
+
+Inconsistencia entre pipeline visual y estado real: tras emitir CG-XXXXX, la orden quedaba en `fase: 'trabajo_realizado'` aunque ya tenía `facturada: true` + `facturaNumero`. Causa raíz auditada por Cowork: `ProcesarFacturacionModal.tsx:726-735` construía `ordenUpdate` sin tocar `fase`. Sprint trivial (1 archivo, cambio aditivo).
+
+### Archivist PRE-CHANGE (manual)
+
+- `ProcesarFacturacionModal.tsx`: historial reciente dominado por SPRINTS-151/152/153/154/155 (`863e804`, `053c137`, `79c7fcc`, `5654971`, `3a9618b`). El relevante es `3a9618b` (SPRINT-155) que envolvió `handleGenerar` en `runTransaction` — confirma que el `ordenUpdate` se aplica dentro del callback de la tx vía `tx.update(ordenRef, ordenUpdateLimpio)` línea 763. El cambio es ADITIVO al payload.
+- Sin postmortems específicos para este archivo.
+- P-001 (`userProfile.id ≠ auth.uid`): respetado — el entry usa `usuario` (nombre string), no uid; `usuarioId` viene de `currentUser?.uid` (línea 419).
+- P-003 (cross-collection sin runTransaction): respetado — cambio aditivo dentro de tx existente; idempotencia ya garantizada por guard `CONDUCE_YA_EMITIDO` (línea 781).
+- P-005 (rules sin deployar): no aplica — no toca `firestore.rules`.
+- P-007 (destinatarioId): no aplica — no toca notificaciones.
+
+### Patrón de referencia consultado
+
+- `src/pages/OrdenDetalle.tsx:373-386` — entry shape `{ fase, timestamp, usuario, nota }`, array reconstruido con `Timestamp.fromDate` para entries previos.
+- `src/pages/AgendaDia.tsx:114-127` — idem.
+- `src/pages/OrdenDetalle.tsx:399-402` y `src/pages/AgendaDia.tsx:175-178` — `updateData` incluye `fase` + `estadoSimple` + `estado` + `historialFases` sincronizados.
+
+### Builder (ejecutado por coordinator)
+
+Cambio en `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` líneas 726-763:
+
+1. Pre-`ordenUpdate` construye `nuevoHistorialFases` mapeando entries previos (con `Timestamp.fromDate` para coercer `Date` → `Timestamp`) y append del entry nuevo `{ fase: 'cerrado' as const, timestamp: ahora, usuario, nota: 'Conduce emitido <numero>' }`.
+2. `ordenUpdate` ahora incluye `fase: 'cerrado'`, `estadoSimple: 'completado'`, `estado: 'cerrado'`, `historialFases: nuevoHistorialFases`.
+3. Comentario explicativo cita SPRINT-161 + archivos de referencia para futuros builders.
+
+Diff: +28/-0 (solo aditivo).
+
+### Tester
+
+- `npx tsc --noEmit` PASS (sin output).
+- `npm run build` PASS (4.04s, sin nuevos warnings).
+- `npx eslint <file> --max-warnings 0` PASS (sin output).
+- `npm run check:regression` 7/7 PASS (144ms, P-001 a P-007 sin hits).
+
+### regression_guardian semántico (ejecutado por coordinator)
+
+APPROVED 8/8 — detalle en COLA_AUTONOMA.md sección histórico SPRINT-161. Resumen:
+1. P-001 respetado (entry usa string nombre).
+2. P-002 N/A (no toca rules).
+3. P-003 respetado (aditivo dentro de tx existente).
+4. Reemplazo de array `historialFases` consistente con patrón del repo (spread preserva entries previos).
+5. Sub-regla "registros sincronizados" CLAUDE.md cumplida.
+6. Strip undefined respetado.
+7. Idempotencia preservada por guard existente.
+8. No introduce nuevas cross-collection writes.
+
+### reviewer (ejecutado por coordinator)
+
+APPROVED. Observaciones no bloqueantes:
+- Race theórico entre precarga y tx si otro tab muta `historialFases`; mismo riesgo que `OrdenDetalle.tsx`/`AgendaDia.tsx`; no introduce regresión nueva.
+- `fase: 'cerrado' as const` evita widening.
+- Comentario explicativo permite auditoría futura.
+
+### Commit + push
+
+Hash `4015fe1`. Pre-commit hook PASS (typecheck + cazadores + lint staged). Push a `main` exitoso (`9d9b524..4015fe1`).
+
+### Deploy
+
+Pendiente verificación devops post-push. Vercel debería buildear automáticamente.
+
+### Tiempo total
+
+~10 min (sprint trivial como anticipado en spec).
+
+---
+
 ## 2026-05-13 — interactivo end-to-end: SPRINT-159 (firma del cliente en wizard cierre, BLOQUEADOR go-live) → EN_REVISION_HUMANA
 
 ### Contexto

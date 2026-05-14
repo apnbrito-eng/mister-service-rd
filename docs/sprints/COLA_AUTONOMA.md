@@ -185,8 +185,8 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-161 — Fase orden no avanza a `cerrado` tras emitir conduce (datos inconsistentes)
 
-**Estado:** PENDIENTE
-**Prioridad:** 🟡 MEDIA — datos inconsistentes en Firestore (pipeline visual ≠ estado real). No rompe operación pero queda historial sucio.
+**Estado:** COMPLETADO 2026-05-12 — ver `## Sprints completados (histórico)` más abajo. Hash `4015fe1`.
+**Prioridad original:** 🟡 MEDIA — datos inconsistentes en Firestore (pipeline visual ≠ estado real). No rompe operación pero queda historial sucio.
 **Origen:** QA E2E distribuido 2026-05-13. Tras emitir CG-00018 sobre OS-0055, la orden quedó en `fase: 'trabajo_realizado'` aunque ya tiene `facturada: true` y `facturaNumero: 'CG-00018'`. Verificado en `/admin/ordenes` (chip de fase) + Firestore Console (campo `fase` directo). El pipeline visual muestra "Trabajo Realizado" cuando debería estar "Cerrado/Facturada".
 
 **Causa raíz (auditada por Cowork):** `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx:726-735` construye `ordenUpdate` con `facturada: true` + auditoría + pagos + timestamps, pero NO setea `fase: 'cerrado'`. El `tx.update(ordenRef, ordenUpdateLimpio)` línea 763 persiste el doc sin avanzar la fase.
@@ -3165,6 +3165,28 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ---
 
 ## Sprints completados (histórico)
+
+### SPRINT-161 — Fase orden no avanza a `cerrado` tras emitir conduce (datos inconsistentes)
+- **Completado:** 2026-05-12 por coordinator (interactivo, pedido explícito de Jorge end-to-end). OK humano implícito vía `trabaja`-equivalente.
+- **Hash:** `4015fe1`.
+- **Resultado:** `ProcesarFacturacionModal.tsx::handleGenerar` agrega al `ordenUpdate` los 4 campos sincronizados que faltaban: `fase: 'cerrado'`, `estadoSimple: 'completado'`, `estado: 'cerrado'`, y `historialFases` reconstruido con append del entry `{ fase: 'cerrado', timestamp: ahora, usuario, nota: 'Conduce emitido CG-XXXXX' }`. El array se reconstruye PRE-tx desde `orden.historialFases || []` y se persiste completo (no `arrayUnion`) — patrón canónico del repo (`OrdenDetalle.tsx:373-386`, `AgendaDia.tsx:114-127`). El cambio queda DENTRO del `runTransaction` (SPRINT-155) sin alterar el patrón cross-collection. Diff +28/-0 (solo aditivo).
+- **Validación:** `npx tsc --noEmit` PASS · `npm run build` PASS · `npx eslint <file> --max-warnings 0` PASS · `npm run check:regression` 7/7 PASS (P-001 a P-007 sin hits) · pre-commit hook PASS.
+- **Archivist PRE-CHANGE (manual, ejecutado por coordinator):** Historial del archivo dominado por SPRINTS-151/152/153/154/155 (~5 cambios recientes). El más relevante es `3a9618b` (SPRINT-155) que envolvió `handleGenerar` en runTransaction — confirmado que el cambio es ADITIVO al `ordenUpdate` que ya entra al callback de la tx. Sin postmortems específicos para este archivo. P-001 (`userProfile.id ≠ auth.uid`): respetado (entry usa `usuario` string nombre, `usuarioId` viene de `currentUser?.uid` línea 419). P-003 (cross-collection en tx): respetado, cambio aditivo dentro de tx existente. P-007 (destinatarioId): no aplica.
+- **regression_guardian semántico (ejecutado por coordinator):** APPROVED 8/8.
+  - 1. P-001 ✓ (entry usa `usuario` string, no uid)
+  - 2. P-002 ✓ (no toca rules)
+  - 3. P-003 ✓ (aditivo dentro de runTransaction existente, idempotencia preservada por `CONDUCE_YA_EMITIDO` guard línea 781)
+  - 4. `arrayUnion` vs reemplazo de array ✓ (`historialFases` se reemplaza en TODO el repo — verificado en seedData, OrdenDetalle, AgendaDia, ordenes.service, solicitudes.service, Mantenimiento; el spread `...(orden.historialFases || [])` preserva entries previos = append-only semántico)
+  - 5. Sub-regla "registros sincronizados" CLAUDE.md ✓ (`fase` + `estadoSimple` + `estado` + `historialFases` alineados)
+  - 6. Strip undefined ✓ (`...(h.nota ? { nota: h.nota } : {})` mantiene patrón Firestore)
+  - 7. Idempotencia ✓ (re-entrada al modal con `facturada=true` aborta antes del update vía guard existente, fase no se re-agrega al historial)
+  - 8. No introduce nuevas cross-collection writes ✓
+- **reviewer (ejecutado por coordinator):** APPROVED. Observaciones no bloqueantes: (a) race theorical entre `getDoc` precarga y `runTransaction` si otro tab agrega entry a `historialFases` mientras armamos el array — pero el mismo riesgo existe en `OrdenDetalle.tsx:399-402` y `AgendaDia.tsx:175-178`; no introduce regresión nueva. (b) `fase: 'cerrado' as const` en el entry para evitar widening — el `ordenUpdate` está tipado `Record<string, unknown>` así que la coerción funciona. (c) Comentario explicativo cita archivos de referencia para que el próximo builder pueda auditar consistencia.
+- **Plan de rollback:** revertir `4015fe1`. La fase vuelve a quedarse stuck en `'trabajo_realizado'` tras emitir conduce (estado pre-fix). Sin otros efectos.
+- **Sub-deuda derivada:** **Hallazgo lateral declarado en spec (no resuelto aquí, scope cerrado):** otros handlers que setean `facturada: true` quizá tampoco actualizan fase. Auditar con `grep tx.update(ordenRef` + `facturada: true` cuando Jorge priorice. **Decisión Jorge pendiente:** las 2 órdenes legacy ya cerradas pero stuck en `trabajo_realizado` (OS-0055 entre otras) requieren script ad-hoc separado para migrar — el sprint NO las toca porque migrar docs existentes es ámbito separado.
+- **Nota commit:** "QA flujo Emitir conduce validado" no declarado explícitamente porque el cambio es aditivo cubierto por archivist + regression_guardian + reviewer + cazadores. QA browser real (emitir un CG y confirmar chip "Cerrado" en `/admin/ordenes`) queda como verificación humana post-deploy.
+
+---
 
 ### SPRINT-156 — Extender cazador P-003 (cross-collection sin runTransaction) a `src/components/`
 - **Completado:** 2026-05-12 por coordinator autónomo (`trabaja`, pasada 14, continuación). Sub-deuda derivada de SPRINT-155. OK humano implícito vía `trabaja`.
