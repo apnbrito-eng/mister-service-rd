@@ -394,6 +394,30 @@ Si la allowlist crece a >5 entradas, pagar la deuda agregando los call sites o r
 
 ---
 
+## P-011 — `updateDoc(ordenes_servicio, {...})` setea flag terminal sin sincronizar `fase`
+
+**Bugs originales (clase recurrente):**
+- SPRINT-161 (commit `4015fe1`, 2026-05-12) — `ProcesarFacturacionModal.tsx::handleGenerar` seteaba `facturada: true` sin avanzar fase a `cerrado`. Orden facturada quedaba stuck en `trabajo_realizado`.
+- SPRINT-173 (commit `d8f376b`, 2026-05-12) — `AgendaDia.tsx::handleAprobarPrecioInline` y `OrdenDetalle.tsx::handleAprobarPrecio` seteaban `estadoAprobacion: 'aprobado'` + `precioAprobado` sin avanzar fase a `aprobado`. Tercer handler idéntico (`Ordenes.tsx::handleAprobarPrecio`, mismo SPRINT-173) capturado por el cazador durante su primera corrida sobre el repo limpio.
+
+**Síntoma:** el pipeline visual (`/admin/ordenes`, agenda del día, tablero, portal cliente público) muestra la orden en la fase previa aunque el flag de estado terminal indica que el negocio ya avanzó. Queries que filtran por `fase` infrareportan. UX: usuarios reportan "aprobé el precio pero la orden sigue en En Diagnóstico" o "facturé el conduce pero la orden sigue en Trabajo Realizado".
+
+**Causa raíz:** la sub-regla CLAUDE.md "registros sincronizados" (`fase` + `estadoSimple` + `estado` + `historialFases` coherentes) es una convención editorial sin enforcement automático. Cualquier handler nuevo que persiste un flag de estado terminal (`estadoAprobacion='aprobado'`, `facturada=true`, `soloChequeo=true`, `cancelada=true`, `eliminada=true`) puede olvidarse de sincronizar `fase`. La modularidad del repo amplifica el riesgo: el flujo "Aprobar precio" tiene TRES handlers idénticos (`AgendaDia`, `OrdenDetalle`, `Ordenes`) — duplicación que en otros sprints podría reducirse a un helper compartido.
+
+**Regla:** todo `updateDoc(<ref a ordenes_servicio>, {...})` que setea un flag de estado terminal del negocio DEBE incluir en el mismo update: `fase` + `estadoSimple` + `estado` + `historialFases` reconstruido con append entry `{ fase, timestamp, usuario, nota }` (NO `arrayUnion`). Patrón canónico: SPRINT-161 (`4015fe1`, `ProcesarFacturacionModal::handleGenerar`) y SPRINT-173 (`d8f376b`, los 3 handlers de aprobar precio). Usar single `ahora = Timestamp.now()` para evitar drift de milisegundos entre los campos relacionados.
+
+**Cazador:** `scripts/invariantes/check-fase-sin-sincronizar-en-update-orden.ts`. Estrategia: extrae todos los `updateDoc(arg1, {block})` con balanceo de paréntesis y llaves, filtra los que tienen `'ordenes_servicio'` en `arg1`, busca patrones literales de flag terminal (`estadoAprobacion: 'aprobado'`, `facturada: true`, `soloChequeo: true`, `cancelada: true`, `eliminada: true`), y reporta hit si no hay `fase:` en el mismo bloque.
+
+**Allowlist por línea:** comentario `// @safe-fase-sin-sincronizar: <razón>` en la misma línea del `updateDoc` o hasta 5 líneas arriba. Hoy:
+- `src/components/ordenes/EliminarOrdenModal.tsx::handleConfirmar` (soft delete preserva fase original para Restaurar).
+- `src/pages/Ordenes.tsx::handleConfirmarEliminarOrden` (idem — soft delete duplicado).
+
+Si la allowlist crece, evaluar si conviene unificar handlers duplicados (`EliminarOrdenModal` vs `Ordenes.tsx::handleConfirmarEliminarOrden`).
+
+**Limitación conocida:** el cazador busca literal `'ordenes_servicio'` en el primer argumento. Si un día se introduce un alias tipo `const ORDENES_COL = 'ordenes_servicio'` y luego se usa `updateDoc(doc(db, ORDENES_COL, id), ...)`, el cazador no caza. Solución: agregar el alias al patrón del cazador.
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:

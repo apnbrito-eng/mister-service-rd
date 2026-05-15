@@ -42,6 +42,10 @@ export default function EliminarOrdenModal({ isOpen, onClose, orden, userProfile
         usuario, 'eliminar', `Eliminó orden — Motivo: ${motivo.trim()}`,
         'eliminada', 'false', 'true'
       );
+      // @safe-fase-sin-sincronizar: soft delete (flag visual `eliminada=true`),
+      // NO una transición de fase. La fase original se preserva intencionalmente
+      // para que el flujo de Restaurar (revertir eliminada=false) funcione sin
+      // perder el estado de negocio previo a la eliminación.
       await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
         eliminada: true,
         motivoEliminacion: motivo.trim(),

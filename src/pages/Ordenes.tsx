@@ -5,7 +5,7 @@ import {
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
-import { OrdenServicio, EstadoOrdenSimple, Cliente, Personal } from '../types';
+import { OrdenServicio, EstadoOrdenSimple, Cliente, Personal, FaseOrden } from '../types';
 import {
   formatFecha, formatHora,
   estadoSimpleBorder,
@@ -175,14 +175,41 @@ export default function Ordenes() {
         selectedOrden.precioSugerido !== undefined ? `RD$ ${selectedOrden.precioSugerido.toLocaleString('es-DO')}` : '',
         `RD$ ${precio.toLocaleString('es-DO')}`
       );
+      // SPRINT-173: tras aprobar precio sugerido, avanzar fase a 'aprobado' y mantener
+      // sincronía con `estadoSimple`/`estado`/`historialFases` (sub-regla CLAUDE.md
+      // "registros sincronizados"). Tercer handler idéntico descubierto por el cazador
+      // P-011 durante el SPRINT-173 (los dos primeros: AgendaDia + OrdenDetalle).
+      // Patrón tomado de SPRINT-161 (4015fe1) en ProcesarFacturacionModal:
+      // shape `{ fase, timestamp, usuario, nota }`, array reemplazado completo
+      // (no `arrayUnion`), single `ahora` para evitar drift de timestamps.
+      const ahora = Timestamp.now();
+      const nuevoHistorialFases = [
+        ...(selectedOrden.historialFases || []).map((h) => ({
+          fase: h.fase,
+          timestamp: h.timestamp instanceof Date ? Timestamp.fromDate(h.timestamp) : h.timestamp,
+          usuario: h.usuario || '',
+          ...(h.nota ? { nota: h.nota } : {}),
+        })),
+        {
+          fase: 'aprobado' as FaseOrden,
+          timestamp: ahora,
+          usuario,
+          nota: `Precio aprobado: RD$ ${precio.toLocaleString('es-DO')}`,
+        },
+      ];
       await updateDoc(doc(db, 'ordenes_servicio', selectedOrden.id), {
         precioAprobado: precio,
         precioFinal: precio,
         estadoAprobacion: 'aprobado',
         aprobadoPor: usuario,
-        fechaAprobacion: Timestamp.now(),
+        fechaAprobacion: ahora,
+        // SPRINT-173: avanzar fase + estados duplicados + append a historial.
+        fase: 'aprobado',
+        estadoSimple: 'pendiente',
+        estado: 'activo',
+        historialFases: nuevoHistorialFases,
         auditoria: arrayUnion(registroAuditoria),
-        updatedAt: Timestamp.now(),
+        updatedAt: ahora,
       });
       // Notificar al técnico para que pueda continuar con el trabajo
       if (selectedOrden.tecnicoId) {
@@ -568,6 +595,10 @@ export default function Ordenes() {
         usuario, 'eliminar', `Eliminó orden — Motivo: ${deleteMotivo.trim()}`,
         'eliminada', 'false', 'true'
       );
+      // @safe-fase-sin-sincronizar: soft delete (flag visual `eliminada=true`),
+      // NO una transición de fase. La fase original se preserva intencionalmente
+      // para que el flujo de Restaurar (revertir eliminada=false) funcione sin
+      // perder el estado de negocio previo a la eliminación.
       await updateDoc(doc(db, 'ordenes_servicio', deleteTarget.id), {
         eliminada: true,
         motivoEliminacion: deleteMotivo.trim(),
