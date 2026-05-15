@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection, addDoc, doc, setDoc, Timestamp, query, onSnapshot, orderBy,
-  runTransaction, updateDoc, serverTimestamp, getDoc,
+  runTransaction, updateDoc, serverTimestamp, getDoc, getDocs, where,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { format, isSameDay } from 'date-fns';
@@ -13,6 +13,7 @@ import {
 } from '../services/clientes.service';
 import { buscarPrecioMantenimiento } from '../services/precios.service';
 import { marcarOrdenReactivada } from '../services/campanasMarketing.service';
+import { crearNotificacion } from '../services/notificaciones.service';
 import {
   Cliente, Personal, OrdenServicio, FaseOrden, EstadoOrdenSimple, CitaPorConfirmar,
 } from '../types';
@@ -702,6 +703,110 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       );
 
       const nuevaRef = await addDoc(collection(db, 'ordenes_servicio'), ordenLimpia);
+
+      // SPRINT-169 (2026-05-15) — Emitir notificación `orden_asignada` a los
+      // destinatarios afectados por la creación de la orden. Best-effort:
+      // si falla, NO rompemos el flujo de creación (la orden ya existe y la
+      // coord puede recrear notifs manualmente o reintentar). Cada noti es
+      // independiente — un fallo individual no afecta a las demás.
+      //
+      // Destinatarios:
+      //   1. Técnico asignado (si hay `form.tecnicoId`, que ya es `auth.uid`
+      //      post-c4be345 / SPRINT-132).
+      //   2. Operaria derivada del técnico (si `operariaIdDerivada` está set;
+      //      ya es `auth.uid` post-SPRINT-149).
+      //   3. Admins + coordinadoras activos (mismo patrón que
+      //      `notificarSugerenciaSoloChequeo` en `ordenes.service.ts:331`).
+      //
+      // P-007 (cazador `check-crearnotificacion-userid-shape.ts`) caza
+      // cualquier `userId: <X>.id` aquí — usamos `p.uid` explícito + filtro
+      // `.filter(p => p.uid)`, NO `.id`.
+      //
+      // Causa raíz del bug original: SPRINT-163 (marcado COMPLETADO en cola
+      // pero sin commit en git log) nunca implementó este bloque. El tipo
+      // `orden_asignada` quedó huérfano en `src/types/index.ts:1750` sin
+      // ningún call site que lo emitiera. Postmortem completo:
+      // `docs/postmortems/2026-05-15-orden-asignada-regresion-sprint-163-no-commit.md`.
+      try {
+        const mensajeBase = `Nueva orden ${numero} asignada — ${form.clienteNombre} (${form.equipoTipo || 'equipo'})${form.fechaCita ? ` para el ${form.fechaCita}${form.horaInicio ? ' a las ' + form.horaInicio : ''}` : ''}.`;
+
+        // 1. Notificar al técnico asignado.
+        if (form.tecnicoId) {
+          try {
+            await crearNotificacion({
+              userId: form.tecnicoId,
+              destinatarioNombre: form.tecnicoNombre || undefined,
+              tipo: 'orden_asignada',
+              titulo: `Orden asignada · ${numero}`,
+              mensaje: mensajeBase,
+              ordenId: nuevaRef.id,
+              ordenNumero: numero,
+            });
+          } catch (notifErr) {
+            console.warn('No se pudo notificar al técnico de orden_asignada:', notifErr);
+          }
+        }
+
+        // 2. Notificar a la operaria derivada (si existe y no es la misma
+        //    persona que el técnico — defensivo, no debería pasar pero
+        //    evitamos notis duplicadas).
+        if (operariaIdDerivada && operariaIdDerivada !== form.tecnicoId) {
+          try {
+            await crearNotificacion({
+              userId: operariaIdDerivada,
+              destinatarioNombre: operariaNombreDerivada || undefined,
+              tipo: 'orden_asignada',
+              titulo: `Orden asignada · ${numero}`,
+              mensaje: `${mensajeBase} Técnico: ${form.tecnicoNombre || 'sin asignar'}.`,
+              ordenId: nuevaRef.id,
+              ordenNumero: numero,
+            });
+          } catch (notifErr) {
+            console.warn('No se pudo notificar a la operaria de orden_asignada:', notifErr);
+          }
+        }
+
+        // 3. Notificar a admins + coordinadoras activos (patrón hermano de
+        //    `notificarSugerenciaSoloChequeo` en `ordenes.service.ts`).
+        try {
+          const qStaff = query(
+            collection(db, 'personal'),
+            where('activo', '==', true),
+            where('rol', 'in', ['administrador', 'coordinadora']),
+          );
+          const snapStaff = await getDocs(qStaff);
+          const yaNotificados = new Set<string>();
+          if (form.tecnicoId) yaNotificados.add(form.tecnicoId);
+          if (operariaIdDerivada) yaNotificados.add(operariaIdDerivada);
+          // No notificar al creador (suele ser una coord/secretaria que ya
+          // sabe que la creó — la noti sería ruido).
+          if (usuarioActual?.id) yaNotificados.add(usuarioActual.id);
+          const destinatarios = snapStaff.docs
+            .map(d => ({ id: d.id, ...d.data() } as Personal))
+            .filter(p => !!p.uid && !yaNotificados.has(p.uid));
+          await Promise.all(
+            destinatarios.map(p =>
+              crearNotificacion({
+                userId: p.uid!,
+                destinatarioNombre: p.nombre,
+                tipo: 'orden_asignada',
+                titulo: `Orden asignada · ${numero}`,
+                mensaje: `${mensajeBase} Técnico: ${form.tecnicoNombre || 'sin asignar'}.`,
+                ordenId: nuevaRef.id,
+                ordenNumero: numero,
+              }).catch(err => {
+                console.warn(`No se pudo notificar a ${p.nombre} de orden_asignada:`, err);
+              }),
+            ),
+          );
+        } catch (errStaff) {
+          console.warn('No se pudo cargar staff para notificar orden_asignada:', errStaff);
+        }
+      } catch (errNotif) {
+        // Wrapper externo defensivo — no debería disparar (cada bloque ya
+        // tiene su try interno) pero por seguridad evitamos romper el flujo.
+        console.warn('Fallo agregado al emitir notificaciones orden_asignada:', errNotif);
+      }
 
       // Sprint Mapa Clientes Commit 3 — ROI tracking Fase 2.
       // Best-effort: detectamos si esta orden califica como "reactivada" por

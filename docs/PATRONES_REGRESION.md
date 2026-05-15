@@ -369,6 +369,31 @@ nomina.service.ts, `o.tecnicoId === t.id` en Dashboard.tsx).
 
 ---
 
+## P-010 — Tipo de notificación declarado en `TipoNotificacion` sin call site emisor
+
+**Bug original:** SPRINT-169 (2026-05-15). Hash del fix: ver `EJECUCION_AUTONOMA.md` entrada de la fecha. Postmortem: `docs/postmortems/2026-05-15-orden-asignada-regresion-sprint-163-no-commit.md`.
+
+**Síntoma:** feature de notificación parece completa en código (tipo declarado en `TipoNotificacion`, service `crearNotificacion` correcto, rule `notificaciones.create: if esStaff()` correcta) pero en producción la noti jamás llega a la campanita. NO hay error, NO hay warning, NO hay request rojo en Network — simplemente nadie llama a `crearNotificacion({ tipo: '<X>', ... })` desde el código de la app. Detección requiere que un humano se dé cuenta de la ausencia (en este caso QA E2E distribuido del 2026-05-14 con OS-0056 — 1 día después de marcar SPRINT-163 como COMPLETADO).
+
+**Caso concreto:** el tipo `'orden_asignada'` quedó declarado en `src/types/index.ts:1750` desde algún sprint previo (probable redacción inicial de SPRINT-157 o SPRINT-158). SPRINT-163 fue marcado COMPLETADO en `docs/sprints/COLA_AUTONOMA.md` el 2026-05-13 pero **nunca produjo commit en git log** — la búsqueda `git log --grep='orden_asignada\|SPRINT-163'` retorna solo refs documentales, ningún diff de código. El handler de creación de orden en `useOrdenCreateForm.ts` línea 704 (post-`addDoc(collection(db, 'ordenes_servicio'), ordenLimpia)`) nunca tuvo el call site `crearNotificacion({ tipo: 'orden_asignada', userId: tecnico.uid, ... })`. Resultado: el tipo huérfano vivió ~2 días invisible hasta que QA real ejercitó el flujo.
+
+**Causa raíz:** `TipoNotificacion` es una unión de strings literales en TypeScript (`'a' | 'b' | 'c'`). Cualquiera puede agregar un valor nuevo "de bandera" anticipando un feature, sin agregar el call site correspondiente. TypeScript NO obliga a que TODOS los valores de un union type sean usados — solo verifica que los usados estén en la unión. Resultado: drift silencioso entre "tipos declarados" y "tipos efectivamente emitidos". El proceso de marcar un sprint como COMPLETADO sin commit (administrative-only update a `COLA_AUTONOMA.md`) amplifica el riesgo: la cola dice "hecho" pero el repo dice "ni se intentó".
+
+**Regla:** cada valor de la unión `TipoNotificacion` debe aparecer al menos una vez como literal `'<valor>'` en `tipo:` dentro de un bloque `crearNotificacion({...})` en `src/`, O dentro de un archivo `api/**` o cualquier archivo que escriba directo a la colección `notificaciones` con Admin SDK (`db.collection('notificaciones').add(...)`). Si no aparece, o es deuda explícita (agregar a `ALLOWLIST` del cazador con sprint owner que lo paga) o es feature huérfano que se debe limpiar del tipo.
+
+**Cazador:** `scripts/invariantes/check-tipo-notificacion-huerfano.ts`. Lee la unión de `src/types/index.ts`, escanea `src/**/*.{ts,tsx}` + `api/**/*.ts` por dos pasadas: (a) bloques `crearNotificacion({...})` con paréntesis balanceados → extrae `tipo: '<v>'` literal; (b) archivos que referencian `collection('notificaciones')` o están dentro de `api/` → extrae cualquier `tipo: '<v>'` literal del archivo (heurística amplia, baja tasa de falsos positivos porque el scope ya está acotado). Reporta cada tipo del union que no aparezca como literal emitido.
+
+**Allowlist:** `ALLOWLIST` map en el header del cazador. Cada entrada documenta el tipo + razón + sprint owner. Hoy:
+- `otro` — catch-all genérico sin owner.
+- `recordatorio` — emitido server-side desde `scripts/cron-recordatorios.ts` fuera del scope del cazador.
+- `reclamo_garantia` — deuda priorizada con owner SPRINT-174 (notificaciones faltantes en flujo de orden).
+
+Si la allowlist crece a >5 entradas, pagar la deuda agregando los call sites o refactorear el cazador.
+
+**Limitación conocida:** call sites con `tipo: tipoVar` (variable resuelta en runtime) no contribuyen al match — los típicos `tipo` están como literales en el shape. Si aparecen casos legítimos transitivos, documentarlos en allowlist.
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:

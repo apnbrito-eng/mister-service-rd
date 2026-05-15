@@ -26,6 +26,7 @@ import { check as checkRulesPendientesDeploy } from './check-rules-pendientes-de
 import { check as checkTecnicoidPersonalIdMisuse } from './check-tecnicoid-personal-id-misuse.js';
 import { check as checkCrearnotificacionUseridShape } from './check-crearnotificacion-userid-shape.js';
 import { check as checkParserCamposFaltantes } from './check-parser-campos-faltantes.js';
+import { check as checkTipoNotificacionHuerfano } from './check-tipo-notificacion-huerfano.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -45,6 +46,7 @@ async function main() {
     checkTecnicoidPersonalIdMisuse,
     checkCrearnotificacionUseridShape,
     checkParserCamposFaltantes,
+    checkTipoNotificacionHuerfano,
   ];
 
   const t0 = Date.now();
