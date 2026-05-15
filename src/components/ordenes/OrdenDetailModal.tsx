@@ -806,24 +806,6 @@ export default function OrdenDetailModal({
                 </div>
               )}
 
-              {/* Firma del cliente (SPRINT-159) */}
-              {cierre?.firmaClienteUrl && (
-                <div>
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                    Firma del cliente
-                  </p>
-                  <a
-                    href={cierre.firmaClienteUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 underline"
-                  >
-                    <FileSignature size={13} />
-                    Ver firma del cliente
-                  </a>
-                </div>
-              )}
-
               {/* Período de garantía */}
               {periodoDias !== null && (
                 <div>
@@ -847,6 +829,34 @@ export default function OrdenDetailModal({
                   </div>
                 </div>
               )}
+
+              {/* Firma del cliente (SPRINT-159 captura + SPRINT-168 render UI).
+                  Thumbnail clickeable. Si la orden tiene cierre pero NO firma
+                  (legacy pre-SPRINT-159), muestra placeholder "Sin firma". */}
+              {cierre && (cierre.firmaClienteUrl ? (
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+                    <FileSignature size={12} /> Firma del cliente
+                  </p>
+                  <a
+                    href={cierre.firmaClienteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block"
+                    title="Ver firma completa"
+                  >
+                    <img
+                      src={cierre.firmaClienteUrl}
+                      alt="Firma del cliente"
+                      className="h-16 w-auto max-w-[240px] rounded-lg border border-gray-200 bg-white hover:opacity-90 transition-opacity"
+                    />
+                  </a>
+                </div>
+              ) : (
+                <div className="text-[11px] text-gray-500 italic flex items-center gap-1.5">
+                  <FileSignature size={12} /> Sin firma del cliente (orden previa al SPRINT-159)
+                </div>
+              ))}
             </div>
           </div>
         );

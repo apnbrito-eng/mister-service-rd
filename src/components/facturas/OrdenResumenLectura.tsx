@@ -192,17 +192,29 @@ export default function OrdenResumenLectura({ orden, variant = 'completo', factu
               Ver foto del cierre
             </a>
           )}
-          {/* SPRINT-159: link a la firma del cliente. Órdenes legacy no la tienen. */}
-          {cierre.firmaClienteUrl && (
-            <a
-              href={cierre.firmaClienteUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 ml-3 inline-flex items-center gap-2 text-xs text-blue-600 hover:text-blue-800 underline"
-            >
-              ✍️ Ver firma del cliente
-            </a>
-          )}
+        </Bloque>
+      )}
+
+      {/* SPRINT-168 — Firma del cliente como bloque propio con thumbnail
+          (SPRINT-159 ya capturaba la firma pero el render en fila expandida
+          de /admin/facturas quedaba enterrado dentro del bloque "Cierre del
+          técnico" y los QA testers no lo encontraban). Bloque dedicado +
+          imagen visible. Órdenes legacy sin firma no muestran este bloque. */}
+      {cierre?.firmaClienteUrl && (
+        <Bloque titulo="Firma del cliente">
+          <a
+            href={cierre.firmaClienteUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block"
+            title="Ver firma completa"
+          >
+            <img
+              src={cierre.firmaClienteUrl}
+              alt="Firma del cliente"
+              className="h-16 w-auto max-w-[240px] rounded-lg border border-gray-200 bg-white hover:opacity-90 transition-opacity"
+            />
+          </a>
         </Bloque>
       )}
 
