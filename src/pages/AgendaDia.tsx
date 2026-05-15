@@ -281,7 +281,12 @@ export default function AgendaDia() {
         auditoria: arrayUnion(registroAuditoria),
         updatedAt: ahora,
       });
-      if (orden.tecnicoId) {
+      // SPRINT-174: notif `precio_aprobado` al técnico + admins/coords
+      // (autoexclusión del aprobador). Patrón canónico SPRINT-169
+      // (`5823955`): try/catch independiente por destinatario, `p.uid`
+      // siempre (P-007), filtrar `p.uid &&` para excluir empleados sin
+      // Auth. No bloquea el flujo si falla.
+      if (orden.tecnicoId && orden.tecnicoId !== currentUser?.uid) {
         try {
           await crearNotificacion({
             userId: orden.tecnicoId,
@@ -293,8 +298,35 @@ export default function AgendaDia() {
             ordenNumero: orden.numero,
           });
         } catch (notifErr) {
-          console.error('Error creando notificación:', notifErr);
+          console.error('[SPRINT-174] precio_aprobado a técnico falló:', notifErr);
         }
+      }
+      try {
+        const destinatariosStaff = personal.filter(
+          p =>
+            !!p.uid &&
+            p.activo &&
+            (p.rol === 'administrador' || p.rol === 'coordinadora') &&
+            p.uid !== currentUser?.uid &&
+            p.uid !== orden.tecnicoId,
+        );
+        for (const destino of destinatariosStaff) {
+          try {
+            await crearNotificacion({
+              userId: destino.uid!,
+              destinatarioNombre: destino.nombre,
+              tipo: 'precio_aprobado',
+              titulo: `Precio aprobado · ${orden.numero || 'orden'}`,
+              mensaje: `Precio RD$${precio.toLocaleString('es-DO')} aprobado en orden ${orden.numero || ''}. Cliente: ${orden.clienteNombre}. Técnico: ${orden.tecnicoNombre || 'sin asignar'}.`,
+              ordenId: orden.id,
+              ordenNumero: orden.numero,
+            });
+          } catch (err) {
+            console.error('[SPRINT-174] precio_aprobado a staff falló para', destino.uid, err);
+          }
+        }
+      } catch (errStaff) {
+        console.error('[SPRINT-174] precio_aprobado fallo enumerando staff:', errStaff);
       }
       toast.success('Precio aprobado');
     } catch (err) {

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, updateDoc, where, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, FaseOrden, MetodoPago, StandbyPieza } from '../types';
+import { OrdenServicio, FaseOrden, MetodoPago, Personal, StandbyPieza } from '../types';
 import { formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente, calcularExpiracionTokenPortal } from '../utils';
 import { METODO_PAGO_LABELS } from '../utils/factura';
 import ModalSugerirSoloChequeo from '../components/cierre/ModalSugerirSoloChequeo';
@@ -42,7 +42,7 @@ import { es } from 'date-fns/locale';
 export default function OrdenDetalle() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
   const [orden, setOrden] = useState<OrdenServicio | null>(null);
   const [loading, setLoading] = useState(true);
   const [gpsSaving, setGpsSaving] = useState(false);
@@ -125,8 +125,12 @@ export default function OrdenDetalle() {
         auditoria: arrayUnion(registroAuditoria),
         updatedAt: ahora,
       });
-      // Notificar al técnico para que pueda continuar con el trabajo
-      if (orden.tecnicoId) {
+      // SPRINT-174: notif `precio_aprobado` al técnico + admins/coords
+      // (autoexclusión del aprobador). Patrón canónico SPRINT-169
+      // (`5823955`): try/catch independiente por destinatario, `p.uid`
+      // siempre (P-007). Sin state local de personal, query inline a
+      // `personal` filtrando `activo=true && rol in [administrador, coordinadora]`.
+      if (orden.tecnicoId && orden.tecnicoId !== currentUser?.uid) {
         try {
           await crearNotificacion({
             userId: orden.tecnicoId,
@@ -138,8 +142,41 @@ export default function OrdenDetalle() {
             ordenNumero: orden.numero,
           });
         } catch (notifErr) {
-          console.error('Error creando notificación de precio aprobado:', notifErr);
+          console.error('[SPRINT-174] precio_aprobado a técnico falló:', notifErr);
         }
+      }
+      try {
+        const qStaff = query(
+          collection(db, 'personal'),
+          where('activo', '==', true),
+          where('rol', 'in', ['administrador', 'coordinadora']),
+        );
+        const snapStaff = await getDocs(qStaff);
+        const destinatariosStaff = snapStaff.docs
+          .map(d => ({ id: d.id, ...d.data() } as Personal))
+          .filter(
+            p =>
+              !!p.uid &&
+              p.uid !== currentUser?.uid &&
+              p.uid !== orden.tecnicoId,
+          );
+        for (const destino of destinatariosStaff) {
+          try {
+            await crearNotificacion({
+              userId: destino.uid!,
+              destinatarioNombre: destino.nombre,
+              tipo: 'precio_aprobado',
+              titulo: `Precio aprobado · ${orden.numero || 'orden'}`,
+              mensaje: `Precio RD$${precio.toLocaleString('es-DO')} aprobado en orden ${orden.numero || ''}. Cliente: ${orden.clienteNombre}. Técnico: ${orden.tecnicoNombre || 'sin asignar'}.`,
+              ordenId: orden.id,
+              ordenNumero: orden.numero,
+            });
+          } catch (err) {
+            console.error('[SPRINT-174] precio_aprobado a staff falló para', destino.uid, err);
+          }
+        }
+      } catch (errStaff) {
+        console.error('[SPRINT-174] precio_aprobado fallo enumerando staff:', errStaff);
       }
       toast.success('✅ Precio aprobado');
     } catch (err) {

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { doc, Timestamp, arrayUnion, runTransaction } from 'firebase/firestore';
+import { collection, doc, getDocs, query, where, Timestamp, arrayUnion, runTransaction } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { OrdenServicio, Usuario, Banco, PagoOrden, EstadoPagoOrden } from '../../types';
+import { OrdenServicio, Usuario, Banco, PagoOrden, EstadoPagoOrden, Personal } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { suscribirBancos } from '../../services/bancos.service';
+import { crearNotificacion } from '../../services/notificaciones.service';
 import { crearRegistroAuditoria } from '../../utils';
 import { mensajeDatosCuentaBancaria, whatsappUrl } from '../../utils/whatsapp';
 import Modal from '../Modal';
@@ -222,6 +223,50 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
         toast.success('Pago registrado');
       } else {
         toast.success('Pago registrado');
+
+        // SPRINT-174: emitir notif `pago_registrado` a admins/coords
+        // (autoexclusión del registrador). Solo cuando el pago realmente se
+        // creó (NO duplicado). Patrón canónico SPRINT-169 (`5823955`):
+        // try/catch independiente por destinatario, `p.uid` siempre (P-007).
+        // No bloquea el flujo si falla — el pago ya quedó persistido en la
+        // transacción anterior.
+        try {
+          const qStaff = query(
+            collection(db, 'personal'),
+            where('activo', '==', true),
+            where('rol', 'in', ['administrador', 'coordinadora']),
+          );
+          const snapStaff = await getDocs(qStaff);
+          const destinatariosStaff = snapStaff.docs
+            .map(d => ({ id: d.id, ...d.data() } as Personal))
+            .filter(p => !!p.uid && p.uid !== currentUser?.uid);
+          const totalAcum = resultado.nuevoMontoPagado ?? 0;
+          const totalOrden = total;
+          const restante = Math.max(0, totalOrden - totalAcum);
+          const detallePago = `${metodo} ${formatearMonto(m)}${
+            pago.bancoNombre ? ` (${pago.bancoNombre})` : ''
+          }`;
+          const mensaje = `Pago registrado: ${detallePago}. Orden ${orden.numero || ''} — ${orden.clienteNombre}. Acumulado: ${formatearMonto(totalAcum)}${
+            totalOrden > 0 ? ` / ${formatearMonto(totalOrden)}` : ''
+          }${restante > 0 ? `. Restante: ${formatearMonto(restante)}` : '.'}`;
+          for (const destino of destinatariosStaff) {
+            try {
+              await crearNotificacion({
+                userId: destino.uid!,
+                destinatarioNombre: destino.nombre,
+                tipo: 'pago_registrado',
+                titulo: `Pago registrado · ${orden.numero || 'orden'}`,
+                mensaje,
+                ordenId: orden.id,
+                ordenNumero: orden.numero,
+              });
+            } catch (err) {
+              console.error('[SPRINT-174] pago_registrado falló para', destino.uid, err);
+            }
+          }
+        } catch (errStaff) {
+          console.error('[SPRINT-174] pago_registrado fallo enumerando staff:', errStaff);
+        }
       }
       onSaved?.();
       handleClose();

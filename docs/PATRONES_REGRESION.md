@@ -386,7 +386,7 @@ nomina.service.ts, `o.tecnicoId === t.id` en Dashboard.tsx).
 **Allowlist:** `ALLOWLIST` map en el header del cazador. Cada entrada documenta el tipo + razón + sprint owner. Hoy:
 - `otro` — catch-all genérico sin owner.
 - `recordatorio` — emitido server-side desde `scripts/cron-recordatorios.ts` fuera del scope del cazador.
-- `reclamo_garantia` — deuda priorizada con owner SPRINT-174 (notificaciones faltantes en flujo de orden).
+- `reclamo_garantia` — deuda priorizada. El SPRINT-174 (2026-05-12) cerró 4 tipos (`precio_aprobado` extendido a admins/coords, `cotizacion_lista`, `cierre_completado`, `pago_registrado`) pero NO incluyó `reclamo_garantia` (api/garantia/[token].ts crea cita + audit log, falta noti in-app — sprint dedicado pendiente).
 
 Si la allowlist crece a >5 entradas, pagar la deuda agregando los call sites o refactorear el cazador.
 

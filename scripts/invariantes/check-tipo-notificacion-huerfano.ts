@@ -75,7 +75,9 @@ const ALLOWLIST: Record<string, string> = {
     'deuda priorizada: tipo declarado para futura noti al admin/coord cuando '
     + 'cliente abre reclamo desde /garantia/:token (api/garantia/[token].ts ya '
     + 'crea cita con origen=reclamo_garantia + audit log; falta noti in-app). '
-    + 'Owner: SPRINT-174 (notificaciones faltantes en flujo de orden).',
+    + 'Owner: sprint dedicado a flujo de reclamo de garantía (NO incluido en '
+    + 'SPRINT-174, que solo cubrió precio_aprobado/cotizacion_lista/cierre_completado/'
+    + 'pago_registrado).',
 };
 
 const REPO_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..');

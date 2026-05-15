@@ -1779,6 +1779,17 @@ export type TipoNotificacion =
   // SPRINT-151: emitida desde ProcesarFacturacionModal al admin/coord cuando
   // se emite un conduce de garantía (incluye flag verificado del pago).
   | 'conduce_emitido'
+  // SPRINT-174 (2026-05-12): notificaciones faltantes en eventos del flujo
+  // de orden. Cada tipo tiene call sites concretos:
+  // - `cotizacion_lista`: TecnicoVista::handleAgregarNota cuando técnico
+  //   sugiere precio (destinatarios: operaria del técnico + admins/coords).
+  // - `cierre_completado`: CierreServicioWizard::handleCerrarServicio post
+  //   `updateDoc` (destinatarios: operaria del técnico + admins/coords).
+  // - `pago_registrado`: RegistrarPagoModal::handleGuardar post transacción
+  //   (destinatarios: admins/coords).
+  | 'cotizacion_lista'
+  | 'cierre_completado'
+  | 'pago_registrado'
   | 'otro';
 
 export interface Notificacion {

@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs, arrayUnion } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs, query, where, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, Cliente, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, StandbyPieza } from '../types';
+import { OrdenServicio, Cliente, Personal, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, StandbyPieza } from '../types';
 import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria, formatMoneda, tieneStandby, formatearEquipoLabel, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente } from '../utils';
 import ModalSugerirSoloChequeo from '../components/cierre/ModalSugerirSoloChequeo';
 import BannerEstadoSugerenciaSoloChequeo from '../components/cierre/BannerEstadoSugerenciaSoloChequeo';
 import FotoEquipoDisplay from '../components/shared/FotoEquipoDisplay';
 import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
+import { crearNotificacion } from '../services/notificaciones.service';
 import { calcularQuincenaActual, rangoQuincena } from '../utils/comisiones';
 import { ComisionRegistro } from '../types';
 import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
@@ -74,7 +75,7 @@ function crearPinNumerado(numero: number, color: string = '#1a5fa8'): L.DivIcon 
 type VistaTab = 'hoy' | 'semana' | 'mes' | 'rango';
 
 export default function TecnicoVista() {
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
@@ -435,6 +436,77 @@ export default function TecnicoVista() {
       updateData.auditoria = arrayUnion(...registros);
 
       await updateDoc(doc(db, 'ordenes_servicio', selectedOrden.id), updateData);
+
+      // SPRINT-174: si el técnico sugirió un precio (precioSugerido seteado),
+      // emitir notif `cotizacion_lista` a la operaria del técnico +
+      // admins/coords. Autoexclusión del propio técnico (es quien sugirió).
+      // Patrón canónico SPRINT-169 (`5823955`): try/catch independiente por
+      // destinatario, `p.uid` siempre (P-007), no bloquea el flujo si falla.
+      const sugirioPrecio = precioSugerido && !isNaN(Number(precioSugerido));
+      if (sugirioPrecio) {
+        const precioNum = Number(precioSugerido);
+        const ordenSnapshot = selectedOrden;
+        try {
+          // Operaria asociada al técnico (operariaId persiste `auth.uid`
+          // post-SPRINT-149). Si la orden no tiene operariaId, también
+          // notificamos a operarias activas vía el sweep de staff abajo.
+          if (
+            ordenSnapshot.operariaId &&
+            ordenSnapshot.operariaId !== currentUser?.uid
+          ) {
+            try {
+              await crearNotificacion({
+                userId: ordenSnapshot.operariaId,
+                destinatarioNombre: ordenSnapshot.operariaNombre,
+                tipo: 'cotizacion_lista',
+                titulo: `Cotización lista · ${ordenSnapshot.numero || 'orden'}`,
+                mensaje: `Técnico sugirió RD$${precioNum.toLocaleString('es-DO')} para ${ordenSnapshot.clienteNombre}. Revisá y aprobá el precio.`,
+                ordenId: ordenSnapshot.id,
+                ordenNumero: ordenSnapshot.numero,
+              });
+            } catch (notifErr) {
+              console.error('[SPRINT-174] cotizacion_lista a operaria falló:', notifErr);
+            }
+          }
+          // Admins + coordinadoras activos.
+          try {
+            const qStaff = query(
+              collection(db, 'personal'),
+              where('activo', '==', true),
+              where('rol', 'in', ['administrador', 'coordinadora']),
+            );
+            const snapStaff = await getDocs(qStaff);
+            const destinatariosStaff = snapStaff.docs
+              .map(d => ({ id: d.id, ...d.data() } as Personal))
+              .filter(
+                p =>
+                  !!p.uid &&
+                  p.uid !== currentUser?.uid &&
+                  p.uid !== ordenSnapshot.operariaId,
+              );
+            for (const destino of destinatariosStaff) {
+              try {
+                await crearNotificacion({
+                  userId: destino.uid!,
+                  destinatarioNombre: destino.nombre,
+                  tipo: 'cotizacion_lista',
+                  titulo: `Cotización lista · ${ordenSnapshot.numero || 'orden'}`,
+                  mensaje: `Técnico ${ordenSnapshot.tecnicoNombre || ''} sugirió RD$${precioNum.toLocaleString('es-DO')} para ${ordenSnapshot.clienteNombre}.`,
+                  ordenId: ordenSnapshot.id,
+                  ordenNumero: ordenSnapshot.numero,
+                });
+              } catch (err) {
+                console.error('[SPRINT-174] cotizacion_lista a staff falló para', destino.uid, err);
+              }
+            }
+          } catch (errStaff) {
+            console.error('[SPRINT-174] cotizacion_lista fallo enumerando staff:', errStaff);
+          }
+        } catch (errNotif) {
+          console.error('[SPRINT-174] cotizacion_lista bloque externo:', errNotif);
+        }
+      }
+
       toast.success('Nota agregada');
       setShowNotaModal(false);
       setSelectedOrden(null);

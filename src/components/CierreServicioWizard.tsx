@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
+import { collection, doc, getDocs, query, updateDoc, where, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, PiezaUsada } from '../types';
+import { OrdenServicio, Personal, PiezaUsada } from '../types';
+import { crearNotificacion } from '../services/notificaciones.service';
 import { subirFirmaCierre, subirFotoCierre, distanciaMetros, obtenerUbicacionGPS, type GpsErrorInfo } from '../services/storage.service';
 import { calcularTotales, borrarFotoPieza } from '../services/piezas.service';
 import { crearRegistroAuditoria } from '../utils';
@@ -430,6 +431,69 @@ export default function CierreServicioWizard({
 
       await updateDoc(doc(db, 'ordenes_servicio', orden.id), ordenUpdate);
       console.log('Cierre guardado OK');
+
+      // SPRINT-174: emitir notif `cierre_completado` a la operaria del
+      // técnico + admins/coords. Autoexclusión del propio técnico (es
+      // quien cerró). Patrón canónico SPRINT-169 (`5823955`): try/catch
+      // independiente por destinatario, `p.uid` siempre (P-007). No bloquea
+      // el flujo de cierre si falla — el cierre ya quedó persistido.
+      try {
+        const piezasInfo = hayPiezas ? ` Piezas: ${piezasUsadas.length}.` : '';
+        const mensajeBase = `Servicio cerrado por ${tecnicoNombre}. Cliente: ${orden.clienteNombre}. Equipo funciona: ${equipoFunciona === 'si' ? 'Sí' : 'No'}.${piezasInfo}`;
+
+        // Operaria del técnico (operariaId persiste auth.uid post-SPRINT-149).
+        if (orden.operariaId && orden.operariaId !== tecnicoId) {
+          try {
+            await crearNotificacion({
+              userId: orden.operariaId,
+              destinatarioNombre: orden.operariaNombre,
+              tipo: 'cierre_completado',
+              titulo: `Cierre completado · ${orden.numero || 'orden'}`,
+              mensaje: mensajeBase,
+              ordenId: orden.id,
+              ordenNumero: orden.numero,
+            });
+          } catch (notifErr) {
+            console.error('[SPRINT-174] cierre_completado a operaria falló:', notifErr);
+          }
+        }
+        // Admins + coordinadoras activos.
+        try {
+          const qStaff = query(
+            collection(db, 'personal'),
+            where('activo', '==', true),
+            where('rol', 'in', ['administrador', 'coordinadora']),
+          );
+          const snapStaff = await getDocs(qStaff);
+          const destinatariosStaff = snapStaff.docs
+            .map(d => ({ id: d.id, ...d.data() } as Personal))
+            .filter(
+              p =>
+                !!p.uid &&
+                p.uid !== tecnicoId &&
+                p.uid !== orden.operariaId,
+            );
+          for (const destino of destinatariosStaff) {
+            try {
+              await crearNotificacion({
+                userId: destino.uid!,
+                destinatarioNombre: destino.nombre,
+                tipo: 'cierre_completado',
+                titulo: `Cierre completado · ${orden.numero || 'orden'}`,
+                mensaje: mensajeBase,
+                ordenId: orden.id,
+                ordenNumero: orden.numero,
+              });
+            } catch (err) {
+              console.error('[SPRINT-174] cierre_completado a staff falló para', destino.uid, err);
+            }
+          }
+        } catch (errStaff) {
+          console.error('[SPRINT-174] cierre_completado fallo enumerando staff:', errStaff);
+        }
+      } catch (errNotif) {
+        console.error('[SPRINT-174] cierre_completado bloque externo:', errNotif);
+      }
 
       toast.success('✅ Servicio cerrado exitosamente');
       onClosed();
