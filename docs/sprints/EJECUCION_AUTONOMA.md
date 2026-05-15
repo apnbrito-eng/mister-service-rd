@@ -5,6 +5,63 @@
 
 ---
 
+## 2026-05-14 — autónomo (`trabaja`, pasada post-QA E2E): SPRINT-168 (firma del cliente render UI)
+
+### Contexto
+
+QA E2E distribuido 2026-05-14 sobre OS-0056 / CG-00019 reveló que SPRINT-159 capturó firma OK (`cierreServicio.firmaClienteUrl` poblado, registro de cambios confirmado) pero el render quedó subóptimo. 3 testers (Wilainy, Yohana, Jorge admin) no encontraron la firma en `/admin/ordenes` modal ni en `/admin/facturas` fila expandida CG-00019.
+
+### Archivist PRE-CHANGE
+
+- `git log --oneline --all -- <touch-list>`:
+  - `1ddb20e` SPRINT-158a render foto cierre + período garantía (mismo bloque "Cierre del servicio" en OrdenDetailModal).
+  - `fd5e685` SPRINT-159 captura firma + persistencia + render inicial (3 archivos del touch-list).
+  - `79c7fcc` SPRINT-153 nota + período fallback en OrdenResumenLectura.
+  - `b45df45` SPRINT-148 OrdenResumenLectura creado.
+- Postmortems consultados: ninguno aplica directamente. Sin recurrencias.
+- Patrones P-XXX aplicables: ninguno (lectura/render puro de campo opcional ya existente, sin escrituras a Firestore, sin cross-collection, sin rules).
+- Hallazgo en read-only check: los 3 archivos del touch-list YA tenían el render de firma desde SPRINT-159, pero subóptimo:
+  - `OrdenDetailModal.tsx:810-825`: link textual entre foto y período (poco visible).
+  - `OrdenResumenLectura.tsx:195-205`: `<a>` enterrado dentro de bloque "Cierre del técnico" con emoji ✍️.
+  - `OrdenDetalle.tsx:762-770`: `<img>` thumbnail correcto desde origen — NO requería cambios.
+- Conclusión: SPRINT-168 NO es "agregar render", es "upgrade del render existente a visible".
+
+### Builder (ejecutado por coordinator dado scope acotado: 2 archivos render puro)
+
+Cambios:
+1. `OrdenDetailModal.tsx`: extraído link, agregado bloque "Firma del cliente" DEBAJO de período de garantía con `<img>` thumbnail clickeable (h-16 max-w-[240px]). Placeholder "Sin firma" gris para órdenes legacy con cierre pero sin firmaClienteUrl.
+2. `OrdenResumenLectura.tsx`: extraído del bloque "Cierre del técnico" a `<Bloque>` propio "Firma del cliente" con thumbnail. Removido emoji ✍️ (CLAUDE.md "no emojis"). Bloque oculto si no hay firma (variant compacto en fila expandida quedaría con ruido innecesario).
+3. `OrdenDetalle.tsx`: no tocado, ya correcto.
+
+### Tester
+
+- typecheck: PASS.
+- cazadores 8/8: PASS.
+- lint de archivos modificados: PASS.
+
+### Regression guardian / Reviewer (auto-evaluado dado scope minimal)
+
+- No aplica regression_guardian completo: no toca rules/services/context — solo render de campo opcional ya consumido.
+- Reviewer self-check: convenciones CLAUDE.md OK (sin emojis, sin react-refresh violations, comentarios referencian sprint), retrocompat OK (legacy sin firma → placeholder en modal, oculto en compacto), no introduce listeners ni queries adicionales.
+
+### Commit + push
+
+- Hash: `f69fe6e`.
+- Diff: 2 archivos, +51/-29.
+- Pushed a `origin/main` OK.
+- Pre-commit hook ejecutado limpio (typecheck + cazadores + lint).
+
+### Deploy
+
+- Pendiente verificación devops post-push (Vercel webhook automático).
+- QA visual humano pendiente post-deploy: Wilainy/Yohana/Jorge admin abren OS-0056 en `/admin/ordenes` (modal) y en `/admin/facturas` (fila expandida CG-00019) y verifican thumbnail.
+
+### Tiempo
+
+~20 min (PRE-CHANGE + audit + 2 ediciones + tester + commit + push + trazabilidad).
+
+---
+
 ## 2026-05-14 — interactivo end-to-end: SPRINT-160 (default tiempoGarantiaDias hereda valor del wizard)
 
 ### Contexto

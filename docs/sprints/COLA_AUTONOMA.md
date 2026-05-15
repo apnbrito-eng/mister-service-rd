@@ -118,7 +118,7 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-168 — Renderizar firma del cliente en UI (modal admin orden + fila expandida facturas)
 
-**Estado:** PENDIENTE
+**Estado:** ✅ COMPLETADO 2026-05-14 por coordinator (pasada autónoma post-QA E2E). Hash `f69fe6e`, +51/-29 líneas en 2 archivos. Thumbnail visible debajo de período de garantía en OrdenDetailModal + bloque dedicado en OrdenResumenLectura. Cazadores 8/8 PASS. Pendiente QA visual humano post-deploy: Wilainy/Yohana/Jorge admin abren OS-0056 en /admin/ordenes (modal) y en /admin/facturas (fila expandida CG-00019) y verifican thumbnail.
 **Prioridad:** 🔴 ALTA — bloqueador legal post go-live. Sin render UI la firma capturada no sirve como prueba de aceptación.
 **Origen:** QA E2E distribuido 2026-05-14 sobre OS-0056 / CG-00019. SPRINT-159 capturó la firma correctamente (`cierreServicio.firmaClienteUrl` poblado) pero el "bonus" de SPRINT-158a (render en modal admin) quedó incompleto. 3 testers confirman lo mismo: Wilainy, Yohana, Jorge admin. La sección "Cierre del Servicio" del modal de detalle de orden salta de "Período de garantía" directo a "Piezas utilizadas" sin pasar por firma. Lo mismo en fila expandida de `/admin/facturas`.
 
