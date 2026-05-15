@@ -414,6 +414,22 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       toast.error('Selecciona fecha y hora para la cita');
       return;
     }
+    // SPRINT-170: si se eligió técnico, debe tener operaria asignada en
+    // `personal[uid].operariaId` para que la denormalización en el doc
+    // orden (líneas 643-644) tenga valor válido. Sin operaria, la card
+    // no muestra chip, las notificaciones `orden_asignada` no llegan a
+    // operaria (líneas 750-) y el flujo posterior queda parcialmente
+    // huérfano. Defense-in-depth contra el warning UI del modal — UI
+    // bloquea el botón pero un submit por keyboard/auto podría burlarlo.
+    if (form.tecnicoId) {
+      const tecnicoElegido = personal.find(p => (p.uid || p.id) === form.tecnicoId);
+      if (tecnicoElegido && !tecnicoElegido.operariaId) {
+        toast.error(
+          `El técnico ${tecnicoElegido.nombre} no tiene operaria asignada. Asignar una en /admin/personal antes de crear la orden.`
+        );
+        return;
+      }
+    }
     // Validación defensiva double-booking
     if (form.tecnicoId && form.fechaCita && form.horaInicio) {
       const fechaSel = new Date(form.fechaCita + 'T00:00:00');

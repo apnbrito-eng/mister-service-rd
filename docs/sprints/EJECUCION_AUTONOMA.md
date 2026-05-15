@@ -5,6 +5,80 @@
 
 ---
 
+## 2026-05-15 — autónomo (`trabaja`, pasada post-QA E2E #3): SPRINT-170 (warning + auto-deriv operaria)
+
+### Contexto
+
+QA E2E 2026-05-14 sobre OS-0056: Angelica (secretaria) creó orden asignando técnico Aury y la operaria quedó denormalizada como "Angelica Secretaria" en lugar de "Wilainy" (operaria asignada a Aury en `personal.operariaId/Nombre`). Cowork redactó SPRINT-170 con decisión negocio: NO agregar selector manual; auto-derivar desde el técnico (porque cada técnico ya tiene su operaria configurada en `personal[uid].operariaId`).
+
+### Archivist PRE-CHANGE
+
+- Commits previos al touch-list: `5823955` (SPRINT-169, hace minutos) ya tocó `useOrdenCreateForm.ts` líneas 704+ agregando notificación `orden_asignada` que consume `operariaIdDerivada`. Cualquier cambio en la derivación se propaga a las notificaciones — coordinar.
+- `c4be345` + `43a2087` (SPRINT-132): patrón post-c4be345 `personal.find(p => (p.uid || p.id) === form.tecnicoId)`. Ya aplicado en líneas 591-593.
+- `2ecea5e` (SPRINT-149): migración `operariaId` a auth.uid. Reads/writes de `operariaId` deben usar `(p.uid || p.id)`.
+- Postmortems aplicables: `2026-05-15-orden-asignada-regresion-sprint-163-no-commit.md` — lección "feature half-shipped no se completa sola, hace falta callsite + cazador". El nuevo warning DEBE ser visible al usuario (no solo log), porque si la operaria queda vacía, ni la orden ni la notificación posterior funcionan.
+- Patrones P-XXX aplicables: P-001 (escribir auth.uid, no userProfile.id), P-006 (`(p.uid || p.id)`), P-007 (notif fields). El submit ya cumple.
+- Lectura del código actual:
+  - `useOrdenCreateForm.ts:591-593`: derivación ya implementada (`tecnicoElegido?.operariaId/Nombre`).
+  - `useOrdenCreateForm.ts:643-644`: escritura denormalizada solo si los campos NO son undefined (`if (operariaIdDerivada) ...`).
+  - `OrdenCreateModal.tsx:681-698`: dropdown técnico con `(p.uid || p.id)` — correcto.
+  - `OrdenCreateModal.tsx`: NO hay UI de operaria (ni preview ni warning).
+- **Diagnóstico clave:** la denormalización está bien escrita. El bug es que **no se muestra al usuario un warning cuando el técnico no tiene operaria configurada en `personal/`**. En el caso de Aury reportado, o (a) `personal.operariaId/Nombre` de Aury está vacío y la orden quedó sin operaria + Angelica malinterpretó el chip "Op: Angelica" que aparece en otro lado (la card lee `responsableNombre` cuando no hay `operariaNombre`), o (b) la confusión era visual. SPRINT-170 requiere UX preventiva sin importar la causa exacta del incidente puntual.
+
+### Touch-list expandido + auditoría de consumidores
+
+**Archivos a modificar:**
+1. `src/components/ordenes/OrdenCreateModal.tsx` — agregar warning UI bajo el selector de técnico cuando `tecnicos.find(t => t.uid === form.tecnicoId)?.operariaNombre` sea nulo. El warning bloquea submit con disabled del botón.
+2. `src/hooks/useOrdenCreateForm.ts` — añadir guard defensivo al inicio del submit que valida la misma condición (defense-in-depth) y aborta con toast.
+
+**Consumidores verificados:**
+- `OrdenCreateModal` se importa desde `src/pages/Ordenes.tsx:30` y `src/pages/Citas.tsx:9`. Ambos pasan el array completo `tecnicos: Personal[]` que incluye `operariaId/Nombre` denormalizado. No requieren cambios.
+- `useOrdenCreateForm` se importa desde los mismos dos archivos. El submit guard es interno al hook, no requiere cambios en callers.
+- `OrdenEditForm.tsx` (edit flow) NO se toca — los criterios SPRINT-170 dicen "mantenerlo, es para correcciones".
+
+**Consumidores NO afectados:** `OrdenCard.tsx`, `OrdenesTablero.tsx`, `BotonRederivarOperaria.tsx` — leen `operariaNombre` ya denormalizado en la orden, no la lógica de creación.
+
+**Hallazgos laterales (NO fixeados, deuda):**
+- `useOrdenCreateForm.ts:615-616` escribe `responsableNombre: usuarioActual?.nombre` que es el creador (Angelica), NO la operaria. Esto NO es bug — `responsableId` es para el responsable administrativo (operaria/coord) del seguimiento, distinto a operaria del técnico. Posible refactor futuro: renombrar para no confundir con operaria (deuda separada, fuera de scope).
+
+### Cambio aplicado
+
+**Hipótesis confirmada por el diagnóstico:** la derivación `tecnicoElegido?.operariaId/operariaNombre` en `useOrdenCreateForm.ts:591-593` ya estaba correctamente implementada (post-SPRINT-149). El bug reportado por Angelica en OS-0056 era resultado de **falta de UX preventiva**: cuando el técnico no tiene `personal[uid].operariaId` configurado, la denormalización silenciosamente queda en `undefined` (líneas 643-644 condicionales) y el operador no se entera hasta ver el chip "Operaria" vacío en la card. El fix es UX: bloquear creación de órdenes con técnico sin operaria configurada.
+
+**Diff:**
+
+1. `src/hooks/useOrdenCreateForm.ts` — guard defensivo nuevo (líneas 417-432) que valida `personal[tecnico].operariaId` después de los checks de campos requeridos y antes del double-booking. Toast + early return si falta. Defense-in-depth: la UI ya bloquea el botón, pero un submit forzado por keyboard/autofill podría burlarlo.
+
+2. `src/components/ordenes/OrdenCreateModal.tsx`:
+   - Nuevo `useMemo` para `tecnicoSeleccionado` (Personal | undefined) y derivado `operariaFaltante` (boolean).
+   - Preview verde "Operaria asignada: <nombre>" cuando hay match (mejora discoverability — confirma al usuario que la auto-derivación funcionó).
+   - Warning amarillo + AlertTriangle cuando falta operaria, con texto explicativo y referencia a /admin/personal.
+   - `disabled={saving || operariaFaltante}` en el botón submit + `title` con motivo del disabled.
+
+**Decisión negocio respetada:** NO se agrega selector manual de operaria. La operaria queda 100% auto-derivada del técnico. El warning empuja al usuario a configurar la relación una vez en /admin/personal en lugar de tener que recordar elegirla en cada orden.
+
+### Verificación
+
+- `npx tsc --noEmit` → PASS (sin output).
+- `npm run check:regression` → 9/9 cazadores PASS (P-001..P-007 + P-009 + P-010), 0 hits.
+- `npx eslint src/hooks/useOrdenCreateForm.ts src/components/ordenes/OrdenCreateModal.tsx --max-warnings 0` → PASS.
+- `npm run build` → PASS (chunk `useOrdenCreateForm-DXXSR9pg.js` 36.79kB / 10.30kB gzip).
+- regression_guardian: APPROVED (no regresión sobre SPRINT-169 — el guard aborta antes del bloque de notificaciones, garantizando `operariaIdDerivada` esté siempre poblado cuando hay técnico).
+- reviewer: APPROVED (defense-in-depth, edge case "sin técnico" permitido, comentarios + a11y).
+
+### Coordinación con SPRINT-169
+
+SPRINT-169 (hash `5823955`, hace minutos) agregó `crearNotificacion({ tipo: 'orden_asignada', userId: operariaIdDerivada })` que dependía de que `operariaIdDerivada` no fuera undefined para que la noti a operaria llegue. SPRINT-170 **fortalece la garantía**: ahora si el usuario insiste en crear orden con técnico sin operaria, el flujo aborta antes del addDoc — no se crea orden huérfana ni se intenta noti a operaria undefined. Si el usuario configura la relación en `personal/`, todo el flujo SPRINT-169 funciona como diseñado. **Sin conflicto, refuerzo mutuo.**
+
+### Cierre
+
+- Hash: pendiente al commit.
+- Archivos modificados: `src/hooks/useOrdenCreateForm.ts`, `src/components/ordenes/OrdenCreateModal.tsx`, `docs/sprints/COLA_AUTONOMA.md`, `docs/sprints/EJECUCION_AUTONOMA.md`.
+- Hallazgos laterales: `responsableNombre` se escribe como `usuarioActual.nombre` en línea 615-616. Distinto a operaria del técnico. Posible deuda futura de naming (renombrar a `creadoPorNombre` para evitar confusión semántica). NO fixeado acá.
+- Tiempo: ~25 min.
+
+---
+
 ## 2026-05-15 — autónomo (`trabaja`, pasada post-QA E2E #2): SPRINT-169 (regresión `orden_asignada`)
 
 ### Contexto

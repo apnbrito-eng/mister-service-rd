@@ -208,7 +208,7 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-170 — Agregar selector de operaria al form de crear orden
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO (coordinator autónomo 2026-05-15, ver `docs/sprints/EJECUCION_AUTONOMA.md`)
 **Prioridad:** 🔴 ALTA — bug crítico de denormalización. Sin esto, todas las órdenes creadas hoy tienen operaria = creador (típicamente Angelica), NO la operaria real del grupo.
 **Origen:** QA E2E distribuido 2026-05-14. Angelica reportó: el form de crear orden NO tiene selector "Operaria asignada". El campo queda fijado al user logueado. Resultado: OS-0056 quedó con operaria = "Angelica Secretaria" en lugar de "Wilainy". Esto explica la causa raíz del bug del chip "Op: Operaria" genérico (catalogado como SPRINT-158 hallazgo #3 y #6).
 

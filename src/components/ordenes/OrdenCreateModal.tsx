@@ -157,6 +157,19 @@ export default function OrdenCreateModal({
       (citaPreset.camposPersonalizados && Object.keys(citaPreset.camposPersonalizados).length > 0))
   );
 
+  // SPRINT-170: técnico elegido + operaria derivada (auto). Se busca por
+  // `(p.uid || p.id)` porque el value del dropdown es `t.uid` post-c4be345
+  // (rule `tecnicoId == auth.uid`). Si el técnico no tiene operaria
+  // configurada en `personal[uid].operariaId`, mostramos warning y
+  // bloqueamos el submit. La operaria de cada técnico se configura en
+  // /admin/personal (no hay selector manual acá — decisión negocio para
+  // evitar error humano).
+  const tecnicoSeleccionado = useMemo<Personal | undefined>(
+    () => (form.tecnicoId ? tecnicos.find(t => (t.uid || t.id) === form.tecnicoId) : undefined),
+    [form.tecnicoId, tecnicos],
+  );
+  const operariaFaltante = !!tecnicoSeleccionado && !tecnicoSeleccionado.operariaId;
+
   // Catálogo configurable de modelos (vive en `config_web/sitio`). Cuando
   // el admin guarda cambios desde /admin/configuracion, el listener
   // re-renderiza este modal con las nuevas opciones.
@@ -696,6 +709,25 @@ export default function OrdenCreateModal({
                   <option key={t.id} value={t.uid}>{t.nombre}</option>
                 ))}
               </select>
+              {/* SPRINT-170: preview de operaria auto-derivada del técnico */}
+              {tecnicoSeleccionado && tecnicoSeleccionado.operariaNombre && (
+                <div className="mt-2 px-3 py-2 bg-green-50 border border-green-200 rounded-lg text-xs text-green-800 flex items-center gap-2">
+                  <CheckCircle size={14} className="flex-shrink-0" />
+                  <span>
+                    Operaria asignada: <strong>{tecnicoSeleccionado.operariaNombre}</strong>
+                  </span>
+                </div>
+              )}
+              {operariaFaltante && (
+                <div className="mt-2 px-3 py-2 bg-yellow-50 border border-yellow-300 rounded-lg text-xs text-yellow-900 flex items-start gap-2">
+                  <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                  <div>
+                    El técnico <strong>{tecnicoSeleccionado?.nombre}</strong> no tiene operaria asignada.
+                    Asignar una en <strong>/admin/personal</strong> antes de crear esta orden,
+                    o las notificaciones a operaria no llegarán y el chip "Operaria" quedará vacío.
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -806,8 +838,9 @@ export default function OrdenCreateModal({
           </button>
           <button
             type="submit"
-            disabled={saving}
-            className="px-6 py-2.5 bg-[#1a5fa8] hover:bg-[#0f3460] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60 flex items-center gap-2"
+            disabled={saving || operariaFaltante}
+            title={operariaFaltante ? 'Asigna una operaria al técnico antes de continuar' : ''}
+            className="px-6 py-2.5 bg-[#1a5fa8] hover:bg-[#0f3460] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {saving ? (
               <>
