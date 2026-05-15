@@ -10,6 +10,61 @@
 
 ---
 
+## SPRINT-175-APPLY — Ejecución de `--apply` del script de migración de fases legacy stuck post-conduce
+
+**Tipo:** Migración de datos — Jorge dispara manualmente (sub-regla CLAUDE.md "cambios destructivos a datos productivos").
+**Estado:** ESPERANDO_OK_JORGE
+**Origen:** SPRINT-175 completado por coordinator pasada 13 (2026-05-12). El script `scripts/migrar-ordenes-cerradas-legacy.ts` está pusheado en DRY-RUN. Falta alinear datos legacy: órdenes con `facturada: true && fase != 'cerrado'` (stuck pre-SPRINT-161 commit `4015fe1`).
+
+**Resultado DRY-RUN 2026-05-12 (corrido durante el sprint sobre Firestore productivo):**
+- `ordenes_servicio` con `facturada == true`: 14 total.
+- Ya en `fase: 'cerrado'` (idempotencia, skip): 1.
+- En `fase: 'cancelado'` (skip terminal distinto): 0.
+- **Stuck (a migrar): 13 órdenes, todas en `fase: 'trabajo_realizado'`**.
+- Ejemplos: OS-0033/CG-00010, OS-0054/CG-00017, OS-0034/CG-00011, etc.
+- 13 < umbral 50 → NO requiere `--ok-ampliado`.
+
+**Cómo ejecutar (Jorge en su Mac, después del push del script):**
+
+1. **DRY-RUN re-confirmación (opcional pero recomendado, ya se hizo durante el sprint):**
+   ```bash
+   cd /Users/jorgeluisbritogarcia/Desktop/mister-service-rd
+   npx tsx scripts/migrar-ordenes-cerradas-legacy.ts
+   ```
+   Si el conteo difiere de 13, revisar por qué antes de seguir.
+
+2. **`--apply` real:**
+   ```bash
+   npx tsx scripts/migrar-ordenes-cerradas-legacy.ts --apply
+   ```
+   El script:
+   - Migra en batches de 200 docs con `writeBatch` atómico.
+   - Setea `fase: 'cerrado'` + `estadoSimple: 'completado'` + `estado: 'cerrado'`.
+   - Appendea entry a `historialFases` con shape `{ fase, timestamp, usuario, nota }` (patrón SPRINT-161, array reemplazado completo, NO arrayUnion).
+   - Setea `migradoSprint: 'SPRINT-175'` + `migradoEn: serverTimestamp()` (forensia).
+   - Escribe audit log en `auditoria_admin` con `accion: 'migracion_fases_cerrado_legacy'`.
+
+3. **QA post-`--apply`:**
+   - Hard refresh en `/admin/ordenes`. Las órdenes migradas deben aparecer en columna "Cerradas" (no en "Trabajo realizado").
+   - Verificar dashboard: contador de "Cerradas" sube en +13, "Trabajo realizado" baja en -13.
+   - Spot-check de 1-2 órdenes en Firestore Console: `historialFases` tiene la entry de migración como última.
+
+**Idempotencia:** si Jorge corre `--apply` dos veces, la segunda corrida verá 0 stuck y termina sin tocar nada.
+
+**Restricciones:**
+
+- NO ejecutar `--apply` antes del DRY-RUN.
+- NO ejecutar `--apply` si conteo difiere significativamente de 13 sin explicación (puede indicar que el bug post-SPRINT-161 reapareció).
+- NO desactivar el umbral de 50 sin OK explícito en este sprint (campo `--ok-ampliado`).
+
+**Si Jorge prefiere rechazar:** agregar `RECHAZADO: jorge YYYY-MM-DD HH:MM <motivo>`. El estado actual no rompe operación corriente — las órdenes legacy solo aparecen mal categorizadas en filtros por fase, pero su `facturada: true` + `facturaNumero` están correctos. La migración es óptima pero no urgente.
+
+**OK / RECHAZADO de Jorge:**
+
+_(pendiente — esperando decisión)_
+
+---
+
 ## SPRINT-158e — GPS bloqueante o informativo al cerrar orden (bug 8 del SPRINT-158, decisión de negocio)
 
 **Tipo:** Decisión de negocio — Jorge decide la política. NO se puede procesar autónomo.

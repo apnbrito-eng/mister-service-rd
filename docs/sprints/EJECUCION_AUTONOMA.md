@@ -5,6 +5,83 @@
 
 ---
 
+## 2026-05-12 — autónomo (`trabaja`): SPRINT-175 (script migración órdenes legacy stuck post-conduce)
+
+### Contexto
+
+SPRINT-161 (`4015fe1`) fixeó el bug en código: ahora las órdenes nuevas avanzan a `fase: 'cerrado'` tras emitir conduce. Pero las órdenes legacy emitidas ANTES quedaron con `facturada: true` + `facturaNumero: 'CG-XXXXX'` pero `fase: 'trabajo_realizado'`. SPRINT-175 entrega un script que detecta y opcionalmente migra esas órdenes (read-only por default + `--apply` manual de Jorge).
+
+Patrón establecido: SPRINT-149 (`d65fb82` migrar-operariaid) + SPRINT-118 (`e6ccb1e` re-migrar notis). Mismo shape: flag `--apply` + flag `--ok-ampliado`, batches de 200, audit log en `auditoria_admin`, forensia con campo `migradoSprint`.
+
+### Archivist PRE-CHANGE (consulta historial)
+
+- Patrón replicado de `scripts/migrar-operariaid-a-uid.ts` (SPRINT-149, hash `d65fb82`): mismo skeleton (initializeApp con service-account.json local + fallback applicationDefault, flag --apply, flag --ok-ampliado, umbral 50, batches 200, audit log).
+- Recordatorio especial: scripts/ es scope server-side via Admin SDK, NO está cubierto por los cazadores P-001..P-011 (todos escanean `src/`). Sin riesgo de regresión sobre código de cliente.
+- Sin restricción de firestore.rules (sprint no toca rules).
+- Sub-regla CLAUDE.md: cambios destructivos a datos productivos requieren OK Jorge en BLOQUEOS.md → script entregado read-only por default, `--apply` NO se ejecuta autónomo.
+
+### Builder (coordinator-as-builder por scope acotado)
+
+Archivo nuevo: `scripts/migrar-ordenes-cerradas-legacy.ts` (253 líneas).
+
+Estructura:
+1. Boot Admin SDK con service-account.json local o applicationDefault.
+2. Lee `ordenes_servicio where facturada == true` (single-field index automático).
+3. Filtra docs con `fase != 'cerrado'` (skip `'cerrado'` por idempotencia, skip `'cancelado'` por estado terminal distinto).
+4. Reporta resumen + desglose por fase actual + primeras 20 IDs.
+5. Umbral 50: `--apply` con >50 docs aborta sin `--ok-ampliado`.
+6. En `--apply`: batches de 200 con `fase: 'cerrado'` + `estadoSimple: 'completado'` + `estado: 'cerrado'` + append a `historialFases` (shape `{ fase, timestamp, usuario, nota }` patrón ProcesarFacturacionModal.tsx:740-753) + forensia `migradoSprint` + `migradoEn` + `updatedAt`.
+7. Audit log en `auditoria_admin` con `accion: 'migracion_fases_cerrado_legacy'`.
+
+### Tester
+
+- `npx tsc --noEmit` → PASS (0 errores).
+- `npx eslint scripts/migrar-ordenes-cerradas-legacy.ts --max-warnings 0` → PASS.
+- `npm run check:regression` → 10/10 PASS (P-001 a P-007 + P-009/P-010/P-011, sin hits).
+- **DRY-RUN sobre Firestore productivo** (service-account.json local detectado) → ejecutó limpio.
+
+### Resultado DRY-RUN (productivo, durante el sprint)
+
+```
+Total facturadas: 14 docs
+Ya en fase 'cerrado' (idempotencia, skip): 1
+En fase 'cancelado' (terminal distinto, skip): 0
+Stuck (facturada=true && fase != 'cerrado'): 13
+
+Desglose por fase actual:
+  trabajo_realizado            13
+
+Primeras 13 órdenes stuck:
+  OS-0033 (CG-00010)  fase=trabajo_realizado  estadoSimple=completado  estado=activo
+  OS-0054 (CG-00017)  fase=trabajo_realizado  estadoSimple=completado  estado=activo
+  OS-0034 (CG-00011)  fase=trabajo_realizado  estadoSimple=completado  estado=activo
+  ...
+```
+
+13 < 50 → cuando Jorge ejecute `--apply`, NO requiere `--ok-ampliado`. Resultado preservado en `BLOQUEOS.md` entrada `SPRINT-175-APPLY`.
+
+### Regression Guardian
+
+N/A — scope `scripts/` server-side, no toca rules/services/context de cliente. Cazadores 10/10 PASS confirman que el sprint no introdujo regresión latente.
+
+### Reviewer
+
+APPROVED. Checks completos en entrada COLA_AUTONOMA.md sección "Sprints completados". Resumen: query eficiente, idempotencia correcta, shape `historialFases` consistente con SPRINT-161, sincronización completa (P-011), `Timestamp.now()` único, forensia preserveada, audit log estructura consistente con SPRINT-149.
+
+### Commit + Push
+
+Pendiente al cierre de este log. Hash se completa post-commit.
+
+### Restricción cumplida
+
+`--apply` NO ejecutado autónomo. Entrada `SPRINT-175-APPLY` agregada a `BLOQUEOS.md` con instrucciones + DRY-RUN preserveado + OK / RECHAZADO pendiente de Jorge.
+
+### Próximo sprint en cola
+
+SPRINT-176 (decisión: ¿quien emite el conduce debe recibir su propia notificación?) — REQUIERE DECISIÓN JORGE (A/B/C) antes de procesar.
+
+---
+
 ## 2026-05-12 — autónomo (`trabaja`): SPRINT-174 (notificaciones faltantes en 4 eventos del flujo)
 
 ### Contexto

@@ -354,32 +354,7 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-175 — Migrar órdenes legacy stuck en `trabajo_realizado` post-conduce
 
-**Estado:** PENDIENTE
-**Prioridad:** 🟢 BAJA — datos inconsistentes históricos, no afectan operación actual.
-**Origen:** QA E2E distribuido 2026-05-14. Maria reportó que OS-0055 sigue en fase `"trabajo_realizado"` pese a tener CG-00018 ya emitido. SPRINT-161 (que arregla la transición a `cerrado` al emitir conduce) NO es retroactivo — solo aplica a órdenes nuevas. Posiblemente hay otras órdenes en la misma situación (todas las que tuvieron conduce antes del 2026-05-14).
-
-#### Touch-list
-
-**Archivos a modificar (1):**
-
-1. `scripts/migrar-ordenes-cerradas-legacy.ts` (nuevo):
-   - DRY-RUN por default: query Firestore por `ordenes_servicio` con `facturada: true && fase: 'trabajo_realizado'` → listar count + IDs primeras 10.
-   - `--apply` real: setea `fase: 'cerrado'` + `estadoSimple: 'completado'` + appendea entry a `historialFases` con razón "Migración legacy SPRINT-175".
-   - Sub-regla CLAUDE.md: migraciones >50 docs requieren OK ampliado en BLOQUEOS.md.
-
-**Consumidores verificados:** ninguno, es read-only hasta `--apply`.
-
-#### Criterios de aceptación
-
-- [ ] DRY-RUN ejecutado por Jorge → reporta count + lista de órdenes a migrar.
-- [ ] Si count <50: ejecutar `--apply` directo.
-- [ ] Si count >50: OK ampliado en BLOQUEOS.md + ejecutar `--apply`.
-- [ ] Auditoría en `auditoria_admin` con `accion: 'migracion_fases_cerrado_legacy'`.
-
-#### Restricciones
-
-- NO modificar el código de los handlers de conduce (esos ya están bien post-SPRINT-161).
-- archivist PRE-CHANGE obligatorio.
+**Estado:** COMPLETADO 2026-05-12 (script entregado read-only por default) — ver sección "Sprints completados". `--apply` esperando OK Jorge en `BLOQUEOS.md` (entrada `SPRINT-175-APPLY`).
 
 ---
 
@@ -3939,6 +3914,40 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ---
 
 ## Sprints completados (histórico)
+
+### SPRINT-175 — Migrar órdenes legacy stuck en `trabajo_realizado` post-conduce (script entregado, `--apply` pendiente OK Jorge)
+- **Completado:** 2026-05-12 por coordinator (autónomo `trabaja`). Sprint cierra la **entrega del script** read-only por default. `--apply` requiere OK Jorge en `BLOQUEOS.md` (cambio destructivo a datos productivos — restricción CLAUDE.md).
+- **Hash:** se completa post-commit.
+- **Archivo entregado:** `scripts/migrar-ordenes-cerradas-legacy.ts` (NUEVO, 253 líneas). Patrón replica `scripts/migrar-operariaid-a-uid.ts` (SPRINT-149) y `scripts/migrar-tecnicoid-a-authuid.ts` (SPRINT-111).
+- **Comportamiento:**
+  - DRY-RUN por default (sin `--apply`): query `ordenes_servicio where facturada == true`, filtra docs con `fase != 'cerrado'` (skip `'cerrado'` por idempotencia, skip `'cancelado'` como estado terminal distinto), reporta count + desglose por fase actual + primeras 20 IDs.
+  - `--apply` real: `writeBatch` de 200 docs con `fase: 'cerrado'` + `estadoSimple: 'completado'` + `estado: 'cerrado'` + append a `historialFases` con shape `{ fase, timestamp, usuario: 'script:migrar-ordenes-cerradas-legacy', nota: 'Migración legacy SPRINT-175 (fase previa: X, conduce CG-Y)' }`. Patrón canónico: array reemplazado completo (no `arrayUnion`), entries previos preservados con sus timestamps originales.
+  - Forensia: setea `migradoSprint: 'SPRINT-175'` + `migradoEn: serverTimestamp()` en cada doc.
+  - Audit log en `auditoria_admin` con `accion: 'migracion_fases_cerrado_legacy'` + resumen por fase previa.
+  - Umbral 50 docs replica SPRINT-149: `--apply` con >50 docs aborta sin `--ok-ampliado`.
+- **DRY-RUN ejecutado durante el sprint (Firestore productivo via `service-account.json` local):**
+  - Total `facturada == true`: 14 órdenes.
+  - Ya en `fase: cerrado` (idempotencia, skip): 1.
+  - **Stuck a migrar: 13 órdenes**, todas en `fase: trabajo_realizado`. Ejemplos: OS-0033/CG-00010, OS-0054/CG-00017, OS-0034/CG-00011.
+  - 13 < 50 → cuando Jorge ejecute `--apply`, NO requiere `--ok-ampliado`.
+- **Validación:** `npx tsc --noEmit` PASS · `npx eslint scripts/migrar-ordenes-cerradas-legacy.ts --max-warnings 0` PASS · `npm run check:regression` 10/10 PASS (P-001 a P-007 + P-009/P-010/P-011 sin hits — scripts/ no aplica al scope de los cazadores) · DRY-RUN sobre Firestore productivo PASS (parsea, conecta, query funciona, no escribe).
+- **Archivist PRE-CHANGE:** patrón replicado de SPRINT-149 (`d65fb82` script migración operariaId) + SPRINT-118 (`e6ccb1e` scripts re-migración notis). Misma estructura: flag `--apply` + flag `--ok-ampliado`, batches de 200, audit log en `auditoria_admin`, forensia con campo `migradoSprint`. Recordatorios: scope `scripts/` server-side via Admin SDK, NO aplica a invariantes P-001..P-011 (todos escanean `src/`). No toca código de runtime (sub-regla SPRINT-175 explícita).
+- **regression_guardian:** N/A para este sprint (scope `scripts/` server-side, no toca rules/services/context de cliente). Cazadores 10/10 PASS confirman que no hay regresión latente.
+- **reviewer:** APPROVED. Checks:
+  - 1. Query eficiente (`where facturada == true` usa índice automático single-field, no requiere índice compuesto) ✓
+  - 2. Idempotencia (skip `'cerrado'` evita doble-migración + skip `'cancelado'` preserva estado terminal distinto) ✓
+  - 3. Shape `historialFases` consistente con `ProcesarFacturacionModal.tsx:740-753` (array reemplazado, `{ fase, timestamp, usuario, nota }`, no arrayUnion para preservar shape de Timestamp en entries históricas) ✓
+  - 4. Sincronización completa: `fase` + `estadoSimple` + `estado` + `historialFases` en el mismo `batch.update()` (cumple invariante P-011) ✓
+  - 5. `Timestamp.now()` único compartido para todas las entries del batch (evita drift de ms) ✓
+  - 6. Forensia: `migradoSprint` + `migradoEn` permiten rollback / auditoría retrospectiva ✓
+  - 7. Audit log estructura consistente con SPRINT-149 (`accion` + `actor` + `sprint` + `docsAfectados` + `resumen`) ✓
+  - 8. Umbral 50 + `--ok-ampliado` replicado fielmente del patrón SPRINT-149 ✓
+  - 9. Sin emojis, comentarios español, sin fabricar identificadores ✓
+- **Restricción cumplida — NO ejecutar `--apply` autónomo:** el coordinator entregó solo el script. Entrada `SPRINT-175-APPLY` agregada a `BLOQUEOS.md` con instrucciones + resultado DRY-RUN preserveado + OK / RECHAZADO pendiente.
+- **Plan de rollback:** revertir el commit revierte el script. Si Jorge ya ejecutó `--apply`, querý docs con `migradoSprint == 'SPRINT-175'` + rollback manual (no automatizado — el bug ya estaba en producción antes, simplemente vuelve al estado stuck).
+- **Próximo paso:** Jorge revisa entrada `SPRINT-175-APPLY` en `BLOQUEOS.md`, agrega `OK: jorge YYYY-MM-DD HH:MM` si autoriza, pega `procesa bloqueos` al coordinator (o ejecuta `--apply` manualmente — más simple para 13 docs).
+
+---
 
 ### SPRINT-173 — Aprobar precio sugerido NO avanza fase (queda en `en_diagnostico`)
 - **Completado:** 2026-05-12 por coordinator (autónomo `trabaja`, pedido explícito de Jorge end-to-end). OK humano implícito vía `trabaja`.
