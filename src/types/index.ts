@@ -374,7 +374,27 @@ export interface OrdenServicio {
   clienteLng?: number;
   equipoTipo: string;
   equipoMarca: string;
+  /**
+   * Configuración del equipo elegida del catálogo (ej: 'Torre',
+   * 'Individual', 'French door', 'Split'). Mal nombrado históricamente
+   * como "Modelo" pero semánticamente es la **configuración física** del
+   * equipo, no el modelo del fabricante. Para el modelo real del
+   * fabricante (ej: 'WF45R6100AW') usar `equipoModeloFabricante`.
+   *
+   * SPRINT-172 (2026-05-12): se mantuvo el nombre del field para
+   * preservar todos los consumidores legacy intactos (parseOrden,
+   * formatearEquipoLabel, OrdenEditForm, ModalEditarOrdenAdmin, etc.).
+   * Solo el label UI del modal crear orden se renombró a "Configuración".
+   */
   equipoModelo?: string;
+  /**
+   * Modelo real del fabricante en texto libre (ej: 'WF45R6100AW',
+   * 'LRMNC1814S'). Agregado en SPRINT-172 (2026-05-12) tras reporte de
+   * Angelica: el form sólo permitía elegir configuración Torre/Individual
+   * y no había forma de capturar el modelo del fabricante. Campo nuevo
+   * arranca vacío para órdenes pre-SPRINT-172 — sin migración.
+   */
+  equipoModeloFabricante?: string;
   /**
    * @deprecated Migrado a `equipoModelo` desde el sprint del catálogo
    * configurable. Las nuevas órdenes guardan la elección del catálogo

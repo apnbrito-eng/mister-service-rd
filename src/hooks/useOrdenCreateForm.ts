@@ -34,11 +34,21 @@ export interface CreateFormState {
   equipoTipo: string;
   equipoMarca: string;
   /**
-   * Modelo elegido del catálogo configurable. Reemplaza el viejo campo
-   * `equipoTipoMotor` específico de Lavadora — ahora es genérico para
-   * todos los tipos.
+   * Configuración del equipo elegida del catálogo configurable (ej:
+   * 'Torre', 'Individual', 'French door'). Mal nombrado históricamente
+   * — el campo de datos se mantiene como `equipoModelo` para preservar
+   * consumidores legacy (parseOrden, formatearEquipoLabel, edit forms),
+   * pero el LABEL UI se renombró a "Configuración" en SPRINT-172.
+   * Reemplaza el viejo campo `equipoTipoMotor` específico de Lavadora
+   * — ahora es genérico para todos los tipos.
    */
   equipoModelo: string;
+  /**
+   * Modelo real del fabricante en texto libre (ej: 'WF45R6100AW').
+   * Agregado en SPRINT-172. Independiente de `equipoModelo` (que es
+   * configuración). Persiste en `orden.equipoModeloFabricante`.
+   */
+  equipoModeloFabricante: string;
   descripcionFalla: string;
   tecnicoId: string;
   tecnicoNombre: string;
@@ -59,6 +69,7 @@ const FORM_INICIAL: CreateFormState = {
   equipoTipo: '',
   equipoMarca: '',
   equipoModelo: '',
+  equipoModeloFabricante: '',
   descripcionFalla: '',
   tecnicoId: '',
   tecnicoNombre: '',
@@ -209,6 +220,10 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       equipoTipo: citaPreset.equipoTipo || '',
       equipoMarca: citaPreset.equipoMarca || '',
       equipoModelo: equipoModeloPreset,
+      // SPRINT-172: el form público no captura modelo de fabricante todavía
+      // (se difirió como SPRINT-172d). Por ahora arranca vacío al confirmar
+      // cita pública — la coord puede agregarlo manualmente en el modal.
+      equipoModeloFabricante: '',
       descripcionFalla: citaPreset.descripcionProblema || citaPreset.falla || citaPreset.servicio || '',
       tecnicoId: '',
       tecnicoNombre: '',
@@ -625,6 +640,9 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
         equipoTipo: form.equipoTipo,
         equipoMarca: form.equipoMarca,
         equipoModelo: form.equipoModelo || '',
+        // SPRINT-172: modelo real del fabricante (texto libre) — separado
+        // de `equipoModelo` que sigue representando configuración.
+        equipoModeloFabricante: form.equipoModeloFabricante.trim() || '',
         descripcionFalla: form.descripcionFalla,
         tecnicoId: form.tecnicoId,
         tecnicoNombre: form.tecnicoNombre,

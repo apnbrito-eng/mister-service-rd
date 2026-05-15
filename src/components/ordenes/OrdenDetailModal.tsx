@@ -451,15 +451,25 @@ export default function OrdenDetailModal({
             <span className="text-gray-500 block text-xs">Marca</span>
             <span className="text-gray-900">{orden.equipoMarca || '--'}</span>
           </div>
+          {/*
+            SPRINT-172: separar Configuración (Torre/Individual, valor del
+            catálogo) y Modelo del fabricante (texto libre). Para órdenes
+            legacy sólo aparece la fila que tenga dato — evita "--"
+            innecesarios. Compat: si la orden histórica tiene
+            `equipoTipoMotor` (deprecated), se rehidrata como
+            Configuración.
+          */}
           <div>
-            <span className="text-gray-500 block text-xs">
-              {orden.equipoTipoMotor ? 'Configuración' : 'Modelo'}
-            </span>
+            <span className="text-gray-500 block text-xs">Configuración</span>
             <span className="text-gray-900">
               {orden.equipoTipoMotor
                 ? labelTipoMotor(orden.equipoTipoMotor)
                 : orden.equipoModelo || '--'}
             </span>
+          </div>
+          <div>
+            <span className="text-gray-500 block text-xs">Modelo del fabricante</span>
+            <span className="text-gray-900">{orden.equipoModeloFabricante || '--'}</span>
           </div>
           <div>
             <span className="text-gray-500 block text-xs">Estado</span>

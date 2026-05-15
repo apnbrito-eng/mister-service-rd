@@ -693,6 +693,10 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     equipoTipo: (raw.equipoTipo as string) || '',
     equipoMarca: (raw.equipoMarca as string) || '',
     equipoModelo: (raw.equipoModelo as string) || undefined,
+    // SPRINT-172: campo nuevo para el modelo real del fabricante (texto
+    // libre). Independiente de `equipoModelo` que es configuración
+    // (Torre/Individual). Órdenes pre-SPRINT-172 lo tienen undefined.
+    equipoModeloFabricante: (raw.equipoModeloFabricante as string) || undefined,
     equipoTipoMotor: raw.equipoTipoMotor === 'torre' || raw.equipoTipoMotor === 'individual'
       ? raw.equipoTipoMotor
       : undefined,

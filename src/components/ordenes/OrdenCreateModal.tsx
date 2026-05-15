@@ -25,10 +25,18 @@ export interface CreateFormState {
   equipoTipo: string;
   equipoMarca: string;
   /**
-   * Modelo elegido del catálogo configurable (ej: 'Torre', 'Individual',
-   * 'French door'). Si el tipo no tiene modelos definidos, es texto libre.
+   * Configuración del equipo elegida del catálogo (ej: 'Torre',
+   * 'Individual', 'French door'). Mal nombrado históricamente — el
+   * label UI se renombró a "Configuración" en SPRINT-172. Si el tipo
+   * no tiene modelos definidos en el catálogo, queda invisible
+   * (mostramos solo el input libre de modelo del fabricante).
    */
   equipoModelo: string;
+  /**
+   * Modelo real del fabricante en texto libre (ej: 'WF45R6100AW').
+   * Agregado en SPRINT-172.
+   */
+  equipoModeloFabricante: string;
   descripcionFalla: string;
   tecnicoId: string;
   tecnicoNombre: string;
@@ -635,9 +643,21 @@ export default function OrdenCreateModal({
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Modelo</label>
-                {modelosDisponibles.length > 0 ? (
+              {/*
+                SPRINT-172 (2026-05-12) — Reportado por Angelica: el combobox
+                "Modelo" sólo permitía elegir Torre/Individual (que en
+                realidad son configuraciones, no modelos del fabricante).
+                Decisión coordinator (ruta conservadora): renombrar UI del
+                combobox a "Configuración" + agregar input texto libre
+                "Modelo" para el modelo real del fabricante. Sin migración
+                de datos — `equipoModelo` sigue siendo el campo de
+                configuración por compat con consumidores legacy
+                (parseOrden, formatearEquipoLabel). El modelo del fabricante
+                vive en el field nuevo `equipoModeloFabricante`.
+              */}
+              {modelosDisponibles.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Configuración</label>
                   <select
                     value={form.equipoModelo}
                     onChange={e => setForm(f => ({ ...f, equipoModelo: e.target.value }))}
@@ -648,16 +668,18 @@ export default function OrdenCreateModal({
                       <option key={m} value={m}>{m}</option>
                     ))}
                   </select>
-                ) : (
-                  <input
-                    type="text"
-                    value={form.equipoModelo}
-                    onChange={e => setForm(f => ({ ...f, equipoModelo: e.target.value }))}
-                    placeholder="Modelo del equipo"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
-                  />
-                )}
-              </div>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Modelo</label>
+              <input
+                type="text"
+                value={form.equipoModeloFabricante}
+                onChange={e => setForm(f => ({ ...f, equipoModeloFabricante: e.target.value }))}
+                placeholder="ej: WF45R6100AW (modelo del fabricante, opcional)"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Descripcion de la Falla *</label>

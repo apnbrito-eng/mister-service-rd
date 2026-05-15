@@ -5,6 +5,172 @@
 
 ---
 
+## 2026-05-12 — autónomo (`trabaja`): SPRINT-172 (campo Modelo combobox → input libre, ruta conservadora A)
+
+### Contexto
+
+QA E2E 2026-05-14 (reporte de Angelica): el campo "Modelo" del modal Crear Orden era un combobox cerrado con 2 opciones (Torre/Individual) que en realidad son **configuración** del equipo, no modelo del fabricante. Sin forma de capturar modelo real (ej: WF45R6100AW). Angelica tuvo que dejar el campo vacío. Prioridad MEDIA — bloquea captura de datos del fabricante.
+
+### Decisión coordinator (ruta conservadora A, sin esperar a Jorge)
+
+Política autónoma `trabaja`. Decisión reversible. Razones:
+- Eliminar el campo Torre/Individual pierde datos históricos en órdenes existentes (`equipoModelo` con valores tipo "Torre"/"Individual" se renderiza en `formatearEquipoLabel`, `OrdenDetailModal`, `Citas.tsx:737`, `MapaRutas.tsx`, `Facturas.tsx`, `ProcesarFacturacionModal.tsx`, etc.).
+- Si Jorge después decide eliminar el campo configuración, sprint cleanup trivial.
+
+**Ruta A:** mantener `equipoModelo` como configuración (sin renombrar el field de datos), agregar campo NUEVO `equipoModeloFabricante` para texto libre. Renombrar solo el LABEL UI del combobox a "Configuración". Cero migración.
+
+### Archivist PRE-CHANGE
+
+- Commits previos sobre `useOrdenCreateForm.ts` + `OrdenCreateModal.tsx`: `af5cf61` (SPRINT-170 warning operaria), `5823955` (SPRINT-169 notif orden_asignada), `43a2087` (SPRINT-132 fix P-006). Sin incidentes recientes que afecten al sprint 172.
+- Commits previos sobre `OrdenDetailModal.tsx`: `f69fe6e` (SPRINT-168 firma thumbnail), `1ddb20e` (SPRINT-158a render foto cierre + período garantía). Sin conflictos.
+- Postmortems aplicables: ninguno sobre campos de equipo.
+- Patrones P-XXX relevantes: ninguno (sprint form-only, no toca rules/services/context).
+- Recordatorios especiales: `equipoTipoMotor` deprecated rehidratado por `parseOrden` como fallback histórico — render legacy debe seguir respetando ese fallback.
+
+### Touch-list expandido + auditoría de 46 consumidores
+
+**Archivos modificados (5):**
+
+1. `src/types/index.ts:375-395` — agregar `equipoModeloFabricante?: string` en `OrdenServicio`. Doc explica diferencia con `equipoModelo` (que se preserva como configuración).
+2. `src/hooks/useOrdenCreateForm.ts` — agregar al `CreateFormState`, al `FORM_INICIAL`, al preset desde `citaPreset` (arranca vacío), y al payload del `addDoc`.
+3. `src/components/ordenes/OrdenCreateModal.tsx` — actualizar `CreateFormState` interface duplicada, renombrar label "Modelo" → "Configuración" en el combobox (que ahora solo aparece cuando `modelosDisponibles.length > 0`), agregar input texto libre "Modelo" full-width debajo.
+4. `src/components/ordenes/OrdenDetailModal.tsx:454-470` — renderizar dos filas en el modal: "Configuración" (Torre/Individual del catálogo) y "Modelo del fabricante" (texto libre). Compat con `equipoTipoMotor` legacy preservada.
+5. `src/utils/index.ts:695` — `parseOrden` rehidrata el campo nuevo desde Firestore.
+
+**Consumidores verificados NO modificados (preservan semántica histórica de `equipoModelo`):**
+
+- `src/utils/index.ts` `formatearEquipoLabel` (líneas 518-535) — sigue leyendo `equipoModelo` como configuración. Sin cambios. El modelo del fabricante NO se incluye en el label corto (decisión: el label es resumen visual; el modelo real va en el detalle).
+- `src/pages/OrdenDetalle.tsx:709` — sigue mostrando label "Modelo" para `equipoModelo` (que es config). Inconsistencia histórica menor — se difiere a SPRINT-172b.
+- `src/components/ordenes/OrdenEditForm.tsx:220-227` — usa `equipoModelo` como texto libre en form edit (pre-existente ambiguo). NO scope. SPRINT-172c posible.
+- `src/components/ordenes/ModalEditarOrdenAdmin.tsx:568-575` — idem.
+- `src/pages/Ordenes.tsx`, `Citas.tsx`, `TecnicoVista.tsx`, `Facturas.tsx`, `MapaRutas.tsx`, `ProcesarFacturacionModal.tsx`, `OrdenResumenLectura.tsx` — todos siguen leyendo `equipoModelo` como antes. Sin cambios necesarios.
+- `src/components/public/FormularioAgendarPublico.tsx` + `src/services/formularioAgendar.service.ts` — form público sigue capturando solo `equipoModelo` (config). Capturar fabricante en form público = SPRINT-172d follow-up.
+- `api/garantia/[token].ts`, `api/portal-cliente/[token].ts` — endpoints públicos read-only, siguen funcionando.
+
+**Hallazgos laterales (deuda futura, NO fixeada acá):**
+
+- **SPRINT-172b (sugerido):** actualizar `OrdenDetalle.tsx:709` para renderizar Configuración + Modelo del fabricante con la misma semántica del modal admin. Trivial.
+- **SPRINT-172c (sugerido):** unificar `OrdenEditForm.tsx` + `ModalEditarOrdenAdmin.tsx` para que también separen Config + Modelo. Hoy son texto libre ambiguo que pisa la configuración.
+- **SPRINT-172d (sugerido):** agregar input "Modelo del fabricante" al form público `FormularioAgendarPublico.tsx`. El cliente final podría escribir su WF45R6100AW al agendar.
+
+### Implementación
+
+- Decisión clave: NO renombrar el field de datos `equipoModelo`. Solo el label UI. Esto preserva 100% de los consumidores legacy intactos. El campo nuevo `equipoModeloFabricante` es aditivo, no destructivo.
+- Layout: grid `md:grid-cols-3` mantiene Tipo+Marca+Configuración en una fila. Input "Modelo" pasa a fila propia full-width (mejor para textos largos como "WF45R6100AW").
+- Combobox "Configuración" solo aparece cuando hay `modelosDisponibles.length > 0` (tipo del catálogo). Si el tipo no tiene catálogo, solo aparece el input libre — coherente con la nueva semántica (sin configuraciones predefinidas = no hay nada que elegir).
+- Preset desde cita pública: `equipoModeloFabricante` arranca vacío al confirmar cita (el form público no captura modelo todavía — SPRINT-172d). La coord puede agregarlo manualmente en el modal antes de crear la orden.
+- Render en modal detalle: dos filas siempre (Configuración + Modelo del fabricante), cada una muestra `--` si está vacío. Compat: si la orden histórica tiene `equipoTipoMotor` (deprecated), se sigue rehidratando como Configuración via `labelTipoMotor`.
+
+### Gates
+
+- **typecheck:** `npx tsc --noEmit` → 0 errores.
+- **cazadores 9/9 PASS:** `npm run check:regression` → 0 hits (P-001 a P-010).
+- **lint (touched files):** `npx eslint src/hooks/useOrdenCreateForm.ts src/components/ordenes/OrdenCreateModal.tsx src/components/ordenes/OrdenDetailModal.tsx src/types/index.ts src/utils/index.ts --max-warnings 0` → 0 warnings, 0 errors.
+- **build:** `npm run build` → ✓ built in 4.39s.
+- **reviewer (coordinator):** APPROVED. Riesgos auditados:
+  - `equipoModeloFabricante` se escribe como string vacío (no undefined) en payload — consistente con `equipoModelo` arriba.
+  - No requiere strip-undefined porque el valor es siempre string.
+  - El useEffect que resetea `equipoModelo` al cambiar tipo de equipo NO afecta `equipoModeloFabricante` — correcto (el modelo del fabricante es independiente del tipo).
+  - `resetForm()` usa `FORM_INICIAL` así que automáticamente limpia el campo nuevo.
+  - `parseOrden` rehidrata desde Firestore — órdenes nuevas verán el campo, órdenes legacy lo ven undefined (renderiza `--`).
+
+### Commit + push
+
+- Hash: pendiente (próximo paso).
+- Branch: `main`.
+- Touch-list final: 5 archivos source + 2 docs (cola + ejecución).
+
+### Próximo
+
+- SPRINT-173 (aprobar precio sugerido NO avanza fase a `en_cotizacion`).
+- Deuda derivada: SPRINT-172b / 172c / 172d (sin urgencia).
+
+---
+
+## 2026-05-14 — autónomo (`trabaja`): SPRINT-171 (ruta `/admin/notificaciones` registrada)
+
+### Contexto
+
+QA E2E 2026-05-14 sobre OS-0056: Maria (coordinadora) intentó navegar a `/admin/notificaciones` para validar notificaciones del flujo. La ruta no existía y el fallback `*` del router redirigía al landing público (`/`), sacándola del contexto admin. Bug de routing puro, MEDIA prioridad.
+
+### Archivist PRE-CHANGE
+
+- Commits previos sobre `src/App.tsx`: `723d0ea` (SPRINT-142a refactor), `03e24df` (SPRINT-121 eliminar Productos), `759a76b` (SPRINT-117c1 etiquetas sidebar). Sin incidentes recientes.
+- Postmortems aplicables a routing: **ninguno**. `docs/postmortems/` no tiene entradas sobre rutas faltantes/redirects rotos.
+- Patrones P-XXX aplicables: P-001 (usar `currentUser.uid`, no `userProfile.id`) — relevante porque la nueva página suscribe a `notificaciones` filtrado por uid.
+- Recordatorios especiales: `react-refresh/only-export-components` (no exportar helpers desde `.tsx`) — la nueva página solo tiene default export, OK.
+- Modelo de notificaciones ya consolidado: `Notificacion.userId` canónico, `destinatarioId` legacy con warn runtime + cazador P-007. Service `notificaciones.service.ts` expone `suscribirNotificaciones / marcarLeida / marcarTodasLeidas`, todos compatibles con uid.
+- Decisión: **Opción A del sprint** (crear página de historial), descartando Opción B (404 admin) porque (a) aporta valor real al usuario y (b) no había references a `/admin/notificaciones` en el código (grep confirmó: solo en docs), lo que implica que sí o sí Maria iba a la ruta esperando encontrar contenido, no por un link existente.
+
+### Touch-list expandido + auditoría de consumidores
+
+**Archivos a modificar:**
+1. `src/App.tsx` — agregar `lazy(() => import('./pages/Notificaciones'))` + ruta `<Route path="notificaciones" />` dentro del bloque admin.
+2. `src/pages/Notificaciones.tsx` — nuevo archivo (171 líneas).
+
+**Consumidores verificados (read-only check):**
+- `grep -rn "/admin/notificaciones"` en `src/`: **0 hits**. Ningún componente linkea a la ruta. La campanita (`NotificacionesPanel.tsx`) navega a `/admin/ordenes/:id` al click, no a `/admin/notificaciones`. Esto valida que la página es destino directo del usuario (URL bar / bookmark), no parte de un flujo automático.
+- `NotificacionesPanel.tsx`: usa los mismos service helpers (`suscribirNotificaciones`, `marcarLeida`, `marcarTodasLeidas`). La nueva página reutiliza sin duplicar lógica.
+- Rule de Firestore `notificaciones`: filtra read/update por `userId == auth.uid`. La página NO necesita `PermisoRoute` extra — cada user solo ve las suyas por construcción.
+
+**Hallazgos laterales (deuda futura, NO fixeada acá):**
+- El service capea la suscripción a 50 docs (`notifs.slice(0, 50)` en `suscribirNotificaciones`). Para usuarios con +50 notifs viejas, no hay paginación hacia atrás. Por ahora la UI muestra un aviso "Mostrando las 50 más recientes. Las más viejas siguen en el sistema." — suficiente para el sprint MEDIA actual. Sprint follow-up tentativo: "paginación de historial de notificaciones (lazy load older)".
+- El fallback global `<Route path="*" element={<Navigate to="/" replace />} />` sigue activo. Si se reintroduce otra ruta admin faltante en el futuro, el síntoma se repite. Opción B del sprint (catch-all `/admin/*` → `<NotFound>` admin) queda como sprint cosmético separado, no urgente.
+
+### Implementación
+
+- `src/pages/Notificaciones.tsx` (171 líneas, default export `Notificaciones`):
+  - Suscripción real-time vía `suscribirNotificaciones(currentUser.uid, ...)`. Usa `currentUser.uid` no `userProfile.id` (P-001).
+  - Filtros UI: "Todas" / "No leídas (n)" con contador en rojo.
+  - Botón "Marcar todas como leídas" solo visible cuando hay no-leídas.
+  - Click en notif marca como leída y navega a `/admin/ordenes/:id` si tiene `ordenId` (paridad con la campanita).
+  - Empty state diferenciado por filtro.
+  - Aviso visual cuando el service entrega su cap de 50.
+- `src/App.tsx`:
+  - Línea 67: `const Notificaciones = lazy(() => import('./pages/Notificaciones'));`.
+  - Línea ~277 (dentro del bloque admin): `<Route path="notificaciones" element={<Notificaciones />} />` con comentario referenciando SPRINT-171.
+
+### Tests
+
+- Typecheck (`npx tsc --noEmit`): **PASS** (sin output).
+- Lint (`npx eslint src/pages/Notificaciones.tsx src/App.tsx --max-warnings 0`): **PASS**.
+- Cazadores (`npm run check:regression`): **9/9 PASS** (P-001/2/3/4/5/6/7/9/10, ningún hit).
+- Build (`npm run build`): **PASS** (chunk `Notificaciones-DfJcahQE.js` generado, lazy load funcionando).
+
+### Reviewer (auto, post-tester)
+
+- APPROVED. Justificación:
+  - Sigue convenciones existentes (Tailwind `text-[#0f3460]`, sin emojis, Spanish UI).
+  - Reutiliza service helpers sin duplicar lógica.
+  - `if (!currentUser?.uid) return;` antes de cualquier write.
+  - No toca rules, no toca services, no toca context — bajo riesgo.
+  - Comentarios in-line referencian SPRINT-171, gotchas relevantes (P-001) y la decisión de no usar PermisoRoute.
+
+### Commit + push
+
+- Commit: `9a0b792` (`fix(routing): SPRINT-171 ruta /admin/notificaciones registrada correctamente`).
+- Push: `af5cf61..9a0b792` a `main`.
+- Pre-commit hook: PASS (typecheck + 9/9 cazadores + lint).
+
+### Próximos pasos para devops
+
+- Verificar deploy Vercel del commit `9a0b792`. URL de prod: `www.misterservicerd.com/admin/notificaciones` debe mostrar la nueva página (post-login) o el login (anónimo), NO redirigir al landing.
+
+### Diff resumido
+
+- `src/App.tsx`: +6 líneas (1 lazy import + 5 líneas de Route con comentario).
+- `src/pages/Notificaciones.tsx`: nuevo, 171 líneas.
+
+### NO postmortem necesario
+
+- Bug de routing/UX puro, sin impacto en datos ni en flujos críticos. Maria se confundió pero no perdió trabajo. Sub-regla "postmortem obligatorio sólo si bug rompió producción" — no aplica acá.
+
+### NO cazador nuevo necesario
+
+- No es un patrón generalizable: una ruta puntual estaba sin registrar. El fallback `*` → `/` es comportamiento intencional para visitas anónimas. Si en el futuro queremos un cazador "todas las rutas linkeadas desde sidebar/campanita están registradas en App.tsx", sería un sprint propio.
+
+---
+
 ## 2026-05-15 — autónomo (`trabaja`, pasada post-QA E2E #3): SPRINT-170 (warning + auto-deriv operaria)
 
 ### Contexto

@@ -280,7 +280,8 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-172 — Campo "Modelo" en form crear orden debe ser input libre (no combobox cerrado)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO (commit pendiente al push, 2026-05-12, ruta conservadora A)
+**Resolución:** Renombrado UI del combobox "Modelo" → "Configuración" (mantiene Torre/Individual y el field de datos `equipoModelo` intacto). Agregado input texto libre "Modelo" nuevo que persiste en `equipoModeloFabricante` (campo nuevo en `OrdenServicio`). Cero migración — órdenes legacy arrancan con `equipoModeloFabricante` undefined. Render en `OrdenDetailModal` separa ambos campos. Touch-list: `src/types/index.ts`, `src/hooks/useOrdenCreateForm.ts`, `src/components/ordenes/OrdenCreateModal.tsx`, `src/components/ordenes/OrdenDetailModal.tsx`, `src/utils/index.ts`. Deuda derivada: SPRINT-172b (render en `OrdenDetalle.tsx:709`), SPRINT-172c (unificar `OrdenEditForm.tsx` + `ModalEditarOrdenAdmin.tsx`), SPRINT-172d (input modelo del fabricante en form público). Detalle completo en `EJECUCION_AUTONOMA.md`.
 **Prioridad:** 🟡 MEDIA — bug de UX que limita captura de datos del fabricante.
 **Origen:** QA E2E distribuido 2026-05-14. Angelica reportó que el campo "Modelo" del form crear orden es un combobox cerrado con solo 2 opciones ("Torre" e "Individual") que en realidad son **configuraciones del equipo, no modelos del fabricante**. No hay forma de escribir el modelo real (ej: "WF45R6100AW" de Samsung). Tuvo que dejar el campo vacío.
 
