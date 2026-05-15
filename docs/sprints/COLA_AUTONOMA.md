@@ -3,7 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-14 por coordinator (interactivo end-to-end, pedido explícito de Jorge) — **SPRINT-158a COMPLETADO** (hash `1ddb20e`, 1 archivo, +136/-1, ~25 min). Bugs 4+5 del SPRINT-158 (foto cierre + período garantía no renderizados en modal admin) cerrados con bloque "Cierre del servicio" inline en `OrdenDetailModal.tsx`. NO se reusó `OrdenResumenLectura` para evitar duplicar info ya mostrada. **SPRINT-158 DIVIDIDO** en 5 sub-sprints: 158a (cerrado), 158b/c/d (PENDIENTES en cola), 158e (BLOQUEOS.md — decisión negocio GPS bloqueante). Hallazgo lateral documentado: `OrdenDetalle.tsx` (página standalone) también carece de render de `periodoGarantiaDias` (foto cierre + firma SÍ las tiene). Deuda separada como SPRINT-158a-FIX-pagina si Jorge la prioriza. Cazadores 8/8 PASS (P-001 a P-007 + P-009). Typecheck + build PASS. Reviewer APPROVED.
+**Última actualización:** 2026-05-14 por Cowork — **QA E2E DISTRIBUIDO COMPLETADO sobre OS-0056 / CG-00019** con 4 Claudes (Maria coord + Wilainy operaria + Yohana operaria + Angelica secretaria) + 2 manuales (Aury técnico en iPad + Jorge admin). **6/6 fixes principales del día validados como PASS** con 1 caveat: SPRINT-159 captura firma OK pero render UI quedó incompleto (SPRINT-168 PENDIENTE). Tabla PASS/FAIL: ✅ SPRINT-159 firma wizard + ✅ SPRINT-161 fase Cerrado + ✅ SPRINT-153-FIX nota visible + ✅ SPRINT-162 KPI sube + ✅ SPRINT-160 modal hereda período + ⚠️ SPRINT-158a (foto+período PASS, firma FAIL). Bonus validado: ✅ SPRINT-152 helper Pago verificado + ✅ notif Conduce_emitido llega a operarias. **9 sprints nuevos escritos a la cola priorizados ALTA/MEDIA/BAJA:** SPRINT-168 (firma render UI — ALTA, bloqueador legal), SPRINT-169 (regresión SPRINT-163 orden_asignada NO llega — ALTA), SPRINT-170 (selector operaria auto-derivado del técnico — ALTA), SPRINT-171 (`/admin/notificaciones` rota — MEDIA), SPRINT-172 (modelo combobox → input libre — MEDIA), SPRINT-173 (aprobar precio NO avanza fase — MEDIA), SPRINT-174 (notifs faltantes 4 eventos — BAJA), SPRINT-175 (migrar órdenes legacy stuck — BAJA), SPRINT-176 (decisión notif a quien emite conduce — BAJA, requiere OK Jorge). Coordinator procesa ALTAS primero al hacer `trabaja`. SPRINT-169 requiere postmortem obligatorio (regresión de sprint anterior).
+
+**Última actualización previa:** 2026-05-14 por coordinator (interactivo end-to-end, pedido explícito de Jorge) — **SPRINT-158a COMPLETADO** (hash `1ddb20e`, 1 archivo, +136/-1, ~25 min). Bugs 4+5 del SPRINT-158 (foto cierre + período garantía no renderizados en modal admin) cerrados con bloque "Cierre del servicio" inline en `OrdenDetailModal.tsx`. NO se reusó `OrdenResumenLectura` para evitar duplicar info ya mostrada. **SPRINT-158 DIVIDIDO** en 5 sub-sprints: 158a (cerrado), 158b/c/d (PENDIENTES en cola), 158e (BLOQUEOS.md — decisión negocio GPS bloqueante). Hallazgo lateral documentado: `OrdenDetalle.tsx` (página standalone) también carece de render de `periodoGarantiaDias` (foto cierre + firma SÍ las tiene). Deuda separada como SPRINT-158a-FIX-pagina si Jorge la prioriza. Cazadores 8/8 PASS (P-001 a P-007 + P-009). Typecheck + build PASS. Reviewer APPROVED.
 
 **Última actualización previa:** 2026-05-14 por Cowork — Jorge eligió "vamos a solucionarlos todos" tras cerrar SPRINT-163 en coordinator. 6 sprints escritos en orden de criticidad: **SPRINT-159 (BLOQUEADOR go-live: firma del cliente) → SPRINT-161 (fase no avanza) → SPRINT-153-FIX (regresión nota conduce) → SPRINT-162 (KPI dashboard=0) → SPRINT-158 (9 hallazgos UX) → SPRINT-160 (modal 60 default UX)**. Coordinator procesa en este orden al hacer `trabaja`. **QA E2E distribuido (4 Claudes + humanos) se activa SOLO después del SPRINT-159** — los otros 5 son menores y bastan con tester+reviewer+regression_guardian del coordinator. Auditoría de consumidores hecha por Cowork antes de redactar (memoria "Revisar dependencias antes de modificar"): paths verificados, hipótesis de causa raíz documentadas, hallazgos laterales catalogados como deuda separada. SPRINT-161 + SPRINT-162 son fixes triviales (1 archivo cada uno). SPRINT-159 toca Storage + types + 3-5 componentes (riesgo medio, archivist obligatorio). SPRINT-153-FIX requiere diagnóstico previo en Firestore Console antes del fix.
 
@@ -114,9 +116,334 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ## Sprints
 
+### SPRINT-168 — Renderizar firma del cliente en UI (modal admin orden + fila expandida facturas)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🔴 ALTA — bloqueador legal post go-live. Sin render UI la firma capturada no sirve como prueba de aceptación.
+**Origen:** QA E2E distribuido 2026-05-14 sobre OS-0056 / CG-00019. SPRINT-159 capturó la firma correctamente (`cierreServicio.firmaClienteUrl` poblado) pero el "bonus" de SPRINT-158a (render en modal admin) quedó incompleto. 3 testers confirman lo mismo: Wilainy, Yohana, Jorge admin. La sección "Cierre del Servicio" del modal de detalle de orden salta de "Período de garantía" directo a "Piezas utilizadas" sin pasar por firma. Lo mismo en fila expandida de `/admin/facturas`.
+
+#### Touch-list
+
+**Archivos a modificar (2-3):**
+
+1. `src/components/ordenes/OrdenDetailModal.tsx` — bloque "Cierre del Servicio":
+   - Agregar bloque "Firma del cliente" debajo del bloque "Período de garantía" si `cierreServicio.firmaClienteUrl` existe.
+   - Render: thumbnail clickeable (~120x60px) que abre el PNG en lightbox o tab nuevo. Patrón similar al thumbnail de foto del cierre (que sí funciona).
+   - Si firma NO presente y cierre SÍ presente: mostrar "Sin firma" en gris (para órdenes pre-SPRINT-159).
+
+2. `src/components/facturas/OrdenResumenLectura.tsx` (variant 'compacto'):
+   - Agregar render análogo de firma debajo del bloque "Cierre del técnico" que ya existe (línea ~177-196). El componente recibe `orden` que ya tiene `cierreServicio.firmaClienteUrl`.
+
+3. `src/pages/OrdenDetalle.tsx` (página standalone):
+   - Verificar si tiene render de firma. Si NO, agregarlo. Reportado por coordinator post-SPRINT-158a como "deuda hallazgo lateral".
+
+**Consumidores verificados:**
+- `OrdenDetailModal` se monta desde `Ordenes.tsx` (vista lista). El campo `cierreServicio` ya se lee, solo falta el render.
+- `OrdenResumenLectura` se monta desde `Facturas.tsx` (fila expandida del conduce) y desde el modal "Marcar garantía manual". Ambos puntos ya reciben `orden` completa.
+
+**Hallazgos laterales:**
+- Storage rules: el catch-all permisivo permite leer cualquier path autenticado, así que la imagen va a cargar. No requiere cambio de rules.
+
+#### Criterios de aceptación
+
+- [ ] En `/admin/ordenes`, abrir modal de OS-0056 (orden con firma) → bloque "Firma del cliente" visible con thumbnail.
+- [ ] En `/admin/facturas`, expandir fila de CG-00019 → bloque "Firma del cliente" visible debajo del cierre del técnico.
+- [ ] Click sobre el thumbnail → abre el PNG (tab nuevo o lightbox).
+- [ ] Para órdenes legacy sin firma (OS-0055 y anteriores): muestra "Sin firma" gris discreto o el bloque no aparece (decisión builder).
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+- [ ] QA: re-validar con Wilainy/Yohana/Jorge que ahora SÍ ven la firma.
+
+#### Restricciones
+
+- NO tocar el componente del wizard (`CierreServicioWizard.tsx`) — solo render de lectura.
+- NO modificar el shape de `cierreServicio` — solo leerlo.
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-169 — Investigar regresión SPRINT-163 (notificación `orden_asignada` no llega)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🔴 ALTA — regresión confirmada en producción. SPRINT-163 marcado COMPLETADO pasada 17 pero el código no funciona end-to-end.
+**Origen:** QA E2E distribuido 2026-05-14. Angelica creó OS-0056 (cliente "QA TEST 14-MAY") asignando técnico Aury + operaria default Angelica (form no tiene selector operaria — ver SPRINT-170). Maria + Yohana confirmaron: **NO llegó notificación "orden_asignada" a ninguna campanita** (ni de Aury, ni de Maria coord, ni de Wilainy/Yohana operarias). El historial de notificaciones tampoco la muestra.
+
+#### Hipótesis a investigar (orden)
+
+1. **El `crearNotificacion({ tipo: 'orden_asignada', ... })` SÍ se ejecuta pero a un destinatario incorrecto** (ej: `userId` mal calculado, apuntando a un uid que no existe). Verificar Firestore Console: ¿hay docs en `notificaciones` con tipo `orden_asignada` creados el 2026-05-14 ~18:30?
+2. **El handler de creación de orden NO llama a `crearNotificacion`** — el commit del SPRINT-163 modificó otro archivo o el handler quedó en una rama no mergeada.
+3. **La rule de `notificaciones` rechaza el write silenciosamente** — pero entonces aparecería error en consola del browser. Hay que mirar.
+4. **El `crearNotificacion` se llama con `userId: undefined`** — y la rule rechaza por field missing.
+
+#### Touch-list
+
+**Diagnóstico obligatorio antes del fix:**
+
+1. Builder verifica en Firestore Console si existen docs `notificaciones` con `tipo === 'orden_asignada'` creados el 2026-05-14 (cualquier hora). Si SÍ → bug de filtro de lectura. Si NO → bug de escritura.
+2. Builder grep `'orden_asignada'` en `src/` para confirmar dónde se dispara `crearNotificacion` con ese tipo. Verificar que el commit del SPRINT-163 efectivamente modificó ese handler.
+3. Si el código está pero no se ejecuta: agregar `console.log` defensivo temporal en el handler para debugging.
+
+**Archivos potencialmente a modificar (1-3):**
+
+1. `src/hooks/useOrdenCreateForm.ts` — donde Angelica hace `addDoc('ordenes_servicio')`. Verificar que ahí esté el `crearNotificacion({ tipo: 'orden_asignada', userId: <tecnico.uid>, ... })`.
+2. `src/services/notificaciones.service.ts` — verificar que el service no filtre tipos en escritura.
+3. `firestore.rules` línea de `notificaciones` — verificar que permita create con `tipo: 'orden_asignada'`.
+
+#### Criterios de aceptación
+
+- [ ] Builder ejecuta diagnóstico y reporta hipótesis confirmada en commit message.
+- [ ] Crear orden nueva de prueba con técnico + operaria asignados → ambos reciben notificación `orden_asignada` en sus campanitas.
+- [ ] Verificar también que la notificación llega al coordinador activo (si hay >1 coord, todos reciben).
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+- [ ] reviewer obligatorio (regresión de sprint anterior).
+- [ ] **Postmortem obligatorio** en `docs/postmortems/2026-05-14-orden-asignada-regresion.md` — para entender por qué el QA del SPRINT-163 no cazó este bug.
+
+#### Restricciones
+
+- NO modificar el comportamiento de otros tipos de notificación.
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-170 — Agregar selector de operaria al form de crear orden
+
+**Estado:** PENDIENTE
+**Prioridad:** 🔴 ALTA — bug crítico de denormalización. Sin esto, todas las órdenes creadas hoy tienen operaria = creador (típicamente Angelica), NO la operaria real del grupo.
+**Origen:** QA E2E distribuido 2026-05-14. Angelica reportó: el form de crear orden NO tiene selector "Operaria asignada". El campo queda fijado al user logueado. Resultado: OS-0056 quedó con operaria = "Angelica Secretaria" en lugar de "Wilainy". Esto explica la causa raíz del bug del chip "Op: Operaria" genérico (catalogado como SPRINT-158 hallazgo #3 y #6).
+
+**Decisión negocio implícita:** la operaria asignada debe derivarse del técnico — porque cada técnico tiene una operaria asignada en `personal[uid].operariaId`. NO debería ser un campo a elegir manualmente en el form (introduce error humano). El form debe auto-derivar.
+
+#### Touch-list
+
+**Archivos a modificar (1-2):**
+
+1. `src/hooks/useOrdenCreateForm.ts` o `src/components/.../ModalCrearOrden.tsx` (depende de dónde esté el form):
+   - Al seleccionar técnico, hacer lookup en `personal[tecnico.uid].operariaId` y auto-asignar `operariaId` + `operariaNombre` denormalizados.
+   - Si el técnico NO tiene operaria asignada: mostrar warning "El técnico Aury no tiene operaria asignada. Asignar en /admin/personal antes de crear esta orden." y bloquear submit (o permitir con operaria vacía documentado).
+   - **NO** agregar dropdown manual de operaria (cliente prefiere auto-derivación).
+
+2. `src/utils/index.ts` — si hay un helper `derivarOperariaDeOrden(tecnicoId, personal)`, verificar que se llama en este flujo.
+
+**Consumidores verificados:**
+- `useOrdenCreateForm` es usado solo por el modal de crear orden. Cambio aislado.
+- `OrdenCard` ya lee `operariaNombre` directo — si lo denormalizamos correcto, el chip muestra el nombre real.
+
+#### Criterios de aceptación
+
+- [ ] Crear orden nueva asignando técnico Aury → `operariaNombre` denormalizado = "Wilainy" (operaria de Aury), NO el user logueado.
+- [ ] Crear orden nueva con técnico que NO tenga operaria asignada → warning visible + submit bloqueado o documentado.
+- [ ] Chip "Operaria" en /admin/ordenes muestra el nombre real (Wilainy), no "Op: Operaria" genérico ni "Angelica Secretaria".
+- [ ] Verificar también el flujo de EDIT orden — si ahí hay selector manual, mantenerlo (es para correcciones).
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+- [ ] reviewer obligatorio (denormalización crítica).
+
+#### Restricciones
+
+- NO tocar las rules de `ordenes_servicio` (operariaId ya está permitido).
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-171 — Ruta `/admin/notificaciones` rota (redirige al landing público)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟡 MEDIA — bug de routing que confunde y bota al user del admin.
+**Origen:** QA E2E distribuido 2026-05-14. Maria (coordinadora) intentó navegar a `/admin/notificaciones` para validar notifs del flujo de OS-0056. La ruta NO existe en el routing y en vez de mostrar 404 o `<NotFound>`, redirige al landing público `www.misterservicerd.com/` con la home pública ("Reparamos sus electrodomésticos / Agendar cita"). Esto saca al usuario del contexto admin.
+
+#### Touch-list
+
+**Archivos a modificar (1):**
+
+1. `src/App.tsx` (router):
+   - Verificar si hay route para `/admin/notificaciones`. Si NO, decidir:
+     - **Opción A (recomendada):** crear página simple `NotificacionesAdmin.tsx` que muestre el historial completo de notificaciones del user logueado (la campanita ya muestra las últimas, esta página muestra todas con filtros). Más útil que un 404.
+     - **Opción B:** agregar catch-all `/admin/*` → `<NotFound>` para que cualquier ruta admin desconocida muestre 404 dentro del layout admin (no redirija al público).
+
+**Consumidores verificados:**
+- `/admin/notificaciones` puede ser referenciado desde links de notificaciones (la campanita lleva ahí). Verificar con grep.
+- Si la ruta NO se referencia desde ningún lado, ir directo a opción B.
+
+#### Criterios de aceptación
+
+- [ ] Navegar a `/admin/notificaciones` ya NO redirige al landing público.
+- [ ] Decisión documentada: ¿se creó la página o solo el 404 admin?
+- [ ] Cualquier otra ruta `/admin/cosa-que-no-existe` muestra 404 dentro del layout admin, no fuera.
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+
+#### Restricciones
+
+- NO tocar el routing de las rutas públicas.
+- NO crear lógica de auth nueva.
+
+---
+
+### SPRINT-172 — Campo "Modelo" en form crear orden debe ser input libre (no combobox cerrado)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟡 MEDIA — bug de UX que limita captura de datos del fabricante.
+**Origen:** QA E2E distribuido 2026-05-14. Angelica reportó que el campo "Modelo" del form crear orden es un combobox cerrado con solo 2 opciones ("Torre" e "Individual") que en realidad son **configuraciones del equipo, no modelos del fabricante**. No hay forma de escribir el modelo real (ej: "WF45R6100AW" de Samsung). Tuvo que dejar el campo vacío.
+
+#### Touch-list
+
+**Archivos a modificar (1-2):**
+
+1. Form crear orden (`useOrdenCreateForm.ts` o componente equivalente):
+   - Cambiar el campo "Modelo" de combobox cerrado a input texto libre.
+   - Si "Torre/Individual" es información útil (es la **configuración** del equipo, no el modelo), renombrar ese campo a "Configuración" y dejarlo combobox. Y agregar un NUEVO input "Modelo" texto libre.
+   - El campo "Modelo" debe persistir en `orden.equipoModelo` (verificar nombre del field).
+
+2. `src/types/index.ts` — verificar que el tipo de `Orden.equipoModelo` sea `string` libre, no enum.
+
+**Decisión builder:** confirmar con Jorge si "Torre/Individual" es info útil que vale la pena preservar (como configuración) o si se elimina y solo queda "Modelo" libre.
+
+#### Criterios de aceptación
+
+- [ ] Campo "Modelo" acepta texto libre (ej: "QA-TEST", "WF45R6100AW").
+- [ ] Si se preservó "Configuración" como combobox: dos campos visibles + bien etiquetados.
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+
+#### Restricciones
+
+- NO romper órdenes legacy que tengan `equipoModelo` con valores tipo "Torre" o "Individual" — esos siguen siendo válidos como string.
+
+---
+
+### SPRINT-173 — Aprobar precio sugerido NO avanza fase (queda en `en_diagnostico`)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟡 MEDIA — bug de pipeline visual. Datos correctos en Firestore pero fase no refleja el estado.
+**Origen:** QA E2E distribuido 2026-05-14. Wilainy aprobó precio sugerido por Aury (RD$8,500) en OS-0056. El precio se aprobó correctamente (toast verde, registro de cambios actualizado), **pero la fase quedó en "En Diagnóstico"** en lugar de avanzar a "En Cotización" o "Aprobado". Ya catalogado previamente en SPRINT-158 hallazgo #2 (no procesado en SPRINT-158a). Yohana confirmó en su chequeo paralelo.
+
+#### Touch-list
+
+**Archivos a modificar (1):**
+
+1. Handler de aprobación de precio (probablemente en `Ordenes.tsx`, `OrdenDetailModal.tsx` o un component dedicado de cotización):
+   - Al ejecutar "Aprobar precio", el `updateDoc` actual setea `cotizacionAprobada: true` (verificar nombre exacto). Agregar al mismo update: `fase: 'aprobado'` (o `'en_cotizacion'` si hay un paso intermedio).
+   - Append entry a `historialFases` con timestamp + actor + razón "Precio aprobado por <operaria>".
+   - Sub-regla CLAUDE.md "registros sincronizados": `historialFases` + `fase` + `estadoSimple` + `estado` deben mantenerse alineados.
+
+**Consumidores verificados (read-only):**
+- Verificar grep de "Aprobar precio" o "aprobarCotizacion" para encontrar el handler exacto.
+- Después de fixear, asegurar que pipelines de `Ordenes.tsx`, `OrdenCard.tsx`, agenda, dashboard reflejan el cambio.
+
+#### Criterios de aceptación
+
+- [ ] Aprobar precio en orden de prueba → fase avanza visualmente a "Aprobado" (o paso intermedio "En Cotización").
+- [ ] `historialFases` incluye entry con razón "Precio aprobado por <operaria>".
+- [ ] Notificación al técnico de "precio aprobado" (depende de SPRINT-174).
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+- [ ] Reviewer obligatorio (cambio en pipeline crítico).
+
+#### Restricciones
+
+- NO tocar la lógica financiera del precio aprobado.
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-174 — Notificaciones faltantes en múltiples eventos del flujo de orden
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟢 BAJA-MEDIA — los datos están bien pero el equipo no se entera por notificación. Coordinación manual por WhatsApp es lo que hay hoy.
+**Origen:** QA E2E distribuido 2026-05-14. Yohana confirmó que las siguientes notificaciones NO se generaron durante el flujo de OS-0056:
+- "Precio aprobado" — cuando Wilainy aprobó RD$8,500 (técnico no se entera de la aprobación)
+- "Diagnóstico/cotización lista" — cuando Aury sugirió el precio
+- "Cierre completado" — cuando Aury cerró el servicio (operaria/coord no se entera)
+- "Pago registrado" — cuando Wilainy registró el pago (admin/coord no se entera)
+- "Orden lista para conduce" / "Envío a facturación" — cuando Wilainy click "Enviar a conduce" (esta SÍ llega a Maria — confirmado en su chequeo final)
+
+#### Touch-list
+
+**Archivos a modificar (3-5):**
+
+1. Handler de "Aprobar precio" (mismo del SPRINT-173): agregar `crearNotificacion({ tipo: 'precio_aprobado', userId: <tecnicoId>, ... })`.
+2. Handler de "Sugerir precio" / "Diagnóstico completado" (en `TecnicoVista.tsx` o equivalente): agregar `crearNotificacion({ tipo: 'cotizacion_lista', userId: <operariaId> + <coordId>, ... })`.
+3. Handler de cierre técnico (`CierreServicioWizard.tsx` submit): agregar `crearNotificacion({ tipo: 'cierre_completado', userId: <operariaId> + <coordId>, ... })`.
+4. Handler de "Registrar pago" (Wilainy en modal de pago): agregar `crearNotificacion({ tipo: 'pago_registrado', userId: <coordId> + <adminId>, ... })`.
+5. `src/types/index.ts` — verificar tipos de notificación existentes y agregar los nuevos.
+
+**Decisión builder:** evaluar si conviene unificar las llamadas en un helper `notificarCambioOrden(orden, tipo, actor)` para reducir duplicación.
+
+#### Criterios de aceptación
+
+- [ ] Cada uno de los 4 eventos genera notificación al destinatario correcto.
+- [ ] Re-correr QA E2E parcial: crear orden → técnico sugiere precio → operaria aprueba → técnico cierra → operaria registra pago → admin verifica que llegaron 4 notifs en su campanita.
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+
+#### Restricciones
+
+- NO tocar el sistema de notificaciones existente (`crearNotificacion` se mantiene).
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-175 — Migrar órdenes legacy stuck en `trabajo_realizado` post-conduce
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟢 BAJA — datos inconsistentes históricos, no afectan operación actual.
+**Origen:** QA E2E distribuido 2026-05-14. Maria reportó que OS-0055 sigue en fase `"trabajo_realizado"` pese a tener CG-00018 ya emitido. SPRINT-161 (que arregla la transición a `cerrado` al emitir conduce) NO es retroactivo — solo aplica a órdenes nuevas. Posiblemente hay otras órdenes en la misma situación (todas las que tuvieron conduce antes del 2026-05-14).
+
+#### Touch-list
+
+**Archivos a modificar (1):**
+
+1. `scripts/migrar-ordenes-cerradas-legacy.ts` (nuevo):
+   - DRY-RUN por default: query Firestore por `ordenes_servicio` con `facturada: true && fase: 'trabajo_realizado'` → listar count + IDs primeras 10.
+   - `--apply` real: setea `fase: 'cerrado'` + `estadoSimple: 'completado'` + appendea entry a `historialFases` con razón "Migración legacy SPRINT-175".
+   - Sub-regla CLAUDE.md: migraciones >50 docs requieren OK ampliado en BLOQUEOS.md.
+
+**Consumidores verificados:** ninguno, es read-only hasta `--apply`.
+
+#### Criterios de aceptación
+
+- [ ] DRY-RUN ejecutado por Jorge → reporta count + lista de órdenes a migrar.
+- [ ] Si count <50: ejecutar `--apply` directo.
+- [ ] Si count >50: OK ampliado en BLOQUEOS.md + ejecutar `--apply`.
+- [ ] Auditoría en `auditoria_admin` con `accion: 'migracion_fases_cerrado_legacy'`.
+
+#### Restricciones
+
+- NO modificar el código de los handlers de conduce (esos ya están bien post-SPRINT-161).
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-176 — Decisión: ¿quien emite el conduce debe recibir su propia notificación?
+
+**Estado:** PENDIENTE — REQUIERE DECISIÓN JORGE
+**Prioridad:** 🟢 BAJA — UX menor, no rompe operación.
+**Origen:** QA E2E distribuido 2026-05-14. Maria emitió el conduce CG-00019 y NO le llegó la notificación a su campanita. Yohana (operaria observadora) SÍ recibió la notificación. Pattern: la notificación va al equipo (operarias + coord otros) pero NO al emisor.
+
+**Comportamiento actual (sin código mostrado):** probable filtro `userId !== currentUser.uid` para evitar auto-notificaciones — patrón común en sistemas similares.
+
+#### Decisión negocio que Jorge debe tomar
+
+**Opción A (mantener como está):** quien emite NO recibe su propia notif. Tiene sentido — el emisor sabe lo que hizo, la notif se llena para los que necesitan enterarse.
+
+**Opción B (notificar a todos incluido emisor):** útil si Jorge quiere historial completo en su campanita aunque haya emitido él. Pero genera ruido.
+
+**Opción C (incluir emisor pero con tipo distinto):** tipo `accion_propia` filtrable. Más complejo.
+
+#### Touch-list (si Jorge elige B o C)
+
+- 1 archivo: `ProcesarFacturacionModal.tsx::handleGenerar` — el filtro de destinatarios actual.
+- Decidir: include vs exclude emisor.
+
+#### Criterios de aceptación
+
+- [ ] Jorge documenta su decisión en este sprint (A, B, o C) con razón.
+- [ ] Si A: cierre sin código, solo documentación de comportamiento esperado.
+- [ ] Si B/C: 1 archivo modificado + re-test.
+
+#### Restricciones
+
+- archivist PRE-CHANGE obligatorio si se cambia código.
+
+---
+
 ### SPRINT-159 — Implementar firma del cliente en wizard cierre del técnico (BLOQUEADOR go-live)
 
-**Estado:** EN_REVISION_HUMANA (código mergeado 2026-05-13 — pendiente QA E2E distribuido en iPad de Aury + verificación storage.rules en consola)
+**Estado:** ✅ COMPLETADO 2026-05-14 — QA E2E distribuido PASS (Aury firmó en iPad sin permission-denied; validó captura con drag/dedo + limpiar + refirmar + bloqueo del botón "Cerrar Servicio" sin firma). Las storage rules actuales (catch-all permisivo `match /{allPaths=**}`) cubrieron el path `firmas_cierre/` sin requerir cambios. Hash commits: `fd5e685` (canvas + storage + persistencia) + `9d9b524` (docs). **Caveat:** la firma se guarda OK en `cierreServicio.firmaClienteUrl` (registro de cambios confirma "Firma cliente: sí") **pero NO se renderiza en UI** — Wilainy + Yohana + Jorge admin confirmaron que el modal de detalle de orden y la fila expandida de `/admin/facturas` no muestran thumbnail "Ver firma". Fix retroactivo en **SPRINT-168** PENDIENTE.
 **Prioridad:** 🔴 CRÍTICA — bloqueador go-live. Sin esto, los conduces de garantía no tienen prueba de aceptación del cliente y la app no puede salir a producción.
 **Origen:** QA E2E distribuido 2026-05-13 (OS-0055 / CG-00018). El wizard `CierreServicioWizard.tsx` actual NO tiene paso de firma. SPRINT-135a-UI implementó wizard nuevo (foto + 3 preguntas + piezas + período de garantía) pero omitió firma. En RD el técnico va a casa del cliente y el cliente firma una hoja de servicio como prueba de aceptación. Sin firma, el conduce de garantía pierde valor legal y no hay defensa documentada si cliente reclama.
 
