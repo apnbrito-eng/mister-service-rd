@@ -247,7 +247,7 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-171 — Ruta `/admin/notificaciones` rota (redirige al landing público)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO (commit `9a0b792`, 2026-05-14)
 **Prioridad:** 🟡 MEDIA — bug de routing que confunde y bota al user del admin.
 **Origen:** QA E2E distribuido 2026-05-14. Maria (coordinadora) intentó navegar a `/admin/notificaciones` para validar notifs del flujo de OS-0056. La ruta NO existe en el routing y en vez de mostrar 404 o `<NotFound>`, redirige al landing público `www.misterservicerd.com/` con la home pública ("Reparamos sus electrodomésticos / Agendar cita"). Esto saca al usuario del contexto admin.
 
@@ -723,6 +723,91 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 - Respetar window 24h: si lead respondió <24h → mensaje normal; si más → plantilla HSM.
 - NO mandar campañas a opt-outs.
 - archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-PORTAL-1 — Portal cliente con CTA "Solicitar nuevo servicio"
+
+**Estado:** PENDIENTE — no depende de aprobación de plantillas WA, puede deployarse en paralelo. Mejora el portal `/garantia/:token` al que apuntan los links de plantillas `conduce_emitido` y `garantia_por_vencer`.
+**Prioridad:** 🟡 MEDIA — UX self-service, multiplica el valor del link enviado por WhatsApp. Sin esto, el cliente que clickea el link solo ve la garantía y tiene que responder por WhatsApp para pedir otro servicio.
+**Origen:** Decisión Jorge 2026-05-15 durante creación de plantillas WhatsApp HSM. Las plantillas `conduce_emitido` y `garantia_por_vencer` envían link al portal `/garantia/:token`. Jorge pidió que ese portal sirva también para que el cliente pueda agendar otro servicio (no solo reclamar garantía).
+
+#### Touch-list
+
+**Archivos a modificar (3 confirmados + 1 a auditar):**
+
+1. **AUDITAR primero** qué componente renderiza `/garantia/:token` (probable: `src/pages/public/PortalGarantia.tsx` o similar — confirmar con `grep -rn "/garantia/:token\|/garantia/\\\${" src/App.tsx`):
+   - Agregar sección nueva "¿Necesita otro servicio?" DEBAJO de los detalles de garantía existentes (no encima — la garantía sigue siendo el contenido principal).
+   - Botón primario "Solicitar nuevo servicio" → abre form modal o expandible con:
+     - **Tipo de equipo** (dropdown: nevera, lavadora, secadora, A/C split, A/C ventana, microondas, estufa, lavavajillas, otro)
+     - **Marca y modelo** (texto libre, opcional)
+     - **Descripción de la falla** (textarea, requerido, min 10 chars)
+     - **Zona** (dropdown pre-poblado con zonas RD del config — reusar lista existente si la hay)
+     - **Fecha preferida** (date picker, mínimo mañana, máximo +30 días)
+     - **Franja horaria** (mañana 8-12 / tarde 1-5 / sin preferencia)
+     - **Teléfono de contacto** (pre-poblado con el del cliente del token, editable)
+     - Botón "Enviar solicitud"
+   - Después de enviar: confirmación visible "Hemos recibido su solicitud. Le contactaremos en las próximas 24 horas para coordinar."
+
+2. `src/services/solicitudes.service.ts`:
+   - Agregar función `crearSolicitudDesdePortalGarantia(data, garantiaToken)` que:
+     - Valida el token (no expirado, corresponde a una orden real).
+     - Persiste a `solicitudes` con `origen: 'portal_cliente_garantia'`, `clienteId: <derivado del token>`, `garantiaTokenOrigen: <token>`, `creadaEn: serverTimestamp()`.
+     - Rate-limit cliente-side por token (1 solicitud por hora — defensa básica, la dura va en rules).
+   - Reusar shapes y validaciones existentes de `solicitudes.service.ts`.
+
+3. `src/services/notificaciones.service.ts` (NO modificar el service, solo usar):
+   - Disparar notificación tipo `'solicitud_nueva_portal'` a la coordinadora (`userId == coordinadora.uid`) + a Maria (operaria principal) cuando llega solicitud.
+   - Reusar patrón establecido en SPRINT-127 (Patrón: `crearNotificacion({ userId, tipo, titulo, descripcion })`).
+
+**Firestore rules:**
+
+- `solicitudes/{id}` allow create público debe gatear:
+  - `request.resource.data.origen == 'portal_cliente_garantia'`
+  - Token válido (verificación cliente-side, pero rule confía en el flujo público existente).
+  - Rate-limit: máximo 1 solicitud por `garantiaTokenOrigen` por hora — implementar con read de `solicitudes` filtradas por token + ts + reject si ya existe una en la última hora.
+- `notificaciones/{id}`: sin cambios (rules actuales cubren).
+
+**NO requiere cambios en:**
+
+- Plantillas WhatsApp ya enviadas (siguen mandando el mismo link).
+- API serverless `/api/whatsapp/*` (WhatsApp y portal son flujos independientes).
+- Otros componentes del portal (la sección de garantía sigue igual).
+
+**Consumidores verificados (read-only check):**
+
+- Componente del portal `/garantia/:token` se monta desde `src/App.tsx` ruta correspondiente. Auditar con: `grep -rn "garantia/:token\|/garantia/" src/App.tsx src/pages/public/`.
+- `solicitudes.service.ts` ya existe y es usado desde `src/pages/public/FormularioPublico.tsx` (flujo `/f/:slug`). Agregar función nueva sin tocar las existentes.
+- `notificaciones.service.ts` ya tiene `crearNotificacion` que respeta SPRINT-127 (rule gatea por `userId == auth.uid`). Reusar tal cual.
+
+**Hallazgos laterales NO incluidos (sprints follow-up):**
+
+- WhatsApp template `solicitud_recibida` para confirmar al cliente que su solicitud fue recibida (no es nuestra plantilla 1-4, sería plantilla 5 en sprint dedicado).
+- Tracking de conversión: cuánto del tráfico que entra a `/garantia/:token` clickea "Solicitar nuevo servicio" → ratio en dashboard admin.
+- Asignación automática técnico-zona-fecha: hoy queda como "solicitud" para que coord agende manual. Sprint follow-up de routing automático.
+
+#### Criterios de aceptación
+
+- [ ] Cliente entra a `/garantia/:token` válido → ve detalles garantía como hoy (sin regresión).
+- [ ] Sección nueva "¿Necesita otro servicio?" visible debajo de detalles garantía.
+- [ ] Click "Solicitar nuevo servicio" → form expandible/modal aparece.
+- [ ] Form valida campos requeridos: tipo equipo, descripción falla (min 10 chars), zona, fecha (>= mañana).
+- [ ] Submit OK → solicitud creada en Firestore con `origen='portal_cliente_garantia'` + `garantiaTokenOrigen=<token>`.
+- [ ] Cliente ve confirmación "Hemos recibido su solicitud..." (estado de éxito visible).
+- [ ] Coordinadora + Maria reciben notificación tipo `'solicitud_nueva_portal'` en su campanita admin.
+- [ ] Token expirado o inválido → form bloqueado con mensaje "Su sesión ha expirado, contacte a Mister Service".
+- [ ] Rate-limit funciona: 2da solicitud con mismo token en <1h muestra mensaje "Ya recibimos su solicitud reciente. Le contactaremos pronto".
+- [ ] Mobile responsive (la mayoría de clics vendrá desde WhatsApp en móvil).
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+
+#### Restricciones
+
+- archivist PRE-CHANGE obligatorio (toca portal público + service + notificaciones).
+- reviewer obligatorio (toca `firestore.rules` + servicio público sin auth).
+- NO modificar el flujo de garantía existente — solo agregar sección extra debajo.
+- NO exponer datos sensibles del cliente o de otras órdenes — solo lo que ya muestra el portal hoy.
+- Sin emojis en código.
+- Identifiers en español consistente con el proyecto.
 
 ---
 
