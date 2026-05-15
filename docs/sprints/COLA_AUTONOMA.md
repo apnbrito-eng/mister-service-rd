@@ -3,7 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-14 por Cowork — **QA E2E DISTRIBUIDO COMPLETADO sobre OS-0056 / CG-00019** con 4 Claudes (Maria coord + Wilainy operaria + Yohana operaria + Angelica secretaria) + 2 manuales (Aury técnico en iPad + Jorge admin). **6/6 fixes principales del día validados como PASS** con 1 caveat: SPRINT-159 captura firma OK pero render UI quedó incompleto (SPRINT-168 PENDIENTE). Tabla PASS/FAIL: ✅ SPRINT-159 firma wizard + ✅ SPRINT-161 fase Cerrado + ✅ SPRINT-153-FIX nota visible + ✅ SPRINT-162 KPI sube + ✅ SPRINT-160 modal hereda período + ⚠️ SPRINT-158a (foto+período PASS, firma FAIL). Bonus validado: ✅ SPRINT-152 helper Pago verificado + ✅ notif Conduce_emitido llega a operarias. **9 sprints nuevos escritos a la cola priorizados ALTA/MEDIA/BAJA:** SPRINT-168 (firma render UI — ALTA, bloqueador legal), SPRINT-169 (regresión SPRINT-163 orden_asignada NO llega — ALTA), SPRINT-170 (selector operaria auto-derivado del técnico — ALTA), SPRINT-171 (`/admin/notificaciones` rota — MEDIA), SPRINT-172 (modelo combobox → input libre — MEDIA), SPRINT-173 (aprobar precio NO avanza fase — MEDIA), SPRINT-174 (notifs faltantes 4 eventos — BAJA), SPRINT-175 (migrar órdenes legacy stuck — BAJA), SPRINT-176 (decisión notif a quien emite conduce — BAJA, requiere OK Jorge). Coordinator procesa ALTAS primero al hacer `trabaja`. SPRINT-169 requiere postmortem obligatorio (regresión de sprint anterior).
+**Última actualización:** 2026-05-15 por Cowork — **7 sprints WhatsApp Cloud API integration agregados a la cola detrás de los 9 fixes del QA**. Stack confirmado: Vite/React/TS + Firebase (Firestore + Storage + Auth) + Vercel Serverless (patrón existente en `api/gps/ubicacion.ts`). Decisión arquitectónica: NO usar BSP intermediario (Wati/360dialog), integrar directo a Meta Cloud API. Roadmap: **WA-1 webhook entrante (HMAC + idempotencia)** → **WA-2 servicio saliente proxy** → **WA-3 UI conversaciones admin** → **WA-4 tracking referral → campanas_marketing existente** → **WA-5 plantillas HSM** → **WA-6 Bot IA Claude Haiku (decisión Jorge: bot conversa + captura datos + crea OS automática + escala a humano)** → **WA-7 cron jobs (recordatorios + NPS + garantía a vencer)**. Identidades Meta confirmadas: Business 103664415995101, Phone Number ID 1151997541323577, número +1 849-564-6767 (display "Fixman Mister service" aprobado). Bloqueadores externos: META_APP_SECRET + META_VERIFY_TOKEN + META_ACCESS_TOKEN (Jorge debe crear app en developers.facebook.com + System User token permanente). Plantillas HSM requieren 24-48h aprobación Meta. SPRINT-WA-6 Bot IA requiere ANTHROPIC_API_KEY + Jorge confirma specs propuestos (modelo Haiku, escalación, system prompt). Coordinator procesa los 9 fixes de QA primero, después WA-1 a WA-7 en orden.
+
+**Última actualización previa:** 2026-05-14 por Cowork — **QA E2E DISTRIBUIDO COMPLETADO sobre OS-0056 / CG-00019** con 4 Claudes (Maria coord + Wilainy operaria + Yohana operaria + Angelica secretaria) + 2 manuales (Aury técnico en iPad + Jorge admin). **6/6 fixes principales del día validados como PASS** con 1 caveat: SPRINT-159 captura firma OK pero render UI quedó incompleto (SPRINT-168 PENDIENTE). Tabla PASS/FAIL: ✅ SPRINT-159 firma wizard + ✅ SPRINT-161 fase Cerrado + ✅ SPRINT-153-FIX nota visible + ✅ SPRINT-162 KPI sube + ✅ SPRINT-160 modal hereda período + ⚠️ SPRINT-158a (foto+período PASS, firma FAIL). Bonus validado: ✅ SPRINT-152 helper Pago verificado + ✅ notif Conduce_emitido llega a operarias. **9 sprints nuevos escritos a la cola priorizados ALTA/MEDIA/BAJA:** SPRINT-168 (firma render UI — ALTA, bloqueador legal), SPRINT-169 (regresión SPRINT-163 orden_asignada NO llega — ALTA), SPRINT-170 (selector operaria auto-derivado del técnico — ALTA), SPRINT-171 (`/admin/notificaciones` rota — MEDIA), SPRINT-172 (modelo combobox → input libre — MEDIA), SPRINT-173 (aprobar precio NO avanza fase — MEDIA), SPRINT-174 (notifs faltantes 4 eventos — BAJA), SPRINT-175 (migrar órdenes legacy stuck — BAJA), SPRINT-176 (decisión notif a quien emite conduce — BAJA, requiere OK Jorge). Coordinator procesa ALTAS primero al hacer `trabaja`. SPRINT-169 requiere postmortem obligatorio (regresión de sprint anterior).
 
 **Última actualización previa:** 2026-05-14 por coordinator (interactivo end-to-end, pedido explícito de Jorge) — **SPRINT-158a COMPLETADO** (hash `1ddb20e`, 1 archivo, +136/-1, ~25 min). Bugs 4+5 del SPRINT-158 (foto cierre + período garantía no renderizados en modal admin) cerrados con bloque "Cierre del servicio" inline en `OrdenDetailModal.tsx`. NO se reusó `OrdenResumenLectura` para evitar duplicar info ya mostrada. **SPRINT-158 DIVIDIDO** en 5 sub-sprints: 158a (cerrado), 158b/c/d (PENDIENTES en cola), 158e (BLOQUEOS.md — decisión negocio GPS bloqueante). Hallazgo lateral documentado: `OrdenDetalle.tsx` (página standalone) también carece de render de `periodoGarantiaDias` (foto cierre + firma SÍ las tiene). Deuda separada como SPRINT-158a-FIX-pagina si Jorge la prioriza. Cazadores 8/8 PASS (P-001 a P-007 + P-009). Typecheck + build PASS. Reviewer APPROVED.
 
@@ -438,6 +440,289 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 #### Restricciones
 
 - archivist PRE-CHANGE obligatorio si se cambia código.
+
+---
+
+### SPRINT-WA-1 — Endpoint webhook entrante WhatsApp Cloud API
+
+**Estado:** PENDIENTE — REQUIERE credenciales Meta antes de ejecutar (META_APP_SECRET + META_VERIFY_TOKEN)
+**Prioridad:** 🔴 ALTA — fundación de toda la integración WhatsApp. Sin webhook, no hay forma de recibir mensajes de leads de Click-to-WhatsApp.
+**Origen:** Decisión arquitectónica 2026-05-15 (handoff de otro Claude). CRM directo a Meta Cloud API (sin BSP intermediario).
+
+#### Touch-list
+
+**Archivos a crear (2):**
+
+1. `api/whatsapp/webhook.ts` — serverless function de Vercel (patrón existente con `api/gps/ubicacion.ts`):
+   - **GET handler**: verificación de Meta. Compara `query.hub.verify_token` con `process.env.META_VERIFY_TOKEN`. Si match, retorna `query.hub.challenge` como text/plain.
+   - **POST handler**: verificación HMAC SHA256. Header `X-Hub-Signature-256` vs `crypto.createHmac('sha256', META_APP_SECRET).update(raw_body).digest('hex')`. Si NO match, retorna 401.
+   - Parseo del payload Meta: extraer `entry[].changes[].value.messages[]` y `statuses[]`.
+   - Escritura idempotente: `setDoc(doc(adminDb, 'whatsapp_mensajes_inbox', message.id), payload)`. Firestore garantiza no duplicación con mismo ID.
+   - Respuesta 200 OK rápido (<5s). NO procesar lógica de negocio acá — solo escribir a Firestore + responder.
+
+2. `lib/firebase-admin.ts` — singleton del SDK admin (no existe en repo):
+   - Decodifica `process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT_BASE64` → JSON → `initializeApp`.
+   - Exporta `adminDb` para uso en serverless functions.
+
+**Variables de entorno nuevas en Vercel:**
+- `META_VERIFY_TOKEN` — string random inventado por Jorge (ej "msr_wh_2026_x9z")
+- `META_APP_SECRET` — del Meta developers console
+- `FIREBASE_ADMIN_SERVICE_ACCOUNT_BASE64` — service account JSON entero codificado base64
+
+**Firestore rules nuevas:**
+- `whatsapp_mensajes_inbox/{messageId}`:
+  - `allow read`: staff oficina
+  - `allow write`: NUNCA desde cliente (solo serverless con admin SDK saltea rules)
+
+#### Criterios de aceptación
+
+- [ ] GET con verify_token correcto retorna challenge (200, text/plain).
+- [ ] GET con token incorrecto retorna 403.
+- [ ] POST con HMAC válido escribe a `whatsapp_mensajes_inbox/{message.id}`.
+- [ ] POST con HMAC inválido retorna 401 sin info útil.
+- [ ] POST duplicado (Meta reintento) NO crea doc nuevo.
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+- [ ] Cazador nuevo P-010: detecta serverless functions que NO validan HMAC.
+- [ ] Test manual: webhook configurado en Meta + mensaje enviado al +1 849-564-6767 → doc visible en Firestore.
+
+#### Restricciones
+
+- NO procesar lógica de negocio en webhook (solo escribir a inbox).
+- NO exponer META_APP_SECRET al frontend NUNCA.
+- archivist PRE-CHANGE obligatorio + reviewer obligatorio (toca rules + serverless productivo).
+
+---
+
+### SPRINT-WA-2 — Servicio saliente proxy `api/whatsapp/send`
+
+**Estado:** PENDIENTE — REQUIERE META_ACCESS_TOKEN (System User permanente)
+**Prioridad:** 🔴 ALTA — sin esto el CRM no puede enviar mensajes (conduces, recordatorios, respuestas).
+
+#### Touch-list
+
+**Archivos a crear (2):**
+
+1. `api/whatsapp/send.ts` — serverless function proxy:
+   - **POST handler**: requiere auth Firebase (verify ID token de header `Authorization: Bearer <idToken>`). Solo staff oficina puede enviar.
+   - Body: `{ to: string, type: 'text'|'template'|'image', payload: {...} }`.
+   - Llama a `https://graph.facebook.com/v20.0/${META_PHONE_NUMBER_ID}/messages` con header `Authorization: Bearer ${META_ACCESS_TOKEN}`.
+   - Maneja errores Meta (429 rate limit, plantilla rechazada, etc.).
+   - Escribe el mensaje saliente a `whatsapp_mensajes_outbox/{wa_message_id}` para tracking.
+
+2. `src/services/whatsapp.service.ts` — wrapper cliente:
+   - `enviarTexto(to, texto)`, `enviarPlantilla(to, templateName, variables)`, `enviarImagen(to, url)`.
+   - Llama al endpoint con ID token del user autenticado.
+
+**Variables de entorno:**
+- `META_ACCESS_TOKEN` — System User token permanente
+- `META_PHONE_NUMBER_ID=1151997541323577`
+- `META_API_VERSION=v20.0`
+
+**Firestore rules:** `whatsapp_mensajes_outbox/{id}`: read staff oficina, write solo serverless.
+
+#### Criterios de aceptación
+
+- [ ] Enviar texto desde CRM → mensaje llega al destino.
+- [ ] Sin auth Firebase → endpoint retorna 401.
+- [ ] Rate limit Meta (429) → manejo con backoff.
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+
+#### Restricciones
+
+- NO exponer META_ACCESS_TOKEN al frontend NUNCA. Todo va por el proxy.
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-WA-3 — UI conversaciones WhatsApp por cliente/orden
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟡 MEDIA — UX importante pero no bloquea recepción/envío.
+
+#### Touch-list
+
+**Archivos a crear (3):**
+
+1. `src/pages/WhatsApp.tsx` — página nueva en `/admin/whatsapp`:
+   - Layout inbox: lista conversaciones izquierda + hilo abierto derecha.
+   - `onSnapshot` sobre `whatsapp_conversaciones` ordenado por `ultimoMensajeAt desc`.
+   - Botón "Responder" → composer (texto/plantilla/imagen).
+   - Botón "Crear orden desde conversación" auto-popula form.
+
+2. `src/components/whatsapp/HiloConversacion.tsx` — render hilo:
+   - Mensajes alineados según `direccion`. Timestamp + estado (enviado/entregado/leído).
+   - Render tipos: texto, imagen, audio, botón interactivo.
+
+3. `src/services/whatsapp-conversaciones.service.ts` — helpers query.
+
+**Sidebar:** entrada "WhatsApp" con badge no leídos.
+
+#### Criterios de aceptación
+
+- [ ] `/admin/whatsapp` accesible para staff oficina.
+- [ ] Lista real-time.
+- [ ] Botón responder funcional (usa WA-2).
+- [ ] Mobile responsive (operarias usan iPad).
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+
+#### Restricciones
+
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-WA-4 — Tracking referral → extender `campanas_marketing`
+
+**Estado:** PENDIENTE — requiere acuerdo de naming campañas con Jorge
+**Prioridad:** 🟢 BAJA-MEDIA — sin esto los leads no se atribuyen a campañas.
+
+#### Touch-list
+
+**Archivos a modificar (2):**
+
+1. `api/whatsapp/webhook.ts` (procesamiento inbox):
+   - Cuando llega primer mensaje, leer `messages[].referral`.
+   - Extraer: `headline`, `source_id` (ad_id), `source_url`, `media_type`, `body`.
+   - Linkear con `campanas_marketing` por `source_id` o crear nueva.
+   - Persistir en `cliente.origen: { tipo: 'whatsapp_ad', adId, campanaId, capturadoAt }`.
+
+2. `src/services/campanasMarketing.service.ts` (ya existe):
+   - Agregar `getOrCreateCampanaPorAdId(adId)`.
+
+**Decisión naming:** Jorge debe acordar formato `[Producto]_[Objetivo]_[Audiencia]_[Fecha]_[Variante]`.
+
+#### Criterios de aceptación
+
+- [ ] Lead de Click-to-WhatsApp → `cliente.origen` poblado con campanaId.
+- [ ] Dashboard de campañas muestra conteo leads por campaña.
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+
+#### Restricciones
+
+- NO modificar shape de `campanas_marketing` en producción — solo extender campos opcionales.
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-WA-5 — Plantillas HSM (sync + UI + envío)
+
+**Estado:** PENDIENTE — REQUIERE plantillas aprobadas en Meta Manager (24-48h aprobación)
+**Prioridad:** 🟡 MEDIA — sin esto solo se pueden enviar mensajes en ventana de 24h post-cliente.
+
+#### Touch-list
+
+**Archivos a crear (2):**
+
+1. `api/whatsapp/sync-templates.ts` — serverless cron c/12h:
+   - Llama `https://graph.facebook.com/v20.0/${WABA_ID}/message_templates`.
+   - Cachea en `whatsapp_plantillas/{name}` con estado, variables, body, category.
+
+2. `src/components/whatsapp/SelectorPlantilla.tsx` — componente:
+   - Modal con plantillas APPROVED.
+   - Form dinámico para variables {{1}}, {{2}}.
+   - Preview + envío vía WA-2.
+
+**Integración con CRM existente:** botón "Enviar conduce por WhatsApp" en flujo de emisión post-runTransaction. Upgrade del patrón actual `wa.me/...` manual a HSM oficial.
+
+#### Criterios de aceptación
+
+- [ ] Sync trae las 4 plantillas mínimas (conduce_emitido, recordatorio_mantenimiento, cita_confirmada, garantia_por_vencer).
+- [ ] UI muestra solo APPROVED.
+- [ ] Envío funciona vía WA-2.
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+
+#### Restricciones
+
+- NO eliminar el patrón `wa.me/...?text=...` actual (sigue como fallback manual).
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+### SPRINT-WA-6 — Bot IA conversacional con Claude Haiku
+
+**Estado:** PENDIENTE — REQUIERE Anthropic API key + system prompt definido + decisiones de escalación
+**Prioridad:** 🟡 MEDIA-ALTA — diferencial competitivo grande. Empieza después de WA-1 + WA-2 + WA-3.
+**Origen:** Decisión Jorge 2026-05-15. Bot atiende mensajes entrantes, conversa, captura datos, crea OS automáticamente. Escala a humano cuando es complejo.
+
+#### Specs propuestos (Jorge confirma o ajusta antes de procesar)
+
+**Modelo:** `claude-haiku-4-5` (~$1/1M input + ~$5/1M output tokens). Estimado: $5-15/mes para ~500 conversaciones.
+
+**System prompt:** tono RD spanish, brand Mister Service. Objetivo: capturar 5 datos para crear OS (nombre, teléfono, equipo, falla, zona).
+
+**Persistencia:** `whatsapp_conversaciones/{clienteId}.contextoBot` con array de últimos 20 mensajes.
+
+**Escalación a humano:**
+- Keywords: "humano", "persona", "agente", "no entiendo".
+- >10 turnos sin progreso.
+- Info contradictoria detectada.
+- Cuando escala: notif a Maria + marca `requiereHumano: true`.
+
+**Horarios:** 24/7. Fuera horario hábil avisa "agente humano mañana 8am" + sigue capturando datos.
+
+**Creación OS:** cuando bot tiene los 5 datos, crea OS desde serverless con admin SDK. `creadaPor: 'whatsapp_bot'`. Heurística routing: zona → técnico.
+
+#### Touch-list (alto nivel)
+
+**Archivos a crear (5):**
+
+1. `lib/bot-conversacional.ts` — lógica bot (`procesarTurno`, detección intents).
+2. `api/whatsapp/bot-procesar.ts` — serverless trigger desde inbox.
+3. `lib/anthropic-client.ts` — wrapper SDK Anthropic.
+4. `src/components/whatsapp/EstadoBot.tsx` — UI admin estado bot.
+5. `docs/bot-system-prompt.md` — system prompt versionado.
+
+**Variables de entorno:** `ANTHROPIC_API_KEY`.
+
+#### Criterios de aceptación
+
+- [ ] Bot responde en <5s.
+- [ ] Captura los 5 datos en conversación natural.
+- [ ] Escala a humano cuando aplica.
+- [ ] Crea OS correctamente.
+- [ ] Costos monitoreables.
+- [ ] Maria puede tomar control en cualquier momento.
+- [ ] System prompt versionado en docs/.
+
+#### Restricciones
+
+- NO permitir al bot acciones financieras (no aprobar precios, no emitir conduces).
+- Cada turno bot logueado en `auditoria_admin`.
+- archivist PRE-CHANGE obligatorio + reviewer obligatorio.
+
+---
+
+### SPRINT-WA-7 — Cron jobs proactivos (recordatorios + NPS + garantía a vencer)
+
+**Estado:** PENDIENTE — requiere WA-5 plantillas aprobadas
+**Prioridad:** 🟢 BAJA — mejora marketing, no funcionalidad core.
+
+#### Touch-list
+
+**Archivos a crear (2):**
+
+1. `api/cron/whatsapp-recordatorios.ts` — diario 9am RD:
+   - Clientes con última visita >6 meses → plantilla `recordatorio_mantenimiento`.
+   - Órdenes con garantía vence en 7 días → `garantia_por_vencer`.
+   - Órdenes cerradas hace 3 días sin NPS → encuesta NPS.
+
+2. `vercel.json` — Vercel Cron:
+   - `{ "crons": [{ "path": "/api/cron/whatsapp-recordatorios", "schedule": "0 13 * * *" }] }` (13:00 UTC = 9:00 RD).
+
+**Idempotencia:** tracking en `whatsapp_recordatorios_enviados/{clienteId}_{tipo}_{fecha}`.
+
+#### Criterios de aceptación
+
+- [ ] Cron diario sin overlap.
+- [ ] No duplicados.
+- [ ] Opt-out: STOP marca `cliente.optOutWhatsapp = true`.
+- [ ] Typecheck + lint + cazadores 8/8 PASS.
+
+#### Restricciones
+
+- Respetar window 24h: si lead respondió <24h → mensaje normal; si más → plantilla HSM.
+- NO mandar campañas a opt-outs.
+- archivist PRE-CHANGE obligatorio.
 
 ---
 
