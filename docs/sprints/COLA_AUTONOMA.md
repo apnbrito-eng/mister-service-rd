@@ -165,7 +165,7 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-169 — Investigar regresión SPRINT-163 (notificación `orden_asignada` no llega)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-15 (hash `5823955` fix + postmortem). **Causa raíz:** SPRINT-163 marcado COMPLETADO sin commit asociado. El tipo `'orden_asignada'` quedó huérfano en `TipoNotificacion` sin emisor en `useOrdenCreateForm.ts`. **Fix:** call site agregado al técnico + operaria derivada + admins/coords + cazador determinístico nuevo P-010 + entrada en `docs/PATRONES_REGRESION.md` + postmortem en `docs/postmortems/2026-05-15-orden-asignada-regresion-sprint-163-no-commit.md`. Hipótesis #2 confirmada (handler nunca llamó a `crearNotificacion`). Cazadores 9/9 PASS post-fix. Validación humana del flujo end-to-end pendiente (Jorge/QA crear orden y confirmar 3 notis llegan).
 **Prioridad:** 🔴 ALTA — regresión confirmada en producción. SPRINT-163 marcado COMPLETADO pasada 17 pero el código no funciona end-to-end.
 **Origen:** QA E2E distribuido 2026-05-14. Angelica creó OS-0056 (cliente "QA TEST 14-MAY") asignando técnico Aury + operaria default Angelica (form no tiene selector operaria — ver SPRINT-170). Maria + Yohana confirmaron: **NO llegó notificación "orden_asignada" a ninguna campanita** (ni de Aury, ni de Maria coord, ni de Wilainy/Yohana operarias). El historial de notificaciones tampoco la muestra.
 

@@ -5,6 +5,99 @@
 
 ---
 
+## 2026-05-15 — autónomo (`trabaja`, pasada post-QA E2E #2): SPRINT-169 (regresión `orden_asignada`)
+
+### Contexto
+
+QA E2E distribuido del 2026-05-14 sobre OS-0056 confirmó que **ninguna campanita recibió la notificación `orden_asignada`** cuando Angelica creó la orden asignando técnico Aury. SPRINT-163 había sido marcado COMPLETADO en `COLA_AUTONOMA.md` pasada 17 (2026-05-13) pero el flujo no funcionaba end-to-end. Cowork redactó SPRINT-169 con 4 hipótesis ordenadas + diagnóstico obligatorio + postmortem obligatorio (regresión de sprint anterior).
+
+### Archivist PRE-CHANGE
+
+- `git log --oneline --all` filtrado por `SPRINT-163` o `orden_asignada` o `asign`: **0 commits relevantes**. Ningún diff de código menciona el sprint ni el literal. Esto confirmó la hipótesis #2 antes incluso de leer código.
+- Grep `'orden_asignada'` en `src/`: 1 hit — `src/types/index.ts:1750` (declaración del tipo en `TipoNotificacion`). 0 hits como literal en `crearNotificacion({ tipo: 'orden_asignada' })`. Causa raíz **localizada en <5 minutos**: el call site no existe en el código.
+- Grep `crearNotificacion` en `src/services/ordenes.service.ts`: 4 hits (precio_aprobado, sugerencia_solo_chequeo, sugerencia_solo_chequeo_resuelta, reprogramacion_resuelta). El service tiene patrones que sirven de plantilla.
+- Postmortems consultados: ninguno aplica directamente (clase nueva, no recurrencia).
+- Patrones P-XXX aplicables al fix: P-001/P-006/P-007 (todos en orden — el código usa `form.tecnicoId = auth.uid`, `operariaIdDerivada = auth.uid` post-SPRINT-149, `p.uid` filtrado para admins/coords).
+- CAMPOS_CROSS_COLLECTION consultado: confirmó que `notificaciones.userId` debe ser `auth.uid` (validado por rule `notificaciones.read: userId == auth.uid`) y que `form.tecnicoId` ya es auth.uid post-c4be345.
+- Lectura del callsite del hook en `Ordenes.tsx:129` y `Citas.tsx:211`: ambos pasan `usuarioActual: { id: currentUser?.uid }` desde SPRINT-114 — consistente con auth.uid.
+
+### Touch-list expandido + auditoría de consumidores
+
+- **Modificado:** `src/hooks/useOrdenCreateForm.ts` (1 import + 1 bloque ~90 líneas post-`addDoc`).
+- **Consumidores del hook (read-only check):** `src/pages/Ordenes.tsx:124` (crear orden manual) y `src/pages/Citas.tsx:207` (confirmar cita pública). Ambos pasan `usuarioActual: { id: currentUser?.uid, nombre: userProfile?.nombre }` — consistente con auth.uid. Cambio aislado al hook, sin necesidad de tocar callers.
+- **Consumidores del tipo `'orden_asignada'`:** solo `src/types/index.ts:1750` (declaración) — no había readers que filtraran por este tipo, lo cual confirma que la "feature half-shipped" jamás se completó en ningún punto del codebase.
+- **Hallazgos laterales (NO fixeados, documentados como deuda):** el cazador P-010 nuevo cazó otros 2 tipos huérfanos al inicio (`reclamo_garantia`, `feedback_detractor`, `reprogramacion_solicitada`). De esos, 2 son falsos positivos del cazador inicial (emitidos desde `api/` con Admin SDK que no usa `crearNotificacion`) — fixeé el cazador para reconocer ese patrón. El 3ro (`reclamo_garantia`) queda en allowlist documentada con dueño SPRINT-174.
+
+### Cambios aplicados
+
+**Commit fix:** `5823955` (`fix(notificaciones): SPRINT-169 regresión orden_asignada (post-SPRINT-163)`).
+
+**Diff: +376/-1, 4 archivos:**
+
+#### 1. `src/hooks/useOrdenCreateForm.ts`
+
+- Imports: + `getDocs, where` de firestore, + `crearNotificacion` de `services/notificaciones.service`.
+- Post-`addDoc(ordenes_servicio)` línea 704+: bloque `try { ... } catch` defensivo que emite 3 grupos de notis:
+  1. **Técnico asignado** (si `form.tecnicoId`, ya es auth.uid post-c4be345).
+  2. **Operaria derivada** (si `operariaIdDerivada !== form.tecnicoId`, auth.uid post-SPRINT-149).
+  3. **Admins + coordinadoras activos** (mismo patrón que `notificarSugerenciaSoloChequeo` en `ordenes.service.ts:331`), excluyendo al creador y a los ya notificados.
+
+#### 2. `scripts/invariantes/check-tipo-notificacion-huerfano.ts` (NUEVO, 219 líneas)
+
+Cazador determinístico P-010. Lee la unión `TipoNotificacion` de `src/types/index.ts`, escanea `src/**/*.{ts,tsx}` + `api/**/*.ts` por dos pasadas: (a) bloques `crearNotificacion({...})` con paréntesis balanceados → extrae `tipo: '<v>'` literal; (b) archivos que referencian `collection('notificaciones')` con Admin SDK → extrae cualquier `tipo: '<v>'` literal. Reporta cada tipo del union que no aparezca como literal emitido (salvo allowlist).
+
+Allowlist documentada con 3 entradas (`otro`, `recordatorio`, `reclamo_garantia` → SPRINT-174).
+
+#### 3. `scripts/invariantes/run-all.ts`
+
++ import y registro del cazador P-010 en la lista de checks.
+
+#### 4. `docs/PATRONES_REGRESION.md`
+
++ Entrada P-010 con bug original, síntoma, causa raíz (drift entre declared types y emitted call sites), regla, cazador, allowlist, limitación conocida.
+
+### Postmortem
+
+**Generado:** `docs/postmortems/2026-05-15-orden-asignada-regresion-sprint-163-no-commit.md` (commit siguiente).
+
+**Causa raíz (5 porqués):** llega a "el catálogo P-XXX tenía un blind spot estructural — no contemplaba la clase 'feature half-shipped'". Todos los cazadores previos razonaban sobre código presente y patrones incorrectos en él; ninguno preguntaba "este símbolo declarado tiene un consumidor real".
+
+**Clasificación:** **clase nueva → propuesto P-010** (no recurrencia de clase ya catalogada).
+
+**Acciones preventivas:**
+
+- [x] Cazador P-010 implementado y registrado.
+- [ ] Sub-regla propuesta para próxima edición de CLAUDE.md: "Marcar un sprint como COMPLETADO requiere ≥1 commit en git log con la referencia al sprint en el mensaje".
+- [ ] Update propuesto al agente archivist: cuando un sprint declara "regresión de SPRINT-XXX", ejecutar `git log --grep='SPRINT-XXX'` y alertar si no hay commits.
+
+### Restricciones (todas honradas)
+
+- NO se tocó `firestore.rules` (cazador P-005 PASS).
+- NO se modificó el comportamiento de otros tipos de notificación.
+- NO se cambió UI ni copy user-facing (las notis usan plantilla coherente con las existentes en el service).
+- archivist PRE-CHANGE: ejecutado.
+- regression_guardian: PASS (revisión semántica en el coordinator; sin hits de P-001/P-006/P-007 en el nuevo código).
+- reviewer: APPROVED (edge cases revisados: técnico sin asignar, técnico sin operaria, técnico = creador, etc.).
+
+### Verificación
+
+- `npx tsc --noEmit`: PASS
+- `npx eslint --max-warnings 0` (archivos tocados): PASS (1 fix de `no-useless-escape` en regex aplicado)
+- `npm run check:regression`: 9/9 cazadores PASS (P-001 a P-007 + P-009 + P-010 nuevo)
+- `npm run build`: PASS (4.79s)
+- Pre-commit hook: PASS sin bypass.
+
+### Deploy
+
+- Push a main `5823955` + commit del postmortem siguiente. Vercel webhook deploys automático.
+- Validación humana pendiente: Jorge / QA crear orden de prueba y confirmar que las 3 notis (técnico + operaria + admins/coords) llegan a las campanitas correspondientes.
+
+### Próximo en cola
+
+SPRINT-170 (selector operaria auto-derivado, ALTA) y SPRINT-171 (`/admin/notificaciones` rota, MEDIA) — el coordinator espera OK de Jorge para continuar (este sprint se procesó con foco quirúrgico por requerimiento explícito del operador, no como parte de un `trabaja` masivo).
+
+---
+
 ## 2026-05-14 — autónomo (`trabaja`, pasada post-QA E2E): SPRINT-168 (firma del cliente render UI)
 
 ### Contexto
