@@ -5,6 +5,106 @@
 
 ---
 
+## 2026-05-12 — autónomo (`trabaja`): SPRINT-174 (notificaciones faltantes en 4 eventos del flujo)
+
+### Contexto
+
+QA E2E distribuido 2026-05-14 reportó 4 notificaciones faltantes en el ciclo OS-0056:
+- "Precio aprobado" — Wilainy aprobó RD$8,500 pero técnico no recibió noti.
+- "Diagnóstico/cotización lista" — Aury sugirió precio, operaria/admin no se entera.
+- "Cierre completado" — Aury cerró, operaria/coord no se entera.
+- "Pago registrado" — Wilainy registró pago, admin/coord no se entera.
+
+Auditoría inicial reveló que `precio_aprobado` SÍ tenía 5 call sites pero todos solo notificaban al técnico (no a admins/coords). Los otros 3 tipos NO existían en `TipoNotificacion` ni tenían call site.
+
+### Archivist PRE-CHANGE (consulta historial)
+
+- **AgendaDia.tsx**: tocado en SPRINT-145, 150, 173 — P-001/P-006/P-011 ya aplicados. Patrón Set/Map fixeado. Sin incidentes en `handleAprobarPrecioInline` post-SPRINT-173. Riesgo bajo, scope acotado.
+- **Ordenes.tsx**: tocado en SPRINT-173 (3er handler aprobar precio descubierto por P-011). 1600 líneas, monolítico. State `personal` ya cargado vía onSnapshot.
+- **OrdenDetalle.tsx**: tocado en SPRINT-173, SPRINT-159 (firma cliente). Patrón existente try/catch independiente. NO tenía state `personal` ni `currentUser` — agregado en este sprint.
+- **CierreServicioWizard.tsx**: tocado en SPRINT-159 (firma, BLOQUEADOR go-live), SPRINT-135a. updateDoc línea 431, post-cierre. NO tenía useApp ni state personal — query inline a personal agregado.
+- **RegistrarPagoModal.tsx**: tocado en SPRINT-114 (currentUser.uid). Usa runTransaction. Post-tx es seguro para emitir notis (no afecta atomicidad del pago).
+- **TecnicoVista.tsx**: tocado en SPRINT-113b, SPRINT-150. handleAgregarNota línea 402 — agrega nota + opcionalmente sugiere precio. Notif solo cuando hay precioSugerido.
+
+**Patrones P-XXX aplicables:** P-001 (currentUser.uid), P-007 (crearNotificacion userId shape — todos los `userId` deben ser auth.uid). Patrón canónico: SPRINT-169 (`5823955`).
+
+**Recordatorio:** NO toca `firestore.rules` (regla `notificaciones.create: esStaff()` ya cubre todos los creators).
+
+### Touch-list expandido + auditoría de consumidores
+
+**Archivos modificados (8):**
+
+1. `src/types/index.ts` — agregar 3 tipos a `TipoNotificacion`: `cotizacion_lista`, `cierre_completado`, `pago_registrado`. Comentario explica destinatarios por tipo.
+2. `src/pages/AgendaDia.tsx` (líneas 284-340) — extender `handleAprobarPrecioInline`. Mantiene notif técnico + agrega autoexclusión `currentUser.uid` + sweep de admins/coords activos vía state local `personal`.
+3. `src/pages/Ordenes.tsx` (líneas 214-260) — extender `handleAprobarPrecio`. Mismo patrón que AgendaDia (usa state local `personal`).
+4. `src/pages/OrdenDetalle.tsx` (líneas 128-180) — extender `handleAprobarPrecio`. Sin state `personal` — query inline a `personal` con `getDocs(query(... where rol in [admin, coord], activo=true))`. Agregados imports `getDocs`, `query`, `where`, `Personal`, destructuring `currentUser`.
+5. `src/pages/TecnicoVista.tsx` (líneas 437-516) — extender `handleAgregarNota` post-updateDoc. Solo emite si `precioSugerido` está seteado. Destinatarios: `orden.operariaId` (post-SPRINT-149 es auth.uid) + admins/coords vía query inline. Agregados imports `query`, `where`, `Personal`, `crearNotificacion`, destructuring `currentUser`.
+6. `src/components/CierreServicioWizard.tsx` (líneas 435-498) — agregar bloque post-`updateDoc(ordenes_servicio, ordenUpdate)`. Destinatarios: `orden.operariaId` + admins/coords vía query inline. Agregados imports `collection`, `getDocs`, `query`, `where`, `Personal`, `crearNotificacion`. NO requiere `currentUser` — usa `tecnicoId` (prop, descriptor) para autoexclusión.
+7. `src/components/ordenes/RegistrarPagoModal.tsx` (líneas 230-280) — agregar bloque post-`runTransaction`, solo si `!resultado.duplicado`. Destinatarios: admins/coords vía query inline. Agregados imports `collection`, `getDocs`, `query`, `where`, `Personal`, `crearNotificacion`.
+8. `scripts/invariantes/check-tipo-notificacion-huerfano.ts` + `docs/PATRONES_REGRESION.md` — actualizar comentario allowlist `reclamo_garantia` para clarificar que NO era scope de SPRINT-174 (sprint dedicado pendiente al flujo de reclamos).
+
+**Consumidores verificados (read-only) NO modificados:**
+
+- `src/components/ordenes/FaseStepper.tsx:139` — emite `precio_aprobado` al técnico cuando admin avanza fase a `aprobado` desde stepper visual. Su flujo independiente NO se toca (caso "drag-drop" / "click directo"). Hallazgo lateral declarado: posible doble notif si admin usa stepper Y handler inline en el mismo flujo. Deuda futura — SPRINT-XXX (dedup `precio_aprobado` cross-handler).
+- `src/components/ordenes/OrdenesTablero.tsx:148` — mismo caso que FaseStepper (drag-drop al tablero kanban). Mismo hallazgo lateral.
+- `src/components/ordenes/RegistrarPagoModal.tsx::handleEliminarPago` — NO se toca. Eliminar un pago no requiere notif (corrección administrativa). Caso fuera de scope.
+
+**Consumidores que sí se tocan (auditoria completa):**
+
+- AgendaDia + Ordenes + OrdenDetalle: 3 handlers de aprobar precio (post-SPRINT-173). Auditados líneas exactas. Hallazgo: ya emitían `precio_aprobado` al técnico, ahora también a admins/coords con autoexclusión.
+
+**Hallazgos laterales declarados:**
+
+1. FaseStepper.tsx:139 + OrdenesTablero.tsx:148 — emiten `precio_aprobado` al técnico SIN autoexclusión del clicker. Si un admin/coord usa el stepper directamente, no recibe su propia noti (correcto — la rule de defense-in-depth los excluye via personal). NO se tocan porque su flujo NO setea fase explícitamente desde un input de precio. Sprint follow-up tentativo: extender admins/coords también acá.
+2. `reclamo_garantia` queda en allowlist P-010 con dueño explícito "sprint dedicado al flujo de reclamos" (api/garantia/[token].ts).
+
+### Cazadores anti-regresión
+
+`npm run check:regression` 10/10 PASS pre-cambio (baseline). Post-cambio: 10/10 PASS con 192ms en pre-commit hook. P-010 reporta 18 tipos declarados, 17 con call site literal (diferencia: `recordatorio` server-side, en allowlist).
+
+### regression_guardian semántico
+
+APPROVED 6/6.
+1. P-001 ✓ — autoexclusión usa `currentUser?.uid` (no `userProfile.id`).
+2. P-007 ✓ — todos los `userId` son `destino.uid!` o campos persistidos (`orden.tecnicoId`, `orden.operariaId`) que YA son auth.uid (post-SPRINT-105/149).
+3. P-003 ✓ — notif post-update es best-effort (try/catch independiente), patrón canónico SPRINT-169. NO requiere runTransaction (semántica "fire-and-forget").
+4. P-006 ✓ — sin lookups por `.id` introducidos. Filtros por rol/uid.
+5. P-010 ✓ — 3 tipos nuevos ya emitidos en call site literal.
+6. P-011 ✓ — sprint NO modifica shapes de updateDoc en `ordenes_servicio` (solo agrega notifs post-update). Los updateDocs existentes ya tenían `fase` sincronizada por SPRINT-173.
+
+### Reviewer (obligatorio por cambio cross-handler)
+
+APPROVED 7/7.
+1. Patrón canónico SPRINT-169 replicado: try/catch independiente por destinatario, `p.uid` siempre, autoexclusión.
+2. Filtros `!!p.uid &&` consistentes para excluir empleados sin Auth (pre-SPRINT-105).
+3. Autoexclusión `p.uid !== currentUser?.uid` correcta para admins/coords. En CierreServicioWizard usa `tecnicoId` (prop, descriptor de cierre); riesgo bajo de auto-notif si el técnico es multi-rol (caso excepcional).
+4. Imports limpios y agrupados. No introduce dependencias circulares.
+5. Comentarios SPRINT-174 explícitos con referencia a SPRINT-169 + P-007 + P-001.
+6. No emojis en código. Español. Conventional Commit `feat(notificaciones):`.
+7. Mensajes de notif accionables (incluyen monto, cliente, técnico) — útil para que el receptor sepa de qué se trata sin abrir la orden.
+
+### Validaciones finales
+
+- `npx tsc --noEmit` PASS.
+- `npm run build` PASS (5.10s).
+- `npx eslint <archivos modificados> --max-warnings 0 --no-warn-ignored` PASS (lint solo de archivos staged, conforme pre-commit hook).
+- `npm run check:regression` 10/10 PASS.
+- Pre-commit hook PASS (typecheck + cazadores + lint staged).
+
+### Resultado
+
+- Commit: `bdd7003` (código + cazador comentario + PATRONES_REGRESION).
+- 8 archivos modificados, 313+ líneas insertadas, 20 eliminadas.
+- 1 commit follow-up para trazabilidad: `<HASH-DOCS>` (cola/log).
+
+### Hallazgos laterales (deuda separada)
+
+1. **FaseStepper.tsx + OrdenesTablero.tsx** — emiten `precio_aprobado` al técnico SIN sweep a admins/coords (flujo drag-drop/stepper directo). Sprint follow-up tentativo para uniformar. NO bloquea operación — el flujo principal (handlers inline) ya cubre el caso reportado en QA.
+2. **`reclamo_garantia`** — tipo declarado sin call site, en allowlist con dueño "sprint dedicado a reclamos de garantía". `api/garantia/[token].ts` ya crea cita + audit log al cliente abriendo reclamo, pero falta noti in-app al admin/coord. Sprint follow-up dedicado.
+3. **Posible doble notif** si admin/coord usa MÚLTIPLES rutas de aprobación en la misma orden (ej: handler inline + drag-drop posterior). Edge-case raro tras SPRINT-173 (handlers ya avanzan fase, drag-drop posterior sería no-op). Documentado pero no bloqueante.
+
+---
+
 ## 2026-05-12 — autónomo (`trabaja`): SPRINT-173 (aprobar precio NO avanza fase)
 
 ### Contexto

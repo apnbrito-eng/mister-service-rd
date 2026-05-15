@@ -318,7 +318,7 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-174 — Notificaciones faltantes en múltiples eventos del flujo de orden
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO (2026-05-12, coordinator). Hash: `bdd7003`. Cazadores 10/10 PASS. Allowlist P-010: 3 entradas (`otro`, `recordatorio` server-side, `reclamo_garantia` deuda futura — NO scope SPRINT-174).
 **Prioridad:** 🟢 BAJA-MEDIA — los datos están bien pero el equipo no se entera por notificación. Coordinación manual por WhatsApp es lo que hay hoy.
 **Origen:** QA E2E distribuido 2026-05-14. Yohana confirmó que las siguientes notificaciones NO se generaron durante el flujo de OS-0056:
 - "Precio aprobado" — cuando Wilainy aprobó RD$8,500 (técnico no se entera de la aprobación)
