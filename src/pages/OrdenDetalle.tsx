@@ -88,14 +88,42 @@ export default function OrdenDetalle() {
         orden.precioSugerido !== undefined ? `RD$ ${orden.precioSugerido.toLocaleString('es-DO')}` : '',
         `RD$ ${precio.toLocaleString('es-DO')}`
       );
+      // SPRINT-173: tras aprobar precio sugerido, avanzar fase a 'aprobado' y mantener
+      // sincronía con `estadoSimple`/`estado`/`historialFases` (sub-regla CLAUDE.md
+      // "registros sincronizados"). Antes el handler dejaba la orden en fase previa
+      // con precioAprobado/estadoAprobacion seteados — inconsistencia visible en
+      // pipeline visual de /admin/ordenes y en filtros por fase.
+      // Patrón tomado de SPRINT-161 (4015fe1) en ProcesarFacturacionModal:
+      // shape `{ fase, timestamp, usuario, nota }`, array reemplazado completo
+      // (no `arrayUnion`), single `ahora` para evitar drift de timestamps.
+      const ahora = Timestamp.now();
+      const nuevoHistorialFases = [
+        ...(orden.historialFases || []).map((h) => ({
+          fase: h.fase,
+          timestamp: h.timestamp instanceof Date ? Timestamp.fromDate(h.timestamp) : h.timestamp,
+          usuario: h.usuario || '',
+          ...(h.nota ? { nota: h.nota } : {}),
+        })),
+        {
+          fase: 'aprobado' as FaseOrden,
+          timestamp: ahora,
+          usuario,
+          nota: `Precio aprobado: RD$ ${precio.toLocaleString('es-DO')}`,
+        },
+      ];
       await updateDoc(doc(db, 'ordenes_servicio', id), {
         precioAprobado: precio,
         precioFinal: precio,
         estadoAprobacion: 'aprobado',
         aprobadoPor: usuario,
-        fechaAprobacion: Timestamp.now(),
+        fechaAprobacion: ahora,
+        // SPRINT-173: avanzar fase + estados duplicados + append a historial.
+        fase: 'aprobado',
+        estadoSimple: 'pendiente',
+        estado: 'activo',
+        historialFases: nuevoHistorialFases,
         auditoria: arrayUnion(registroAuditoria),
-        updatedAt: Timestamp.now(),
+        updatedAt: ahora,
       });
       // Notificar al técnico para que pueda continuar con el trabajo
       if (orden.tecnicoId) {
