@@ -64,6 +64,7 @@ const Feedback = lazy(() => import('./pages/Feedback'));
 const SugerenciasChequeo = lazy(() => import('./pages/SugerenciasChequeo'));
 const Reprogramaciones = lazy(() => import('./pages/Reprogramaciones'));
 const ConfiguracionMarketing = lazy(() => import('./pages/ConfiguracionMarketing'));
+const Notificaciones = lazy(() => import('./pages/Notificaciones'));
 
 // Public website pages (también lazy — el sitio público es un viewport distinto)
 import PublicLayout from './components/public/PublicLayout';
@@ -274,6 +275,11 @@ function AppRoutes() {
         <Route path="sugerencias-chequeo" element={<RolRoute roles={['administrador', 'coordinadora']}><SugerenciasChequeo /></RolRoute>} />
         <Route path="reprogramaciones" element={<RolRoute roles={['administrador', 'coordinadora']}><Reprogramaciones /></RolRoute>} />
         <Route path="configuracion-marketing" element={<RolRoute roles={['administrador']}><ConfiguracionMarketing /></RolRoute>} />
+        {/* SPRINT-171 (2026-05-14): ruta `/admin/notificaciones` faltaba y el
+            fallback `*` mandaba al landing público — confundía a la
+            coordinadora. La rule de Firestore ya filtra por userId == auth.uid,
+            así que no necesita PermisoRoute extra. */}
+        <Route path="notificaciones" element={<Notificaciones />} />
       </Route>
 
       {/* Legacy redirects — old /dashboard, /ordenes etc. now under /admin */}
