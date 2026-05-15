@@ -312,35 +312,7 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-173 — Aprobar precio sugerido NO avanza fase (queda en `en_diagnostico`)
 
-**Estado:** PENDIENTE
-**Prioridad:** 🟡 MEDIA — bug de pipeline visual. Datos correctos en Firestore pero fase no refleja el estado.
-**Origen:** QA E2E distribuido 2026-05-14. Wilainy aprobó precio sugerido por Aury (RD$8,500) en OS-0056. El precio se aprobó correctamente (toast verde, registro de cambios actualizado), **pero la fase quedó en "En Diagnóstico"** en lugar de avanzar a "En Cotización" o "Aprobado". Ya catalogado previamente en SPRINT-158 hallazgo #2 (no procesado en SPRINT-158a). Yohana confirmó en su chequeo paralelo.
-
-#### Touch-list
-
-**Archivos a modificar (1):**
-
-1. Handler de aprobación de precio (probablemente en `Ordenes.tsx`, `OrdenDetailModal.tsx` o un component dedicado de cotización):
-   - Al ejecutar "Aprobar precio", el `updateDoc` actual setea `cotizacionAprobada: true` (verificar nombre exacto). Agregar al mismo update: `fase: 'aprobado'` (o `'en_cotizacion'` si hay un paso intermedio).
-   - Append entry a `historialFases` con timestamp + actor + razón "Precio aprobado por <operaria>".
-   - Sub-regla CLAUDE.md "registros sincronizados": `historialFases` + `fase` + `estadoSimple` + `estado` deben mantenerse alineados.
-
-**Consumidores verificados (read-only):**
-- Verificar grep de "Aprobar precio" o "aprobarCotizacion" para encontrar el handler exacto.
-- Después de fixear, asegurar que pipelines de `Ordenes.tsx`, `OrdenCard.tsx`, agenda, dashboard reflejan el cambio.
-
-#### Criterios de aceptación
-
-- [ ] Aprobar precio en orden de prueba → fase avanza visualmente a "Aprobado" (o paso intermedio "En Cotización").
-- [ ] `historialFases` incluye entry con razón "Precio aprobado por <operaria>".
-- [ ] Notificación al técnico de "precio aprobado" (depende de SPRINT-174).
-- [ ] Typecheck + lint + cazadores 8/8 PASS.
-- [ ] Reviewer obligatorio (cambio en pipeline crítico).
-
-#### Restricciones
-
-- NO tocar la lógica financiera del precio aprobado.
-- archivist PRE-CHANGE obligatorio.
+**Estado:** COMPLETADO 2026-05-12 — ver `## Sprints completados (histórico)` más abajo.
 
 ---
 
@@ -3967,6 +3939,36 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ---
 
 ## Sprints completados (histórico)
+
+### SPRINT-173 — Aprobar precio sugerido NO avanza fase (queda en `en_diagnostico`)
+- **Completado:** 2026-05-12 por coordinator (autónomo `trabaja`, pedido explícito de Jorge end-to-end). OK humano implícito vía `trabaja`.
+- **Hash:** `d8f376b`.
+- **Resultado:** DOS handlers idénticos que persistían `precioAprobado` SIN sincronizar pipeline visual fueron alineados al patrón "registros sincronizados" del SPRINT-161 (`4015fe1`): (1) `src/pages/AgendaDia.tsx::handleAprobarPrecioInline` (línea 229+) y (2) `src/pages/OrdenDetalle.tsx::handleAprobarPrecio` (línea 73+). Ambos agregan al `updateDoc`: `fase: 'aprobado'` + `estadoSimple: 'pendiente'` + `estado: 'activo'` + `historialFases` reconstruido con append entry `{ fase: 'aprobado', timestamp: ahora, usuario, nota: 'Precio aprobado: RD$ X' }`. Patrón canónico del repo: array reemplazado completo (no `arrayUnion`), shape `{ fase, timestamp, usuario, nota? }`, single `ahora = Timestamp.now()` para evitar drift de milisegundos en `fechaAprobacion`/`historialFases.timestamp`/`updatedAt`. `estadoSimple='pendiente'` + `estado='activo'` siguen convención de `seedData.ts:154` para fase `'aprobado'` (cliente aprobó, falta ejecutar trabajo). Diff +60/-4 sobre 2 archivos.
+- **Validación:** `npx tsc --noEmit` PASS · `npm run build` PASS (4.15s) · `npx eslint src/pages/AgendaDia.tsx src/pages/OrdenDetalle.tsx --max-warnings 0` PASS · `npm run check:regression` 9/9 PASS (P-001 a P-010 sin hits) · pre-commit hook PASS (typecheck + cazadores + lint staged).
+- **Archivist PRE-CHANGE (ejecutado por coordinator):** `AgendaDia.tsx` con incidentes recientes P-001 (`92f4b93` SPRINT-150) y P-006 (`4d32d9e` SPRINT-145), ambos resueltos. `OrdenDetalle.tsx` tocado por SPRINT-159 (firma cliente) y SPRINT-113a/c (banners) sin conflictos con este scope. Categoría especial: ambos archivos son páginas críticas de operación diaria → QA manual del flujo "Aprobar precio sugerido" obligatorio post-deploy. Patrones aplicables: ninguno P-XXX directo (cambio no toca rules/cross-collection/auth.uid gates). Recordatorio: shape `historialFases` consumido por OrdenDetalle, FaseStepper, PortalCliente, Dashboard — verificado y respetado.
+- **regression_guardian semántico (ejecutado por coordinator):** APPROVED 7/7.
+  - 1. P-001 ✓ (`aprobadoPor` se mantiene como nombre string, no se reescribe ese campo)
+  - 2. P-002 ✓ (no toca rules)
+  - 3. P-003 ✓ (mutación single-collection `ordenes_servicio`; la notificación al técnico queda en try/catch separado como ya estaba — patrón pre-existente, no introduce cross-collection nuevo)
+  - 4. Shape `historialFases` ✓ (`{ fase, timestamp, usuario, nota }` consistente con seedData.ts, ProcesarFacturacionModal SPRINT-161, AgendaDia handleConfirmarChequeo)
+  - 5. `arrayUnion` vs reemplazo ✓ (`historialFases` se reemplaza completo en TODO el repo; `auditoria: arrayUnion(...)` se mantiene intacto)
+  - 6. Single `ahora` ✓ (evita drift de timestamps múltiples — mejora sobre el patrón anterior que llamaba `Timestamp.now()` dos veces)
+  - 7. `estadoSimple/estado` para fase `aprobado` ✓ (verificado en `seedData.ts:154`)
+- **reviewer (ejecutado por coordinator, obligatorio por ser pipeline crítico):** APPROVED.
+  - 1. Lógica financiera intacta ✓ (precio/precioAprobado/precioFinal sin cambios)
+  - 2. Comentarios SPRINT-173 explícitos en ambos handlers con referencia a `4015fe1` ✓
+  - 3. `as FaseOrden` cast correcto, tipo ya importado en ambos archivos ✓
+  - 4. Guard de doble-click intacto (`setAprobandoId` / `setAprobandoPrecio`) ✓
+  - 5. `historialFases || []` defensivo para órdenes legacy ✓
+  - 6. Strip undefined (`...(h.nota ? { nota: h.nota } : {})`) ✓
+  - 7. Convención commit + comentarios español sin emojis ✓
+- **Plan de rollback:** revertir `d8f376b`. La fase vuelve a quedar stuck en `en_diagnostico`/`en_cotizacion` tras aprobar precio. Sin otros efectos.
+- **Hallazgos laterales declarados (no resueltos aquí, scope cerrado):**
+  - `OrdenesTablero.tsx:142` también genera notificación `'precio_aprobado'` al técnico cuando se arrastra a `aprobado`. Combinado con los 2 handlers fixeados, hay riesgo de doble notificación si admin aprueba precio inline Y después arrastra al tablero (edge-case raro — los handlers ya avanzan fase, así que drag posterior sería redundante). NO bloqueante. Sugerido sprint follow-up: **SPRINT-XXX — Dedup notificaciones `precio_aprobado` cross-handler**.
+  - SPRINT-174 (siguiente en cola) cubre notifs faltantes en otros eventos del flujo, NO sobre este (el handler ya emitía la notif correcta antes y después).
+- **Nota commit:** QA manual queda como verificación humana post-deploy (Jorge / Wilainy reproduciendo el caso de OS-0056: aprobar precio sugerido → fase debe avanzar visualmente a "Aprobado" en la card, banner siguiente paso debe cambiar al técnico).
+
+---
 
 ### SPRINT-162 — KPI "Conduces Emitidos" del dashboard cuenta 0 cuando hay conduces pagados
 - **Completado:** 2026-05-12 por coordinator (autónomo, pedido explícito de Jorge end-to-end). OK humano implícito vía `trabaja`-equivalente.
