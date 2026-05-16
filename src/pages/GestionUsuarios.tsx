@@ -7,6 +7,7 @@ import { db, auth } from '../firebase/config';
 import { Personal, Rol, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, PermisosSistema } from '../types';
 import { permisosDefaultDeRol, iaHabilitadaDefaultPorRol } from '../utils/permisos';
 import { agruparPorRol } from '../utils/roles';
+import { ROL_LABELS, ROL_COLORS, ROL_SELECT_ORDEN } from '../utils/personal';
 import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
@@ -14,23 +15,15 @@ import { Edit, Key, Power, User, Shield, Eye, EyeOff, Check, KeyRound, ExternalL
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 
-const ROL_LABELS: Record<Rol, string> = {
-  administrador: 'Administrador',
-  coordinadora: 'Coordinadora',
-  secretaria: 'Secretaria',
-  operaria: 'Operaria',
-  tecnico: 'Técnico',
-  ayudante: 'Ayudante',
-};
-
-const ROL_COLORS: Record<Rol, string> = {
-  administrador: 'bg-purple-100 text-purple-700',
-  coordinadora: 'bg-violet-100 text-violet-700',
-  secretaria: 'bg-blue-100 text-blue-700',
-  operaria: 'bg-teal-100 text-teal-700',
-  tecnico: 'bg-orange-100 text-orange-700',
-  ayudante: 'bg-slate-100 text-slate-700',
-};
+// SPRINT-PERSONAL-EDIT-UNIFY (2026-05-15): ROL_LABELS + ROL_COLORS importados desde
+// `utils/personal.ts` (single source of truth desde SPRINT-142d) en lugar de duplicar
+// en este archivo. Antes faltaba la entrada `coordinadora` en el dropdown del modal
+// Editar Usuario (Jorge lo descubrió al crear cuentas QA del SPRINT-QA-USER).
+//
+// Los modales que listan roles "con acceso al sistema" excluyen `ayudante` (los
+// ayudantes solo se gestionan desde /admin/personal — ver `FormAltaEditarEmpleado`).
+// `ROL_OPCIONES_SISTEMA` filtra `ROL_SELECT_ORDEN` quitando `ayudante`.
+const ROL_OPCIONES_SISTEMA: Rol[] = ROL_SELECT_ORDEN.filter((r) => r !== 'ayudante');
 
 interface FormState {
   nombre: string;
@@ -790,10 +783,11 @@ export default function GestionUsuarios() {
                           onChange={e => handleRolChange(e.target.value as Rol)}
                           className={`w-full px-3 py-2 border ${rolBorderClass} rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]`}
                         >
-                          <option value="administrador">Administrador</option>
-                          <option value="secretaria">Secretaria</option>
-                          <option value="operaria">Operaria</option>
-                          <option value="tecnico">Técnico</option>
+                          {ROL_OPCIONES_SISTEMA.map((r) => (
+                            <option key={r} value={r}>
+                              {ROL_LABELS[r]}
+                            </option>
+                          ))}
                         </select>
                         {rolModificado && (
                           <p className="text-[11px] text-amber-700 mt-1">
