@@ -121,6 +121,56 @@ _(pendiente — esperando decisión)_
 
 ---
 
+## SPRINT-158b — Denormalización `operariaNombre` correctamente al crear orden + display en chip
+
+**Tipo:** Bug requiere reproducción humana y verificación en Firestore Console — coordinator autónomo NO puede deducir causa raíz desde auditoría estática.
+**Estado:** ESPERANDO_REPRODUCCION_JORGE
+**Origen:** QA E2E distribuido 2026-05-13 sobre OS-0055. Wilainy reportó chip "Op: Operaria" (literal). Yohana reportó que el chip parece tomar el nombre del CREADOR de la orden.
+
+#### Por qué se escaló (coordinator autónomo pasada 16, 2026-05-15)
+
+Auditoría estática completa con grep en `src/**` por `operariaNombre`:
+
+1. **Cadena de derivación al crear orden:** `useOrdenCreateForm.ts:622-624` busca técnico con `personal.find(p => (p.uid || p.id) === form.tecnicoId)` y persiste `tecnicoElegido.operariaNombre` en la orden. Esto es correcto post-c4be345.
+2. **Origen del campo en el doc personal del técnico:** `FormAltaEditarEmpleado.tsx:217` setea `personal.operariaNombre = op?.nombre || ''` al asignar operaria desde dropdown. Si `op` es undefined, queda string vacío. Si la operaria existe, queda el nombre real.
+3. **Render del chip:** `OrdenCard.tsx:171-175` renderiza `orden.operariaNombre.split(' ')[0]` con guard truthy. Si `operariaNombre = "Operaria"` literal en BD, el chip muestra "Op: Operaria".
+4. **NO se encontró código que escriba `operariaNombre = "Operaria"` literal en ningún archivo del repo.** `ROL_LABELS.operaria = 'Operaria'` (utils/personal.ts:20) se usa SOLO en displays de tablas y `<option>` labels, NUNCA se persiste a Firestore.
+5. **NO se encontró código que copie el nombre del creador a `operariaNombre`.** El campo `creadoPor` y `responsableNombre` se persisten en sus propios campos (líneas 650-651 de useOrdenCreateForm.ts), no en `operariaNombre`.
+
+**Conclusión coordinator:** las hipótesis del spec original (a) "lee operariaRol en lugar de operariaNombre" y (b) "copia nombre del creador" no se sustentan con la evidencia estática. La fuente probable es:
+
+- **Hipótesis A:** un seed o backfill antiguo escribió `operariaNombre = "Operaria"` literal en algunos docs `personal/` viejos, y se propagó por denormalización al crear órdenes.
+- **Hipótesis B:** Yohana describió mal el síntoma del bug 6 — quizás vio el chip vacío y lo interpretó como "el del creador".
+- **Hipótesis C:** existe un path de actualización que pasé por alto (ej. un script de migración no commiteado, o un import desde otro origen).
+
+#### Acción solicitada a Jorge
+
+**Antes de aplicar cualquier fix:**
+
+1. **Reproducir el bug en producción:** abrir `/admin/ordenes`, identificar una card con "Op: Operaria" literal (Wilainy lo vio sobre OS-0055). Si ya se re-derivó, buscar otra similar.
+2. **Verificar en Firestore Console:** abrir el doc `ordenes_servicio/{id}` de la orden afectada. Reportar:
+   - Valor exacto de `operariaNombre`.
+   - Valor exacto de `operariaId`.
+   - Valor de `tecnicoId`.
+3. **Verificar el doc personal del técnico de esa orden:** abrir `personal/{auth.uid del técnico}`. Reportar:
+   - Valor exacto de `operariaNombre` en ese doc.
+   - Valor exacto de `operariaId`.
+4. **Pegarme la respuesta acá** (o en un comentario en este archivo) para que pueda redactar SPRINT-158b-FIX con la causa raíz real.
+
+#### Alternativa si Jorge prefiere fix preventivo sin reproducción
+
+Si Jorge prefiere "defense-in-depth" sin esperar reproducción:
+
+- Agregar guard en `useOrdenCreateForm.ts:624`: si `tecnicoElegido?.operariaNombre === 'Operaria'` (literal del rol), tratarlo como vacío y NO persistir el campo.
+- Agregar script `scripts/reparar-operarianombre-literal.ts` (read-only por default + `--apply`) que detecte y limpie docs con `operariaNombre === 'Operaria'` literal en `ordenes_servicio` y `personal`.
+- Riesgo: si Hipótesis B (Yohana confundida) es la real, este fix no resuelve nada y deja deuda morta.
+
+#### OK / RECHAZADO / RESPUESTA de Jorge
+
+_(pendiente — esperando reproducción o decisión de fix preventivo)_
+
+---
+
 ## SPRINT-149-APPLY — Ejecución de `--apply` del script de migración operariaId (post-fix de código)
 
 **Tipo:** Migración de datos — Jorge dispara manualmente (sub-regla CLAUDE.md "migraciones >50 docs sobre flujo de nómina").

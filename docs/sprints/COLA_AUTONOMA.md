@@ -1107,7 +1107,7 @@ Bug 8 era explícitamente decisión de negocio en la spec original ("¿Cambiar a
 
 ### SPRINT-158b — Denormalización `operariaNombre` correctamente al crear orden + display en chip (bugs 3+6 del SPRINT-158)
 
-**Estado:** PENDIENTE
+**Estado:** ESCALADO A BLOQUEOS 2026-05-15 por coordinator autónomo (pasada 16). Auditoría estática completa NO sustenta las hipótesis del spec original (no se encontró código que escriba `operariaNombre = "Operaria"` literal ni que copie el nombre del creador). Se requiere reproducción humana + verificación en Firestore Console del valor real de `operariaNombre` en un doc afectado. Ver `docs/sprints/BLOQUEOS.md → SPRINT-158b` para detalles + acción solicitada a Jorge.
 **Prioridad:** 🟡 MEDIA — bug visual confirmado por 2 roles (Wilainy + Yohana). El chip "Operaria" en card de `/admin/ordenes` muestra "Op: Operaria" (string literal del rol) en lugar del nombre real ("Wilainy"). Bug 6 sugiere que además se está copiando el nombre del CREADOR de la orden (Angelica Secretaria) en lugar de la operaria asignada al técnico. Ambos hallazgos posiblemente comparten causa raíz: la denormalización al crear orden no deriva correctamente `operariaNombre` a partir de `operariaId` (el uid de la operaria del grupo del técnico).
 
 **Origen:** QA E2E distribuido 2026-05-13 sobre OS-0055. Reportado por Wilainy (Bug 3) y confirmado por Yohana desde otro rol (Bug 6).
