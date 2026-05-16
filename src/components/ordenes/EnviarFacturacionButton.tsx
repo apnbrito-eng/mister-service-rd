@@ -63,40 +63,49 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
         updatedAt: ahora,
       });
 
-      // 2) Notificar a admin + coordinadoras (fan-out)
-      try {
-        const qAdmin = query(
-          collection(db, 'personal'),
-          where('activo', '==', true),
-          where('rol', 'in', ['administrador', 'coordinadora']),
-        );
-        const snap = await getDocs(qAdmin);
-        const destinatarios = snap.docs
-          .map(d => ({ id: d.id, ...d.data() } as Personal))
-          .filter(p => !!p.uid);
-
-        await Promise.all(
-          destinatarios.map(p =>
-            crearNotificacion({
-              userId: p.uid!,
-              destinatarioNombre: p.nombre,
-              tipo: 'orden_enviada_a_facturacion',
-              titulo: 'Orden lista para conduce de garantía',
-              mensaje: `${orden.numero || orden.id} — ${orden.clienteNombre}. Enviada por ${usuario}.`,
-              ordenId: orden.id,
-              ordenNumero: orden.numero,
-            }),
-          ),
-        );
-      } catch (err) {
-        console.warn('No se pudieron crear todas las notificaciones:', err);
-      }
-
+      // SPRINT-158d-FIX (2026-05-15): optimistic UI — confirmar al usuario apenas
+      // el updateDoc crítico resuelve. Las notificaciones al admin/coord viajan
+      // fire-and-forget en background (no críticas para la operación; si fallan,
+      // el doc YA está marcado `enviadaAFacturacion: true` y la próxima sesión las
+      // muestra). Antes el botón quedaba en "Enviando..." 3-8s (a veces 30s en
+      // conexiones lentas — caso Wilainy 2026-05-13 QA E2E) esperando getDocs +
+      // Promise.all de notifs secuenciales. Diagnóstico estático en SPRINT-158d.
       toast.success('Enviada a conduce de garantía');
+      setSaving(false);
+
+      // 2) Notificar a admin + coordinadoras (fan-out) — fire-and-forget.
+      void (async () => {
+        try {
+          const qAdmin = query(
+            collection(db, 'personal'),
+            where('activo', '==', true),
+            where('rol', 'in', ['administrador', 'coordinadora']),
+          );
+          const snap = await getDocs(qAdmin);
+          const destinatarios = snap.docs
+            .map(d => ({ id: d.id, ...d.data() } as Personal))
+            .filter(p => !!p.uid);
+
+          await Promise.all(
+            destinatarios.map(p =>
+              crearNotificacion({
+                userId: p.uid!,
+                destinatarioNombre: p.nombre,
+                tipo: 'orden_enviada_a_facturacion',
+                titulo: 'Orden lista para conduce de garantía',
+                mensaje: `${orden.numero || orden.id} — ${orden.clienteNombre}. Enviada por ${usuario}.`,
+                ordenId: orden.id,
+                ordenNumero: orden.numero,
+              }),
+            ),
+          );
+        } catch (err) {
+          console.warn('No se pudieron crear todas las notificaciones:', err);
+        }
+      })();
     } catch (err) {
       console.error(err);
       toast.error('Error al enviar a conduce');
-    } finally {
       setSaving(false);
     }
   };

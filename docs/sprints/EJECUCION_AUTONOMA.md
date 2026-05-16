@@ -5,6 +5,90 @@
 
 ---
 
+## 2026-05-15 — autónomo (`trabaja`, pasada 18): SPRINT-PERSONAL-EDIT-UNIFY + SPRINT-158d-FIX
+
+### Contexto
+
+Cola al inicio: 2 sprints PENDIENTES ejecutables autónomos.
+
+1. **SPRINT-PERSONAL-EDIT-UNIFY** (MEDIA) — agregado por Cowork el 2026-05-15. Bug: dropdown Rol en modal Editar Usuario (`GestionUsuarios.tsx`) faltaba opción `Coordinadora`. Jorge lo descubrió al crear cuentas QA del SPRINT-QA-USER y tuvo que recurrir al modal alternativo de Personal.
+2. **SPRINT-158d-FIX** (BAJA) — propuesta de fix derivada del diagnóstico read-only del SPRINT-158d (pasada 16). Optimistic UI en `EnviarFacturacionButton.handleClick` para evitar el 30s de "Enviando..." reportado por Wilainy en QA E2E 2026-05-13.
+
+3. **SPRINT-QA-USER** (MEDIA-ALTA) — NO ejecutable autónomo. Requiere acción humana de Jorge (crear las 5 cuentas QA con password manual) ANTES de que coordinator pueda correr `scripts/qa-sanity-check.ts`. Queda fuera de scope de esta pasada.
+
+Prompt explícito de Jorge: "Si SPRINT-PERSONAL-EDIT-UNIFY revela que requiere consolidación grande (>6 archivos), dividir y procesar solo el subset trivial". Auditoría reveló cambio aislado de 1 archivo (consolidación a fuente canónica que YA existe desde SPRINT-142d) → se procesó completo, no se necesitó dividir.
+
+### archivist PRE-CHANGE (resumen coordinator, sin agent dedicado en esta pasada)
+
+**Para SPRINT-PERSONAL-EDIT-UNIFY (touch-list: `src/pages/GestionUsuarios.tsx`):**
+
+- Historial git relevante: `8d1851e` (SPRINT-125 keys granulares), `009bcc8` (SPRINT-105 espejo `usuarios/{uid}`), `c294717` (agrupar listas por rol), `4ef71b1` (cambiar email + audit log), `6b2a46f` (roles coordinadora + ayudante).
+- Postmortems relacionados: ninguno aplica directamente (los bugs históricos del archivo fueron de Auth/permisos, no de dropdown UI).
+- Patrones P-XXX que aplican: ninguno con riesgo (P-004 alta empleado doble doc se preserva — solo se toca dropdown UI, no la lógica de creación de doc usuarios/{uid}).
+- Advertencia: archivo sensible (gestión de altas con acceso al sistema). El cambio NO toca lógica de auth/permisos — solo dropdown de selección de rol y constantes labels/colors.
+
+**Para SPRINT-158d-FIX (touch-list: `src/components/ordenes/EnviarFacturacionButton.tsx`):**
+
+- Diagnóstico previo en SPRINT-158d (pasada 16) ya identificó: cuello de botella son las 3 awaits secuenciales (updateDoc + getDocs + Promise.all notifs).
+- Postmortem relacionado: SPRINT-158d completo deja análisis estructural read-only, recomienda fix optimistic UI.
+- Patrones P-XXX: SPRINT-114 ya alineó `usuarioId = currentUser?.uid` en este handler (línea 45 — referencia al gotcha P-001).
+- Advertencia: el handler tiene interacción con notifs que el SPRINT-158c (pasada anterior) verificó que sí llegan. El fix solo cambia timing (sincrónico → async background), NO destinatarios.
+
+### Plan ejecutado
+
+#### SPRINT-PERSONAL-EDIT-UNIFY
+
+**Cambios aplicados a `src/pages/GestionUsuarios.tsx`:**
+
+1. Import: agregada línea `import { ROL_LABELS, ROL_COLORS, ROL_SELECT_ORDEN } from '../utils/personal';`
+2. Eliminadas las dos constantes locales duplicadas (`ROL_LABELS` y `ROL_COLORS`, líneas 17-33).
+3. Agregada constante derivada `ROL_OPCIONES_SISTEMA: Rol[] = ROL_SELECT_ORDEN.filter((r) => r !== 'ayudante')` con bloque de comentario explicativo del SPRINT.
+4. Dropdown del modal Editar Usuario (`<select>` línea ~793) ahora mapea desde `ROL_OPCIONES_SISTEMA` con `{ROL_OPCIONES_SISTEMA.map((r) => <option key={r} value={r}>{ROL_LABELS[r]}</option>)}`.
+
+**Decisión arquitectónica:** Opción A del sprint spec (single source of truth) en lugar de Opción B (unificar los 2 modales). Justificación: los dos modales tienen propósito distinto y complementario — Editar Usuario gestiona permisos + email login; Editar Personal gestiona nivel/comisión/datos operativos. Unificarlos requeriría refactor de >6 archivos según el prompt de Jorge → se difirió.
+
+**Cazador P-XXX nuevo:** NO se creó. Razón: la consolidación a single source elimina estructuralmente la posibilidad del bug; un cazador grep negativo sobre `<option value="(administrador|...)"` daría falsos positivos en tests/scripts. Deuda futura si el patrón reaparece en otro lugar del codebase.
+
+**Hallazgos laterales (NO scope):**
+- El modal "Agregar Personal" potencialmente tiene un bug sticky de default Rol (sub-deuda SPRINT-PERSONAL-EDIT-UNIFY-B en el spec original). NO se tocó en esta pasada — Jorge prioriza explícitamente solo el subset trivial.
+
+#### SPRINT-158d-FIX
+
+**Cambios aplicados a `src/components/ordenes/EnviarFacturacionButton.tsx`:**
+
+1. Bloque de notificaciones (líneas 67-93 originales) extraído a un IIFE `void (async () => { ... })()`.
+2. `toast.success('Enviada a conduce de garantía')` + `setSaving(false)` movidos a ejecutar INMEDIATAMENTE después del `updateDoc` crítico (líneas 57-64).
+3. Bloque `finally { setSaving(false) }` eliminado (el `setSaving(false)` ahora aparece en success path + error path explícitamente).
+4. Comentario inline detallado del SPRINT-158d-FIX con referencia al caso Wilainy.
+
+**Patrón:** mantener el await crítico (`updateDoc` de la orden) como bloqueante; mover las operaciones no-críticas (getDocs + fan-out de notifs) a background fire-and-forget. Si las notifs fallan, el `console.warn` interno preserva el comportamiento de logging original. La orden YA queda marcada `enviadaAFacturacion: true` en Firestore antes de que la operaria vea el toast, así que no hay riesgo de UX inconsistente.
+
+### Validación post-cambio
+
+| Check | Resultado |
+|---|---|
+| TypeScript typecheck (`npx tsc --noEmit`) | PASS |
+| ESLint `GestionUsuarios.tsx` + `EnviarFacturacionButton.tsx` | PASS sin warnings |
+| Cazadores invariantes (`npm run check:regression`) | PASS 10/10 (P-001..P-007 + P-009 + P-010 + P-011) |
+
+### Reviewer self-check del coordinator
+
+- SPRINT-PERSONAL-EDIT-UNIFY: cambio mecánico de consolidación. Riesgo nulo de regresión funcional — el dropdown sigue invocando `handleRolChange(e.target.value as Rol)` con `Rol` que ya incluye `coordinadora` en `src/types/index.ts`. La rama `coordinadora` ya estaba soportada en handlers downstream (líneas 19, 28 del archivo confirman labels + colors previos para coordinadora). El bug era únicamente UI.
+- SPRINT-158d-FIX: el IIFE `void` desacopla la promise de notifs del await del handler. El `console.warn` interno se preserva en caso de fallo. Patrón estándar de fire-and-forget. Riesgo: si el browser termina la sesión antes de que el IIFE resuelva (cierre de tab), las notifs podrían perderse — pero ese mismo caso ya existía antes (cualquier fallo durante el `await Promise.all` original tampoco re-intentaba). Comportamiento equivalente en peor caso.
+
+### Cola al cierre
+
+- COMPLETADOS esta pasada: SPRINT-PERSONAL-EDIT-UNIFY + SPRINT-158d-FIX.
+- PENDIENTE bloqueado por acción humana: SPRINT-QA-USER (Jorge debe crear 5 cuentas QA primero — listadas en bloque del sprint).
+- **Cola autónoma agotada** post esta pasada.
+
+### Próximos pasos sugeridos
+
+1. Jorge crea las 5 cuentas QA → coordinator puede cerrar SPRINT-QA-USER en próxima pasada (entregar 3 archivos docs/scripts + correr sanity check).
+2. Cowork puede priorizar SPRINT-WA-1 (webhook WhatsApp) si Jorge proveyó credenciales Meta — actualmente en BLOQUEOS por falta de `META_APP_SECRET` + `META_VERIFY_TOKEN`.
+
+---
+
 ## 2026-05-15 — autónomo (`trabaja`, pasada dedicada): SPRINT-158c (notificaciones + transición fase post-SPRINT-173/174)
 
 ### Contexto
