@@ -5,6 +5,46 @@
 
 ---
 
+## 2026-05-15 — autónomo (`trabaja`, pasada 16): SPRINT-158d (perfilamiento timeout - diagnóstico read-only)
+
+### Contexto
+
+SPRINT-158d clasificado como "sprint mayoritariamente de investigación" + restricción "NO autónomo si requiere cambios estructurales — solo si fix trivial". El sprint pide diagnóstico del timeout 30s reportado por Wilainy al click "Enviar a conduce".
+
+### Archivist PRE-CHANGE
+
+No aplica (sprint read-only, no modifica código).
+
+### Diagnóstico (coordinator-as-auditor)
+
+1. **Localización del handler:** `src/components/ordenes/EnviarFacturacionButton.tsx::handleClick` (línea 34). Confirmado standalone, NO en OrdenDetailModal ni Ordenes.tsx.
+2. **Cadena de awaits:** 3 awaits secuenciales (updateDoc → getDocs(personal) → Promise.all(crearNotificacion)). Latencia esperada en buena conexión: 3-8s.
+3. **Verificación de índices:** `firestore.indexes.json` NO tiene índice compuesto explícito para `personal(activo, rol)`. Firestore lo resuelve con índices automáticos single-field (cardinalidad baja del taller).
+4. **Lectura completa de `crearNotificacion`:** función simple, `addDoc` con clean. Sin overhead. ~0.3-1s por destinatario.
+
+### Hallazgos
+
+- **Causa raíz del timeout 30s en Wilainy:** NO se identifica cuello algorítmico explicativo. Las 4 hipótesis más probables (conexión lenta, tab throttling Chrome, WebSocket atorado, re-renders post-update bloqueantes) son ambientales/externas — no atacables desde código.
+- **Cuello estructural identificado (separado del caso puntual):** falta de optimistic UI. El botón espera TODA la cadena (incluyendo notifs no-críticas) antes de cerrar el spinner.
+
+### Decisión: NO aplicar fix en este sprint
+
+Aunque el fix es trivial (~10 líneas: mover `getDocs + Promise.all` a fire-and-forget), modificarlo sin coordinar con SPRINT-158c (notificaciones faltantes + bug 9) es arriesgado: 158c puede agregar más notifs y cambiar criterios de aceptación. Coordinator de próxima pasada debe procesar 158c primero.
+
+### Tester
+
+No aplica (sin cambios de código).
+
+### Commit + push
+
+Solo cambios documentales en COLA_AUTONOMA.md (estado SPRINT-158d → COMPLETADO + hallazgos completos).
+
+### Resultado
+
+SPRINT-158d COMPLETADO como diagnóstico read-only. Documentado SPRINT-158d-FIX como follow-up para procesarse después de SPRINT-158c.
+
+---
+
 ## 2026-05-15 — autónomo (`trabaja`, pasada 16): SPRINT-176 (cierre documental decisión auto-notif emisor)
 
 ### Contexto

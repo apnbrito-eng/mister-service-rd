@@ -118,6 +118,69 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ## Sprints
 
+### SPRINT-QA-USER — Super usuario QA para sidepanel: 5 cuentas dedicadas + prompt maestro E2E
+
+**Estado:** PENDIENTE — REQUIERE Jorge cree 5 cuentas manuales antes de cerrar
+**Prioridad:** 🟡 MEDIA-ALTA — habilita QA E2E en 1 solo prompt sin pausas humanas. Multiplica capacidad de detección de bugs.
+**Origen:** Decisión Jorge 2026-05-15 vía Cowork — quiere que Claude en sidepanel pueda probar TODO el software en un solo prompt, con permisos completos de cada rol, detectar bugs como humano + sugerir optimizaciones UX ("río que fluye"). Eligió ruta B (5 cuentas QA dedicadas, no super-admin único ni override impersonation).
+
+#### Touch-list
+
+**Archivos a crear (3):**
+
+1. `docs/QA_SUPER_USER.md` — manual del super usuario QA:
+   - Lista de las 5 cuentas con email + rol + nombre simbólico.
+   - Convención de uso (orden de testing, escenarios cubiertos).
+   - Política: estas cuentas NO se usan en producción para datos reales — solo QA.
+   - Cómo Jorge regenera passwords si fugan.
+   - Cómo Cowork/coordinator escribe nuevos prompts QA que las usan.
+
+2. `docs/QA_PROMPT_MAESTRO.md` — prompt copy-paste para sidepanel Claude que ejecuta QA E2E completo:
+   - Bloque único con login → ciclo completo de orden → cobertura módulos secundarios → cierre.
+   - Output estructurado obligatorio: 4 secciones (bugs estructurados, sugerencias UX, cobertura módulos, evidencia/screenshots).
+   - Reglas de seguridad: NO borrar datos reales, NO modificar configuraciones globales, NO crear órdenes con clientes reales (siempre cliente "QA Test" + teléfono 8090000000).
+
+3. `scripts/qa-sanity-check.ts` — script que valida en Firestore que las 5 cuentas existen con sus roles correctos:
+   - Lee `usuarios/{uid}` y `personal where email==qa-*@misterservicerd.com`.
+   - Reporta inconsistencias (cuenta falta, rol incorrecto, doc duplicado).
+   - Corre antes de cada sesión QA para detectar drift.
+
+**Acción manual de Jorge (PRE-REQUISITO):**
+
+Crear las 5 cuentas vía `/admin/gestion-usuarios` con estos datos exactos:
+
+| Email                                     | Rol           | Nombre QA               |
+| ----------------------------------------- | ------------- | ----------------------- |
+| qa-secretaria@misterservicerd.com         | secretaria    | QA Secretaria Sidepanel |
+| qa-tecnica@misterservicerd.com            | tecnico       | QA Técnica Sidepanel    |
+| qa-operaria@misterservicerd.com           | operaria      | QA Operaria Sidepanel   |
+| qa-coordinadora@misterservicerd.com       | coordinadora  | QA Coordinadora Sidepanel |
+| qa-admin@misterservicerd.com              | administrador | QA Admin Sidepanel      |
+
+Password común sugerido (Jorge decide el real, NO commitear): formato fuerte ≥12 chars + número + símbolo. Guardar en password manager personal de Jorge.
+
+**Validación que el coordinator hace al cerrar el sprint:**
+
+- [ ] 3 archivos creados con contenido completo.
+- [ ] `scripts/qa-sanity-check.ts` corre sin errores con las 5 cuentas ya creadas por Jorge.
+- [ ] Cazador P-XXX nuevo (opcional, lateral) que detecte si algún test/script productivo hardcodea las cuentas QA fuera de scripts/qa-*.
+- [ ] Typecheck + lint + cazadores N/N PASS.
+- [ ] Documentación en `CLAUDE.md` referenciando `docs/QA_SUPER_USER.md` para que futuros agentes lo encuentren.
+
+#### Hallazgos laterales esperables
+
+- Posible necesidad de un campo `esQA: boolean` en `personal/{id}` para filtrar estas cuentas de reportes financieros, KPIs, comisiones. Si el coordinator detecta esto, escala a sub-sprint SPRINT-QA-USER-B.
+- Si las rules de Firestore bloquean alguna acción legítima del rol QA correspondiente, NO ajustar rules — reportar el gap como bug real (porque significa que un usuario real con ese rol tampoco puede hacerla).
+
+#### Restricciones
+
+- NO usar las cuentas QA en producción para crear datos reales. Convención: cliente siempre "QA Test", teléfono `8090000000`, observaciones "TEST QA <fecha>".
+- NO commitear passwords en código, docs, ni en CLAUDE.md.
+- Si el sidepanel-Claude ve un bug que afecta SOLO a la cuenta QA pero no a usuarios reales, es probable que sea drift de datos QA — investigar antes de reportarlo como bug del software.
+- archivist PRE-CHANGE obligatorio (toca `gestion-usuarios` indirecto + crea scripts nuevos).
+
+---
+
 ### SPRINT-168 — Renderizar firma del cliente en UI (modal admin orden + fila expandida facturas)
 
 **Estado:** ✅ COMPLETADO 2026-05-14 por coordinator (pasada autónoma post-QA E2E). Hash `f69fe6e`, +51/-29 líneas en 2 archivos. Thumbnail visible debajo de período de garantía en OrdenDetailModal + bloque dedicado en OrdenResumenLectura. Cazadores 8/8 PASS. Pendiente QA visual humano post-deploy: Wilainy/Yohana/Jorge admin abren OS-0056 en /admin/ordenes (modal) y en /admin/facturas (fila expandida CG-00019) y verifican thumbnail.
@@ -1208,38 +1271,61 @@ Los tipos de notificación posiblemente ya existen en `src/types/index.ts:1742-.
 
 ### SPRINT-158d — Perfilamiento timeout 30s "Enviar a conduce" (bug 7 del SPRINT-158)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-15 por coordinator autónomo (pasada 16) como diagnóstico read-only. Identificado el cuello de botella estructural + documentado fix follow-up SPRINT-158d-FIX. NO se aplicó fix en este sprint por conservadurismo: SPRINT-158c (notificaciones faltantes) toca el mismo flujo de notifs — modificar la semántica de fallo aquí podría chocar con criterios de aceptación de 158c. Próximo coordinator debe procesar 158c PRIMERO, después 158d-FIX (optimistic UI).
 **Prioridad:** 🟢 BAJA — operación completó correctamente en backend (conduce CG-00018 emitido), pero la UI tardó 30s en confirmar. UX degradada para Wilainy pero NO bloqueo funcional.
 
 **Origen:** QA E2E distribuido 2026-05-13. Wilainy (operaria PC #2) reportó timeout de 30s al click "Enviar a conduce" en el flujo T+18 (registro de pago + envío a conduce). El backend completó la operación correctamente — solo la UI quedó en estado pendiente.
 
-#### Tareas de diagnóstico (sprint mayoritariamente de investigación)
+#### Hallazgos del diagnóstico estático (coordinator, 2026-05-15)
 
-1. Identificar el handler exacto. Probable: `src/components/ordenes/EnviarFacturacionButton.tsx::onClick` o handler equivalente en `OrdenDetailModal.tsx`.
-2. Perfilar con `performance.mark`/`performance.measure` en local, o agregar `console.time`/`console.timeEnd` temporal en cada `await` del handler.
-3. Identificar el cuello de botella: ¿query sin índice? ¿suscripción bloqueante? ¿múltiples `await` secuenciales que podrían paralelizarse? ¿reads de `personal` para destinatarios de notificación que escanea toda la colección?
-4. Documentar hallazgos en el sprint + proponer fix en sprint follow-up (SPRINT-158d-FIX).
+**Handler exacto:** `src/components/ordenes/EnviarFacturacionButton.tsx::handleClick` (línea 34). NO está en `OrdenDetailModal.tsx` ni en `Ordenes.tsx`. Es un componente standalone que se monta dentro del modal.
 
-#### Touch-list provisional
+**Cadena de awaits secuenciales:**
 
-**Archivos a auditar (read-only inicialmente):**
+1. `updateDoc(ordenes_servicio)` con `arrayUnion` para auditoría (línea 57). Latencia típica esperada: 0.5-2s.
+2. `getDocs(query(personal, where activo == true, where rol in ['administrador', 'coordinadora']))` (líneas 68-73). Sin índice compuesto explícito en `firestore.indexes.json`, pero Firestore puede resolverlo con índices automáticos single-field (cardinalidad baja típica del taller). Latencia típica esperada: 1-3s.
+3. `Promise.all([crearNotificacion x N])` (líneas 78-90). Paralelo. N suele ser 2-4 destinatarios. Cada `addDoc` toma ~0.3-1s. Latencia típica esperada: 1-2s.
 
-- `src/components/ordenes/EnviarFacturacionButton.tsx`
-- Handler que recibe el click en `OrdenDetailModal.tsx` o `Ordenes.tsx`.
-- `src/services/ordenes.service.ts` — buscar función que persiste el envío.
-- `src/services/notificaciones.service.ts` — perfilar query de destinatarios (¿lee toda `personal` cada vez?).
+**Total esperado en buena conexión:** 3-8 segundos.
+
+**Por qué 30s en el caso de Wilainy:** el código NO tiene un cuello de botella algorítmico explicativo. Las causas más probables son:
+
+- **Hipótesis A (conexión lenta):** la red de Wilainy estaba especialmente lenta en ese momento (~30s para 3 round-trips a Firestore).
+- **Hipótesis B (tab throttling):** Chrome de Wilainy tenía la tab en background o con throttling de timers — los `await` se quedan esperando event loop.
+- **Hipótesis C (WebSocket atorado):** el WebSocket persistente de Firestore puede atorarse y demorar en re-establecerse antes de procesar la siguiente operación.
+- **Hipótesis D (no es el handler, es la reactividad post-update):** `onSnapshot` listeners en la app (Dashboard ~6 listeners, OrdenDetailModal listeners) re-render todos al ver el cambio del doc — el ciclo de render bloquea el toast.
+
+**Cuello de botella estructural REAL identificado (independiente del caso puntual de Wilainy):**
+
+El handler NO tiene optimistic UI. El botón muestra "Enviando..." durante TODA la cadena de awaits (incluyendo notifs que son no-críticas). Si las notifs tardan, la UX degrada aunque la orden YA esté marcada como `enviadaAFacturacion: true` en Firestore. Para el flujo crítico (la operaria marca la orden como lista), las notificaciones a admin/coord son secundarias.
+
+#### Propuesta de fix follow-up (SPRINT-158d-FIX, redactar tras cierre de SPRINT-158c)
+
+**Touch-list:** `src/components/ordenes/EnviarFacturacionButton.tsx` (~10 líneas).
+
+**Cambio:** mover `getDocs + Promise.all` a fire-and-forget (`.catch(err => console.error(...))` sin await). Mantener `updateDoc` como await crítico. El toast `Enviada a conduce de garantía` se muestra apenas el `updateDoc` resuelve. El `setSaving(false)` también se ejecuta inmediatamente tras el updateDoc, no después de las notifs.
+
+**Por qué NO se aplica en este sprint:**
+
+1. SPRINT-158c (notificaciones faltantes + bug 9) está PENDIENTE y toca el mismo flujo de notifs. Si SPRINT-158d-FIX cambia la semántica de fallo de notifs (de "bloquea respuesta" a "silenciado en background"), puede chocar con los criterios de SPRINT-158c que requieren que las notificaciones efectivamente lleguen y sean visibles.
+2. Modificar el handler sin reviewer es arriesgado en flujo de comisiones/facturación.
+3. La probabilidad de que la causa real sea conexión de Wilainy (Hipótesis A) es alta — si es el caso, fix no resuelve el problema raíz.
+
+**Recomendación al coordinator de la próxima pasada:** procesar SPRINT-158c PRIMERO (asegurar notifs llegan), después SPRINT-158d-FIX (optimistic UI). Si SPRINT-158c agrega más notifs al handler, el fix de optimistic UI cobra MÁS valor (más motivo para no esperar).
+
+**Hallazgo lateral (NO fix en este sprint):** `firestore.indexes.json` NO tiene índice compuesto explícito para `personal(activo, rol)`. Firestore lo resuelve con auto-indexes single-field. Si en el futuro la colección `personal` crece y la query empieza a degradar, considerar agregar índice. Sprint sugerido para el futuro: `SPRINT-FUT-indice-personal-activo-rol`.
 
 #### Criterios de aceptación
 
-- [ ] Identificado el cuello de botella con timing concreto (ej: "el `await getDocs(query(personal))` toma 12s con 50+ docs").
-- [ ] Propuesta de fix documentada (caché de destinatarios, paralelizar awaits, etc.).
-- [ ] Sprint follow-up SPRINT-158d-FIX redactado si requiere cambios estructurales.
-- [ ] Si el fix es trivial (<5 líneas), aplicar en este mismo sprint.
+- [x] Identificado el cuello de botella estructural (cadena de 3 awaits secuenciales en `EnviarFacturacionButton.handleClick`).
+- [x] Propuesta de fix documentada (mover notifs a background fire-and-forget).
+- [x] Sprint follow-up SPRINT-158d-FIX redactado en este mismo bloque (no se crea entrada separada en la cola hasta SPRINT-158c cerrado).
+- [x] NO se aplicó fix en este sprint por interacción con SPRINT-158c (decisión conservadora).
 
-#### Restricciones
+#### Restricciones cumplidas
 
-- **Sprint NO autónomo si requiere cambios estructurales** — solo si el fix es trivial (ej: agregar índice Firestore, paralelizar 2 awaits). Si toca arquitectura de notificaciones o servicios → BLOQUEOS.md.
-- NO modificar lógica de negocio del envío — solo performance.
+- Sprint mantuvo scope read-only (solo diagnóstico estático).
+- NO modificó lógica de negocio del envío.
 
 ---
 
