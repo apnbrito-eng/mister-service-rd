@@ -360,34 +360,39 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ### SPRINT-176 — Decisión: ¿quien emite el conduce debe recibir su propia notificación?
 
-**Estado:** PENDIENTE — REQUIERE DECISIÓN JORGE
+**Estado:** COMPLETADO 2026-05-15 por coordinator autónomo (pasada 16). Opción A mantenida. Hash pendiente (commit en curso). Cambios: 1 archivo (`ProcesarFacturacionModal.tsx`) +9/-2 líneas — agregado comentario inline SPRINT-176 cerca del filtro `p.uid !== currentUser?.uid` documentando la decisión (UX estándar — emisor no se auto-notifica). Sin cambios de comportamiento; el filtro ya estaba correcto. Cazadores 10/10 PASS. Typecheck + lint PASS.
+**Decisión Jorge 2026-05-15:** Opción A. UX estándar — nadie se notifica a sí mismo de acciones que acaba de hacer. Limpia panel propio. Confirmado vía Cowork con recomendación.
 **Prioridad:** 🟢 BAJA — UX menor, no rompe operación.
 **Origen:** QA E2E distribuido 2026-05-14. Maria emitió el conduce CG-00019 y NO le llegó la notificación a su campanita. Yohana (operaria observadora) SÍ recibió la notificación. Pattern: la notificación va al equipo (operarias + coord otros) pero NO al emisor.
 
-**Comportamiento actual (sin código mostrado):** probable filtro `userId !== currentUser.uid` para evitar auto-notificaciones — patrón común en sistemas similares.
+**Comportamiento actual confirmado correcto:** filtro `userId !== currentUser.uid` para evitar auto-notificaciones — patrón estándar. Mantener.
 
-#### Decisión negocio que Jorge debe tomar
+#### Decisión negocio TOMADA
 
-**Opción A (mantener como está):** quien emite NO recibe su propia notif. Tiene sentido — el emisor sabe lo que hizo, la notif se llena para los que necesitan enterarse.
+**Opción A (elegida):** quien emite NO recibe su propia notif. El emisor sabe lo que hizo, la notif se llena solo para quienes necesitan enterarse. Mantener comportamiento actual.
 
-**Opción B (notificar a todos incluido emisor):** útil si Jorge quiere historial completo en su campanita aunque haya emitido él. Pero genera ruido.
+~~Opción B (descartada): notificar a todos incluido emisor — genera ruido en campanita propia.~~
+~~Opción C (descartada): tipo `accion_propia` filtrable — over-engineering para 5 personas.~~
 
-**Opción C (incluir emisor pero con tipo distinto):** tipo `accion_propia` filtrable. Más complejo.
+#### Acción del coordinator
 
-#### Touch-list (si Jorge elige B o C)
-
-- 1 archivo: `ProcesarFacturacionModal.tsx::handleGenerar` — el filtro de destinatarios actual.
-- Decidir: include vs exclude emisor.
+- NO cambios de código. Comportamiento actual es el deseado.
+- Auditar que el filtro `userId !== currentUser.uid` esté presente y funcionando en `ProcesarFacturacionModal.tsx::handleGenerar`.
+- Si el filtro NO está y la lógica actual depende de otro mecanismo (ej. el destinatario no se incluye en `staffActivos` cuando es el actor), documentar cómo se logra el comportamiento.
+- Agregar comentario inline cerca del filtro: `// SPRINT-176: filtrar emisor para evitar auto-notif (decisión Jorge 2026-05-15 — UX estándar)`.
+- Considerar agregar cazador P-XXX que detecte `crearNotificacion({userId: currentUser?.uid})` sin filtro — patrón anti-self-notif. (Opcional, dejar como deuda lateral si requiere muchas horas.)
 
 #### Criterios de aceptación
 
-- [ ] Jorge documenta su decisión en este sprint (A, B, o C) con razón.
-- [ ] Si A: cierre sin código, solo documentación de comportamiento esperado.
-- [ ] Si B/C: 1 archivo modificado + re-test.
+- [x] Jorge documentó decisión: Opción A (mantener filtrar emisor).
+- [x] Coordinator audita que el filtro está presente y comentario inline agregado. Filtro en `ProcesarFacturacionModal.tsx:927` confirmado: `p.uid !== currentUser?.uid`. Comentario inline SPRINT-176 agregado al lado del filtro + bloque explicativo arriba documentando decisión.
+- [ ] Cazador anti-self-notif opcional (lateral, no bloquea cierre — deuda futura si Jorge prioriza).
+- [x] Cierre como COMPLETADO con commit `docs(sprint-176): decisión A - mantener filtro emisor en notif conduce`.
 
 #### Restricciones
 
-- archivist PRE-CHANGE obligatorio si se cambia código.
+- archivist PRE-CHANGE NO obligatorio (no cambia código funcional).
+- Si la auditoría detecta que el filtro NO está y el comportamiento observado fue accidental, escalar a BLOQUEOS antes de "arreglar" — el comportamiento observado es el deseado, no romperlo.
 
 ---
 

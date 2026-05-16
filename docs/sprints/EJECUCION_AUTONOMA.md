@@ -5,6 +5,51 @@
 
 ---
 
+## 2026-05-15 — autónomo (`trabaja`, pasada 16): SPRINT-176 (cierre documental decisión auto-notif emisor)
+
+### Contexto
+
+Pasada 15 cerró 8 sprints (SPRINT-168 a 175). SPRINT-176 quedó documentado en cola con "DECISIÓN TOMADA — Opción A" por Cowork (Jorge eligió mantener el filtro `p.uid !== currentUser?.uid` que evita auto-notificación al emisor del conduce). El sprint indica explícitamente "Procesable como cierre documental sin código" + "archivist PRE-CHANGE NO obligatorio".
+
+### Archivist PRE-CHANGE
+
+Salteado por restricción explícita del sprint (no cambia código funcional, solo comentarios inline documentando decisión ya tomada).
+
+### Builder (coordinator-as-builder por scope trivial)
+
+1. Auditoría confirma filtro presente en `ProcesarFacturacionModal.tsx:927` post-cambio: `p.uid !== currentUser?.uid // SPRINT-176: filtrar emisor para evitar auto-notif (decisión Jorge 2026-05-15 — UX estándar)`.
+2. Bloque de comentarios arriba del `try` extendido con nuevo párrafo SPRINT-176 documentando: decisión Jorge, fecha, motivo (UX estándar, panel propio limpio), origen QA (CG-00019 / Maria 2026-05-14).
+3. Sin cambios funcionales. Solo 9 líneas agregadas (8 de comentario + 1 sufijo inline en filtro existente), 2 modificadas.
+
+### Tester
+
+- Typecheck: PASS (sin errores).
+- Cazadores anti-regresión: 10/10 PASS (P-001..P-007 + P-009 + P-010 + P-011), 189ms.
+- ESLint sobre `ProcesarFacturacionModal.tsx`: PASS (0 warnings).
+
+### Regression_guardian
+
+NO invocado — el sprint no toca rules/services/context con cambios funcionales (solo comentarios).
+
+### Reviewer
+
+NO invocado — cambio trivial, sin cambio de comportamiento. Sprint mismo declara cierre documental.
+
+### Commit + push
+
+- Touch-list final: `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` (+9/-2) + `docs/sprints/COLA_AUTONOMA.md` (estado cabecera SPRINT-176).
+- Hash: (ver siguiente commit) — `docs(sprint-176): decisión A - mantener filtro emisor en notif conduce`.
+
+### Deploy
+
+`devops` invocado post-push para verificar Vercel deploy.
+
+### Resultado
+
+SPRINT-176 COMPLETADO. 1 archivo de código (comentarios) + 1 doc. Cazador anti-self-notif opcional queda como deuda lateral (NO bloquea cierre — Jorge puede priorizar si quiere capturar el patrón sistémicamente).
+
+---
+
 ## 2026-05-12 — autónomo (`trabaja`): SPRINT-175 (script migración órdenes legacy stuck post-conduce)
 
 ### Contexto

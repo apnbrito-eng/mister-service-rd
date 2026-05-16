@@ -917,6 +917,13 @@ export default function ProcesarFacturacionModal({
       // saber cuándo se emite uno (especialmente si fue un admin/coord). Antes
       // del cambio: Wilainy/Yohana NO recibían el doc → contador no subía.
       //
+      // SPRINT-176 (2026-05-15): decisión Jorge — Opción A. Mantener filtro
+      // `p.uid !== currentUser?.uid` para evitar auto-notificación al emisor.
+      // UX estándar: nadie se notifica a sí mismo de acciones que acaba de
+      // hacer. El emisor ya sabe lo que hizo, la notif sirve solo al resto del
+      // equipo. Origen: QA E2E 2026-05-14 (Maria emitió CG-00019, no le llegó
+      // notif a su campanita — confirmado comportamiento deseado, no bug).
+      //
       // Política de logging: el catch usa console.error (no warn) para que los
       // fallos de Firestore (rules denegando, doc inválido) sean visibles en
       // DevTools. Sin esto los errores quedaban silenciados (SPRINT-153 Bug 3).
@@ -924,7 +931,7 @@ export default function ProcesarFacturacionModal({
         const destinatarios = personalActivo.filter(p =>
           (p.rol === 'administrador' || p.rol === 'coordinadora' || p.rol === 'operaria') &&
           p.uid && // requiere auth account (P-006: uid = auth.uid, no doc id)
-          p.uid !== currentUser?.uid // no auto-notificarse
+          p.uid !== currentUser?.uid // SPRINT-176: filtrar emisor para evitar auto-notif (decisión Jorge 2026-05-15 — UX estándar)
         );
         const verificadoLabel = pagoNuevoFinal?.verificado === true ? 'sí' : (pagoNuevoFinal ? 'no' : 'sin pago');
         const mensajeBase = `${orden.clienteNombre} · ${formatMonedaPrecisa(totalItems)} · Pago verificado: ${verificadoLabel}`;
