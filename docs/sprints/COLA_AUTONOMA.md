@@ -177,7 +177,7 @@ Coordinator escoge A si los modales tienen razón de existir por separado (permi
 
 ### SPRINT-QA-USER — Super usuario QA para sidepanel: 5 cuentas dedicadas + prompt maestro E2E
 
-**Estado:** PENDIENTE — REQUIERE Jorge cree 5 cuentas manuales antes de cerrar
+**Estado:** COMPLETADO 2026-05-15 — ver `## Sprints completados (histórico)` más abajo.
 **Prioridad:** 🟡 MEDIA-ALTA — habilita QA E2E en 1 solo prompt sin pausas humanas. Multiplica capacidad de detección de bugs.
 **Origen:** Decisión Jorge 2026-05-15 vía Cowork — quiere que Claude en sidepanel pueda probar TODO el software en un solo prompt, con permisos completos de cada rol, detectar bugs como humano + sugerir optimizaciones UX ("río que fluye"). Eligió ruta B (5 cuentas QA dedicadas, no super-admin único ni override impersonation).
 
@@ -4180,6 +4180,35 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ---
 
 ## Sprints completados (histórico)
+
+### SPRINT-QA-USER — Super usuario QA para sidepanel: 5 cuentas dedicadas + prompt maestro E2E + sanity check
+
+- **Completado:** 2026-05-15 por coordinator (autónomo `trabaja`, pasada 19).
+- **Hash:** se completa post-commit.
+- **Archivos creados (3):**
+  - `scripts/qa-sanity-check.ts` (243 líneas) — read-only, valida que las 5 cuentas QA existen con rol consistente en `personal/` + `usuarios/{uid}` + Firebase Auth. Clasifica drift granular (`falta`, `doc_duplicado`, `uid_vacio`, `rol_drift_personal`, `rol_drift_usuario`, `usuario_faltante`, `auth_faltante`, `auth_email_mismatch`). Exit 0 si todas OK, 1 si drift. Catálogo `CUENTAS_QA` es source-of-truth en código.
+  - `docs/QA_SUPER_USER.md` (153 líneas) — manual del super usuario QA: catálogo de cuentas, política de seguridad ("NO ajustar rules para que pase QA"), convención de uso, regeneración de passwords, cómo escribir nuevos prompts.
+  - `docs/QA_PROMPT_MAESTRO.md` (219 líneas) — prompt copy-paste para sidepanel Claude que ejerce ciclo E2E completo pasando por los 5 roles. Validaciones explícitas contra sprints recientes (159, 160, 161, 162, 168, 170, 171, 173, 176). Reporte estructurado obligatorio en 4 secciones.
+- **Archivos modificados (2):**
+  - `CLAUDE.md` — +3 líneas en `Related docs in repo` referenciando los 3 archivos nuevos.
+  - `docs/sprints/COLA_AUTONOMA.md` — mover sprint a histórico.
+- **Sanity check pre-commit:** ejecutado contra Firestore productivo (read-only). 5/5 cuentas OK:
+  - `qa-secretaria@misterservicerd.com` (uid `06gfaoYH0bUibOswQIMSIYqkPlo1`)
+  - `qa-tecnica@misterservicerd.com` (uid `GdOvwCYyCRWv6iN0oLHRrld1CsX2`)
+  - `qa-operaria@misterservicerd.com` (uid `3sOpVgyEnTdgUi8UBstSvZoX1cw1`)
+  - `qa-coordinadora@misterservicerd.com` (uid `ScuhnBJVufXRAKJ42kUdaosRa1r2`)
+  - `qa-admin@misterservicerd.com` (uid `QhN2J8pVLbQtnGdGfmEVKY1TlVm2`)
+  - Todas con `personal.rol == usuarios.rol == catálogo`, P-004 cumplido, Firebase Auth alineado.
+- **Validación:** `npx tsc --noEmit` PASS · `npx eslint scripts/qa-sanity-check.ts` PASS exit 0 · `npm run check:regression` 10/10 PASS (sin hits). Lint del repo global arroja 10897 errores en archivos pre-existentes fuera del sprint (`dist-lazy/`, `vite.config.ts.timestamp-*.mjs`, `scripts/qa-sprint-135a-ui.ts`) — NO bloquea pre-commit hook (que lintea solo staged).
+- **Archivist PRE-CHANGE:** sprint hereda patrón canónico de scripts read-only de `ac54662` (SPRINT-117 auditoría emails), `5bfa0e0` (diagnóstico tecnicoid) y `d65fb82` (SPRINT-149 migración operariaId). Recordatorio aplicado de postmortem `2026-05-07-iniciar-chequeo-permission-denied.md`: si la cuenta QA tecnico se bloquea, NO ajustar rule — reportar como bug real (regla explícita en `QA_SUPER_USER.md`). Invariante P-004 (alta empleado doble doc) ahora VERIFICADO recurrentemente por el sanity check, no solo cazador estático.
+- **regression_guardian:** N/A (sprint solo crea docs + script read-only, no toca rules/services/context). Política autónoma lo marca opcional; saltado conscientemente.
+- **Decisión: NO se agregó cazador P-XXX nuevo** para detectar hardcodes de emails QA fuera de `scripts/qa-*` / `docs/QA_*`. La superficie es muy pequeña y el patrón estable. Si en el futuro alguien hardcodea un email QA en código de producción, abrir P-XXX entonces.
+- **Hallazgos laterales para futuros sprints:**
+  - **Deuda housekeeping:** agregar `dist-lazy/`, `vite.config.ts.timestamp-*.mjs` al `.gitignore` o a `eslint.config.js ignores`. Inflan output de `npm run lint` sin valor.
+  - **Sprint hermano latente:** `SPRINT-QA-USER-B` (campo `esQA: boolean` en `personal/{id}` + filtro en aggregations financieras) queda pendiente si las próximas sesiones QA contaminan reportes de comisiones/KPIs.
+  - **Primera ejecución del prompt maestro** sirve como smoke test del setup completo. Si rompe, el reporte estructurado dirá dónde.
+
+---
 
 ### SPRINT-175 — Migrar órdenes legacy stuck en `trabajo_realizado` post-conduce (script entregado, `--apply` pendiente OK Jorge)
 - **Completado:** 2026-05-12 por coordinator (autónomo `trabaja`). Sprint cierra la **entrega del script** read-only por default. `--apply` requiere OK Jorge en `BLOQUEOS.md` (cambio destructivo a datos productivos — restricción CLAUDE.md).

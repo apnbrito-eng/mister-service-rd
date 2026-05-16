@@ -192,6 +192,9 @@ Complementaria al archivist PRE-CHANGE (histórico de bugs), no lo reemplaza. PR
 - `PROMPTS-CLAUDE-CODE.md` — saved prompts the owner reuses.
 - `docs/MAPA_DEPENDENCIAS.md` — quién consume qué en cada módulo core. Consultar antes de tocar código compartido.
 - `docs/CAMPOS_CROSS_COLLECTION.md` — tabla de campos que conectan colecciones (tecnicoId, operariaId, etc.) con su regla estricta. Consultar antes de leer/escribir un campo apuntador.
+- `docs/QA_SUPER_USER.md` — catálogo de las 5 cuentas QA dedicadas para sidepanel Claude (SPRINT-QA-USER). Política de uso, regeneración de passwords, convenciones de datos de prueba.
+- `docs/QA_PROMPT_MAESTRO.md` — prompt copy-paste para `Claude in Chrome` que ejerce E2E completo en 1 sola sesión usando las 5 cuentas QA.
+- `scripts/qa-sanity-check.ts` — read-only, valida existencia + rol + invariante P-004 de las 5 cuentas QA. Correr antes de cada sesión QA. `npx tsx scripts/qa-sanity-check.ts`.
 
 ## Multi-agent workflow (`.claude/agents/`)
 

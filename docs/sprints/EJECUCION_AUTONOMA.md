@@ -5,6 +5,138 @@
 
 ---
 
+## 2026-05-15 — autónomo (`trabaja`, pasada 19): SPRINT-QA-USER
+
+### Contexto
+
+Pasada disparada por Jorge tras confirmar manualmente que las 5 cuentas QA fueron creadas en Firebase Auth + Firestore. Sprint quedó BLOQUEADO en pasada 18 esperando justamente esta acción humana. Ahora ejecutable end-to-end.
+
+Cola al inicio: 1 sprint PENDIENTE.
+
+- **SPRINT-QA-USER** (MEDIA-ALTA) — crear 3 archivos de soporte para QA E2E vía sidepanel Claude (manual + prompt + sanity check) y validar que las 5 cuentas creadas por Jorge cumplen P-004.
+
+### archivist PRE-CHANGE (resumen coordinator)
+
+Touch-list: 3 archivos nuevos (`docs/QA_SUPER_USER.md`, `docs/QA_PROMPT_MAESTRO.md`, `scripts/qa-sanity-check.ts`) + 2 modificaciones triviales (`CLAUDE.md` referencias en `Related docs`, `COLA_AUTONOMA.md` estado).
+
+- **Historial git relevante** (patrón canónico de scripts read-only con service-account.json):
+  - `ac54662` (SPRINT-117) — `scripts/auditoria-emails-personal-vs-usuarios.ts`. Mismo patrón: read-only, exit 1 si drift, `firebase-admin`.
+  - `5bfa0e0` — `scripts/diagnostico-tecnicoid-auth-uid.ts`. Patrón read-only similar.
+  - `d65fb82` (SPRINT-149) — `scripts/migrar-operariaid-a-uid.ts`. Read-only por default + `--apply` para escritura.
+- **Postmortems relacionados:** ninguno aplica directamente. El postmortem `2026-05-07-iniciar-chequeo-permission-denied.md` es relevante como recordatorio: si la cuenta QA tecnico se bloquea por permisos, NO ajustar rule — reportar como bug real (regla explicitada en `QA_SUPER_USER.md`).
+- **Patrones P-XXX que aplican:** P-004 (alta empleado con doble doc `personal/` + `usuarios/{uid}`). El sanity check VERIFICA P-004 por cada cuenta QA — convirtiéndolo en chequeo determinístico recurrente, no solo cazador estático.
+- **Advertencia:** no hay riesgo. Sprint crea documentación + script read-only sin tocar código de producción. No toca rules, services ni context.
+
+### Builder (coordinator-driven, sin tool Agent disponible)
+
+3 archivos nuevos + 2 modificaciones triviales:
+
+1. **`scripts/qa-sanity-check.ts`** (243 líneas):
+   - Catálogo de 5 cuentas QA como source-of-truth en código (`CUENTAS_QA`).
+   - Chequea por cuenta: existencia en `personal/`, uid no vacío, `usuarios/{uid}` existe (P-004), rol consistente en ambos docs, email canónico en Firebase Auth.
+   - Clasificación granular: `ok` / `falta` / `doc_duplicado` / `uid_vacio` / `rol_drift_personal` / `rol_drift_usuario` / `usuario_faltante` / `auth_faltante` / `auth_email_mismatch`.
+   - Output legible + resumen final + acciones sugeridas para cada clasificación.
+   - Read-only (no escribe). Exit 0 si todas OK, 1 si drift, 2 si error fatal.
+   - Fallback case-sensitive: prueba email lowercase primero, luego original (cubre alta con email no-normalizado).
+
+2. **`docs/QA_SUPER_USER.md`** (153 líneas):
+   - Manual de las 5 cuentas: emails, roles, nombre simbólico.
+   - Política de seguridad: NO commitear passwords, NO usar en datos reales, NO ajustar rules "para que pase QA".
+   - Convención de uso (orden de testing por roles).
+   - Regeneración de passwords si fuga.
+   - Cómo escribir nuevos prompts QA.
+   - Cross-refs a `qa-sanity-check.ts`, `QA_PROMPT_MAESTRO.md`, `QA_BROWSER_CLAUDE.md`.
+
+3. **`docs/QA_PROMPT_MAESTRO.md`** (219 líneas):
+   - Prompt copy-paste E2E entre marcadores `>>>>>` y `<<<<<`.
+   - 6 etapas (5 roles + admin final) que ejercen ciclo completo de orden: cita → asignación → check-in → diagnóstico → aprobación → cierre → emisión conduce → validación dashboard.
+   - Validaciones explícitas contra sprints recientes (SPRINT-159 firma, SPRINT-160 default garantía, SPRINT-161 transición a cerrado, SPRINT-162 KPIs, SPRINT-168 render firma, SPRINT-170 derivación operaria, SPRINT-171 ruta admin/notificaciones, SPRINT-173 transición aprobado, SPRINT-176 emisor no auto-notifica).
+   - Reporte estructurado obligatorio: 4 secciones (bugs / sugerencias UX / cobertura / evidencia).
+   - Reglas inviolables: cliente "QA Test", teléfono `8090000000`, observaciones `TEST QA <fecha>`.
+   - Sin emojis (regla CLAUDE.md).
+
+4. **`CLAUDE.md`** (+3 líneas en `Related docs in repo`): referencias a los 3 archivos nuevos para que futuros agentes los descubran.
+
+5. **`docs/sprints/COLA_AUTONOMA.md`**: estado `PENDIENTE` → `COMPLETADO` (movido a histórico al cierre).
+
+### Tester (typecheck + lint staged + cazadores)
+
+- `npx tsc --noEmit`: PASS (sin output, exit 0).
+- `npm run check:regression`: PASS 10/10 cazadores (P-001..P-007 + P-009 + P-010 + P-011) en 170ms, 0 hits.
+- `npx eslint scripts/qa-sanity-check.ts --max-warnings 0 --no-warn-ignored`: PASS exit 0.
+- Lint global del repo arroja 10897 errores en archivos pre-existentes fuera del sprint (`dist-lazy/`, `vite.config.ts.timestamp-*.mjs`, `scripts/qa-sprint-135a-ui.ts`) — NO son del sprint y NO bloquean el pre-commit hook (que lintea sólo staged ts/tsx).
+
+### Sanity check ejecutado sobre Firestore productivo (read-only)
+
+```
+=== QA Sanity Check — SPRINT-QA-USER ===
+Verificando 5 cuentas QA dedicadas...
+
+✓ qa-secretaria@misterservicerd.com    clasificacion=ok
+✓ qa-tecnica@misterservicerd.com       clasificacion=ok
+✓ qa-operaria@misterservicerd.com      clasificacion=ok
+✓ qa-coordinadora@misterservicerd.com  clasificacion=ok
+✓ qa-admin@misterservicerd.com         clasificacion=ok
+
+=== Resumen ===
+  OK:   5/5
+  FAIL: 0/5
+
+Todas las cuentas QA están listas. Sesión QA E2E puede arrancar.
+```
+
+Las 5 cuentas cumplen invariante P-004 (doc `personal/` + doc `usuarios/{uid}` con rol consistente + Firebase Auth alineado). Jorge hizo el alta correctamente desde `/admin/gestion-usuarios` (no desde Console).
+
+### Reviewer (coordinator-driven)
+
+Repaso fresco — sin regresiones detectadas:
+
+- Script read-only, sin escrituras. No commitea secretos. Patrón canónico igual a SPRINT-117/SPRINT-149.
+- Catálogo `CUENTAS_QA` es source-of-truth en código + replicado en doc para humanos. Doc explica dónde sincronizar si cambia.
+- Política "NO ajustar rules para que pase QA" explícita en doc — preserva integridad de defense-in-depth.
+- Prompt maestro referencia sprints con IDs para validar fixes recientes — convierte cada deploy importante en una oportunidad de regression check.
+- CLAUDE.md cambio mínimo (solo 3 líneas en `Related docs`).
+
+Sin regresiones semánticas. No toca rules/services/context → regression_guardian opcional (saltado).
+
+### Hallazgos laterales
+
+- **Archivos generados fuera de `.gitignore`:** `dist-lazy/`, `vite.config.ts.timestamp-*.mjs`. Inflan el output de `npm run lint` (5544 → 10897 errors al duplicar). NO bloquean nada porque el pre-commit hook lintea solo staged. Deuda futura: agregar a `.gitignore` o a `eslint.config.js ignores`. Fuera de scope.
+- **`scripts/qa-sprint-135a-ui.ts`** existe untracked sin ignore — parece artefacto QA viejo. Fuera de scope, no se commitea acá.
+- **Sprint `SPRINT-QA-USER-B`** (esQA flag en `personal/{id}`) queda pendiente como sprint hermano. Se activa si los reportes financieros empiezan a contaminarse con datos QA. Documentado en `QA_SUPER_USER.md`.
+- **Cazador potencial nuevo** (mencionado en spec como opcional): detectar hardcodes de emails QA fuera de `scripts/qa-*` / `docs/QA_*`. No se agregó porque la superficie es muy pequeña y el patrón es estable. Si en el futuro alguien hardcodea `qa-admin@misterservicerd.com` en código de producción, agregar P-XXX. Documentado en header del script.
+
+### Cazadores 10/10 PASS post-cambio
+
+Idem al pre-cambio (script y docs no introducen patrones nuevos cazables). Coverage:
+
+- P-001 (`userprofile.id` misuse): no aplica — script usa `firebase-admin` server-side.
+- P-002 (rules opcional sin `.get()`): no toca rules.
+- P-003 (cross-collection sin runTransaction): script es read-only.
+- P-004 (alta empleado doble doc): el script VERIFICA este invariante explícitamente.
+- P-005 (rules pendientes deploy): no toca rules.
+- P-006 (dropdown técnico/operaria): no toca UI dropdowns.
+- P-007 (crearNotificacion userId shape): no toca notificaciones.
+- P-009 (parseFactura campos): no toca parsers.
+- P-010 (tipo notificación huérfano): no toca tipos.
+- P-011 (updateDoc flag terminal sin fase): no toca órdenes.
+
+### Resultado
+
+- **Commit hash:** `<pendiente — bash siguiente>`.
+- **Archivos:** 5 (2 modificados, 3 creados).
+- **Líneas:** +619/-1.
+- **Sanity check pre-commit:** 5/5 cuentas OK contra Firestore productivo.
+- **Estado SPRINT-QA-USER:** COMPLETADO 2026-05-15 — movido a histórico.
+
+### Próximos pasos pendientes para Jorge
+
+1. **Primera ejecución del prompt maestro** (`docs/QA_PROMPT_MAESTRO.md`) sirve como smoke test del setup. Si el prompt rompe en algún paso, el reporte estructurado dirá dónde.
+2. **Crear cliente "QA Test"** + teléfono `8090000000` en `/admin/clientes` si no existe (el prompt asume que existe).
+3. Si las próximas sesiones QA detectan que las 5 cuentas QA contaminan reportes financieros / KPIs / comisiones, activar `SPRINT-QA-USER-B` (campo `esQA: boolean` en `personal/{id}` + filtro en aggregations).
+
+---
+
 ## 2026-05-15 — autónomo (`trabaja`, pasada 18): SPRINT-PERSONAL-EDIT-UNIFY + SPRINT-158d-FIX
 
 ### Contexto
