@@ -674,6 +674,99 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 
 ---
 
+### SPRINT-177 — Botón "Avisar a oficina" en vista técnico + flujo operaria para reagendar/cancelar
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟡 MEDIA-ALTA — cubre caso operativo real frecuente. Sin esto, el técnico que va a una visita fallida queda sin acción clara y la orden queda colgada en "agendado" sin avanzar.
+**Origen:** Decisión Jorge 2026-05-15 durante QA E2E SPRINT-159 (OS-0057). El técnico va a casa del cliente y se topa con casos donde el cliente no abre, no estaba, cancela en el momento, o no contesta. Hoy no hay forma de marcar este estado en la app — la orden queda "agendada" perpetuamente y la operaria no se entera salvo por llamada del técnico.
+
+#### Touch-list
+
+**Archivos a modificar (4-5 confirmados):**
+
+1. `src/types/index.ts`:
+   - Agregar campo nuevo `visitaFallida?: { detalleCliente: string; reportadoAt: Timestamp; tecnicoUid: string; tecnicoNombre: string }`.
+   - `detalleCliente` es texto libre (lo que el técnico escribió en el modal). NO es enum ni categoría — es la palabra cruda del técnico para que la operaria lea contexto real.
+   - Decisión builder: es FLAG ortogonal (no fase nueva). La orden mantiene su fase actual y la operaria reagenda → limpia `visitaFallida` y la orden vuelve a "agendado" con nueva fecha.
+
+2. `src/components/tecnico/TecnicoVista.tsx` (o equivalente — auditar nombre con grep):
+   - Agregar botón en la card de orden cuando fase ∈ {agendado, en_diagnostico} y `visitaFallida` undefined.
+   - **Texto del botón:** "📞 Avisar a oficina" (color naranja/amber medio, NO rojo — el caso no es error del cliente, es coordinación).
+   - **Tono UX:** neutral, no acusatorio. Implica "necesito apoyo de oficina para resolver algo" — la operaria gestiona desde ahí.
+   - Click abre modal "¿Qué pasó con esta visita?" con:
+     - **Textarea obligatoria** (placeholder: "Escribe lo que el cliente te dijo o lo que pasó. Por ejemplo: 'No abrió, llamé y no contestó' / 'Cliente pidió que volvamos el sábado' / 'No encontré la dirección'"). Mínimo 10 caracteres para guardar.
+     - **Sin opciones predefinidas, sin dropdown, sin radio buttons.** Solo texto libre — el técnico escribe en sus palabras qué pasó, la operaria lee y decide qué hacer.
+     - Botones: "Enviar a oficina" (azul/verde principal, deshabilitado hasta tener 10+ chars) + "Cancelar" (gris).
+   - Disparar la acción `marcarVisitaFallida(ordenId, { detalleCliente: <textarea>, tecnicoUid, tecnicoNombre })`.
+
+3. `src/services/ordenes.service.ts` (o donde estén los mutators de orden):
+   - Función nueva `marcarVisitaFallida(ordenId, { detalleCliente, tecnicoUid, tecnicoNombre })` que:
+     - Actualiza `orden.visitaFallida = { detalleCliente, reportadoAt: serverTimestamp(), tecnicoUid, tecnicoNombre }`.
+     - Persiste audit log en `auditoria_admin` con `accion: 'avisar_oficina'` (tono friendly también en backend, no `visita_fallida`).
+     - Dispara notificación a operarias activas tipo `'aviso_oficina'`.
+   - TODO en runTransaction (sub-regla CLAUDE.md mutaciones cross-collection).
+
+4. `src/components/ordenes/OrdenDetailModal.tsx` (vista admin/operaria):
+   - Si `orden.visitaFallida` existe, mostrar bloque destacado arriba con:
+     - Icono ⚠️ + "Visita fallida"
+     - Motivo + detalle + timestamp + nombre técnico
+     - Botones operaria:
+       - **"📞 Llamar cliente"** → link `tel:${cliente.telefono}` o `https://wa.me/1${normalizarTelefono(cliente.telefono)}?text=...` con mensaje pre-cargado.
+       - **"📅 Reagendar"** → form para nueva fecha + hora, al guardar limpia `visitaFallida` y la orden vuelve a fase "agendado" con nuevos datos.
+       - **"🚫 Cancelar orden"** → requiere motivo + confirmación. Mueve la orden a fase `cancelado`.
+
+5. `firestore.rules` (probable):
+   - Permitir update de `visitaFallida` por técnico asignado (gateado por `auth.uid == tecnicoId`).
+   - Permitir update por operarias/coord (ya tienen rule más permisiva probable).
+   - **ESCALAR a BLOQUEOS** si requiere rule nueva — Jorge debe revisar antes de deployar.
+
+**Notificaciones nuevas:**
+- Tipo `'visita_fallida'` con userId = uid de cada operaria activa + coordinadora.
+- Título: "📞 OS-XXXX necesita coordinación con cliente"
+- Descripción: `${tecnicoNombre} reporta: "${motivo}". Cliente: ${clienteNombre}, tel ${clienteTelefono}. Llamar para coordinar.`
+- Click navega a /admin/ordenes con la orden expandida o a su detalle.
+- **Tono friendly mantenido en notif** — no decir "visita fallida" al frente, decir "necesita coordinación".
+
+**Consumidores verificados (read-only check):**
+- Vista técnico se monta desde rutas `/tecnico/*`. Confirmar componente exacto con `grep -rn "/tecnico" src/App.tsx`.
+- `OrdenDetailModal` se monta desde múltiples lugares (Facturas.tsx, FacturacionPendiente.tsx, Ordenes.tsx). Cambios deben ser retro-compatibles (campo `visitaFallida` es opcional).
+- `notificaciones.service.ts` tiene patrón establecido — reusar `crearNotificacion`.
+
+**Hallazgos laterales (NO tocar acá):**
+- El audit trail muestra cambios de campos, pero podría no estar mostrando bien "cambios de estado" tipo visita_fallida → reagendado. Sprint follow-up si se observa en QA.
+- Si reagendar genera nueva fecha, ¿debería disparar otra vez la notif "orden_asignada" a Aury? Probable que sí. Validar en QA.
+
+#### Criterios de aceptación
+
+- [ ] Botón "📞 Avisar a oficina" visible en card de técnico cuando fase ∈ {agendado, en_diagnostico} y `visitaFallida` undefined.
+- [ ] Color del botón naranja/amber medio (NO rojo — tono neutral, no acusatorio).
+- [ ] Click abre modal "¿Qué pasó con esta visita?" con UN solo textarea libre.
+- [ ] Placeholder del textarea: "Escribe lo que el cliente te dijo o lo que pasó. Por ejemplo: 'No abrió, llamé y no contestó' / 'Cliente pidió que volvamos el sábado' / 'No encontré la dirección'".
+- [ ] Validación: mínimo 10 caracteres para guardar (botón "Enviar a oficina" deshabilitado debajo de ese mínimo).
+- [ ] Botón principal del modal "Enviar a oficina" (NO "Confirmar" para mantener tono colaborativo).
+- [ ] "Enviar a oficina" persiste `visitaFallida.detalleCliente` (texto libre crudo) en la orden + audit log con `accion: 'avisar_oficina'` + notif a operarias con tipo `'aviso_oficina'`.
+- [ ] **NO incluir lista de motivos predefinidos** — el técnico escribe en sus palabras. Si en QA aparecen radio buttons o dropdown, es desviación del spec.
+- [ ] Operaria recibe notif "Visita fallida — OS-XXXX" en su campanita.
+- [ ] Click notif navega a la orden.
+- [ ] Vista operaria muestra bloque "Visita fallida" con datos + 3 botones (Llamar / Reagendar / Cancelar).
+- [ ] "Llamar cliente" abre tel: o wa.me con mensaje pre-cargado.
+- [ ] "Reagendar" persiste nueva fecha/hora + limpia visitaFallida + fase vuelve a "agendado" + audit log.
+- [ ] "Cancelar orden" requiere motivo + confirmación + fase a "cancelado" + audit log.
+- [ ] Si reagendar genera nueva fecha, dispara notif `orden_asignada` al técnico de nuevo.
+- [ ] Typecheck + lint + cazadores 9/9 PASS.
+- [ ] regression_guardian PASS (toca services + notificaciones + componentes críticos).
+- [ ] reviewer obligatorio (cambio de estado de orden + flujo operativo nuevo).
+
+#### Restricciones
+
+- NO romper órdenes legacy sin `visitaFallida` (campo opcional).
+- archivist PRE-CHANGE obligatorio (toca services + componentes técnico + componentes admin).
+- Sub-regla CLAUDE.md "Mutaciones cross-collection deben ir en runTransaction" — aplica a `marcarVisitaFallida`.
+- NO tocar el flujo de "Sugerir solo chequeo" — es caso distinto (cliente sí recibió pero no se puede reparar).
+- Si `firestore.rules` requiere cambio para permitir update de `visitaFallida` por técnico → ESCALAR a BLOQUEOS, NO procesar autónomo.
+
+---
+
 ### SPRINT-PORTAL-1 — Portal cliente con CTA "Solicitar nuevo servicio"
 
 **Estado:** PENDIENTE — no depende de aprobación de plantillas WA, puede deployarse en paralelo. Mejora el portal `/garantia/:token` al que apuntan los links de plantillas `conduce_emitido` y `garantia_por_vencer`.
