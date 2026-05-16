@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs, query, where, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, Cliente, Personal, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, StandbyPieza } from '../types';
+import { OrdenServicio, Cliente, Personal, FaseOrden, TecnicoPermisos, PERMISOS_DEFAULT_TECNICO, StandbyPieza } from '../types';
 import { faseLabel, formatHora, formatFecha, formatTelefono, parseOrden, googleMapsLink, estadoSimpleColor, estadoSimpleLabel, crearRegistroAuditoria, formatMoneda, tieneStandby, formatearEquipoLabel, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente } from '../utils';
 import ModalSugerirSoloChequeo from '../components/cierre/ModalSugerirSoloChequeo';
 import BannerEstadoSugerenciaSoloChequeo from '../components/cierre/BannerEstadoSugerenciaSoloChequeo';
@@ -413,6 +413,7 @@ export default function TecnicoVista() {
       const notasActualizadas = notasExistentes ? `${notasExistentes}\n${nuevaNota}` : nuevaNota;
 
       const usuario = userProfile?.nombre || 'Técnico';
+      const ahora = Timestamp.now();
       const registros: Record<string, unknown>[] = [];
       registros.push(crearRegistroAuditoria(
         usuario, 'nota_tecnico', `Agregó nota técnica: "${notaNueva.slice(0, 60)}${notaNueva.length > 60 ? '...' : ''}"`
@@ -420,7 +421,7 @@ export default function TecnicoVista() {
 
       const updateData: Record<string, unknown> = {
         notasTecnico: notasActualizadas,
-        updatedAt: Timestamp.now(),
+        updatedAt: ahora,
       };
       if (precioSugerido && !isNaN(Number(precioSugerido))) {
         const precioAnterior = selectedOrden.precioSugerido;
@@ -431,6 +432,39 @@ export default function TecnicoVista() {
           precioAnterior !== undefined ? `RD$ ${precioAnterior.toLocaleString('es-DO')}` : '',
           `RD$ ${Number(precioSugerido).toLocaleString('es-DO')}`
         ));
+
+        // SPRINT-158c bug 2: avanzar fase a 'en_cotizacion' cuando el técnico
+        // sugiere precio. Antes, la fase quedaba stuck en 'en_diagnostico'
+        // hasta que la operaria aprobaba (entonces saltaba a 'aprobado',
+        // omitiendo 'en_cotizacion'). Sub-regla CLAUDE.md "registros
+        // sincronizados": fase + estadoSimple + estado + historialFases
+        // alineados en el mismo updateDoc.
+        //
+        // Guard de retroceso: SOLO avanzar si la orden está en
+        // 'en_diagnostico'. Si ya está en 'en_cotizacion', 'aprobado',
+        // 'agendado' o más adelante, mantener la fase actual (sugerir
+        // precio puede pasar como ajuste de cotización sin retroceder).
+        // Patrón canónico de SPRINT-173 (d8f376b) en AgendaDia.tsx.
+        if (selectedOrden.fase === 'en_diagnostico') {
+          const nuevoHistorialFases = [
+            ...(selectedOrden.historialFases || []).map((h) => ({
+              fase: h.fase,
+              timestamp: h.timestamp instanceof Date ? Timestamp.fromDate(h.timestamp) : h.timestamp,
+              usuario: h.usuario || '',
+              ...(h.nota ? { nota: h.nota } : {}),
+            })),
+            {
+              fase: 'en_cotizacion' as FaseOrden,
+              timestamp: ahora,
+              usuario,
+              nota: `Precio sugerido: RD$ ${Number(precioSugerido).toLocaleString('es-DO')}`,
+            },
+          ];
+          updateData.fase = 'en_cotizacion';
+          updateData.estadoSimple = 'en_proceso';
+          updateData.estado = 'activo';
+          updateData.historialFases = nuevoHistorialFases;
+        }
       }
 
       updateData.auditoria = arrayUnion(...registros);

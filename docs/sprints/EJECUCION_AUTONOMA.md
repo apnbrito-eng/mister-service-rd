@@ -5,6 +5,111 @@
 
 ---
 
+## 2026-05-15 — autónomo (`trabaja`, pasada dedicada): SPRINT-158c (notificaciones + transición fase post-SPRINT-173/174)
+
+### Contexto
+
+Recomendación del coordinator anterior (pasada 16) priorizaba SPRINT-158c (MEDIA-ALTA) como bloqueador para SPRINT-158d-FIX. Auditoría inicial reveló que SPRINT-173 (`d8f376b` + `7826b2b` cazador P-011) y SPRINT-174 (`bdd7003`) ya cubrieron 5 de los 6 sub-bugs del spec original. Solo bug 2 (transición de fase intermedia) quedaba pendiente.
+
+### Cola al inicio
+
+- SPRINT-158c PENDIENTE (este sprint).
+- SPRINT-PERSONAL-EDIT-UNIFY (NUEVO, MEDIA) — Cowork lo agregó durante esta pasada. Queda en cola.
+
+### Archivist PRE-CHANGE (manual coordinator)
+
+**Archivos del touch-list:** `src/pages/TecnicoVista.tsx`.
+
+**Historial git:** 29 commits totales. Último cambio relevante: SPRINT-174 (`bdd7003`, 2026-05-15) que agregó la notif `cotizacion_lista` post-`updateDoc` en el mismo `handleAgregarNota`. El cambio actual es complementario aditivo al mismo handler — sin conflicto.
+
+**Postmortems específicos:** ninguno para TecnicoVista. SPRINT-103 (rules sin deploy del Iniciar Chequeo) toca otro flujo.
+
+**Patrones aplicables:**
+- P-001 (`userProfile.id ≠ auth.uid`): respetado. `usuario` es string `nombre`.
+- P-011 (flag terminal sin fase): NO se dispara aquí (precioSugerido no es flag terminal según definición del cazador). La regla CLAUDE.md "registros sincronizados" se cumple igual por mejor práctica.
+- Shape `historialFases`: respetado (`{ fase, timestamp, usuario, nota }` con strip undefined; array reemplazado completo, no arrayUnion).
+- `estadoSimple='en_proceso' + estado='activo'` para fase `en_cotizacion`: verificado en `seedData.ts:139`.
+
+**Recordatorios:** ninguno especial.
+
+### Auditoría de cobertura SPRINT-173 + SPRINT-174 (read-only check, antes de tocar código)
+
+Comparación sub-bug por sub-bug:
+
+| Sub-bug | Pre-pasada | Cubierto por | Acción |
+|---|---|---|---|
+| Bug 1 — `cotizacion_lista` al sugerir precio | Bug abierto | SPRINT-174 `bdd7003` (TecnicoVista.tsx:445-508) | YA cubierto |
+| Bug 2 — Fase NO avanza a `en_cotizacion` | Bug abierto | SPRINT-158c (este sprint) | **FIXEADO** |
+| Bug 9.a — `precio_aprobado` admins/coords | Parcial | SPRINT-174 en AgendaDia + Ordenes + OrdenDetalle | YA cubierto |
+| Bug 9.b — `cierre_completado` operaria + coord | Bug abierto | SPRINT-174 en CierreServicioWizard | YA cubierto |
+| Bug 9.c — `pago_registrado` admin + coord | Bug abierto | SPRINT-174 en RegistrarPagoModal | YA cubierto |
+| Bug 9.d — Envío a facturación admin + coord | Cubierto | SPRINT-153 + EnviarFacturacionButton ya emite | YA cubierto |
+
+**Scope final:** 1 archivo, 1 handler, ~25 líneas aditivas.
+
+### Builder (coordinator-as-builder por scope diminuto)
+
+**Cambios en `src/pages/TecnicoVista.tsx`:**
+
+1. Línea 4 — agregado `FaseOrden` al import del módulo `../types`.
+2. Línea 415 — `const ahora = Timestamp.now()` factorizado para reusar en `updatedAt` + `historialFases.timestamp`.
+3. Línea 424 — `updatedAt: Timestamp.now()` → `updatedAt: ahora`.
+4. Líneas 434-466 — bloque nuevo aditivo DENTRO del `if (precioSugerido && !isNaN(Number(precioSugerido)))`:
+   - Guard `if (selectedOrden.fase === 'en_diagnostico')`.
+   - Reconstrucción de `historialFases` con append `{ fase: 'en_cotizacion', timestamp: ahora, usuario, nota: 'Precio sugerido: RD$ X' }` (strip undefined del campo nota).
+   - `updateData.fase = 'en_cotizacion'`, `updateData.estadoSimple = 'en_proceso'`, `updateData.estado = 'activo'`, `updateData.historialFases = nuevoHistorialFases`.
+
+Patrón canónico tomado de SPRINT-173 (`d8f376b`) en AgendaDia.tsx::handleAprobarPrecioInline.
+
+### Tester
+
+- `npx tsc --noEmit` → PASS (sin output).
+- `npx eslint src/pages/TecnicoVista.tsx --max-warnings 0` → PASS.
+- `npm run build` → PASS (4.15s, bundle TecnicoVista 64.46 kB / gzip 18.63 kB).
+- `npm run check:regression` → **10/10 PASS** (P-001..P-011 sin hits, P-008 manual sin scope).
+
+### Regression_guardian semántico (manual coordinator) → APPROVED 10/10
+
+1. P-001 ✓ (sin uid mismatch — `usuario` es string nombre).
+2. P-002 ✓ (no toca rules).
+3. P-003 ✓ (aditivo single-collection `ordenes_servicio`; notifs post-updateDoc en try/catch — pre-existentes, SPRINT-174).
+4. P-007 ✓ (no agrega `crearNotificacion`).
+5. P-011 ✓ (no aplica — sin flag terminal — pero igual seteamos fase como buena práctica).
+6. Shape `historialFases` ✓ consistente con seedData/AgendaDia/ProcesarFacturacionModal.
+7. `arrayUnion` vs reemplazo ✓ (array reemplazado completo, append-only semántico vía spread).
+8. `estadoSimple/estado` para `en_cotizacion` ✓ verificado en seedData.ts:139.
+9. **Guard de retroceso** ✓ `if (selectedOrden.fase === 'en_diagnostico')` — solo avanza desde fase correcta. Sin esto, re-cotización en orden ya `aprobado`/`agendado` retrocedería fase.
+10. Single `ahora = Timestamp.now()` ✓ — sin drift entre `updatedAt` y `historialFases.timestamp`.
+
+### Reviewer (manual coordinator) → APPROVED
+
+1. Lógica financiera intacta ✓ (`precioSugerido` se setea igual que antes).
+2. Comentario SPRINT-158c explícito con referencia a SPRINT-173 (`d8f376b`) y sub-regla CLAUDE.md.
+3. `as FaseOrden` cast correcto, tipo importado.
+4. Guard de retroceso comentado con razón clara ("re-cotización en fase posterior no retrocede").
+5. Strip undefined del campo `nota` en historialFases.
+6. `(selectedOrden.historialFases || [])` defensivo para órdenes legacy sin el campo.
+7. No rompe SPRINT-174: la notif `cotizacion_lista` sigue disparándose SIEMPRE que `sugirioPrecio === true`, independiente de la fase (UX deliberada — si el técnico ajusta precio en orden ya `aprobado`, la operaria igual se entera).
+
+### Commit + push
+
+Commit pendiente. Mensaje: `feat(orden-handler): SPRINT-158c avanzar fase a en_cotizacion al sugerir precio`.
+
+### Resultado
+
+SPRINT-158c COMPLETADO. Bug 2 fixeado. Bugs 1 + 9.a/b/c/d ya estaban cubiertos por SPRINT-173/174. SPRINT-158d-FIX queda como follow-up natural (optimistic UI en EnviarFacturacionButton — ahora desbloqueado).
+
+### Hallazgos laterales (deuda separada, no fixeada)
+
+- Cazador P-011 podría extenderse a "avance de fase intermedia sin sincronizar estadoSimple/estado". NO scope ahora — esperar segunda recurrencia antes de catalogar (política conservadora).
+- `TecnicoVista.tsx::handleAgregarNota` ahora mezcla 4 responsabilidades (nota + precio + fase + notif). Refactor opcional a helpers separados si el handler crece más.
+
+### Próximo
+
+Cola tiene SPRINT-PERSONAL-EDIT-UNIFY (MEDIA, agregado por Cowork durante esta pasada). SPRINT-158d-FIX (BAJA, descrito dentro del bloque SPRINT-158d) puede procesarse ahora que SPRINT-158c cerró.
+
+---
+
 ## 2026-05-15 — autónomo (`trabaja`, pasada 16): SPRINT-158d (perfilamiento timeout - diagnóstico read-only)
 
 ### Contexto

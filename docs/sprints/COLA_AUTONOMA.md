@@ -3,7 +3,9 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-15 por Cowork — **7 sprints WhatsApp Cloud API integration agregados a la cola detrás de los 9 fixes del QA**. Stack confirmado: Vite/React/TS + Firebase (Firestore + Storage + Auth) + Vercel Serverless (patrón existente en `api/gps/ubicacion.ts`). Decisión arquitectónica: NO usar BSP intermediario (Wati/360dialog), integrar directo a Meta Cloud API. Roadmap: **WA-1 webhook entrante (HMAC + idempotencia)** → **WA-2 servicio saliente proxy** → **WA-3 UI conversaciones admin** → **WA-4 tracking referral → campanas_marketing existente** → **WA-5 plantillas HSM** → **WA-6 Bot IA Claude Haiku (decisión Jorge: bot conversa + captura datos + crea OS automática + escala a humano)** → **WA-7 cron jobs (recordatorios + NPS + garantía a vencer)**. Identidades Meta confirmadas: Business 103664415995101, Phone Number ID 1151997541323577, número +1 849-564-6767 (display "Fixman Mister service" aprobado). Bloqueadores externos: META_APP_SECRET + META_VERIFY_TOKEN + META_ACCESS_TOKEN (Jorge debe crear app en developers.facebook.com + System User token permanente). Plantillas HSM requieren 24-48h aprobación Meta. SPRINT-WA-6 Bot IA requiere ANTHROPIC_API_KEY + Jorge confirma specs propuestos (modelo Haiku, escalación, system prompt). Coordinator procesa los 9 fixes de QA primero, después WA-1 a WA-7 en orden.
+**Última actualización:** 2026-05-15 por coordinator autónomo (pasada dedicada SPRINT-158c, `trabaja`) — **SPRINT-158c COMPLETADO** con 1 archivo modificado (`src/pages/TecnicoVista.tsx`, +35/-3). Auditoría reveló que SPRINT-173 + SPRINT-174 ya cubrían 5 de los 6 sub-bugs (bug 1 + bugs 9.a/b/c/d). Único bug residual ejecutado en esta pasada: **bug 2 (transición de fase `en_diagnostico → en_cotizacion` al sugerir precio)** en `handleAgregarNota`. Guard de retroceso explícito (`if selectedOrden.fase === 'en_diagnostico'`) impide regresión desde fases posteriores. Cazadores 10/10 PASS. typecheck + build (4.15s) + lint PASS. regression_guardian 10/10 + reviewer APPROVED (manuales coordinator). Hash pendiente del commit en curso. Tabla de comparación post-ejecución agregada al bloque SPRINT-158c. Hallazgo lateral: Cowork agregó SPRINT-PERSONAL-EDIT-UNIFY (MEDIA) durante la pasada — queda en cola para próxima ejecución.
+
+**Última actualización previa:** 2026-05-15 por Cowork — **7 sprints WhatsApp Cloud API integration agregados a la cola detrás de los 9 fixes del QA**. Stack confirmado: Vite/React/TS + Firebase (Firestore + Storage + Auth) + Vercel Serverless (patrón existente en `api/gps/ubicacion.ts`). Decisión arquitectónica: NO usar BSP intermediario (Wati/360dialog), integrar directo a Meta Cloud API. Roadmap: **WA-1 webhook entrante (HMAC + idempotencia)** → **WA-2 servicio saliente proxy** → **WA-3 UI conversaciones admin** → **WA-4 tracking referral → campanas_marketing existente** → **WA-5 plantillas HSM** → **WA-6 Bot IA Claude Haiku (decisión Jorge: bot conversa + captura datos + crea OS automática + escala a humano)** → **WA-7 cron jobs (recordatorios + NPS + garantía a vencer)**. Identidades Meta confirmadas: Business 103664415995101, Phone Number ID 1151997541323577, número +1 849-564-6767 (display "Fixman Mister service" aprobado). Bloqueadores externos: META_APP_SECRET + META_VERIFY_TOKEN + META_ACCESS_TOKEN (Jorge debe crear app en developers.facebook.com + System User token permanente). Plantillas HSM requieren 24-48h aprobación Meta. SPRINT-WA-6 Bot IA requiere ANTHROPIC_API_KEY + Jorge confirma specs propuestos (modelo Haiku, escalación, system prompt). Coordinator procesa los 9 fixes de QA primero, después WA-1 a WA-7 en orden.
 
 **Última actualización previa:** 2026-05-14 por Cowork — **QA E2E DISTRIBUIDO COMPLETADO sobre OS-0056 / CG-00019** con 4 Claudes (Maria coord + Wilainy operaria + Yohana operaria + Angelica secretaria) + 2 manuales (Aury técnico en iPad + Jorge admin). **6/6 fixes principales del día validados como PASS** con 1 caveat: SPRINT-159 captura firma OK pero render UI quedó incompleto (SPRINT-168 PENDIENTE). Tabla PASS/FAIL: ✅ SPRINT-159 firma wizard + ✅ SPRINT-161 fase Cerrado + ✅ SPRINT-153-FIX nota visible + ✅ SPRINT-162 KPI sube + ✅ SPRINT-160 modal hereda período + ⚠️ SPRINT-158a (foto+período PASS, firma FAIL). Bonus validado: ✅ SPRINT-152 helper Pago verificado + ✅ notif Conduce_emitido llega a operarias. **9 sprints nuevos escritos a la cola priorizados ALTA/MEDIA/BAJA:** SPRINT-168 (firma render UI — ALTA, bloqueador legal), SPRINT-169 (regresión SPRINT-163 orden_asignada NO llega — ALTA), SPRINT-170 (selector operaria auto-derivado del técnico — ALTA), SPRINT-171 (`/admin/notificaciones` rota — MEDIA), SPRINT-172 (modelo combobox → input libre — MEDIA), SPRINT-173 (aprobar precio NO avanza fase — MEDIA), SPRINT-174 (notifs faltantes 4 eventos — BAJA), SPRINT-175 (migrar órdenes legacy stuck — BAJA), SPRINT-176 (decisión notif a quien emite conduce — BAJA, requiere OK Jorge). Coordinator procesa ALTAS primero al hacer `trabaja`. SPRINT-169 requiere postmortem obligatorio (regresión de sprint anterior).
 
@@ -117,6 +119,59 @@ Hallazgos relacionados: SPRINT-157 también detectado en el mismo test (notifica
 ---
 
 ## Sprints
+
+### SPRINT-PERSONAL-EDIT-UNIFY — Unificar modales Editar Usuario vs Editar Personal (dropdown Rol inconsistente)
+
+**Estado:** PENDIENTE
+**Prioridad:** 🟡 MEDIA — UX/data integrity. Permite que Jorge corrija roles incorrectos sin tener que eliminar+recrear. Riesgo: silenciosamente queda data con rol incorrecto si se usa el modal equivocado.
+**Origen:** Jorge descubrió el 2026-05-15 al crear las 5 cuentas QA del SPRINT-QA-USER. La cuenta `qa-coordinadora@misterservicerd.com` quedó mal creada con rol Operaria por default no reiniciado. Al intentar corregir desde "Editar Usuario" (modal minimalista), el dropdown Rol solo tenía 4 opciones (Administrador/Secretaria/Operaria/Técnico) — **falta Coordinadora**. Tuvo que ir al modal alternativo "Editar Personal" (modal completo con Nivel/Comisión/etc.) que SÍ tiene Coordinadora en el dropdown. Workaround manual ejecutado, pero la asimetría queda como bug.
+
+#### Hipótesis de causa raíz
+
+Hay dos componentes distintos de edición de personal/usuarios que probablemente evolucionaron en paralelo:
+
+1. **"Editar Usuario"** (minimalista, abre desde un botón distinto en `GestionUsuarios.tsx` o similar) — dropdown carga lista hardcoded de 4 roles sin Coordinadora.
+2. **"Editar Personal"** (completo, abre desde otro botón) — dropdown carga lista hardcoded de 5 roles incluyendo Coordinadora.
+
+Las dos listas viven en archivos distintos, sin fuente de verdad común. El que falta "Coordinadora" probablemente nunca se actualizó cuando el rol se introdujo al sistema.
+
+#### Touch-list (auditoría obligatoria antes de redactar fase 2)
+
+**Archivos a auditar primero (read-only check):**
+
+- `src/pages/GestionUsuarios.tsx` — dónde se monta "Editar Usuario".
+- `src/pages/Personal.tsx` (o equivalente) — dónde se monta "Editar Personal".
+- Componentes `*EditModal.tsx` (PersonalEditModal, GestionUsuariosEditModal, UsuarioEditModal, etc.) — auditar cuál es cuál.
+- `src/utils/roles.ts` o `src/types/index.ts` — donde se define la lista canónica de roles (si existe).
+- Búsqueda global de `'coordinadora'` y `'Coordinadora'` para mapear todos los lugares donde se hardcodea.
+
+**Decisión arquitectónica que el coordinator debe tomar:**
+
+- Opción A: una sola fuente de verdad en `utils/roles.ts` exportando `ROLES = ['administrador', 'coordinadora', 'operaria', 'secretaria', 'tecnico'] as const` + label map. Ambos modales importan de ahí.
+- Opción B: unificar los dos modales en uno solo, eliminando el minimalista. Más invasivo pero limpia deuda.
+
+Coordinator escoge A si los modales tienen razón de existir por separado (permisos granulares vs datos operativos). Escoge B si el minimalista es vestigial.
+
+#### Criterios de aceptación
+
+- [ ] Dropdown Rol en ambos modales muestra las 5 opciones (Administrador, Coordinadora, Secretaria, Operaria, Técnico).
+- [ ] Si se elige Opción A: nueva constante en `utils/roles.ts` importada por ambos modales.
+- [ ] Si se elige Opción B: el modal minimalista queda eliminado, todos los call sites apuntan al unificado.
+- [ ] Cazador P-XXX nuevo: detecta listas hardcoded de roles que NO importen del módulo canónico.
+- [ ] QA manual: editar el rol de un usuario existente desde ambos botones — ambos deben permitir Coordinadora.
+- [ ] Typecheck + lint + cazadores N/N PASS.
+
+#### Restricciones
+
+- archivist PRE-CHANGE obligatorio (toca componentes de gestión de personal, área sensible).
+- reviewer obligatorio (cambio toca permisos por rol, máxima criticidad).
+- NO tocar firestore.rules. Las rules ya conocen el rol Coordinadora — el bug es solo UI.
+
+#### Hallazgo lateral relacionado
+
+- El modal "Agregar Personal" tiene un bug menor: el dropdown Rol mantiene la última selección al cerrar y reabrir. Default sticky causa errores como el de Jorge (crear coordinadora con rol Operaria por residuo del intento anterior). Sprint sub-deuda SPRINT-PERSONAL-EDIT-UNIFY-B (reset state on close) opcional.
+
+---
 
 ### SPRINT-QA-USER — Super usuario QA para sidepanel: 5 cuentas dedicadas + prompt maestro E2E
 
@@ -1212,7 +1267,7 @@ Bug 8 era explícitamente decisión de negocio en la spec original ("¿Cambiar a
 
 ### SPRINT-158c — Notificaciones faltantes + transición automática a `en_cotizacion` (bugs 1+2+9 del SPRINT-158)
 
-**Estado:** PENDIENTE
+**Estado:** COMPLETADO 2026-05-15 por coordinator autónomo (pasada dedicada, `trabaja`). Hash pendiente del commit en curso. Auditoría reveló que SPRINT-173 (`d8f376b` + `7826b2b`) y SPRINT-174 (`bdd7003`) ya cubrieron 5 de los 6 sub-bugs de este sprint (bug 1 + bugs 9.a/9.b/9.c/9.d). Único bug residual ejecutado en este sprint: **bug 2 (transición de fase `en_diagnostico → en_cotizacion` al sugerir precio)** en `src/pages/TecnicoVista.tsx::handleAgregarNota`. Cambios: 1 archivo, +35/-3 líneas. Cazadores 10/10 PASS. typecheck + build + lint PASS. regression_guardian + reviewer APPROVED (manual coordinator).
 **Prioridad:** 🟡 MEDIA-ALTA — afecta visibilidad operativa en 3 roles confirmados (Maria coord, Wilainy operaria, Yohana operaria). Sin estas notificaciones, los handoffs en el flujo de orden quedan invisibles hasta que alguien entra a mirar manualmente.
 
 **Origen:** QA E2E distribuido 2026-05-13 sobre OS-0055 → CG-00018. Reportado desde 3 roles independientemente.
@@ -1266,6 +1321,31 @@ Los tipos de notificación posiblemente ya existen en `src/types/index.ts:1742-.
 - NO modificar el shape de `Notificacion` ni el filtro de destinatarios (eso ya se ajustó en SPRINT-153 + SPRINT-127). Solo agregar callers nuevos.
 - Usar siempre `userId: <X>.uid` (no `.id`) — cazador P-007 enforce.
 - La transición de fase debe acompañarse de entrada en `historialFases` + `crearRegistroAuditoria`.
+
+#### Cierre — comparación post-ejecución
+
+| Sub-bug | Estado pre-pasada | Cubierto por | Acción este sprint |
+|---|---|---|---|
+| Bug 1 — `cotizacion_lista` al sugerir precio | Bug abierto | SPRINT-174 (`bdd7003`) en `TecnicoVista.tsx:445-508` | YA cubierto. Sin cambios. |
+| Bug 2 — Fase NO avanza a `en_cotizacion` | Bug abierto | SPRINT-158c (este sprint) | **FIXEADO** en `TecnicoVista.tsx::handleAgregarNota` con guard `if (selectedOrden.fase === 'en_diagnostico')`. Patrón canónico SPRINT-173. |
+| Bug 9.a — `precio_aprobado` a admins/coords | Parcial (solo al técnico) | SPRINT-174 extendió en `AgendaDia.tsx`, `Ordenes.tsx`, `OrdenDetalle.tsx` (3 handlers) | YA cubierto. Sin cambios. |
+| Bug 9.b — `cierre_completado` a operaria + coord | Bug abierto | SPRINT-174 en `CierreServicioWizard.tsx::handleCerrarServicio` | YA cubierto. Sin cambios. |
+| Bug 9.c — `pago_registrado` a admin + coord | Bug abierto | SPRINT-174 en `RegistrarPagoModal.tsx::handleGuardar` | YA cubierto. Sin cambios. |
+| Bug 9.d — Envío a facturación → admin + coord | Cubierto históricamente | SPRINT-153 (`conduce_emitido`) + `EnviarFacturacionButton.tsx` ya emite a admins/coords | YA cubierto. Sin cambios. |
+
+**Touch-list FINAL ejecutado:** 1 archivo (`src/pages/TecnicoVista.tsx`). 1 import (`FaseOrden`) + 1 bloque en `handleAgregarNota` (~25 líneas aditivas + single `ahora = Timestamp.now()` reutilizado).
+
+**Guard de retroceso explícito:** la transición a `en_cotizacion` SOLO se aplica si `selectedOrden.fase === 'en_diagnostico'`. Si el técnico ajusta precio en una orden ya `en_cotizacion`/`aprobado`/`agendado`, la fase se mantiene y solo se actualiza `precioSugerido` + `notasTecnico` (comportamiento legacy preservado). Sin esto, el handler podría retroceder fase desde `aprobado` a `en_cotizacion` en escenarios de re-cotización.
+
+**Hallazgos laterales (no fixeados, scope cerrado):**
+- Cazador P-011 NO se dispara aquí porque `precioSugerido` no es flag terminal según la definición actual del cazador. La regla CLAUDE.md "registros sincronizados" igualmente se cumple por mejor práctica. Si en el futuro emerge otra clase recurrente (avance de fase intermedia sin sincronizar `estadoSimple/estado`), considerar P-012 dedicado. NO sprint follow-up sugerido — esperar que el patrón aparezca al menos una vez más antes de catalogar.
+- `TecnicoVista.tsx::handleAgregarNota` mezcla 4 responsabilidades (nota + precio + fase + notif). Refactor opcional a helpers separados si el handler crece más. NO scope.
+
+**QA manual recomendado post-deploy (Jorge ejercita):**
+1. Crear OS nueva → técnico inicia chequeo → técnico abre modal "Agregar nota" + sugiere precio. Verificar que la fase del chip avance de "En diagnóstico" → "En cotización" en `/admin/ordenes` y en `/tecnico`.
+2. Sobre la misma orden ya en `en_cotizacion`, técnico abre modal y ajusta precio. Verificar que la fase se mantiene `en_cotizacion` (no retrocede ni avanza).
+3. Operaria aprueba → fase pasa a `aprobado` (SPRINT-173 ya cubierto).
+4. `historialFases` debe mostrar entry `{ fase: 'en_cotizacion', timestamp, usuario, nota: 'Precio sugerido: RD$ XXX' }`.
 
 ---
 
