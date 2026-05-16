@@ -123,7 +123,7 @@ Idem al pre-cambio (script y docs no introducen patrones nuevos cazables). Cover
 
 ### Resultado
 
-- **Commit hash:** `<pendiente — bash siguiente>`.
+- **Commit hash:** `6626ff2`.
 - **Archivos:** 5 (2 modificados, 3 creados).
 - **Líneas:** +619/-1.
 - **Sanity check pre-commit:** 5/5 cuentas OK contra Firestore productivo.

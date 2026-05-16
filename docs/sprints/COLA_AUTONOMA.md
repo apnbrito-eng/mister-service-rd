@@ -4184,7 +4184,7 @@ Ejercer manualmente en producción con técnico + operaria reales:
 ### SPRINT-QA-USER — Super usuario QA para sidepanel: 5 cuentas dedicadas + prompt maestro E2E + sanity check
 
 - **Completado:** 2026-05-15 por coordinator (autónomo `trabaja`, pasada 19).
-- **Hash:** se completa post-commit.
+- **Hash:** `6626ff2`.
 - **Archivos creados (3):**
   - `scripts/qa-sanity-check.ts` (243 líneas) — read-only, valida que las 5 cuentas QA existen con rol consistente en `personal/` + `usuarios/{uid}` + Firebase Auth. Clasifica drift granular (`falta`, `doc_duplicado`, `uid_vacio`, `rol_drift_personal`, `rol_drift_usuario`, `usuario_faltante`, `auth_faltante`, `auth_email_mismatch`). Exit 0 si todas OK, 1 si drift. Catálogo `CUENTAS_QA` es source-of-truth en código.
   - `docs/QA_SUPER_USER.md` (153 líneas) — manual del super usuario QA: catálogo de cuentas, política de seguridad ("NO ajustar rules para que pase QA"), convención de uso, regeneración de passwords, cómo escribir nuevos prompts.
