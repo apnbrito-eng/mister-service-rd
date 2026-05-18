@@ -54,6 +54,8 @@ export default function MetricasMensuales() {
       setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
       checkLoaded();
     });
+    // @safe-listener-sin-where: MetricasMensuales gateada por permiso
+    // admin/coord. Rule `comisiones` short-circuit con `esAdminOCoord()`.
     const unsubCom = onSnapshot(collection(db, 'comisiones'), (snap) => {
       setComisiones(snap.docs.map(d => {
         const r = d.data();

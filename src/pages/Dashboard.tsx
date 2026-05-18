@@ -158,6 +158,9 @@ export default function Dashboard() {
     });
 
     // Comisiones pendientes (Fase 6) — para widget nómina próxima
+    // @safe-listener-sin-where: Dashboard es página admin/coord (gateado por
+    // sidebar). Rule `comisiones` short-circuit `esAdminOCoord()`. Cazador
+    // P-012 no infiere gating UI estáticamente.
     const unsubComisiones = onSnapshot(collection(db, 'comisiones'), (snap) => {
       setComisionesPendientes(snap.docs.map(d => {
         const raw = d.data();

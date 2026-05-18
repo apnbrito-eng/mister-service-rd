@@ -53,6 +53,10 @@ export default function Nomina() {
   const [empleadoDescuentosAbierto, setEmpleadoDescuentosAbierto] = useState<string | null>(null);
 
   useEffect(() => {
+    // @safe-listener-sin-where: Nomina gateada por permiso admin/coord
+    // (página de gestión de nómina). Rules `liquidaciones_nomina` y
+    // `comisiones` short-circuit con `esAdminOCoord()`. Aplica a los 2
+    // listeners siguientes.
     const unsub = onSnapshot(
       query(collection(db, 'liquidaciones_nomina'), orderBy('fechaGeneracion', 'desc')),
       (snap) => {
@@ -60,6 +64,7 @@ export default function Nomina() {
         setLoading(false);
       }
     );
+    // @safe-listener-sin-where: idem comentario arriba (gating admin/coord).
     const unsubC = onSnapshot(collection(db, 'comisiones'), (snap) => {
       setComisionesAll(snap.docs.map(d => {
         const raw = d.data();

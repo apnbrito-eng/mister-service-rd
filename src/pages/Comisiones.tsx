@@ -32,6 +32,11 @@ export default function Comisiones() {
   const [tecnicosExpandidos, setTecnicosExpandidos] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    // @safe-listener-sin-where: página gateada por permiso configuracionVer
+    // + rol admin/coord (línea 14-16). Rule de `comisiones` corto-circuita
+    // con `esAdminOCoord()` → query full-collection sin where es legítima
+    // para estos usuarios. Cazador P-012 no puede inferir el gating UI
+    // estáticamente.
     const unsub = onSnapshot(
       query(collection(db, 'comisiones'), orderBy('fechaCobro', 'desc')),
       (snap) => {

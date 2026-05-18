@@ -116,16 +116,21 @@ console contaminado en cada carga + sugerencia de patrón problemático.
 
 ## Acciones preventivas (para que no vuelva)
 
-- [ ] **Cazador determinístico (sprint follow-up):** detectar
-  `onSnapshot(collection(db, '<col>'), ...)` sin `query(... where(...))`
-  cuando la rule de esa colección tiene `auth.uid == X`. Sería P-012.
-  Requiere parsear `firestore.rules` + AST del TSX. Pendiente porque
-  primero hay que ver si recurre en otras páginas.
-- [x] **Documentación:** este postmortem queda como referencia para futuros
-  builders que vean listeners similares.
-- [ ] **Sub-regla CLAUDE.md (futuro):** cuando una página de rol restringido
-  (tecnico/operaria/secretaria/ayudante) suscribe a una colección, verificar
-  que el `where` matchee el constraint de la rule.
+- [x] **Cazador determinístico P-012 creado en SPRINT-179-FIX2 (2026-05-18, commit pendiente al cierre del postmortem):** detecta `onSnapshot(collection(db, '<col>'), ...)` sin `where` cuando la rule de esa colección tiene `auth.uid == X` (sin short-circuit `esStaff()/esStaffOficina()`). Parsea `firestore.rules` con regex sobre bloques `match` y escanea `src/` por listeners sin filtro matcheante. Catálogo: `docs/PATRONES_REGRESION.md` § P-012. Implementación: `scripts/invariantes/check-listener-sin-where-rol-restringido.ts`.
+- [x] **Barrido sistemático del codebase:** SPRINT-179-FIX2 confirmó que NO hay otros listeners sin where contra colecciones realmente restrictivas. El cazador detectó 4 colecciones restrictivas (`conversaciones_ia`, `ponches`, `comisiones`, `liquidaciones_nomina`) y 5 listeners contra ellas, TODOS en páginas admin/coord gateadas por UI. Allowlistados con `@safe-listener-sin-where` en `Comisiones.tsx`, `Dashboard.tsx`, `MetricasMensuales.tsx`, `Nomina.tsx`.
+- [x] **Documentación:** este postmortem queda como referencia para futuros builders que vean listeners similares.
+- [ ] **Sub-regla CLAUDE.md (futuro):** cuando una página de rol restringido (tecnico/operaria/secretaria/ayudante) suscribe a una colección, verificar que el `where` matchee el constraint de la rule. (Implícita ahora vía P-012 — la sub-regla escrita queda pendiente.)
+
+## Recurrencia parcialmente confirmada 2026-05-18 — SPRINT-179-FIX2
+
+El sprint SPRINT-179-FIX2 fue redactado a la cola tras un QA puntual del 2026-05-18 que reportó `permission-denied` en `/admin/citas` con qa-secretaria (stack `index-EhZnYXZ1.js:468:469`). La auditoría del codebase NO confirmó que el síntoma original venga del mismo patrón — `Citas.tsx` suscribe a `citas_por_confirmar` y `ordenes_servicio`, ambas con rule `esStaff()` (permisivas para secretaria). El cazador P-012 no encuentra otros listeners sin where contra colecciones restrictivas accesibles desde rol secretaria.
+
+Hipótesis para el síntoma reportado en /admin/citas:
+- Posible query transitoria desde un componente compartido (NotificacionesPanel, modal de garantía, etc.) que falla bajo ciertas condiciones de carga.
+- Posible carga de un doc específico de `liquidaciones_nomina` o `comisiones` desde un widget que sí accede secretaria (improbable — esas páginas son admin/coord).
+- Falso positivo del QA si el error console ya estaba allí desde otra sesión sin clear.
+
+El cazador P-012 queda activo como red de seguridad. Si el síntoma recurre, abrir sub-sprint con repro detallado (sourcemaps, network tab, exact endpoint).
 
 ---
 

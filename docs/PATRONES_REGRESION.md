@@ -418,6 +418,34 @@ Si la allowlist crece, evaluar si conviene unificar handlers duplicados (`Elimin
 
 ---
 
+## P-012 — `onSnapshot` sin `where` contra colección con rule `auth.uid == X`
+
+**Bug original:** histórico — `TecnicoVista.tsx` suscribía a `comisiones` sin `where` filter desde "Fase 5" (pre-2026-04). La rule de `comisiones` exige `esAdminOCoord() || (esTecnico() && resource.data.tecnicoId == auth.uid)`. Para técnicos, la query SIN where era rechazada por Firestore con `permission-denied`. Detección: QA E2E sidepanel 2026-05-16. Fix: SPRINT-179 (commit `328c508`, 2026-05-18). Postmortem: `docs/postmortems/2026-05-18-tecnico-comisiones-listener-sin-where.md`.
+
+El cazador se creó proactivamente en SPRINT-179-FIX2 (2026-05-18) — el barrido del codebase confirmó que NO hay otros listeners sin where contra colecciones realmente restrictivas (4 colecciones detectadas: `conversaciones_ia`, `ponches`, `comisiones`, `liquidaciones_nomina`; los 5 listeners encontrados están en páginas admin/coord gateadas por UI y se allowlistaron con tag `@safe-listener-sin-where`).
+
+**Síntoma:** `permission-denied` en console cuando un usuario rol-restringido (técnico/operaria/ayudante) carga una página que suscribe a una colección con rule del tipo `auth.uid == X` sin que el caller incluya `where('X', '==', auth.uid)`. El listener nunca emite datos; la app puede SEGUIR FUNCIONANDO si tiene fallback (filter client-side espera vacío) — bug latente, features que dependan del listener no funcionan en silencio.
+
+**Causa raíz:** Firestore Rules evalúa queries por su shape. Si la rule exige `field == auth.uid`, la query DEBE incluir `where('field', '==', auth.uid)` para que Firestore garantice estructuralmente que todos los docs devueltos satisfacen la rule. Un filter client-side post-snapshot NO sustituye el constraint server-side.
+
+**Regla:** cualquier `onSnapshot(collection(db, '<col>'), ...)` o `onSnapshot(query(collection(db, '<col>'), ...))` sin `where(...)` donde la rule de `<col>` tiene un `auth.uid == <campo>` en `allow read` (sin short-circuit de rol global tipo `esStaff()/esStaffOficina()`) debe:
+- (a) incluir `where('<campo>', '==', currentUser.uid)` en la query, O
+- (b) si el caller siempre es admin/coord por gating UI, allowlistar con `// @safe-listener-sin-where: <razón>` en la misma línea o hasta 5 arriba.
+
+**Cazador:** `scripts/invariantes/check-listener-sin-where-rol-restringido.ts`. Parsea `firestore.rules` (regex sobre bloques `match /<col>/{...}` + `allow read: if ...`), detecta colecciones con constraint `resource.data.<X> == request.auth.uid` SIN short-circuit `esStaff()`/`esStaffOficina()`, y luego escanea `src/` por `onSnapshot(...)` sin `where` matcheando esos constraints. Hereda extractor de balanceo de paréntesis del cazador P-011.
+
+**Allowlist por línea (tag `@safe-listener-sin-where`):**
+- `src/pages/Comisiones.tsx:35` — página admin/coord.
+- `src/pages/Dashboard.tsx:161` — página admin/coord.
+- `src/pages/MetricasMensuales.tsx:57` — página admin/coord.
+- `src/pages/Nomina.tsx:55,67` — página admin/coord (2 listeners en el mismo effect).
+
+Si la allowlist crece >10 entradas o aparece una página NO-admin con tag, refactorear el cazador para inferir gating de UI (probable AST estático sobre `useApp`/`puede(...)` en el mismo archivo).
+
+**Limitación conocida:** el parser de rules es heurístico (regex). Si una rule envuelve la check en función helper que el parser no expande (ej: `function tecnicoLeeSuya() { return esTecnico() && ... }`), el cazador puede falso-negativizar. Mitigación: si una rule nueva se escribe así, agregar la función helper al regex de short-circuit.
+
+---
+
 ## P-014 — `addDoc`/`setDoc` a `clientes` sin guard por `telefonoNormalizado`
 
 **Bug original:** SPRINT-185 (commit pendiente al crear el cazador — se commitea junto). Detección: QA puntual sidepanel 2026-05-18 sobre SPRINT-178 reveló que el descuento de chequeo previo NO aplicaba para OS-0058/OS-0059 del cliente "QA Test" porque las dos órdenes apuntaban a `clienteId` distintos del mismo cliente físico (typeahead mostraba 2 entradas idénticas con mismo tel `8090000000`).
