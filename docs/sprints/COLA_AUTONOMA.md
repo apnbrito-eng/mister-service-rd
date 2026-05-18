@@ -87,7 +87,9 @@ Los 3 consumidores están bien escritos — esperan el campo en el shape del tip
 
 ## SPRINT-178 — Implementar vigencia 30 días del chequeo + descuento automático a cotización
 
-**Estado:** 🟡 EN_EJECUCION 2026-05-18 (pasada 20) — desbloqueado por OK Jorge en `BLOQUEOS.md` con 4 decisiones:
+**Estado:** ✅ COMPLETADO 2026-05-18 (pasada 20) — hash `bd2b2a8`. Deploy verificado en producción. Índice compuesto deployado vía `npm run deploy:indexes`. Cazadores 10/10 PASS. typecheck + lint PASS.
+
+**Estado original previo:** 🟡 EN_EJECUCION 2026-05-18 (pasada 20) — desbloqueado por OK Jorge en `BLOQUEOS.md` con 4 decisiones:
 1. Edge case 2+ chequeos vigentes: aplica solo el más reciente.
 2. Solo cotizaciones nuevas post-deploy (cero migración retroactiva).
 3. Override manual permitido para admin/coord con audit log obligatorio.

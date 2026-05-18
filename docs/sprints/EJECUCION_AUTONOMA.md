@@ -5,6 +5,73 @@
 
 ---
 
+## 2026-05-18 — autónomo (`procesa bloqueos` → `trabaja`, pasada 20): SPRINT-178 completado
+
+### Contexto
+
+Jorge editó `BLOQUEOS.md → SPRINT-178` con las 4 decisiones explícitas + `OK: jorge 2026-05-18`. Coordinator desbloqueó el sprint y lo movió a `COLA_AUTONOMA.md` con scope refinado, luego lo procesó autónomamente.
+
+Decisiones tomadas por Jorge:
+1. Edge case 2+ chequeos vigentes: solo el más reciente.
+2. Solo cotizaciones nuevas post-deploy (cero migración retroactiva).
+3. Override manual admin/coord con audit log obligatorio.
+4. Matching: clienteId + equipoTipo (sin equipoModelo).
+
+### Sprint procesado
+
+**SPRINT-178** (ALTA, post-OK Jorge) — Vigencia 30 días del chequeo + descuento automático a cotización. Hash `bd2b2a8`.
+
+**archivist PRE-CHANGE:** historial git relevante:
+- `afc5e4a` (Reactivación) — flujo `solo_chequeo → reparacion_completa` ya tiene helper canónico `reactivarOrdenPostChequeo` con runTransaction + idempotencia. Patrón replicable.
+- `4015fe1` (SPRINT-161) — patrón `historialFases` con shape `{ fase, timestamp, usuario, nota }` reemplazado completo (no arrayUnion). 3 handlers de aprobación de precio ya alineados a este patrón (SPRINT-173 d8f376b).
+- `3a9618b` (SPRINT-155) — runTransaction en ProcesarFacturacionModal con idempotencia `facturada===true`. Inserción de los 6 campos denormalizados va dentro del payload de tx pre-existente.
+
+Postmortems aplicables:
+- `2026-05-07-iniciar-chequeo-rules-sin-deploy.md` → APLICA: deploy de índices antes de cerrar sprint. Cumplido: `npm run deploy:indexes` corrido pre-commit.
+
+Recordatorios:
+- "userProfile.id ≠ auth.uid" (CLAUDE.md) → APLICA. `aplicadoPor: currentUser?.uid` usado consistentemente.
+- "Strip undefined antes de Firestore" → APLICA. Helper `construirCamposDescuentoChequeo` solo incluye campos con valor; spread `...camposDescuento` en updateDoc no introduce undefined.
+
+**Touch-list expandido:** 8 archivos a modificar + 1 nuevo (`utils/descuentoChequeo.ts`). 25 consumidores de `OrdenServicio` verificados — todos seguros (campos opcionales no rompen consumidores existentes). 0 cambios a `firestore.rules` (todos los writes son `esStaffOficina()`).
+
+**Builder (yo):** 12 archivos cambiados (+772/-11 líneas). Helper puro extraído a `utils/descuentoChequeo.ts` (4 funciones: `calcularDescuentoChequeo`, `construirCamposDescuentoChequeo`, `describirDescuentoChequeo`, `diasRestantesVigencia`). Patrón compartido por los 3 handlers de aprobación.
+
+Cazador P-009 cazó la regresión preventiva: los 6 campos en `Factura` requerían entrada en `parseFactura`. Builder lo corrigió en el mismo sprint (sub-regla CLAUDE.md "cazadores son verdad").
+
+**tester:** typecheck PASS. lint PASS (archivos modificados específicamente verificados). regression cazadores 10/10 PASS.
+
+**regression_guardian:** APPROVED — auditoría sobre:
+- audit log: completo (notaAuditoria con detalle override + ordenNumero origen + aplicadoPor).
+- denormalización Factura: condicional `if (orden.descuentoChequeoPrevioId)`, 6 campos copiados defensivamente con strip-undefined.
+- matching: query exacta `clienteId + equipoTipo + tipoCierre='solo_chequeo'`. Filtra `reactivadaPostChequeo` y `eliminada` client-side.
+
+**reviewer:** APPROVED — riesgos identificados, todos mitigados:
+- Índice no deployado → catch retorna null, no bloquea aprobación.
+- Doble click → setAprobandoPrecio(true) deshabilita botón.
+- precio===0 → toast error.
+- AgendaDia sin permiso → puedeAprobar gatea el botón pre-handler.
+
+**Deploy de índice:** `npm run deploy:indexes` → "deployed indexes in firestore.indexes.json successfully for (default) database". 1 índice nuevo: `ordenes_servicio (clienteId ASC, equipoTipo ASC, tipoCierre ASC, fechaCierre DESC)`.
+
+**Commit + push:** `bd2b2a8` → main. Pre-commit hook OK (cazadores 10/10 + typecheck + lint staged).
+
+**devops:** version.json en producción confirmado:
+```json
+{
+  "commit": "bd2b2a8",
+  "builtAt": "2026-05-18T15:51:06.363Z"
+}
+```
+
+**Tiempo total pasada 20:** ~25 minutos.
+
+### Postmortem
+
+NO aplica — SPRINT-178 es FEATURE nueva, no hotfix. No hubo bug en producción.
+
+---
+
 ## 2026-05-18 — autónomo (`trabaja`, pasada 19): 7 sprints + 1 escalado a BLOQUEOS
 
 ### Contexto
