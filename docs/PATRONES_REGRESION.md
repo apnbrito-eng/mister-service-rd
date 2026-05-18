@@ -477,6 +477,33 @@ NUNCA `addDoc(collection(db, 'clientes'), ...)` — auto-id de Firestore hace es
 
 ---
 
+## P-015 — `orderBy('<campo>')` sobre colección con shape no garantizado (campo opcional/anidado/missing en algún write path)
+
+**Bug original:** SPRINT-178 (commit `bd2b2a8`, 2026-05-18). Hash del fix: `4890dfa` (SPRINT-187). Postmortem: `docs/postmortems/2026-05-18-banner-descuento-query-orderby-mal-escrita.md`.
+
+**Síntoma:** `snap.empty === true` después de la query Firestore aunque inspección manual del doc en Firestore Console muestra datos razonables. El feature que depende de la query (banner descuento, listado filtrado, etc.) silenciosamente no funciona — NO hay error en console, NO hay request rojo en Network, NO hay warning. El caller recibe array vacío y trata como "no hay datos" cuando en realidad la query filtró el doc por shape.
+
+**Caso concreto:** `buscarChequeoVigentePorCliente` en `src/services/ordenes.service.ts` usaba `orderBy('fechaCierre', 'desc')` sobre `ordenes_servicio`. La fecha se persistía DENTRO de `cierreServicio.fechaCierre` (objeto anidado, NO raíz) por el wizard de cierre, y `AgendaDia.tsx::handleCerrarChequeo` no escribía el campo en absoluto. Firestore excluye silenciosamente del orderBy los docs sin el campo del orden → la query retornaba vacío → `null` del helper → banner descuento jamás aparecía para clientes con chequeo previo legítimo (todo el feature de SPRINT-178). 12 horas en producción con el feature inerte.
+
+**Causa raíz:** las queries Firestore con `orderBy` tienen una asunción implícita sobre el shape de los docs que NO está reflejada en el tipo TS ni en el código de los writes. El typecheck NO captura "el orderBy referencia un campo opcional/anidado que no todos los writes escriben a nivel raíz". Si el campo es opcional o se persiste en sub-objeto, la query excluye los docs sin el campo a nivel raíz — y el caller no lo nota porque `snap.empty === true` parece "no hay datos" en lugar de "filtrados por shape implícito".
+
+**Regla:** cada `orderBy('<campo>', ...)` debe satisfacer al menos una de:
+- (a) El par (colección, campo) está en el allowlist `GUARANTEED_PAIRS` del cazador (campo garantizado a nivel raíz por contadores transaccionales, convención del repo verificada con grep, o helper centralizado que lo enforza en todos los paths).
+- (b) La línea tiene tag `// @safe-orderby: <razón>` en la misma línea o hasta 5 arriba (verificación humana documentada — usado para casos donde la colección está detrás de variable `const COL`).
+
+**Cazador:** `scripts/invariantes/check-firestore-orderby-campo-no-persistido.ts`. Estrategia pragmática (NO full AST): regex sobre `orderBy('<campo>'` en `src/**/*.{ts,tsx}` + `api/**/*.ts`, asocia con `collection(db, '<col>')` literal más cercano (<400 chars hacia atrás), valida contra `GUARANTEED_PAIRS` o tag. Aprendizaje del postmortem: "Pesado de implementar full AST → variante pragmática: lista hardcoded de pares (colección, campo) garantizados + comentario explicando cómo extender" (línea 82 del postmortem).
+
+**Allowlist `GUARANTEED_PAIRS`:** 21 pares verificados al crear el cazador. Cada entry documenta la verificación (e.g., "Convención del repo + addDoc en X.tsx incluye createdAt"). Para agregar par nuevo, el sprint owner debe correr `grep -rn "addDoc.*<col>\|setDoc.*<col>\|updateDoc.*<col>"` y confirmar que TODOS los paths escriben el campo a nivel raíz.
+
+**Tag por línea:** `// @safe-orderby: <sprint + razón>` en la misma línea o hasta 5 arriba. Aplicado a 4 ubicaciones en SPRINT-188 donde la colección está detrás de variable `const COL`/`CAMPANAS_COL` (avances, bancos, campanasMarketing, ponches).
+
+**Limitación conocida:**
+- Cobertura por par literal `(col, campo)`. Si la colección está detrás de variable sin literal cercano, el cazador reporta hit; el tag `@safe-orderby` lo silencia con verificación humana.
+- NO valida cross-paths automáticamente: es una whitelist humana, NO un linter dinámico. Los writes a la colección NO se verifican en runtime — la garantía depende de que el sprint owner haya hecho el grep al agregar la entry.
+- Si dos `query(...)` consecutivos con colecciones distintas aparecen muy cerca (<400 chars), `findCollectionBefore` puede asociar mal. Mitigación: el match toma el último literal, lo que dentro del mismo `query(...)` siempre es correcto. Si aparece bug por este edge case, usar tag explícito.
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:

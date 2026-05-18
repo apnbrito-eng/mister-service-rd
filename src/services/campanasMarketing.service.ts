@@ -577,6 +577,7 @@ export async function marcarOrdenReactivada(
 export function subscribeToCampanas(
   callback: (campanas: CampanaMarketing[]) => void,
 ): Unsubscribe {
+  // @safe-orderby: SPRINT-188 — CAMPANAS_COL = 'campanas_marketing'. `fecha` se setea con Timestamp.now() en cada addDoc de campaña (handler TabReactivacion).
   const q = query(collection(db, CAMPANAS_COL), orderBy('fecha', 'desc'));
   return onSnapshot(q, (snap) => {
     const lista: CampanaMarketing[] = snap.docs.map((d) => {

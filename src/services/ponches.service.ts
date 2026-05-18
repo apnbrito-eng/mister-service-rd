@@ -147,6 +147,7 @@ export async function obtenerPonchesPorPersonal(
   const clauses: QueryConstraint[] = [where('personalUid', '==', personalUid)];
   if (desde) clauses.push(where('fechaRD', '>=', desde));
   if (hasta) clauses.push(where('fechaRD', '<=', hasta));
+  // @safe-orderby: SPRINT-188 — col 'ponches' (literal en query abajo, fuera del rango de 400 chars). `fechaRD` siempre seteada en registrarPonche.
   clauses.push(orderBy('fechaRD', 'desc'));
   const snap = await getDocs(query(collection(db, 'ponches'), ...clauses));
   return snap.docs.map((d) => mapDocToPonche(d.id, d.data()));

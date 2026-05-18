@@ -42,6 +42,7 @@ function parseAvance(id: string, raw: Record<string, unknown>): AvanceEmpleado {
 
 /** Suscripción en tiempo real a avances. */
 export function suscribirAvances(callback: (avances: AvanceEmpleado[]) => void): () => void {
+  // @safe-orderby: SPRINT-188 — COL = 'avances' (const arriba). `createdAt` se persiste en todo addDoc de avance (parseAvance lo rehidrata como required raíz).
   const q = query(collection(db, COL), orderBy('createdAt', 'desc'));
   return onSnapshot(q, snap => {
     const items = snap.docs.map(d => parseAvance(d.id, d.data()));

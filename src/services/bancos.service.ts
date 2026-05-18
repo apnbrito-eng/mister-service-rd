@@ -53,6 +53,7 @@ function seedToPayload(s: BancoSeed, orden: number): Record<string, unknown> {
 
 /** Suscripción en tiempo real a la lista de bancos. */
 export function suscribirBancos(callback: (bancos: Banco[]) => void) {
+  // @safe-orderby: SPRINT-188 — COL = 'bancos' (const arriba). `nombre` es required en seedToPayload + UI de bancos lo exige siempre.
   const q = query(collection(db, COL), orderBy('nombre'));
   return onSnapshot(q, snap => {
     const items = snap.docs.map(d => parseBanco(d.id, d.data()));
