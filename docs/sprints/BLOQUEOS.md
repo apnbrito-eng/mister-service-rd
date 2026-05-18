@@ -50,7 +50,35 @@ Antes de mover este sprint de vuelta a la cola con `procesa bloqueos`, decidir:
 
 **OK / RECHAZADO de Jorge:**
 
-_(pendiente — esperando 4 decisiones arriba)_
+**Decisiones (vía Cowork → Jorge 2026-05-18):**
+
+1. **Edge case 2+ chequeos vigentes simultáneos:** **solo el más reciente.** Si el cliente tiene 2 chequeos del mismo equipo vigentes (≤30d), aplica el descuento del más reciente solamente. Los anteriores quedan registrados pero no se acumulan. Recomendación del coordinator aceptada — más justa para el negocio.
+
+2. **¿Aplica a órdenes legacy?** **NO — solo cotizaciones nuevas post-deploy.** Cero migración retroactiva. Cero riesgo de tocar facturación previa. Si un cliente tuvo chequeo pre-deploy y vuelve a cotizar post-deploy, NO se le aplica descuento automáticamente (la coord puede usar el override manual del punto 3 si lo negocia).
+
+3. **¿Permitir override manual?** **SÍ con audit log completo.** Admin/coord pueden aplicar descuento sobre chequeo vencido (>30d) o sobre cualquier monto custom, con audit trail obligatorio (quién, cuándo, motivo, monto override vs auto, ordenId origen). El override se persiste en `descuentoChequeoPrevioOverride: true` + `descuentoChequeoPrevioMotivoOverride: <string>` + `descuentoChequeoPrevioAplicadoPor: <auth.uid>`.
+
+4. **Granularidad matching:** **clienteId + equipoTipo (sin equipoModelo).** Match permisivo. Cualquier "Aire Acondicionado" del mismo cliente cuenta como aplicable, no importa marca/modelo. Generoso con el cliente — fideliza más. Si Jorge en el futuro quiere endurecer, agregar equipoModelo es trivial.
+
+**Implicaciones arquitectónicas:**
+
+- Query `buscarChequeoVigentePorCliente(clienteId, equipoTipo)` requiere índice compuesto sobre `ordenes_servicio` con `clienteId + equipoTipo + tipoCierre + fechaCierre`. **Si Firestore no tiene el índice, el coordinator debe escribirlo en `firestore.indexes.json` y desplegarlo con `npm run deploy:indexes` antes de cerrar el sprint.** Si requiere `firestore.rules`, ESCALAR a sub-sprint con OK separado (sub-regla CLAUDE.md).
+
+- Campos nuevos en `OrdenServicio` (todos opcionales):
+  - `descuentoChequeoPrevioId?: string` (ordenId del chequeo origen)
+  - `descuentoChequeoPrevioMonto?: number`
+  - `descuentoChequeoPrevioFecha?: Timestamp` (fechaCierre del chequeo origen)
+  - `descuentoChequeoPrevioOverride?: boolean` (true si fue manual)
+  - `descuentoChequeoPrevioMotivoOverride?: string`
+  - `descuentoChequeoPrevioAplicadoPor?: string` (auth.uid del admin/coord)
+
+- Denormalizar también en `Factura` post-emisión (para trazabilidad fiscal + para que reportes financieros distingan "ingreso por chequeo independiente" vs "anticipo aplicado").
+
+- archivist PRE-CHANGE obligatorio antes de tocar `ordenes.service.ts` y los componentes de cotización.
+- regression_guardian + reviewer obligatorios (riesgo financiero — descuento automático afecta cuentas).
+- Postmortem opcional (solo si la ejecución revela una causa raíz estructural).
+
+**OK: jorge 2026-05-18 — confirmo las 4 decisiones arriba (más reciente / solo nuevas / override con audit / clienteId+equipoTipo). Procesar autónomo con scope refinado. Si toca firestore.rules → BLOQUEOS sub-sprint separado. Si requiere índice compuesto, deployar con `npm run deploy:indexes` antes de cerrar.**
 
 ---
 
