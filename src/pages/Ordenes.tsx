@@ -761,7 +761,15 @@ export default function Ordenes() {
     );
 
     getDocs(collection(db, 'clientes')).then(snap => {
-      setClientes(snap.docs.map(d => ({ id: d.id, ...d.data() } as Cliente)));
+      // SPRINT-187 Bug A — excluir soft-deleted (mergeados por dedup
+      // SPRINT-185). El state `clientes` se usa en cruces internos del
+      // listado de órdenes (lookup por id, mapa, etc.); ocultar mergeos
+      // mantiene la UI consistente con /admin/clientes.
+      setClientes(
+        snap.docs
+          .filter(d => d.data().eliminado !== true)
+          .map(d => ({ id: d.id, ...d.data() } as Cliente)),
+      );
     });
 
     getDocs(query(collection(db, 'personal'), orderBy('nombre'))).then(snap => {

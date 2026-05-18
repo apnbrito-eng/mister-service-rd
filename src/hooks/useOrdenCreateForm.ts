@@ -181,7 +181,16 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
   // mover a un fetch puntual al montar + revalidación on-demand.
   useEffect(() => {
     const unsubClientes = onSnapshot(collection(db, 'clientes'), (snap) => {
-      setClientes(snap.docs.map(d => ({ id: d.id, ...d.data() } as Cliente)));
+      // SPRINT-187 Bug A — excluir soft-deleted (mergeados por dedup
+      // SPRINT-185). Los typeahead de nombre + teléfono leen de este state;
+      // sin el filtro, la UI muestra entradas fantasma del cliente original
+      // pre-merge. Filtramos antes del map para que `clientesFiltrados` y
+      // `clientesFiltradosTelefono` (memos abajo) operen solo sobre activos.
+      setClientes(
+        snap.docs
+          .filter(d => d.data().eliminado !== true)
+          .map(d => ({ id: d.id, ...d.data() } as Cliente)),
+      );
     });
     const unsubPersonal = onSnapshot(
       query(collection(db, 'personal'), orderBy('nombre')),

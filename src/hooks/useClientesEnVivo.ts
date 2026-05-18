@@ -35,15 +35,23 @@ export function useClientesEnVivo(): {
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'clientes'), (snap) => {
       const sinTipo = new Set<string>();
-      const lista = snap.docs.map(d => {
-        const raw = d.data() as Record<string, unknown>;
-        if (raw.tipo !== 'particular' && raw.tipo !== 'b2b') {
-          // No tenía tipo definido en el doc; parseCliente le pone 'particular'
-          // como default — guardamos el id para que la UI muestre el badge.
-          sinTipo.add(d.id);
-        }
-        return parseCliente(d.id, raw);
-      });
+      const lista = snap.docs
+        // SPRINT-187 Bug A — filtrar soft-deleted del listado/UI. Los docs
+        // mergeados por `scripts/dedup-clientes-por-telefono.ts --apply`
+        // quedan en Firestore con `eliminado: true` para forensia, pero
+        // NO deben aparecer en ningún typeahead, listado ni mapa. Firestore
+        // no permite `!= true` directo en queries (requeriría índice y
+        // excluye docs sin el campo); filtramos client-side post-snapshot.
+        .filter(d => d.data().eliminado !== true)
+        .map(d => {
+          const raw = d.data() as Record<string, unknown>;
+          if (raw.tipo !== 'particular' && raw.tipo !== 'b2b') {
+            // No tenía tipo definido en el doc; parseCliente le pone 'particular'
+            // como default — guardamos el id para que la UI muestre el badge.
+            sinTipo.add(d.id);
+          }
+          return parseCliente(d.id, raw);
+        });
       lista.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
       setClientes(lista);
       setClientesSinTipoDefinido(sinTipo);

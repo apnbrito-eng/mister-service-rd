@@ -142,7 +142,13 @@ export default function MapaRutas() {
       setLoading(false);
     });
     getDocs(collection(db, 'clientes')).then(snap => {
-      setClientes(snap.docs.map(d => ({ id: d.id, ...d.data() } as Cliente)));
+      // SPRINT-187 Bug A — excluir soft-deleted (mergeados por dedup
+      // SPRINT-185) del cruce con órdenes en el mapa de rutas.
+      setClientes(
+        snap.docs
+          .filter(d => d.data().eliminado !== true)
+          .map(d => ({ id: d.id, ...d.data() } as Cliente)),
+      );
     });
     getDocs(collection(db, 'personal')).then(snap => {
       setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));

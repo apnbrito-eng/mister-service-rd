@@ -140,7 +140,13 @@ export default function TecnicoVista() {
     });
 
     getDocs(collection(db, 'clientes')).then(snap => {
-      setClientes(snap.docs.map(d => ({ id: d.id, ...d.data() } as Cliente)));
+      // SPRINT-187 Bug A — excluir soft-deleted (mergeados por dedup
+      // SPRINT-185). El técnico solo debe ver clientes canónicos.
+      setClientes(
+        snap.docs
+          .filter(d => d.data().eliminado !== true)
+          .map(d => ({ id: d.id, ...d.data() } as Cliente)),
+      );
     });
 
     const unsubStandby = onSnapshot(collection(db, 'standby_piezas'), (snap) => {

@@ -44,7 +44,15 @@ export function formatearTelefono(tel: string): string {
   return tel;
 }
 
-/** Busca cliente por teléfono normalizado. Retorna id si existe, null si no. */
+/**
+ * Busca cliente por teléfono normalizado. Retorna id si existe, null si no.
+ *
+ * SPRINT-187 Bug A: ignora soft-deleted (`eliminado: true`) — un cliente
+ * mergeado por dedup NO debe matchear, sino que la UI debería resolver el
+ * canónico vía el campo `mergedaCon` (TODO follow-up si el caso aparece).
+ * Hoy, todos los callers que llegan acá vía typeahead/input asumen "si
+ * existe, está activo" — devolver un mergeado rompería ese contrato.
+ */
 export async function buscarClientePorTelefono(telefono: string): Promise<{ id: string; data: Cliente } | null> {
   const telNorm = normalizarTelefono(telefono);
   // Guard explícito contra `''` (audit C1): si el normalizador rechazó la
@@ -60,7 +68,14 @@ export async function buscarClientePorTelefono(telefono: string): Promise<{ id: 
   const snap = await getDocs(q);
 
   if (!snap.empty) {
-    const d = snap.docs[0];
+    // SPRINT-187 Bug A — preferir el doc activo si hay múltiples matches
+    // (caso teórico: tel duplicado pre-dedup, donde uno quedó como canónico
+    // y otro mergeado). Si todos están eliminados, retornar null para que
+    // el caller siga el flujo de "no existe" en lugar de devolver un
+    // fantasma.
+    const activos = snap.docs.filter(d => d.data().eliminado !== true);
+    if (activos.length === 0) return null;
+    const d = activos[0];
     return {
       id: d.id,
       data: { id: d.id, ...d.data() } as Cliente,
