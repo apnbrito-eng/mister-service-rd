@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCheck, Filter, AlertCircle } from 'lucide-react';
-import { Notificacion } from '../types';
+import { Bell, CheckCheck, Filter, AlertCircle, Eye } from 'lucide-react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { Notificacion, Personal } from '../types';
 import { useApp } from '../context/AppContext';
 import {
   suscribirNotificaciones, marcarLeida, marcarTodasLeidas,
 } from '../services/notificaciones.service';
 import { tiempoTranscurrido } from '../utils';
+import { esAdminOCoord } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 /**
@@ -27,20 +30,44 @@ import LoadingSpinner from '../components/LoadingSpinner';
  * "userProfile.id NO siempre es auth.uid" en CLAUDE.md.
  */
 export default function Notificaciones() {
-  const { currentUser } = useApp();
+  const { currentUser, userProfile } = useApp();
   const navigate = useNavigate();
   const [notifs, setNotifs] = useState<Notificacion[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState<'todas' | 'no_leidas'>('todas');
 
+  // SPRINT-184 parte 2 (2026-05-18): admin/coord puede ver bandeja de otros
+  // usuarios para auditar entrega de notifs sin fricción de login-switch.
+  // La rule firestore `notificaciones` permite `esStaff()` leer notifs ajenas
+  // (rules ya aprobadas, no requirió cambio). Para roles non-admin el
+  // selector queda oculto y se ve siempre la bandeja propia.
+  const puedeAuditar = esAdminOCoord(userProfile);
+  const [verBandejaDe, setVerBandejaDe] = useState<string>('');
+  const [personalLista, setPersonalLista] = useState<Personal[]>([]);
+  const targetUid = puedeAuditar && verBandejaDe ? verBandejaDe : (currentUser?.uid ?? '');
+  const esBandejaPropia = !puedeAuditar || !verBandejaDe || verBandejaDe === currentUser?.uid;
+
+  // Carga de `personal` solo si el user puede auditar. Suscripción liviana
+  // (sin filtros, ~15 docs en producción). Si no es admin/coord, no se
+  // suscribe ni descarga nada.
   useEffect(() => {
-    if (!currentUser?.uid) return;
-    const unsub = suscribirNotificaciones(currentUser.uid, (arr) => {
+    if (!puedeAuditar) return;
+    const unsub = onSnapshot(collection(db, 'personal'), (snap) => {
+      const lista = snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal));
+      setPersonalLista(lista);
+    });
+    return () => unsub();
+  }, [puedeAuditar]);
+
+  useEffect(() => {
+    if (!targetUid) return;
+    setLoading(true);
+    const unsub = suscribirNotificaciones(targetUid, (arr) => {
       setNotifs(arr);
       setLoading(false);
     });
     return () => unsub();
-  }, [currentUser?.uid]);
+  }, [targetUid]);
 
   const visibles = useMemo(() => {
     if (filtro === 'no_leidas') return notifs.filter(n => !n.leida);
@@ -50,7 +77,9 @@ export default function Notificaciones() {
   const noLeidas = useMemo(() => notifs.filter(n => !n.leida).length, [notifs]);
 
   const handleClickNotif = async (n: Notificacion) => {
-    if (!n.leida) {
+    // SPRINT-184 parte 2: en modo auditoría (bandeja ajena), no marcamos como
+    // leídas — confundiría al dueño real de la bandeja.
+    if (!n.leida && esBandejaPropia) {
       try { await marcarLeida(n.id); } catch (err) { console.error(err); }
     }
     if (n.ordenId) {
@@ -60,8 +89,21 @@ export default function Notificaciones() {
 
   const handleMarcarTodas = async () => {
     if (!currentUser?.uid) return;
+    // SPRINT-184: solo "marcar todas como leídas" sobre tu propia bandeja.
+    // Marcar como leídas las de otro user sería confuso para el dueño real.
+    if (!esBandejaPropia) return;
     try { await marcarTodasLeidas(currentUser.uid); } catch (err) { console.error(err); }
   };
+
+  // Opciones del selector: solo personal con uid (vía Auth). Excluyo
+  // ayudantes — no entran al sistema admin. Ordenado por nombre.
+  const opcionesBandeja = useMemo(() => {
+    if (!puedeAuditar) return [];
+    return personalLista
+      .filter(p => p.uid && p.rol !== 'ayudante')
+      .map(p => ({ uid: p.uid as string, nombre: p.nombre, rol: p.rol }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [personalLista, puedeAuditar]);
 
   if (loading) return <LoadingSpinner fullPage text="Cargando notificaciones..." />;
 
@@ -82,7 +124,7 @@ export default function Notificaciones() {
           </div>
         </div>
 
-        {noLeidas > 0 && (
+        {noLeidas > 0 && esBandejaPropia && (
           <button
             type="button"
             onClick={handleMarcarTodas}
@@ -92,6 +134,36 @@ export default function Notificaciones() {
           </button>
         )}
       </div>
+
+      {/* SPRINT-184 parte 2 — selector "Ver bandeja de" para admin/coord */}
+      {puedeAuditar && opcionesBandeja.length > 0 && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          <Eye size={14} className="text-gray-400" />
+          <label htmlFor="bandejaSelect" className="text-xs font-medium text-gray-600">
+            Ver bandeja de:
+          </label>
+          <select
+            id="bandejaSelect"
+            value={verBandejaDe || (currentUser?.uid ?? '')}
+            onChange={(e) => setVerBandejaDe(e.target.value === (currentUser?.uid ?? '') ? '' : e.target.value)}
+            className="text-xs px-2 py-1 border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          >
+            <option value={currentUser?.uid ?? ''}>Yo ({userProfile?.nombre || 'mi sesión'})</option>
+            {opcionesBandeja
+              .filter(o => o.uid !== currentUser?.uid)
+              .map(o => (
+                <option key={o.uid} value={o.uid}>
+                  {o.nombre} ({o.rol})
+                </option>
+              ))}
+          </select>
+          {!esBandejaPropia && (
+            <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+              Modo auditoría — sin acciones de marcado
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-2 mb-4">
         <Filter size={14} className="text-gray-400" />

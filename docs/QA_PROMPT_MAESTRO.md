@@ -43,7 +43,7 @@ REGLAS INVIOLABLES:
 
 ROL 1 — qa-secretaria@misterservicerd.com (ya estoy logueada)
 
-a. Andá a /admin/citas-por-confirmar. Esperá a que cargue. Reportá cuántas citas hay.
+a. Andá a /admin/citas. Esperá a que cargue. Reportá cuántas citas pendientes hay (la ruta /admin/citas-por-confirmar fue consolidada — usar /admin/citas).
 b. Click "Nueva cita" o equivalente. Llená:
    - Cliente: buscar "QA Test" (debe autocompletar).
    - Teléfono: 8090000000.
@@ -68,12 +68,16 @@ a. Estás en /tecnico. Reportá si la orden OS-XXXX aparece en tu agenda.
 b. Tocá la orden. Reportá la fase actual.
 c. Click "Iniciar chequeo". Reportá si el botón funciona (en el pasado dio
    permission-denied — ver postmortem 2026-05-07).
-d. Llená el wizard de diagnóstico. Pasos típicos:
-   - Equipo prende? No.
-   - Conexiones OK? Sí.
-   - Diagnóstico: "QA - posible falla del módulo principal".
-   - Sugerir precio: RD$ 2500.
-   - Submit.
+d. Llená el flujo de chequeo. La UI actual NO es un wizard binario "prende/conexiones"
+   — son dos botones de acción mutuamente excluyentes:
+   - **"Sugerir solo chequeo"**: abre modal pidiendo motivo + monto. Usá motivo
+     "QA - cliente decide no reparar por costo" y dejá monto default. Submit.
+     → la sugerencia queda pendiente de aprobación por la coordinadora (ROL 3).
+   - **"Marcar Realizado"** (alternativa): si la reparación se hizo en sitio,
+     este botón salta directo al wizard de cierre.
+   Para este flujo QA elegí "Sugerir solo chequeo" (ejercita más roles).
+   Antes de submit, cargá también un precio sugerido (RD$ 2500) y una nota del
+   técnico para que la coordinadora tenga contexto al aprobar.
 e. Reportá cualquier validación rara, botón con label confuso, transición de fase no esperada.
 
 PAUSA — logout, login como qa-coordinadora@misterservicerd.com.
@@ -107,11 +111,16 @@ c. Reportá:
    - ¿La firma se capturó?
    - ¿La orden transicionó a "trabajo_realizado"?
 
-PAUSA — logout, login como qa-operaria@misterservicerd.com.
+PAUSA — logout, login como qa-coordinadora@misterservicerd.com (de nuevo).
 
-ROL 5 — qa-operaria@misterservicerd.com
+ROL 5 — qa-coordinadora@misterservicerd.com (emisión de conduce)
 
-a. Andá a /admin/facturas-pendientes (o equivalente — "Facturación pendiente").
+NOTA: la emisión del conduce de garantía está restringida por routing + flujo
+de negocio a roles administrador/coordinadora (RolRoute en App.tsx). La
+operaria PUEDE ver Facturación Pendiente pero el botón "Emitir conduce" no le
+está habilitado para emitir el documento final.
+
+a. Andá a /admin/facturacion-pendiente.
 b. Buscá la OS-XXXX. Debe aparecer porque está en trabajo_realizado.
 c. Click "Emitir conduce" o equivalente. Validá el modal:
    - Monto pre-cargado correcto (RD$ 2500 menos lo que corresponda — reportá).
