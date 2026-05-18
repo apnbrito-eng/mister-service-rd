@@ -10,7 +10,49 @@ OK PASS confirmados del día (no rollback): SPRINT-186 modelo del fabricante OK,
 
 ---
 
+## SPRINT-188-CAZADOR-P015 — Cazador determinístico para queries Firestore con orderBy sobre campo no garantizado
+
+**Estado:** PENDIENTE 2026-05-18 noche por coordinator autónomo (pasada 24, sprint follow-up automático tras SPRINT-187 Bug B).
+
+**Prioridad:** MEDIA (acción preventiva del postmortem 2026-05-18 banner descuento).
+
+**Origen:** Postmortem `docs/postmortems/2026-05-18-banner-descuento-query-orderby-mal-escrita.md`. Causa raíz clase nueva: query Firestore con `orderBy('X')` cuando `X` no se persiste a nivel raíz en TODOS los paths de write de esa colección. Firestore excluye silenciosamente los docs sin el campo del orden → query retorna vacío → helper devuelve null sin error.
+
+### Objetivo
+
+Crear cazador determinístico P-015 en `scripts/invariantes/check-firestore-orderby-campo-no-garantizado.ts` que escanee el codebase y grite cuando detecte una query Firestore con `orderBy(<campo>)` donde el `<campo>` no se persiste en TODOS los paths de write (`addDoc`/`setDoc`/`updateDoc`) de la misma colección.
+
+### Touch-list previsto
+
+1. `scripts/invariantes/check-firestore-orderby-campo-no-garantizado.ts` (NUEVO).
+2. `scripts/invariantes/run-all.ts` — registrar P-015.
+3. `docs/PATRONES_REGRESION.md` — agregar entrada P-015 con bug original (SPRINT-178 commit `bd2b2a8`), síntoma, causa raíz, regla.
+4. `CLAUDE.md` — sub-regla "Queries Firestore con orderBy validar field persisted en todos los paths".
+
+### Criterios de éxito
+
+- [ ] Cazador P-015 PASS sobre el codebase actual (post-fix SPRINT-187).
+- [ ] Verificación inversa con fixture temporal: agregar `query(...orderBy('campoInexistente', 'desc'))` y confirmar que el cazador grita 1 hit.
+- [ ] Registrado en `run-all.ts` y agregado al pre-commit hook implícito (via `npm run check:regression`).
+- [ ] Entrada en PATRONES_REGRESION.md siguiendo formato P-XXX.
+- [ ] Sub-regla en CLAUDE.md siguiendo formato gotcha existente.
+
+### Restricciones
+
+- Allowlist para campos garantizados centralmente (`createdAt`, `updatedAt` poblados por todos los addDoc/setDoc, `numero` por contador transaccional, etc.).
+- NO bloquear queries legítimas con orderBy sobre campos consistentes.
+
+### Notas para el coordinator
+
+- Implementación tentativa: AST parse de `query(...orderBy('X', ...))` + grep de `updateDoc|setDoc|addDoc` sobre la misma colección. Para cada write, verificar que el campo `X` está en el objeto literal del payload (o que el script de write provee el campo). Si hay al menos un write sin el campo → grita.
+- Considerar que `serverTimestamp()` y `Timestamp.now()` cuentan como persistencia válida del campo.
+- Falso positivo a evaluar: si un campo se persiste vía `arrayUnion`/`arrayRemove` o vía merge con shape inferido, el cazador puede no detectarlo. Documentar la limitación en el header del cazador.
+
+---
+
 ## SPRINT-187 — Filtrar soft-deleted en /admin/clientes + debuggear banner descuento
+
+**Estado:** COMPLETADO 2026-05-18 noche por coordinator autónomo (pasada 24). Hashes `b6486e4` (Bug A — soft-deleted filter en 6 archivos) + `4890dfa` (Bug B — query orderBy mal escrita en 3 archivos). Postmortem obligatorio creado en `docs/postmortems/2026-05-18-banner-descuento-query-orderby-mal-escrita.md`. Clasificado como clase nueva → SPRINT-188-CAZADOR-P015 agregado a la cola como follow-up. Cazadores 12/12 PASS. typecheck + lint PASS. NO toca rules ni indexes — refactoring de índices dormidos queda como sprint futuro.
 
 **Prioridad:** ALTA (bloquea revalidación end-to-end de SPRINT-178 + UX confuso para coord/secretaria).
 

@@ -5,6 +5,100 @@
 
 ---
 
+## 2026-05-18 noche — autónomo (`trabaja`, pasada 24): SPRINT-187 completado (Bug A + Bug B) + postmortem
+
+### Contexto
+
+Cowork escribió SPRINT-187 con 2 bugs independientes post-QA visual sidepanel del deploy SPRINT-185 + 186:
+
+- **Bug A** — `/admin/clientes` y typeahead del modal de creación de orden mostraban entradas soft-deleted (post-dedup SPRINT-185). UI mentía aunque los datos en Firestore estaban consolidados.
+- **Bug B** — banner descuento chequeo previo (SPRINT-186) no renderizaba al crear orden con QA Test + Aire Acondicionado aunque OS-0058 existía.
+
+Sprint mandaba "diagnóstico primero" para Bug B con 6 hipótesis dependientes de data Firestore Console. Coordinator decidió análisis estático primero — si encontraba causa raíz evidente en el código → fix; si requería data real → escalar a BLOQUEOS.
+
+### archivist PRE-CHANGE (síntesis manual)
+
+Historial relevante sobre touch-list combinado:
+- `f41d106` (SPRINT-186) — banner descuento UI + hook wiring `useOrdenCreateForm`.
+- `bd2b2a8` (SPRINT-178) — helper `buscarChequeoVigentePorCliente` con `orderBy('fechaCierre')` + índice compuesto.
+- `a3b56bf` (SPRINT-185) — dedup clientes + soft-delete flag + filter en `Clientes.tsx`.
+- `c4be345` (SPRINT-132) — patrón `tecnicoId == auth.uid` (no aplica directo acá).
+
+Recordatorios aplicados: P-014 cliente create sin guard PASS, P-006 dropdown tecnico, P-007 crearNotificacion userId. Sub-regla cleanup archivos críticos (Wizard + AgendaDia) declarada en commit message.
+
+### Touch-list expandido + auditoría consumidores
+
+**Bug A — consumidores de la colección `clientes` auditados con grep:**
+
+| Archivo | Línea | Estado pre-fix | Acción |
+|---|---|---|---|
+| `src/pages/Clientes.tsx` | 160 | YA filtraba `eliminado !== true` (SPRINT-185) | sin cambio |
+| `src/hooks/useClientesEnVivo.ts` | 36 | NO filtraba | filter post-snapshot |
+| `src/hooks/useOrdenCreateForm.ts` | 183 | NO filtraba | filter post-snapshot |
+| `src/pages/Ordenes.tsx` | 763 | NO filtraba | filter post-getDocs |
+| `src/pages/MapaRutas.tsx` | 144 | NO filtraba | filter post-getDocs |
+| `src/pages/TecnicoVista.tsx` | 142 | NO filtraba | filter post-getDocs |
+| `src/services/clientes.service.ts` | 48 | `buscarClientePorTelefono` retornaba primer match sin filtrar | filter `eliminado !== true` + null si todos eliminados |
+
+**Bug B — análisis estático del helper revela causa raíz sin necesidad de Firestore:**
+
+`buscarChequeoVigentePorCliente` (línea 811-818) usaba:
+```
+where clienteId == X + where equipoTipo == Y + where tipoCierre == 'solo_chequeo'
++ orderBy('fechaCierre', 'desc') + limit(5)
+```
+Pero ningún path persistía `fechaCierre` a nivel raíz del doc:
+- `CierreServicioWizard.tsx:374-376` — fecha vive DENTRO de `cierreServicio` (anidado).
+- `AgendaDia.tsx::handleCerrarChequeo:175-191` — NO escribía `fechaCierre` en absoluto, sólo `updatedAt`.
+
+Firestore excluye en el orderBy los docs sin el campo del orden → query retornaba vacío → helper devolvía null → banner no renderizaba. **Bug evidente del código; no requirió Firestore Console.**
+
+### Builder — Bug A
+
+5 archivos modificados: `useClientesEnVivo.ts`, `useOrdenCreateForm.ts`, `Ordenes.tsx`, `MapaRutas.tsx`, `TecnicoVista.tsx`. Plus `clientes.service.ts::buscarClientePorTelefono` con filter + null-si-todos-mergeados.
+
+### Builder — Bug B
+
+3 archivos modificados:
+- `ordenes.service.ts::buscarChequeoVigentePorCliente`: query sin orderBy/limit(5) → `limit(20)` + sort/filter client-side. Cascada de fallbacks: `cierreServicio.fechaCierre` → `fechaCierre` raíz → `updatedAt`. Import `orderBy` removido.
+- `CierreServicioWizard.tsx`: forward fix `fechaCierre: <Timestamp>` a nivel raíz del update.
+- `AgendaDia.tsx::handleCerrarChequeo`: forward fix idem.
+
+### Tester
+
+typecheck PASS (ambos commits), lint PASS, 12/12 cazadores PASS.
+
+### regression_guardian
+
+APPROVED. Bug A es aditivo (filter post-fetch). Bug B no toca rules/indexes — modifica query Firestore (no requería reindex; índice existente queda dormido). `clientes.service.ts::buscarClientePorTelefono` cambio sutil pero correcto: caller siguiente flujo "no existe" si todos los matches están mergeados — exactamente lo deseado.
+
+### reviewer
+
+APPROVED. Riesgo identificado: el fallback a `updatedAt` en el helper podría dar falsos positivos si un chequeo antiguo fue tocado tangencialmente. Mitigado por `tipoCierre === 'solo_chequeo'` + `precioChequeo > 0`. Aceptable hasta reporte real de Jorge.
+
+### Postmortem obligatorio
+
+`docs/postmortems/2026-05-18-banner-descuento-query-orderby-mal-escrita.md` creado siguiendo template. Clasifica como **clase nueva — P-015 propuesto** ("query Firestore con orderBy sobre campo no garantizado en todos los writes"). Sprint follow-up `SPRINT-188-CAZADOR-P015` queda en la cola para que el builder implemente el cazador determinístico.
+
+### Trazabilidad
+
+| Sprint | Bug | Hash | Archivos | Tiempo | Postmortem | Deploy |
+|---|---|---|---|---|---|---|
+| SPRINT-187 | Bug A (soft-deleted filter) | `b6486e4` | 6 | 12 min | N/A (no fue regresión de producción — bug de cobertura post-SPRINT-185) | OK (push) |
+| SPRINT-187 | Bug B (orderBy query) | `4890dfa` | 3 | 25 min | sí — `2026-05-18-banner-descuento-query-orderby-mal-escrita.md` | OK (push) |
+
+### Cazadores anti-regresión al cierre
+
+12/12 PASS. P-015 pendiente de crear en SPRINT-188-CAZADOR-P015 (delegado al builder).
+
+### QA pendiente humano (Jorge sidepanel post-deploy)
+
+1. Recargar `/admin/clientes` y typeahead del modal de creación → 1 sola entrada "QA Test" (no 3).
+2. Crear orden con cliente QA Test + Aire Acondicionado → banner descuento RD$ X aparece (asumiendo OS-0058 dentro de 30 días y dedup ya aplicado).
+3. Si el banner aparece pero el monto está en 0 → hipótesis adicional: OS-0058 quedó sin `precioChequeo` poblado. Reportar a Cowork para sprint follow-up.
+
+---
+
 ## 2026-05-18 — autónomo (`trabaja la cola completa sin pausas`, pasada 22): 2 completados + 1 escalado
 
 ### Contexto
