@@ -28,6 +28,7 @@ import { check as checkCrearnotificacionUseridShape } from './check-crearnotific
 import { check as checkParserCamposFaltantes } from './check-parser-campos-faltantes.js';
 import { check as checkTipoNotificacionHuerfano } from './check-tipo-notificacion-huerfano.js';
 import { check as checkFaseSinSincronizar } from './check-fase-sin-sincronizar-en-update-orden.js';
+import { check as checkClienteCreateSinDedup } from './check-cliente-create-sin-dedup.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -49,6 +50,7 @@ async function main() {
     checkParserCamposFaltantes,
     checkTipoNotificacionHuerfano,
     checkFaseSinSincronizar,
+    checkClienteCreateSinDedup,
   ];
 
   const t0 = Date.now();

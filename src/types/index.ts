@@ -145,6 +145,19 @@ export interface Cliente {
     agenteNombre: string;
     campanaId: string;
   }>;
+  /**
+   * Soft-delete flags (SPRINT-185 dedup por teléfono normalizado).
+   * Si `eliminado === true`, el cliente fue mergeado a otro registro
+   * canónico (`mergedaCon`) por el script `dedup-clientes-por-telefono.ts`.
+   * Las queries de UI deben filtrar `where('eliminado', '!=', true)` o
+   * client-side. NO se hace hard-delete para preservar forensia
+   * (audit log queda apuntando al cliente original).
+   */
+  eliminado?: boolean;
+  eliminadoEn?: Timestamp | Date;
+  eliminadoPor?: string;
+  /** Id del cliente canónico al que se mergeó este registro duplicado. */
+  mergedaCon?: string;
   createdAt: Date;
   updatedAt?: Date;
 }

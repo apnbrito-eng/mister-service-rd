@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, Timestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cliente, OrdenServicio, ZONAS_RD } from '../types';
 import { formatFechaCorta, formatMoneda, formatTelefono, parseCliente } from '../utils';
+import { buscarOCrearCliente, buscarClientePorTelefono, normalizarTelefono } from '../services/clientes.service';
 import { whatsappUrl } from '../utils/whatsapp';
 import { coordsFromLatLng, googleMapsViewUrl } from '../utils/maps';
 import { inferirZona, zonaColor } from '../utils/zonas';
@@ -153,7 +154,11 @@ export default function Clientes() {
     });
   }, [selectedCliente]);
 
-  const filteredClientes = clientes.filter(c =>
+  // Filtra mergedos (SPRINT-185 soft-delete) ANTES de aplicar búsqueda.
+  // Los clientes con `eliminado === true` fueron consolidados con otro
+  // canónico vía `scripts/dedup-clientes-por-telefono.ts --apply`.
+  const clientesVisibles = clientes.filter(c => c.eliminado !== true);
+  const filteredClientes = clientesVisibles.filter(c =>
     c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
     c.telefono.includes(busqueda)
   );
@@ -161,8 +166,8 @@ export default function Clientes() {
   // ─── Tab Mapa: derivados ────────────────────────────────────────────────
   /** Clientes que pasan los filtros del sidebar (sin importar coords). */
   const clientesFiltrados = useMemo(
-    () => clientes.filter(c => aplicaFiltros(c, filtros)),
-    [clientes, filtros],
+    () => clientesVisibles.filter(c => aplicaFiltros(c, filtros)),
+    [clientesVisibles, filtros],
   );
 
   /** Subset con coords válidas — los que efectivamente se renderizan en el mapa. */
@@ -212,7 +217,11 @@ export default function Clientes() {
     if (!puedeVerReactivacion && tab === 'reactivacion') setTab('lista');
   }, [puedeVerReactivacion, tab]);
 
-  const geocodeDireccion = async (direccion: string) => {
+  // Dead code histórico: helper de geocoding manual via Nominatim, reemplazado
+  // por Google Places Autocomplete + handleUsarMiUbicacion (geolocation directa).
+  // Se conserva por si algún flow de import lo vuelve a necesitar. Prefijo `_`
+  // silencia warning de unused (regla eslint allows /^_/u).
+  const _geocodeDireccion = async (direccion: string) => {
     if (!direccion) return;
     setGeocoding(true);
     try {
@@ -281,29 +290,62 @@ export default function Clientes() {
       toast.error('Nombre y teléfono son requeridos');
       return;
     }
+    // Guard SPRINT-185: validar teléfono RD antes de tocar Firestore.
+    // El normalizador retorna '' si la entrada no es un teléfono RD válido
+    // (>11 dígitos, código internacional NO-RD, <10 dígitos).
+    const telNorm = normalizarTelefono(form.telefono);
+    if (!telNorm || telNorm.length !== 10) {
+      toast.error('Teléfono inválido. Debe ser un número RD de 10 dígitos.');
+      return;
+    }
     setSaving(true);
     try {
+      // Guard runtime contra duplicados (SPRINT-185): si ya existe un cliente
+      // con este teléfono normalizado, NO crear duplicado. Antes del fix esta
+      // página usaba `addDoc` con auto-id, lo que ignoraba la convención de
+      // `buscarOCrearCliente` (ID = telNorm) y permitía 2 docs con mismo tel.
+      // Ese fue el bug que originó el sprint (caso QA Test en producción).
+      const existente = await buscarClientePorTelefono(form.telefono);
+      if (existente) {
+        toast.error(
+          `Ya existe un cliente con este teléfono: ${existente.data.nombre} (${formatTelefono(existente.data.telefono)}). ` +
+          `Asociá la nueva orden a ese cliente en vez de crear duplicado.`,
+        );
+        setSaving(false);
+        return;
+      }
+
+      // No hay duplicado → delegar a `buscarOCrearCliente` (helper canónico).
+      // Esto persiste el cliente con id == telefonoNormalizado, escribe el
+      // campo `telefonoNormalizado`, infiere zona si aplica, y hace strip
+      // de undefined (Firestore los rechaza).
       const zonaFinal = form.zona === '__auto__'
-        ? (inferirZona(form.lat || undefined, form.lng || undefined) || undefined)
+        ? undefined  // el helper auto-infiere desde lat/lng
         : (form.zona || undefined);
-      const payload: Record<string, unknown> = {
+
+      const clienteId = await buscarOCrearCliente(form.telefono, {
         nombre: form.nombre,
-        telefono: form.telefono,
-        email: form.email,
-        direccion: form.direccion,
-        lat: form.lat || null,
-        lng: form.lng || null,
+        email: form.email || undefined,
+        direccion: form.direccion || undefined,
+        lat: form.lat || undefined,
+        lng: form.lng || undefined,
         tipo: form.tipo,
-        origen: 'manual',
-        createdAt: Timestamp.now(),
-      };
-      if (zonaFinal) payload.zona = zonaFinal;
-      await addDoc(collection(db, 'clientes'), payload);
+      });
+
+      // Si el usuario eligió zona manual (no __auto__), persistirla post-crear.
+      if (zonaFinal) {
+        await updateDoc(doc(db, 'clientes', clienteId), {
+          zona: zonaFinal,
+          updatedAt: Timestamp.now(),
+        });
+      }
+
       toast.success('Cliente creado');
       setShowModal(false);
       setForm({ nombre: '', telefono: '', email: '', direccion: '', lat: 0, lng: 0, zona: '__auto__', tipo: 'particular' });
-    } catch {
-      toast.error('Error al crear cliente');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error al crear cliente';
+      toast.error(msg);
     } finally {
       setSaving(false);
     }

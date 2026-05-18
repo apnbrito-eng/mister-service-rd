@@ -418,6 +418,33 @@ Si la allowlist crece, evaluar si conviene unificar handlers duplicados (`Elimin
 
 ---
 
+## P-014 — `addDoc`/`setDoc` a `clientes` sin guard por `telefonoNormalizado`
+
+**Bug original:** SPRINT-185 (commit pendiente al crear el cazador — se commitea junto). Detección: QA puntual sidepanel 2026-05-18 sobre SPRINT-178 reveló que el descuento de chequeo previo NO aplicaba para OS-0058/OS-0059 del cliente "QA Test" porque las dos órdenes apuntaban a `clienteId` distintos del mismo cliente físico (typeahead mostraba 2 entradas idénticas con mismo tel `8090000000`).
+
+**Síntoma:** typeahead de cliente muestra 2 entradas con mismo teléfono y nombre similar. Queries cross-collection por `clienteId` (`buscarChequeoVigentePorCliente`, historial de servicios, métricas de cliente) fragmentan los datos del mismo cliente físico en dos buckets. Features que dependen de matching exacto por `clienteId` (descuento chequeo previo, reactivación, comisiones) silenciosamente fallan o sub-reportan.
+
+**Causa raíz:** `src/pages/Clientes.tsx::handleSubmit` (pre-fix) usaba `addDoc(collection(db, 'clientes'), payload)` con auto-id, ignorando la convención del helper canónico `buscarOCrearCliente` del service (que persiste con id = `telefonoNormalizado` y bloquea duplicados). La inconsistencia entre flujos de alta (1 página directa al SDK + N flujos vía service helper) permitió que escapen duplicados sin que ningún test los detectara — no hay test suite y el QA E2E sólo cubre cuentas dedicadas pre-creadas.
+
+**Regla:** cualquier write a `clientes` desde `src/` (alta nueva) debe pasar por uno de:
+- `buscarOCrearCliente()` del service (idempotente por `telNorm`).
+- `crearOActualizarClienteDesdeCita()` del service (idempotente por `telNorm`).
+- `setDoc(doc(db, 'clientes', telNorm), ...)` con `telNorm` derivado de `normalizarTelefono(...)` PRECEDIDO por `buscarClientePorTelefono` que bloquee si retorna != null.
+
+NUNCA `addDoc(collection(db, 'clientes'), ...)` — auto-id de Firestore hace estructuralmente imposible idempotencia por teléfono.
+
+**Cazador:** `scripts/invariantes/check-cliente-create-sin-dedup.ts`. Estrategia: regex sobre `addDoc(collection(db, 'clientes'), ...)` y `setDoc(doc(db, 'clientes', <expr>), ...)`. Auto-allow heurístico para `setDoc` con `telNorm` + `buscarClientePorTelefono`/`buscarOCrearCliente` en una ventana de 20 líneas arriba (cubre el patrón legítimo de `useOrdenCreateForm.ts`). El service canónico y `seedData.ts` están en la allowlist por path.
+
+**Allowlist por archivo:**
+- `src/services/clientes.service.ts` — el helper VIVE acá.
+- `src/firebase/seedData.ts` — seed dev escribe con telNorm explícito.
+
+**Tag por línea:** `// @safe-cliente-create: <razón>` en la misma línea o hasta 5 arriba.
+
+**Limitación conocida:** la heurística de auto-allow detecta `normalizarTelefono`/`telNorm` y `buscarClientePorTelefono`/`buscarOCrearCliente` en ventana de 20 líneas. Si el guard está más arriba (función separada, helper externo), el cazador puede falsificar positivo — agregar tag explícito.
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:
