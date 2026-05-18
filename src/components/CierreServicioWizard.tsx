@@ -434,6 +434,14 @@ export default function CierreServicioWizard({
         // ya están seteados — no los pisamos.
         tipoCierre: orden.soloChequeo === true ? 'solo_chequeo' : 'reparacion_completa',
         cierreServicio: cierrePayload,
+        // SPRINT-187 Bug B (forward fix): denormalizar `fechaCierre` a nivel
+        // raíz además de en `cierreServicio.fechaCierre`. Hasta SPRINT-187 la
+        // fecha vivía SOLO anidada — `buscarChequeoVigentePorCliente` la
+        // resolvía pero la query Firestore con `orderBy('fechaCierre')`
+        // (ya removido) excluía estos docs. El helper sigue leyendo del
+        // anidado como fuente preferida; el raíz queda como compat con
+        // futuras queries que necesiten ordenar/filtrar por fecha de cierre.
+        fechaCierre: fechaCierreTs,
         // SPRINT-135a-UI: campos nuevos a nivel orden (modelo 75f6c7b).
         periodoGarantiaDias,
         garantiaVencimiento: garantiaVencimientoTs,

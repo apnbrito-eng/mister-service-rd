@@ -183,6 +183,11 @@ export default function AgendaDia() {
         estado: 'cerrado',
         historialFases: nuevoHistorial,
         auditoria: arrayUnion(registroAuditoria),
+        // SPRINT-187 Bug B (forward fix): persistir `fechaCierre` a nivel raíz
+        // del doc para que `buscarChequeoVigentePorCliente` pueda resolverla
+        // (antes este path NO escribía fecha de cierre en absoluto — sólo
+        // `updatedAt` — y el helper la confundía con la fecha de cierre).
+        fechaCierre: ahora,
         updatedAt: ahora,
         // SPRINT-139 (2026-05-11): expirar token portal 30 días post-cierre.
         tokenPortalClienteExpiraEn: Timestamp.fromDate(
