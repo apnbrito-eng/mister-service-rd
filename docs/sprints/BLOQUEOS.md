@@ -10,6 +10,50 @@
 
 ---
 
+## SPRINT-178 — Vigencia 30 días del chequeo + descuento automático a cotización
+
+**Tipo:** Feature de producto con decisión de negocio + scope amplio. Requiere OK Jorge antes de procesar.
+**Estado:** ESPERANDO_OK_JORGE
+**Origen:** QA E2E 2026-05-16. Jorge clarificó regla: "Los chequeos tienen 30 días de vigencia para ser utilizado en monto a favor de la cotización que se le hizo al cliente."
+
+**Por qué se escaló (coordinator autónomo pasada 19, 2026-05-18):**
+
+1. **Decisión de negocio pendiente:** edge case 2+ chequeos vigentes simultáneos sobre el mismo equipo. La cola dice "decisión pendiente de Jorge — recomendación coordinator: aplicar el más reciente". Sin OK explícito de esa regla, el sprint queda con ambigüedad de comportamiento.
+
+2. **Scope amplio:** touch-list inicial cubre 6 archivos (`ordenes.service.ts`, `ModalSugerirSoloChequeo.tsx`, `Ordenes.tsx`, `types/index.ts`, `ProcesarFacturacionModal.tsx`, posiblemente `firestore.rules`). El sprint mismo dice "AUDIT explícito de consumidores antes de redactar fix final" — el spec actual NO tiene la auditoría hecha. Procesar autónomo arriesga implementar la parte equivocada del feature.
+
+3. **Posible touch a `firestore.rules`:** el spec dice "Si requiere ajuste → ESCALAR a BLOQUEOS.md". Sin auditar las rules actuales contra los campos nuevos (`descuentoChequeoPrevioId`, `descuentoChequeoPrevioMonto`), no se puede confirmar si Jorge necesita aprobar cambio de rules antes.
+
+4. **Posible necesidad de índice compuesto Firestore:** la query `buscarChequeoVigentePorCliente(clienteId, equipoTipo, equipoModelo)` requeriría un índice compuesto sobre `ordenes_servicio` (clienteId + equipoTipo + tipoCierre + fechaCierre). Eso impacta cuota de Firebase + costos.
+
+5. **Posible backfill de órdenes legacy:** si Jorge quiere aplicar el descuento retroactivamente a clientes que ya tuvieron chequeo previo en los últimos 30 días pre-deploy, requiere script de migración separado (>50 docs probable) que va a BLOQUEOS también.
+
+**Acción solicitada a Jorge:**
+
+Antes de mover este sprint de vuelta a la cola con `procesa bloqueos`, decidir:
+
+1. **Edge case 2+ chequeos vigentes simultáneos:** ¿se acumulan descuentos? ¿solo el más reciente? ¿solo el más antiguo? (recomendación coordinator: solo el más reciente — más justo para el negocio).
+
+2. **¿Aplica a órdenes legacy?** Si SÍ, el backfill va como sub-sprint con OK separado. Si NO, solo nuevas cotizaciones post-deploy.
+
+3. **¿Permitir override manual?** Ej: admin puede aplicar descuento sobre chequeo de >30 días si negocia con el cliente, con audit log.
+
+4. **¿Granularidad del matching cliente/equipo?** ¿Por `clienteId` + `equipoTipo` + `equipoModelo`? ¿Solo por `clienteId` + `equipoSerie` si existiera? (probable: clienteId + equipoTipo + equipoModelo, pero hay que confirmar — el spec original no lo aclara).
+
+**Cómo desbloquear:**
+
+1. Jorge edita este bloque con las 4 decisiones explícitas + `OK: jorge YYYY-MM-DD HH:MM`.
+2. Si la decisión arquitectónica revela touch a rules → el sub-sprint de rules va con OK separado.
+3. Coordinator mueve este sprint de vuelta a `COLA_AUTONOMA.md` con scope refinado.
+
+**Si Jorge prefiere rechazar:** agregar `RECHAZADO: jorge YYYY-MM-DD HH:MM <motivo>`. El estado actual no rompe operación corriente — los chequeos siguen siendo válidos contablemente, el "descuento" no se aplica automáticamente pero la coord puede aplicarlo manual en la cotización si el cliente lo pide.
+
+**OK / RECHAZADO de Jorge:**
+
+_(pendiente — esperando 4 decisiones arriba)_
+
+---
+
 ## SPRINT-175-APPLY — Ejecución de `--apply` del script de migración de fases legacy stuck post-conduce
 
 **Tipo:** Migración de datos — Jorge dispara manualmente (sub-regla CLAUDE.md "cambios destructivos a datos productivos").

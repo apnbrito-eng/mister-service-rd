@@ -5,6 +5,105 @@
 
 ---
 
+## 2026-05-18 — autónomo (`trabaja`, pasada 19): 7 sprints + 1 escalado a BLOQUEOS
+
+### Contexto
+
+Pasada disparada por Jorge tras el QA E2E del 2026-05-16 sobre OS-0058. Cowork escribió 8 sprints derivados de los 21 hallazgos. Coordinator los procesó en orden de prioridad respetando las restricciones de modo autónomo.
+
+Cola al inicio: 8 sprints PENDIENTES (177-HOTFIX, 178, 179, 180, 181, 182, 183, 184).
+
+### Sprints procesados
+
+**SPRINT-177-HOTFIX** (ALTA) — `parseOrden` olvida `firmaClienteUrl` + `firmaClienteAt`. Hash `ad4decc`.
+
+archivist PRE-CHANGE: historial git confirmó bug análogo previo (`12c149f` "parseOrden no rehidrataba inicioChequeo") + recordatorio crítico: P-009 limitación documentada "extender a OrdenServicio queda como follow-up" desde SPRINT-153-FIX (no cerrada antes de la recurrencia).
+
+Builder: 2 líneas en parseOrden + cazador P-009 extendido con función `extractIifeReturnKeys` que parsea sub-objetos dentro de funciones parser. Tipo `firmaClienteAt` ampliado a `Timestamp | Date` (patrón análogo a `piezasValidadasEn`).
+
+Verificación inversa con `git stash`: cazador grita pre-fix sobre los 2 campos. Post-fix PASS 19/19.
+
+regression_guardian: APPROVED. Reviewer: APPROVED.
+
+Postmortem: `docs/postmortems/2026-05-18-firma-cliente-parser-olvido.md` con 5 porqués hasta causa raíz estructural (deuda follow-up del cazador no cerrada).
+
+---
+
+**SPRINT-180 + SPRINT-181** (MEDIA + BAJA) — Catch-all 404 admin + Badge Solo chequeo. Hash `729b85f` (commit consolidado).
+
+- SPRINT-180: nueva página `src/pages/Admin404.tsx`. Ruta `path="*"` DENTRO del bloque `/admin` (rutas específicas hermanas matchean por especificidad).
+- SPRINT-181: componente compartido `src/components/shared/BadgeSoloChequeo.tsx` con variantes compact/prominent. Montado en headers de `OrdenDetailModal` y `ProcesarFacturacionModal`.
+
+Reviewer: APPROVED.
+
+---
+
+**SPRINT-183** (BAJA) — UX bajos consolidados. Hash `3650b26`.
+
+3 fixes:
+- `useOrdenCreateForm.ts`: toast "(cliente existente)" cuando se asocia sin crear.
+- `Citas.tsx`: campo Observaciones opcional en Registrar Cita.
+- `siguientePaso.ts`: hint del técnico actualizado tras aprobación de sugerencia solo chequeo.
+
+regression_guardian: APPROVED. Reviewer: APPROVED.
+
+---
+
+**SPRINT-184** (DOC + UX BAJA) — QA_PROMPT_MAESTRO + filtro destinatario notifs. Hash `e6e1ba4`.
+
+Parte 1 (doc): 3 correcciones a `QA_PROMPT_MAESTRO.md`. Parte 2 (UX): selector "Ver bandeja de" en `/admin/notificaciones`. Auditoría de rules previa confirmó que `match /notificaciones` rule 539 permite `esStaff()` leer notifs ajenas → NO requirió cambio de rules. Modo auditoría bloquea acciones de marcado.
+
+regression_guardian: APPROVED. Reviewer: APPROVED.
+
+---
+
+**SPRINT-179** (MEDIA) — Diagnosticar permission-denied en /tecnico. Hash `328c508`.
+
+Auditoría estática reveló causa: listener `onSnapshot(collection(db, 'comisiones'))` sin where en `TecnicoVista.tsx:163`. Rule exige `(esTecnico() && tecnicoId == auth.uid)`. Fix: `query(..., where('tecnicoId', '==', currentUser.uid))`. Filter client-side reducido a `quincenaAsignada` solamente.
+
+Postmortem: `docs/postmortems/2026-05-18-tecnico-comisiones-listener-sin-where.md`. Clase de bug NUEVA — propuesta P-012 (cazador determinístico para listeners sin where vs rules restrictivas) queda como sprint follow-up si recurre.
+
+regression_guardian: APPROVED. Reviewer: APPROVED.
+
+---
+
+**SPRINT-182** (MEDIA) — Wizard cierre adaptado. Hash `8bdd914`.
+
+Cambio mínimo y quirúrgico: solo labels + banner informativo. NO toca shape persistido, lógica de submit, piezas, firma ni garantía.
+
+- `equipoTipo.toLowerCase().includes('aire')` → pregunta 3 cambia a conexiones eléctricas/condensador/filtro.
+- `soloChequeo === true` → pregunta 1 cambia a "¿Le comunicaste al cliente el diagnóstico final?" + banner "Cierre como solo chequeo".
+
+Hallazgo #11 (simplificar estructuralmente el wizard) NO incluido — refactor invasivo, queda como SPRINT-182-B futuro.
+
+regression_guardian: APPROVED. Reviewer: APPROVED.
+
+---
+
+**SPRINT-178** (ALTA, ESCALADO a BLOQUEOS) — Vigencia 30 días chequeo + descuento auto.
+
+Razones del escalado: edge case 2+ chequeos vigentes simultáneos requiere decisión de negocio; scope amplio (6 archivos + posible firestore.rules + posible índice compuesto + posible backfill legacy); sub-sprints follow-up requerirían OK separado.
+
+Movido a `docs/sprints/BLOQUEOS.md → SPRINT-178` con las 4 decisiones que Jorge debe resolver.
+
+---
+
+### Cazadores anti-regresión
+
+Todos los commits pasaron 10/10 cazadores en pre-commit hook. Extensión P-009: post-SPRINT-177 cubre ahora `Factura ↔ parseFactura` Y `CierreServicio ↔ parseOrden.cierreServicio`.
+
+### Resultado final
+
+- 7 sprints COMPLETADOS pusheados a `origin/main`.
+- 1 sprint ESCALADO a BLOQUEOS.
+- 2 postmortems generados.
+- 1 cazador determinístico ampliado (P-009).
+- 1 propuesta de cazador nuevo (P-012) documentada como follow-up.
+
+Hashes finales: `ad4decc`, `729b85f`, `3650b26`, `e6e1ba4`, `328c508`, `8bdd914`.
+
+---
+
 ## 2026-05-15 — autónomo (`trabaja`, pasada 19): SPRINT-QA-USER
 
 ### Contexto

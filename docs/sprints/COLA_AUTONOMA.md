@@ -3,7 +3,357 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-15 por coordinator autónomo (pasada 18, `trabaja`) — **2 sprints COMPLETADOS en serie:** (1) **SPRINT-PERSONAL-EDIT-UNIFY** (hash `82d1fd1`) — `GestionUsuarios.tsx` ahora importa `ROL_LABELS`/`ROL_COLORS`/`ROL_SELECT_ORDEN` desde `utils/personal.ts` (single source of truth desde SPRINT-142d) eliminando duplicación local. Dropdown del modal Editar Usuario muestra ahora las 5 opciones con acceso al sistema (incluye Coordinadora que faltaba — bug que llevó a Jorge a tener que usar el modal alternativo al crear cuentas QA del SPRINT-QA-USER). +15/-21 líneas. (2) **SPRINT-158d-FIX** (hash `b16f46a`) — `EnviarFacturacionButton.tsx` optimistic UI: toast + `setSaving(false)` ahora se ejecutan inmediatamente después del `updateDoc` crítico; notifs a admin/coord viajan en IIFE `void` fire-and-forget. Confirmación al usuario en ≤2s en lugar de 3-30s (caso Wilainy QA E2E 2026-05-13). +20/-7 líneas en el componente. Cazadores 10/10 PASS post-cada commit. Typecheck + lint PASS. Push verificado a `origin/main`. **Cola autónoma agotada** (SPRINT-QA-USER queda PENDIENTE-bloqueado por acción humana de Jorge: crear las 5 cuentas QA antes que coordinator pueda cerrar).
+**Última actualización:** 2026-05-18 por coordinator autónomo (pasada 19, `trabaja`) — **7 SPRINTS COMPLETADOS + 1 ESCALADO a BLOQUEOS en una sola pasada.** Hashes pusheados en orden: `ad4decc` SPRINT-177-HOTFIX (parser firmaClienteUrl + cazador P-009 extendido + postmortem), `729b85f` SPRINT-180+181 (catch-all 404 admin + badge Solo chequeo en headers), `3650b26` SPRINT-183 (3 UX bajos: toast cliente, observaciones, hint stepper), `e6e1ba4` SPRINT-184 (QA_PROMPT_MAESTRO doc + selector "Ver bandeja de" admin/coord), `328c508` SPRINT-179 (permission-denied tecnico/comisiones + postmortem clase nueva), `8bdd914` SPRINT-182 (wizard labels adaptativas equipoTipo + soloChequeo). **SPRINT-178 ESCALADO a BLOQUEOS** — feature de producto con 4 decisiones de negocio pendientes (edge case 2+ chequeos vigentes + legacy retroactivo + override manual + granularidad matching). Cazadores 10/10 PASS post-cada commit. Typecheck + lint PASS. **2 postmortems generados** (firma + permission-denied). Cola autónoma agotada en lo procesable; SPRINT-178 espera Jorge.
+
+**Última actualización previa:** 2026-05-16 por Cowork — **QA E2E sesión sidepanel COMPLETADA sobre OS-0058 / CG-00020** con 6 roles (qa-secretaria, qa-tecnica, qa-coordinadora, qa-tecnica cierre, qa-coordinadora emite, qa-admin validación). Reporte completo en sesión Cowork. **21 hallazgos** documentados. **PASS confirmados:** SPRINT-159 firma capturada + SPRINT-158a foto cierre + SPRINT-160 garantía 60d + SPRINT-161 fase cerrado + SPRINT-162 KPI conduces +1 + SPRINT-170 selector operaria + SPRINT-171 /admin/notificaciones ruta + SPRINT-151 modal items editables + verificar pago + postmortem 2026-05-07 Iniciar Chequeo resuelto. **8 sprints nuevos escritos a la cola** priorizados ALTA/MEDIA/BAJA: SPRINT-177-HOTFIX (parser olvida firmaClienteUrl — ALTA, regresión silenciosa SPRINT-159), SPRINT-178 (vigencia 30 días chequeo + descuento cotización — ALTA, gap producto), SPRINT-179 (permission-denied console al cargar /tecnico — MEDIA), SPRINT-180 (catch-all 404 admin — MEDIA), SPRINT-181 (badge "Solo chequeo" en headers de modales — BAJA), SPRINT-182 (UX consolidado wizard cierre adaptado a solo_chequeo + tipo equipo — MEDIA), SPRINT-183 (toast cliente asociado / hint stepper / observaciones cita — BAJA), SPRINT-184 (actualizar QA_PROMPT_MAESTRO + filtro destinatario notifs — DOC). SPRINT-176 validación cross-rol notif emisor sigue pendiente login-switch humano. Coordinator procesa ALTAS primero al hacer `trabaja`. SPRINT-177-HOTFIX requiere postmortem obligatorio + refinar cazador P-009 que falló en cazar este caso.
+
+---
+
+## SPRINT-177-HOTFIX — `parseOrden` olvida `firmaClienteUrl` + `firmaClienteAt` (regresión silenciosa SPRINT-159)
+
+**Estado:** ✅ COMPLETADO 2026-05-18 por coordinator autónomo (pasada 19). Hash `ad4decc`. Fix de 2 líneas en `parseOrden` + cazador P-009 extendido a `CierreServicio ↔ parseOrden.cierreServicio` con función nueva `extractIifeReturnKeys`. Verificación inversa con `git stash` confirmó que el cazador SÍ grita pre-fix sobre los 2 campos. Tipo `firmaClienteAt` ampliado a `Timestamp | Date` para compatibilidad post-parse (consistente con `piezasValidadasEn`). Postmortem en `docs/postmortems/2026-05-18-firma-cliente-parser-olvido.md` con 5 porqués (causa raíz: deuda follow-up del cazador P-009 no cerrada — header decía "extender a OrdenServicio queda como follow-up" pero el bug recurrió antes de cerrarla). Cazadores 10/10 PASS. typecheck + lint PASS.
+
+**Prioridad:** ALTA (acreditación legal de firma del cliente perdida en producción).
+
+**Origen:** QA E2E sesión sidepanel 2026-05-16 sobre OS-0058. Reporte ROL 6 (qa-admin validación) reveló que el modal de orden y la fila expandida de factura muestran "Sin firma del cliente (orden previa al SPRINT-159)" aunque la firma SÍ fue capturada por el wizard del técnico (log `Firma subida OK: https://firebasestorage.googleapis.com/...firma-1778944325233.png` durante ROL 4), y SPRINT-168 ya implementó el render correctamente.
+
+**Causa raíz confirmada (verificación de código por Cowork):**
+
+`src/utils/index.ts:739-795` — la función `parseOrden` reconstruye explícitamente `cierreServicio` desde el doc Firestore mapeando cada campo conocido. **NO incluye `firmaClienteUrl` ni `firmaClienteAt`** entre los campos mapeados. El tipo `CierreServicio` SÍ los tiene (`src/types/index.ts:1641-1642`), el wizard SÍ los persiste (`src/components/CierreServicioWizard.tsx:365-366`), y los 3 consumidores UI los esperan (`OrdenDetailModal.tsx:737,846` + `OrdenDetalle.tsx:827` + `OrdenResumenLectura.tsx:203`). Pero `parseOrden` los descarta al leer → la UI ve `undefined` → fallback al placeholder "Sin firma".
+
+Este es exactamente el patrón **P-009 (parser olvida campos del tipo)** ya catalogado. El cazador falló en detectar este caso → requiere refinamiento.
+
+**Touch-list:**
+
+1. `src/utils/index.ts` (líneas 739-795) — agregar 2 campos al objeto retornado por la IIFE de `cierreServicio`:
+   ```ts
+   firmaClienteUrl: (cs.firmaClienteUrl as string) || undefined,
+   firmaClienteAt: parseFirestoreDate(cs.firmaClienteAt) || undefined,
+   ```
+   Ubicación sugerida: después de `revisoConexiones` (línea 749) o al final del objeto antes del `};` de cierre. Mantener el patrón de los otros campos opcionales.
+
+2. `scripts/invariantes/check-parser-olvida-campos.ts` (P-009) — refinar para que detecte este caso específico. Comparar cada propiedad declarada en interfaces del tipo `CierreServicio` (y otros tipos parseados) contra los campos efectivamente reconstruidos en sus respectivos parsers. Agregar test de regresión usando el shape exacto pre-fix de OS-0058 (firmaClienteUrl declarado en type + persistido por wizard + ausente del parseOrden → debe gritar).
+
+3. `docs/postmortems/2026-05-16-firma-cliente-parser-olvido.md` (NUEVO) — postmortem completo siguiendo `_TEMPLATE.md`:
+   - Timeline: SPRINT-159 (captura + persistencia) → SPRINT-168 (render UI agregado) → 14 días en producción con firmas capturadas pero invisibles → QA E2E 2026-05-16 detecta el bug.
+   - Impacto: todas las órdenes cerradas con firma desde el deploy de SPRINT-159 al 2026-05-16 muestran "Sin firma" aunque la firma esté en Firestore + Storage. Estimar cuántas órdenes afectadas con un script de conteo.
+   - 5 porqués hasta causa raíz estructural (¿por qué el cazador P-009 no detectó? ¿por qué SPRINT-159 no tuvo test que leyera la orden parseada después del cierre?).
+   - Acciones preventivas: refinamiento cazador + posiblemente test unitario que afirme que `parseOrden(input).cierreServicio.firmaClienteUrl === input.cierreServicio.firmaClienteUrl` para shapes con firma poblada.
+
+**Consumidores verificados (read-only check Cowork 2026-05-16):**
+
+- `src/components/ordenes/OrdenDetailModal.tsx:737, 846, 852, 859` — render thumbnail + link a firma + placeholder "Sin firma" (lógica condicional dependiente de `cierre.firmaClienteUrl`).
+- `src/pages/OrdenDetalle.tsx:827, 831, 835, 838-840` — render thumbnail + timestamp formateado.
+- `src/components/facturas/OrdenResumenLectura.tsx:203, 206, 213` — link "Ver firma" + thumbnail.
+
+Los 3 consumidores están bien escritos — esperan el campo en el shape del tipo. El bug es 100% del parser.
+
+**Consumidores NO afectados:**
+
+- `src/components/CierreServicioWizard.tsx` — escribe el campo, no lo lee de la orden parseada (lo construye localmente y lo persiste).
+- `src/types/index.ts` — declaración del tipo, no afectada.
+
+**Hallazgos laterales (NO incluir en este sprint, documentar como deuda futura):**
+
+- ¿`parseFactura` (línea 1085 de utils/index.ts) tiene problemas análogos con otros campos? Auditoría completa sería sprint propio.
+- ¿`OrdenResumenLectura` en /admin/facturas lee la orden via `parseOrden` o lee directo del doc factura? Si es lo segundo, podría tener el mismo problema en otro path. Verificar antes de declarar fix completo.
+
+**Plan de ejecución sugerido para el coordinator:**
+
+1. archivist PRE-CHANGE obligatorio sobre `src/utils/index.ts` (parseOrden).
+2. builder: 3 ediciones quirúrgicas (2 líneas en parseOrden + cazador refinado + postmortem).
+3. tester: typecheck + lint + `npm run check:regression` (cazador P-009 refinado debe pasar 0 hits post-fix + caso positivo debe gritar correctamente).
+4. regression_guardian: validar que el fix NO introduce nuevos hits y que el cazador refinado caza el patrón.
+5. reviewer: lectura cruzada del fix + lectura del postmortem.
+
+**Criterios de éxito:**
+
+- [ ] `parseOrden` retorna `cierreServicio.firmaClienteUrl` y `firmaClienteAt` cuando están poblados en el doc raw.
+- [ ] OS-0058 (verificable post-deploy con hard refresh) muestra la firma del cliente como thumbnail clickeable en `/admin/ordenes` modal Y en `/admin/facturas` fila expandida.
+- [ ] Cazador P-009 refinado caza el shape pre-fix (test positivo) y NO grita post-fix (test negativo).
+- [ ] Postmortem en `docs/postmortems/2026-05-16-firma-cliente-parser-olvido.md` siguiendo template.
+- [ ] CLAUDE.md actualizado con gotcha si hay aprendizaje no obvio del 5-porqué.
+
+**Restricciones:**
+
+- NO tocar `firestore.rules` (campo opcional, ya permitido).
+- NO tocar la lógica del wizard (escribe bien).
+- NO tocar los componentes de render (leen bien).
+- NO crear migración de datos: el fix es solo de lectura, las órdenes en Firestore ya tienen los campos correctos.
+
+**Postmortem obligatorio: SÍ** (regresión silenciosa de SPRINT-159 que escapó 14 días en producción).
+
+---
+
+## SPRINT-178 — Implementar vigencia 30 días del chequeo + descuento automático a cotización
+
+**Estado:** 🚫 ESCALADO A BLOQUEOS 2026-05-18 por coordinator autónomo (pasada 19). Razones: (1) edge case 2+ chequeos vigentes simultáneos requiere decisión de negocio de Jorge; (2) scope amplio (6 archivos + posible firestore.rules + posible índice compuesto + posible backfill legacy); (3) sub-sprints follow-up (rules, migración) requerirían OK separado. Ver `docs/sprints/BLOQUEOS.md → SPRINT-178` para las 4 decisiones que Jorge debe resolver antes de procesar.
+
+**Prioridad:** ALTA (gap de producto que afecta facturación correcta).
+
+**Origen:** QA E2E 2026-05-16. Jorge clarificó regla de negocio:
+> "Los chequeos tienen 30 días de vigencia para ser utilizado en monto a favor de la cotización que se le hizo al cliente. Luego de ahí si el cliente decide no proceder y pasan los 30 días de vigencia del chequeo, tendría el cliente que pagar un servicio completo si decide proceder con la cotización."
+
+Auditoría Cowork: grep en `src/**` por `30.*dias`, `vigencia.*chequeo`, `descuento.*chequeo`, `aplicarChequeo` → **0 resultados**. La lógica no está implementada. Saved a memoria del proyecto en `project_vigencia_chequeo_30_dias.md`.
+
+**Comportamiento esperado:**
+
+1. Al cotizar una reparación posterior a un `solo_chequeo` del mismo cliente/equipo:
+   - El sistema debe detectar si existe `solo_chequeo` previo del mismo cliente (`clienteId` o `clienteTelefono`) y mismo equipo (`equipoTipo`+`equipoModelo` o `equipoId`) en los últimos 30 días.
+   - Si existe y está vigente (`fechaCierre + 30 días >= hoy`), mostrar al técnico/coord/operaria: "Hay chequeo previo de RD$X del DD/MM/AAAA — vigente hasta DD/MM/AAAA. Aplicar descuento."
+   - Permitir aplicar el descuento con un checkbox/botón → restar `montoChequeoPrevio` del total cotizado.
+   - Persistir en la nueva orden: `descuentoChequeoPrevioId: <ordenIdDelChequeo>` + `descuentoChequeoPrevioMonto: <RD$X>` para audit trail.
+   - Audit log: "Descuento por chequeo previo aplicado: RD$X (origen: OS-AAAA del DD/MM/AAAA)".
+
+2. Si el chequeo previo está **vencido** (> 30 días):
+   - Mostrar info: "Chequeo previo de RD$X del DD/MM/AAAA (vencido el DD/MM/AAAA, han pasado N días). No aplicable como descuento."
+   - El cliente paga el servicio completo desde cero.
+
+3. Edge case — cliente con 2+ chequeos vigentes sobre el mismo equipo:
+   - Decisión pendiente de Jorge (mover a BLOQUEOS si no aclara): ¿se acumulan los descuentos? ¿solo se aplica el último? ¿el más antiguo?
+   - Recomendación coordinator: aplicar el más reciente solamente (más justo para el negocio).
+
+**Touch-list (auditoría inicial — NO procesar hasta confirmar consumidores):**
+
+1. `src/services/ordenes.service.ts` — agregar helper `buscarChequeoVigentePorCliente(clienteId, equipoTipo, equipoModelo)` que retorna `{ ordenId, fechaCierre, montoChequeo, vigente: boolean, diasRestantes: number } | null`.
+2. `src/components/cierre/ModalSugerirSoloChequeo.tsx` — verificar si la pantalla de cotización del técnico ya consume datos del cliente. Si sí, inyectar warning visual.
+3. `src/pages/Ordenes.tsx` o componente de creación de orden con cotización — agregar UI del descuento.
+4. `src/types/index.ts` — agregar campos opcionales a `OrdenServicio`: `descuentoChequeoPrevioId?: string`, `descuentoChequeoPrevioMonto?: number`, `descuentoChequeoPrevioFecha?: Timestamp`.
+5. `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` — al emitir conduce, validar si la orden tiene descuento aplicado y persistirlo en `factura.descuentoChequeoPrevio*` para trazabilidad fiscal.
+6. `firestore.rules` — **verificar**: si las nuevas escrituras son permitidas. **Si requiere ajuste → ESCALAR a BLOQUEOS.md.**
+
+**Hallazgos laterales que pueden surgir durante la auditoría:**
+
+- ¿Cómo se relacionan dos órdenes del mismo cliente? ¿Por `clienteId`, `clienteTelefono`, o un campo `equipoSerie`?
+- ¿La UI de cotización del técnico (path B con piezas) ya existe? Si está incompleta, hay que terminarla primero (relacionado con hallazgo #8 del QA).
+- ¿`Cliente` tiene un histórico de servicios consumible o hay que consultar `ordenes_servicio` con query? La query requiere índice compuesto.
+
+**Plan de ejecución sugerido:**
+
+1. archivist PRE-CHANGE sobre `ordenes.service.ts` + componentes de cotización.
+2. **AUDIT explícito de consumidores antes de redactar fix final** (sub-regla touch-list expandido). El sprint actual puede dividirse en sub-sprints después del audit.
+3. Posiblemente requiere script de backfill para órdenes legacy con chequeos previos que el cliente quiere aplicar retroactivamente — decidir con Jorge.
+
+**Criterios de éxito:**
+
+- [ ] Al crear/cotizar orden post-`solo_chequeo` reciente del mismo cliente/equipo, el sistema sugiere el descuento.
+- [ ] El descuento se aplica al total cotizado.
+- [ ] Audit log y campos denormalizados en `ordenes_servicio` + `facturas`.
+- [ ] Chequeo vencido (>30 días) NO permite descuento, muestra info clara.
+- [ ] Test E2E sobre QA Test cliente: crear chequeo, esperar (o simular fecha) y crear cotización vinculada.
+
+**Restricciones:**
+
+- NO afectar órdenes legacy sin descuento — solo aplicar a nuevas cotizaciones post-deploy.
+- NO modificar contabilidad ya emitida (facturas pasadas no se reescriben).
+- Migración retroactiva (si Jorge la pide) va en BLOQUEOS.md como sub-sprint.
+
+---
+
+## SPRINT-179 — Diagnosticar `permission-denied` en console al cargar `/tecnico`
+
+**Estado:** ✅ COMPLETADO 2026-05-18 por coordinator autónomo (pasada 19). Hash `328c508`. Causa raíz: `onSnapshot(collection(db, 'comisiones'))` sin where en `TecnicoVista.tsx:163` violaba la rule `(esTecnico() && tecnicoId == auth.uid)` — Firestore rechazaba la suscripción full-collection. Fix: `query(..., where('tecnicoId', '==', currentUser.uid))`. Filter client-side reducido a `quincenaAsignada` solamente. Dep array cambia a `currentUser?.uid`. Postmortem en `docs/postmortems/2026-05-18-tecnico-comisiones-listener-sin-where.md` con 5 porqués + propuesta P-012 (cazador determinístico para listeners sin where con rules restrictivas) como sprint follow-up si recurre. Cazadores 10/10 PASS. typecheck + lint PASS.
+
+**Prioridad:** MEDIA (no bloquea funcionalidad pero contamina monitoreo + sugiere listener con fuga de permisos).
+
+**Origen:** QA E2E 2026-05-16. Capturado en ROL 2 (10:41:44) y ROL 4 (11:09:50) durante carga inicial de `/tecnico` por qa-tecnica. Stack: `index-BX_eXeH8.js:468:469` `@firebase/firestore: Firestore (10.14.1): Uncaught Error in snapshot listener: FirebaseError: [code=permission-denied]: Missing or insufficient permissions.` Solo aparece al cargar la vista (no durante acciones). NO se replica en sesiones admin/coordinadora.
+
+**Hipótesis (coordinator debe verificar):**
+
+1. **H1 — Listener global sin filtro por `auth.uid`:** algún `onSnapshot` en `TecnicoVista.tsx` o componente padre suscribe a una colección que las rules gatean por `tecnicoUid == request.auth.uid` y la query no incluye ese filtro. La rule rechaza inmediatamente al técnico → listener emite error.
+
+2. **H2 — Listener a `usuarios/{otherUid}` o `personal/{otherDocId}`:** algún suscriptor lee perfiles ajenos. Rules limitan a uid propio.
+
+3. **H3 — Cache de session/Auth desactualizado** entre logouts/logins rápidos del QA — pero el error es reproducible siempre, no intermitente.
+
+**Touch-list de auditoría:**
+
+1. `src/pages/TecnicoVista.tsx` — listar TODOS los `onSnapshot` que monta (incluido el de `ordenes`, `notificaciones`, `personal`, `mantenimientos`, `gps_ubicaciones`). Verificar para cada uno: ¿la query incluye `where('campo', '==', auth.currentUser.uid)`? Si no, ¿la rule lo permite sin ese filtro?
+2. `firestore.rules` — read-only audit. ¿Hay alguna colección que el técnico necesita leer pero la rule rechaza?
+3. `src/context/AppContext.tsx` — verificar listeners globales que se montan al loguear (perfil, notifs).
+4. `vite.config.ts` + sourcemaps — generar build dev para identificar el archivo/línea exacto del error (el production minificado `index-BX_eXeH8.js:468:469` no se puede mapear sin sourcemap).
+
+**Plan de ejecución sugerido:**
+
+1. archivist PRE-CHANGE obligatorio (afecta listeners — riesgo de regresión).
+2. Reproducir bug en dev con sourcemap habilitado → identificar stack exacto.
+3. Aplicar fix mínimo: agregar `where()` faltante o atrapar el error en el listener con try/catch que loguee sin spam.
+4. tester + regression_guardian + reviewer.
+
+**Criterios de éxito:**
+
+- [ ] Console limpio (0 `permission-denied`) al cargar `/tecnico` como qa-tecnica.
+- [ ] Funcionalidad de la vista técnico intacta (orden visible, iniciar chequeo, cerrar wizard, etc.).
+- [ ] Cazador nuevo si aplica (ej. P-012 "listener Firestore sin filtro por auth.uid en página de rol restringido").
+
+**Restricciones:**
+
+- NO silenciar el error con un `try/catch` vacío sin entender la causa.
+- NO modificar rules sin OK Jorge (BLOQUEOS.md).
+
+**Postmortem opcional** (depende de si causa raíz es estructural).
+
+---
+
+## SPRINT-180 — Catch-all 404 dentro del layout admin
+
+**Estado:** ✅ COMPLETADO 2026-05-18 por coordinator autónomo (pasada 19, junto con SPRINT-181). Hash `729b85f`. Nueva página `src/pages/Admin404.tsx` con botón "Ir al Dashboard" + "Volver atrás". Ruta `path="*"` registrada DENTRO del bloque `/admin` route — las rutas hermanas específicas matchean primero por prioridad react-router 6. Las rutas públicas standalone (`/cita/:calendarId`, `/tracking/:token`, `/f/:slug`, `/garantia/:token`, `/cliente/:token`) no se ven afectadas. Cazadores 10/10 PASS.
+
+**Prioridad:** MEDIA (UX bug, no funcional crítico pero pérdida de contexto al usuario).
+
+**Origen:** QA E2E 2026-05-16 ROL 6 bonus. Navegar a `/admin/notif-que-no-existe` (URL inventada) redirige al landing público `https://www.misterservicerd.com/` en vez de mostrar 404 dentro del layout admin. Pérdida total de sidebar + contexto de sesión. Usuario tiene que volver manualmente.
+
+Esta es regresión parcial de SPRINT-171: el sprint arregló `/admin/notificaciones` puntualmente pero no implementó catch-all `/admin/*`.
+
+**Touch-list:**
+
+1. `src/App.tsx` — agregar ruta catch-all `/admin/*` o `/admin/:rest*` que renderiza un componente `<Admin404Page />` DENTRO del `Layout` admin (con sidebar visible, contexto de sesión preservado, link "Volver al dashboard").
+2. `src/pages/Admin404.tsx` (NUEVO) — componente 404 estilizado consistente con el resto del admin (header, mensaje, botón "Volver al dashboard", link a las páginas más usadas).
+3. Verificar que rutas válidas existentes (`/admin/dashboard`, `/admin/ordenes`, etc.) NO sean capturadas por el catch-all (deben tener prioridad en el router).
+
+**Criterios de éxito:**
+
+- [ ] `/admin/cualquier-cosa-inexistente` muestra 404 dentro del layout admin.
+- [ ] Rutas válidas siguen funcionando.
+- [ ] Sesión de usuario preservada (no requiere re-login).
+
+**Restricciones:**
+
+- NO afectar el catch-all del routing público (que sí debe llevar al landing).
+- NO romper rutas públicas standalone como `/cita/:calendarId`, `/tracking/:token`, `/f/:slug`.
+
+---
+
+## SPRINT-181 — Badge "Solo chequeo" visible en headers de modales
+
+**Estado:** ✅ COMPLETADO 2026-05-18 por coordinator autónomo (pasada 19, junto con SPRINT-180). Hash `729b85f`. Componente compartido `src/components/shared/BadgeSoloChequeo.tsx` con variantes `compact` (default) y `prominent`. Montado en header de `OrdenDetailModal.tsx` y de `ProcesarFacturacionModal.tsx` con variante prominent (consistente con el badge existente en `OrdenResumenLectura.tsx`, que mantiene su badge inline — refactor futuro opcional). Cazadores 10/10 PASS.
+
+**Prioridad:** BAJA (consistencia UX, no funcional).
+
+**Origen:** QA E2E 2026-05-16. El badge "Solo chequeo / Sin reparación" aparece bien en:
+- Card del listado `/admin/ordenes` ✓
+- Fila expandida de `/admin/facturas` ✓ (badge amarillo prominente "⚠️ SOLO CHEQUEO · SIN REPARACIÓN")
+
+Pero FALTA en:
+- Header del modal de detalle de orden (`OrdenDetailModal.tsx`) — la coordinadora abre y solo infiere por texto.
+- Header del modal de emisión de conduce (`ProcesarFacturacionModal.tsx`) — al emitir la coord no ve indicador visual claro.
+
+**Touch-list:**
+
+1. `src/components/ordenes/OrdenDetailModal.tsx` — agregar badge `<Badge variant="solo_chequeo">Solo chequeo</Badge>` en el header del modal, condicional a `orden.soloChequeo === true`.
+2. `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` — mismo badge en el header del modal de emisión.
+3. Componente compartido `<BadgeSoloChequeo />` si no existe (reusar el mismo de la card de orden y fila de factura).
+
+**Criterios de éxito:**
+
+- [ ] OS-0058 (test case) muestra badge "Solo chequeo" en header del modal de orden Y en modal de emisión de conduce.
+- [ ] Estilo consistente con los otros 2 lugares donde ya aparece.
+
+---
+
+## SPRINT-182 — Wizard de cierre adaptado a `soloChequeo: true` + tipo de equipo
+
+**Estado:** ✅ COMPLETADO 2026-05-18 por coordinator autónomo (pasada 19). Hash `8bdd914`. Cambio mínimo y quirúrgico: solo labels de las 3 preguntas + banner informativo. NO toca shape persistido, lógica de submit, piezas, firma ni garantía. Hallazgo #13 resuelto: si `equipoTipo` contiene "aire", pregunta 3 cambia a "¿Revisaste conexiones eléctricas, condensador y filtro?". Hallazgo #14 resuelto: si `soloChequeo === true`, pregunta 1 cambia a "¿Le comunicaste al cliente el diagnóstico final?" + banner "Cierre como solo chequeo" arriba. Hallazgo #11 (simplificar estructuralmente el wizard en solo_chequeo — no pedir piezas/garantía) queda como deuda futura SPRINT-182-B si Jorge lo prioriza (requiere refactor más invasivo). Cazadores 10/10 PASS.
+
+**Prioridad:** MEDIA (afecta UX y trazabilidad legal del cierre).
+
+**Origen:** QA E2E 2026-05-16. Múltiples hallazgos del wizard de cierre `CierreServicioWizard.tsx`:
+
+- **Hallazgo #11:** El wizard NO se adapta a `orden.soloChequeo === true`. Pide los mismos campos que reparación completa (foto, firma, garantía, piezas) cuando algunos no aplican.
+- **Hallazgo #13:** La pregunta 4 "¿Revisaste las mangueras de desagüe, entrada de agua y que la llave esté abierta?" es específica de lavadoras/secadoras. En Aire Acondicionado split NO aplica (drenaje sí, entrada de agua/llave NO). El wizard NO branchea por `equipoTipo`.
+- **Hallazgo #14:** La pregunta "¿Equipo funciona correctamente?" no tiene sentido en flujo solo_chequeo (técnico no reparó, respuesta siempre "No"). Debería auto-marcarse "No" + ser informativa, o reemplazarse por "¿Confirmás que solo realizaste diagnóstico?".
+
+**Touch-list (auditoría inicial):**
+
+1. `src/components/CierreServicioWizard.tsx` — refactor para branchear por `orden.soloChequeo` y `orden.equipoTipo`:
+   - Si `soloChequeo === true`: simplificar wizard (no pedir piezas, garantía adaptada al diagnóstico, pregunta 1 informativa).
+   - Si `equipoTipo === 'Aire Acondicionado'`: cambiar pregunta de mangueras por "¿Revisaste conexiones eléctricas + condensador + filtro?".
+   - Crear mapa de preguntas por `equipoTipo` en `src/utils/checklistCierre.ts` (nuevo) o reusar `checklistTemplates.ts` existente.
+
+2. `src/types/index.ts` — verificar si `CierreServicio` necesita campos adicionales para preguntas por tipo de equipo (probablemente no, se mantienen los 3 booleanos genéricos).
+
+3. `src/utils/checklistTemplates.ts` — verificar si ya tiene templates por tipo de equipo (CLAUDE.md menciona "Checklists are hardcoded in `utils/checklistTemplates.ts` (per `equipoTipo`)"). Si sí, reusar.
+
+**Criterios de éxito:**
+
+- [ ] Cerrar OS con `soloChequeo: true` no pide piezas, muestra texto adaptado al diagnóstico-solo.
+- [ ] Cerrar OS de Aire Acondicionado no pregunta por mangueras/llave de agua.
+- [ ] Cerrar OS de Lavadora sigue preguntando mangueras (regresión cero).
+- [ ] Test E2E sobre wizard con distintos `equipoTipo`.
+
+**Restricciones:**
+
+- NO romper cierres existentes (rules + UI compatibles con cierres legacy).
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+## SPRINT-183 — Hallazgos UX bajos consolidados (toast, hint stepper, observaciones)
+
+**Estado:** ✅ COMPLETADO 2026-05-18 por coordinator autónomo (pasada 19). Hash `3650b26`. 3 fixes pequeños: (1) toast `useOrdenCreateForm.ts` muestra "(cliente existente)" cuando se asocia sin crear; (2) `Citas.tsx` agregado campo `observaciones` opcional (max 500 chars) que persiste a `citas_por_confirmar.observaciones`; (3) `siguientePaso.ts` ahora detecta sugerencia.estado === 'aprobada' en fase `en_diagnostico` y cambia hint del técnico a "cerrar la orden tras el cobro / firma del cliente" + hint de oficina a "Solo chequeo aprobado — esperando cierre del técnico". Cazadores 10/10 PASS.
+
+**Prioridad:** BAJA (mejoras menores, sin impacto funcional).
+
+**Origen:** QA E2E 2026-05-16. Tres hallazgos bajos consolidados en un sprint:
+
+1. **Hallazgo #1 — Toast "(cliente creado)" cuando es asociado:** al crear OS desde cita, si la app detecta tel duplicado y asocia cliente existente, el toast dice "Orden OS-XXXX creada y agendada (cliente creado)". Texto engañoso. Debería decir "(cliente existente)" o "(cliente asociado)".
+
+2. **Hallazgo #3 — Form "Registrar Cita" sin campo Observaciones:** el modal de `Citas.tsx` (handleRegistrar) no tiene campo de notas/observaciones. La secretaria tiene que agregar las notas después en el modal de la orden. Agregar campo opcional.
+
+3. **Hallazgo #12 — Hint del stepper no se actualiza tras aprobación:** después de que la coord aprueba el solo_chequeo, el hint del stepper del técnico sigue diciendo "Próximo paso: cotizar reparación o sugerir solo chequeo" cuando debería decir "Próximo paso: cerrar la orden tras el cobro / firma del cliente".
+
+**Touch-list:**
+
+1. `src/components/ordenes/OrdenCreateModal.tsx` o `useOrdenCreateForm.ts` — fix mensaje de toast.
+2. `src/pages/Citas.tsx` — agregar `<input>` opcional para notas/observaciones en el form de registrar cita + persistir en `citas_por_confirmar.observaciones`.
+3. `src/pages/TecnicoVista.tsx` o componente de stepper del técnico — derivar hint dinámicamente del estado actual de la orden (fase + soloChequeo + estadoAprobacion).
+
+**Criterios de éxito:**
+
+- [ ] Toast diferenciado al asociar vs crear cliente nuevo.
+- [ ] Form de registrar cita tiene campo Observaciones opcional.
+- [ ] Hint del stepper del técnico cambia tras aprobación de la sugerencia.
+
+---
+
+## SPRINT-184 — Actualizar QA_PROMPT_MAESTRO + agregar filtro destinatario en /admin/notificaciones
+
+**Estado:** ✅ COMPLETADO 2026-05-18 por coordinator autónomo (pasada 19). Hash `e6e1ba4`. Parte 1 (doc): 3 correcciones a `docs/QA_PROMPT_MAESTRO.md` — ruta `/admin/citas` (no `/admin/citas-por-confirmar`), wizard ROL 2 paso (d) reflejando UI real (botones "Sugerir solo chequeo" / "Marcar Realizado" en vez del wizard binario inexistente), ROL 5 reasignado a `qa-coordinadora` con nota explicativa sobre restricción routing. Parte 2 (UX): selector "Ver bandeja de" agregado a `/admin/notificaciones` para admin/coord. Suscripción a `personal` solo si `esAdminOCoord(userProfile)`. En modo auditoría: marcar leída/marcar todas leídas bloqueadas + badge "Modo auditoría". NO requirió cambio de rules — `match /notificaciones` ya permite `esStaff()` leer notifs ajenas (rule line 539). Cazadores 10/10 PASS.
+
+**Prioridad:** DOC + UX BAJA.
+
+**Origen:** QA E2E 2026-05-16.
+
+**Parte 1 — Doc:**
+
+`docs/QA_PROMPT_MAESTRO.md` tiene 3 errores que el QA E2E descubrió:
+- ROL 2 paso (d): describe un wizard binario ("Equipo prende? Conexiones OK?") que NO existe en la UI actual. El flujo real es "Sugerir solo chequeo" o "Marcar Realizado".
+- ROL 5: asigna la emisión de conduce a operaria, pero el routing y el flujo de negocio lo restringen a coordinadora/admin.
+- Ruta `/admin/citas-por-confirmar` redirige a `/admin/citas` — actualizar.
+
+**Touch-list:**
+
+1. `docs/QA_PROMPT_MAESTRO.md` — corregir las 3 inconsistencias. Reasignar ROL 5 a `qa-coordinadora`. Actualizar wizard del técnico para reflejar la UI real. Cambiar ruta vieja.
+
+**Parte 2 — UX:**
+
+`/admin/notificaciones` (post-SPRINT-171) muestra TODAS las notifs del usuario logueado, pero NO permite filtrar por destinatario. Para validar manualmente sprints como SPRINT-176 (que la coordinadora emisora NO recibió notif de su propia emisión), el admin tiene que hacer login-switch entre cuentas — fricción innecesaria.
+
+**Touch-list:**
+
+2. `src/pages/Notificaciones.tsx` (asumir nombre del archivo) — agregar selector "Ver bandeja de: [yo / @rol]" cuando el usuario logueado es admin. La query lee notificaciones de destinatario distinto al `auth.uid` propio.
+3. `firestore.rules` — verificar si admin puede leer notificaciones de otros destinatarios. Si NO, **ESCALAR a BLOQUEOS.md** (cambio de rules).
+
+**Criterios de éxito:**
+
+- [ ] QA_PROMPT_MAESTRO.md actualizado y consistente con la UI real.
+- [ ] Admin puede ver bandeja de notificaciones de otros roles para auditoría.
+
+**Restricciones:**
+
+- Solo admin/coord pueden usar el filtro (no exponer notifs ajenas a otros roles).
+
+--- — **2 sprints COMPLETADOS en serie:** (1) **SPRINT-PERSONAL-EDIT-UNIFY** (hash `82d1fd1`) — `GestionUsuarios.tsx` ahora importa `ROL_LABELS`/`ROL_COLORS`/`ROL_SELECT_ORDEN` desde `utils/personal.ts` (single source of truth desde SPRINT-142d) eliminando duplicación local. Dropdown del modal Editar Usuario muestra ahora las 5 opciones con acceso al sistema (incluye Coordinadora que faltaba — bug que llevó a Jorge a tener que usar el modal alternativo al crear cuentas QA del SPRINT-QA-USER). +15/-21 líneas. (2) **SPRINT-158d-FIX** (hash `b16f46a`) — `EnviarFacturacionButton.tsx` optimistic UI: toast + `setSaving(false)` ahora se ejecutan inmediatamente después del `updateDoc` crítico; notifs a admin/coord viajan en IIFE `void` fire-and-forget. Confirmación al usuario en ≤2s en lugar de 3-30s (caso Wilainy QA E2E 2026-05-13). +20/-7 líneas en el componente. Cazadores 10/10 PASS post-cada commit. Typecheck + lint PASS. Push verificado a `origin/main`. **Cola autónoma agotada** (SPRINT-QA-USER queda PENDIENTE-bloqueado por acción humana de Jorge: crear las 5 cuentas QA antes que coordinator pueda cerrar).
 
 **Última actualización previa:** 2026-05-15 por coordinator autónomo (pasada dedicada SPRINT-158c, `trabaja`) — **SPRINT-158c COMPLETADO** con 1 archivo modificado (`src/pages/TecnicoVista.tsx`, +35/-3). Auditoría reveló que SPRINT-173 + SPRINT-174 ya cubrían 5 de los 6 sub-bugs (bug 1 + bugs 9.a/b/c/d). Único bug residual ejecutado en esta pasada: **bug 2 (transición de fase `en_diagnostico → en_cotizacion` al sugerir precio)** en `handleAgregarNota`. Guard de retroceso explícito (`if selectedOrden.fase === 'en_diagnostico'`) impide regresión desde fases posteriores. Cazadores 10/10 PASS. typecheck + build (4.15s) + lint PASS. regression_guardian 10/10 + reviewer APPROVED (manuales coordinator). Hash pendiente del commit en curso. Tabla de comparación post-ejecución agregada al bloque SPRINT-158c. Hallazgo lateral: Cowork agregó SPRINT-PERSONAL-EDIT-UNIFY (MEDIA) durante la pasada — queda en cola para próxima ejecución.
 
