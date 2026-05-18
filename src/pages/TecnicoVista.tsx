@@ -154,13 +154,21 @@ export default function TecnicoVista() {
 
     // Comisiones de la quincena actual (Fase 5)
     let unsubComisiones = () => {};
-    // @safe-userprofile-id: guard de existencia + filtro client-side de
-    // comisiones legacy donde tecnicoId == personalDocId. La rule de
-    // lectura de comisiones valida auth.uid; si Firestore retorna 0 docs
-    // para perfiles personal/, el filter local no rompe nada (queda vacío).
-    if (userProfile?.id) {
+    // SPRINT-179 (2026-05-18): la query SIN where rompía con permission-denied
+    // en la consola al cargar /tecnico. La rule de `comisiones` exige
+    // `esTecnico() && resource.data.tecnicoId == request.auth.uid` — Firestore
+    // rechaza queries que no garanticen ese matcheo. Agregar
+    // `where('tecnicoId', '==', currentUser.uid)` lo arregla. Filtro
+    // client-side restante: solo `quincenaAsignada === quincena` (la
+    // comparación legacy `c.tecnicoId === userProfile.id` ya no aplica
+    // porque la query filtra por auth.uid directamente).
+    if (currentUser?.uid) {
       const quincena = calcularQuincenaActual(new Date());
-      unsubComisiones = onSnapshot(collection(db, 'comisiones'), (snap) => {
+      const qComisiones = query(
+        collection(db, 'comisiones'),
+        where('tecnicoId', '==', currentUser.uid),
+      );
+      unsubComisiones = onSnapshot(qComisiones, (snap) => {
         const items = snap.docs
           .map(d => {
             const raw = d.data();
@@ -198,8 +206,9 @@ export default function TecnicoVista() {
             }
             return comision;
           })
-          // @safe-userprofile-id: ver comentario al inicio del bloque if.
-          .filter(c => c.tecnicoId === userProfile.id && c.quincenaAsignada === quincena);
+          // SPRINT-179: query ya filtra por tecnicoId == auth.uid. Solo
+          // mantenemos el filtro client-side de quincena.
+          .filter(c => c.quincenaAsignada === quincena);
         setComisionesQuincena(items);
       });
     }
@@ -207,9 +216,10 @@ export default function TecnicoVista() {
     const unsubEmpresa = suscribirConfigEmpresa(cfg => setEmpresaConfig(cfg));
 
     return () => { unsub(); unsubComisiones(); unsubStandby(); unsubEmpresa(); };
-    // @safe-userprofile-id: deps array de useEffect, no es write.
+    // SPRINT-179: dep array depende de currentUser.uid (lo que el query
+    // filtra). Si cambia el user logueado, el listener se re-suscribe.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userProfile?.id]);
+  }, [currentUser?.uid]);
 
   // Auto-compartir ubicación cuando hay órdenes con tracking GPS activo
   useEffect(() => {
