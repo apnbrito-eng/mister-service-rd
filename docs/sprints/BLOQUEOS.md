@@ -12,6 +12,8 @@
 
 ## SPRINT-186 — Surface aviso descuento chequeo previo en modal creación + bugs UX modal orden
 
+**✅ DESBLOQUEADO 2026-05-18 — movido a COLA tras OK Jorge cliente consolidado (audit `33M7G5z6lEBVBdSf6yKK`). Ver bloque original abajo (preservado por trazabilidad).**
+
 **Tipo:** Feature UX + bugfixes UX. ESPERA confirmación humana del estado de datos.
 **Estado:** BLOQUEADO 2026-05-18 — ESPERANDO OK JORGE (cliente consolidado).
 **Origen:** QA puntual sidepanel 2026-05-18 sobre SPRINT-178. Movido por coordinator autónomo pasada 22 a este archivo por dependencia explícita marcada en la cola.

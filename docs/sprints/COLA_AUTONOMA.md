@@ -6038,4 +6038,68 @@ Entregar 2 scripts ejecutables que (a) re-migren 44 notificaciones Caso A apunta
 - Audit log shape: ver patrón en otros scripts del repo que escriben a `auditoria_admin`.
 - Postmortem va al final del sprint **después** de que Jorge confirme `--apply` exitoso. Si Jorge solo aplica fase 1 y deja fase 2 para más tarde, el postmortem de fase 2 queda como TODO en BLOQUEOS.md.
 
+---
+
+## SPRINT-186 — Surface aviso descuento chequeo previo en modal creación + bugs UX modal orden
+
+**Estado:** PENDIENTE.
+**Origen:** QA puntual sidepanel 2026-05-18 sobre SPRINT-178. Movido a BLOQUEOS por coordinator autónomo pasada 22. Desbloqueado 2026-05-18 por OK Jorge (cliente consolidado vía dedup `--apply`, audit `33M7G5z6lEBVBdSf6yKK`). Movido de vuelta a la cola en pasada 23.
+**Tipo:** Feature UX + 2 bugfixes UX.
+
+**Dependencia confirmada (precondición ya cumplida):**
+
+- SPRINT-185 código en producción (commit `a3b56bf`): guard runtime contra duplicados + script dedup + cazador P-014.
+- `npx tsx scripts/dedup-clientes-por-telefono.ts --apply` ejecutado por Jorge 2026-05-18:
+  - DRY-RUN reportó 2 grupos (QA Test + Brito/Jorge Brito). Decisión: apply directo (canónico = más antiguo en ambos casos).
+  - `--apply` real: 2 grupos consolidados, 2 duplicados soft-deleted, 3 docs reasignados (2 órdenes + 1 factura), 1 batch atómico (6 ops Firestore).
+  - Audit log: `auditoria_admin/33M7G5z6lEBVBdSf6yKK` con `accion=dedup_clientes_por_telefono`.
+  - Cliente "QA Test" canónico: `Q0y6fB6NCIkNoZ3nlwIp`. OS-0058 y OS-0059 ahora apuntan al mismo `clienteId`.
+
+**Scope (3 items):**
+
+1. **Sugerencia automática al crear orden — banner descuento chequeo previo**
+
+   Touch: `src/hooks/useOrdenCreateForm.ts` + `src/components/ordenes/OrdenCreateModal.tsx`.
+
+   Comportamiento:
+   - Al cambiar `cliente.id` + `equipoTipo` en el modal, ejecutar `buscarChequeoVigentePorCliente(clienteId, equipoTipo)` con debounce 300ms.
+   - Si retorna chequeo vigente (dentro de 30 días, no aplicado), mostrar banner naranja con:
+     - Texto: "Este cliente tiene un chequeo previo vigente para este equipo. Monto del chequeo: RD$ X. Vence el DD/MM/YYYY."
+     - Checkbox: "Aplicar descuento de RD$ X a esta orden" (default check según decisión Jorge SPRINT-178 = aplicar por default).
+   - Si checkbox marcado al crear: persistir `descuentoChequeoPrevioId` + `descuentoChequeoPrevioMonto` + `descuentoChequeoPrevioVencimiento` en el doc orden nuevo (mismo shape que SPRINT-178 ya definió).
+   - Replica patrón visual del banner "Operaria asignada" de SPRINT-170.
+
+2. **Sub-bug Modelo perdido al editar**
+
+   Touch: `src/components/ordenes/OrdenEditModal.tsx`.
+
+   Síntoma reportado: al abrir OrdenEditModal sobre una orden con `equipoModelo` poblado, el input aparece vacío o se borra al guardar.
+
+   Acción: auditar el binding (probable `useState` inicializa con string vacío en vez del valor de la orden, o posible duplicación Modelo + "Modelo del fabricante" si hay 2 inputs sobre el mismo field).
+
+3. **Sub-bug `MessageNotSentError` al cerrar modal con Esc**
+
+   Touch: archivo del modal que dispara el error (a identificar — probable `OrdenCreateModal.tsx` u `OrdenEditModal.tsx`).
+
+   Síntoma: al cerrar el modal con tecla Esc se loguea `MessageNotSentError` en consola. Causa probable: listener `onSnapshot` o handler de eventos sin cleanup en el `useEffect` correspondiente.
+
+   Acción: identificar el listener huérfano y agregar return cleanup en el useEffect.
+
+**Restricciones:**
+
+- NO tocar `buscarChequeoVigentePorCliente` (ya correcto post-SPRINT-178).
+- archivist PRE-CHANGE obligatorio sobre touch-list.
+- Touch-list expandido + auditoría de consumidores obligatoria antes de redactar fix (sub-regla CLAUDE.md). Grep por `descuentoChequeoPrevio`, `buscarChequeoVigentePorCliente`, `OrdenCreateModal`, `OrdenEditModal`, `equipoModelo`.
+- Si auditoría revela `firestore.rules` o índice compuesto faltante → ESCALAR sub-sprint a BLOQUEOS.
+- Sub-regla cleanup en archivos críticos: `OrdenCreateModal.tsx` y `OrdenEditModal.tsx` están en la lista crítica. Commit message debe declarar "QA flujo creación/edición orden validado" o agregar a BLOQUEOS para validación humana si no se puede ejercer UI autónomo.
+
+**Notas para el coordinator:**
+
+- Postmortem opcional (no es bug de prod, es UX + bugs UI).
+- regression_guardian obligatorio (toca hooks + components con efectos).
+- Sub-bugs 2 y 3 pueden separarse en commits distintos si la auditoría revela touch-list muy distinto.
+
+**Touch-list inicial:** `src/hooks/useOrdenCreateForm.ts`, `src/components/ordenes/OrdenCreateModal.tsx`, `src/components/ordenes/OrdenEditModal.tsx`. La auditoría puede expandirlo.
+
+
 </details>
