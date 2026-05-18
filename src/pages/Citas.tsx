@@ -1054,6 +1054,9 @@ export default function Citas() {
           handleSelectCliente={createForm.handleSelectCliente}
           handleClienteTelefonoChange={createForm.handleClienteTelefonoChange}
           citaPreset={selectedCita}
+          chequeoPrevio={createForm.chequeoPrevioCreate}
+          aplicarDescuento={createForm.aplicarDescuentoCreate}
+          setAplicarDescuento={createForm.setAplicarDescuentoCreate}
           extraFooterSlot={
             esGarantiaConCambioTecnico ? (
               <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 space-y-3">

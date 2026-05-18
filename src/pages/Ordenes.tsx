@@ -107,6 +107,7 @@ export default function Ordenes() {
     equipoTipo: '',
     equipoMarca: '',
     equipoModelo: '',
+    equipoModeloFabricante: '',
     descripcionFalla: '',
     fotoEquipoUrl: '',
     tecnicoId: '',
@@ -371,6 +372,7 @@ export default function Ordenes() {
         equipoTipo: selectedOrden.equipoTipo || '',
         equipoMarca: selectedOrden.equipoMarca || '',
         equipoModelo: selectedOrden.equipoModelo || '',
+        equipoModeloFabricante: selectedOrden.equipoModeloFabricante || '',
         descripcionFalla: selectedOrden.descripcionFalla || '',
         fotoEquipoUrl: fotoUrl || '',
         tecnicoId: selectedOrden.tecnicoId || '',
@@ -556,8 +558,15 @@ export default function Ordenes() {
       }
       if (editForm.equipoModelo !== (selectedOrden.equipoModelo || '')) {
         registros.push(crearRegistroAuditoria(
-          usuario, 'editar', 'Cambió modelo del equipo', 'equipoModelo',
+          usuario, 'editar', 'Cambió configuración del equipo', 'equipoModelo',
           selectedOrden.equipoModelo || '', editForm.equipoModelo
+        ));
+      }
+      // SPRINT-186: persistir modelo del fabricante separadamente
+      if (editForm.equipoModeloFabricante !== (selectedOrden.equipoModeloFabricante || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió modelo del fabricante', 'equipoModeloFabricante',
+          selectedOrden.equipoModeloFabricante || '', editForm.equipoModeloFabricante
         ));
       }
       if (editForm.duracionMin !== (selectedOrden.duracionMin || 60)) {
@@ -649,6 +658,8 @@ export default function Ordenes() {
         equipoTipo: editForm.equipoTipo,
         equipoMarca: editForm.equipoMarca,
         equipoModelo: editForm.equipoModelo,
+        // SPRINT-186: persistir modelo del fabricante (texto libre)
+        equipoModeloFabricante: editForm.equipoModeloFabricante.trim() || '',
         descripcionFalla: editForm.descripcionFalla,
         fotoEquipoUrl: fotoUrlFinal,
         tecnicoId: editForm.tecnicoId,
@@ -1114,6 +1125,9 @@ export default function Ordenes() {
           handleDireccionChange={createForm.handleDireccionChange}
           handleSelectCliente={createForm.handleSelectCliente}
           handleClienteTelefonoChange={createForm.handleClienteTelefonoChange}
+          chequeoPrevio={createForm.chequeoPrevioCreate}
+          aplicarDescuento={createForm.aplicarDescuentoCreate}
+          setAplicarDescuento={createForm.setAplicarDescuentoCreate}
         />
       )}
 

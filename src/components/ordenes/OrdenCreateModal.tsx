@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, User, Wrench, Calendar, AlertTriangle, CheckCircle, Loader2, Edit2, Home, ChevronDown, Shield } from 'lucide-react';
+import { Plus, User, Wrench, Calendar, AlertTriangle, CheckCircle, Loader2, Edit2, Home, ChevronDown, Shield, Tag } from 'lucide-react';
 import { Cliente, Personal, OrdenServicio, DireccionCliente, CitaPorConfirmar } from '../../types';
 import {
   DURACIONES, HORARIOS, HORARIOS_LABEL,
@@ -12,6 +12,7 @@ import Modal from '../Modal';
 import EditarClienteModal from '../clientes/EditarClienteModal';
 import CampoDireccionConPlaces from '../shared/CampoDireccionConPlaces';
 import FotoEquipoDisplay from '../shared/FotoEquipoDisplay';
+import { ChequeoVigenteInfo, diasRestantesVigencia } from '../../utils/descuentoChequeo';
 
 export interface CreateFormState {
   clienteId: string;
@@ -84,6 +85,15 @@ interface OrdenCreateModalProps {
    *  para Citas.tsx que necesita meter la UI de garantía con motivo del
    *  cambio de técnico. */
   extraFooterSlot?: React.ReactNode;
+  /** SPRINT-186: chequeo previo vigente detectado al cambiar cliente/equipo.
+   *  Si null, no se muestra el banner. Si retorna info, el modal renderiza
+   *  banner naranja con monto + vencimiento + checkbox para aplicar
+   *  descuento al crear la orden. */
+  chequeoPrevio?: ChequeoVigenteInfo | null;
+  /** SPRINT-186: toggle del checkbox del banner. Controlado por el hook
+   *  `useOrdenCreateForm` (auto-marca true si chequeo vigente). */
+  aplicarDescuento?: boolean;
+  setAplicarDescuento?: (v: boolean) => void;
 }
 
 export default function OrdenCreateModal({
@@ -112,6 +122,9 @@ export default function OrdenCreateModal({
   clientes = [],
   citaPreset,
   extraFooterSlot,
+  chequeoPrevio,
+  aplicarDescuento,
+  setAplicarDescuento,
 }: OrdenCreateModalProps) {
   const esClienteExistente = !!form.clienteId && !isNewCliente;
   const readonlyInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-blue-50/50 text-gray-700 cursor-not-allowed';
@@ -703,6 +716,61 @@ export default function OrdenCreateModal({
             )}
           </div>
         </div>
+
+        {/*
+          SPRINT-186: banner naranja descuento chequeo previo.
+          Aparece cuando el hook `useOrdenCreateForm` detecta un chequeo
+          vigente o vencido para el cliente+equipo. Sólo permite auto-aplicar
+          sobre vigente; vencido se muestra como info read-only (el override
+          con motivo se hace después en el flujo de aprobación de precio en
+          /admin/ordenes — ver SPRINT-178). Replica patrón visual de
+          "Operaria asignada" en mismo modal.
+        */}
+        {chequeoPrevio && (
+          <div className={`p-4 rounded-lg border ${
+            chequeoPrevio.vigente
+              ? 'bg-orange-50 border-orange-300'
+              : 'bg-gray-50 border-gray-300'
+          }`}>
+            <div className="flex items-start gap-3">
+              <Tag size={18} className={`flex-shrink-0 mt-0.5 ${chequeoPrevio.vigente ? 'text-orange-600' : 'text-gray-500'}`} />
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm font-semibold ${chequeoPrevio.vigente ? 'text-orange-900' : 'text-gray-700'}`}>
+                  {chequeoPrevio.vigente
+                    ? 'Este cliente tiene un chequeo previo vigente para este equipo'
+                    : 'Este cliente tuvo un chequeo previo (ya vencido)'}
+                </p>
+                <p className="text-xs text-gray-700 mt-1">
+                  Origen: orden {chequeoPrevio.ordenNumero} —
+                  Monto: <strong>RD$ {chequeoPrevio.montoChequeo.toLocaleString('es-DO')}</strong> —
+                  {chequeoPrevio.vigente
+                    ? ` vence en ${diasRestantesVigencia(chequeoPrevio.fechaCierre)} día(s).`
+                    : ' vencido (ya pasaron más de 30 días).'}
+                </p>
+                {chequeoPrevio.vigente && setAplicarDescuento && (
+                  <label className="mt-3 flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={aplicarDescuento === true}
+                      onChange={e => setAplicarDescuento(e.target.checked)}
+                      className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                    />
+                    <span className="text-sm text-gray-900">
+                      Aplicar descuento de <strong>RD$ {chequeoPrevio.montoChequeo.toLocaleString('es-DO')}</strong> a esta orden
+                    </span>
+                  </label>
+                )}
+                {!chequeoPrevio.vigente && (
+                  <p className="text-xs text-gray-500 italic mt-2">
+                    Aplicar descuento sobre chequeo vencido requiere override
+                    de admin/coord con motivo — se gestiona en el paso de
+                    aprobación de precio, no al crear la orden.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Section: Programacion */}
         <div>

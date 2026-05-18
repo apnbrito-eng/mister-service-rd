@@ -20,7 +20,20 @@ export interface EditFormState {
   // Equipo
   equipoTipo: string;
   equipoMarca: string;
+  /**
+   * SPRINT-172: "Configuración" del equipo (ej: 'Torre', 'Individual',
+   * 'French door'). El label UI dice "Configuración", el campo de datos
+   * sigue llamándose `equipoModelo` por compat con consumidores legacy.
+   */
   equipoModelo: string;
+  /**
+   * SPRINT-186: Modelo real del fabricante (texto libre, ej: 'WF45R6100AW').
+   * Antes faltaba en `EditFormState` — al editar una orden creada con
+   * SPRINT-172, el usuario sólo veía/editaba la "Configuración" labeleada
+   * "Modelo" y pensaba que perdía el modelo real. Ahora ambos campos
+   * conviven igual que en `OrdenCreateModal`.
+   */
+  equipoModeloFabricante: string;
   descripcionFalla: string;
   fotoEquipoUrl?: string;
   // Programación
@@ -217,15 +230,29 @@ export default function OrdenEditForm({
               </datalist>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Modelo</label>
+              {/* SPRINT-172/SPRINT-186: el campo `equipoModelo` históricamente
+                  representa "Configuración" (Torre/Individual/etc.). El label
+                  UI lo aclara para que no se confunda con modelo del
+                  fabricante (campo separado abajo). */}
+              <label className="block text-xs font-medium text-gray-600 mb-1">Configuración</label>
               <input
                 type="text"
                 value={editForm.equipoModelo}
                 onChange={e => setEditForm(f => ({ ...f, equipoModelo: e.target.value }))}
-                placeholder="Modelo"
+                placeholder="Torre, Individual, French door..."
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
               />
             </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Modelo del fabricante</label>
+            <input
+              type="text"
+              value={editForm.equipoModeloFabricante}
+              onChange={e => setEditForm(f => ({ ...f, equipoModeloFabricante: e.target.value }))}
+              placeholder="ej: WF45R6100AW (modelo del fabricante, opcional)"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Descripción de la falla</label>

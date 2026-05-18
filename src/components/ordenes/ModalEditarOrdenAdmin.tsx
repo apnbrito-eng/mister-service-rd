@@ -65,7 +65,10 @@ const LABELS_SENSIBLES: Record<CampoSensible, string> = {
   clienteReferencia: 'Referencia',
   equipoTipo: 'Tipo de equipo',
   equipoMarca: 'Marca',
-  equipoModelo: 'Modelo',
+  // SPRINT-186: aclarar que el campo histórico `equipoModelo` es la
+  // "Configuración" (Torre/Individual). El modelo del fabricante vive en
+  // el campo no sensible `equipoModeloFabricante` (texto libre).
+  equipoModelo: 'Configuración',
   descripcionFalla: 'Falla reportada',
 };
 
@@ -97,6 +100,9 @@ interface FormState {
   equipoMarca: string;
   equipoModelo: string;
   descripcionFalla: string;
+  // SPRINT-186: modelo del fabricante (texto libre, no sensible —
+  // el cliente normalmente no lo conoce; lo carga la coord/técnico).
+  equipoModeloFabricante: string;
   // Agendamiento (no sensibles)
   fechaCita: string;          // datetime-local
   duracionMin: string;        // string para permitir vacío
@@ -122,6 +128,7 @@ function ordenToForm(o: OrdenServicio): FormState {
     equipoTipo: o.equipoTipo || '',
     equipoMarca: o.equipoMarca || '',
     equipoModelo: o.equipoModelo || '',
+    equipoModeloFabricante: o.equipoModeloFabricante || '',
     descripcionFalla: o.descripcionFalla || '',
     fechaCita: dateToDatetimeLocal(o.fechaCita),
     duracionMin: typeof o.duracionMin === 'number' ? String(o.duracionMin) : '',
@@ -231,6 +238,10 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
     if (modificados.has('equipoMarca')) payload.equipoMarca = form.equipoMarca.trim();
     if (modificados.has('equipoModelo')) {
       payload.equipoModelo = form.equipoModelo.trim() || undefined;
+    }
+    // SPRINT-186: persistir modelo del fabricante (texto libre, no sensible)
+    if (modificados.has('equipoModeloFabricante')) {
+      payload.equipoModeloFabricante = form.equipoModeloFabricante.trim() || undefined;
     }
     if (modificados.has('descripcionFalla')) payload.descripcionFalla = form.descripcionFalla.trim();
 
@@ -370,6 +381,7 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
       applyIfDefined('equipoTipo', updatePayload.equipoTipo);
       applyIfDefined('equipoMarca', updatePayload.equipoMarca);
       applyIfDefined('equipoModelo', updatePayload.equipoModelo);
+      applyIfDefined('equipoModeloFabricante', updatePayload.equipoModeloFabricante);
       applyIfDefined('descripcionFalla', updatePayload.descripcionFalla);
       if (modificados.has('fechaCita')) {
         const d = datetimeLocalToDate(form.fechaCita);
@@ -564,15 +576,27 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
                 {modificadoHint('equipoMarca')}
               </div>
               <div>
-                <label className="block mb-1">{labelSensibleBase('Modelo')}</label>
+                <label className="block mb-1">{labelSensibleBase('Configuración')}</label>
                 <input
                   type="text"
                   value={form.equipoModelo}
                   onChange={e => actualizar('equipoModelo', e.target.value)}
                   className={sensibleInputCls('equipoModelo')}
                   title={TOOLTIP_SENSIBLE}
+                  placeholder="Torre, Individual, French door..."
                 />
                 {modificadoHint('equipoModelo')}
+              </div>
+              {/* SPRINT-186: modelo del fabricante (texto libre, no sensible) */}
+              <div>
+                <label className="block mb-1 text-gray-700">Modelo del fabricante</label>
+                <input
+                  type="text"
+                  value={form.equipoModeloFabricante}
+                  onChange={e => actualizar('equipoModeloFabricante', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  placeholder="ej: WF45R6100AW"
+                />
               </div>
               <div className="md:col-span-2">
                 <label className="block mb-1">{labelSensibleBase('Falla reportada *')}</label>

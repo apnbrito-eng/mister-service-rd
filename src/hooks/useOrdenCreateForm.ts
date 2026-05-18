@@ -12,6 +12,7 @@ import {
   normalizarTelefono, buscarClientePorTelefono, crearOActualizarClienteDesdeCita,
 } from '../services/clientes.service';
 import { buscarPrecioMantenimiento } from '../services/precios.service';
+import { buscarChequeoVigentePorCliente } from '../services/ordenes.service';
 import { marcarOrdenReactivada } from '../services/campanasMarketing.service';
 import { crearNotificacion } from '../services/notificaciones.service';
 import {
@@ -21,6 +22,7 @@ import {
   esOrdenMantenimiento, formatMoneda, crearRegistroAuditoria,
   generarTokenPortalCliente, parseCliente,
 } from '../utils';
+import { construirCamposDescuentoChequeo, ChequeoVigenteInfo } from '../utils/descuentoChequeo';
 
 export interface CreateFormState {
   clienteId: string;
@@ -125,6 +127,12 @@ export interface UseOrdenCreateFormReturn {
   horariosOcupadosCreate: string[];
   // Submit
   saving: boolean;
+  // SPRINT-186: Banner descuento chequeo previo. `chequeoPrevioCreate` es
+  // null cuando no hay chequeo o todavía no se resolvió la búsqueda.
+  // `aplicarDescuentoCreate` es el toggle del checkbox del banner.
+  chequeoPrevioCreate: ChequeoVigenteInfo | null;
+  aplicarDescuentoCreate: boolean;
+  setAplicarDescuentoCreate: (v: boolean) => void;
   // Handlers
   handleSelectCliente: (c: Cliente) => void;
   handleClienteTelefonoChange: (telefono: string) => void;
@@ -285,6 +293,64 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
     setOrdenesActivasCliente(activas);
   }, [form.clienteId, ordenes]);
 
+  // SPRINT-186: surface aviso descuento chequeo previo en modal creación.
+  // Al cambiar `cliente.id` + `equipoTipo`, dispara debounce 300ms y consulta
+  // `buscarChequeoVigentePorCliente`. Si retorna info (vigente o vencido),
+  // expone el chequeo al modal + el flag `aplicarDescuento` controlado por
+  // el checkbox. Replica patrón del SPRINT-178 en `Ordenes.tsx:179-204`
+  // (mismo helper, pero allí dispara desde "orden ya creada con precio
+  // sugerido"; acá dispara durante "nueva orden, antes de submit").
+  //
+  // Comportamiento del checkbox por default:
+  //   - Si chequeo vigente: auto-check (aplicar por default).
+  //   - Si chequeo vencido: NO auto-check (override requiere acción del
+  //     admin/coord; el modal del create flow lo deja en false — se podrá
+  //     aplicar el descuento más adelante en el flujo de aprobación de
+  //     precio, donde sí hay UI de override con motivo).
+  //
+  // Cleanup: flag `cancelado` en la closure evita setState post-unmount
+  // y debounce timer se limpia al cambiar dependencias.
+  const [chequeoPrevioCreate, setChequeoPrevioCreate] = useState<ChequeoVigenteInfo | null>(null);
+  const [aplicarDescuentoCreate, setAplicarDescuentoCreate] = useState(false);
+  const chequeoBuscarTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Reset al cambiar cliente o equipo. Garantiza que si el usuario
+    // cambia el tipo de equipo, NO queda un banner stale del tipo previo.
+    setChequeoPrevioCreate(null);
+    setAplicarDescuentoCreate(false);
+
+    if (!form.clienteId || !form.equipoTipo) return;
+
+    let cancelado = false;
+    if (chequeoBuscarTimeout.current) {
+      clearTimeout(chequeoBuscarTimeout.current);
+    }
+    chequeoBuscarTimeout.current = setTimeout(() => {
+      buscarChequeoVigentePorCliente(form.clienteId, form.equipoTipo)
+        .then(info => {
+          if (cancelado) return;
+          if (!info) return;
+          setChequeoPrevioCreate(info);
+          // Auto-marcar solo si está vigente (UX por defecto SPRINT-178).
+          if (info.vigente) setAplicarDescuentoCreate(true);
+        })
+        .catch(err => {
+          if (!cancelado) {
+            console.warn('[SPRINT-186] error buscando chequeo previo en create:', err);
+          }
+        });
+    }, 300);
+
+    return () => {
+      cancelado = true;
+      if (chequeoBuscarTimeout.current) {
+        clearTimeout(chequeoBuscarTimeout.current);
+        chequeoBuscarTimeout.current = null;
+      }
+    };
+  }, [form.clienteId, form.equipoTipo]);
+
   const tecnicos = useMemo(
     () => personal.filter(p => p.rol === 'tecnico' && p.activo),
     [personal],
@@ -411,9 +477,16 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
     setShowTelefonoDropdown(false);
     setIsNewCliente(false);
     setOrdenesActivasCliente([]);
+    // SPRINT-186: limpiar banner descuento al resetear.
+    setChequeoPrevioCreate(null);
+    setAplicarDescuentoCreate(false);
     if (telefonoSearchTimeout.current) {
       clearTimeout(telefonoSearchTimeout.current);
       telefonoSearchTimeout.current = null;
+    }
+    if (chequeoBuscarTimeout.current) {
+      clearTimeout(chequeoBuscarTimeout.current);
+      chequeoBuscarTimeout.current = null;
     }
     presetAplicadoIdRef.current = null;
   };
@@ -709,6 +782,32 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
         if (Object.keys(meta).length > 0) ordenData.metadatosCita = meta;
       }
 
+      // SPRINT-186: persistir descuento chequeo previo si el usuario marcó
+      // el checkbox en el banner naranja (sólo vigente auto-check; vencido
+      // requiere flujo de aprobación de precio con override). NO aplica el
+      // descuento al `precioSugerido` (la orden recién creada no tiene
+      // precio aún) — solo deja los campos `descuentoChequeoPrevio*` en el
+      // doc para que el flujo posterior de aprobación de precio los lea y
+      // los aplique al precio sugerido cuando el técnico/coord lo cargue.
+      //
+      // Patrón análogo a `Ordenes.tsx:220-247`: usa
+      // `construirCamposDescuentoChequeo` con `montoFinalDescuento` =
+      // `chequeo.montoChequeo` (descuento completo; si el precio sugerido
+      // futuro fuera menor, el flujo de aprobación recalcula). Sin
+      // `override: true` porque acá sólo se permite auto-aplicar sobre
+      // chequeo vigente (mismo criterio del UI banner).
+      if (chequeoPrevioCreate && aplicarDescuentoCreate && chequeoPrevioCreate.vigente) {
+        const camposDescuento = construirCamposDescuentoChequeo({
+          chequeo: {
+            ordenId: chequeoPrevioCreate.ordenId,
+            fechaCierre: chequeoPrevioCreate.fechaCierre,
+          },
+          montoFinalDescuento: chequeoPrevioCreate.montoChequeo,
+          // override=false: auto-apply sobre chequeo vigente.
+        });
+        Object.assign(ordenData, camposDescuento);
+      }
+
       // Auto-aprobar si es mantenimiento
       let precioMantenimientoEncontrado: number | null = null;
       if (esOrdenMantenimiento(form.descripcionFalla)) {
@@ -935,6 +1034,9 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
     tecnicos,
     horariosOcupadosCreate,
     saving,
+    chequeoPrevioCreate,
+    aplicarDescuentoCreate,
+    setAplicarDescuentoCreate,
     handleSelectCliente,
     handleClienteTelefonoChange,
     handleDireccionChange,

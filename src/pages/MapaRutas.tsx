@@ -115,6 +115,7 @@ export default function MapaRutas() {
     clienteTelefono: '', clienteDireccion: '', clienteReferencia: '',
     clienteLat: undefined, clienteLng: undefined,
     equipoTipo: '', equipoMarca: '', equipoModelo: '',
+    equipoModeloFabricante: '',
     descripcionFalla: '', fotoEquipoUrl: '',
     tecnicoId: '', tecnicoNombre: '',
     duracionMin: 60,
@@ -365,6 +366,7 @@ export default function MapaRutas() {
       equipoTipo: o.equipoTipo || '',
       equipoMarca: o.equipoMarca || '',
       equipoModelo: o.equipoModelo || '',
+      equipoModeloFabricante: o.equipoModeloFabricante || '',
       descripcionFalla: o.descripcionFalla || '',
       fotoEquipoUrl: fotoUrl || '',
       tecnicoId: o.tecnicoId || '',
@@ -384,6 +386,7 @@ export default function MapaRutas() {
       clienteTelefono: '', clienteDireccion: '', clienteReferencia: '',
       clienteLat: undefined, clienteLng: undefined,
       equipoTipo: '', equipoMarca: '', equipoModelo: '',
+      equipoModeloFabricante: '',
       descripcionFalla: '', fotoEquipoUrl: '',
       tecnicoId: '', tecnicoNombre: '',
       duracionMin: 60,
@@ -694,8 +697,15 @@ export default function MapaRutas() {
       }
       if (editForm.equipoModelo !== (editingOrden.equipoModelo || '')) {
         registros.push(crearRegistroAuditoria(
-          usuario, 'editar', 'Cambió modelo del equipo desde mapa', 'equipoModelo',
+          usuario, 'editar', 'Cambió configuración del equipo desde mapa', 'equipoModelo',
           editingOrden.equipoModelo || '', editForm.equipoModelo
+        ));
+      }
+      // SPRINT-186: persistir modelo del fabricante separadamente
+      if (editForm.equipoModeloFabricante !== (editingOrden.equipoModeloFabricante || '')) {
+        registros.push(crearRegistroAuditoria(
+          usuario, 'editar', 'Cambió modelo del fabricante desde mapa', 'equipoModeloFabricante',
+          editingOrden.equipoModeloFabricante || '', editForm.equipoModeloFabricante
         ));
       }
       if (editForm.duracionMin !== (editingOrden.duracionMin || 60)) {
@@ -715,6 +725,8 @@ export default function MapaRutas() {
         equipoTipo: editForm.equipoTipo,
         equipoMarca: editForm.equipoMarca,
         equipoModelo: editForm.equipoModelo,
+        // SPRINT-186: persistir modelo del fabricante (texto libre)
+        equipoModeloFabricante: editForm.equipoModeloFabricante.trim() || '',
         descripcionFalla: editForm.descripcionFalla,
         fotoEquipoUrl: fotoUrlFinal,
         tecnicoId: editForm.tecnicoId,
