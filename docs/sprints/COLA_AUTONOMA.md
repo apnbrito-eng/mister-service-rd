@@ -50,6 +50,63 @@ Crear cazador determinístico P-015 en `scripts/invariantes/check-firestore-orde
 
 ---
 
+## SPRINT-187-FIX2-HOTFIX — `parseCliente` olvida `eliminado` (P-009 recurrencia #3) + extender cazador
+
+**Prioridad:** ALTA (post-validación visual reveló que SPRINT-187 Bug A se fixeó solo en typeahead, NO en listado).
+
+**Origen:** QA visual sidepanel 2026-05-18 noche post-SPRINT-187. Reporte: typeahead del modal de creación filtra soft-deleted correctamente, pero `/admin/clientes` listado sigue mostrando 3 entradas "QA Test" (incluyendo el soft-deleted). Investigación inmediata de Cowork:
+
+`parseCliente` en `src/utils/index.ts:601-678` retorna 19 campos del tipo `Cliente` pero NO incluye `eliminado` (ni `eliminadoEn`, `eliminadoPor`, `mergedaCon`, `telefonoNormalizado` opcional). El tipo `Cliente` los tiene declarados; el parser los descarta silenciosamente. `Clientes.tsx:160` filtra `c.eliminado !== true` que evalúa `undefined !== true === true` → soft-deleted pasa el filtro.
+
+**Causa raíz:** TERCERA recurrencia del patrón P-009 (parser olvida campos del tipo) en una semana. El postmortem `2026-05-18-firma-cliente-parser-olvido.md` predijo exactamente esto: "Follow-up — extender P-009 a otros parsers como `parseCliente`, `parseServicioPrecio`, `parseInicioChequeo`". El follow-up no se cerró y el bug recurrió.
+
+**Touch-list:**
+
+1. `src/utils/index.ts` (parseCliente, líneas 601-678) — agregar campos al objeto retornado:
+   ```ts
+   eliminado: raw.eliminado === true ? true : undefined,
+   eliminadoEn: parseFirestoreDate(raw.eliminadoEn) || undefined,
+   eliminadoPor: (raw.eliminadoPor as string) || undefined,
+   mergedaCon: (raw.mergedaCon as string) || undefined,
+   ```
+   Verificar también que `telefonoNormalizado` ya está (línea 657 lo tiene — OK).
+
+2. `scripts/invariantes/check-parser-campos-faltantes.ts` (P-009) — extender a `Cliente ↔ parseCliente`. Reusar `extractIifeReturnKeys` o adaptarlo al patrón `parseCliente` (return directo, no IIFE). Verificación inversa con `git stash` debe confirmar que detecta los 4 campos pre-fix.
+
+3. `docs/postmortems/2026-05-18-parser-cliente-eliminado-olvido.md` (NUEVO) — postmortem corto referenciando como **recurrencia #3** del patrón. Indicar:
+   - Recurrencia #1: SPRINT-153-FIX (parseFactura olvida campos)
+   - Recurrencia #2: SPRINT-177-HOTFIX (parseOrden.cierreServicio olvida firmaClienteUrl)
+   - Recurrencia #3: este sprint (parseCliente olvida eliminado)
+   - Lección estructural: **la deuda de extender cazadores debe procesarse SIEMPRE en sprint propio en lugar de quedar como "follow-up"**. SPRINT-188 follow-up de P-015 corre el mismo riesgo si no se prioriza.
+
+4. `docs/PATRONES_REGRESION.md` — actualizar entry P-009 con la tercera instancia + cobertura ampliada a `Cliente`.
+
+**Plan:**
+
+1. archivist PRE-CHANGE sobre `utils/index.ts` (parseCliente) + cazador P-009.
+2. builder aplica el fix mecánico (4 líneas + cazador refinado + postmortem).
+3. tester: typecheck + lint + `npm run check:regression`. El P-009 ampliado debe pasar 0 hits post-fix + gritar correctamente pre-fix.
+4. regression_guardian: validar simetría tipo ↔ parser ahora cubre 3/N tipos.
+5. NO reviewer obligatorio (fix mecánico chico).
+
+**Criterios de éxito:**
+
+- [ ] `/admin/clientes` muestra 1 sola entrada "QA Test" post-fix + hard refresh.
+- [ ] Listado de clientes sigue funcionando para todos los demás casos.
+- [ ] Cazador P-009 cubre `Cliente ↔ parseCliente` además de Factura + CierreServicio.
+- [ ] Postmortem creado con análisis estructural de las 3 recurrencias.
+- [ ] Sub-regla CLAUDE.md (o gotcha existente reforzada) que "follow-up de cazador" se trata como sprint propio prioritario.
+
+**Restricciones:**
+
+- NO tocar `firestore.rules` (campos opcionales, ya permitidos).
+- NO tocar el script de dedup (correcto).
+- NO tocar el listado de `Clientes.tsx` (filtro correcto, solo recibe undefined del parser).
+
+**Postmortem obligatorio:** SÍ — tercera recurrencia del mismo patrón en una semana es bandera roja sobre el manejo de deuda follow-up de cazadores.
+
+---
+
 ## SPRINT-187 — Filtrar soft-deleted en /admin/clientes + debuggear banner descuento
 
 **Estado:** COMPLETADO 2026-05-18 noche por coordinator autónomo (pasada 24). Hashes `b6486e4` (Bug A — soft-deleted filter en 6 archivos) + `4890dfa` (Bug B — query orderBy mal escrita en 3 archivos). Postmortem obligatorio creado en `docs/postmortems/2026-05-18-banner-descuento-query-orderby-mal-escrita.md`. Clasificado como clase nueva → SPRINT-188-CAZADOR-P015 agregado a la cola como follow-up. Cazadores 12/12 PASS. typecheck + lint PASS. NO toca rules ni indexes — refactoring de índices dormidos queda como sprint futuro.
