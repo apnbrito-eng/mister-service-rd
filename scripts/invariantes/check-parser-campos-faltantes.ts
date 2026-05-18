@@ -9,12 +9,32 @@
  * bloque "Nota del conduce" jamás renderizaba. QA E2E del 2026-05-13 sobre
  * CG-00018 confirmó 0 hits del texto en DOM.
  *
- * Recurrencia (SPRINT-177-HOTFIX 2026-05-16): mismo patrón sobre
+ * Recurrencia #2 (SPRINT-177-HOTFIX 2026-05-16): mismo patrón sobre
  * `CierreServicio.firmaClienteUrl` + `firmaClienteAt`. SPRINT-159 persistió la
  * firma, los 3 consumidores UI la leían, pero `parseOrden` la descartaba en la
  * IIFE de `cierreServicio` → "Sin firma" mostrado 14 días en producción. El
- * cazador NO cazó este caso porque solo cubría `Factura`. Este sprint amplía
+ * cazador NO cazó este caso porque solo cubría `Factura`. Ese sprint amplió
  * el cazador a `CierreServicio ↔ parseOrden.cierreServicio` (sub-objeto).
+ *
+ * Recurrencia #3 (SPRINT-187-FIX2-HOTFIX 2026-05-18): mismo patrón sobre
+ * `Cliente.eliminado` + `eliminadoEn` + `eliminadoPor` + `mergedaCon`.
+ * SPRINT-185 (`a3b56bf`) persistió los 4 campos soft-delete en `clientes/{id}`
+ * desde el script de dedup y desde el UI cuando borra, pero `parseCliente`
+ * en `src/utils/index.ts:601-678` nunca incluyó los campos → `Clientes.tsx:160`
+ * filtraba `c.eliminado !== true` que evaluaba `undefined !== true === true` y
+ * los soft-deleted seguían visibles en `/admin/clientes`. QA visual sidepanel
+ * 2026-05-18 noche cazó 3 entradas "QA Test" en el listado. El cazador NO
+ * cazó este caso porque solo cubría `Factura` + `CierreServicio`. Este sprint
+ * amplía a `Cliente ↔ parseCliente` (return directo, no IIFE — reusa
+ * `extractParserReturnKeys`).
+ *
+ * **TERCERA recurrencia del MISMO patrón en 5 días = bandera roja estructural.**
+ * Ver `docs/postmortems/2026-05-18-parser-cliente-eliminado-olvido.md` para
+ * el análisis. Lección: la deuda "extender cazador a más tipos" NO debe quedar
+ * como anotación en este JSDoc — debe materializarse como sprint en
+ * `COLA_AUTONOMA.md` con touch-list específico INMEDIATAMENTE. Las
+ * recurrencias #2 y #3 fueron exactamente los tipos que la versión original
+ * de este cazador listó como "follow-up si vuelve a ocurrir".
  *
  * Síntoma: feature que escribe Y lee parece correcta en la code review pero
  * falla en producción porque el parser intermedio borra silenciosamente el
@@ -58,7 +78,7 @@ import { InvariantResult, InvariantHit } from './types.js';
 
 const PATTERN_ID = 'P-009';
 const PATTERN_NAME =
-  'Campo del tipo Factura ausente en parseFactura (parser silenciosamente filtra el campo)';
+  'Campo del tipo (Factura/CierreServicio/Cliente) ausente en parser correspondiente (parser silenciosamente filtra el campo)';
 const ROOT_DIR = path.resolve(process.cwd());
 
 /**
@@ -76,6 +96,15 @@ const SKIP_FACTURA_FIELDS = new Set<string>([
  * alias legacy, o documentación explícita.
  */
 const SKIP_CIERRESERVICIO_FIELDS = new Set<string>([
+  // Vacío inicialmente. Sumar con comentario justificando.
+]);
+
+/**
+ * Campos del tipo `Cliente` que NO deben listarse en `parseCliente`.
+ * Razones aceptadas: campo derivado, alias legacy migrado, o documentación
+ * explícita del por qué se ignora en lectura.
+ */
+const SKIP_CLIENTE_FIELDS = new Set<string>([
   // Vacío inicialmente. Sumar con comentario justificando.
 ]);
 
@@ -115,31 +144,50 @@ function extractInterfaceFields(
   if (depth !== 0) return null;
   const body = content.slice(openIdx + 1, i);
   // Capturar `clave?: tipo` o `clave: tipo` ignorando comentarios.
-  // El parser de keys es heurístico — basta para shapes planos como Factura.
+  // SPRINT-187-FIX2-HOTFIX: trackear `nest` del nivel de llaves para evitar
+  // capturar keys de objetos anidados inline (ej: `legacyMetricas: {
+  // totalServicios: number; ... }` dentro de `Cliente`). Solo se capturan
+  // keys con `nest === 0` (nivel raíz del interface). Esto preserva el
+  // comportamiento previo para shapes planos como `Factura` /
+  // `CierreServicio` (sus claves siempre estaban en nest 0).
   const keys = new Set<string>();
   const lines = body.split('\n');
   let inBlockComment = false;
+  let nest = 0;
   for (const rawLine of lines) {
-    let line = rawLine.trim();
+    let line = rawLine;
+    // Strip comentarios de línea (preservar resto de la línea por si tiene `{`).
+    const sl = line.indexOf('//');
+    if (sl >= 0) line = line.slice(0, sl);
     if (inBlockComment) {
       const end = line.indexOf('*/');
-      if (end < 0) continue;
-      line = line.slice(end + 2).trim();
-      inBlockComment = false;
-    }
-    if (line.startsWith('//')) continue;
-    if (line.startsWith('/*')) {
-      const end = line.indexOf('*/');
       if (end < 0) {
-        inBlockComment = true;
+        // Línea entera dentro del bloque; las llaves del comentario no cuentan.
         continue;
       }
-      line = line.slice(end + 2).trim();
+      line = line.slice(end + 2);
+      inBlockComment = false;
     }
-    if (!line) continue;
-    // Match `keyName?:` o `keyName:` al inicio de línea (no anidados).
-    const km = /^([a-zA-Z_][a-zA-Z0-9_]*)\??\s*:/.exec(line);
-    if (km) keys.add(km[1]);
+    const bs = line.indexOf('/*');
+    if (bs >= 0) {
+      const be = line.indexOf('*/', bs + 2);
+      if (be < 0) {
+        line = line.slice(0, bs);
+        inBlockComment = true;
+      } else {
+        line = line.slice(0, bs) + line.slice(be + 2);
+      }
+    }
+    const trimmed = line.trim();
+    if (trimmed && nest === 0) {
+      const km = /^([a-zA-Z_][a-zA-Z0-9_]*)\??\s*:/.exec(trimmed);
+      if (km) keys.add(km[1]);
+    }
+    // Actualizar nest counts después de procesar la línea.
+    for (const ch of line) {
+      if (ch === '{') nest++;
+      else if (ch === '}') nest--;
+    }
   }
   return { typeName, keys };
 }
@@ -525,10 +573,71 @@ export async function check(): Promise<InvariantResult> {
     );
   }
 
+  // ─── Cobertura 3 (SPRINT-187-FIX2-HOTFIX): Cliente ↔ parseCliente ────────
+  const clienteShape = extractInterfaceFields(typesContent, 'Cliente');
+  const clienteParserKeys = extractParserReturnKeys(utilsContent, 'parseCliente');
+
+  if (clienteShape && clienteParserKeys) {
+    const missingCliente: string[] = [];
+    for (const key of clienteShape.keys) {
+      if (SKIP_CLIENTE_FIELDS.has(key)) continue;
+      if (!clienteParserKeys.has(key)) missingCliente.push(key);
+    }
+
+    for (const key of missingCliente) {
+      let lineNo = 0;
+      for (let i = 0; i < typesLines.length; i++) {
+        const ln = typesLines[i];
+        const m = new RegExp(`^\\s+${key}\\??\\s*:`).exec(ln);
+        if (m) {
+          lineNo = i + 1;
+          break;
+        }
+      }
+      hits.push({
+        file: path.relative(ROOT_DIR, typesPath),
+        line: lineNo || 1,
+        snippet: (typesLines[(lineNo || 1) - 1] || '').trim(),
+        explanation:
+          `El campo \`${key}\` está declarado en el tipo Cliente pero NO aparece ` +
+          `en \`parseCliente\` (src/utils/index.ts). El \`onSnapshot\` de Clientes ` +
+          `carga los docs con \`parseCliente(d.id, d.data())\` — cualquier campo ` +
+          `no listado acá se filtra silenciosamente y los componentes lo reciben ` +
+          `como \`undefined\`. Bug histórico: SPRINT-185 (\`a3b56bf\`) persistió ` +
+          `\`eliminado/eliminadoEn/eliminadoPor/mergedaCon\` (soft-delete del dedup) ` +
+          `pero \`parseCliente\` nunca los incluyó → el filtro \`c.eliminado !== true\` ` +
+          `en Clientes.tsx:160 evaluaba \`undefined !== true === true\` y los ` +
+          `soft-deleted seguían apareciendo en /admin/clientes hasta que QA visual ` +
+          `sidepanel del 2026-05-18 cazó las 3 entradas "QA Test". TERCERA ` +
+          `recurrencia del patrón P-009 en 5 días (parseFactura, ` +
+          `parseOrden.cierreServicio, parseCliente). ` +
+          `Acción: agregá \`${key}: (raw.${key} as <tipo>) || undefined,\` ` +
+          `(o \`parseFirestoreDate(raw.${key}) || undefined\` para timestamps, o ` +
+          `\`raw.${key} === true ? true : undefined\` para boolean estricto) al ` +
+          `return de \`parseCliente\` con el cast correspondiente al tipo declarado. ` +
+          `Si el campo legítimamente NO debe leerse del doc (campo derivado, etc.), ` +
+          `agregalo a SKIP_CLIENTE_FIELDS con comentario de justificación.`,
+      });
+    }
+    notes.push(
+      `Cliente: ${clienteShape.keys.size} campos en tipo, ` +
+      `${clienteParserKeys.size} campos en parseCliente. ` +
+      `Skip explícito: ${SKIP_CLIENTE_FIELDS.size}.`,
+    );
+  } else {
+    notes.push(
+      `Cliente ↔ parseCliente: no cubierto en esta corrida ` +
+      `(no se encontró el tipo o el parser). Si fue refactorizada, ajustar el cazador.`,
+    );
+  }
+
   notes.push(
-    `Limitación: cubre Factura y CierreServicio. Otros sub-objetos parseados de ` +
-    `OrdenServicio (inicioChequeo, trackingGPS, cierreChequeoHistorico) y ` +
-    `ServicioPrecio / PiezaInventario quedan como follow-up.`,
+    `Limitación: cubre Factura, CierreServicio y Cliente. Otros sub-objetos ` +
+    `parseados de OrdenServicio (inicioChequeo, trackingGPS, cierreChequeoHistorico) ` +
+    `y ServicioPrecio / PiezaInventario quedan como follow-up — ` +
+    `materializar como sprint en COLA_AUTONOMA.md, NO como anotación ` +
+    `(antiprecedente: recurrencias #2 y #3 ocurrieron sobre tipos listados como ` +
+    `follow-up no materializado en versiones previas del cazador).`,
   );
 
   return {

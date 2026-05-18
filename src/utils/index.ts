@@ -672,6 +672,16 @@ export function parseCliente(id: string, raw: Record<string, unknown>): Cliente 
     legacyMetricas,
     ultimoContactoMarketing,
     contactosMarketing,
+    // Soft-delete (SPRINT-185 dedup por teléfono normalizado). Rehidratamos
+    // defensivamente: clientes legacy sin estos campos quedan `undefined`,
+    // los filtros UI (`c.eliminado !== true` en Clientes.tsx:160) los siguen
+    // dejando pasar como activos. SPRINT-187-FIX2-HOTFIX (recurrencia #3 de
+    // P-009): si estos campos no se rehidratan acá, Clientes.tsx evalúa
+    // `undefined !== true === true` y los soft-deleted vuelven a verse.
+    eliminado: raw.eliminado === true ? true : undefined,
+    eliminadoEn: parseFirestoreDate(raw.eliminadoEn) || undefined,
+    eliminadoPor: (raw.eliminadoPor as string) || undefined,
+    mergedaCon: (raw.mergedaCon as string) || undefined,
     createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
     updatedAt: parseFirestoreDate(raw.updatedAt) || undefined,
   };
