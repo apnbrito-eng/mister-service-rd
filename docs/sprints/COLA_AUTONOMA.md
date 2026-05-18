@@ -1,9 +1,84 @@
-# Cola autónoma de sprints
+**Última actualización:** 2026-05-18 noche por Cowork — **QA visual sidepanel post-deploy reveló 2 FAILs en SPRINT-185 + SPRINT-178/186 end-to-end.** SPRINT-187 escrito a la cola con dos investigaciones:
 
-> Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
-> Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
+(A) **`/admin/clientes` listado + typeahead muestra soft-deleted** — el dedup mergeó OK pero la UI no filtra `where eliminado != true` → ilusión visual de duplicación post-fix.
 
-**Última actualización:** 2026-05-18 por Cowork — **QA puntual SPRINT-178 post-deploy reveló bug crítico de datos + 2 sprints nuevos a la cola.** El sidepanel intentó validar el descuento 30 días creando OS-0059 (cotización para QA Test + Aire Acondicionado) pero el descuento de OS-0058 NO apareció. Investigación de código: SPRINT-178 SÍ está implementado (helper `buscarChequeoVigentePorCliente` invocado desde `Ordenes.tsx:191`, `OrdenDetalle.tsx:99`, `AgendaDia.tsx:253` en handler aprobación de precio), pero NO surface aviso en modal de creación + se descubrió **causa raíz alternativa: cliente "QA Test" duplicado en /admin/clientes** (typeahead muestra 2 entradas idénticas con mismo tel 8090000000). Si OS-0058 está asociada a clienteId#A y OS-0059 a clienteId#B, el match falla por diseño. **2 sprints escritos:** SPRINT-185 (deduplicación clientes por teléfono normalizado + guard runtime + sprint cazador) — ALTA bloqueante para validar SPRINT-178; SPRINT-186 (surface aviso descuento en modal creación + sub-bug Modelo perdido + MessageNotSentError Esc) — MEDIA UX. Otros hallazgos del QA puntual: SPRINT-179-FIX2 (permission-denied recurre en /admin/citas qa-secretaria — completitud incompleta SPRINT-179, postmortem ya predijo recurrencia con stack `index-EhZnYXZ1.js:468:469`). Cliente debe consolidarse ANTES de revalidar SPRINT-178 (sin esto el descuento legítimamente no aplicará). **El coordinator no debe procesar SPRINT-186 hasta que SPRINT-185 esté COMPLETADO + Jorge confirme cliente consolidado** — dependencia explícita.
+(B) **Banner descuento NO renderiza en modal creación** — el helper `buscarChequeoVigentePorCliente` o su wiring en el modal tiene bug. Posibles causas: clienteId denormalizado mal en OS-0058 post-dedup, helper retorna null por edge case, o render condicional con guard incorrecto.
+
+OK PASS confirmados del día (no rollback): SPRINT-186 modelo del fabricante OK, SPRINT-181 badge solo chequeo en header OK, SPRINT-177-HOTFIX firma thumbnail OK.
+
+**Última actualización previa:** 2026-05-18 por Cowork — **QA puntual SPRINT-178 post-deploy reveló bug crítico de datos + 2 sprints nuevos a la cola.** El sidepanel intentó validar el descuento 30 días creando OS-0059 (cotización para QA Test + Aire Acondicionado) pero el descuento de OS-0058 NO apareció. Investigación de código: SPRINT-178 SÍ está implementado (helper `buscarChequeoVigentePorCliente` invocado desde `Ordenes.tsx:191`, `OrdenDetalle.tsx:99`, `AgendaDia.tsx:253` en handler aprobación de precio), pero NO surface aviso en modal de creación + se descubrió **causa raíz alternativa: cliente "QA Test" duplicado en /admin/clientes** (typeahead muestra 2 entradas idénticas con mismo tel 8090000000). Si OS-0058 está asociada a clienteId#A y OS-0059 a clienteId#B, el match falla por diseño. **2 sprints escritos:** SPRINT-185 (deduplicación clientes por teléfono normalizado + guard runtime + sprint cazador) — ALTA bloqueante para validar SPRINT-178; SPRINT-186 (surface aviso descuento en modal creación + sub-bug Modelo perdido + MessageNotSentError Esc) — MEDIA UX. Otros hallazgos del QA puntual: SPRINT-179-FIX2 (permission-denied recurre en /admin/citas qa-secretaria — completitud incompleta SPRINT-179, postmortem ya predijo recurrencia con stack `index-EhZnYXZ1.js:468:469`). Cliente debe consolidarse ANTES de revalidar SPRINT-178 (sin esto el descuento legítimamente no aplicará). **El coordinator no debe procesar SPRINT-186 hasta que SPRINT-185 esté COMPLETADO + Jorge confirme cliente consolidado** — dependencia explícita.
+
+---
+
+## SPRINT-187 — Filtrar soft-deleted en /admin/clientes + debuggear banner descuento
+
+**Prioridad:** ALTA (bloquea revalidación end-to-end de SPRINT-178 + UX confuso para coord/secretaria).
+
+**Origen:** QA visual sidepanel 2026-05-18 noche sobre fixes deployados (SPRINT-185 + 178 + 186). 2 FAILs detectados:
+
+### Bug A — Listado /admin/clientes + typeahead OrdenCreateModal NO filtran `eliminado: true`
+
+Síntoma: el typeahead muestra "3 entradas QA Test" (1 canónica + 1 soft-deleted + 1 cliente distinto "QA TEST 14-MAY"). Los datos en Firestore SÍ están consolidados, solo la UI miente.
+
+**Touch-list (auditoría inicial):**
+
+1. `src/pages/Clientes.tsx` — verificar el query del listado. Probablemente `onSnapshot(collection(db, 'clientes'))` sin filter. Agregar `where('eliminado', '!=', true)` o filtrar client-side (Firestore no permite `!= true` directo en query; alternativas: `where('eliminado', '==', false)` si todos los activos tienen el campo explícito, o filtrar post-snapshot).
+2. `src/hooks/useOrdenCreateForm.ts` o `src/components/ordenes/OrdenCreateModal.tsx` — verificar el typeahead de cliente. Misma fix.
+3. `src/services/clientes.service.ts` — verificar el helper `buscarOCrearCliente` y queries auxiliares.
+4. Otros componentes que listan clientes (búsqueda en /admin/dashboard, /admin/citas confirmación, etc.).
+
+**Decisión arquitectónica:** los docs soft-deleted siguen siendo útiles para forensia (audit log, queries históricas). NO hard-delete. Solo filtrar en lecturas UI. Documentar el invariante en `clientes.service.ts`.
+
+### Bug B — Banner descuento NO renderiza al crear orden con QA Test + Aire Acondicionado
+
+Síntoma: cliente QA Test consolidado (canónico con OS-0058 + OS-0059), pero al crear orden y elegir Aire Acondicionado no aparece el banner del descuento implementado por SPRINT-186. Aparece otro banner distinto ("Cliente ya tiene 1 orden activa: OS-0059") pero NO el de descuento.
+
+**Hipótesis a verificar en orden:**
+
+H1 — `OS-0058.clienteId` apunta al doc ID canónico correcto. Verificar en Firestore Console:
+- Abrir `ordenes_servicio/sQFAc4tZKTVwK3b4WvHd` (OS-0058) → leer `clienteId`.
+- Abrir `ordenes_servicio/<id>` (OS-0059) → leer `clienteId`.
+- Si son distintos, el script de dedup NO reasignó correctamente → bug de SPRINT-185 implementación. Sprint follow-up.
+
+H2 — `OS-0058.tipoCierre === 'solo_chequeo'` post-dedup. Verificar campo en Firestore. Si `null` o vacío, el helper `buscarChequeoVigentePorCliente` lo filtra. Verificar también `OS-0058.soloChequeo === true`.
+
+H3 — `OS-0058.fechaCierre` está dentro de 30 días del momento actual. Verificar timestamp.
+
+H4 — `OS-0058.equipoTipo === 'Aire Acondicionado'` exacto (sin variantes como "AC" o "Aire Acondicionado Split"). El helper de SPRINT-178 hace match estricto por igualdad de string. Si hay variantes, agregar normalización.
+
+H5 — El hook que llama `buscarChequeoVigentePorCliente` en `useOrdenCreateForm.ts` (SPRINT-186) tiene un dep array o debounce mal seteado. Verificar console.log durante la sesión QA — agregar logging temporal en el hook si hace falta.
+
+H6 — El render condicional del banner tiene un guard adicional que no se cumple (ej: `descuentoChequeoPrevioMonto > 0 && !overrideManual`). Verificar la condición exacta.
+
+**Touch-list de investigación (NO de fix, hasta confirmar hipótesis):**
+
+1. `src/services/ordenes.service.ts:804` — `buscarChequeoVigentePorCliente`. Agregar console.log temporal o leer la lógica completa.
+2. `src/hooks/useOrdenCreateForm.ts` — verificar el wiring del hook.
+3. `src/components/ordenes/OrdenCreateModal.tsx` — verificar el render condicional.
+
+**Plan:**
+
+1. archivist PRE-CHANGE obligatorio sobre los 3 archivos clave.
+2. **Diagnóstico primero**: Jorge abre Firestore Console y reporta los campos de OS-0058 + OS-0059 (clienteId, tipoCierre, soloChequeo, fechaCierre, equipoTipo). Cowork hace el match contra hipótesis.
+3. Builder implementa el fix según la hipótesis confirmada.
+4. tester + regression_guardian + reviewer.
+5. Bug A se procesa en paralelo (es independiente de Bug B).
+
+**Criterios de éxito:**
+
+- [ ] `/admin/clientes` muestra solo activos (1 entrada QA Test, no 3).
+- [ ] Typeahead del modal de creación muestra solo activos.
+- [ ] Crear orden con cliente QA Test + Aire Acondicionado renderiza banner descuento RD$ 2,500 referenciando OS-0058.
+- [ ] Render del banner incluye checkbox aplicar + fecha vencimiento del chequeo.
+- [ ] Persiste correctamente los campos `descuentoChequeoPrevio*` al guardar.
+
+**Restricciones:**
+
+- NO modificar el script de dedup hasta confirmar que el bug es UI-only (Bug A).
+- NO modificar `buscarChequeoVigentePorCliente` hasta confirmar la hipótesis de Bug B con data real de Firestore.
+- archivist PRE-CHANGE obligatorio.
+
+**Postmortem obligatorio:** SÍ — bug pasó SPRINT-185 + SPRINT-186 sin detectarse + validación de QA visual lo cazó. Aprendizaje sobre cobertura de tests visuales post-deploy.
 
 ---
 
