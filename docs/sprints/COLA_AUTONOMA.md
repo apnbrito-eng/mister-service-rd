@@ -6042,7 +6042,7 @@ Entregar 2 scripts ejecutables que (a) re-migren 44 notificaciones Caso A apunta
 
 ## SPRINT-186 — Surface aviso descuento chequeo previo en modal creación + bugs UX modal orden
 
-**Estado:** PENDIENTE.
+**Estado:** ✅ COMPLETADO 2026-05-18 — commit `f41d106` pasada 23. Touch-list expandido: 7 archivos (sprint mencionaba `OrdenEditModal.tsx` que NO existe; reales son `OrdenEditForm.tsx` + `ModalEditarOrdenAdmin.tsx`). Item 3 (MessageNotSentError) no aplica al repo — proviene de extensión externa. Ver entrada Pasada 23 en `DIARIO_2026-05-18.md`.
 **Origen:** QA puntual sidepanel 2026-05-18 sobre SPRINT-178. Movido a BLOQUEOS por coordinator autónomo pasada 22. Desbloqueado 2026-05-18 por OK Jorge (cliente consolidado vía dedup `--apply`, audit `33M7G5z6lEBVBdSf6yKK`). Movido de vuelta a la cola en pasada 23.
 **Tipo:** Feature UX + 2 bugfixes UX.
 
