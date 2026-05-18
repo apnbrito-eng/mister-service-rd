@@ -1,5 +1,8 @@
 import type { OrdenServicio, Rol } from '../types';
-import { obtenerSugerenciaSoloChequeoPendiente } from './index';
+import {
+  obtenerSugerenciaSoloChequeoPendiente,
+  obtenerUltimaSugerenciaSoloChequeo,
+} from './index';
 
 /**
  * Tono visual del banner — afecta el color y el icono del banner.
@@ -137,12 +140,33 @@ export function calcularSiguientePaso(
         tono: 'espera',
       };
 
-    case 'en_diagnostico':
+    case 'en_diagnostico': {
+      // SPRINT-183 (2026-05-18): tras aprobación de sugerencia solo chequeo,
+      // el técnico debía seguir viendo "cotizar reparación o sugerir solo
+      // chequeo" porque la fase no cambia. Ahora detectamos la sugerencia
+      // más reciente con estado 'aprobada' y cambiamos el hint a cerrar la
+      // orden. Antiprecedente QA E2E 2026-05-16 hallazgo #12.
+      const ultimaSugerencia = obtenerUltimaSugerenciaSoloChequeo(orden);
+      const sugerenciaAprobada = ultimaSugerencia?.estado === 'aprobada';
       if (rolSoportado === 'tecnico' || rolSoportado === 'ayudante') {
+        if (sugerenciaAprobada) {
+          return {
+            titulo: 'Próximo paso: cerrar la orden tras el cobro / firma del cliente',
+            detalle: 'La oficina aprobó el solo chequeo. Cobrá el monto al cliente, sacá foto del cierre y la firma, y cerrá la orden.',
+            tono: 'accion',
+          };
+        }
         return {
           titulo: 'Próximo paso: cotizar reparación o sugerir solo chequeo',
           detalle: 'Si no se puede reparar hoy, sugerí cobrar solo chequeo a la oficina.',
           tono: 'accion',
+        };
+      }
+      if (sugerenciaAprobada) {
+        return {
+          titulo: 'Solo chequeo aprobado — esperando cierre del técnico',
+          detalle: 'El técnico ya puede cobrar el chequeo y cerrar la orden.',
+          tono: 'info',
         };
       }
       return {
@@ -150,6 +174,7 @@ export function calcularSiguientePaso(
         detalle: 'El técnico está revisando el equipo. Esperá su cotización o sugerencia.',
         tono: 'espera',
       };
+    }
 
     case 'en_cotizacion': {
       const tienePrecio = orden.precioSugerido !== undefined && orden.precioSugerido !== null;

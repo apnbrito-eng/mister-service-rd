@@ -45,6 +45,11 @@ export default function Citas() {
     fechaSolicitada: '',
     horaSolicitada: '',
     origen: 'WhatsApp',
+    // SPRINT-183 (2026-05-18): notas/observaciones opcionales al registrar
+    // cita desde oficina. Antes la secretaria tenía que abrir la orden
+    // después y agregar las notas — friction innecesaria. Persiste a
+    // `citas_por_confirmar.observaciones`.
+    observaciones: '',
   });
 
   const [fotoEquipo, setFotoEquipo] = useState<File | null>(null);
@@ -537,6 +542,7 @@ export default function Citas() {
       equipoTipo: '', equipoMarca: '', equipoModelo: '',
       falla: '', fechaSolicitada: '', horaSolicitada: '',
       origen: 'WhatsApp',
+      observaciones: '',
     });
     handleQuitarFoto();
   };
@@ -607,6 +613,8 @@ export default function Citas() {
         }
       }
       if (fotoEquipoUrl) data.fotoEquipoUrl = fotoEquipoUrl;
+      // SPRINT-183: persistir observaciones si la secretaria las cargó.
+      if (form.observaciones.trim()) data.observaciones = form.observaciones.trim();
 
       await addDoc(collection(db, 'citas_por_confirmar'), data);
       toast.success('Cita registrada. Pendiente de confirmación.');
@@ -987,6 +995,21 @@ export default function Citas() {
                 <p className="text-[10px] text-gray-400 mt-1">Esta cita queda pendiente de confirmación por oficina.</p>
               </div>
             </div>
+          </div>
+
+          {/* SPRINT-183 (2026-05-18) — Observaciones opcionales.
+              Antes la secretaria tenía que abrir la orden después y agregar
+              las notas. Persiste a `citas_por_confirmar.observaciones`. */}
+          <div>
+            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3">Observaciones (opcional)</h3>
+            <textarea
+              rows={2}
+              value={form.observaciones}
+              onChange={e => setForm(f => ({ ...f, observaciones: e.target.value.slice(0, 500) }))}
+              placeholder="Notas internas: contexto del cliente, urgencia, preferencias, etc."
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] resize-none"
+            />
+            <p className="text-[10px] text-gray-400 mt-1 text-right">{form.observaciones.length}/500</p>
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

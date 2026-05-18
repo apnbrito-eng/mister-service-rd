@@ -891,12 +891,17 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
         }
       }
 
-      // Toast final con sufijo según contexto cliente
+      // Toast final con sufijo según contexto cliente.
+      // SPRINT-183 (2026-05-18): si el cliente NO se creó (asociado a uno
+      // existente por tel duplicado) y tampoco se agregó dirección nueva,
+      // mostrar "(cliente existente)" para que el secretario entienda que
+      // se reusó el cliente. Antes el toast solo decía "(cliente creado)"
+      // o quedaba sin sufijo — engañoso cuando el flujo asociaba sin crear.
       const sufijoCliente = clienteCreadoFlag
         ? ' (cliente creado)'
         : direccionAgregadaFlag
           ? ' (dirección agregada al cliente)'
-          : '';
+          : ' (cliente existente)';
       toast.success(`Orden ${numero} creada${citaPreset ? ' y agendada' : ''}${sufijoCliente}`);
 
       resetForm();
