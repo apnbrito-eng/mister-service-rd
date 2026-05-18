@@ -27,6 +27,8 @@ import { Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
 import { reactivarOrdenPostChequeo } from '../../services/ordenes.service';
 import { useConfigWeb } from '../../hooks/useConfigWeb';
 import toast from 'react-hot-toast';
+import type { ChequeoVigenteInfo } from '../../utils/descuentoChequeo';
+import { calcularDescuentoChequeo } from '../../utils/descuentoChequeo';
 
 interface OrdenDetailModalProps {
   orden: OrdenServicio;
@@ -38,6 +40,14 @@ interface OrdenDetailModalProps {
   setPrecioAprobacion: (v: string) => void;
   aprobandoPrecio: boolean;
   standbyItems?: StandbyPieza[];
+  // SPRINT-178: descuento por chequeo previo (opcionales — el componente
+  // renderiza el widget solo si el padre los pasa).
+  chequeoPrevio?: ChequeoVigenteInfo | null;
+  aplicarDescuento?: boolean;
+  setAplicarDescuento?: (v: boolean) => void;
+  overrideMotivo?: string;
+  setOverrideMotivo?: (v: string) => void;
+  puedeOverrideDescuento?: boolean;
 }
 
 export default function OrdenDetailModal({
@@ -50,6 +60,12 @@ export default function OrdenDetailModal({
   setPrecioAprobacion,
   aprobandoPrecio,
   standbyItems = [],
+  chequeoPrevio = null,
+  aplicarDescuento = false,
+  setAplicarDescuento,
+  overrideMotivo = '',
+  setOverrideMotivo,
+  puedeOverrideDescuento = false,
 }: OrdenDetailModalProps) {
   const { config: configWeb } = useConfigWeb();
   const puedeModificar = puede(userProfile, 'ordenesModificar');
@@ -575,6 +591,80 @@ export default function OrdenDetailModal({
             El tecnico sugirio <strong>RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong>.
             Puedes modificar el precio antes de aprobar.
           </p>
+
+          {/* SPRINT-178: widget chequeo previo vigente / vencido */}
+          {chequeoPrevio && setAplicarDescuento && (() => {
+            const precioBase = Number(precioAprobacion) || 0;
+            const preview = calcularDescuentoChequeo(precioBase, chequeoPrevio.montoChequeo);
+            const fechaStr = chequeoPrevio.fechaCierre.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            return (
+              <div className={`mb-3 rounded-lg p-3 border-2 ${
+                chequeoPrevio.vigente ? 'bg-blue-50 border-blue-300' : 'bg-orange-50 border-orange-300'
+              }`}>
+                {chequeoPrevio.vigente ? (
+                  <>
+                    <p className="text-xs text-blue-900 mb-2">
+                      <strong>Chequeo previo vigente:</strong> RD$ {chequeoPrevio.montoChequeo.toLocaleString('es-DO')} del {fechaStr} ({chequeoPrevio.ordenNumero}). Vigente {chequeoPrevio.diasRestantes} dia{chequeoPrevio.diasRestantes === 1 ? '' : 's'} mas.
+                    </p>
+                    <label className="flex items-center gap-2 text-xs text-blue-900 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={aplicarDescuento}
+                        onChange={e => setAplicarDescuento(e.target.checked)}
+                        className="rounded border-blue-400"
+                      />
+                      <span>
+                        Aplicar descuento de <strong>RD$ {preview.descuentoAplicado.toLocaleString('es-DO')}</strong>
+                        {aplicarDescuento && precioBase > 0 && (
+                          <> {'\u{2192}'} precio final: <strong>RD$ {preview.precioConDescuento.toLocaleString('es-DO')}</strong></>
+                        )}
+                      </span>
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-orange-900 mb-2">
+                      <strong>Chequeo previo VENCIDO:</strong> RD$ {chequeoPrevio.montoChequeo.toLocaleString('es-DO')} del {fechaStr} ({chequeoPrevio.ordenNumero}). Vencio hace {Math.abs(chequeoPrevio.diasRestantes)} dia{Math.abs(chequeoPrevio.diasRestantes) === 1 ? '' : 's'}.
+                    </p>
+                    {puedeOverrideDescuento ? (
+                      <>
+                        <label className="flex items-center gap-2 text-xs text-orange-900 cursor-pointer mb-2">
+                          <input
+                            type="checkbox"
+                            checked={aplicarDescuento}
+                            onChange={e => setAplicarDescuento(e.target.checked)}
+                            className="rounded border-orange-400"
+                          />
+                          <span>
+                            Aplicar descuento <strong>(override manual)</strong> de RD$ {preview.descuentoAplicado.toLocaleString('es-DO')}
+                          </span>
+                        </label>
+                        {aplicarDescuento && setOverrideMotivo && (
+                          <div>
+                            <label className="block text-[11px] font-medium text-orange-900 mb-1">
+                              Motivo del override <span className="text-red-600">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={overrideMotivo}
+                              onChange={e => setOverrideMotivo(e.target.value)}
+                              placeholder="Ej: cliente negocio aplicar igual"
+                              className="w-full px-2 py-1 border border-orange-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-orange-500 bg-white"
+                            />
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-[11px] text-orange-700 italic">
+                        Solo admin/coordinadora pueden aplicar descuento sobre chequeo vencido.
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
           <div className="flex gap-2">
             <div className="flex-1">
               <label className="block text-xs font-medium text-yellow-800 mb-1">Precio final (RD$)</label>

@@ -35,7 +35,15 @@ import type { EditFormState } from '../components/ordenes/OrdenEditForm';
 import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
 import OrdenesTablero from '../components/ordenes/OrdenesTablero';
 import { crearNotificacion } from '../services/notificaciones.service';
+import { buscarChequeoVigentePorCliente } from '../services/ordenes.service';
 import { useOrdenCreateForm } from '../hooks/useOrdenCreateForm';
+import {
+  calcularDescuentoChequeo,
+  construirCamposDescuentoChequeo,
+  describirDescuentoChequeo,
+  type ChequeoVigenteInfo,
+} from '../utils/descuentoChequeo';
+import { esAdminOCoord } from '../utils/permisos';
 
 const ESTADOS_SIMPLE: EstadoOrdenSimple[] = ['pendiente', 'en_proceso', 'completado', 'cancelado'];
 
@@ -116,6 +124,14 @@ export default function Ordenes() {
   const [precioAprobacion, setPrecioAprobacion] = useState('');
   const [aprobandoPrecio, setAprobandoPrecio] = useState(false);
 
+  // SPRINT-178: descuento por chequeo previo (consulta lazy al abrir orden con
+  // precioSugerido pendiente). NO se persiste hasta que el usuario aprueba el
+  // precio (con o sin checkbox de descuento). Override solo admin/coord.
+  const [chequeoPrevio, setChequeoPrevio] = useState<ChequeoVigenteInfo | null>(null);
+  const [aplicarDescuento, setAplicarDescuento] = useState(false);
+  const [overrideMotivo, setOverrideMotivo] = useState('');
+  const puedeOverrideDescuento = esAdminOCoord(userProfile);
+
   const dirInputRef = useRef<HTMLInputElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const autocompleteRef = useRef<any>(null);
@@ -157,20 +173,90 @@ export default function Ordenes() {
     }
   }, [selectedOrden?.id, selectedOrden?.precioSugerido, selectedOrden?.estadoAprobacion]);
 
+  // SPRINT-178: al seleccionar una orden con precioSugerido pendiente, buscar
+  // chequeo previo vigente del mismo cliente/equipo. No bloquea el render —
+  // el helper retorna null si no hay índice creado o no hay chequeo.
+  useEffect(() => {
+    // Reset al cambiar de orden
+    setChequeoPrevio(null);
+    setAplicarDescuento(false);
+    setOverrideMotivo('');
+    if (!selectedOrden) return;
+    if (selectedOrden.estadoAprobacion === 'aprobado') return;
+    if (selectedOrden.precioSugerido === undefined) return;
+    if (selectedOrden.descuentoChequeoPrevioId) return; // ya aplicado anteriormente
+    if (!selectedOrden.clienteId || !selectedOrden.equipoTipo) return;
+
+    let cancelado = false;
+    buscarChequeoVigentePorCliente(selectedOrden.clienteId, selectedOrden.equipoTipo)
+      .then(info => {
+        if (cancelado) return;
+        if (!info) return;
+        // Excluir auto-match (la misma orden NO puede ser su propio chequeo).
+        if (info.ordenId === selectedOrden.id) return;
+        setChequeoPrevio(info);
+        // Auto-marcar el checkbox si el chequeo está vigente (UX por defecto).
+        // Si vencido, requiere override manual del admin/coord — NO auto-check.
+        if (info.vigente) setAplicarDescuento(true);
+      })
+      .catch(err => console.warn('[SPRINT-178] error buscando chequeo previo:', err));
+    return () => { cancelado = true; };
+  }, [selectedOrden?.id, selectedOrden?.clienteId, selectedOrden?.equipoTipo, selectedOrden?.precioSugerido, selectedOrden?.estadoAprobacion, selectedOrden?.descuentoChequeoPrevioId, selectedOrden]);
+
   const handleAprobarPrecio = async () => {
     if (!selectedOrden) return;
-    const precio = Number(precioAprobacion);
-    if (isNaN(precio) || precio <= 0) {
+    const precioBase = Number(precioAprobacion);
+    if (isNaN(precioBase) || precioBase <= 0) {
       toast.error('Ingresa un precio valido');
       return;
     }
+
+    // SPRINT-178: aplicar descuento por chequeo previo si corresponde.
+    // - Auto: si chequeo vigente y checkbox marcado.
+    // - Override: admin/coord pueden aplicar sobre chequeo vencido (motivo obligatorio).
+    let precio = precioBase;
+    let camposDescuento: Record<string, unknown> = {};
+    let detalleDescuento = '';
+    if (chequeoPrevio && aplicarDescuento) {
+      const esOverride = !chequeoPrevio.vigente;
+      if (esOverride) {
+        if (!puedeOverrideDescuento) {
+          toast.error('Solo admin/coordinadora pueden aplicar descuento sobre chequeo vencido');
+          return;
+        }
+        if (overrideMotivo.trim().length < 5) {
+          toast.error('El motivo del override es obligatorio (mínimo 5 caracteres)');
+          return;
+        }
+      }
+      const { precioConDescuento, descuentoAplicado } = calcularDescuentoChequeo(precioBase, chequeoPrevio.montoChequeo);
+      precio = precioConDescuento;
+      camposDescuento = construirCamposDescuentoChequeo({
+        chequeo: { ordenId: chequeoPrevio.ordenId, fechaCierre: chequeoPrevio.fechaCierre },
+        montoFinalDescuento: descuentoAplicado,
+        override: esOverride,
+        motivoOverride: esOverride ? overrideMotivo.trim() : undefined,
+        aplicadoPor: esOverride ? (currentUser?.uid || undefined) : undefined,
+      });
+      detalleDescuento = describirDescuentoChequeo({
+        ordenNumero: chequeoPrevio.ordenNumero,
+        montoDescuento: descuentoAplicado,
+        fechaChequeo: chequeoPrevio.fechaCierre,
+        override: esOverride,
+        motivoOverride: esOverride ? overrideMotivo.trim() : undefined,
+      });
+    }
+
     setAprobandoPrecio(true);
     try {
       const usuario = userProfile?.nombre || 'Admin';
+      const notaAuditoria = detalleDescuento
+        ? `Aprobo precio: RD$ ${precio.toLocaleString('es-DO')} — ${detalleDescuento}`
+        : `Aprobo precio: RD$ ${precio.toLocaleString('es-DO')}`;
       const registroAuditoria = crearRegistroAuditoria(
         usuario,
         'precio_sugerido',
-        `Aprobo precio: RD$ ${precio.toLocaleString('es-DO')}`,
+        notaAuditoria,
         'precioFinal',
         selectedOrden.precioSugerido !== undefined ? `RD$ ${selectedOrden.precioSugerido.toLocaleString('es-DO')}` : '',
         `RD$ ${precio.toLocaleString('es-DO')}`
@@ -209,6 +295,9 @@ export default function Ordenes() {
         estado: 'activo',
         historialFases: nuevoHistorialFases,
         auditoria: arrayUnion(registroAuditoria),
+        // SPRINT-178: 6 campos opcionales del descuento por chequeo previo
+        // (vacío si no se aplicó descuento — Firestore no recibe undefined).
+        ...camposDescuento,
         updatedAt: ahora,
       });
       // SPRINT-174: notif `precio_aprobado` al técnico + admins/coords
@@ -967,6 +1056,12 @@ export default function Ordenes() {
             setPrecioAprobacion={setPrecioAprobacion}
             aprobandoPrecio={aprobandoPrecio}
             standbyItems={standbyItems}
+            chequeoPrevio={chequeoPrevio}
+            aplicarDescuento={aplicarDescuento}
+            setAplicarDescuento={setAplicarDescuento}
+            overrideMotivo={overrideMotivo}
+            setOverrideMotivo={setOverrideMotivo}
+            puedeOverrideDescuento={puedeOverrideDescuento}
           />
         )}
 

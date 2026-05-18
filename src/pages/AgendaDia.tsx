@@ -17,6 +17,12 @@ import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
 import { crearNotificacion } from '../services/notificaciones.service';
+import { buscarChequeoVigentePorCliente } from '../services/ordenes.service';
+import {
+  calcularDescuentoChequeo,
+  construirCamposDescuentoChequeo,
+  describirDescuentoChequeo,
+} from '../utils/descuentoChequeo';
 import { format, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
@@ -228,18 +234,53 @@ export default function AgendaDia() {
 
   const handleAprobarPrecioInline = async (orden: OrdenServicio) => {
     if (orden.precioSugerido === undefined) return;
-    const precio = Number(orden.precioSugerido);
-    if (isNaN(precio) || precio <= 0) {
+    const precioBase = Number(orden.precioSugerido);
+    if (isNaN(precioBase) || precioBase <= 0) {
       toast.error('Precio sugerido inválido');
       return;
     }
+
+    // SPRINT-178: aprobación rápida = auto-descuento silencioso si hay chequeo
+    // vigente. NO permite override aquí (la UI es 1 clic, sin input para
+    // motivo). Si el admin/coord quiere override, debe abrir la orden en
+    // /admin/ordenes o /admin/orden/:id. Si la orden ya tiene descuento
+    // aplicado (re-aprobación), guard idempotente.
+    let precio = precioBase;
+    let camposDescuento: Record<string, unknown> = {};
+    let detalleDescuento = '';
+    if (!orden.descuentoChequeoPrevioId && orden.clienteId && orden.equipoTipo) {
+      try {
+        const info = await buscarChequeoVigentePorCliente(orden.clienteId, orden.equipoTipo);
+        if (info && info.vigente && info.ordenId !== orden.id) {
+          const { precioConDescuento, descuentoAplicado } = calcularDescuentoChequeo(precioBase, info.montoChequeo);
+          precio = precioConDescuento;
+          camposDescuento = construirCamposDescuentoChequeo({
+            chequeo: { ordenId: info.ordenId, fechaCierre: info.fechaCierre },
+            montoFinalDescuento: descuentoAplicado,
+            override: false,
+          });
+          detalleDescuento = describirDescuentoChequeo({
+            ordenNumero: info.ordenNumero,
+            montoDescuento: descuentoAplicado,
+            fechaChequeo: info.fechaCierre,
+            override: false,
+          });
+        }
+      } catch (err) {
+        console.warn('[SPRINT-178/AgendaDia] error buscando chequeo previo:', err);
+      }
+    }
+
     setAprobandoId(orden.id);
     try {
       const usuario = userProfile?.nombre || 'Admin';
+      const notaAuditoria = detalleDescuento
+        ? `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')} — ${detalleDescuento}`
+        : `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')}`;
       const registroAuditoria = crearRegistroAuditoria(
         usuario,
         'precio_sugerido',
-        `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')}`,
+        notaAuditoria,
         'precioFinal',
         '',
         `RD$ ${precio.toLocaleString('es-DO')}`
@@ -279,8 +320,14 @@ export default function AgendaDia() {
         estado: 'activo',
         historialFases: nuevoHistorialFases,
         auditoria: arrayUnion(registroAuditoria),
+        // SPRINT-178: descuento por chequeo previo (silencioso, sólo si vigente).
+        ...camposDescuento,
         updatedAt: ahora,
       });
+      // SPRINT-178: toast informativo si se aplicó descuento silencioso
+      if (detalleDescuento) {
+        toast.success(`Descuento aplicado: ${detalleDescuento}`, { duration: 6000 });
+      }
       // SPRINT-174: notif `precio_aprobado` al técnico + admins/coords
       // (autoexclusión del aprobador). Patrón canónico SPRINT-169
       // (`5823955`): try/catch independiente por destinatario, `p.uid`

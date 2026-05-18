@@ -15,6 +15,16 @@
         { "fieldPath": "personalUid", "order": "ASCENDING" },
         { "fieldPath": "fechaRD", "order": "DESCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "ordenes_servicio",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "clienteId", "order": "ASCENDING" },
+        { "fieldPath": "equipoTipo", "order": "ASCENDING" },
+        { "fieldPath": "tipoCierre", "order": "ASCENDING" },
+        { "fieldPath": "fechaCierre", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

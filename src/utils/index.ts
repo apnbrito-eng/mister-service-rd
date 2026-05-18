@@ -1184,6 +1184,15 @@ export function parseFactura(id: string, raw: Record<string, unknown>): Factura 
       raw.clienteTipoEnEmision === 'particular' || raw.clienteTipoEnEmision === 'b2b'
         ? raw.clienteTipoEnEmision
         : undefined,
+    // SPRINT-178: denormalización del descuento por chequeo previo (todos
+    // opcionales, sólo poblados si la orden subyacente tenía descuento al
+    // emitirse el conduce). Cazador P-009 enforce que se incluyan acá.
+    descuentoChequeoPrevioId: (raw.descuentoChequeoPrevioId as string) || undefined,
+    descuentoChequeoPrevioMonto: typeof raw.descuentoChequeoPrevioMonto === 'number' ? (raw.descuentoChequeoPrevioMonto as number) : undefined,
+    descuentoChequeoPrevioFecha: parseFirestoreDate(raw.descuentoChequeoPrevioFecha) || undefined,
+    descuentoChequeoPrevioOverride: raw.descuentoChequeoPrevioOverride === true ? true : undefined,
+    descuentoChequeoPrevioMotivoOverride: (raw.descuentoChequeoPrevioMotivoOverride as string) || undefined,
+    descuentoChequeoPrevioAplicadoPor: (raw.descuentoChequeoPrevioAplicadoPor as string) || undefined,
     createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
   };
 }

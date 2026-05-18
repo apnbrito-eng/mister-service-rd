@@ -524,6 +524,30 @@ export default function ProcesarFacturacionModal({
       if (orden.tipoCierre) facturaPayload.tipoCierre = orden.tipoCierre;
       else if (orden.soloChequeo) facturaPayload.tipoCierre = 'solo_chequeo';
       else facturaPayload.tipoCierre = 'reparacion_completa';
+      // SPRINT-178: denormalizar los 6 campos del descuento por chequeo previo
+      // (si la orden los tiene). Trazabilidad fiscal + reportes financieros
+      // (distinguir "ingreso por chequeo independiente" vs "anticipo aplicado").
+      if (orden.descuentoChequeoPrevioId) {
+        facturaPayload.descuentoChequeoPrevioId = orden.descuentoChequeoPrevioId;
+        if (typeof orden.descuentoChequeoPrevioMonto === 'number') {
+          facturaPayload.descuentoChequeoPrevioMonto = orden.descuentoChequeoPrevioMonto;
+        }
+        if (orden.descuentoChequeoPrevioFecha) {
+          // Persistir como Timestamp (consistente con fechaServicio).
+          facturaPayload.descuentoChequeoPrevioFecha = orden.descuentoChequeoPrevioFecha instanceof Date
+            ? Timestamp.fromDate(orden.descuentoChequeoPrevioFecha)
+            : orden.descuentoChequeoPrevioFecha;
+        }
+        if (orden.descuentoChequeoPrevioOverride === true) {
+          facturaPayload.descuentoChequeoPrevioOverride = true;
+        }
+        if (orden.descuentoChequeoPrevioMotivoOverride) {
+          facturaPayload.descuentoChequeoPrevioMotivoOverride = orden.descuentoChequeoPrevioMotivoOverride;
+        }
+        if (orden.descuentoChequeoPrevioAplicadoPor) {
+          facturaPayload.descuentoChequeoPrevioAplicadoPor = orden.descuentoChequeoPrevioAplicadoPor;
+        }
+      }
       // SPRINT-151: idem — fechaPago se setea si el cobro queda completo
       // (sumando el pago nuevo del modal a los previos).
       if ((totalPagado + montoPagoNuevo) >= totalItems) facturaPayload.fechaPago = ahora;

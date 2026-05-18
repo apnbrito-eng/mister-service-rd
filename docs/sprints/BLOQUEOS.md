@@ -13,7 +13,7 @@
 ## SPRINT-178 — Vigencia 30 días del chequeo + descuento automático a cotización
 
 **Tipo:** Feature de producto con decisión de negocio + scope amplio. Requiere OK Jorge antes de procesar.
-**Estado:** ESPERANDO_OK_JORGE
+**Estado:** ✅ DESBLOQUEADO 2026-05-18 — movido a `COLA_AUTONOMA.md` con scope refinado por coordinator autónomo pasada 20. Jorge OK con 4 decisiones explícitas. Ver scope final en COLA.
 **Origen:** QA E2E 2026-05-16. Jorge clarificó regla: "Los chequeos tienen 30 días de vigencia para ser utilizado en monto a favor de la cotización que se le hizo al cliente."
 
 **Por qué se escaló (coordinator autónomo pasada 19, 2026-05-18):**

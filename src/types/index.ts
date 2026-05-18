@@ -479,6 +479,32 @@ export interface OrdenServicio {
   efectivoEntregadoEn?: Date;
   // Cotización vinculada (Fase 4B)
   cotizacionId?: string;
+  /**
+   * SPRINT-178 (2026-05-18): descuento automático al aprobar precio cuando el
+   * cliente tiene un `solo_chequeo` vigente (≤30 días) del mismo `equipoTipo`.
+   * Regla de negocio: "el monto del chequeo se aplica a la cotización siguiente
+   * si se aprueba dentro de los 30 días posteriores al cierre del chequeo".
+   *
+   * Política (OK Jorge 2026-05-18):
+   *  - Edge 2+ chequeos vigentes: aplica SOLO el más reciente.
+   *  - Solo cotizaciones aprobadas post-deploy (cero migración retroactiva).
+   *  - Override manual permitido solo para admin/coord con audit log.
+   *  - Matching: `clienteId + equipoTipo` (sin equipoModelo — match permisivo).
+   *
+   * Todos los campos son opcionales (sólo poblados si el descuento se aplica).
+   */
+  /** id de la orden chequeo origen (ej: `os_abc123`). */
+  descuentoChequeoPrevioId?: string;
+  /** Monto aplicado como descuento (típicamente RD$2,000 del chequeo). */
+  descuentoChequeoPrevioMonto?: number;
+  /** fechaCierre del chequeo origen (para verificación visual). */
+  descuentoChequeoPrevioFecha?: Timestamp | Date;
+  /** True si admin/coord aplicó descuento sobre chequeo VENCIDO (>30d) o custom. */
+  descuentoChequeoPrevioOverride?: boolean;
+  /** Motivo libre del override. Obligatorio si `descuentoChequeoPrevioOverride: true`. */
+  descuentoChequeoPrevioMotivoOverride?: string;
+  /** auth.uid del admin/coord que aplicó el override (NO `userProfile.id`, ver CLAUDE.md). */
+  descuentoChequeoPrevioAplicadoPor?: string;
   // Inicio de chequeo (Fase 8) — registro técnico al llegar al sitio
   inicioChequeo?: InicioChequeo;
   // Pagos y facturación (Fase 7)
@@ -1196,6 +1222,19 @@ export interface Factura {
    * a WhatsApp o `/garantia/:token`).
    */
   notaConduce?: string;
+  /**
+   * SPRINT-178 (2026-05-18): denormalización del descuento por chequeo previo
+   * aplicado a la orden subyacente. Permite reportes financieros que distingan
+   * "ingreso por chequeo independiente" vs "anticipo aplicado" sin re-leer
+   * `ordenes_servicio`. Todos opcionales (sólo poblados si la orden tenía
+   * `descuentoChequeoPrevioId`).
+   */
+  descuentoChequeoPrevioId?: string;
+  descuentoChequeoPrevioMonto?: number;
+  descuentoChequeoPrevioFecha?: Timestamp | Date;
+  descuentoChequeoPrevioOverride?: boolean;
+  descuentoChequeoPrevioMotivoOverride?: string;
+  descuentoChequeoPrevioAplicadoPor?: string;
   createdAt: Date;
 }
 

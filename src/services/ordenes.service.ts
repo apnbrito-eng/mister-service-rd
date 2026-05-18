@@ -1,11 +1,13 @@
 import {
   runTransaction, doc, serverTimestamp, Timestamp,
   updateDoc, arrayUnion, collection, query, where, getDocs, onSnapshot,
+  orderBy, limit,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { crearRegistroAuditoria, generarTokenPortalCliente, parseOrden } from '../utils';
 import type { OrdenServicio, Personal, PropuestaReprogramacion, SugerenciaSoloChequeo } from '../types';
 import { crearNotificacion } from './notificaciones.service';
+import { diasRestantesVigencia, type ChequeoVigenteInfo } from '../utils/descuentoChequeo';
 
 /**
  * Resultado de `reactivarOrdenPostChequeo`. Devuelve `ok=false` cuando la
@@ -764,4 +766,108 @@ export function suscribirOrdenesConPropuestaReprogramacionPendiente(
     }
     callback(ordenes);
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// SPRINT-178 — Búsqueda de chequeo previo vigente para descuento
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Busca el chequeo previo (`tipoCierre: 'solo_chequeo'`) MÁS RECIENTE de un
+ * cliente para un `equipoTipo` específico. Aplica regla SPRINT-178:
+ *  - Match: `clienteId + equipoTipo` (sin equipoModelo — decisión Jorge,
+ *    matching permisivo "cualquier aire del mismo cliente cuenta").
+ *  - Vigencia: 30 días desde `cierreServicio.fechaCierre` (constante
+ *    `VIGENCIA_CHEQUEO_DIAS` en `utils/descuentoChequeo.ts`).
+ *  - Edge case 2+ chequeos vigentes: `orderBy fechaCierre DESC + limit(1)`
+ *    retorna el más reciente.
+ *  - Excluye chequeos ya reactivados (`reactivadaPostChequeo: true`) — esos
+ *    ya cambiaron a `tipoCierre: 'reparacion_completa'` y no son "chequeos
+ *    cerrados disponibles para descuento".
+ *
+ * IMPORTANTE: si `vigente === false` (o sea, hay un chequeo pero está
+ * vencido), igual lo retorna con `vigente: false`. El caller decide si
+ * mostrarlo informativamente o permitir override manual (admin/coord).
+ *
+ * Requiere índice compuesto Firestore:
+ *   `ordenes_servicio (clienteId ASC, equipoTipo ASC, tipoCierre ASC, fechaCierre DESC)`
+ * Ver `firestore.indexes.json` — deployado con `npm run deploy:indexes`.
+ *
+ * Retorna `null` si:
+ *  - El cliente nunca tuvo un chequeo del mismo equipo.
+ *  - El doc encontrado no tiene `fechaCierre` parseable (defensivo).
+ *
+ * @param clienteId id del cliente (NO clienteTelefono — el match es por id).
+ * @param equipoTipo string del catálogo de tipos (ej: 'Aire Acondicionado',
+ *   'Lavadora'). Match case-sensitive — el catálogo guarda el valor canónico.
+ */
+export async function buscarChequeoVigentePorCliente(
+  clienteId: string,
+  equipoTipo: string,
+): Promise<ChequeoVigenteInfo | null> {
+  if (!clienteId || !equipoTipo) return null;
+
+  try {
+    const q = query(
+      collection(db, 'ordenes_servicio'),
+      where('clienteId', '==', clienteId),
+      where('equipoTipo', '==', equipoTipo),
+      where('tipoCierre', '==', 'solo_chequeo'),
+      orderBy('fechaCierre', 'desc'),
+      limit(5), // Traemos 5 por si el más reciente está reactivado (filtramos client-side)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+
+    // Filtrar client-side: excluir reactivadas. La rule de `orderBy fechaCierre`
+    // ya garantiza orden descendente, así que el primer match no-reactivado
+    // es el más reciente disponible.
+    for (const d of snap.docs) {
+      const data = d.data() as Record<string, unknown>;
+      if (data.reactivadaPostChequeo === true) continue;
+      if (data.eliminada === true) continue;
+
+      // Resolver fechaCierre: puede estar en `fechaCierre` raíz (legacy) o
+      // en `cierreServicio.fechaCierre` (canonical post-wizard). Tomar el
+      // primero presente, preferir cierreServicio (es el oficial).
+      const cierreServ = data.cierreServicio as Record<string, unknown> | undefined;
+      const fechaRaw =
+        cierreServ?.fechaCierre ??
+        data.fechaCierre ??
+        null;
+      if (!fechaRaw) continue;
+      const fechaCierre: Date =
+        fechaRaw instanceof Timestamp
+          ? fechaRaw.toDate()
+          : fechaRaw instanceof Date
+            ? fechaRaw
+            : null as unknown as Date;
+      if (!fechaCierre || isNaN(fechaCierre.getTime())) continue;
+
+      const monto = Number(
+        data.precioChequeo ||
+        data.precioFinal ||
+        data.precioAprobado ||
+        0,
+      );
+      if (monto <= 0) continue;
+
+      const dias = diasRestantesVigencia(fechaCierre);
+      return {
+        ordenId: d.id,
+        ordenNumero: typeof data.numero === 'string' ? data.numero : d.id,
+        fechaCierre,
+        montoChequeo: monto,
+        vigente: dias > 0,
+        diasRestantes: dias,
+      };
+    }
+    return null;
+  } catch (err) {
+    // El error más común será "índice no creado todavía" — Firestore tira
+    // FirebaseError con instrucciones para crear el índice. Log warn y
+    // retornar null para no bloquear el flujo de aprobación de precio.
+    console.warn('[buscarChequeoVigentePorCliente] error buscando chequeo previo:', err);
+    return null;
+  }
 }

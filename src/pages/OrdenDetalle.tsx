@@ -35,9 +35,17 @@ import { whatsappUrl } from '../utils/whatsapp';
 import { coordsFromLatLng, googleMapsViewUrl } from '../utils/maps';
 import BotonComoLlegar from '../components/shared/BotonComoLlegar';
 import { crearNotificacion } from '../services/notificaciones.service';
+import { buscarChequeoVigentePorCliente } from '../services/ordenes.service';
 import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import {
+  calcularDescuentoChequeo,
+  construirCamposDescuentoChequeo,
+  describirDescuentoChequeo,
+  type ChequeoVigenteInfo,
+} from '../utils/descuentoChequeo';
+import { esAdminOCoord } from '../utils/permisos';
 
 export default function OrdenDetalle() {
   const { id } = useParams<{ id: string }>();
@@ -49,6 +57,12 @@ export default function OrdenDetalle() {
   const [precioAprobacion, setPrecioAprobacion] = useState('');
   const [aprobandoPrecio, setAprobandoPrecio] = useState(false);
   const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
+
+  // SPRINT-178: descuento por chequeo previo (consulta lazy).
+  const [chequeoPrevio, setChequeoPrevio] = useState<ChequeoVigenteInfo | null>(null);
+  const [aplicarDescuento, setAplicarDescuento] = useState(false);
+  const [overrideMotivo, setOverrideMotivo] = useState('');
+  const puedeOverrideDescuento = esAdminOCoord(userProfile);
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [modalPiezasAbierto, setModalPiezasAbierto] = useState(false);
   const [empresaConfig, setEmpresaConfig] = useState<ConfigEmpresa>({ ...CONFIG_EMPRESA_DEFAULT });
@@ -70,20 +84,81 @@ export default function OrdenDetalle() {
     }
   }, [orden?.precioSugerido, orden?.estadoAprobacion]);
 
+  // SPRINT-178: buscar chequeo previo vigente al cargar la orden pendiente.
+  useEffect(() => {
+    setChequeoPrevio(null);
+    setAplicarDescuento(false);
+    setOverrideMotivo('');
+    if (!orden) return;
+    if (orden.estadoAprobacion === 'aprobado') return;
+    if (orden.precioSugerido === undefined) return;
+    if (orden.descuentoChequeoPrevioId) return;
+    if (!orden.clienteId || !orden.equipoTipo) return;
+
+    let cancelado = false;
+    buscarChequeoVigentePorCliente(orden.clienteId, orden.equipoTipo)
+      .then(info => {
+        if (cancelado || !info) return;
+        if (info.ordenId === orden.id) return;
+        setChequeoPrevio(info);
+        if (info.vigente) setAplicarDescuento(true);
+      })
+      .catch(err => console.warn('[SPRINT-178] error buscando chequeo previo:', err));
+    return () => { cancelado = true; };
+  }, [orden?.id, orden?.clienteId, orden?.equipoTipo, orden?.precioSugerido, orden?.estadoAprobacion, orden?.descuentoChequeoPrevioId, orden]);
+
   const handleAprobarPrecio = async () => {
     if (!id || !orden) return;
-    const precio = Number(precioAprobacion);
-    if (isNaN(precio) || precio <= 0) {
+    const precioBase = Number(precioAprobacion);
+    if (isNaN(precioBase) || precioBase <= 0) {
       toast.error('Ingresa un precio válido');
       return;
     }
+
+    // SPRINT-178: aplicar descuento por chequeo previo si corresponde.
+    let precio = precioBase;
+    let camposDescuento: Record<string, unknown> = {};
+    let detalleDescuento = '';
+    if (chequeoPrevio && aplicarDescuento) {
+      const esOverride = !chequeoPrevio.vigente;
+      if (esOverride) {
+        if (!puedeOverrideDescuento) {
+          toast.error('Solo admin/coordinadora pueden aplicar descuento sobre chequeo vencido');
+          return;
+        }
+        if (overrideMotivo.trim().length < 5) {
+          toast.error('El motivo del override es obligatorio (mínimo 5 caracteres)');
+          return;
+        }
+      }
+      const { precioConDescuento, descuentoAplicado } = calcularDescuentoChequeo(precioBase, chequeoPrevio.montoChequeo);
+      precio = precioConDescuento;
+      camposDescuento = construirCamposDescuentoChequeo({
+        chequeo: { ordenId: chequeoPrevio.ordenId, fechaCierre: chequeoPrevio.fechaCierre },
+        montoFinalDescuento: descuentoAplicado,
+        override: esOverride,
+        motivoOverride: esOverride ? overrideMotivo.trim() : undefined,
+        aplicadoPor: esOverride ? (currentUser?.uid || undefined) : undefined,
+      });
+      detalleDescuento = describirDescuentoChequeo({
+        ordenNumero: chequeoPrevio.ordenNumero,
+        montoDescuento: descuentoAplicado,
+        fechaChequeo: chequeoPrevio.fechaCierre,
+        override: esOverride,
+        motivoOverride: esOverride ? overrideMotivo.trim() : undefined,
+      });
+    }
+
     setAprobandoPrecio(true);
     try {
       const usuario = userProfile?.nombre || 'Admin';
+      const notaAuditoria = detalleDescuento
+        ? `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')} — ${detalleDescuento}`
+        : `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')}`;
       const registroAuditoria = crearRegistroAuditoria(
         usuario,
         'precio_sugerido',
-        `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')}`,
+        notaAuditoria,
         'precioFinal',
         orden.precioSugerido !== undefined ? `RD$ ${orden.precioSugerido.toLocaleString('es-DO')}` : '',
         `RD$ ${precio.toLocaleString('es-DO')}`
@@ -123,6 +198,8 @@ export default function OrdenDetalle() {
         estado: 'activo',
         historialFases: nuevoHistorialFases,
         auditoria: arrayUnion(registroAuditoria),
+        // SPRINT-178: descuento por chequeo previo (opcional).
+        ...camposDescuento,
         updatedAt: ahora,
       });
       // SPRINT-174: notif `precio_aprobado` al técnico + admins/coords
@@ -1111,6 +1188,80 @@ export default function OrdenDetalle() {
                 El técnico sugirió <strong>RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong>.
                 Puedes modificar el precio antes de aprobar.
               </p>
+
+              {/* SPRINT-178: widget chequeo previo vigente / vencido */}
+              {chequeoPrevio && (() => {
+                const precioBase = Number(precioAprobacion) || 0;
+                const preview = calcularDescuentoChequeo(precioBase, chequeoPrevio.montoChequeo);
+                const fechaStr = chequeoPrevio.fechaCierre.toLocaleDateString('es-DO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                return (
+                  <div className={`mb-3 rounded-lg p-3 border-2 ${
+                    chequeoPrevio.vigente ? 'bg-blue-50 border-blue-300' : 'bg-orange-50 border-orange-300'
+                  }`}>
+                    {chequeoPrevio.vigente ? (
+                      <>
+                        <p className="text-xs text-blue-900 mb-2">
+                          <strong>Chequeo previo vigente:</strong> RD$ {chequeoPrevio.montoChequeo.toLocaleString('es-DO')} del {fechaStr} ({chequeoPrevio.ordenNumero}). Vigente {chequeoPrevio.diasRestantes} día{chequeoPrevio.diasRestantes === 1 ? '' : 's'} más.
+                        </p>
+                        <label className="flex items-center gap-2 text-xs text-blue-900 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={aplicarDescuento}
+                            onChange={e => setAplicarDescuento(e.target.checked)}
+                            className="rounded border-blue-400"
+                          />
+                          <span>
+                            Aplicar descuento de <strong>RD$ {preview.descuentoAplicado.toLocaleString('es-DO')}</strong>
+                            {aplicarDescuento && precioBase > 0 && (
+                              <> → precio final: <strong>RD$ {preview.precioConDescuento.toLocaleString('es-DO')}</strong></>
+                            )}
+                          </span>
+                        </label>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-orange-900 mb-2">
+                          <strong>Chequeo previo VENCIDO:</strong> RD$ {chequeoPrevio.montoChequeo.toLocaleString('es-DO')} del {fechaStr} ({chequeoPrevio.ordenNumero}). Venció hace {Math.abs(chequeoPrevio.diasRestantes)} día{Math.abs(chequeoPrevio.diasRestantes) === 1 ? '' : 's'}.
+                        </p>
+                        {puedeOverrideDescuento ? (
+                          <>
+                            <label className="flex items-center gap-2 text-xs text-orange-900 cursor-pointer mb-2">
+                              <input
+                                type="checkbox"
+                                checked={aplicarDescuento}
+                                onChange={e => setAplicarDescuento(e.target.checked)}
+                                className="rounded border-orange-400"
+                              />
+                              <span>
+                                Aplicar descuento <strong>(override manual)</strong> de RD$ {preview.descuentoAplicado.toLocaleString('es-DO')}
+                              </span>
+                            </label>
+                            {aplicarDescuento && (
+                              <div>
+                                <label className="block text-[11px] font-medium text-orange-900 mb-1">
+                                  Motivo del override <span className="text-red-600">*</span>
+                                </label>
+                                <input
+                                  type="text"
+                                  value={overrideMotivo}
+                                  onChange={e => setOverrideMotivo(e.target.value)}
+                                  placeholder="Ej: cliente negoció aplicar igual"
+                                  className="w-full px-2 py-1 border border-orange-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-orange-500 bg-white"
+                                />
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-[11px] text-orange-700 italic">
+                            Solo admin/coordinadora pueden aplicar descuento sobre chequeo vencido.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+
               <div className="flex gap-2">
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-yellow-800 mb-1">Precio final (RD$)</label>

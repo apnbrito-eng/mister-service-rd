@@ -87,7 +87,60 @@ Los 3 consumidores están bien escritos — esperan el campo en el shape del tip
 
 ## SPRINT-178 — Implementar vigencia 30 días del chequeo + descuento automático a cotización
 
-**Estado:** 🚫 ESCALADO A BLOQUEOS 2026-05-18 por coordinator autónomo (pasada 19). Razones: (1) edge case 2+ chequeos vigentes simultáneos requiere decisión de negocio de Jorge; (2) scope amplio (6 archivos + posible firestore.rules + posible índice compuesto + posible backfill legacy); (3) sub-sprints follow-up (rules, migración) requerirían OK separado. Ver `docs/sprints/BLOQUEOS.md → SPRINT-178` para las 4 decisiones que Jorge debe resolver antes de procesar.
+**Estado:** 🟡 EN_EJECUCION 2026-05-18 (pasada 20) — desbloqueado por OK Jorge en `BLOQUEOS.md` con 4 decisiones:
+1. Edge case 2+ chequeos vigentes: aplica solo el más reciente.
+2. Solo cotizaciones nuevas post-deploy (cero migración retroactiva).
+3. Override manual permitido para admin/coord con audit log obligatorio.
+4. Matching: `clienteId + equipoTipo` (sin equipoModelo).
+
+**Touch-list refinado post-OK Jorge:**
+- `src/services/ordenes.service.ts` (helper `buscarChequeoVigentePorCliente`).
+- `src/types/index.ts` (campos opcionales nuevos en `OrdenServicio` + denorm en `Factura`).
+- `src/pages/Ordenes.tsx` (UI descuento en `handleAprobarPrecio` + override admin/coord).
+- `src/pages/OrdenDetalle.tsx` (UI descuento en `handleAprobarPrecio` + override).
+- `src/pages/AgendaDia.tsx` (handler de aprobación rápida — descuento auto sin UI, sin override).
+- `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` (denormalizar 6 campos en Factura post-emisión).
+- `firestore.indexes.json` (índice compuesto `ordenes_servicio: clienteId + equipoTipo + tipoCierre + fechaCierre`).
+
+**NO toca `firestore.rules`:** los 6 campos nuevos son opcionales, escritos por `esStaffOficina()` (no por técnico). El gate de update de técnico (R4) tiene `noTocaCamposAprobacion()` y `noTocaSoloChequeo()` — el técnico ya no puede tocar nada relacionado con cotización/precio. Las facturas son esStaffOficina write. **0 cambios a rules requeridos.**
+
+**Comportamiento esperado:**
+
+1. Al aprobar precio en `handleAprobarPrecio` (3 handlers paralelos: Ordenes.tsx, OrdenDetalle.tsx, AgendaDia.tsx):
+   - Antes de mostrar el modal/UI de aprobación, consultar `buscarChequeoVigentePorCliente(clienteId, equipoTipo)`.
+   - Si retorna chequeo vigente (≤30 días), mostrar widget "Chequeo previo de RD$X del DD/MM/AAAA — vigente hasta DD/MM/AAAA. Aplicar descuento."
+   - Checkbox/botón "Aplicar descuento" → resta `montoChequeo` del precio aprobado y persiste los 6 campos `descuentoChequeoPrevio*` en la orden.
+
+2. Si el chequeo está vencido (>30 días):
+   - Mostrar widget info "Chequeo previo de RD$X del DD/MM/AAAA (vencido). No aplicable como descuento automático."
+   - Admin/coord ven adicional botón "Aplicar de todos modos (override)" → abre prompt motivo → persiste con `descuentoChequeoPrevioOverride: true` + `descuentoChequeoPrevioMotivoOverride` + `descuentoChequeoPrevioAplicadoPor: currentUser.uid`. Audit log entry.
+
+3. Edge case 2+ chequeos vigentes: la query ordena por `fechaCierre DESC` y retorna **el primero** (= más reciente). Decisión OK Jorge.
+
+4. AgendaDia (aprobación rápida sin modal): aplica descuento automático silencioso si hay chequeo vigente (sin permitir override ni input). Log toast informativo: "Descuento RD$X aplicado por chequeo previo OS-####".
+
+5. Al emitir conduce (`ProcesarFacturacionModal`): si la orden tiene `descuentoChequeoPrevioId`, denormalizar los 6 campos en el doc `facturas/{id}` para trazabilidad fiscal/reportes.
+
+**6 campos nuevos opcionales en `OrdenServicio`:**
+- `descuentoChequeoPrevioId?: string` (ordenId del chequeo origen)
+- `descuentoChequeoPrevioMonto?: number`
+- `descuentoChequeoPrevioFecha?: Timestamp | Date` (fechaCierre del chequeo origen)
+- `descuentoChequeoPrevioOverride?: boolean`
+- `descuentoChequeoPrevioMotivoOverride?: string`
+- `descuentoChequeoPrevioAplicadoPor?: string` (auth.uid)
+
+Mismos 6 campos denormalizados en `Factura`.
+
+**Restricciones:**
+- Solo aplica a cotizaciones aprobadas post-deploy (no migración retroactiva).
+- Override SOLO admin/coord (`esAdminOCoord(userProfile)`).
+- Audit log obligatorio en override.
+- Si índice compuesto necesario → `firestore.indexes.json` + `npm run deploy:indexes` ANTES de marcar COMPLETADO.
+- Si surge cambio a `firestore.rules` durante implementación → ABORTAR + sub-sprint BLOQUEOS con OK separado.
+
+---
+
+## SPRINT-178 (LEGACY ESCALADO — preservado para forensia) ⊘ 
 
 **Prioridad:** ALTA (gap de producto que afecta facturación correcta).
 
