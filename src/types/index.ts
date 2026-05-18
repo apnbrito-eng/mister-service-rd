@@ -1639,7 +1639,13 @@ export interface CierreServicio {
   // (`firmas_cierre/{ordenId}/firma-{timestamp}.png`) y la URL queda acá.
   // Campos opcionales — órdenes legacy cerradas antes del sprint no los tienen.
   firmaClienteUrl?: string;
-  firmaClienteAt?: Timestamp;
+  // SPRINT-177-HOTFIX (2026-05-18): tipo ampliado a `Timestamp | Date` para
+  // permitir lectura post-parseOrden (donde parseFirestoreDate retorna Date)
+  // sin downcast forzado. Patrón consistente con `piezasValidadasEn` /
+  // `aprobadaEn` en el mismo archivo. Persistencia sigue siendo Timestamp
+  // (Timestamp.now() en el wizard) — el `| Date` solo aplica al shape
+  // post-parse en memoria.
+  firmaClienteAt?: Timestamp | Date;
 }
 
 export type CondicionPieza = 'nueva' | 'usada';

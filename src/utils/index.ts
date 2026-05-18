@@ -792,6 +792,13 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
         descripcionTrabajo: (cs.descripcionTrabajo as string) || undefined,
         trabajoPendiente: (cs.trabajoPendiente as string) || undefined,
         satisfaccionCliente: typeof cs.satisfaccionCliente === 'number' ? (cs.satisfaccionCliente as number) : undefined,
+        // SPRINT-177-HOTFIX: firma del cliente (P-009 — parser olvidaba estos
+        // campos persistidos por SPRINT-159 → la UI rendereaba "Sin firma"
+        // aunque la firma existiera en Storage + Firestore. 14 días en
+        // producción con firmas invisibles. Postmortem
+        // `docs/postmortems/2026-05-16-firma-cliente-parser-olvido.md`.
+        firmaClienteUrl: (cs.firmaClienteUrl as string) || undefined,
+        firmaClienteAt: parseFirestoreDate(cs.firmaClienteAt) || undefined,
       };
     })() : undefined,
     metodoPagoCierre: (raw.metodoPagoCierre as import('../types').MetodoPago) || undefined,
