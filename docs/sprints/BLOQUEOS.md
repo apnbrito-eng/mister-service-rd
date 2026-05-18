@@ -55,6 +55,17 @@ SPRINT-186 NO puede procesarse autónomo hasta que Jorge confirme que el cliente
 3. Jorge verifica en `/admin/clientes` que el typeahead de "QA Test" muestra 1 sola entrada (post-deploy + hard refresh).
 4. Jorge edita esta entrada agregando `OK: jorge YYYY-MM-DD HH:MM cliente consolidado` y pega `procesa bloqueos` al coordinator.
 
+**OK: jorge 2026-05-18 — cliente consolidado.**
+
+Ejecución del dedup `--apply` (vía Cowork → Jorge 2026-05-18):
+
+- DRY-RUN reportó 2 grupos (QA Test + Brito/Jorge Brito). Decisión: apply directo (canónico = más antiguo en ambos casos).
+- `--apply` real: 2 grupos consolidados, 2 duplicados soft-deleted, 3 docs reasignados (2 órdenes + 1 factura), 1 batch atómico (6 ops Firestore).
+- Audit log id: `33M7G5z6lEBVBdSf6yKK` en `auditoria_admin` con `accion=dedup_clientes_por_telefono`.
+- Resultado: typeahead "QA Test" debería mostrar 1 sola entrada (`Q0y6fB6NCIkNoZ3nlwIp` como `clienteId` canónico). OS-0058 y OS-0059 ahora apuntan al mismo `clienteId` → `buscarChequeoVigentePorCliente` debería retornar el chequeo vigente correctamente.
+
+Coordinator: procesar SPRINT-186 con `procesa bloqueos`.
+
 ---
 
 ## SPRINT-178 — Vigencia 30 días del chequeo + descuento automático a cotización
