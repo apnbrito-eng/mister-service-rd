@@ -22,6 +22,7 @@ import ReagendarModal from './ReagendarModal';
 import RegistrarPagoModal from './RegistrarPagoModal';
 import EnviarFacturacionButton from './EnviarFacturacionButton';
 import EnviarPortalButton from './EnviarPortalButton';
+import BadgeSoloChequeo from '../shared/BadgeSoloChequeo';
 import { Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
 import { reactivarOrdenPostChequeo } from '../../services/ordenes.service';
 import { useConfigWeb } from '../../hooks/useConfigWeb';
@@ -111,6 +112,17 @@ export default function OrdenDetailModal({
   };
   return (
     <div className="space-y-6">
+      {/* SPRINT-181 (2026-05-18): badge "Solo chequeo" en el header del modal.
+          Antes solo se veía en la card del listado y en la fila expandida de
+          /admin/facturas — la coordinadora abría el modal y solo inferia por
+          texto. Componente compartido `BadgeSoloChequeo` (variante prominent
+          consistente con el de OrdenResumenLectura). */}
+      {(orden.tipoCierre === 'solo_chequeo' || orden.soloChequeo === true) && (
+        <div className="-mt-1">
+          <BadgeSoloChequeo orden={orden} prominent />
+        </div>
+      )}
+
       {/* Banner si está eliminada */}
       {orden.eliminada && (
         <div className="bg-red-50 border-2 border-red-300 rounded-xl p-3 flex items-start gap-2 text-sm text-red-900">

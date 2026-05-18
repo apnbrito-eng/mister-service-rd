@@ -37,6 +37,7 @@ import {
 import { obtenerConfigFiscal } from '../../services/configFiscal.service';
 import { esAdminOCoord } from '../../utils/permisos';
 import Modal from '../Modal';
+import BadgeSoloChequeo from '../shared/BadgeSoloChequeo';
 import FacturaItemsEditor from '../facturas/FacturaItemsEditor';
 import {
   Banknote, ArrowRightLeft, CreditCard, Check, Clock, X,
@@ -1031,6 +1032,15 @@ export default function ProcesarFacturacionModal({
   return (
     <Modal isOpen={!!orden} onClose={onClose} title={`Emitir conduce de garantía — ${orden.numero || ''}`} size="lg">
       <div className="space-y-5">
+        {/* SPRINT-181 (2026-05-18): badge "Solo chequeo" prominente en el
+            header del modal de emisión. Antes la coord/admin emitían el
+            conduce sin indicador visual claro de que era solo chequeo (sin
+            reparación) — solo lo veían en la fila expandida post-emisión.
+            Variante prominent consistente con OrdenResumenLectura. */}
+        {(orden.tipoCierre === 'solo_chequeo' || orden.soloChequeo === true) && (
+          <BadgeSoloChequeo orden={orden} prominent />
+        )}
+
         {/* Banner borrador encontrado */}
         {borradorEncontrado && (
           <div className="flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-sm">

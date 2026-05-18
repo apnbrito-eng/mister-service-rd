@@ -65,6 +65,7 @@ const SugerenciasChequeo = lazy(() => import('./pages/SugerenciasChequeo'));
 const Reprogramaciones = lazy(() => import('./pages/Reprogramaciones'));
 const ConfiguracionMarketing = lazy(() => import('./pages/ConfiguracionMarketing'));
 const Notificaciones = lazy(() => import('./pages/Notificaciones'));
+const Admin404 = lazy(() => import('./pages/Admin404'));
 
 // Public website pages (también lazy — el sitio público es un viewport distinto)
 import PublicLayout from './components/public/PublicLayout';
@@ -280,6 +281,14 @@ function AppRoutes() {
             coordinadora. La rule de Firestore ya filtra por userId == auth.uid,
             así que no necesita PermisoRoute extra. */}
         <Route path="notificaciones" element={<Notificaciones />} />
+        {/* SPRINT-180 (2026-05-18): catch-all DENTRO del layout admin. Sin
+            esto, cualquier `/admin/<ruta-inexistente>` caía al `*` global
+            que redirige a `/` (landing público) → coordinadora perdía
+            sidebar + contexto de sesión. Detectado en QA E2E 2026-05-16
+            ROL 6 bonus. Las rutas hermanas declaradas arriba tienen
+            prioridad — react-router matchea en orden, las específicas
+            ganan al catch-all. */}
+        <Route path="*" element={<Admin404 />} />
       </Route>
 
       {/* Legacy redirects — old /dashboard, /ordenes etc. now under /admin */}
