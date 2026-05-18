@@ -79,6 +79,25 @@ export default function CierreServicioWizard({
   const [periodoGarantiaDias, setPeriodoGarantiaDias] = useState<number>(PERIODO_GARANTIA_DEFAULT_DIAS);
   const periodoValido = periodoGarantiaDias >= 1 && periodoGarantiaDias <= 365;
 
+  // SPRINT-182 (2026-05-18): labels adaptadas a `orden.soloChequeo` +
+  // `equipoTipo`. El wizard no branchea estructuralmente (mismas 3 preguntas
+  // + foto + firma + piezas) — solo cambian las labels para que el técnico
+  // entienda el contexto. Hallazgos QA E2E:
+  //  - #13: la pregunta 3 era de mangueras/llave (lavadora). En Aire NO
+  //    aplica drenaje + llave; se reemplaza por conexiones eléctricas +
+  //    condensador + filtro.
+  //  - #14: la pregunta 1 ("¿equipo funciona?") no tiene sentido en
+  //    solo_chequeo (técnico no reparó → respuesta siempre "no"). Texto
+  //    adaptado a "¿diagnóstico claro y comunicado?".
+  const esSoloChequeo = orden.soloChequeo === true;
+  const esAireAcondicionado = (orden.equipoTipo || '').toLowerCase().includes('aire');
+  const labelEquipoFunciona = esSoloChequeo
+    ? '¿Le comunicaste al cliente el diagnóstico final?'
+    : '¿El equipo quedó funcionando correctamente?';
+  const labelRevisoConexiones = esAireAcondicionado
+    ? '¿Revisaste conexiones eléctricas, condensador y filtro?'
+    : '¿Revisaste las mangueras de desagüe, entrada de agua y que la llave esté abierta?';
+
   // Capturar GPS automáticamente al abrir (en background).
   // Usa el helper con fallback a baja precisión — evita quedarse colgado en interiores.
   useEffect(() => {
@@ -611,10 +630,16 @@ export default function CierreServicioWizard({
             )}
           </div>
 
-          {/* SECCIÓN 2: 3 PREGUNTAS */}
+          {/* SECCIÓN 2: 3 PREGUNTAS — SPRINT-182 labels adaptativas */}
           <div className="space-y-4">
+            {esSoloChequeo && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900">
+                <span className="font-semibold">Cierre como solo chequeo:</span> el técnico
+                no realizó reparación. Las preguntas abajo se adaptaron al diagnóstico.
+              </div>
+            )}
             <PreguntaSiNo
-              label="¿El equipo quedó funcionando correctamente?"
+              label={labelEquipoFunciona}
               value={equipoFunciona}
               onChange={setEquipoFunciona}
             />
@@ -624,7 +649,7 @@ export default function CierreServicioWizard({
               onChange={setClienteSatisfecho}
             />
             <PreguntaSiNo
-              label="¿Revisaste las mangueras de desagüe, entrada de agua y que la llave esté abierta?"
+              label={labelRevisoConexiones}
               value={revisoConexiones}
               onChange={setRevisoConexiones}
             />
