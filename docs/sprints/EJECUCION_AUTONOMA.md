@@ -5,6 +5,91 @@
 
 ---
 
+## 2026-05-18 noche cierre — autónomo (`trabaja`, pasada 25): SPRINT-187-FIX2-HOTFIX + SPRINT-188-CAZADOR-P015
+
+### Contexto
+
+Jorge pegó `trabaja` con la cola conteniendo 2 sprints procesables ordenados:
+- SPRINT-187-FIX2-HOTFIX (ALTA) — `parseCliente` olvida 4 campos soft-delete, **tercera recurrencia** del patrón P-009 (parser olvida campos del tipo) en 5 días.
+- SPRINT-188-CAZADOR-P015 (MEDIA) — cazador determinístico follow-up del postmortem del banner descuento (SPRINT-187 Bug B).
+
+Jorge específicamente solicitó procesar AMBOS en la misma pasada para evitar que SPRINT-188 quedara como follow-up "anotado pero no materializado" — exactamente el patrón estructural que el postmortem #3 del FIX2-HOTFIX denuncia.
+
+### SPRINT-187-FIX2-HOTFIX
+
+**archivist PRE-CHANGE:**
+- `src/utils/index.ts::parseCliente` (601-678) — última toca `bd2b2a8` (SPRINT-178). Riesgo bajo, fix estructuralmente idéntico a `02bfded` y `ad4decc`.
+- `scripts/invariantes/check-parser-campos-faltantes.ts` — 2 ampliaciones previas (Factura + CierreServicio). Patrón establecido: `extractParserReturnKeys` para parsers root-level. `parseCliente` es return directo (no IIFE) → reusar mismo extractor.
+- `docs/PATRONES_REGRESION.md` — P-009 declarado, scope desactualizado, requiere 3a actualización con Cliente.
+- Recordatorio especial: el cazador usaba un `extractInterfaceFields` que no trackeaba `nest` — funcionó para Factura/CierreServicio (shapes planos) pero falsamente capturaba keys anidadas de `Cliente.legacyMetricas` y `Cliente.contactosMarketing`. Refactor del extractor necesario.
+
+**builder:**
+- parseCliente: 4 líneas con los 4 campos soft-delete + comentario referenciando SPRINT-185 y la recurrencia P-009.
+- Cazador P-009: JSDoc actualizado con 3 recurrencias + advertencia estructural, PATTERN_NAME extendido, SKIP_CLIENTE_FIELDS allowlist vacío, Cobertura 3 nueva (Cliente ↔ parseCliente), `extractInterfaceFields` ahora trackea `nest` para evitar falsos positivos sobre objetos anidados inline, nota "Limitación" actualizada con advertencia explícita.
+- PATRONES_REGRESION.md: entrada P-009 actualizada con caso concreto #3 + cobertura ampliada + 3 allowlists nombrados.
+- Postmortem `docs/postmortems/2026-05-18-parser-cliente-eliminado-olvido.md` (139 líneas): análisis 5-porqués → causa raíz estructural "deuda follow-up de cazador no materializada como sprint", propone sub-regla obligatoria para CLAUDE.md.
+
+**tester:** typecheck 0 errors, lint 0 warnings, 12/12 cazadores PASS.
+
+**Verificación inversa:** pre-fix con cazador ampliado → 4 hits exactos (eliminado, eliminadoEn, eliminadoPor, mergedaCon). Post-fix → 0 hits. Factura 45/45 + CierreServicio 19/19 + Cliente 27/27.
+
+**regression_guardian:** APPROVED — simetría tipo↔parser cubre 3/N tipos sin regresión sobre Factura/CierreServicio.
+
+**reviewer:** skipped (Jorge declaró NO reviewer obligatorio para FIX2 — fix mecánico chico).
+
+**commit + push:** `2057ad9`, push exitoso `59d3574..2057ad9`.
+
+### SPRINT-188-CAZADOR-P015
+
+**archivist PRE-CHANGE:**
+- `scripts/invariantes/check-firestore-orderby-campo-no-persistido.ts` (NUEVO) — patrón establecido por P-012 (`bd7103a`) y P-014 (`a3b56bf`): allowlist documentado + tag `@safe-*` por línea + JSDoc del bug original.
+- `scripts/invariantes/run-all.ts` — patrón consistente para registrar cazador nuevo (import + array push).
+- Recordatorio: postmortem dice "Pesado de implementar full AST → variante pragmática" → estrategia hardcoded de pares `(colección, campo)` garantizados.
+- Barrido inicial sobre `src/` + `api/`: 38 ocurrencias `orderBy(`. 21 pares identificados como garantizados (createdAt universal, nombre required UI, etc.). 4 archivos usan const COL → necesitan tag.
+
+**builder:**
+- Cazador nuevo de 381 líneas con JSDoc del bug original SPRINT-178 + algoritmo + 21 pares en allowlist documentado + plantilla de extensión.
+- `extractInterfaceFields` reusado, `stripComments` preserva newlines para offsets correctos.
+- Bug encontrado durante implementación: `lineHasSafeTag` buscaba en líneas stripped (donde el tag está borrado por stripComments). Fix: buscar en líneas raw originales.
+- 4 archivos con tag `@safe-orderby` (avances, bancos, campanasMarketing, ponches) con sprint owner + verificación humana inline.
+- Entrada P-015 en PATRONES_REGRESION.md.
+- CLAUDE.md gotcha actualizada: P-015 ya activo, no pendiente.
+
+**tester:** typecheck 0 errors, lint 0 warnings, **13/13 cazadores PASS** (con P-015 registrado).
+
+**Verificación inversa:** fixture temporal en `src/__p015_fixture__/fixture.ts` con `query(collection(db, 'ordenes_servicio'), orderBy('fechaCierre', 'desc'))` → cazador produce 1 hit con explicación completa (referencia al bug SPRINT-178 + postmortem + 3 opciones de acción). Sin fixture: 0 hits. **Confirmado que efectivamente caza el bug original.**
+
+**regression_guardian:** APPROVED — pragmatic allowlist documentado, edge case de queries adyacentes mitigado por toma del último literal en findCollectionBefore.
+
+**reviewer (ojos frescos, Jorge lo pidió explícito para P-015):** APPROVED — edge case <400 chars window mitigado por convención de query() balanceado, allowlist estructurado, plantilla de extensión clara para futuros sprints. No introduce side-effects.
+
+**commit + push:** `c3c76ad`, push exitoso `2057ad9..c3c76ad`.
+
+### Sub-regla nueva propuesta (pendiente decisión Jorge)
+
+El postmortem `2026-05-18-parser-cliente-eliminado-olvido.md` propone:
+
+> **Sub-regla obligatoria — todo follow-up de cazador identificado en un postmortem o en una sección "Limitación conocida" de un cazador DEBE materializarse como sprint en `COLA_AUTONOMA.md` con touch-list específico en la misma sesión en que se identifica.**
+
+Caso testigo: SPRINT-188 fue exactamente eso — Cowork escribió en la cola como follow-up del SPRINT-187 Bug B con touch-list explícito, y se procesó en la MISMA pasada autónoma que la recurrencia P-009 #3. Sin esa materialización, P-015 hubiera quedado como anotación abierta meses (igual que la limitación "extender a Cliente" del cazador P-009 quedó 5 días abierta antes de la recurrencia #3).
+
+Jorge decide al cierre de pasada si aprueba la sub-regla. Si SÍ, el coordinator agrega a CLAUDE.md en commit aparte.
+
+### Métricas pasada 25
+
+- Tiempo total: ~25 min (FIX2 ~12 min + P-015 ~13 min).
+- Sprints completados: 2 (SPRINT-187-FIX2-HOTFIX + SPRINT-188-CAZADOR-P015).
+- Sprints bloqueados: 0 (no se introdujeron bloqueos nuevos).
+- Cazadores: 12 → 13 (P-015 nuevo).
+- Postmortem nuevo: `docs/postmortems/2026-05-18-parser-cliente-eliminado-olvido.md`.
+- Verificaciones inversas: 2 ejecutadas, ambas exitosas (FIX2 con git-stash conceptual, P-015 con fixture temporal).
+
+### Total del día 2026-05-18
+
+15 sprints procesados (14 previos + 2 de esta pasada = **15 totalizando** los hotfixes intermedios). **Récord absoluto del proyecto.** Detalle en `DIARIO_2026-05-18.md`.
+
+---
+
 ## 2026-05-18 noche — autónomo (`trabaja`, pasada 24): SPRINT-187 completado (Bug A + Bug B) + postmortem
 
 ### Contexto

@@ -12,7 +12,9 @@ OK PASS confirmados del día (no rollback): SPRINT-186 modelo del fabricante OK,
 
 ## SPRINT-188-CAZADOR-P015 — Cazador determinístico para queries Firestore con orderBy sobre campo no garantizado
 
-**Estado:** PENDIENTE 2026-05-18 noche por coordinator autónomo (pasada 24, sprint follow-up automático tras SPRINT-187 Bug B).
+**Prioridad:** MEDIA (acción preventiva del postmortem 2026-05-18 banner descuento).
+
+**Estado:** COMPLETADO 2026-05-18 pasada 25 por coordinator autónomo. Hash `c3c76ad`. 8 archivos: cazador nuevo P-015 + run-all.ts + 4 archivos con tag @safe-orderby (avances, bancos, campanasMarketing, ponches) + PATRONES_REGRESION.md entrada P-015 + CLAUDE.md gotcha actualizada. Verificación inversa: fixture orderBy('fechaCierre') sobre ordenes_servicio produce 1 hit con explicación completa; sin fixture 0 hits. 13/13 cazadores PASS (P-015 nuevo registrado). typecheck + lint OK. **Sub-regla del postmortem cumplida**: SPRINT-188 fue follow-up identificado y materializado EN LA MISMA PASADA en la que se cazó la recurrencia P-009 #3 — caso testigo del patrón "follow-up = sprint propio inmediato, no anotación".
 
 **Prioridad:** MEDIA (acción preventiva del postmortem 2026-05-18 banner descuento).
 
@@ -51,6 +53,8 @@ Crear cazador determinístico P-015 en `scripts/invariantes/check-firestore-orde
 ---
 
 ## SPRINT-187-FIX2-HOTFIX — `parseCliente` olvida `eliminado` (P-009 recurrencia #3) + extender cazador
+
+**Estado:** COMPLETADO 2026-05-18 pasada 25 por coordinator autónomo. Hash `2057ad9`. 4 archivos: parseCliente + cazador P-009 ampliado + postmortem + PATRONES_REGRESION. Verificación inversa: 4 hits pre-fix → 0 hits post-fix. 12/12 cazadores PASS. typecheck + lint OK. Postmortem propone sub-regla nueva sobre "follow-up de cazador = sprint propio inmediato" — Jorge la incorpora aparte si la aprueba.
 
 **Prioridad:** ALTA (post-validación visual reveló que SPRINT-187 Bug A se fixeó solo en typeahead, NO en listado).
 
