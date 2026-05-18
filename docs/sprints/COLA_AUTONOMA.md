@@ -3,7 +3,175 @@
 > Cowork escribe acá. Coordinator lee y procesa cuando Jorge pega `trabaja`.
 > Formato y reglas en `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md`.
 
-**Última actualización:** 2026-05-18 por coordinator autónomo (pasada 19, `trabaja`) — **7 SPRINTS COMPLETADOS + 1 ESCALADO a BLOQUEOS en una sola pasada.** Hashes pusheados en orden: `ad4decc` SPRINT-177-HOTFIX (parser firmaClienteUrl + cazador P-009 extendido + postmortem), `729b85f` SPRINT-180+181 (catch-all 404 admin + badge Solo chequeo en headers), `3650b26` SPRINT-183 (3 UX bajos: toast cliente, observaciones, hint stepper), `e6e1ba4` SPRINT-184 (QA_PROMPT_MAESTRO doc + selector "Ver bandeja de" admin/coord), `328c508` SPRINT-179 (permission-denied tecnico/comisiones + postmortem clase nueva), `8bdd914` SPRINT-182 (wizard labels adaptativas equipoTipo + soloChequeo). **SPRINT-178 ESCALADO a BLOQUEOS** — feature de producto con 4 decisiones de negocio pendientes (edge case 2+ chequeos vigentes + legacy retroactivo + override manual + granularidad matching). Cazadores 10/10 PASS post-cada commit. Typecheck + lint PASS. **2 postmortems generados** (firma + permission-denied). Cola autónoma agotada en lo procesable; SPRINT-178 espera Jorge.
+**Última actualización:** 2026-05-18 por Cowork — **QA puntual SPRINT-178 post-deploy reveló bug crítico de datos + 2 sprints nuevos a la cola.** El sidepanel intentó validar el descuento 30 días creando OS-0059 (cotización para QA Test + Aire Acondicionado) pero el descuento de OS-0058 NO apareció. Investigación de código: SPRINT-178 SÍ está implementado (helper `buscarChequeoVigentePorCliente` invocado desde `Ordenes.tsx:191`, `OrdenDetalle.tsx:99`, `AgendaDia.tsx:253` en handler aprobación de precio), pero NO surface aviso en modal de creación + se descubrió **causa raíz alternativa: cliente "QA Test" duplicado en /admin/clientes** (typeahead muestra 2 entradas idénticas con mismo tel 8090000000). Si OS-0058 está asociada a clienteId#A y OS-0059 a clienteId#B, el match falla por diseño. **2 sprints escritos:** SPRINT-185 (deduplicación clientes por teléfono normalizado + guard runtime + sprint cazador) — ALTA bloqueante para validar SPRINT-178; SPRINT-186 (surface aviso descuento en modal creación + sub-bug Modelo perdido + MessageNotSentError Esc) — MEDIA UX. Otros hallazgos del QA puntual: SPRINT-179-FIX2 (permission-denied recurre en /admin/citas qa-secretaria — completitud incompleta SPRINT-179, postmortem ya predijo recurrencia con stack `index-EhZnYXZ1.js:468:469`). Cliente debe consolidarse ANTES de revalidar SPRINT-178 (sin esto el descuento legítimamente no aplicará). **El coordinator no debe procesar SPRINT-186 hasta que SPRINT-185 esté COMPLETADO + Jorge confirme cliente consolidado** — dependencia explícita.
+
+---
+
+## SPRINT-185 — Deduplicación de clientes por teléfono normalizado + guard runtime
+
+**Prioridad:** ALTA (bloquea validación end-to-end de SPRINT-178 + integridad de datos del cliente).
+
+**Origen:** QA puntual sidepanel 2026-05-18 sobre SPRINT-178. El typeahead de cliente en OrdenCreateModal mostró 2 entradas "QA Test · (809) 000-0000" idénticas. El descuento de SPRINT-178 no aplicó probablemente porque OS-0058 quedó asociada a un `clienteId` distinto al que se usó al crear OS-0059. Caso aislado de QA + síntoma de bug sistémico: el alta de cliente no chequea duplicados por teléfono antes de crear.
+
+**Comportamiento esperado:**
+
+1. **Script DRY-RUN + `--apply`** (`scripts/dedup-clientes-por-telefono.ts`):
+   - Recorre `clientes` agrupando por `normalizarTelefonoRD(telefono)` (helper que strip non-digits, drop leading 1 si 11 dígitos, last 10).
+   - Para cada grupo con >1 entrada: el más antiguo (`createdAt` ASC) es canónico, los otros son duplicados.
+   - Para cada duplicado: query `ordenes_servicio where clienteId == <duplicado>` + reasignar a `clienteId == <canónico>` con `updateDoc` batch. Mismo barrido sobre `citas_por_confirmar`, `cotizaciones`, `facturas`, `equipos_taller` si tienen `clienteId`.
+   - Eliminar el doc duplicado con `eliminado: true` + `eliminadoPor: 'sistema'` + `eliminadoEn: serverTimestamp()` + `mergedaCon: <canonicoId>` (soft delete para forensia, no hard delete).
+   - Audit log en `auditoria_admin` con `accion: 'dedup_clientes_por_telefono'` + lista de duplicados consolidados + canónicos.
+   - Si >50 docs afectados → abortar y pedir `--ok-ampliado` (sub-regla CLAUDE.md migraciones masivas).
+
+2. **Guard runtime** en `src/services/clientes.service.ts`:
+   - Antes de `addDoc(collection(db, 'clientes'), ...)` agregar query `where('telefonoNormalizado', '==', normalizarTelefonoRD(form.telefono))`.
+   - Si retorna >0 → bloquear creación con error claro "Ya existe cliente con este teléfono: <nombre> · <tel>. Asociar a ese cliente en lugar de crear duplicado."
+   - Persistir `telefonoNormalizado` como campo nuevo en `Cliente` (denormalizado del `telefono` raw) — facilita queries futuras.
+
+3. **Helper compartido** `src/utils/cliente.ts` (NUEVO) o extender `utils/index.ts`:
+   - `normalizarTelefonoRD(tel: string): string` — strip non-digits, drop leading 1 si 11 dígitos, return last 10. Patrón heredado de `phoneNormalize` ya existente pero centralizado.
+   - Tests inline en el header del helper (comentario JSDoc con casos): `8090000000` → `8090000000`, `+1 (809) 000-0000` → `8090000000`, `18090000000` → `8090000000`, `0000-000-8090` → `8090000000` (edge case input invertido).
+
+4. **Cazador P-014 (NUEVO)** en `scripts/invariantes/check-cliente-create-sin-dedup.ts`:
+   - Detecta `addDoc(collection(db, 'clientes'), ...)` o `setDoc(doc(db, 'clientes', ...))` sin un guard previo de `getDocs(query(...where('telefonoNormalizado', '==', ...)))`.
+   - Allowlist documentada para casos legítimos (ej: backfill scripts).
+
+**Touch-list (auditoría):**
+
+1. `scripts/dedup-clientes-por-telefono.ts` (NUEVO).
+2. `src/utils/cliente.ts` (NUEVO) o `src/utils/index.ts` extendido — helper `normalizarTelefonoRD`.
+3. `src/services/clientes.service.ts` — guard + persistir `telefonoNormalizado`.
+4. `src/types/index.ts` — agregar `telefonoNormalizado?: string` + `mergedaCon?: string` + `eliminado?: boolean` + `eliminadoEn?: Timestamp` + `eliminadoPor?: string` a `Cliente`.
+5. `scripts/invariantes/check-cliente-create-sin-dedup.ts` (NUEVO P-014).
+6. `firestore.rules` — verificar. **Si requiere ajuste para permitir `telefonoNormalizado` como campo nuevo o el flag `eliminado` → ESCALAR a BLOQUEOS sub-sprint con OK separado.**
+
+**Consumidores que crean cliente (auditar antes de cerrar):**
+
+- `src/hooks/useOrdenCreateForm.ts` — al crear orden desde admin.
+- `src/pages/Citas.tsx` — al confirmar cita.
+- `src/components/public/AgendarPage.tsx` o `formularioAgendar.service.ts` — desde form público (`/agendar`).
+- `src/components/public/CampoFormulario.tsx` o `solicitudes.service.ts` — desde dynamic forms (`/f/:slug`).
+
+Cada caller debe consumir el guard. Si el guard detecta duplicado, devolver el `clienteId` existente y asociar la nueva orden a ese.
+
+**Plan de ejecución:**
+
+1. archivist PRE-CHANGE obligatorio sobre `clientes.service.ts` + todos los consumidores listados.
+2. builder: script + helper + types + guard + cazador.
+3. tester: typecheck + lint + `npm run check:regression`.
+4. regression_guardian: validar que el guard no rompe flujos de cita pública existentes (ej: form `/agendar` debe seguir funcionando para clientes nuevos legítimos).
+5. reviewer: lectura cruzada (riesgo de datos — eliminación lógica de clientes).
+6. **Jorge dispara el `--apply` del script manualmente DESPUÉS del deploy del fix de código** — siguiendo patrón SPRINT-149-APPLY / SPRINT-175-APPLY. Si DRY-RUN reporta más de 5 grupos de duplicados, escalar a BLOQUEOS con conteo + ejemplos.
+
+**Criterios de éxito:**
+
+- [ ] DRY-RUN del script reporta exactamente cuántos clientes duplicados por tel existen, incluyendo el caso QA Test.
+- [ ] `--apply` (disparado por Jorge) consolida los duplicados con soft delete + reasigna órdenes/citas/facturas.
+- [ ] Typeahead de cliente en OrdenCreateModal muestra 1 sola entrada "QA Test" post-`--apply`.
+- [ ] Crear cliente nuevo con teléfono ya existente es bloqueado por el guard runtime con mensaje claro.
+- [ ] Cazador P-014 PASS + agregado a `docs/PATRONES_REGRESION.md`.
+- [ ] Audit log completo de la dedup en `auditoria_admin`.
+
+**Restricciones:**
+
+- NO hard-delete de clientes — soft delete con `eliminado: true` para forensia.
+- NO tocar `firestore.rules` sin OK separado.
+- NO ejecutar `--apply` sin DRY-RUN previo.
+- Si DRY-RUN encuentra >50 grupos de duplicados → BLOQUEOS con OK ampliado.
+
+**Postmortem opcional** (solo si causa raíz revela algo estructural del flujo de alta de clientes).
+
+---
+
+## SPRINT-186 — Surface aviso de descuento 30 días en modal creación + bugs UX modal orden
+
+**Prioridad:** MEDIA (UX, no bloqueante funcional pero impacta conversión).
+
+**DEPENDENCIA EXPLÍCITA: NO procesar hasta que SPRINT-185 esté COMPLETADO + Jorge confirme cliente consolidado.** Sin dedupe primero el QA de este sprint estaría viciado por la misma causa raíz que generó SPRINT-185.
+
+**Origen:** QA puntual sidepanel 2026-05-18 sobre SPRINT-178. La lógica del descuento está implementada (`buscarChequeoVigentePorCliente` invocado desde 3 lugares río abajo) pero NO surface aviso en el modal de creación de orden. La oficina no se entera del crédito al agendar — solo aparece al aprobar precio.
+
+**Comportamiento esperado:**
+
+1. **Sugerencia automática al crear orden:** en `OrdenCreateModal.tsx` (o `useOrdenCreateForm.ts`), al cambiar `cliente.id` + `equipoTipo`, ejecutar `buscarChequeoVigentePorCliente(clienteId, equipoTipo)` (debounce 300ms para no spam). Si retorna chequeo vigente, mostrar banner naranja/amarillo bajo el bloque "Cliente":
+   ```
+   ⚠️ Cliente tiene chequeo previo vigente · OS-XXXX · RD$X aplicable como crédito
+   Vence el DD/MM/AAAA (faltan N días)
+   ☐ Aplicar a esta orden
+   ```
+   Replica patrón visual del banner "Operaria asignada: X" (SPRINT-170) que ya funciona ahí.
+
+2. **Sub-bug #23 — Campo "Modelo" se borra al editar:** verificar en `OrdenEditModal.tsx` o `useOrdenEditForm.ts` el binding del campo `equipoModelo`. Si hay 2 campos "Modelo" + "Modelo del fabricante" que apuntan al mismo path Firestore pero con keys distintas en el form, consolidar a uno solo.
+
+3. **Sub-bug #24 — `MessageNotSentError` al cerrar modal con Esc:** capturar excepción específica `MessageNotSentError` en algún listener fantasma del modal. Identificar y limpiar suscripción huérfana al unmount.
+
+**Touch-list:**
+
+1. `src/hooks/useOrdenCreateForm.ts` — agregar query `buscarChequeoVigentePorCliente` cuando `cliente.id` o `equipoTipo` cambia. Persistir info en state local + render condicional.
+2. `src/components/ordenes/OrdenCreateModal.tsx` — banner visual + checkbox "Aplicar descuento" + persistir flags al guardar (`descuentoChequeoPrevioId`, `descuentoChequeoPrevioMonto`, `descuentoChequeoPrevioFecha`).
+3. `src/components/ordenes/OrdenEditModal.tsx` — fix binding doble Modelo.
+4. Algún componente con listener fantasma para MessageNotSentError.
+
+**Hallazgo lateral del sidepanel (anotar pero NO incluir en este sprint):**
+
+- UX `/admin/citas` tarda ~8s en pasar del spinner al contenido. Agregar skeleton o "Cargando N citas..." con count progresivo. Probable sprint propio `SPRINT-CITAS-SKELETON`.
+- Typeahead de cliente sin info diferenciadora cuando hay 2+ con mismo nombre. Resuelto parcialmente por SPRINT-185 (no debería haber duplicados), pero el patrón de "agregar último servicio o fecha de alta" es UX bueno por si existe legítimo (ej: 2 clientes con mismo nombre real). Documentar como deuda para revisar post-SPRINT-185.
+
+**Criterios de éxito:**
+
+- [ ] Crear orden para QA Test + Aire Acondicionado muestra banner del descuento desde OS-0058.
+- [ ] Checkbox "Aplicar descuento" persiste correctamente al guardar.
+- [ ] Editar OS-0059 muestra "QA-DUMMY-001" en el campo Modelo (no vacío).
+- [ ] Cerrar modal con Esc no emite `MessageNotSentError`.
+
+**Restricciones:**
+
+- NO procesar hasta que SPRINT-185 esté COMPLETADO.
+- NO tocar la lógica backend de `buscarChequeoVigentePorCliente` (ya implementada correctamente).
+- archivist PRE-CHANGE obligatorio.
+
+---
+
+## SPRINT-179-FIX2 — Barrido completitud listener Firestore sin where + crear P-012
+
+**Prioridad:** MEDIA (recurrencia confirmada de clase de bug, postmortem 2026-05-18 ya predijo).
+
+**Origen:** QA sidepanel 2026-05-18 detectó `permission-denied` recurrente en `/admin/citas` (qa-secretaria) con stack `index-EhZnYXZ1.js:468:469`. SPRINT-179 fixeó solo el listener de comisiones en `TecnicoVista.tsx`. Resto del codebase con mismo patrón quedó pendiente. El postmortem `2026-05-18-tecnico-comisiones-listener-sin-where.md` ya documentó "Cazador P-012 pendiente porque primero hay que ver si recurre en otras páginas". **Ya recurrió.** P-012 ahora se justifica completamente.
+
+**Touch-list:**
+
+1. **Barrido del codebase:** buscar TODOS los `onSnapshot(collection(db, '<col>'), ...)` y `onSnapshot(query(collection(db, '<col>')), ...)` sin where. Cruzar contra `firestore.rules` para identificar cuáles tienen rule con `auth.uid == X`. Aplicar `where()` que matchee la rule en cada caso.
+
+   Casos conocidos a chequear primero:
+   - `src/pages/Citas.tsx:146` — `onSnapshot(collection(db, 'ordenes_servicio'))` sin where. Confirmado en QA. Necesita filter por rol (admin/coord ven todo, secretaria probablemente ve todo también pero la rule rechaza algo más sutil — investigar).
+   - Posibles otros: `Mantenimientos.tsx`, `Inventario.tsx`, `Productos.tsx`, `EquiposTaller.tsx`, `Cotizaciones.tsx` — todos pueden tener listeners similares.
+
+2. **Crear cazador P-012** en `scripts/invariantes/check-listener-sin-where-rol-restringido.ts`:
+   - AST parse de TSX para detectar `onSnapshot(collection(db, '<col>'), ...)` y `onSnapshot(query(collection(db, '<col>')), ...)` (sin `where(...)` adentro).
+   - Parsear `firestore.rules` para detectar reglas con `auth.uid == X` o `request.auth.uid in resource.data.X`.
+   - Si hay match (listener sin where + rule restrictiva) → grita.
+   - Allowlist para casos donde el rol activo realmente puede leer toda la colección (ej: admin con rule `esAdminOCoord()`).
+
+3. **Agregar P-012 a `docs/PATRONES_REGRESION.md`** con casos pre/post fix.
+
+4. **Update postmortem** `docs/postmortems/2026-05-18-tecnico-comisiones-listener-sin-where.md` con sección "Recurrencia confirmada 2026-05-18 en Citas.tsx" + check `[x]` en acciones preventivas para "Cazador P-012 creado".
+
+**Criterios de éxito:**
+
+- [ ] Console limpio (0 `permission-denied`) al cargar `/admin/citas` como qa-secretaria.
+- [ ] Console limpio al cargar todas las páginas rol-restringidas auditadas.
+- [ ] Cazador P-012 PASS + agregado a pre-commit hook.
+- [ ] Postmortem actualizado.
+
+**Restricciones:**
+
+- NO silenciar errors con try/catch vacío.
+- NO tocar rules sin OK Jorge (BLOQUEOS).
+- Si el barrido revela >5 archivos con cambios → considerar dividir en sub-sprints.
+
+---
+
+**Última actualización previa:** 2026-05-18 por coordinator autónomo (pasada 19, `trabaja`) — **7 SPRINTS COMPLETADOS + 1 ESCALADO a BLOQUEOS en una sola pasada.** Hashes pusheados en orden: `ad4decc` SPRINT-177-HOTFIX (parser firmaClienteUrl + cazador P-009 extendido + postmortem), `729b85f` SPRINT-180+181 (catch-all 404 admin + badge Solo chequeo en headers), `3650b26` SPRINT-183 (3 UX bajos: toast cliente, observaciones, hint stepper), `e6e1ba4` SPRINT-184 (QA_PROMPT_MAESTRO doc + selector "Ver bandeja de" admin/coord), `328c508` SPRINT-179 (permission-denied tecnico/comisiones + postmortem clase nueva), `8bdd914` SPRINT-182 (wizard labels adaptativas equipoTipo + soloChequeo). **SPRINT-178 ESCALADO a BLOQUEOS** — feature de producto con 4 decisiones de negocio pendientes (edge case 2+ chequeos vigentes + legacy retroactivo + override manual + granularidad matching). Cazadores 10/10 PASS post-cada commit. Typecheck + lint PASS. **2 postmortems generados** (firma + permission-denied). Cola autónoma agotada en lo procesable; SPRINT-178 espera Jorge.
 
 **Última actualización previa:** 2026-05-16 por Cowork — **QA E2E sesión sidepanel COMPLETADA sobre OS-0058 / CG-00020** con 6 roles (qa-secretaria, qa-tecnica, qa-coordinadora, qa-tecnica cierre, qa-coordinadora emite, qa-admin validación). Reporte completo en sesión Cowork. **21 hallazgos** documentados. **PASS confirmados:** SPRINT-159 firma capturada + SPRINT-158a foto cierre + SPRINT-160 garantía 60d + SPRINT-161 fase cerrado + SPRINT-162 KPI conduces +1 + SPRINT-170 selector operaria + SPRINT-171 /admin/notificaciones ruta + SPRINT-151 modal items editables + verificar pago + postmortem 2026-05-07 Iniciar Chequeo resuelto. **8 sprints nuevos escritos a la cola** priorizados ALTA/MEDIA/BAJA: SPRINT-177-HOTFIX (parser olvida firmaClienteUrl — ALTA, regresión silenciosa SPRINT-159), SPRINT-178 (vigencia 30 días chequeo + descuento cotización — ALTA, gap producto), SPRINT-179 (permission-denied console al cargar /tecnico — MEDIA), SPRINT-180 (catch-all 404 admin — MEDIA), SPRINT-181 (badge "Solo chequeo" en headers de modales — BAJA), SPRINT-182 (UX consolidado wizard cierre adaptado a solo_chequeo + tipo equipo — MEDIA), SPRINT-183 (toast cliente asociado / hint stepper / observaciones cita — BAJA), SPRINT-184 (actualizar QA_PROMPT_MAESTRO + filtro destinatario notifs — DOC). SPRINT-176 validación cross-rol notif emisor sigue pendiente login-switch humano. Coordinator procesa ALTAS primero al hacer `trabaja`. SPRINT-177-HOTFIX requiere postmortem obligatorio + refinar cazador P-009 que falló en cazar este caso.
 
