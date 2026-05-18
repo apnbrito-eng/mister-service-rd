@@ -9,6 +9,10 @@
 
 ## SPRINT-185 — Deduplicación de clientes por teléfono normalizado + guard runtime
 
+**Estado:** COMPLETADO 2026-05-18 por coordinator autónomo (pasada 22). Hash `a3b56bf`. Fix en `Clientes.tsx::handleSubmit` (usa `buscarOCrearCliente` + guard `buscarClientePorTelefono` + soft-delete filter). Script `scripts/dedup-clientes-por-telefono.ts` con DRY-RUN + `--apply` + `--ok-ampliado` (Jorge dispara manual). Cazador P-014 registrado + verificación inversa con fixture temporal (1 hit pre-fix → 0 hits post-fix). Cazadores 11/11 PASS. Tipo `Cliente` extendido con `eliminado/eliminadoEn/eliminadoPor/mergedaCon`. NO se tocó `firestore.rules` (rule de clientes permite update por staff sin restricción de campos — schema extension UI-side).
+
+**Pendiente Jorge:** correr `npx tsx scripts/dedup-clientes-por-telefono.ts` (DRY-RUN) y, si reporta ≤5 grupos, re-correr con `--apply`. Si >5 grupos, escalar a `SPRINT-185-APPLY` en `BLOQUEOS.md` con conteo.
+
 **Prioridad:** ALTA (bloquea validación end-to-end de SPRINT-178 + integridad de datos del cliente).
 
 **Origen:** QA puntual sidepanel 2026-05-18 sobre SPRINT-178. El typeahead de cliente en OrdenCreateModal mostró 2 entradas "QA Test · (809) 000-0000" idénticas. El descuento de SPRINT-178 no aplicó probablemente porque OS-0058 quedó asociada a un `clienteId` distinto al que se usó al crear OS-0059. Caso aislado de QA + síntoma de bug sistémico: el alta de cliente no chequea duplicados por teléfono antes de crear.
@@ -85,6 +89,8 @@ Cada caller debe consumir el guard. Si el guard detecta duplicado, devolver el `
 
 ## SPRINT-186 — Surface aviso de descuento 30 días en modal creación + bugs UX modal orden
 
+**Estado:** ESCALADO a BLOQUEOS 2026-05-18 por coordinator autónomo (pasada 22). Espera Jorge confirmar cliente consolidado tras correr `--apply` del script de SPRINT-185. Ver `docs/sprints/BLOQUEOS.md`.
+
 **Prioridad:** MEDIA (UX, no bloqueante funcional pero impacta conversión).
 
 **DEPENDENCIA EXPLÍCITA: NO procesar hasta que SPRINT-185 esté COMPLETADO + Jorge confirme cliente consolidado.** Sin dedupe primero el QA de este sprint estaría viciado por la misma causa raíz que generó SPRINT-185.
@@ -133,6 +139,8 @@ Cada caller debe consumir el guard. Si el guard detecta duplicado, devolver el `
 ---
 
 ## SPRINT-179-FIX2 — Barrido completitud listener Firestore sin where + crear P-012
+
+**Estado:** COMPLETADO 2026-05-18 por coordinator autónomo (pasada 22). Hash `bd7103a`. Cazador P-012 creado en `scripts/invariantes/check-listener-sin-where-rol-restringido.ts` (parsea rules + escanea listeners). Barrido completo confirmó NO hay otros listeners problemáticos en el codebase — los 5 detectados están en páginas admin/coord gateadas por UI, allowlistados con `@safe-listener-sin-where`. Cazadores 12/12 PASS. Verificación inversa: fixture sin where caza correctamente. Postmortem actualizado con sección "Recurrencia parcialmente confirmada" — el síntoma reportado en /admin/citas qa-secretaria NO se reprodujo estáticamente (rules de citas_por_confirmar + ordenes_servicio permiten esStaff); cazador queda como red de seguridad.
 
 **Prioridad:** MEDIA (recurrencia confirmada de clase de bug, postmortem 2026-05-18 ya predijo).
 

@@ -10,6 +10,53 @@
 
 ---
 
+## SPRINT-186 — Surface aviso descuento chequeo previo en modal creación + bugs UX modal orden
+
+**Tipo:** Feature UX + bugfixes UX. ESPERA confirmación humana del estado de datos.
+**Estado:** BLOQUEADO 2026-05-18 — ESPERANDO OK JORGE (cliente consolidado).
+**Origen:** QA puntual sidepanel 2026-05-18 sobre SPRINT-178. Movido por coordinator autónomo pasada 22 a este archivo por dependencia explícita marcada en la cola.
+
+**Por qué está bloqueado:**
+
+SPRINT-185 ya completó la parte de código (commit `a3b56bf`): el guard runtime contra duplicados está en producción, el script `scripts/dedup-clientes-por-telefono.ts` con DRY-RUN/`--apply` está commiteado, el cazador P-014 está activo. **Pero**: la consolidación de los duplicados existentes en producción (incluyendo "QA Test") la dispara Jorge manualmente vía:
+
+```bash
+npx tsx scripts/dedup-clientes-por-telefono.ts                  # DRY-RUN: reporta conteo
+npx tsx scripts/dedup-clientes-por-telefono.ts --apply           # consolida (si ≤50 docs)
+npx tsx scripts/dedup-clientes-por-telefono.ts --apply --ok-ampliado  # si DRY-RUN reportó >50
+```
+
+SPRINT-186 NO puede procesarse autónomo hasta que Jorge confirme que el cliente "QA Test" quedó consolidado (1 sola entrada en typeahead, mismo `clienteId` para OS-0058 y OS-0059). Sin esto, el QA del aviso del descuento estaría viciado por el bug original.
+
+**Por qué Jorge debe disparar el `--apply` (regla operacional Jorge 2026-05-18):**
+
+- Mismo patrón que SPRINT-149-APPLY y SPRINT-175-APPLY: scripts de migración los corre Jorge tras revisar el DRY-RUN.
+- Si DRY-RUN reporta >5 grupos duplicados → escalar como `SPRINT-185-APPLY` separado.
+- Si DRY-RUN reporta >50 docs afectados → requerir `--ok-ampliado` (sub-regla CLAUDE.md migraciones masivas).
+
+**Resumen del scope de SPRINT-186 al desbloquear:**
+
+1. **Sugerencia automática al crear orden** (`useOrdenCreateForm.ts` + `OrdenCreateModal.tsx`): al cambiar `cliente.id` + `equipoTipo`, llamar `buscarChequeoVigentePorCliente(clienteId, equipoTipo)` (debounce 300ms). Si hay chequeo vigente, mostrar banner naranja con checkbox "Aplicar descuento" (replica patrón del banner "Operaria asignada" de SPRINT-170).
+2. **Sub-bug Modelo perdido al editar:** verificar binding `equipoModelo` en `OrdenEditModal.tsx`. Posible duplicación de campos (Modelo + Modelo del fabricante).
+3. **Sub-bug `MessageNotSentError` al cerrar modal con Esc:** identificar listener fantasma + limpiar.
+
+**Touch-list estimado:** `src/hooks/useOrdenCreateForm.ts`, `src/components/ordenes/OrdenCreateModal.tsx`, `src/components/ordenes/OrdenEditModal.tsx`, posible componente con listener fantasma.
+
+**Restricciones:**
+
+- NO procesar hasta que Jorge confirme cliente consolidado.
+- NO tocar `buscarChequeoVigentePorCliente` (ya correcto post-SPRINT-178).
+- archivist PRE-CHANGE obligatorio al desbloquear.
+
+**Cómo desbloquear:**
+
+1. Jorge corre `npx tsx scripts/dedup-clientes-por-telefono.ts` (DRY-RUN).
+2. Si reporta ≤5 grupos: re-correr con `--apply`. Si reporta >5 grupos: agregar sub-sprint `SPRINT-185-APPLY` acá con conteo.
+3. Jorge verifica en `/admin/clientes` que el typeahead de "QA Test" muestra 1 sola entrada (post-deploy + hard refresh).
+4. Jorge edita esta entrada agregando `OK: jorge YYYY-MM-DD HH:MM cliente consolidado` y pega `procesa bloqueos` al coordinator.
+
+---
+
 ## SPRINT-178 — Vigencia 30 días del chequeo + descuento automático a cotización
 
 **Tipo:** Feature de producto con decisión de negocio + scope amplio. Requiere OK Jorge antes de procesar.
@@ -85,7 +132,8 @@ Antes de mover este sprint de vuelta a la cola con `procesa bloqueos`, decidir:
 ## SPRINT-175-APPLY — Ejecución de `--apply` del script de migración de fases legacy stuck post-conduce
 
 **Tipo:** Migración de datos — Jorge dispara manualmente (sub-regla CLAUDE.md "cambios destructivos a datos productivos").
-**Estado:** ESPERANDO_OK_JORGE
+**Estado:** ✅ EJECUTADO 2026-05-18 17:55 — Jorge corrió `npx tsx scripts/migrar-ordenes-cerradas-legacy.ts --apply` en su Mac. DRY-RUN confirmó 13 stuck (mismo conteo que el de 2026-05-12). `--apply` real: **13/13 docs actualizados** en 1 batch. Audit log escrito en `auditoria_admin` con `accion=migracion_fases_cerrado_legacy`. Órdenes migradas: OS-0033, OS-0054, OS-0034, OS-0023, OS-0035, OS-0032, OS-0049, OS-0028, OS-0036, OS-0055, OS-0031, OS-0039, OS-0038. Próximo paso: hard refresh en /admin/dashboard para validar que embudo "Cerrado" subió en +13 y "Trabajo Realizado" bajó en -13.
+**Estado previo:** ESPERANDO_OK_JORGE
 **Origen:** SPRINT-175 completado por coordinator pasada 13 (2026-05-12). El script `scripts/migrar-ordenes-cerradas-legacy.ts` está pusheado en DRY-RUN. Falta alinear datos legacy: órdenes con `facturada: true && fase != 'cerrado'` (stuck pre-SPRINT-161 commit `4015fe1`).
 
 **Resultado DRY-RUN 2026-05-12 (corrido durante el sprint sobre Firestore productivo):**

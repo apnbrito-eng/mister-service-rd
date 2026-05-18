@@ -5,6 +5,82 @@
 
 ---
 
+## 2026-05-18 — autónomo (`trabaja la cola completa sin pausas`, pasada 22): 2 completados + 1 escalado
+
+### Contexto
+
+Jorge commiteó 3 sprints nuevos del QA puntual SPRINT-178 (`f889c33`): SPRINT-185 dedup clientes (ALTA, bloquea revalidación 178), SPRINT-179-FIX2 barrido listeners (MEDIA, recurrencia documentada), SPRINT-186 surface aviso descuento (MEDIA, depende de 185 + OK humano). Orden estricto definido por Jorge: 185 → 179-FIX2 → 186 a BLOQUEOS.
+
+### SPRINT-185 — Dedup clientes + cazador P-014 — COMPLETADO
+
+**Hash:** `a3b56bf` (`feat(clientes): SPRINT-185 dedup por teléfono normalizado + guard runtime + cazador P-014`).
+
+**archivist PRE-CHANGE:** historial relevante:
+- `d62ded1` (2026-05-05) — rechazo internacionales NO-RD en `normalizarTelefono`.
+- `3b34ce4` (2026-05-04) — import 9k clientes desde calendar establece convención `id == telNorm` para nuevos.
+- `bd2b2a8` (SPRINT-178) — descuento usa matching exacto `clienteId + equipoTipo`, vulnerable a fragmentación si el cliente está duplicado.
+
+Recordatorios aplicados: P-001 strip undefined OK; P-003 mutación cross-collection en script implicó usar batch.commit() (admite la limitación de no atomicidad cross-batch, mitigada por idempotencia).
+
+**Touch-list expandido + auditoría consumidores:** del touch-list previsto en la cola, **la mayoría YA estaba implementada**. Auditoría reveló que el único agujero real era `src/pages/Clientes.tsx::handleSubmit` con `addDoc` sin guard. Todos los otros callers (`useOrdenCreateForm.ts`, `clientes.service.ts`, `seedData.ts`) ya cumplen la convención. Scope refinado: NO crear `utils/cliente.ts` separado (el helper YA existe en service); NO modificar más callers.
+
+**builder:** 6 archivos cambiados (619/-19). Fix quirúrgico en `Clientes.tsx` + tipo Cliente extendido + script dedup + cazador P-014 + entrada en PATRONES_REGRESION.
+
+**tester:** typecheck PASS. Cazadores 11/11 PASS. Lint failed inicialmente (warning preexistente `geocodeDireccion` unused — prefijé `_`); re-lint PASS.
+
+**regression_guardian:** APPROVED. Sprint NO tocó services (solo importó de él), NO tocó rules (rule de clientes permite update por staff sin restricción de campos — schema extension UI-side documentada). Soft-delete con filtro client-side documentado en CLAUDE.md.
+
+**reviewer:** APPROVED. Verificación inversa: fixture temporal `addDoc(collection(db, 'clientes'), payload)` → P-014 grita 1 hit; eliminada → 0 hits.
+
+**Pendiente Jorge manual:** disparar `--apply` del script (mismo patrón SPRINT-149-APPLY/SPRINT-175-APPLY).
+
+### SPRINT-179-FIX2 — Cazador P-012 + barrido listeners — COMPLETADO
+
+**Hash:** `bd7103a` (`feat(regression): SPRINT-179-FIX2 cazador P-012 listener sin where + barrido completo`).
+
+**archivist PRE-CHANGE:** postmortem `2026-05-18-tecnico-comisiones-listener-sin-where.md` documentó "cazador P-012 pendiente porque primero hay que ver si recurre en otras páginas". El sprint asume recurrencia confirmada por reporte de QA sobre /admin/citas.
+
+**Touch-list expandido + auditoría consumidores:** barrido completo del codebase con `grep -rn "onSnapshot(collection(db"` → 40+ listeners encontrados. Cross-referenciado con `firestore.rules` por colección. **Hallazgo crítico**: el síntoma reportado en /admin/citas (`Citas.tsx:146` sobre `ordenes_servicio`) NO se reproduce estáticamente — la rule de `ordenes_servicio` es `esStaff()` (permisiva para secretaria). Las únicas colecciones realmente restrictivas: `comisiones`, `liquidaciones_nomina`, `conversaciones_ia`, `ponches`. Los listeners contra ellas viven en páginas admin/coord (Comisiones, Dashboard, MetricasMensuales, Nomina) gateadas por UI.
+
+**builder:** cazador P-012 con parser de rules (regex sobre `match /<col>/` + `allow read`) + extractor de onSnapshot con balanceo. Iteración 1 detectó 0 colecciones (parser excluía `esAdminOCoord()` como short-circuit). Refinado: solo `esStaff()`/`esStaffOficina()` son short-circuit válidos (cubren TODOS los roles); `esAdmin*` no cuenta porque deja a técnicos en la rama de constraint. Iteración 2 detectó 5 hits, todos en páginas admin/coord — allowlistados con tag `@safe-listener-sin-where`. 8 archivos cambiados (339/-10).
+
+**tester:** typecheck PASS. Cazadores 12/12 PASS. Lint PASS.
+
+**regression_guardian:** APPROVED. El cazador agrega cobertura sin tocar rules ni services. Allowlist con justificación documentada por línea.
+
+**reviewer:** APPROVED. Verificación inversa con fixture `onSnapshot(collection(db, 'comisiones'), () => {})` → P-012 grita correctamente. Postmortem actualizado con sección "Recurrencia parcialmente confirmada" + acción preventiva marcada [x].
+
+### SPRINT-186 — Surface aviso descuento — ESCALADO a BLOQUEOS
+
+Movido a `docs/sprints/BLOQUEOS.md` por dependencia explícita marcada en la cola: requiere que Jorge confirme que el cliente "QA Test" quedó consolidado tras correr `--apply` del script de SPRINT-185. Sin esto el QA del aviso del descuento estaría viciado por la causa raíz original. No se procesó código.
+
+### Cazadores anti-regresión al cierre
+
+12/12 PASS:
+- P-001 userprofile-id-misuse
+- P-002 rules-immutability
+- P-003 cross-collection-tx
+- P-004 alta-empleado-doble-doc
+- P-005 rules-pendientes-deploy
+- P-006 tecnicoid-personal-id-misuse
+- P-007 crearnotificacion-userid-shape
+- P-009 parser-campos-faltantes (CierreServicio + Factura cobertura ampliada)
+- P-010 tipo-notificacion-huerfano
+- P-011 fase-sin-sincronizar-en-update-orden
+- **P-012 listener-sin-where-rol-restringido** (NUEVO)
+- **P-014 cliente-create-sin-dedup** (NUEVO)
+
+P-008 (audit notis legacy server-side, requiere service-account) NO está en pre-commit hook por diseño. P-013 saltado por convención numérica de Cowork.
+
+### Trazabilidad
+
+| Sprint | Hash | Archivos | Tiempo aprox | Postmortem | Deploy |
+|---|---|---|---|---|---|
+| SPRINT-185 | `a3b56bf` | 6 (+619/-19) | 25 min | N/A (no fue hotfix de producción) | OK (push exitoso) |
+| SPRINT-179-FIX2 | `bd7103a` | 8 (+339/-10) | 35 min | actualizado existente | OK |
+
+---
+
 ## 2026-05-18 — autónomo (`procesa bloqueos` → `trabaja`, pasada 20): SPRINT-178 completado
 
 ### Contexto
