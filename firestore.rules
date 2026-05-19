@@ -657,6 +657,162 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // 5b. WhatsApp Cloud API (inbox, outbox, conversaciones,
+    //     plantillas, recordatorios, config) — SPRINT-WA-RULES
+    //     2026-05-19. Subsistema integración directa Meta Cloud API.
+    //
+    // Patrón general: writes son SIEMPRE desde Admin SDK (webhook
+    // serverless de Meta, endpoint api/whatsapp/send.ts, crons de
+    // recordatorios, cron sync-plantillas). Los Admin SDK bypassan
+    // estas rules — los deny explícitos abajo son defense-in-depth
+    // por si la colección se expusiera desde cliente accidentalmente.
+    // ─────────────────────────────────────────────────────────────
+
+    // Mensajes entrantes (raw payload de Meta, idempotentes por wamid).
+    // Read: staff oficina ve historial de conversaciones desde UI.
+    // Write: NUNCA cliente — el webhook serverless escribe vía Admin SDK.
+    //
+    // CAVEAT PII (security audit 2026-05-19 — E.1, accepted): el campo
+    // `raw` guarda el payload Meta completo, que incluye contenido
+    // potencialmente sensible mencionado por clientes en sus mensajes
+    // (datos médicos, financieros, conflictos). Cualquier staff oficina
+    // ve TODO el historial desde día 1. Decisión consciente — replica
+    // el statu quo de WhatsApp manual del negocio. MITIGACIÓN
+    // OPERATIVA OBLIGATORIA: revocar cuentas Firebase Auth EN EL
+    // MOMENTO de la salida de un empleado, no al final del día (sin
+    // esto, ex-empleada con cuenta no desactivada puede bulk-export
+    // todo el inbox). Sprint follow-up potencial: subcolección
+    // raw_payload accesible solo a admin (refactor futuro, no bloquea v1).
+    match /whatsapp_mensajes_inbox/{wamid} {
+      allow read: if esStaffOficina();
+      allow write: if false;
+    }
+
+    // Mensajes salientes (con tracking de estado Meta).
+    // Read: staff oficina.
+    // Write: NUNCA cliente — el endpoint api/whatsapp/send.ts escribe
+    // vía Admin SDK (lleva auth Firebase ID token verify, pero la
+    // escritura a Firestore se hace server-side con privilegios admin).
+    match /whatsapp_mensajes_outbox/{docId} {
+      allow read: if esStaffOficina();
+      allow write: if false;
+    }
+
+    // Conversaciones agregadas por wa_id de contraparte.
+    // Read: staff oficina.
+    // Create/Delete: NUNCA cliente — el webhook crea, nadie borra
+    // (auditable). Soft-delete via flag si en el futuro se necesita.
+    // Update PARCIAL permitido a staff oficina sobre campos UI seguros
+    // (marcar leído, etiquetar, tomar/soltar asignación propia,
+    //  flip bot.habilitado para una conversación propia).
+    //
+    // Control anti-sabotaje (SPRINT-WA-RULES security audit, 2026-05-19):
+    //   - Reasignar conversaciones (asignadaA): asimétrico.
+    //     • admin/coord: libre (gestión).
+    //     • resto: solo tomar (previo null → propio), soltar
+    //       (propio → null/propio), o mantener (no-op).
+    //     • NO puede "robar" (uidOtro → uidPropio): la igualdad
+    //       request.auth.uid in [...] permitía falsamente esto.
+    //       Fix: bloque asimétrico explícito por transición.
+    //   - Toggle bot.habilitado: restringido a admin/coord o quien
+    //     tiene la conversación asignada. Sin esto, un insider podía
+    //     apagar el bot en masa sin trazabilidad.
+    //
+    // Campos CRÍTICOS son inmutables desde cliente (ultimoMensaje*,
+    // contadores, ventana24h, primeraInteraccion, bot.contexto.*,
+    // bot.turnosCount, ultimaActividad, wa_id, clienteId) —
+    // solo el Admin SDK los toca desde webhook/send.
+    //
+    // Uso .get(field, null) porque updates parciales desde UI pueden
+    // no incluir estos campos (Firestore preserva los que no se mandan
+    // cuando se usa dot-path notation o updateDoc parcial).
+    match /whatsapp_conversaciones/{waId} {
+      allow read: if esStaffOficina();
+      allow create: if false;
+      allow delete: if false;
+      allow update: if esStaffOficina() &&
+        // Identidad/relación: snapshot inmutable.
+        request.resource.data.get('wa_id', null) == resource.data.get('wa_id', null) &&
+        request.resource.data.get('clienteId', null) == resource.data.get('clienteId', null) &&
+        // Mensajes y contadores: solo Admin SDK los muta.
+        request.resource.data.get('ultimoMensajeEntrante', null) == resource.data.get('ultimoMensajeEntrante', null) &&
+        request.resource.data.get('ultimoMensajeSaliente', null) == resource.data.get('ultimoMensajeSaliente', null) &&
+        request.resource.data.get('ultimoPhoneNumberId', null) == resource.data.get('ultimoPhoneNumberId', null) &&
+        request.resource.data.get('totalMensajesEntrantes', null) == resource.data.get('totalMensajesEntrantes', null) &&
+        request.resource.data.get('totalMensajesSalientes', null) == resource.data.get('totalMensajesSalientes', null) &&
+        request.resource.data.get('ventana24h', null) == resource.data.get('ventana24h', null) &&
+        request.resource.data.get('primeraInteraccion', null) == resource.data.get('primeraInteraccion', null) &&
+        // ultimaActividad: timestamp server-only (index de sort bandeja).
+        // Si el cliente lo pudiera tocar, podría reordenar bandeja global.
+        request.resource.data.get('ultimaActividad', null) == resource.data.get('ultimaActividad', null) &&
+        // bot.contexto.* (ultimaIntencion, datosRecolectados,
+        // intentosFallidosSeguidos) + bot.turnosCount: solo Admin SDK
+        // los muta (bot logic en webhook).
+        request.resource.data.get('bot', {}).get('contexto', null) == resource.data.get('bot', {}).get('contexto', null) &&
+        request.resource.data.get('bot', {}).get('turnosCount', null) == resource.data.get('bot', {}).get('turnosCount', null) &&
+        // Control de asignación entre operarias (anti-robo, asimétrico):
+        (
+          esAdminOCoord() ||
+          // No-op de asignadaA (cambia otros campos sin tocar asignación).
+          request.resource.data.get('asignadaA', null) == resource.data.get('asignadaA', null) ||
+          // Tomar: estado previo null + nuevo == uid propio.
+          (resource.data.get('asignadaA', null) == null &&
+           request.resource.data.get('asignadaA', null) == request.auth.uid) ||
+          // Soltar: estado previo == uid propio + nuevo == null.
+          (resource.data.get('asignadaA', null) == request.auth.uid &&
+           request.resource.data.get('asignadaA', null) == null)
+        ) &&
+        // Toggle bot.habilitado: solo admin/coord o asignataria de la conv.
+        // Si cambia el valor de bot.habilitado, debe cumplir la condición.
+        (
+          esAdminOCoord() ||
+          resource.data.get('asignadaA', null) == request.auth.uid ||
+          request.resource.data.get('bot', {}).get('habilitado', null) ==
+            resource.data.get('bot', {}).get('habilitado', null)
+        );
+    }
+
+    // Cache de plantillas HSM aprobadas en Meta (sync cron c/12h).
+    // Read: esStaff() — cualquier rol que envíe mensajes necesita
+    // conocer plantillas disponibles desde la UI (composer).
+    // Write: NUNCA cliente — el cron Admin SDK upserta tras consultar
+    // Graph API. UI admin edita mappingCRM via endpoint serverless
+    // dedicado (no escribe directo).
+    match /whatsapp_plantillas/{plantillaId} {
+      allow read: if esStaff();
+      allow write: if false;
+    }
+
+    // Idempotencia de crons proactivos (recordatorios mantenimiento +
+    // garantías + NPS). Doc id determinístico tipo__entidad__fecha.
+    // Read: staff oficina (auditar qué se mandó).
+    // Write: NUNCA cliente — solo los crons Admin SDK escriben.
+    match /whatsapp_recordatorios_enviados/{docId} {
+      allow read: if esStaffOficina();
+      allow write: if false;
+    }
+
+    // Configuración operativa del módulo WhatsApp (1 doc fijo
+    // whatsapp_config/sistema). NO contiene secretos — esos viven en
+    // process.env de Vercel (META_APP_SECRET, META_ACCESS_TOKEN,
+    // META_VERIFY_TOKEN, ANTHROPIC_API_KEY). Acá vive: horario bot,
+    // límite turnos, palabras escalado/urgencia/opt-out, números
+    // activos, routing zonas, opt-outs runtime.
+    //
+    // Read: admin y coord (NO secretaria/operaria — security audit
+    // 2026-05-19 C.1 decisión consciente). `optOuts[]` contiene
+    // teléfonos sensibles (PII de clientes que rechazaron contacto)
+    // y `routingZonas` expone uids de técnicos — restringido a roles
+    // de gestión. Si en el futuro la UI necesita exponer horario bot
+    // a secretaria/operaria, particionar en dos docs (sistema público
+    // + privado) en sprint follow-up.
+    // Write: solo admin (decisión operativa estratégica).
+    match /whatsapp_config/{docId} {
+      allow read: if esAdminOCoord();
+      allow write: if esAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // 6. Auditoría (append-only)
     // ─────────────────────────────────────────────────────────────
 
