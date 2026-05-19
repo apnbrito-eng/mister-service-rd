@@ -34,6 +34,7 @@ import { check as checkFirestoreOrderByCampoNoPersistido } from './check-firesto
 import { check as checkWhatsappWebhookHmac } from './check-whatsapp-webhook-hmac.js';
 import { check as checkWhatsappIdempotency } from './check-whatsapp-idempotency.js';
 import { check as checkWhatsappWindow24h } from './check-whatsapp-window-24h.js';
+import { check as checkBillingErroresNoSilenciados } from './check-billing-errors-no-silenciados.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -61,6 +62,7 @@ async function main() {
     checkWhatsappWebhookHmac,
     checkWhatsappIdempotency,
     checkWhatsappWindow24h,
+    checkBillingErroresNoSilenciados,
   ];
 
   const t0 = Date.now();

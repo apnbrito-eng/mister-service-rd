@@ -1839,3 +1839,76 @@ Jorge edita doc `config/rate_limits` desde Firestore Console agregando:
 Los valores aplican en el próximo POST (no requiere redeploy). UI admin para editar puede agregarse en un sprint futuro si se necesita ajuste frecuente.
 
 ---
+
+## SPRINT-WA-BILLING-VERIFY — Verificación operativa de billing/quality vía Graph API + handler errores + P-019
+
+**Tipo:** Operacional + endurecimiento defensivo. NO toca features visibles.
+**Estado:** ✅ COMPLETADO 2026-05-19 — commit hash al final de esta pasada.
+**Prioridad:** 🟡 MEDIA — defensa preventiva del módulo WhatsApp recién deployado.
+
+#### Resumen de implementación
+
+5 archivos nuevos + 6 modificados:
+- `api/_lib/manejarErrorMeta.ts` — helper centralizado que parsea códigos error Meta (131056/131057/131031/131048/132000/132001/131047/131051/131026), persiste en `whatsapp_errores_meta` con `mensaje` truncado a 500 chars y `detalles` JSON-stringificado capeado a 1000 chars (mitigación PII), notifica admins activos con dedupe transaccional por `(codigo, día RD)` para evitar spam en incidentes recurrentes.
+- `scripts/verificar-billing-whatsapp.ts` — script local sin Firebase Admin. Consulta Graph API por phone_number_ids + WABA + plantillas. Imprime tabla + veredicto stdout + escribe `docs/sprints/REPORTE_BILLING_WA_<fecha>.md`. NUNCA persiste tokens.
+- `scripts/invariantes/check-billing-errors-no-silenciados.ts` — cazador P-019 (17 cazadores activos). Tag `// @safe-meta-catch: <razón ≥10 chars>` para allowlist por línea.
+- `api/whatsapp/send.ts` modificado: integra `manejarErrorMeta` en path fallo Meta + 2 tags safe-meta-catch.
+- `api/whatsapp/webhook.ts` modificado: integra `manejarErrorMeta` en status callback failed + 2 tags safe-meta-catch.
+- `firestore.rules` modificado: rules nuevas `whatsapp_errores_meta` (read `esAdmin()` — endurecido tras security audit) + `whatsapp_errores_meta_dedupe` (read admin, write false — Admin SDK only). **Deployadas** sha `3520281ac2fbdf5552fe1d42856aceff9938226bfa515470bfa46d832222be1e` 2026-05-19T23:18:16Z.
+- `src/types/index.ts`: 2 tipos nuevos en `TipoNotificacion` (`whatsapp_billing_error` + `whatsapp_meta_error`).
+- `docs/MODULO_WHATSAPP.md` + `docs/PATRONES_REGRESION.md` + `scripts/invariantes/run-all.ts`.
+
+**Validadores:** archivist PRE-CHANGE OK, tester typecheck/cazadores 17/17 PASS, regression_guardian GO, reviewer CHANGES_NEEDED (3 items: códigos críticos faltantes, TipoNotificacion union, cap admins) → 2 críticos fixeados, cap admins deferido como deuda menor por improbabilidad operativa, security RISKS_FOUND (1 ALTA + 3 MEDIAS + 2 BAJAS) → 4 críticos fixeados (dedupe transaccional, truncado PII, read=esAdmin, cazador exige razón ≥10 chars).
+
+**Acción manual de Jorge POST-deploy:**
+
+```bash
+vercel env pull .env.local
+export $(grep -v '^#' .env.local | xargs)
+npx tsx scripts/verificar-billing-whatsapp.ts
+```
+
+Esperado: tabla con quality_rating, messaging_limit_tier, code_verification_status para ambos números + estado WABA + plantillas. Veredicto OK si quality !== RED + account_review !== REJECTED.
+
+**BANDERAS A LEVANTAR (si aplican):**
+- quality_rating YELLOW o RED → flag para revisar volumen + opt-outs.
+- messaging_limit_tier TIER_250 o menor → flag para considerar upgrade tier.
+- Cualquier plantilla en PAUSED o REJECTED → revisar contenido + reenviar.
+
+---
+
+## SPRINT-WA-NOTIF-CREATE-RULE-FIX — Hallazgo lateral: rule `notificaciones create` permite spoof de userId
+
+**Tipo:** Hardening de rules. NO toca features visibles.
+**Estado:** ABIERTO 2026-05-19 — hallazgo lateral del security audit SPRINT-WA-BILLING-VERIFY.
+**Prioridad:** 🟡 MEDIA — riesgo de spoof inter-staff (operaria crea notif fake con userId de admin).
+
+#### Hallazgo
+
+`firestore.rules` actual permite `notificaciones create: if esStaff()` sin validar que `request.resource.data.userId == request.auth.uid`. Eso significa que cualquier staff autenticado puede crear una notificación con `userId` de cualquier otro usuario.
+
+#### Por qué es ahora
+
+El audit del SPRINT-WA-BILLING-VERIFY lo cazó como hallazgo lateral. No es regresión nueva del sprint — preexiste — pero el sprint nuevo lo evidencia porque el helper `manejarErrorMeta` crea notif vía Admin SDK (que bypassa rules), demostrando que el patrón "sistema crea notif para otro user" es legítimo via Admin SDK pero NO debería permitirse desde cliente.
+
+#### Fix propuesto (1 línea)
+
+```javascript
+match /notificaciones/{notifId} {
+  allow create: if esStaff()
+    && request.resource.data.userId == request.auth.uid;  // <-- agregar
+  ...
+}
+```
+
+Notif sistema (manejarErrorMeta, crearNotificacion server-side) seguirán vía Admin SDK que bypassa la rule.
+
+#### Cómo desbloquear
+
+1. Jorge edita esta entrada con `OK: jorge YYYY-MM-DD HH:MM hardening notif create`.
+2. Coordinator procesa con builder → reviewer + security → `npm run deploy:rules` → commit + push.
+3. **CUIDADO**: si algún caller cliente legítimo crea notif para otros usuarios sin pasar por Admin SDK, este cambio lo rompe. Auditar `src/services/notificaciones.service.ts` y todos los call sites de `crearNotificacion` antes de mergear. Si hay casos legítimos, mantener `esStaff()` pero agregar nueva rule alternativa.
+
+**OK Jorge:** _pendiente_
+
+---

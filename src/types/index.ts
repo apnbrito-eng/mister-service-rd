@@ -1848,6 +1848,15 @@ export type TipoNotificacion =
   | 'cotizacion_lista'
   | 'cierre_completado'
   | 'pago_registrado'
+  // SPRINT-WA-BILLING-VERIFY (2026-05-19): notificaciones emitidas por
+  // api/_lib/manejarErrorMeta.ts cuando códigos Meta crítica/alta llegan
+  // desde send.ts (fallo POST) o webhook.ts (status callback failed).
+  // - `whatsapp_billing_error`: códigos billing (131056/131057/131031) →
+  //   WABA sin tarjeta, trial excedido, cuenta bloqueada permanentemente.
+  // - `whatsapp_meta_error`: otros códigos críticos no-billing (131048
+  //   spam, 132000/132001 templates) → operación rota sin ser plata.
+  | 'whatsapp_billing_error'
+  | 'whatsapp_meta_error'
   | 'otro';
 
 export interface Notificacion {

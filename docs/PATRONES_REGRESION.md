@@ -588,6 +588,34 @@ Si falta cualquiera de los 4 → FAIL.
 
 ---
 
+## P-019 — Errores billing Meta swallowed sin notificación admin
+
+**Bug original (anticipado):** SPRINT-WA-BILLING-VERIFY (2026-05-19). Cazador preventivo. Sin él, una regresión típica del módulo WhatsApp es agregar un `catch` que responda 502 al cliente sin loggear ni notificar, dejando que errores billing/spam/ban de Meta caigan silenciosos hasta que un cliente externo se queja.
+
+**Síntoma de una regresión:** Meta devuelve `131056` (Account billing must be configured) o `131057` (Trial account exceeded) en respuesta al POST de `api/whatsapp/send.ts`. El endpoint responde 502 al frontend, el frontend muestra "no se pudo enviar". Pero NADIE en oficina recibe notificación: no hay log estructurado, no hay doc en `whatsapp_errores_meta`, no hay noti en campanita de admin. El sistema completo de WhatsApp está caído por billing durante horas/días hasta que un cliente externo reporta que no recibe mensajes.
+
+**Causa raíz prevenida:** error handling silencioso. Es trivial agregar un catch que responda 502 — el dev futuro puede no notar que el patrón canónico exige logging + persistencia + notificación. Cuando el sprint actual (WA-BILLING-VERIFY) introdujo `manejarErrorMeta` como helper canónico, había que blindar que catches NUEVOS bajo `api/whatsapp/*.ts` también lo usen (o equivalente). El cazador enforce el invariante automáticamente.
+
+**Regla:** cualquier bloque `catch (...) { ... }` dentro de `api/whatsapp/*.ts` (incluido helpers en `api/_lib/whatsapp*.ts` y `api/_lib/manejarErrorMeta.ts`) que responda al cliente (vía `res.status`/`res.json`/`res.send`/`res.end`/`return res.`) DEBE contener en el body del catch AL MENOS UNA de estas señales:
+- `manejarErrorMeta(` — el helper canónico (hace 3-en-1: log + persist + notif).
+- `console.error(` — logging directo.
+- `escribirAuditoria*(` — cualquier helper de audit (ej. `escribirAuditoriaSend`).
+- `db.collection('whatsapp_errores_meta')` — persistencia directa.
+
+Si el catch NO responde al cliente (sólo loggea, sólo persiste, sólo relanza), NO aplica la regla — es catch interno de retry o reconciliación.
+
+**Cazador:** `scripts/invariantes/check-billing-errors-no-silenciados.ts`. Estrategia: regex sobre cada `catch (...) { ... }` con balanceo de llaves. Verifica presencia de al menos una señal OK cuando el body contiene una señal de respuesta al cliente. Cubre archivos bajo `api/whatsapp/*.ts` + `api/_lib/whatsapp*.ts` (incluye el propio `manejarErrorMeta.ts`).
+
+**Allowlist por línea:** tag `// @safe-meta-catch: <razón>` en la misma línea del `catch (` o hasta 5 líneas arriba. Útil para catches legítimamente silenciosos (raro). Si crece a >5 entradas, refactorear el cazador o reevaluar la regla.
+
+**Allowlist por archivo:** vacía al inicio. Si crece a >3 entradas, refactorear.
+
+**Limitación conocida:**
+- Detección heurística por regex. El balanceo de llaves funciona para catches estándar pero puede fallar si hay strings con `{`/`}` literales muy largos — en la práctica los catches del repo son simples.
+- NO verifica orden lógico (log antes de response, etc.) — sólo presencia. Reviewer humano valida semánticamente.
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:

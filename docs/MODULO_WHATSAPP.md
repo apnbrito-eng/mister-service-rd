@@ -623,13 +623,55 @@ Si falta alguno → ERROR pre-commit.
 
 **Patrón:** en `api/whatsapp/send.ts`, si `tipo === 'texto_libre'`, debe haber lectura de `whatsapp_conversaciones/{wa_id}.ultimoMensajeEntrante.timestamp` y comparación `< 24h * ms`.
 
-**Opcional P-019:** detectar tokens/secretos hardcoded (`META_APP_SECRET`, `META_ACCESS_TOKEN`, `META_VERIFY_TOKEN`) que NO sean references `process.env.X`.
+### P-019: Errores Meta swallowed sin logging/persistencia/notificación
+
+**Archivo:** `scripts/invariantes/check-billing-errors-no-silenciados.ts` (SPRINT-WA-BILLING-VERIFY, 2026-05-19).
+
+**Patrón a cazar:** dentro de `api/whatsapp/*.ts` y `api/_lib/whatsapp*.ts`, cualquier `catch` que responda al cliente (vía `res.status`/`res.json`/`return res.`) debe contener al menos UNA de las señales: `manejarErrorMeta(`, `console.error(`, `escribirAuditoria*(`, o `db.collection('whatsapp_errores_meta')`. Sin esto, errores billing/spam/ban de Meta caen silenciosos al frontend y oficina no se entera hasta que un cliente externo se queja.
+
+**Allowlist por línea:** tag `// @safe-meta-catch: <razón>` en la misma línea o hasta 5 arriba.
+
+---
+
+## 8b. Manejo de errores billing Meta
+
+**Helper canónico:** `api/_lib/manejarErrorMeta.ts` (SPRINT-WA-BILLING-VERIFY, 2026-05-19).
+
+Centraliza el handling de errores estructurados de Meta cuando `api/whatsapp/send.ts` (POST falla) o `api/whatsapp/webhook.ts` (status callback con `estado=failed` + `errorMeta.code`) tienen un código de error poblado. Hace 3-en-1 en best-effort:
+
+1. **Logging** con tag específico (`META_BILLING_ERROR_131056`, `META_SPAM_RATE_LIMIT_131048`, etc.) sin PII (wa_id truncado).
+2. **Persistencia** en `whatsapp_errores_meta` (audit + analítica).
+3. **Notificación** a admins activos (docs `notificaciones` directos desde Admin SDK) cuando severidad es `critica` o `alta`.
+
+### Tabla de códigos manejados
+
+| Code | Severidad | esBilling | Significado | Acción del helper |
+|---|---|---|---|---|
+| `131056` | critica | true | Account billing must be configured (WABA sin tarjeta/suspendido) | log + persist + notif admins |
+| `131057` | alta | true | Trial account exceeded message limit | log + persist + notif admins |
+| `131048` | alta | false | Spam rate limit (Meta detectó patrón abusivo) | log + persist + notif admins |
+| `131051` | media | false | Unsupported message type | log + persist (sin notif) |
+| otros | baja | false | Cualquier otro código incluyendo undefined | log + persist (sin notif) |
+
+`send.ts` usa el flag `esBilling` para distinguir el motivo en el audit log (`meta-billing-error` vs `meta-envio-fallo`) y en el response payload — el frontend puede mostrar UX específico ("contacta al admin: error de billing Meta") en lugar del genérico "no se pudo enviar".
+
+### Verificación periódica de billing
+
+Comando QA:
+
+```bash
+vercel env pull .env.local
+export $(grep -v '^#' .env.local | xargs)
+npx tsx scripts/verificar-billing-whatsapp.ts
+```
+
+Genera `docs/sprints/REPORTE_BILLING_WA_2026-05-19.md` con phone numbers (`quality_rating`, `messaging_limit_tier`, `code_verification_status`), WABA (`account_review_status`), y plantillas (status). Veredicto OK / WARNINGS / CRITICO. Ejecutar antes de campañas grandes o si admins reportan toasts de "meta-billing-error".
 
 ---
 
 ## 9. Impactos cross-archivo del repo existente
 
-### `firestore.rules` — 6 rules nuevas
+### `firestore.rules` — 7 rules nuevas
 
 ```
 match /whatsapp_mensajes_inbox/{docId}        → read esStaffOficina, write false
@@ -638,6 +680,7 @@ match /whatsapp_conversaciones/{docId}        → read esStaffOficina, update pa
 match /whatsapp_plantillas/{docId}            → read esStaff, write false (admin SDK cron)
 match /whatsapp_recordatorios_enviados/{id}   → read esStaffOficina, write false
 match /whatsapp_config/{docId}                → read esAdminOCoord, write esAdmin (no secretos acá)
+match /whatsapp_errores_meta/{docId}          → read esAdminOCoord, write false, delete esAdmin (SPRINT-WA-BILLING-VERIFY)
 ```
 
 **Reviewer obligatorio** (sub-regla CLAUDE.md sprints que tocan rules). Deploy con `npm run deploy:rules` antes de marcar COMPLETADO (cazador P-005).

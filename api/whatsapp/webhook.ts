@@ -32,6 +32,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'node:crypto';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminFirestore } from '../_lib/firebaseAdmin.js';
+import { manejarErrorMeta } from '../_lib/manejarErrorMeta.js';
 import {
   caparRawPayload,
   debeActualizarEstado,
@@ -361,6 +362,37 @@ async function persistirStatusCallback(
     actualizado = true;
   });
 
+  // SPRINT-WA-BILLING-VERIFY: si el callback marcó estado=failed con código
+  // Meta, delegar a helper especializado (log estructurado + persistencia en
+  // whatsapp_errores_meta + notificación admin si severidad crítica/alta).
+  // Best-effort fuera de la transacción para no demorar el ack a Meta.
+  if (cb.estado === 'failed' && cb.errorMeta && cb.errorMeta.code !== undefined) {
+    try {
+      const errorMetaInput: {
+        code?: number;
+        mensaje?: string;
+        title?: string;
+        detalles?: unknown;
+      } = { code: cb.errorMeta.code };
+      if (cb.errorMeta.mensaje) errorMetaInput.mensaje = cb.errorMeta.mensaje;
+      if (cb.errorMeta.title) errorMetaInput.title = cb.errorMeta.title;
+      if (cb.errorMeta.detalles) errorMetaInput.detalles = cb.errorMeta.detalles;
+
+      await manejarErrorMeta({
+        db,
+        errorMeta: errorMetaInput,
+        contexto: {
+          fuente: 'webhook',
+          phoneNumberId: cb.phoneNumberId,
+          wamid: cb.wamid,
+        },
+      });
+    } catch (err) {
+      const m = err instanceof Error ? err.message.substring(0, 200) : 'unknown';
+      console.warn(`${LOG_PREFIX} manejarErrorMeta falló (best-effort): ${m}`);
+    }
+  }
+
   return { actualizado, encontrado: true };
 }
 
@@ -391,6 +423,7 @@ async function handleEvento(req: VercelRequest, res: VercelResponse): Promise<vo
 
   // 1) Leer body raw.
   let rawBody: Buffer;
+  // @safe-meta-catch: lectura raw del body (timeout/oversize), no error Meta. console.warn local ya cubre logging.
   try {
     rawBody = await leerRawBody(req);
   } catch (err) {
@@ -414,6 +447,7 @@ async function handleEvento(req: VercelRequest, res: VercelResponse): Promise<vo
 
   // 3) Parse JSON.
   let payloadJson: unknown;
+  // @safe-meta-catch: parse JSON local post-HMAC, no es error estructurado de Meta. console.warn local ya cubre logging.
   try {
     payloadJson = JSON.parse(rawBody.toString('utf8'));
   } catch {

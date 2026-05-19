@@ -42,6 +42,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminAuth, getAdminFirestore } from '../_lib/firebaseAdmin.js';
+import { manejarErrorMeta } from '../_lib/manejarErrorMeta.js';
 import {
   normalizarWaIdRd,
   obtenerPhoneNumberIdsAllowlist,
@@ -409,6 +410,7 @@ export default async function handler(
   }
 
   let decodedToken: Awaited<ReturnType<typeof auth.verifyIdToken>>;
+  // @safe-meta-catch: validación de token Firebase Auth del cliente, no error Meta.
   try {
     decodedToken = await auth.verifyIdToken(idToken);
   } catch {
@@ -995,6 +997,7 @@ export default async function handler(
   }
 
   let metaPayload: PayloadMeta;
+  // @safe-meta-catch: validación local de input (shape de plantilla/media), no error Meta. Outbox queda failed con motivo local.
   try {
     metaPayload = construirPayloadMeta({ wa_id, tipo, texto, plantilla, media });
   } catch (err) {
@@ -1145,7 +1148,40 @@ export default async function handler(
     console.error(`${LOG_PREFIX} update outbox post-fallo falló: ${m}`);
   }
 
+  // SPRINT-WA-BILLING-VERIFY: extraer código Meta + delegar a helper
+  // especializado que clasifica severidad, persiste a whatsapp_errores_meta
+  // y notifica admins si severidad es crítica/alta (códigos billing 131056,
+  // 131057, spam rate 131048, etc.). Best-effort — no bloquea respuesta.
+  const codigoMetaRaw = (metaResp.error as Record<string, unknown> | undefined)?.code;
+  const codigoMeta = typeof codigoMetaRaw === 'number' ? codigoMetaRaw : undefined;
+  const errorMetaInput: {
+    code?: number;
+    mensaje?: string;
+    title?: string;
+    detalles?: unknown;
+  } = {};
+  if (codigoMeta !== undefined) errorMetaInput.code = codigoMeta;
+  const mensajeRaw = (metaResp.error as Record<string, unknown> | undefined)?.mensaje
+    ?? (metaResp.error as Record<string, unknown> | undefined)?.message;
+  if (typeof mensajeRaw === 'string') errorMetaInput.mensaje = mensajeRaw;
+  const tituloRaw = (metaResp.error as Record<string, unknown> | undefined)?.title;
+  if (typeof tituloRaw === 'string') errorMetaInput.title = tituloRaw;
+  if (metaResp.error !== undefined) errorMetaInput.detalles = metaResp.error;
+
+  const resultadoManejo = await manejarErrorMeta({
+    db,
+    errorMeta: errorMetaInput,
+    contexto: {
+      fuente: 'send',
+      wa_id,
+      phoneNumberId,
+      outboxId: outboxRef.id,
+      callerUid,
+    },
+  });
+
   // Audit log de fallo Meta (security audit WA-2 MEDIA #2 — cobertura completa).
+  // Si es billing error, distinguir motivo para que la consola admin filtre.
   await escribirAuditoriaSend(db, {
     accion: 'enviar_whatsapp',
     resultado: 'fallo_meta',
@@ -1157,16 +1193,24 @@ export default async function handler(
     phoneNumberId,
     outboxId: outboxRef.id,
     ordenId,
-    motivo: 'meta-envio-fallo',
-    detalle: { error: metaResp.error ?? null, intentos },
+    motivo: resultadoManejo.esBilling ? 'meta-billing-error' : 'meta-envio-fallo',
+    detalle: {
+      error: metaResp.error ?? null,
+      intentos,
+      severidad: resultadoManejo.severidad,
+      codigoMeta: codigoMeta ?? null,
+    },
   });
 
   console.warn(
     `${LOG_PREFIX} envío FAIL | wa=${truncarWaIdParaLog(wa_id)} tipo=${tipo} ` +
-      `intentos=${intentos}`,
+      `intentos=${intentos} severidad=${resultadoManejo.severidad} ` +
+      `esBilling=${resultadoManejo.esBilling}`,
   );
   res.status(502).json({
-    error: 'meta-envio-fallo',
+    error: resultadoManejo.esBilling ? 'meta-billing-error' : 'meta-envio-fallo',
+    severidad: resultadoManejo.severidad,
+    codigoMeta: codigoMeta ?? null,
     detalle: metaResp.error ?? null,
     outboxId: outboxRef.id,
     intentos,

@@ -792,6 +792,37 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Log de errores estructurados de Meta (códigos billing/spam/quality/etc).
+    // SPRINT-WA-BILLING-VERIFY (2026-05-19). Persistido por
+    // `api/_lib/manejarErrorMeta.ts` desde `api/whatsapp/send.ts` (POST a
+    // Meta falla) y `api/whatsapp/webhook.ts` (status callback con
+    // estado=failed + code). Doc id auto-generado.
+    //
+    // Read: SOLO admin (security audit hallazgo MEDIA #3 — endurecido
+    // 2026-05-19 mismo día). Los docs pueden contener fragmentos del
+    // payload original echado por Meta en `error_data.details` (códigos
+    // 132000/131051 incluyen el body del mensaje fallado). Coord no
+    // necesita ver errores Meta para operar — admin es el responsable
+    // de plataforma. Reduce superficie de leak de PII del cliente.
+    // Write/delete: NUNCA cliente — solo Admin SDK escribe. Admin puede
+    // eliminar entries viejas para housekeeping si crece descontroladamente.
+    match /whatsapp_errores_meta/{docId} {
+      allow read: if esAdmin();
+      allow create: if false;
+      allow update: if false;
+      allow delete: if esAdmin();
+    }
+
+    // Dedupe de notificaciones admin por (codigo, día RD). Doc id formato
+    // `{YYYY-MM-DD}_{codigo}`. Persistido transaccionalmente por
+    // `manejarErrorMeta.ts` para evitar spam (sin esto, incidente billing
+    // de 48h generaría miles de notif a cada admin — security audit
+    // hallazgo ALTA #1).
+    match /whatsapp_errores_meta_dedupe/{docId} {
+      allow read: if esAdmin();
+      allow write: if false;
+    }
+
     // Configuración operativa del módulo WhatsApp (1 doc fijo
     // whatsapp_config/sistema). NO contiene secretos — esos viven en
     // process.env de Vercel (META_APP_SECRET, META_ACCESS_TOKEN,
