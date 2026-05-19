@@ -10,6 +10,50 @@ OK PASS confirmados del día (no rollback): SPRINT-186 modelo del fabricante OK,
 
 ---
 
+## SPRINT-WA-0-CIERRE — Decisiones de negocio firmes + sembrar `whatsapp_config/sistema`
+
+**Prioridad:** ALTA (desbloqueo módulo WhatsApp completo).
+
+**Estado:** ✅ COMPLETADO 2026-05-19 pasada 1 por coordinator autónomo (sesión continuación tras Opción A confirmada). Hash: pendiente al final de esta pasada.
+
+**Origen:** Jorge respondió las 10 decisiones D1-D10 de SPRINT-WA-0 (BLOQUEOS.md:31) el 2026-05-19. Coordinator cierra el sprint admin, persiste decisiones en docs + script, y desbloquea SPRINT-WA-RULES + SPRINT-WA-1.
+
+### Objetivo
+
+Persistir las 10 decisiones firmes en formato consumible por código (`whatsapp_config/sistema`) y por humanos (sección dedicada en `docs/MODULO_WHATSAPP.md`). Identificar y documentar bloqueador nuevo derivado de D3=B.
+
+### Touch-list ejecutado
+
+1. **`docs/MODULO_WHATSAPP.md`** — agregada sección "Decisiones de negocio FIRMES (D1-D10, OK Jorge 2026-05-19)" con tabla de los 10 valores + 1 párrafo de blocker nuevo.
+2. **`docs/sprints/BLOQUEOS.md`** — SPRINT-WA-0 marcado COMPLETADO con respuestas Jorge inline. SPRINT-WA-6 actualizado con sub-sección "⚠️ Blocker nuevo identificado 2026-05-19" detallando creación de plantilla HSM `auto_respuesta_fuera_horario` (nombre, categoría UTILITY, body propuesto, variable `{{1}}` teléfono contingencia).
+3. **`scripts/init-whatsapp-config.ts`** — nuevo script idempotente. Crea o actualiza `whatsapp_config/sistema` con 10 decisiones snapshot + horario L-S 8-18 + 20 turnos + palabras escalado/urgencia/opt-out + 2 números activos + routing zonas vacío + costos referencia. Modos: default idempotente (solo agrega nuevos), `--dry-run`, `--force` (sobrescribe). Patrón de auth idéntico a `backfill-usuarios-desde-personal.ts`.
+4. **`docs/specs/bot-ia-system-prompt.md`** — sin cambios necesarios (D5=20 turnos y D10="Fixman" ya estaban en v1.0 propuesto).
+
+### Acción de Jorge POST-deploy del SPRINT-WA-RULES
+
+Una vez que WA-RULES esté deployado, Jorge corre:
+
+```bash
+npx tsx scripts/init-whatsapp-config.ts --dry-run   # ver plan
+npx tsx scripts/init-whatsapp-config.ts             # aplicar
+```
+
+El script es seguro de correr múltiples veces (idempotente). Si ya existe el doc, hace merge solo de campos nuevos y refresca `decisionesSnapshot` + `schemaVersion` + `updatedAt`.
+
+### Criterios de aceptación cumplidos
+
+- [x] 10 decisiones firmes documentadas en MODULO_WHATSAPP.md sección dedicada.
+- [x] SPRINT-WA-0 marcado COMPLETADO en BLOQUEOS.md.
+- [x] Script `init-whatsapp-config.ts` creado + typechecked.
+- [x] Blocker nuevo (plantilla `auto_respuesta_fuera_horario`) documentado en WA-6.
+- [x] Cazadores 13/13 PASS al commitear.
+
+### Próximo sprint
+
+SPRINT-WA-RULES (rules nuevas + deploy) entra a esta misma pasada.
+
+---
+
 ## SPRINT-188-CAZADOR-P015 — Cazador determinístico para queries Firestore con orderBy sobre campo no garantizado
 
 **Prioridad:** MEDIA (acción preventiva del postmortem 2026-05-18 banner descuento).

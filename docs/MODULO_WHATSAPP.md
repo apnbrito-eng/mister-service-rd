@@ -1,10 +1,33 @@
 # Módulo WhatsApp Cloud API — arquitectura de referencia
 
-**Estado:** SPEC v0.1 — pendiente de implementación. Los 7 sprints están listados en `docs/sprints/BLOQUEOS.md` (SPRINT-WA-1 a SPRINT-WA-7) esperando OK de Jorge a las decisiones de negocio D1-D8.
+**Estado:** SPEC v0.2 — 10 decisiones de negocio FIRMES al 2026-05-19. SPRINT-WA-0 cerrado. Implementación arrancando con SPRINT-WA-RULES → SPRINT-WA-1.
 
 **Decisión arquitectónica raíz (2026-05-15):** integración **directa a Meta Cloud API**, sin BSP intermediario (no Wati, no 360dialog). Endpoints serverless en `api/whatsapp/*` siguiendo el patrón existente de `api/gps/ubicacion.ts`.
 
 **Audiencia:** coordinator + builders + Jorge. Sirve como mapa cuando se procesen los sprints WA, y como referencia "cómo extender" para features futuras.
+
+---
+
+## Decisiones de negocio FIRMES (D1-D10, OK Jorge 2026-05-19)
+
+| # | Decisión | Valor firme | Impacto |
+|---|---|---|---|
+| **D1** | Número default envío | **Sticky por conversación** — usa el último `phoneNumberId` que el cliente usó. Override manual disponible en composer. | `whatsapp_conversaciones.ultimoPhoneNumberId` se respeta. Composer expone dropdown para override puntual. |
+| **D2** | 2 números → conversaciones | **1 conversación por `wa_id`** — doc id `whatsapp_conversaciones/{wa_id}` único; `phoneNumberId` se preserva por mensaje individual. | Operaria ve historial completo del cliente sin importar a qué número escribió. |
+| **D3** | Horario bot | **Lunes-Sábado 8:00-18:00 RD.** Fuera de eso: plantilla `auto_respuesta_fuera_horario` (a crear en Meta — bloqueante para WA-6). | Bot solo activo en horario. Fuera, cola para humano + auto-respuesta HSM. |
+| **D4** | Plantillas autónomas del bot | **Solo categoría UTILITY** (ej. `cita_confirmada` post-creación OS). MARKETING requiere acción operaria. | Bot no manda marketing autónomamente — previene abuso/spam. |
+| **D5** | Límite turnos | **20 turnos** por conversación. Al alcanzar → escalar a humano. | `whatsapp_config.bot.limiteTurnosConversacion = 20`. |
+| **D6** | Roles autorizados envío UI | **admin, coord, secretaria, operaria.** Técnico/ayudante NO mandan WhatsApp. | `api/whatsapp/send.ts` valida `rol ∈ [admin, coord, secretaria, operaria]`. |
+| **D7** | Body literal plantillas | **Cron `sync-plantillas` corre primero**; mapping CRM se ajusta tras ver bodies reales. | WA-5 desplegado antes que WA-2 puede mandar plantillas reales. |
+| **D8** | Opt-out automático | **STOP/BAJA/NO MAS → `whatsapp_config.optOuts[]` + `clientes/{id}.optOutMarketing=true`.** Defense-in-depth. | Webhook entrante detecta keywords, agrega a opt-outs. `api/whatsapp/send.ts` rechaza si cliente está en opt-out. |
+| **D9** | Plan Vercel | **Pro** — 3 crons separados OK (no consolidar). | `vercel.json` tendrá 3 entradas independientes: `sync-plantillas`, `recordatorios-mantenimiento`, `garantias-por-vencer`. |
+| **D10** | Tono/nombre bot | **"Fixman"**. Trato: **usted en primer turno, tú si cliente lo usa primero (adaptive)**. | System prompt v1.0 lo refleja — ver `docs/specs/bot-ia-system-prompt.md`. |
+
+**Bloqueador nuevo identificado por D3:** la plantilla HSM `auto_respuesta_fuera_horario` (categoría UTILITY) NO existe aún en Meta. Jorge debe crearla antes de WA-6. Approval Meta tarda 24-72h. Texto propuesto: *"Gracias por escribir a Mister Service. Estamos fuera de horario (L-S 8am-6pm). Te respondemos mañana a primera hora. Si es urgencia, llama al [tel]."* Variable `{{1}}` = teléfono de contingencia. Documentado en `BLOQUEOS.md` SPRINT-WA-6.
+
+**Próximas decisiones esperadas (no bloquean WA-RULES ni WA-1):**
+- Naming format de campañas marketing (impacta WA-4 — se acuerda durante el sprint).
+- Plantilla auto-respuesta fuera de horario (impacta WA-6 — bloqueado hasta approval Meta).
 
 ---
 

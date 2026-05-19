@@ -31,9 +31,20 @@
 ### SPRINT-WA-0 — Decisiones de negocio (10 puntos) + confirmación billing Vercel
 
 **Tipo:** Decisiones de Jorge. NO toca código.
-**Estado:** BLOQUEADO 2026-05-18 — esperando OK Jorge con 10 respuestas.
+**Estado:** ✅ COMPLETADO 2026-05-19 — Jorge respondió las 10 decisiones. Bloque original preservado abajo para trazabilidad.
 
-#### Por qué está bloqueado
+**Respuestas Jorge 2026-05-19:** D1=D (sticky por conversación), D2=A (una conversación por wa_id), D3=B (L-S 8-18 RD + plantilla auto-respuesta fuera horario — bloqueante WA-6), D4=C (bot solo UTILITY autónomas), D5=B (20 turnos), D6=C (admin/coord/secretaria/operaria), D7=A (cron sync-plantillas primero), D8=A (opt-out automático STOP/BAJA), D9=Pro (3 crons separados OK), D10=A (Fixman, usted/tú adaptive).
+
+**Próximo desbloqueado:** SPRINT-WA-RULES (rules nuevas) + SPRINT-WA-1 (webhook).
+
+**Artefactos producidos por el cierre:**
+- `docs/MODULO_WHATSAPP.md` sección "Decisiones de negocio FIRMES" actualizada con los 10 valores.
+- `scripts/init-whatsapp-config.ts` (nuevo): script idempotente que crea/actualiza `whatsapp_config/sistema` con los valores firmes. Jorge corre con `npx tsx scripts/init-whatsapp-config.ts` cuando WA-RULES esté deployado.
+- Nuevo blocker identificado en WA-6 por D3=B: plantilla HSM `auto_respuesta_fuera_horario` NO existe — Jorge la crea en Meta antes de procesar WA-6.
+
+---
+
+#### Por qué estuvo bloqueado (preservado para trazabilidad)
 
 Sin estas 10 decisiones, el architect y el builder estarían adivinando criterios de negocio. Cada una tiene una propuesta default que Jorge puede aceptar tal cual con un solo OK, o ajustar específicamente.
 
@@ -100,7 +111,7 @@ Sin estas 10 decisiones, el architect y el builder estarían adivinando criterio
 2. Coordinator actualiza `whatsapp_config/sistema` (lo crea desde script + agrega los valores firmes a `docs/MODULO_WHATSAPP.md` y `docs/specs/bot-ia-system-prompt.md` si difieren de los defaults).
 3. Mueve SPRINT-WA-1 a `COLA_AUTONOMA.md` y procesa.
 
-**OK Jorge:** _pendiente_
+**OK Jorge 2026-05-19:** D1=D, D2=A, D3=B, D4=C, D5=B, D6=C, D7=A, D8=A, D9=Pro, D10=A (todas las recomendadas). Coordinator debe (1) crear `whatsapp_config/sistema` con estos valores; (2) registrar la pendiente "crear plantilla HSM nueva para auto-respuesta fuera de horario" como bloqueo de WA-6 hasta que Meta apruebe; (3) mover SPRINT-WA-RULES a la cola autónoma.
 
 ---
 
@@ -639,8 +650,29 @@ Si plan Hobby (D9=A):
 ### SPRINT-WA-6 — Bot IA conversacional con Claude Haiku
 
 **Tipo:** Integración Anthropic + datos sensibles + endpoint público trigger. Requiere OK.
-**Estado:** BLOQUEADO 2026-05-18 — depende de WA-1 + WA-2 + WA-3.
+**Estado:** 🚧 BLOQUEADO 2026-05-19 — depende de WA-1 + WA-2 + WA-3 **Y de plantilla HSM nueva `auto_respuesta_fuera_horario` (a crear en Meta por Jorge)**.
 **Prioridad:** 🟡 MEDIA-ALTA — diferencial competitivo grande. Después de validar que los humanos pueden responder bien (WA-3).
+
+#### ⚠️ Blocker nuevo identificado 2026-05-19 (decisión D3=B)
+
+D3=B implica que el bot **NO responde fuera de horario L-S 8:00-18:00 RD**. En su lugar, debe enviarse una plantilla HSM aprobada. Esta plantilla **no existe todavía** en Meta Business Manager.
+
+**Acción de Jorge antes de procesar WA-6:**
+
+1. Entrar a `business.facebook.com → WhatsApp Manager → Plantillas de mensajes → Crear plantilla nueva`.
+2. **Nombre:** `auto_respuesta_fuera_horario`
+3. **Categoría:** `UTILITY`
+4. **Idioma:** `Spanish` (es) — o `Spanish (DOM)` (es_DO) si está disponible.
+5. **Body propuesto** (1 variable):
+   > Gracias por escribir a Mister Service. Estamos fuera de horario (lunes a sábado 8am-6pm). Te respondemos mañana a primera hora. Si es una emergencia, llámanos al {{1}}.
+6. **Variable {{1}}:** teléfono de contingencia (ej. el principal `849-564-6767` o un número específico de guardia).
+7. Enviar a approval — Meta tarda 24-72h.
+8. Una vez APPROVED, correr cron `sync-plantillas` (de WA-5) y verificar que aparece en Firestore `whatsapp_plantillas/auto_respuesta_fuera_horario__es` con `estado='APPROVED'`.
+9. Editar este blocker con `OK: jorge YYYY-MM-DD HH:MM plantilla creada y aprobada`.
+
+**Sin esto, WA-6 no puede procesarse** — el bot fuera de horario quedaría en estado indefinido (no responde, pero tampoco tiene mecanismo de auto-respuesta).
+
+**Alternativa si Jorge prefiere acelerar:** cambiar D3 de B a C (silencio fuera de horario, solo marca `requiereHumano=true`). Eso desbloquea WA-6 sin esperar Meta approval, a costa de UX (el cliente no recibe acuse).
 
 #### Dependencias
 
@@ -649,6 +681,7 @@ Si plan Hobby (D9=A):
 - WA-3 (UI para que operaria tome control y vea conversaciones del bot).
 - `ANTHROPIC_API_KEY` ya en Vercel.
 - `docs/specs/bot-ia-system-prompt.md` con system prompt v1.0 aprobado.
+- **NUEVO:** Plantilla `auto_respuesta_fuera_horario` APPROVED en Meta (ver blocker arriba).
 
 #### Touch-list expandido
 
