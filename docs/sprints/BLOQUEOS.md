@@ -235,7 +235,29 @@ match /whatsapp_config/{docId} {
 ### SPRINT-WA-1 — Webhook entrante (HMAC + idempotencia) — FUNDACIÓN
 
 **Tipo:** Endpoint público nuevo + integración terceros (Meta). Requiere OK Jorge.
-**Estado:** BLOQUEADO 2026-05-18 — depende de SPRINT-WA-0 + SPRINT-WA-RULES.
+**Estado:** ✅ COMPLETADO 2026-05-19 por builder. Hash: pendiente (coordinator commitea tras tester + regression_guardian + reviewer + security). Implementación entregada:
+
+- `api/whatsapp/webhook.ts` — GET verify + POST receive con HMAC SHA-256 + `timingSafeEqual` + `bodyParser: false` + body raw como Buffer + idempotency via `runTransaction` (inbox + conversaciones atómico) + status callbacks con `debeActualizarEstado` (resistente a callbacks fuera de orden).
+- `api/_lib/whatsappWebhook.ts` — helpers puros (parsing, normalización wa_id RD, extracción de contenido por tipo, strip undefined recursivo, cap raw payload 50KB). Sin side effects, sin Firebase imports.
+- `scripts/invariantes/check-whatsapp-webhook-hmac.ts` (P-016) — caza ausencia de los 4 invariantes críticos (createHmac sha256, header x-hub-signature-256, timingSafeEqual, bodyParser: false). PASS silent si archivos no existen.
+- `scripts/invariantes/check-whatsapp-idempotency.ts` (P-017) — caza ausencia de `runTransaction` + `tx.get` en webhook entrante + tempId pre-Meta en send saliente (cuando exista). PASS silent para send (todavía no implementado).
+- `scripts/invariantes/run-all.ts` — P-016 y P-017 registrados (15 cazadores activos).
+- `docs/PATRONES_REGRESION.md` — entradas P-016 y P-017 agregadas con explicación completa.
+
+**Notas del builder:**
+- `nanoid` NO se agregó al `package.json` (CLAUDE.md dice no usar — `crypto.randomUUID` built-in cubre el caso de WA-2). El cazador P-017 explícitamente exige `randomUUID` y NO acepta `nanoid`.
+- Función helper `runTransaction` ya disponible directo del Admin SDK via `getAdminFirestore().runTransaction(...)` (patrón existente en `api/portal-cliente/[token]/posponer.ts:174` y `api/ai/chat.ts:292`).
+- Body raw size cap defensivo: 5MB para evitar memory abuse (Meta payloads reales son <50KB).
+- Log policy aplicada: NUNCA loggea texto del mensaje; sólo `wamid`, `wa_id` truncado a 4 dígitos, `tipo`, contadores.
+
+**Próximos pasos para coordinator:**
+1. tester: typecheck + lint + `npm run check:regression` (esperado 15/15 PASS).
+2. regression_guardian: verificación semántica (orden tx.get → tx.set, atomicidad inbox+conversaciones, evitar leaks de PII en logs).
+3. reviewer: foco HMAC + raw body + spoof prevention.
+4. security: vector análisis (qué pasa si Meta cambia formato de wamid, qué pasa si el secret rota mid-flight, etc.).
+5. commit + push + Jorge configura webhook URL en Meta Developers + E2E manual.
+
+**Estado original:** BLOQUEADO 2026-05-18 — depende de SPRINT-WA-0 + SPRINT-WA-RULES.
 **Prioridad:** 🔴 ALTA — sin esto, no entran mensajes de WhatsApp al CRM.
 
 #### Dependencias

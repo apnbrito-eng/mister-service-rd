@@ -504,6 +504,59 @@ NUNCA `addDoc(collection(db, 'clientes'), ...)` — auto-id de Firestore hace es
 
 ---
 
+## P-016 — Webhook WhatsApp sin HMAC SHA-256 + raw body + timingSafeEqual
+
+**Bug original (anticipado):** SPRINT-WA-1 (2026-05-19). Cazador preventivo, no histórico — implementado JUNTO al endpoint para que cualquier regresión futura sobre `api/whatsapp/webhook.ts` sea bloqueada antes del merge.
+
+**Síntoma de una regresión:** un atacante con la URL del webhook (semi-pública — Meta la pinea en su dashboard de Developers) POSTea payload sin firma o con firma forjada, el endpoint lo procesa como si fuera de Meta, y aparecen docs falsos en `whatsapp_mensajes_inbox/{wamid}` con `wa_id` arbitrario + conversaciones envenenadas. Si la lógica de bot ya está activa (SPRINT-WA-6), también dispara respuestas automáticas al teléfono spoofeado.
+
+**Causa raíz prevenida:** el archivo `api/whatsapp/webhook.ts` debe SIEMPRE mantener 4 invariantes:
+1. `export const config = { api: { bodyParser: false } }` — sin esto, Vercel parsea el body como JSON y el HMAC se calcula sobre re-serialización (espacios, orden de keys distintos a lo que firmó Meta). Resultado: HMAC siempre falla en prod.
+2. Lectura del body como `Buffer` raw (acumulación de chunks vía `req.on('data')`).
+3. `crypto.createHmac('sha256', META_APP_SECRET).update(rawBody).digest('hex')`.
+4. Comparación con `crypto.timingSafeEqual` (anti-timing attack — `===` filtra info byte-a-byte sobre el digest correcto).
+
+**Regla:** los archivos `api/whatsapp/webhook.ts` Y `api/_lib/whatsappWebhook.ts` (escaneados en conjunto, ya que el helper puede vivir en `_lib/`) deben contener TODOS los siguientes patterns regex:
+- `crypto.createHmac('sha256'` o `crypto.createHmac("sha256"`
+- `x-hub-signature-256` (en cualquier caso)
+- `timingSafeEqual`
+- `bodyParser: false`
+
+Si alguno falta → FAIL.
+
+**Cazador:** `scripts/invariantes/check-whatsapp-webhook-hmac.ts`. Estrategia: regex sobre los 2 archivos (concat). Si NINGUNO existe, PASS silent (sprint aún no implementó). Si AL MENOS UNO existe, los 4 patterns son obligatorios.
+
+**Allowlist:** vacía. No hay forma legítima de tener el endpoint sin los 4 invariantes. Si la lógica se mueve a otro archivo, agregar el path a `ARCHIVOS_A_ESCANEAR`.
+
+---
+
+## P-017 — Webhook/send WhatsApp sin idempotency (runTransaction + tx.get o tempId pre-Meta)
+
+**Bug original (anticipado):** SPRINT-WA-1 (2026-05-19). Cazador preventivo. Doble cobertura: webhook entrante (idempotency vs reintentos Meta) + send saliente (idempotency vs timeouts de nuestra red al postear a Meta).
+
+**Síntoma:**
+- (A) **Entrante:** Meta reintenta cada POST que no responde 200 en <10s. Sin idempotency, un reintento causa doc duplicado en `whatsapp_mensajes_inbox` o counter `totalMensajesEntrantes` doblado en `whatsapp_conversaciones/{wa_id}`. Si bot está activo (SPRINT-WA-6), también dispara respuesta IA dos veces — costos Anthropic doblados.
+- (B) **Saliente:** si POSTeamos a Meta y la respuesta timeoutea (pero Meta SÍ envió), un retry naive desde nuestro lado dispara DOBLE envío al cliente. Spam + posible ban de Meta por abuso.
+
+**Causa raíz prevenida:** la única forma robusta de idempotency en Firestore es leer + escribir en el MISMO `runTransaction` callback. Patrones NO idempotentes:
+- `addDoc(...)` con auto-id (id nuevo cada llamada).
+- `setDoc(...)` sin `tx.get` previo dentro de tx (race: dos callbacks paralelos ambos ven "no existe" y crean).
+- `if (snap.exists) return; await setDoc(...)` fuera de tx (TOCTOU).
+
+**Regla por archivo:**
+- `api/whatsapp/webhook.ts` (entrante): DEBE contener `runTransaction` Y (`tx.get(` o `transaction.get(`) Y referencia a `whatsapp_mensajes_inbox` o `whatsapp_conversaciones`.
+- `api/whatsapp/send.ts` (saliente, todavía no implementado al cierre WA-1): DEBE contener `crypto.randomUUID(` (tempId) Y `addDoc/setDoc` sobre `whatsapp_mensajes_outbox` Y la escritura outbox DEBE preceder en offset a la llamada `graph.facebook.com` o `/messages`. NO usar `nanoid` (no instalado).
+
+**Cazador:** `scripts/invariantes/check-whatsapp-idempotency.ts`. Estrategia: heurística por regex sobre offsets de match — si el archivo no existe, PASS silent para esa rama.
+
+**Allowlist:** vacía. La excepción legítima es "archivo no existe" que ya cubre el flow.
+
+**Limitación conocida:**
+- El cazador no verifica que el ORDEN `tx.get` → `tx.set` adentro del callback sea correcto, sólo que ambos patterns estén presentes. La correctitud semántica la valida `reviewer` cuando el sprint toca este endpoint.
+- Si la lógica se refactoriza a un helper en `_lib/`, extender `ARCHIVOS_WEBHOOK` / `ARCHIVOS_SEND`.
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:

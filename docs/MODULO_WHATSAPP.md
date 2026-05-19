@@ -257,7 +257,8 @@ Cada colección tiene un propósito atómico. Ninguna se escribe desde cliente �
 - `META_APP_SECRET` — HMAC SHA256.
 - `META_ACCESS_TOKEN` — System User token permanente.
 - `META_WABA_ID=1884486412326904`, `META_BUSINESS_ID=103664415995101`, `META_APP_ID=1558940908663280`, `META_PHONE_NUMBER_ID=1151997541323577` (default), `META_API_VERSION=v21.0`.
-- `FIREBASE_ADMIN_SERVICE_ACCOUNT_BASE64` (o el patrón actual de `api/_lib/firebaseAdmin.ts`).
+- `META_PHONE_NUMBER_IDS_ALLOWLIST` (CSV, opcional) — allowlist defense-in-depth. Si está seteado, el webhook rechaza payloads con `phone_number_id` distinto. Ejemplo `1151997541323577,1226992440486630`. Si NO está seteado pero `META_PHONE_NUMBER_ID` sí lo está, se usa ese único id como allowlist. Si ninguno está seteado → modo legacy (acepta cualquier id; usar solo en dev).
+- `FIREBASE_PROJECT_ID` + `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY` — Admin SDK.
 - `ANTHROPIC_API_KEY` — Bot IA.
 
 **Rules:** read `esAdminOCoord()`. Write `esAdmin()`. UI admin tiene formularios para los campos no críticos (horario, palabras escalado, routing zonas).

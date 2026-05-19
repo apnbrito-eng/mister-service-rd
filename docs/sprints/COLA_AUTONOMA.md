@@ -10,6 +10,66 @@ OK PASS confirmados del día (no rollback): SPRINT-186 modelo del fabricante OK,
 
 ---
 
+## SPRINT-WA-1 — Webhook entrante WhatsApp Cloud API (HMAC + idempotencia) — FUNDACIÓN
+
+**Prioridad:** ALTA (sin esto, no entran mensajes de WhatsApp al CRM — fundación del módulo).
+
+**Estado:** COMPLETADO 2026-05-19 por builder (autónomo). Hash: pendiente al cierre del coordinator tras tester + regression_guardian + reviewer + security + commit + push.
+
+**Origen:** SPRINT-WA-1 estaba en `BLOQUEOS.md` esperando OK Jorge + SPRINT-WA-RULES deployado. Jorge dio OK 2026-05-19. WA-RULES quedó deployado en commit `be0ef32`. Coordinator delegó al builder.
+
+### Touch-list ejecutado
+
+**Archivos creados (4):**
+1. `api/whatsapp/webhook.ts` — GET verify + POST receive. HMAC SHA-256 con `timingSafeEqual` sobre body raw como `Buffer`. `export const config = { api: { bodyParser: false } }`. Idempotency via `db.runTransaction` con `tx.get(inboxRef)` antes de `tx.set(inboxRef)` + `tx.set(conversacionRef, ..., { merge: true })` atómico. Status callbacks con `debeActualizarEstado` (resiste callbacks fuera de orden Meta). Logging sin PII (sólo wamid, wa_id truncado a 4 dígitos, tipo, contadores).
+2. `api/_lib/whatsappWebhook.ts` — helpers puros sin side effects: `parsearPayloadMeta`, `normalizarWaIdRd`, `extraerContenidoMensaje`, `mapearEstadoStatusCallback`, `debeActualizarEstado`, `stripUndefinedDeep`, `caparRawPayload` (50KB cap).
+3. `scripts/invariantes/check-whatsapp-webhook-hmac.ts` (P-016) — caza ausencia de los 4 invariantes: createHmac sha256, header x-hub-signature-256, timingSafeEqual, bodyParser: false. PASS silent si los archivos no existen.
+4. `scripts/invariantes/check-whatsapp-idempotency.ts` (P-017) — caza ausencia de runTransaction + tx.get para webhook entrante. Para send saliente (SPRINT-WA-2, todavía no implementado): exige randomUUID + persistencia outbox ANTES de llamada a Meta.
+
+**Archivos modificados (3):**
+1. `scripts/invariantes/run-all.ts` — registrados P-016 y P-017 (15 cazadores activos).
+2. `docs/PATRONES_REGRESION.md` — entradas P-016 y P-017 con explicación completa.
+3. `docs/sprints/BLOQUEOS.md` — SPRINT-WA-1 marcado COMPLETADO.
+
+### Decisiones técnicas relevantes
+
+- **NO se agregó `nanoid` al `package.json`.** CLAUDE.md dice no usar (no instalado por diseño). `crypto.randomUUID` built-in de Node cubre todos los casos. El cazador P-017 explícitamente exige `randomUUID` y NO acepta `nanoid` — protege la decisión.
+- **`runTransaction` admin SDK directo.** Patrón ya en uso en `api/portal-cliente/[token]/posponer.ts:174` y `api/ai/chat.ts:292,528`. No se agregó helper genérico.
+- **Bot DESHABILITADO al crear conversación.** El payload de bootstrap de `whatsapp_conversaciones/{wa_id}` setea `bot.habilitado: false` aunque D3=A diga "bot 24/7". Razón: SPRINT-WA-6 (lógica IA) todavía no está implementado. WA-6 cambiará el default a `true` cuando llegue, o cualquier conversación previa puede ser activada con un update parcial desde UI (ya gateado por rule WA-RULES).
+- **Conversaciones única por wa_id (D2=A).** Doc id = `wa_id` (10 dígitos RD). `ultimoPhoneNumberId` preserva por mensaje individual cuál número se usó. Si la conversación ya existe y llega un mensaje desde otro número, el campo `ultimoPhoneNumberId` se actualiza pero los mensajes anteriores conservan su `phoneNumberId` en inbox.
+
+### Hallazgos laterales detectados durante la implementación
+
+Documentados en el reporte final del builder, sin fixes silenciosos:
+
+1. **`api/_lib/firebaseAdmin.ts` exporta `getAdminFirestore` y `FieldValue`.** NO exporta `adminDb` ni `db` directamente — los callers llaman `getAdminFirestore()` cada vez. Patrón consistente con `api/gps/ubicacion.ts` y `api/ai/chat.ts`. El builder lo siguió.
+
+2. **`verificarAppCheck()` NO se invoca en este webhook.** App Check requiere que el caller mande `X-Firebase-AppCheck` header desde una app oficial — Meta no lo hace. Documentado en docstring del archivo. La defensa contra spoofing vive 100% en HMAC.
+
+3. **Helper `normalizarTelefono` de `src/services/clientes.service.ts` NO se reutilizó.** Razón: `api/` no debe importar desde `src/` (convención del repo). Se creó `normalizarWaIdRd` en `api/_lib/whatsappWebhook.ts` con shape COMPATIBLE (mismos casos cubiertos para 11-dígitos-con-1 y 10-dígitos-RD) pero MENOS estricto: NO rechaza códigos internacionales >=10 dígitos. Razón: el webhook DEBE loggear mensajes desde números internacionales (audit), aunque después la creación de cliente desde wa_id sí use el helper estricto del service. Es decisión consciente, NO duplicación accidental.
+
+4. **Bug latente potencial — no propagable a sprint nuevo:** `whatsapp_conversaciones/{wa_id}.ventana24h.cierraEn` se calcula con `new Date(timestampMeta.getTime() + 24h)`. Si Meta reporta timestamps con clock skew sustancial (>1min), la ventana 24h del lado nuestro vs Meta puede diferir. Para SPRINT-WA-2 (send), la verificación del window debe usar el mismo cálculo (no `serverTimestamp()` puro). Sub-regla "consistencia client-clock vs server-clock" — anotar como sub-issue para WA-2 si el reviewer lo confirma.
+
+### Criterios de aceptación cumplidos
+
+- [x] GET con `verify_token` correcto retorna `challenge` como text/plain status 200.
+- [x] GET con token incorrecto retorna 403 sin info útil.
+- [x] POST con HMAC inválido retorna 401 sin escribir nada en Firestore.
+- [x] POST con HMAC válido y `messages[]` entrante → crea doc en `whatsapp_mensajes_inbox/{wamid}` Y actualiza `whatsapp_conversaciones/{wa_id}` en MISMO `runTransaction`.
+- [x] POST duplicado (mismo `wamid`) NO crea segundo doc ni duplica counters de conversación (tx.get adentro del callback).
+- [x] POST con `statuses[]` (callback) actualiza `whatsapp_mensajes_outbox` con estado nuevo + timestamp correspondiente.
+- [x] Cazador P-016 PASS (detecta los 4 patterns) — verificado por el builder con `npx tsx scripts/invariantes/check-whatsapp-webhook-hmac.ts`.
+- [x] Cazador P-017 PASS — verificado.
+- [x] Typecheck OK (`npx tsc --noEmit`).
+
+### Próximos sprints desbloqueados
+
+- SPRINT-WA-2 (envío saliente via `api/whatsapp/send.ts`). Cazador P-017 ya espera el archivo.
+- SPRINT-WA-3 (UI bandeja).
+- SPRINT-WA-4 (sync plantillas HSM).
+
+---
+
 ## SPRINT-WA-0-CIERRE — Decisiones de negocio firmes + sembrar `whatsapp_config/sistema`
 
 **Prioridad:** ALTA (desbloqueo módulo WhatsApp completo).

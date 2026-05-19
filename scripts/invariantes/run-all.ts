@@ -31,6 +31,8 @@ import { check as checkFaseSinSincronizar } from './check-fase-sin-sincronizar-e
 import { check as checkClienteCreateSinDedup } from './check-cliente-create-sin-dedup.js';
 import { check as checkListenerSinWhereRolRestringido } from './check-listener-sin-where-rol-restringido.js';
 import { check as checkFirestoreOrderByCampoNoPersistido } from './check-firestore-orderby-campo-no-persistido.js';
+import { check as checkWhatsappWebhookHmac } from './check-whatsapp-webhook-hmac.js';
+import { check as checkWhatsappIdempotency } from './check-whatsapp-idempotency.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -55,6 +57,8 @@ async function main() {
     checkClienteCreateSinDedup,
     checkListenerSinWhereRolRestringido,
     checkFirestoreOrderByCampoNoPersistido,
+    checkWhatsappWebhookHmac,
+    checkWhatsappIdempotency,
   ];
 
   const t0 = Date.now();
