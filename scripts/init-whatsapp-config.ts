@@ -25,7 +25,12 @@
  * Decisiones firmes (SPRINT-WA-0, OK Jorge 2026-05-19):
  *   D1=D — sticky por conversación (no hardcoded acá, lo respeta send.ts)
  *   D2=A — una conversación por wa_id (no parametrizable acá)
- *   D3=B — L-S 8-18 RD + plantilla fuera horario
+ *   D3=A — bot 24/7 con escalación por triggers (cambio de B→A el 2026-05-19
+ *          noche por decisión Jorge: respuesta instantánea + UX consistente).
+ *          La plantilla auto_respuesta_fuera_horario queda como FALLBACK
+ *          de emergencia (bot caído, ban temporal, mantenimiento) no como
+ *          flujo normal. Si la plantilla está APPROVED queda en
+ *          whatsapp_plantillas con uso opcional.
  *   D4=C — bot solo UTILITY autónomas (no parametrizable acá, lógica en whatsappBot.ts)
  *   D5=B — 20 turnos
  *   D6=C — admin/coord/secretaria/operaria (gateado en send.ts)
@@ -56,6 +61,7 @@ interface WhatsappConfigSistema {
       zona: string;
       fueraDeHorario: 'auto_responder_plantilla' | 'silenciar' | 'siempre_bot';
       plantillaFueraHorario: string | null;
+      plantillaFueraHorarioModo?: 'fallback_emergencia' | 'flujo_normal';
     };
     limiteTurnosConversacion: number;
     palabrasEscaladoHumano: string[];
@@ -75,7 +81,8 @@ interface WhatsappConfigSistema {
     sprintWa0Fecha: string;
     D1: 'sticky_por_conversacion';
     D2: 'una_conversacion_por_wa_id';
-    D3: 'horario_L_S_8_18_con_plantilla_fuera';
+    D3: 'bot_24_7_con_escalacion_por_triggers';
+    D3_cambio?: string;
     D4: 'bot_solo_utility';
     D5_limiteTurnos: number;
     D6_rolesAutorizados: string[];
@@ -108,12 +115,22 @@ const DEFAULTS: WhatsappConfigSistema = {
   bot: {
     habilitadoGlobal: false,
     horario: {
-      activo: true,
+      // D3=A (2026-05-19): bot atiende 24/7. horario.activo=false
+      // significa "no aplicar restricción horaria al bot". El campo
+      // se preserva en el schema para permitir reactivarlo en el
+      // futuro sin migración.
+      activo: false,
       inicio: '08:00',
       fin: '18:00',
       zona: 'America/Santo_Domingo',
-      fueraDeHorario: 'auto_responder_plantilla',
+      // 'siempre_bot' refleja D3=A. Si en el futuro Jorge revierte
+      // a D3=B/C, cambiar a 'auto_responder_plantilla' o 'silenciar'.
+      fueraDeHorario: 'siempre_bot',
+      // Plantilla queda referenciada como FALLBACK de emergencia
+      // (no flujo normal). Llamable manualmente por admin o cron
+      // de incidentes.
       plantillaFueraHorario: 'auto_respuesta_fuera_horario',
+      plantillaFueraHorarioModo: 'fallback_emergencia',
     },
     limiteTurnosConversacion: 20,
     palabrasEscaladoHumano: [
@@ -155,7 +172,8 @@ const DEFAULTS: WhatsappConfigSistema = {
     sprintWa0Fecha: '2026-05-19',
     D1: 'sticky_por_conversacion',
     D2: 'una_conversacion_por_wa_id',
-    D3: 'horario_L_S_8_18_con_plantilla_fuera',
+    D3: 'bot_24_7_con_escalacion_por_triggers',
+    D3_cambio: 'cambio_de_B_a_A_2026_05_19_noche',
     D4: 'bot_solo_utility',
     D5_limiteTurnos: 20,
     D6_rolesAutorizados: ['administrador', 'coordinadora', 'secretaria', 'operaria'],

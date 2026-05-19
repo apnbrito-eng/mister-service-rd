@@ -92,10 +92,10 @@ Reglas estrictas:
 - NUNCA respondas preguntas fuera del scope de servicio técnico (política,
   religión, opiniones personales). Redirige amablemente: "Soy el asistente
   de servicio técnico, ¿puedo ayudarte con algún electrodoméstico?".
-- NUNCA respondas si el cliente está fuera del horario laboral Y la configuración
-  dice `silenciar` o `auto_responder_plantilla` — esa lógica la maneja el
-  serverless, no tú. Si te llaman fuera de horario es porque el modo es
-  "siempre_bot", entonces responde normalmente.
+- Atendés 24/7 (D3=A, OK Jorge 2026-05-19). No hay restricción horaria.
+  Si una urgencia llega a las 3am, respondés normalmente y escalás a
+  humano si aplica trigger de urgencia — la lógica decide si Maria o
+  Wilainy reciben push fuera de horario laboral.
 - Si te preguntan si eres un bot o una IA: "Soy el asistente virtual de
   Mister Service. Si prefieres hablar con una persona, escribe 'humano' y
   te conecto."
@@ -193,7 +193,7 @@ Después de la respuesta del bot, el código evalúa:
 2. **Trigger 2** (3 intentos fallidos): si `intentosFallidosSeguidos >= 3`. Se incrementa cuando el bot dice "no entendí" o similar (detectado por keyword en respuesta del bot).
 3. **Trigger 3** (urgencia): match contra `whatsapp_config.bot.palabrasUrgencia` + el bot mismo puede marcar urgencia en su respuesta con un token `[ESCALAR:urgencia]` que el código intercepta y remueve antes de enviar al cliente.
 4. **Trigger 4** (complejo): si el bot incluye el token `[ESCALAR:complejo]` en su respuesta. Equivalente para `[ESCALAR:venta_perdida]`, `[ESCALAR:post_venta]`, etc.
-5. **Trigger 5** (horario): chequeo determinístico antes de llamar al bot.
+5. **Trigger 5** (horario): D3=A → bot 24/7, este trigger NO se aplica. Se preserva en código solo para compat si Jorge revierte a D3=B/C. La lógica de notificación a operaria fuera de horario es separada (push prioritario solo si trigger crítico).
 6. **Trigger 6** (límite turnos): si `turnosCount >= bot.limiteTurnosConversacion`.
 7. **Trigger 7** (venta perdida): mismo mecanismo de token `[ESCALAR:venta_perdida]`.
 
@@ -213,8 +213,9 @@ Después de la respuesta del bot, el código evalúa:
 | Límite turnos por conversación | 20 | `whatsapp_config.bot.limiteTurnosConversacion` |
 | Costo estimado por conversación promedio (10 turnos × ~150 tokens c/u) | ~$0.005 USD = ~RD$ 0.30 | tabla `whatsapp_config.costosReferencia` |
 | Costo estimado mensual (500 conversaciones) | ~$2.50 USD = ~RD$ 150 | — |
-| Horario activo bot | L-S 8:00-18:00 RD | `whatsapp_config.bot.horario` |
-| Modo fuera de horario | `silenciar` (default propuesto) | `whatsapp_config.bot.horario.fueraDeHorario` |
+| Horario activo bot | **24/7 (D3=A)** — `whatsapp_config.bot.horario.activo = false` | `whatsapp_config.bot.horario` |
+| Modo fuera de horario | `siempre_bot` (D3=A) — bot responde a toda hora | `whatsapp_config.bot.horario.fueraDeHorario` |
+| Plantilla fallback emergencia | `auto_respuesta_fuera_horario` (USO MANUAL, no automático) | `whatsapp_config.bot.horario.plantillaFueraHorarioModo = 'fallback_emergencia'` |
 
 ---
 
@@ -308,7 +309,7 @@ El contador se **resetea** cuando el bot extrae al menos un dato nuevo del clien
 
 ## Decisiones pendientes que afectan este prompt
 
-- **D3** (horario bot): si Jorge elige modo `auto_responder_plantilla` en lugar de `silenciar`, el prompt debe incluir referencia a la plantilla auto-respuesta.
+- ~~**D3** (horario bot)~~ — RESUELTO 2026-05-19: D3=A (bot 24/7). Si Jorge revierte a B/C en el futuro, restaurar el prompt anterior y reactivar Trigger 5.
 - **D5** (límite turnos): el valor 20 está hardcoded en el prompt como "más de 20 turnos". Si Jorge elige otro, editar.
 - **D10** (tono "Fixman"): si Jorge prefiere otro nombre o tratamiento (siempre "usted" / siempre "tú"), editar.
 - **D11** (RD$ 1,500): si la tarifa de chequeo cambia, editar acá Y en el config.
