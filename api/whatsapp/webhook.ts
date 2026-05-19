@@ -30,7 +30,8 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import crypto from 'node:crypto';
-import { FieldValue, getAdminFirestore } from '../_lib/firebaseAdmin.js';
+import { FieldValue } from 'firebase-admin/firestore';
+import { getAdminFirestore } from '../_lib/firebaseAdmin.js';
 import {
   caparRawPayload,
   debeActualizarEstado,
