@@ -10,6 +10,742 @@
 
 ---
 
+## 🟦 MÓDULO WHATSAPP CLOUD API — 7 sprints encolados
+
+**Origen:** Jorge eligió Opción A (planning estructurado por bloques) el 2026-05-18 tras el coordinator detectar que el pedido "trabaja en una sola pasada" violaba las sub-reglas de CLAUDE.md (rules nuevas + endpoints públicos + integraciones de terceros requieren OK explícito).
+
+**Referencias técnicas:**
+- `docs/MODULO_WHATSAPP.md` — arquitectura completa del módulo (6 colecciones, 2 endpoints, 3 crons, 3 cazadores nuevos, flujos entrante/saliente, mapeo HSM, window 24h, routing técnico, escalado bot).
+- `docs/specs/bot-ia-system-prompt.md` — prompt versionado del bot Claude Haiku (tono, captura, escalado, ejemplos).
+- `docs/sprints/COLA_AUTONOMA.md:1278-1559` — drafts originales de los 7 sprints WA (ahora superados por las versiones estructuradas abajo).
+
+**Precondiciones externas verificadas hoy 2026-05-18:**
+- 4 plantillas HSM APPROVED en español: `conduce_emitido` (3315829318618800), `cita_confirmada` (954386164046647), `recordatorio_mantenimiento` (2151324502097238), `garantia_por_vencer` (2415325218966527). WABA ID `1884486412326904`.
+- 2 números activos: `1151997541323577` (6767 "Fixman Mister service") + `1226992440486630` (6265 "Fixman 6265"). Tests E2E recientes envían texto plano OK.
+- `ANTHROPIC_API_KEY` cargada en Vercel.
+- `META_ACCESS_TOKEN` (nuevo, sin newline), `META_APP_SECRET`, `META_VERIFY_TOKEN`, `META_BUSINESS_ID=103664415995101`, `META_WABA_ID=1884486412326904`, `META_PHONE_NUMBER_ID=1151997541323577` ya en Vercel.
+- App ID Meta: `1558940908663280`.
+
+---
+
+### SPRINT-WA-0 — Decisiones de negocio (10 puntos) + confirmación billing Vercel
+
+**Tipo:** Decisiones de Jorge. NO toca código.
+**Estado:** BLOQUEADO 2026-05-18 — esperando OK Jorge con 10 respuestas.
+
+#### Por qué está bloqueado
+
+Sin estas 10 decisiones, el architect y el builder estarían adivinando criterios de negocio. Cada una tiene una propuesta default que Jorge puede aceptar tal cual con un solo OK, o ajustar específicamente.
+
+#### Decisiones (responder A/B/C/D + cualquier comentario)
+
+**D1 — Número default de envío.** ¿Desde cuál número sale un mensaje cuando una operaria escribe desde la UI?
+- (A) Siempre 6767 (Fixman Mister service principal).
+- (B) Siempre 6265.
+- (C) La operaria elige cada vez (dropdown).
+- **(D) Sticky por conversación: usa el número que el cliente usó la última vez, con override manual disponible. (recomendado)**
+
+**D2 — Mismo cliente desde 2 números = 1 o 2 conversaciones?**
+- **(A) Una sola conversación (doc `whatsapp_conversaciones/{wa_id}` único, los mensajes traen `phoneNumberId` cada uno). (recomendado)**
+- (B) Dos hilos separados (doc id = `{wa_id}__{phoneNumberId}`).
+
+**D3 — Horario del bot.**
+- (A) 24/7 — el bot atiende siempre, escala a humano por los 7 triggers.
+- **(B) Lunes-Sábado 8:00-18:00 RD. Fuera de eso, plantilla auto-respuesta "te respondemos mañana 8am" + cola para humano. Requiere CREAR una plantilla HSM nueva y esperar approval Meta (24-72h). (recomendado pero requiere plantilla nueva)**
+- (C) L-S 8:00-18:00 RD. Fuera de eso, silencio total (no responde nada, marca `requiereHumano=true`).
+
+**D4 — Plantillas que el bot puede mandar autónomamente.**
+- (A) Solo texto en window. Si necesita reabrir window → escala a humano.
+- (B) El bot puede mandar cualquier plantilla aprobada cuando lo decida.
+- **(C) Solo plantillas categoría UTILITY (ej. `cita_confirmada` post-creación OS). Las MARKETING requieren operaria. (recomendado)**
+
+**D5 — Límite hard de turnos por conversación.**
+- (A) 10 turnos.
+- **(B) 20 turnos. (recomendado — balance costo/UX)**
+- (C) 50 turnos.
+- (D) Sin límite.
+
+**D6 — Roles autorizados para mandar mensajes desde UI.**
+- (A) Solo admin/coord.
+- (B) admin/coord/secretaria.
+- **(C) admin/coord/secretaria/operaria. (recomendado — operaria es el rol que más se comunica)**
+- (D) Todos incluso técnico/ayudante.
+
+**D7 — Body literal de las 4 plantillas APPROVED.**
+- (A) Corremos el cron `sync-plantillas` antes de WA-2 y vemos qué hay; ajustamos mapping CRM si el body real difiere de lo propuesto en `docs/MODULO_WHATSAPP.md` sección 4.
+- (B) Jorge pega el body literal de las 4 plantillas en este sprint.
+
+*Recomendado A si Jorge no tiene a mano el body. Bloquea WA-2 (envío) hasta tener el cron corrido al menos una vez.*
+
+**D8 — Opt-out automático.** ¿Si cliente escribe "STOP", "BAJA", "NO MAS"?
+- **(A) Automático: agregar a `whatsapp_config.optOuts[]` Y marcar `clientes/{id}.optOutMarketing=true`. Próximo envío rechaza. (recomendado — cumplimiento legal Meta)**
+- (B) Manual: requiere acción de operaria.
+
+**D9 — Plan Vercel actual.**
+- (A) Hobby (limitado a 2 crons → consolidar `recordatorios-mantenimiento` + `garantias-por-vencer` en un solo endpoint con switch por path query).
+- (B) Pro o superior (3 crons OK).
+
+*Bloquea WA-7. Jorge confirma desde dashboard Vercel.*
+
+**D10 — Tono/nombre del bot.**
+- (A) Nombre "Fixman" (matchea display del número 6767).
+- (B) Otro nombre (especificar).
+- Trato por defecto: usted en primer turno, tú si cliente lo usa primero. ¿Cambio?
+
+*Recomendado A + trato por defecto propuesto.*
+
+#### Cómo desbloquear
+
+1. Jorge responde D1-D10 con letras (ej. "D1=D, D2=A, D3=B, D4=C, D5=B, D6=C, D7=A, D8=A, D9=Pro, D10=A").
+2. Coordinator actualiza `whatsapp_config/sistema` (lo crea desde script + agrega los valores firmes a `docs/MODULO_WHATSAPP.md` y `docs/specs/bot-ia-system-prompt.md` si difieren de los defaults).
+3. Mueve SPRINT-WA-1 a `COLA_AUTONOMA.md` y procesa.
+
+**OK Jorge:** _pendiente_
+
+---
+
+### SPRINT-WA-RULES — Sub-sprint dedicado a `firestore.rules` (6 rules nuevas)
+
+**Tipo:** Cambio a `firestore.rules`. Sub-sprint separado por sub-regla CLAUDE.md "Reviewer obligatorio cuando un sprint toca firestore.rules".
+**Estado:** BLOQUEADO 2026-05-18 — depende de SPRINT-WA-0.
+
+#### Touch-list expandido
+
+**Archivos a modificar (1):**
+- `firestore.rules` — agregar 6 bloques nuevos (insertar bajo el bloque de `campanas_marketing` por afinidad temática).
+
+**Consumidores verificados (read-only):**
+- `firestore.rules.deployed.lock` — se actualiza con el hash post-deploy.
+- Cazador P-005 (`check-rules-pendientes-deploy.ts`) — bloquea pre-commit si hay diff entre repo y lock.
+
+**No afectados:** ninguna rule existente cambia.
+
+#### Rules a agregar
+
+```javascript
+// === WhatsApp Cloud API module ===
+
+match /whatsapp_mensajes_inbox/{wamid} {
+  allow read: if esStaffOficina();
+  allow write: if false;             // solo admin SDK del webhook
+}
+
+match /whatsapp_mensajes_outbox/{docId} {
+  allow read: if esStaffOficina();
+  allow write: if false;             // solo admin SDK de api/whatsapp/send
+}
+
+match /whatsapp_conversaciones/{waId} {
+  allow read: if esStaffOficina();
+  // Update parcial permitido a staff oficina solo sobre campos UI seguros
+  allow update: if esStaffOficina()
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      'asignadaA', 'asignadaANombre', 'etiquetas', 'noLeidos',
+      'requiereHumano', 'bot', 'updatedAt'
+    ])
+    // Campos críticos inmutables (patrón .get(field, null) por opcionales)
+    && request.resource.data.get('ultimoMensajeEntrante', null) == resource.data.get('ultimoMensajeEntrante', null)
+    && request.resource.data.get('totalMensajesEntrantes', null) == resource.data.get('totalMensajesEntrantes', null)
+    && request.resource.data.get('totalMensajesSalientes', null) == resource.data.get('totalMensajesSalientes', null)
+    && request.resource.data.get('ventana24h', null) == resource.data.get('ventana24h', null);
+  allow create: if false;            // solo admin SDK lo crea desde webhook
+  allow delete: if false;
+}
+
+match /whatsapp_plantillas/{plantillaId} {
+  allow read: if esStaff();          // cualquier rol que envía conoce plantillas
+  allow write: if false;             // solo admin SDK del cron
+}
+
+match /whatsapp_recordatorios_enviados/{id} {
+  allow read: if esStaffOficina();
+  allow write: if false;
+}
+
+match /whatsapp_config/{docId} {
+  allow read: if esAdminOCoord();
+  allow write: if esAdmin();         // editor de config (sin secretos — esos van en process.env)
+}
+```
+
+**Funciones helper esperadas:** `esStaff()`, `esStaffOficina()`, `esAdmin()`, `esAdminOCoord()` ya existen en `firestore.rules` actual (líneas ~30-80). Verificar antes del PR.
+
+#### Criterios de éxito específicos
+
+- [ ] 6 bloques nuevos aparecen en `firestore.rules`.
+- [ ] `npm run check:regression` PASS (los 12 cazadores actuales + posibles P-016/017/018 si se agregaron en sprints anteriores).
+- [ ] `npm run deploy:rules` ejecutado SIN errores.
+- [ ] `firestore.rules.deployed.lock` actualizado.
+- [ ] Reviewer aprueba con foco en defense-in-depth.
+- [ ] Test manual desde Firestore Console: técnico autenticado intenta leer `whatsapp_mensajes_inbox` → DENIED. Admin lee → ALLOWED.
+- [ ] Test manual: staff oficina intenta `update` de `whatsapp_conversaciones` cambiando `ultimoMensajeEntrante` → DENIED (campo crítico inmutable).
+- [ ] Test manual: staff oficina hace update solo de `asignadaA` → ALLOWED.
+
+#### Tiempo realista
+
+**1.5-2.5 horas:**
+- Builder: 30-45 min (edición + verificar helpers existentes).
+- Reviewer: 30-45 min (security audit).
+- Deploy + verificación manual: 15-30 min.
+- Postmortem si rompe algo: +1h.
+
+#### Cómo desbloquear
+
+1. SPRINT-WA-0 cerrado con OK Jorge en D1-D10.
+2. Jorge pega `OK: jorge YYYY-MM-DD HH:MM rules WA` al final de este bloque.
+3. Coordinator procesa con builder → reviewer → security → devops → docs.
+4. **NO procesar este sprint en pasada autónoma sin OK explícito.**
+
+**OK Jorge:** _pendiente_
+
+---
+
+### SPRINT-WA-1 — Webhook entrante (HMAC + idempotencia) — FUNDACIÓN
+
+**Tipo:** Endpoint público nuevo + integración terceros (Meta). Requiere OK Jorge.
+**Estado:** BLOQUEADO 2026-05-18 — depende de SPRINT-WA-0 + SPRINT-WA-RULES.
+**Prioridad:** 🔴 ALTA — sin esto, no entran mensajes de WhatsApp al CRM.
+
+#### Dependencias
+
+- SPRINT-WA-0 (decisiones D1-D10).
+- SPRINT-WA-RULES (las 6 rules deployadas — porque el webhook escribe vía admin SDK pero los reads desde UI usan rules).
+
+#### Touch-list expandido
+
+**Archivos a crear (3):**
+1. `api/whatsapp/webhook.ts` — GET verify + POST receive con HMAC + idempotency via `runTransaction`.
+2. `api/_lib/whatsappWebhook.ts` — helpers de parsing payload Meta (extraer `entry[].changes[].value.messages[]` y `statuses[]`).
+3. `scripts/invariantes/check-whatsapp-webhook-hmac.ts` — cazador P-016.
+4. `scripts/invariantes/check-whatsapp-idempotency.ts` — cazador P-017.
+
+**Archivos a modificar (3):**
+1. `package.json` — verificar/agregar `nanoid`.
+2. `docs/PATRONES_REGRESION.md` — agregar P-016, P-017.
+3. `scripts/invariantes/index.ts` (o donde se registran cazadores) — incluir P-016, P-017.
+
+**Consumidores verificados (read-only — esperado tras grep):**
+- `api/_lib/firebaseAdmin.ts` — admin SDK init. El webhook lo importa para escribir a Firestore sin rules.
+- Cazador P-005 — verifica `deploy:rules` antes de marcar COMPLETADO (no aplica acá porque WA-RULES ya deployó).
+- Sub-regla CLAUDE.md "Mutaciones cross-collection en `runTransaction`" — aplica acá (inbox + conversaciones atómico).
+
+**No afectados:**
+- Ninguna rule existente cambia (las nuevas las creó WA-RULES).
+- Ningún componente UI consume aún `whatsapp_mensajes_inbox` (WA-3 lo hará).
+
+**Hallazgos laterales esperados (audit del builder):**
+- Verificar si `api/_lib/firebaseAdmin.ts` exporta `adminDb` o usa otro nombre — alinear imports.
+- Verificar si hay un helper `runTransaction` de admin SDK ya importado en otro endpoint serverless. Si no, usar el patrón directo de `firebase-admin/firestore`.
+
+#### Criterios de éxito específicos
+
+- [ ] GET con `verify_token` correcto retorna `challenge` como text/plain status 200.
+- [ ] GET con token incorrecto retorna 403 sin info útil.
+- [ ] POST con HMAC inválido retorna 401 sin escribir nada en Firestore.
+- [ ] POST con HMAC válido y `messages[]` entrante → crea doc en `whatsapp_mensajes_inbox/{wamid}` Y actualiza `whatsapp_conversaciones/{wa_id}` en MISMO `runTransaction`.
+- [ ] POST duplicado (mismo `wamid`) NO crea segundo doc ni duplica counters de conversación.
+- [ ] POST con `statuses[]` (callback) actualiza `whatsapp_mensajes_outbox` con estado nuevo + timestamp correspondiente (`enviadoEn`/`entregadoEn`/`leidoEn`/`falladoEn`).
+- [ ] Cazador P-016 PASS: detecta `crypto.createHmac` + `timingSafeEqual` + `bodyParser: false` + lectura raw body.
+- [ ] Cazador P-017 PASS: detecta `runTransaction` + `tx.get` antes de `tx.set` en webhook.
+- [ ] Typecheck + lint + 12 cazadores existentes PASS.
+- [ ] Vercel preview deploy OK (URL `*.vercel.app/api/whatsapp/webhook`).
+- [ ] Test E2E manual: Jorge configura webhook URL en Meta Developers, pasa "Verify and save", manda mensaje desde su teléfono al +1 849-564-6767 → aparece doc en Firestore con texto + timestamp correctos.
+
+#### Restricciones explícitas
+
+- NO procesar lógica de negocio en webhook (NO crear OS, NO llamar Anthropic). Solo escribir a Firestore + responder 200 rápido (<5s).
+- NO exponer `META_APP_SECRET` ni `META_ACCESS_TOKEN` en respuesta HTTP NUNCA.
+- archivist PRE-CHANGE obligatorio.
+- reviewer obligatorio (endpoint público con HMAC).
+- security obligatorio (datos sensibles + spoof prevention).
+
+#### Tiempo realista
+
+**8-12 horas:**
+- archivist PRE-CHANGE: 30 min.
+- builder: 4-6 h (HMAC raw body es delicado en Vercel; reintentos Meta requieren tests).
+- tester: 1 h.
+- regression_guardian: 30 min.
+- reviewer: 1-2 h (foco HMAC + idempotency).
+- security: 1 h.
+- Iteraciones post review: 1-2 h.
+- Deploy + E2E manual con Jorge: 30-60 min.
+
+#### Cómo desbloquear
+
+1. SPRINT-WA-RULES cerrado con commit + deploy.
+2. Jorge pega `OK: jorge YYYY-MM-DD HH:MM webhook entrante` acá.
+3. Coordinator procesa con flujo completo (archivist → builder → tester → regression_guardian → reviewer → security → commit + push → devops → docs).
+
+**OK Jorge:** _pendiente_
+
+---
+
+### SPRINT-WA-5 — UI plantillas HSM (sync + selector)
+
+**Tipo:** Endpoint cron público + UI. Requiere OK por integración Meta y plantillas son operacionales.
+**Estado:** BLOQUEADO 2026-05-18 — depende de SPRINT-WA-RULES.
+**Prioridad:** 🟡 MEDIA. Independiente de WA-1 (puede correr en paralelo).
+
+#### Dependencias
+
+- SPRINT-WA-RULES (necesita rule `whatsapp_plantillas`).
+- D7 de SPRINT-WA-0 (cómo se obtienen los bodies — sync o pegar manual).
+- D9 de SPRINT-WA-0 (plan Vercel para el cron).
+
+#### Touch-list expandido
+
+**Archivos a crear (3):**
+1. `api/whatsapp/cron/sync-plantillas.ts` — cron c/12h. Llama `https://graph.facebook.com/v21.0/{WABA_ID}/message_templates` y upsert en `whatsapp_plantillas/{nombre}__{idioma}`.
+2. `src/components/whatsapp/SelectorPlantilla.tsx` — modal de selección con form dinámico por variables {{1}}..{{N}}, preview, envío vía WA-2.
+3. `src/services/whatsapp-plantillas.service.ts` — wrapper de queries de `whatsapp_plantillas`.
+
+**Archivos a modificar (2):**
+1. `vercel.json` — agregar cron `sync-plantillas`.
+2. `src/types/index.ts` — agregar interfaces `WhatsappPlantilla`, `WhatsappPlantillaComponente`.
+
+**Consumidores verificados:**
+- WA-2 va a importar `SelectorPlantilla` para integrar en composer.
+- WA-7 va a leer `whatsapp_plantillas` para validar que plantilla del cron sigue APPROVED antes de enviar.
+
+**Hallazgos laterales esperados:**
+- Confirmar `META_WABA_ID=1884486412326904` es el correcto (vs `META_BUSINESS_ID=103664415995101`).
+- Si plan Vercel = Hobby (D9), este cron CUENTA contra el límite de 2.
+
+#### Criterios de éxito
+
+- [ ] Cron `sync-plantillas` corre y trae las 4 plantillas APPROVED. Doc id en formato `conduce_emitido__es`.
+- [ ] Cada doc tiene `componentes[]` con body + variables detectadas.
+- [ ] `cantidadVariables` se calcula correctamente de regex `/\{\{\d+\}\}/g` sobre body.
+- [ ] UI muestra SOLO plantillas con `estado='APPROVED'`.
+- [ ] Form dinámico se ajusta a la cantidad de variables de la plantilla seleccionada.
+- [ ] Preview muestra plantilla con variables sustituidas antes de enviar.
+- [ ] Botón "Enviar" deshabilitado hasta que todas las variables required estén llenas.
+- [ ] Typecheck + lint + 12 cazadores PASS.
+
+#### Restricciones
+
+- NO eliminar el patrón actual `wa.me/...?text=...` manual (sigue como fallback si plantillas fallan).
+- NO permitir envío directo desde este sprint — el componente se monta pero el envío real lo hace WA-2.
+- archivist PRE-CHANGE obligatorio.
+
+#### Tiempo realista
+
+**4-6 horas:**
+- builder: 3-4 h.
+- tester + reviewer: 1-1.5 h.
+- Iteraciones: 30-60 min.
+
+#### Cómo desbloquear
+
+1. SPRINT-WA-RULES cerrado.
+2. Decisión D7 firmada (sync vs pegar manual).
+3. Decisión D9 firmada (Hobby vs Pro — confirma si hay slot disponible de cron).
+4. Jorge pega `OK: jorge YYYY-MM-DD HH:MM plantillas HSM`.
+
+**OK Jorge:** _pendiente_
+
+---
+
+### SPRINT-WA-2 — Servicio saliente proxy `api/whatsapp/send`
+
+**Tipo:** Endpoint público nuevo + integración Meta. Requiere OK.
+**Estado:** BLOQUEADO 2026-05-18 — depende de WA-1 + WA-5 (callbacks + plantillas cache).
+**Prioridad:** 🔴 ALTA — sin esto el CRM no envía nada.
+
+#### Dependencias
+
+- WA-1 (callbacks de status del webhook necesitan saber qué outbox actualizar).
+- WA-5 (validación de plantillas y variables contra cache).
+
+#### Touch-list expandido
+
+**Archivos a crear (3):**
+1. `api/whatsapp/send.ts` — POST con auth Firebase + role check + window 24h + backoff 429.
+2. `src/services/whatsapp.service.ts` — wrapper cliente: `enviarTexto(to, texto)`, `enviarPlantilla(to, nombre, variables, ordenId?)`, `enviarMedia(to, storageUrl, mimeType, caption?)`.
+3. `scripts/invariantes/check-whatsapp-window-24h.ts` — cazador P-018.
+
+**Archivos a modificar (2):**
+1. `docs/PATRONES_REGRESION.md` — agregar P-018.
+2. `scripts/invariantes/index.ts` — incluir P-018.
+
+**Consumidores verificados:**
+- `api/whatsapp/cron/recordatorios-mantenimiento.ts` (WA-7) llamará este endpoint internamente con bypass de auth Firebase (admin SDK).
+- `api/_lib/whatsappBot.ts` (WA-6) llamará este endpoint al responder al cliente.
+- `src/pages/WhatsApp.tsx` (WA-3) lo invoca al enviar texto desde composer.
+
+**Hallazgos laterales esperados:**
+- ¿Hay un helper común para verificar ID token Firebase + extraer rol? Mirar `api/gps/ubicacion.ts`. Si no, crear `api/_lib/verifyAuthRol.ts` reusable.
+- Verificar que `nanoid` esté en deps (lo usa `tempId` del outbox).
+
+#### Criterios de éxito
+
+- [ ] POST sin auth Firebase → 401.
+- [ ] POST con auth válida pero rol técnico → 403.
+- [ ] POST con `tipo='texto_libre'` y window 24h cerrada → 422 con sugerencia.
+- [ ] POST con `tipo='texto_libre'` y window abierta → 200, doc en outbox, mensaje llega al destino.
+- [ ] POST con `tipo='plantilla'` válida con variables completas → 200, doc en outbox, plantilla llega correctamente formateada al destino.
+- [ ] POST con `tipo='plantilla'` con variables faltantes → 400.
+- [ ] POST con `tipo='plantilla'` no APPROVED → 400.
+- [ ] Backoff 429: simular respuesta 429 de Meta (mock o usar 6265 si está rate-limited) → reintenta hasta 5 veces, último intento → `estado='failed'`.
+- [ ] Outbox actualizado con `wamid` y `estado='sent'` después de respuesta 200 Meta.
+- [ ] Cazador P-018 PASS: detecta que `send.ts` lee `whatsapp_conversaciones.ultimoMensajeEntrante.timestamp` antes de aceptar `tipo='texto_libre'`.
+- [ ] `whatsapp_conversaciones/{wa_id}.ultimoMensajeSaliente` se actualiza tras envío exitoso.
+- [ ] Audit log en `auditoria_admin` con `accion='enviar_whatsapp'`.
+- [ ] Test E2E manual: operaria desde UI manda plantilla `conduce_emitido` con variables reales a teléfono de prueba → mensaje llega → estado pasa de `queued` → `sent` → `delivered` (via callback de WA-1).
+
+#### Restricciones
+
+- NO exponer `META_ACCESS_TOKEN` al frontend NUNCA.
+- archivist PRE-CHANGE obligatorio.
+- reviewer obligatorio (endpoint público + auth + window 24h + plantillas).
+- security obligatorio (token sensible, datos personales).
+
+#### Tiempo realista
+
+**6-8 horas:**
+- builder: 3-4 h.
+- tester + regression_guardian: 1 h.
+- reviewer + security: 1.5-2 h.
+- E2E manual con Jorge (envío real a número de prueba): 30-60 min.
+
+#### Cómo desbloquear
+
+1. WA-1 y WA-5 deployados y verificados.
+2. Decisión D6 firmada (roles autorizados).
+3. Jorge pega `OK: jorge YYYY-MM-DD HH:MM envío saliente`.
+
+**OK Jorge:** _pendiente_
+
+---
+
+### SPRINT-WA-3 — UI conversaciones admin
+
+**Tipo:** Página nueva en `/admin/whatsapp` + permiso nuevo. Requiere OK por el permiso (toca rules indirectamente via `PermisosSistema`).
+**Estado:** BLOQUEADO 2026-05-18 — depende de WA-1 + WA-2.
+**Prioridad:** 🟡 MEDIA — UX importante, pero no bloquea recepción/envío.
+
+#### Dependencias
+
+- WA-1 (lee `whatsapp_mensajes_inbox` + `whatsapp_conversaciones`).
+- WA-2 (botón "Enviar" llama al proxy).
+
+#### Touch-list expandido
+
+**Archivos a crear (5):**
+1. `src/pages/WhatsApp.tsx` — página `/admin/whatsapp`. Layout inbox: lista conversaciones izquierda + hilo derecha.
+2. `src/components/whatsapp/HiloConversacion.tsx` — render del hilo con mensajes inbox+outbox merged y sorted by timestamp.
+3. `src/components/whatsapp/ComposerWhatsapp.tsx` — input texto libre (gated por window 24h) + botón selector plantilla (importa de WA-5).
+4. `src/components/whatsapp/BannerWindow24h.tsx` — banner amarillo cuando window cerrada.
+5. `src/services/whatsapp-conversaciones.service.ts` — helpers query (`getConversacionesAsignadasA`, `getConversacionesRequiereHumano`, etc.).
+
+**Archivos a modificar (5):**
+1. `src/App.tsx` — agregar route `/admin/whatsapp` bajo `ProtectedRoute`.
+2. `src/components/Sidebar.tsx` — entrada nueva con badge.
+3. `src/types/index.ts` — agregar 4 permisos a `PermisosSistema` + interfaces `WhatsappConversacion`, `WhatsappMensajeInbox`, `WhatsappMensajeOutbox`.
+4. `src/services/permisosDefault.service.ts` (o donde se definen defaults) — agregar defaults por rol.
+5. `src/components/GestionUsuarios.tsx` (o donde se editan permisos) — agregar UI para los 4 permisos nuevos.
+
+**Consumidores verificados:**
+- Admin/coord pueden ver bandeja completa.
+- Secretaria/operaria solo conversaciones asignadas a ellas o sin asignar.
+- Técnico/ayudante: la ruta `/admin/whatsapp` ni aparece en Sidebar (permiso `whatsappVer=false`).
+
+**Hallazgos laterales esperados:**
+- ¿Es necesario un hidratador `parseConversacion` para Timestamps? Sí — patrón de `parseOrden`.
+- `onSnapshot` global a `whatsapp_conversaciones` puede ser pesado — lazy subscribe.
+
+#### Criterios de éxito
+
+- [ ] `/admin/whatsapp` accesible para admin/coord/secretaria/operaria con permiso.
+- [ ] Técnico/ayudante navegando manual a la URL → redirect a `/tecnico` o "no autorizado".
+- [ ] Lista conversaciones se actualiza en real-time (mensaje nuevo entra → aparece arriba).
+- [ ] Badge de no leídos en Sidebar actualizable.
+- [ ] Hilo renderiza tipos: texto, imagen (con preview), audio (con player), location (link a Maps), botón (chip).
+- [ ] Composer permite texto libre solo si window abierta.
+- [ ] Banner amarillo se muestra si window cerrada.
+- [ ] Selector plantilla integrado.
+- [ ] Botón "Tomar control" desactiva bot (`bot.habilitado=false`, `requiereHumano=false`, `asignadaA=currentUser.uid`).
+- [ ] Botón "Crear orden desde conversación" pre-popula form con datos del cliente y la conversación.
+- [ ] Mobile responsive (operarias usan iPad).
+- [ ] Typecheck + lint + 12 cazadores PASS.
+- [ ] Sin nuevos `composite indexes` requeridos (sort/filter client-side cuando aplique).
+
+#### Restricciones
+
+- NO ampliar el alcance: este sprint NO incluye el bot IA (WA-6) ni el routing por zona (WA-6).
+- archivist PRE-CHANGE obligatorio.
+- reviewer obligatorio (permisos + rules consumption).
+
+#### Tiempo realista
+
+**8-12 horas:**
+- builder: 5-7 h (UI compleja + integración permisos).
+- tester + regression_guardian: 1 h.
+- reviewer + qa (manual): 2-3 h.
+- Iteraciones: 1 h.
+
+#### Cómo desbloquear
+
+1. WA-1 + WA-2 deployados.
+2. Decisión D6 confirmada (impacta permisos defaults).
+3. Jorge pega `OK: jorge YYYY-MM-DD HH:MM UI conversaciones`.
+
+**OK Jorge:** _pendiente_
+
+---
+
+### SPRINT-WA-4 — Tracking referral → extender `campanas_marketing`
+
+**Tipo:** Modifica endpoint público (webhook) + extiende colección existente. Requiere OK.
+**Estado:** BLOQUEADO 2026-05-18 — depende de WA-1.
+**Prioridad:** 🟢 BAJA-MEDIA. Sin esto los leads de WhatsApp ad no se atribuyen.
+
+#### Dependencias
+
+- WA-1 (extiende handler de POST inbox para extraer `messages[].referral`).
+- Decisión Jorge: naming format de campañas (sub-decisión D-extra que se puede acordar en cualquier momento, no bloquea otros sprints).
+
+#### Touch-list expandido
+
+**Archivos a modificar (3):**
+1. `api/whatsapp/webhook.ts` (creado en WA-1) — agregar parsing de `referral` cuando es primer mensaje del cliente.
+2. `src/services/campanasMarketing.service.ts` — agregar `getOrCreateCampanaPorAdId(adId, headline, sourceUrl)` que upserta a `campanas_marketing` por `adId`.
+3. `src/types/index.ts` — extender `Cliente` con `origen?: { tipo: 'whatsapp_ad', adId, campanaId, capturadoAt }`. Extender `CampanaMarketing` con `adId?`, `mediaType?`, `sourceUrl?`, `headlineMeta?`.
+
+**Consumidores verificados:**
+- `src/pages/Dashboard.tsx` o `Marketing.tsx` consume `campanas_marketing` — al agregar campos opcionales no se rompe nada (verificar parser).
+- `firestore.rules:606+` regla de `campanas_marketing` ya tiene patrón de inmutabilidad. Si se agregan campos opcionales sin garantizarlos en create, la inmutabilidad con `.get(field, null)` los acepta correctamente (precedente SPRINT post-c7c8e34).
+
+**No afectados:**
+- Endpoint público de creación de campañas (si existe) sigue funcionando.
+- Inserción de leads manuales no cambia.
+
+**Hallazgos laterales esperados:**
+- Verificar que el shape actual de `CampanaMarketing` no tiene un campo `adId` que pisamos.
+- Decidir si el cliente que viene del ad pero no es la primera vez (ya existe en `clientes`) hereda el `origen` (NO) o lo agrega como audit (SÍ, en `auditoria_admin` con `accion='lead_via_ad'`).
+
+#### Criterios de éxito
+
+- [ ] Mensaje entrante con `referral` (Click-to-WhatsApp ad) → si es PRIMER mensaje del `wa_id`:
+  - Crear/upsertar campaña en `campanas_marketing` por `adId`.
+  - Crear/actualizar cliente en `clientes` con `origen: { tipo: 'whatsapp_ad', adId, campanaId, capturadoAt }`.
+- [ ] Si ya existe el cliente con `origen` previo → NO sobrescribir, agregar audit log.
+- [ ] Dashboard de campañas muestra conteo de leads por campaña.
+- [ ] Typecheck + lint + 12 cazadores PASS.
+- [ ] Test E2E: Jorge crea un Click-to-WhatsApp ad de prueba en Meta Ads Manager apuntando al 6767, hace click, manda mensaje → aparece campaña nueva en `campanas_marketing` con `adId` y `mediaType`.
+
+#### Restricciones
+
+- NO romper el shape actual de `campanas_marketing` — solo agregar campos OPCIONALES.
+- archivist PRE-CHANGE obligatorio.
+- reviewer obligatorio (toca `campanas_marketing` que tiene rules estrictas).
+
+#### Tiempo realista
+
+**3-5 horas:**
+- builder: 2-3 h.
+- tester + regression_guardian: 30-45 min.
+- reviewer: 30-45 min.
+- E2E con Jorge: 30 min.
+
+#### Cómo desbloquear
+
+1. WA-1 deployado y validado.
+2. Jorge confirma naming format opcional (no bloqueante — se puede iterar).
+3. Jorge pega `OK: jorge YYYY-MM-DD HH:MM tracking referral`.
+
+**OK Jorge:** _pendiente_
+
+---
+
+### SPRINT-WA-7 — Cron jobs (recordatorios + NPS + garantía a vencer)
+
+**Tipo:** Endpoints públicos cron + integración Meta. Requiere OK.
+**Estado:** BLOQUEADO 2026-05-18 — depende de WA-2 + WA-5.
+**Prioridad:** 🟢 BAJA. Mejora marketing/post-venta, no funcionalidad core.
+
+#### Dependencias
+
+- WA-2 (necesita el endpoint `send.ts` para enviar plantillas).
+- WA-5 (necesita el cache de plantillas `whatsapp_plantillas` para validar APPROVED).
+- Decisión D9 (plan Vercel — define si son 3 crons o 1 consolidado).
+
+#### Touch-list expandido
+
+**Archivos a crear (3, o 1 si plan Hobby):**
+
+Si plan Pro (D9=B):
+1. `api/whatsapp/cron/recordatorios-mantenimiento.ts` — diario 10am RD.
+2. `api/whatsapp/cron/garantias-por-vencer.ts` — lunes 11am RD.
+3. `api/whatsapp/cron/nps-post-cierre.ts` — diario 12pm RD. Envía encuesta NPS a órdenes cerradas hace 3 días sin NPS.
+
+Si plan Hobby (D9=A):
+1. `api/whatsapp/cron/recordatorios-consolidado.ts` — diario 10am RD. Switch interno por path query: `?tipo=mantenimiento`, `?tipo=garantia`, `?tipo=nps`. Vercel cron llama 3 veces con diferente query (NO — Vercel cron no permite query). Mejor: un solo endpoint que internamente corre los 3 tipos secuencialmente (mantenimiento → garantía → nps).
+
+**Archivos a modificar (1):**
+1. `vercel.json` — agregar entrada(s) de cron.
+
+**Consumidores verificados:**
+- Idempotencia: `whatsapp_recordatorios_enviados/{tipo}__{entidadId}__{fechaYYYYMMDD}`.
+- Outbox: cada envío crea doc en `whatsapp_mensajes_outbox` via call interno a `api/whatsapp/send` (con admin SDK bypass de auth Firebase).
+
+**No afectados:**
+- Crons existentes (gps, otros) siguen funcionando — solo se agrega.
+
+**Hallazgos laterales esperados:**
+- ¿Hay opt-out global? Sí — `whatsapp_config.optOuts[]` Y `clientes/{id}.optOutMarketing=true`. El cron debe respetar ambos.
+- ¿Se envía a clientes que no respondieron en 6+ meses (potencial spam)? Validar.
+
+#### Criterios de éxito
+
+- [ ] Cron `recordatorios-mantenimiento` corre diario 10am RD (= 14:00 UTC), identifica clientes con último cierre 5-7 meses atrás Y NO opt-out Y NO enviado en últimos 90 días.
+- [ ] Cron `garantias-por-vencer` corre lunes 11am RD, identifica órdenes con `garantia.fechaVencimiento` en 15-30 días.
+- [ ] Cron `nps-post-cierre` (si plan Pro) corre diario 12pm RD, identifica órdenes cerradas hace 3 días sin NPS.
+- [ ] Idempotencia 100%: correr el cron 2 veces el mismo día → cero duplicados.
+- [ ] Mensajes con plantilla HSM apropiada (`recordatorio_mantenimiento`, `garantia_por_vencer`, o una nueva para NPS).
+- [ ] Si cliente está en `optOuts` → cron lo skipea Y crea audit log.
+- [ ] Si cliente está fuera de window 24h y plantilla no es APPROVED → falla con error claro en audit (no envía).
+- [ ] Typecheck + lint + 12 cazadores PASS.
+- [ ] Test E2E manual: Jorge fuerza ejecución del cron via Vercel Dashboard "Run now" → mensajes llegan a clientes de prueba (no a clientes reales).
+
+#### Restricciones
+
+- Respetar window 24h: si el cliente respondió hace <24h, mandar texto plano (raro en cron pero posible). Default: siempre plantilla HSM (mantenimiento/garantía).
+- NO mandar a opt-outs NI a teléfonos inválidos (validar con regex RD).
+- Cron debe completar en <60s por restricción Vercel.
+- archivist PRE-CHANGE obligatorio.
+- reviewer obligatorio.
+
+#### Tiempo realista
+
+**6-8 horas:**
+- builder: 3-4 h (incluyendo consolidación si plan Hobby).
+- tester + regression_guardian: 1 h.
+- reviewer: 1 h.
+- E2E con Jorge: 1 h.
+
+#### Cómo desbloquear
+
+1. WA-2 + WA-5 deployados.
+2. Decisión D9 firmada (plan Vercel).
+3. Si Jorge quiere NPS por WhatsApp, necesita una plantilla nueva APPROVED. Si no la quiere ahora → sacar `nps-post-cierre` del scope.
+4. Jorge pega `OK: jorge YYYY-MM-DD HH:MM crons WA`.
+
+**OK Jorge:** _pendiente_
+
+---
+
+### SPRINT-WA-6 — Bot IA conversacional con Claude Haiku
+
+**Tipo:** Integración Anthropic + datos sensibles + endpoint público trigger. Requiere OK.
+**Estado:** BLOQUEADO 2026-05-18 — depende de WA-1 + WA-2 + WA-3.
+**Prioridad:** 🟡 MEDIA-ALTA — diferencial competitivo grande. Después de validar que los humanos pueden responder bien (WA-3).
+
+#### Dependencias
+
+- WA-1 (recibe mensajes entrantes).
+- WA-2 (envía respuestas del bot).
+- WA-3 (UI para que operaria tome control y vea conversaciones del bot).
+- `ANTHROPIC_API_KEY` ya en Vercel.
+- `docs/specs/bot-ia-system-prompt.md` con system prompt v1.0 aprobado.
+
+#### Touch-list expandido
+
+**Archivos a crear (4):**
+1. `api/_lib/whatsappBot.ts` — lógica del bot (`procesarTurno`, `detectarEscaladoPostRespuesta`, `extraerDatosCliente`).
+2. `api/_lib/anthropicClient.ts` — wrapper Anthropic SDK con manejo de errores + token tracking.
+3. `src/components/whatsapp/EstadoBot.tsx` — UI admin mostrando bot habilitado/deshabilitado por conversación + botón "Reactivar bot" + "Tomar control".
+4. `scripts/invariantes/check-bot-system-prompt-version-sync.ts` — cazador opcional P-019: verifica que `whatsapp_config.bot.systemPromptVersion` matchea el frontmatter de `docs/specs/bot-ia-system-prompt.md`.
+
+**Archivos a modificar (3):**
+1. `api/whatsapp/webhook.ts` (creado en WA-1) — agregar invocación del bot cuando `conversacion.bot.habilitado && !requiereHumano && horario_OK`.
+2. `src/services/ordenes.service.ts` — agregar `crearOSDesdeBot(datos, conversacionId)` que crea OS con `creadaPor='whatsapp_bot'` + `fase='nuevo_lead'`. Routing zona → técnico via `whatsapp_config.routingZonas`.
+3. `src/types/index.ts` — agregar `OrigenOrden` con tipo `whatsapp_bot`.
+
+**Consumidores verificados:**
+- WA-1 webhook llama `procesarTurno()` después de persistir inbox + conversacion.
+- `crearOSDesdeBot` consume `whatsapp_config.routingZonas` y `personal where rol='tecnico'`.
+- `notificaciones.service.ts` consume nuevos tipos `whatsapp_requiere_humano`.
+
+**Hallazgos laterales esperados:**
+- Confirmar versión Anthropic SDK actual (`@anthropic-ai/sdk` versión). Si ya existe `api/ai/chat.ts`, reusar setup.
+- Verificar `auditoria_admin` shape para `accion='bot_turn'` y `accion='bot_escalo_humano'`.
+
+#### Criterios de éxito
+
+- [ ] System prompt cargado desde `docs/specs/bot-ia-system-prompt.md` (build-time via fs read, no hardcoded).
+- [ ] Bot responde en <5s al 95% de los mensajes.
+- [ ] Bot captura los 5 datos (nombre, teléfono, dirección, equipo, falla) en conversación natural.
+- [ ] Bot escala correctamente por cada uno de los 7 triggers (test manual de cada uno).
+- [ ] Bot crea OS automáticamente cuando recolecta los 5 datos.
+- [ ] Routing zona → técnico funciona; si zona no matchea → OS con `tecnicoId=''` + notificación coord.
+- [ ] Costos monitoreables: cada llamada Anthropic registrada en `auditoria_admin` con `tokensInput`, `tokensOutput`, `costoUSD`.
+- [ ] Operaria puede "Tomar control" en cualquier momento desde UI WA-3 → bot deja de responder en esa conversación.
+- [ ] `bot.systemPromptVersion` matchea el frontmatter del archivo.
+- [ ] Cazador opcional P-019 PASS si se implementa.
+- [ ] Test E2E manual: Jorge hace una conversación completa con el bot (saludo → equipo → zona → falla → confirmación), bot crea OS visible en `/admin/ordenes`.
+- [ ] Test E2E manual: Jorge escribe "humano" → bot escala correctamente, notif a operaria llega.
+- [ ] Test E2E manual: Jorge dice algo confuso 3 veces → bot escala.
+- [ ] Test E2E manual: cliente intenta hacer pregunta fuera de scope (política, otro tema) → bot redirige educadamente.
+
+#### Restricciones
+
+- NO permitir al bot acciones financieras (no aprobar precios, no emitir conduces, no facturar).
+- Cada turno del bot logueado en `auditoria_admin` con `accion='bot_turn'`.
+- archivist PRE-CHANGE obligatorio.
+- reviewer obligatorio (LLM + datos sensibles + endpoint público trigger).
+- security obligatorio (PII en logs, escape de tokens [ESCALAR:X]).
+- qa manual obligatorio (test de los 7 triggers).
+
+#### Tiempo realista
+
+**10-15 horas:**
+- builder: 6-9 h (bot logic + escalado + crear OS + routing).
+- tester + regression_guardian: 1 h.
+- reviewer + security: 2 h.
+- qa manual (7 triggers + ejemplos del prompt): 1-2 h.
+- E2E con Jorge: 1 h.
+
+#### Cómo desbloquear
+
+1. WA-1 + WA-2 + WA-3 deployados.
+2. Decisiones D3, D5, D10 firmadas (horario, límite turnos, nombre/tono).
+3. System prompt v1.0 aprobado por Jorge tras revisar `docs/specs/bot-ia-system-prompt.md`.
+4. Jorge pega `OK: jorge YYYY-MM-DD HH:MM bot IA`.
+
+**OK Jorge:** _pendiente_
+
+---
+
+### Resumen del módulo WhatsApp — para Jorge
+
+**Estado al 2026-05-18:** 7 sprints encolados + 2 sprints administrativos (WA-0 decisiones + WA-RULES rules).
+
+**Orden de procesamiento recomendado por el architect:**
+
+| # | Sprint | Tiempo | Depende de |
+|---|---|---|---|
+| 0 | SPRINT-WA-0 (decisiones) | 30 min Jorge | — |
+| 1 | SPRINT-WA-RULES (firestore.rules) | 1.5-2.5 h | WA-0 |
+| 2 | SPRINT-WA-1 (webhook entrante) | 8-12 h | WA-RULES |
+| 3 | SPRINT-WA-5 (UI plantillas) — paralelo a WA-1 | 4-6 h | WA-RULES |
+| 4 | SPRINT-WA-2 (envío saliente) | 6-8 h | WA-1 + WA-5 |
+| 5 | SPRINT-WA-3 (UI conversaciones) | 8-12 h | WA-1 + WA-2 |
+| 6 | SPRINT-WA-4 (tracking referral) | 3-5 h | WA-1 |
+| 7 | SPRINT-WA-7 (crons) | 6-8 h | WA-2 + WA-5 |
+| 8 | SPRINT-WA-6 (bot IA) | 10-15 h | WA-1 + WA-2 + WA-3 |
+
+**Total realista:** 47-69 horas distribuidas en 6-10 sesiones de Claude Code a lo largo de 1-2 semanas.
+
+**Acciones manuales pendientes de Jorge POST-deploy de WA-1:**
+- Configurar webhook URL en `developers.facebook.com → app 1558940908663280 → WhatsApp → Configuration → Webhooks`. URL: `https://www.misterservicerd.com/api/whatsapp/webhook`.
+- Pegar `META_VERIFY_TOKEN` en pantalla del webhook.
+- Suscribir campos: `messages`, `message_status`, `message_template_status_update`, `account_update`.
+- Probar con botón "Verify and save".
+
+---
+
 ## SPRINT-186 — Surface aviso descuento chequeo previo en modal creación + bugs UX modal orden
 
 **✅ DESBLOQUEADO 2026-05-18 — movido a COLA tras OK Jorge cliente consolidado (audit `33M7G5z6lEBVBdSf6yKK`). Ver bloque original abajo (preservado por trazabilidad).**
