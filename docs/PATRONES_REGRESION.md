@@ -545,15 +545,46 @@ Si alguno falta → FAIL.
 
 **Regla por archivo:**
 - `api/whatsapp/webhook.ts` (entrante): DEBE contener `runTransaction` Y (`tx.get(` o `transaction.get(`) Y referencia a `whatsapp_mensajes_inbox` o `whatsapp_conversaciones`.
-- `api/whatsapp/send.ts` (saliente, todavía no implementado al cierre WA-1): DEBE contener `crypto.randomUUID(` (tempId) Y `addDoc/setDoc` sobre `whatsapp_mensajes_outbox` Y la escritura outbox DEBE preceder en offset a la llamada `graph.facebook.com` o `/messages`. NO usar `nanoid` (no instalado).
+- `api/whatsapp/send.ts` (saliente): DEBE contener UNO de los patterns de tempId — `crypto.randomUUID(`/`randomUUID(` (server-generated) O referencia a `tempId`/`TEMP_ID_REGEX` (client-generated + validado server-side, patrón SPRINT-WA-2). Y DEBE contener UNO de los patterns de escritura a outbox — `addDoc/setDoc` directo sobre `whatsapp_mensajes_outbox` con la escritura precediendo en offset a `graph.facebook.com`/`/messages`, O patrón transaccional `db.collection('whatsapp_mensajes_outbox')` + `tx.get(` + `tx.set(` (preferido — garantiza atomicidad real contra reintentos concurrentes). NO usar `nanoid` (no instalado).
 
-**Cazador:** `scripts/invariantes/check-whatsapp-idempotency.ts`. Estrategia: heurística por regex sobre offsets de match — si el archivo no existe, PASS silent para esa rama.
+**Cazador:** `scripts/invariantes/check-whatsapp-idempotency.ts`. Estrategia: heurística por regex sobre offsets de match — si el archivo no existe, PASS silent para esa rama. Extensión SPRINT-WA-2 (2026-05-19): reconoce el patrón transaccional vía `runTransaction` + `tx.set` sobre outbox como LÓGICAMENTE EQUIVALENTE y SUPERIOR al `addDoc/setDoc` directo. La verificación de orden (outbox antes de Meta) sólo aplica al patrón directo — el transaccional se auto-protege porque la tx commitea antes del siguiente await.
 
 **Allowlist:** vacía. La excepción legítima es "archivo no existe" que ya cubre el flow.
 
 **Limitación conocida:**
 - El cazador no verifica que el ORDEN `tx.get` → `tx.set` adentro del callback sea correcto, sólo que ambos patterns estén presentes. La correctitud semántica la valida `reviewer` cuando el sprint toca este endpoint.
 - Si la lógica se refactoriza a un helper en `_lib/`, extender `ARCHIVOS_WEBHOOK` / `ARCHIVOS_SEND`.
+
+---
+
+## P-018 — Send WhatsApp `texto_libre` sin validación de ventana 24h
+
+**Bug original (anticipado):** SPRINT-WA-2 (2026-05-19). Cazador preventivo, no histórico — implementado JUNTO al endpoint para que cualquier regresión futura sobre `api/whatsapp/send.ts` sea bloqueada antes del merge.
+
+**Síntoma de una regresión:** un caller usa `enviarTexto(wa_id, texto)` contra una conversación cuya ventana de servicio Meta (24h post-último-mensaje-entrante) ya cerró. Meta rechaza con error `(#131047) Re-engagement message`. El doc `whatsapp_mensajes_outbox/{id}` queda en `failed` con `errorMeta` críptico, UX dice "no se pudo enviar" sin pistas. Cargo de Meta por intento + percepción de feature rota. El user no sabe que debía enviar plantilla HSM en lugar de texto libre.
+
+**Causa raíz prevenida:** la regla de negocio de Meta (Cloud API "Customer Service Window") vive sólo en docs. Sin enforcement en código, un refactor futuro puede:
+- Mover la validación a un helper externo y romperla sin darse cuenta.
+- Cambiar `> 24 * 60 * 60 * 1000` por `>= 24h` y desencadenar edge cases.
+- Removerla "porque parece duplicado" cuando alguien implementa WA-5 y piensa que la plantilla HSM cubre todo el rango.
+
+Adicionalmente la lógica tiene varios edge cases sutiles: conversación nueva (sin `ultimoMensajeEntrante`), timestamp como Firestore Timestamp vs Date vs string ISO, tolerancia de clock skew.
+
+**Regla:** si `api/whatsapp/send.ts` (cuando existe) menciona el literal `'texto_libre'`, el mismo archivo debe contener TODOS los siguientes patterns regex:
+1. Lectura de `whatsapp_conversaciones` — `.collection('whatsapp_conversaciones'` o `.collection("whatsapp_conversaciones"`.
+2. Referencia a `ultimoMensajeEntrante` (campo persistido por el webhook entrante).
+3. Comparación temporal `24 * 60 * 60 * 1000`, `86400000`, `86_400_000` o cadena `24h` en comentario contiguo (heurística — `24h` cubre el caso donde el dev extrae una constante `VENTANA_MS_24H`).
+4. Respuesta `'window-cerrada'` (string literal — convención del repo para que el frontend detecte el caso específico y sugiera al user enviar plantilla HSM).
+
+Si falta cualquiera de los 4 → FAIL.
+
+**Cazador:** `scripts/invariantes/check-whatsapp-window-24h.ts`. Estrategia: regex sobre `ARCHIVOS_SCAN` (hoy = `['api/whatsapp/send.ts']`). Si NINGUNO existe, PASS silent. Si el archivo existe pero NO menciona `'texto_libre'` (ej: helper sólo de plantillas), skip silencioso para ese archivo.
+
+**Allowlist:** vacía. Si la lógica de ventana se extrae a helper en `api/_lib/whatsappSend.ts`, agregar el path a `ARCHIVOS_SCAN`. Si un archivo legítimamente NO debe validar ventana (caller dedicado a plantillas HSM que nunca acepta texto libre), agregar a `ALLOWLIST_FILES` con razón documentada.
+
+**Limitación conocida:**
+- Heurística por regex sobre archivo único — el cazador no verifica el orden lógico (que el check corra ANTES de la llamada a Meta). El reviewer humano lo valida semánticamente.
+- Si el dev expresa 24h como `1440 * 60_000` u otro shape exótico, el cazador falsifica positivo. Mitigación: usar uno de los 3 patrones canónicos o agregar comentario `// 24h` contiguo.
 
 ---
 

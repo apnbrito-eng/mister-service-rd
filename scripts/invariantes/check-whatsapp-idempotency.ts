@@ -35,13 +35,18 @@
  *   - DEBE contener `tx.get(` o `transaction.get(` cerca de operaciones
  *     que tocan `whatsapp_mensajes_inbox` o `whatsapp_conversaciones`.
  *
- * `api/whatsapp/send.ts` (saliente, todavía no implementado):
+ * `api/whatsapp/send.ts` (saliente):
  *   - DEBE contener uno de:
- *     - `crypto.randomUUID(` (id local determinístico antes de llamar Meta).
- *     - Asignación literal de id con string >=8 chars (tempId hex/nanoid-like).
+ *     - `crypto.randomUUID(` / `randomUUID(` (tempId generado server-side).
+ *     - Referencia a `tempId` o constante `TEMP_ID_REGEX` (tempId
+ *       client-generated y validado server-side — patrón SPRINT-WA-2).
  *   - DEBE persistir doc en `whatsapp_mensajes_outbox` ANTES de la llamada
- *     a Meta (detectada por: alguna escritura a outbox precede a un
- *     `fetch(... graph.facebook.com` o `messages` endpoint).
+ *     a Meta. Detectado por uno de:
+ *     - directo: `addDoc(...outbox...)` o `setDoc(...outbox...)` antes del
+ *       `fetch(... graph.facebook.com` o `messages` endpoint.
+ *     - transaccional: `db.collection('whatsapp_mensajes_outbox')` + `tx.set(`
+ *       + `tx.get(` en el mismo archivo (idempotency atómica vía
+ *       `runTransaction`, patrón preferido SPRINT-WA-2).
  *
  * Si el archivo NO existe → PASS silent para ese archivo (no bloqueamos
  * sprints futuros que aún no lo crearon).
@@ -170,15 +175,30 @@ function verificarWebhook(archivos: ArchivoCargado[]): InvariantHit[] {
 }
 
 /**
- * Verifica que el archivo de send saliente (cuando existe) crea un tempId
- * + persiste outbox ANTES de llamar a Meta.
+ * Verifica que el archivo de send saliente (cuando existe) tenga
+ * idempotency vía tempId + persiste outbox ANTES de llamar a Meta.
  *
- * Heurística:
- *   - Detectar `crypto.randomUUID(` o asignación literal `id: '<≥8 chars>'`.
- *   - Detectar `addDoc(...outbox...)` o `setDoc(...outbox...)`.
- *   - Detectar referencia a `graph.facebook.com` o `messages` endpoint.
- *   - El primer offset de escritura a outbox DEBE ser menor que el primer
- *     offset de la llamada a Meta.
+ * Heurística (extendida SPRINT-WA-2 para reconocer 2 variantes):
+ *   - Variante A (tempId server-generated): `crypto.randomUUID(` o
+ *     `randomUUID(` en el archivo.
+ *   - Variante B (tempId client-generated, validado server-side): presencia
+ *     de la palabra `tempId` o constante `TEMP_ID_REGEX` — el cliente envía
+ *     el tempId en el body y el server lo valida con regex
+ *     `^[A-Za-z0-9_-]{16,32}$`. Patrón usado por SPRINT-WA-2.
+ *
+ *   - Escritura a outbox: `addDoc(...outbox...)`, `setDoc(...outbox...)`, o
+ *     `tx.set(<ref>, ...)` donde `<ref>` proviene de
+ *     `db.collection('whatsapp_mensajes_outbox')` (idempotency vía
+ *     `runTransaction` + `tx.get` + `tx.set` — patrón SUPERIOR al
+ *     `addDoc/setDoc` directo porque garantiza atomicidad contra
+ *     reintentos concurrentes).
+ *
+ *   - Llamada a Meta: `graph.facebook.com` o `/messages` endpoint literal.
+ *
+ *   - Orden: la primera escritura a outbox DEBE ocurrir ANTES de la primera
+ *     referencia al endpoint de Meta. (Sólo aplica al patrón directo
+ *     `addDoc/setDoc`. El patrón transaccional con `runTransaction` se
+ *     auto-protege porque la tx commitea antes de continuar.)
  */
 function verificarSend(archivos: ArchivoCargado[]): InvariantHit[] {
   const hits: InvariantHit[] = [];
@@ -190,55 +210,86 @@ function verificarSend(archivos: ArchivoCargado[]): InvariantHit[] {
   const archivoReporte = archivos[0].path;
   const contenido = archivos[0].contenido;
 
-  // tempId pattern: `crypto.randomUUID(` o `randomUUID(`.
+  // tempId patterns:
+  //   A) Server-generated: `crypto.randomUUID(` o `randomUUID(`.
+  //   B) Client-generated + server-validated: palabra `tempId` o
+  //      constante `TEMP_ID_REGEX` (SPRINT-WA-2 convention).
   const tieneRandomUuid = /\brandomUUID\s*\(/.test(contenido);
+  const tieneTempIdRef =
+    /\btempId\b/.test(contenido) || /\bTEMP_ID_REGEX\b/.test(contenido);
 
-  // Detectar escritura a outbox.
-  const reOutboxWrite =
+  // Detectar escritura a outbox:
+  //   - directo: `addDoc(...outbox...)`, `setDoc(...outbox...)`.
+  //   - transaccional: `tx.set(<ref>, ...)` con `<ref>` desde
+  //     `db.collection('whatsapp_mensajes_outbox')`. Heurística: si el
+  //     archivo contiene `db.collection('whatsapp_mensajes_outbox')` Y
+  //     `tx.set(`, asumimos patrón transaccional válido.
+  const reOutboxWriteDirecto =
     /(?:addDoc|setDoc)\s*\(\s*[^)]*whatsapp_mensajes_outbox/;
-  const matchOutbox = contenido.match(reOutboxWrite);
+  const matchOutboxDirecto = contenido.match(reOutboxWriteDirecto);
+
+  const reOutboxColl =
+    /\.collection\s*\(\s*['"`]whatsapp_mensajes_outbox['"`]\s*\)/;
+  const matchOutboxColl = contenido.match(reOutboxColl);
+  const tieneTxSet = /\btx\.set\s*\(/.test(contenido);
+  const tieneTxGet = /\btx\.get\s*\(/.test(contenido);
+
+  const usaPatronTransaccional =
+    !!matchOutboxColl && tieneTxSet && tieneTxGet;
+
+  const tieneEscrituraAOutbox = !!matchOutboxDirecto || usaPatronTransaccional;
 
   // Detectar llamada a Meta.
   const reMeta = /graph\.facebook\.com|\/messages['"`]\s*[,)]/;
   const matchMeta = contenido.match(reMeta);
 
-  if (!tieneRandomUuid) {
+  if (!tieneRandomUuid && !tieneTempIdRef) {
     hits.push({
       file: archivoReporte,
       line: 1,
-      snippet: '(falta `crypto.randomUUID(` para generar tempId)',
+      snippet:
+        '(falta tempId — ni `crypto.randomUUID(` ni referencia a `tempId`/`TEMP_ID_REGEX`)',
       explanation:
-        'El endpoint de send saliente debe generar un `tempId` local con ' +
-        '`crypto.randomUUID()` ANTES de llamar a Meta. Sin tempId determinístico, ' +
-        'un retry post-timeout crea un doc nuevo en `whatsapp_mensajes_outbox` ' +
-        'cada vez — duplicación + pérdida de tracking del `wamid` que Meta devuelve. ' +
-        'NO usar `nanoid` (no está instalado en este repo): usar `crypto.randomUUID` ' +
-        'de Node built-in.',
+        'El endpoint de send saliente debe usar `tempId` para idempotency ' +
+        '— ya sea generándolo server-side con `crypto.randomUUID()` ANTES de ' +
+        'llamar a Meta, o recibiéndolo del cliente y validándolo con ' +
+        '`TEMP_ID_REGEX` (regex `^[A-Za-z0-9_-]{16,32}$`). Sin tempId, un retry ' +
+        'post-timeout crea un doc nuevo en `whatsapp_mensajes_outbox` cada vez — ' +
+        'duplicación + pérdida de tracking del `wamid` que Meta devuelve. ' +
+        'NO usar `nanoid` (no está instalado en este repo).',
     });
   }
 
-  if (!matchOutbox) {
+  if (!tieneEscrituraAOutbox) {
     hits.push({
       file: archivoReporte,
       line: 1,
-      snippet: '(falta `addDoc/setDoc` sobre `whatsapp_mensajes_outbox`)',
+      snippet:
+        '(falta escritura a `whatsapp_mensajes_outbox` — ni `addDoc/setDoc` ni `tx.set` con `db.collection(\'whatsapp_mensajes_outbox\')`)',
       explanation:
         'El endpoint debe persistir el doc en `whatsapp_mensajes_outbox` ' +
         'ANTES de la llamada a Meta (estado inicial = `queued`). Si Meta confirma, ' +
         'update con `wamid` + estado `sent`. Si Meta timeoutea, el doc queda en ' +
-        '`queued` y un cron de reconciliación puede reintentar con el mismo tempId.',
+        '`queued` y un cron de reconciliación puede reintentar con el mismo tempId. ' +
+        'Patrones aceptados: (a) directo `setDoc(doc(db, \'whatsapp_mensajes_outbox\', tempId), {...})`; ' +
+        '(b) transaccional `db.runTransaction(async tx => { ... tx.set(outboxColl.doc(), {...}); })` ' +
+        'con `outboxColl = db.collection(\'whatsapp_mensajes_outbox\')` (preferido — ' +
+        'garantiza atomicidad real contra reintentos concurrentes via `tx.get` previo).',
     });
   }
 
-  if (matchOutbox && matchMeta) {
-    const idxOutbox = matchOutbox.index ?? -1;
+  // Verificación de orden: sólo aplica al patrón directo. El patrón
+  // transaccional con `runTransaction` se auto-protege — la tx commitea
+  // (o aborta) antes de continuar al siguiente await.
+  if (matchOutboxDirecto && matchMeta) {
+    const idxOutbox = matchOutboxDirecto.index ?? -1;
     const idxMeta = matchMeta.index ?? -1;
     if (idxOutbox >= 0 && idxMeta >= 0 && idxOutbox > idxMeta) {
       hits.push({
         file: archivoReporte,
         line: 1,
         snippet:
-          '(escritura a `whatsapp_mensajes_outbox` aparece DESPUÉS de la llamada a Meta)',
+          '(escritura directa a `whatsapp_mensajes_outbox` aparece DESPUÉS de la llamada a Meta)',
         explanation:
           'La persistencia del doc outbox debe ocurrir ANTES del POST a Meta — ' +
           'no después. Si Meta envía pero nuestra red corta antes de la respuesta, ' +

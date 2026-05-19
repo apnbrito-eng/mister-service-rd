@@ -115,7 +115,7 @@ Sin estas 10 decisiones, el architect y el builder estarían adivinando criterio
 
 **Cambio D3 B→A:** Jorge decidió que el bot IA atienda 24/7 con escalación a humano por triggers, en lugar de mandar plantilla "volvemos mañana" fuera de horario. Razón: respuesta instantánea siempre + experiencia consistente. Implicancias:
 - WA-6 (bot IA) NO respeta horario para responder — solo lo respeta para decidir cuándo notificar a Maria/Wilainy "hay caso urgente esperando" (push fuera de horario solo si trigger crítico).
-- La plantilla `auto_respuesta_fuera_horario` se mandó a revisión Meta el 2026-05-19 como **respaldo de emergencia** (bot caído, banneo temporal, mantenimiento) — NO es parte del flujo normal. Una vez APPROVED, queda en `whatsapp_plantillas` con flag `usoFallback: true`.
+- La plantilla `auto_respuesta_fuera_horario` se mandó a revisión Meta el 2026-05-19 como **respaldo de emergencia** (bot caído, banneo temporal, mantenimiento) — NO es parte del flujo normal. Una vez APPROVED, queda en `whatsapp_plantillas` con flag `usoFallback: true`. **Meta auto-reclasificó la categoría de UTILITY → MARKETING** en el momento del Submit por la presencia del botón URL "Agendar cita" hacia `/agendar`. Jorge aceptó la reclasificación porque el uso esperado es 1-2 envíos/mes y el costo Marketing es despreciable. Acción pendiente: **apelar a UTILITY** vía "Help Business / Request a review" si vale la pena el ahorro (a evaluar post-MVP).
 - D4=C sigue: bot solo manda autónomamente plantillas UTILITY (la fallback es UTILITY así que califica si se necesita).
 
 **Cambio adicional 2026-05-19 noche — capacidad dual del bot (capturar conversacional O delegar al formulario):** Jorge agregó que el bot IA debe poder elegir entre dos modos para capturar datos de cita:
@@ -404,8 +404,22 @@ match /whatsapp_config/{docId} {
 ### SPRINT-WA-2 — Servicio saliente proxy `api/whatsapp/send`
 
 **Tipo:** Endpoint público nuevo + integración Meta. Requiere OK.
-**Estado:** BLOQUEADO 2026-05-18 — depende de WA-1 + WA-5 (callbacks + plantillas cache).
+**Estado:** ✅ COMPLETADO 2026-05-19 — commit pending hash al final de esta pasada. WA-5 plantillas cache PENDIENTE: el endpoint NO valida que la plantilla esté APPROVED ni que las variables coincidan con cuerpo — hoy un nombre inválido o variables faltantes resultan en error Meta 502. Documentado en código inline. Cubierto por WA-5 cuando se implemente.
 **Prioridad:** 🔴 ALTA — sin esto el CRM no envía nada.
+
+#### Resumen de implementación 2026-05-19
+
+3 archivos nuevos + 3 modificados:
+- `api/whatsapp/send.ts` (~1174 líneas) con auth Firebase + role check (D6=C) + check `activo!=false` + rate limit por uid/rol (replicado de `api/ai/chat.ts`) + window 24h check (P-018) + opt-out doble fuente fail-closed (D8=A) + allowlist phoneNumberId (simétrica con webhook) + idempotency con `doc(tempId)` (P-017) + backoff 429 con jitter (MAX=3 por Vercel Hobby) + retry post-Meta-OK + audit log centralizado en TODOS los rechazos y fallos + best-effort updates de conversaciones.
+- `src/services/whatsapp.service.ts` (230 líneas): wrappers `enviarTexto`/`enviarPlantilla`/`enviarMedia` con `crypto.randomUUID()` para tempId.
+- `scripts/invariantes/check-whatsapp-window-24h.ts`: cazador P-018 + entry en `PATRONES_REGRESION.md` + registro en `run-all.ts`.
+- Cazador P-017 (idempotency) extendido para reconocer patrón transaccional además del directo.
+
+Validadores 4/4 GO: tester (typecheck + 16/16 cazadores PASS), regression_guardian GO, reviewer cazó 3 BLOQUEADORES (privilege esc en idempotency, opt-out bypass por índice faltante, empleado deshabilitado puede enviar) — fixeados. Security audit cazó 1 ALTA + 3 MEDIAS + 2 BAJAS — todos aplicados (rate limit, audit log shape canónico + paths de rechazo, recovery post-Meta-OK, opt-out fail-closed, fix typo, JSDoc idempotent in-flight).
+
+#### Acción manual de Jorge POST-deploy
+
+Test E2E real con curl (comando listo, ver fin de DIARIO_2026-05-19.md).
 
 #### Dependencias
 
@@ -1756,3 +1770,72 @@ Conservado acá para histórico. NO procesar desde acá — las entradas activas
 **Restricción explícita honrada:** NO se hicieron cambios adicionales al `firestore.rules` en el mismo commit. Solo la línea 369 + comentarios explicativos arriba. Las inconsistencias #15 (papelera operaria) y #8 (secretaria + trabajo realizado) siguen abiertas en `BLOQUEOS.md` SPRINT-112-QA como QA humano puro.
 
 </details>
+
+---
+
+## SPRINT-VERCEL-PLAN-DECISION — Vercel Hobby vs Pro (3 crons WhatsApp)
+
+**Tipo:** Decisión operativa + posible billing.
+**Estado:** BLOQUEADO 2026-05-19 — esperando OK Jorge antes de SPRINT-WA-7.
+**Prioridad:** 🟡 MEDIA (no bloquea WA-5, WA-3, WA-4 ni WA-6 — solo WA-7 crons).
+
+#### Por qué se escaló
+
+D9 original (SPRINT-WA-0 OK Jorge 2026-05-19) dijo "Pro 3 crons separados". Posterior verificación operativa: Vercel está en **Hobby plan**. Hobby permite hasta **2 crons** (Pro hasta 40). WA-7 necesita 3 crons (sync-plantillas, recordatorios-mantenimiento, garantias-por-vencer).
+
+Adicionalmente, Hobby tiene **timeout 10s** por serverless function. WA-2 ya redujo MAX_INTENTOS_META de 5 a 3 para encajar en ese budget (~9s worst-case). Pro elevaría a 60s.
+
+#### Opciones
+
+- **(A) Upgrade a Pro** ($20/mes). Permite 3 crons separados + timeout 60s + suficiente headroom para WA-6 bot IA (latencia Anthropic 1-5s × turnos).
+- **(B) Quedarse en Hobby** + consolidar a 2 crons (un endpoint que internamente corre mantenimiento + garantía + nps secuencialmente, otro endpoint sync-plantillas). Pierde aislamiento de fallos entre los 3 jobs y forza a respetar el 10s total para los 3 combinados.
+
+#### Recomendación
+
+(A) Pro. Costo $20/mes vs riesgo de timeout en cron consolidado + limitación futura para WA-6 bot.
+
+#### Cómo desbloquear
+
+Jorge edita esta entrada con `OK: jorge YYYY-MM-DD HH:MM upgrade Pro` o `OK: jorge YYYY-MM-DD HH:MM consolidar 2 crons`. Coordinator entonces actualiza decisión D9 en MODULO_WHATSAPP.md y procede con WA-7.
+
+**OK Jorge:** _pendiente_
+
+---
+
+## SPRINT-WA-2-FOLLOWUP-RATE-LIMITS-CONFIG — Crear doc `config/rate_limits.whatsapp_send`
+
+**Tipo:** Operacional (config Firestore). NO toca código.
+**Estado:** ABIERTO 2026-05-19 — opcional, sin OK Jorge requerido.
+**Prioridad:** 🟢 BAJA — el endpoint funciona con defaults hardcoded mientras el doc no exista.
+
+#### Por qué existe este sprint
+
+SPRINT-WA-2 implementó rate limit en `api/whatsapp/send.ts` que cuenta envíos por uid y día. El cap se lee de `config/rate_limits.whatsapp_send.{rol}` con fallback a defaults hardcoded:
+
+- administrador: 500/día
+- coordinadora: 500/día
+- secretaria: 300/día
+- operaria: 300/día
+- default (rol desconocido): 100/día
+
+Si el doc `config/rate_limits` NO tiene sub-key `whatsapp_send`, los defaults aplican. Sin acción inmediata.
+
+#### Para personalizar caps
+
+Jorge edita doc `config/rate_limits` desde Firestore Console agregando:
+
+```json
+{
+  "whatsapp_send": {
+    "administrador": 1000,
+    "coordinadora": 800,
+    "secretaria": 500,
+    "operaria": 500,
+    "default": 50
+  }
+}
+```
+
+Los valores aplican en el próximo POST (no requiere redeploy). UI admin para editar puede agregarse en un sprint futuro si se necesita ajuste frecuente.
+
+---

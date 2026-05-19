@@ -33,6 +33,7 @@ import { check as checkListenerSinWhereRolRestringido } from './check-listener-s
 import { check as checkFirestoreOrderByCampoNoPersistido } from './check-firestore-orderby-campo-no-persistido.js';
 import { check as checkWhatsappWebhookHmac } from './check-whatsapp-webhook-hmac.js';
 import { check as checkWhatsappIdempotency } from './check-whatsapp-idempotency.js';
+import { check as checkWhatsappWindow24h } from './check-whatsapp-window-24h.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -59,6 +60,7 @@ async function main() {
     checkFirestoreOrderByCampoNoPersistido,
     checkWhatsappWebhookHmac,
     checkWhatsappIdempotency,
+    checkWhatsappWindow24h,
   ];
 
   const t0 = Date.now();
