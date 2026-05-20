@@ -1664,7 +1664,7 @@ Password común sugerido (Jorge decide el real, NO commitear): formato fuerte �
 
 ### SPRINT-177 — Botón "Avisar a oficina" en vista técnico + flujo operaria para reagendar/cancelar
 
-**Estado:** PENDIENTE
+**Estado:** ✅ COMPLETADO 2026-05-19 por coordinator autónomo (continuación post-WhatsApp). Hash `165bcff`. 5 archivos: types (campo visitaFallida + tipo aviso_oficina) + parseOrden defensivo + ordenes.service.ts (marcarVisitaFallida con runTransaction + limpiarVisitaFallida + audit canónico) + TecnicoVista (botón amber + modal textarea libre) + OrdenDetailModal (banner con 5 acciones, reusa ReagendarModal + CancelarOrdenModal con callbacks que limpian visitaFallida). Sin cambio de rules — campo opcional no rompe gates existentes. archivist PRE-CHANGE confirmó procesable autónomo. regression_guardian cazó doble-prefijo `OS-OS-####` (fixeado). reviewer cazó 1 BLOCK (banner en órdenes canceladas/cerradas) + 2 CONCERNS (audit shape no canónico, sin warn si 0 destinatarios) — los 3 fixeados antes de commit. Cazadores 17/17 PASS. typecheck + lint PASS.
 **Prioridad:** 🟡 MEDIA-ALTA — cubre caso operativo real frecuente. Sin esto, el técnico que va a una visita fallida queda sin acción clara y la orden queda colgada en "agendado" sin avanzar.
 **Origen:** Decisión Jorge 2026-05-15 durante QA E2E SPRINT-159 (OS-0057). El técnico va a casa del cliente y se topa con casos donde el cliente no abre, no estaba, cancela en el momento, o no contesta. Hoy no hay forma de marcar este estado en la app — la orden queda "agendada" perpetuamente y la operaria no se entera salvo por llamada del técnico.
 
