@@ -1,4 +1,76 @@
-**Última actualización:** 2026-05-18 noche por Cowork — **QA visual sidepanel post-deploy reveló 2 FAILs en SPRINT-185 + SPRINT-178/186 end-to-end.** SPRINT-187 escrito a la cola con dos investigaciones:
+**Última actualización:** 2026-05-19 noche por Cowork — **Bug crítico módulo WhatsApp saliente: SPRINT-WA-2-FIX-BODYPARSER agregado al tope de la cola.** El endpoint `api/whatsapp/send.ts` (commit `58a642a`, SPRINT-WA-2) rechaza con HTTP 400 `{"error":"body-invalido"}` toda llamada POST con JSON válido. Causa raíz: usa `export const config = { api: { bodyParser: true } }`, sintaxis del Next.js Pages Router que **no aplica en `@vercel/node`** (runtime real del repo, Vite + Vercel). Jorge probó con curl real (Content-Length 243, body JSON parseable, token Firebase fresh) y siempre devuelve `body-invalido`. Bloquea el QA E2E del módulo. Sprint procesable autónomo (no toca rules, no integra terceros). Definición completa más abajo.
+
+---
+
+## SPRINT-WA-2-FIX-BODYPARSER — Fix parseo body endpoint WhatsApp saliente
+
+**Prioridad:** ALTA (bloquea QA E2E del módulo WhatsApp saliente; sin esto WA-3 frontend no puede llamar al endpoint).
+
+**Estado:** PENDIENTE
+
+**Origen:** Jorge probó SPRINT-WA-2 con curl válido el 2026-05-19. Siempre devuelve HTTP 400 `body-invalido` aunque el body llegue correctamente al servidor (verificado verbose curl: Content-Length 243, JSON parseable). Cowork diagnosticó causa raíz: el bloque `export const config = { api: { bodyParser: true } }` en `api/whatsapp/send.ts:58-62` es sintaxis del Next.js Pages Router que **no aplica en `@vercel/node`**, el runtime real del repo. Resultado: `req.body` llega como string o undefined dependiendo del Content-Type, y la guard `typeof rawBody !== 'object'` (línea 557) tira 400. El endpoint `api/admin/crear-usuario.ts:140` ya usa el patrón correcto (`const body = (req.body ?? {}) as Record<string, unknown>`) con éxito en producción → confirma que `@vercel/node` no necesita esa config.
+
+### Touch-list
+
+1. **`api/whatsapp/send.ts`** — tres cambios:
+   - **(a) Eliminar líneas 53-62** completas (bloque `export const config`).
+   - **(b) Reemplazar líneas 555-561** con parseo defensivo que acepte string JSON, objeto ya parseado, o vacío:
+     ```typescript
+     // 5) Validar body. @vercel/node auto-parsea application/json a objeto,
+     //    pero algunos clientes mandan string o sin Content-Type — parseamos
+     //    defensivamente. Patrón ya usado en api/admin/crear-usuario.ts:140.
+     let body: Record<string, unknown>;
+     try {
+       const raw = req.body;
+       if (raw == null) {
+         body = {};
+       } else if (typeof raw === 'string') {
+         body = raw.trim().length > 0 ? JSON.parse(raw) : {};
+       } else if (typeof raw === 'object') {
+         body = raw as Record<string, unknown>;
+       } else {
+         res.status(400).json({ error: 'body-invalido', detalle: `tipo=${typeof raw}` });
+         return;
+       }
+     } catch (err) {
+       const m = err instanceof Error ? err.message.substring(0, 200) : 'unknown';
+       res.status(400).json({ error: 'body-invalido', detalle: `json-parse-failed: ${m}` });
+       return;
+     }
+     ```
+   - **(c) Actualizar JSDoc de cabecera** línea 18: cambiar `bodyParser: true (JSON request del cliente; HMAC sólo aplica al webhook)` → `body se parsea defensivamente (string|object|null); @vercel/node auto-parsea application/json pero el endpoint tolera ambas formas`.
+
+2. **`CLAUDE.md`** — agregar gotcha nuevo en la sección de Conventions & gotchas:
+   > **`@vercel/node` ignora `export const config = { api: {...} }`.** Esa sintaxis es del Next.js Pages Router; este repo es Vite + `@vercel/node`. Para parseo de body, usar el patrón de `api/admin/crear-usuario.ts:140` (`const body = (req.body ?? {}) as Record<string, unknown>`). Cualquier endpoint nuevo debe probarse con curl real antes de cerrar el sprint — no asumir que la config aplica. Antiprecedente SPRINT-WA-2 commit `58a642a`: el endpoint rechazó todo POST con `body-invalido` HTTP 400 hasta el hotfix de SPRINT-WA-2-FIX-BODYPARSER.
+
+### Consumidores verificados (read-only)
+
+- `grep -rn "api/whatsapp/send" src/` — sin consumidores frontend todavía (WA-3 lo añade). Cambio retro-compatible: el shape del request no cambia, solo el parseo interno.
+- `api/admin/crear-usuario.ts:140` ya usa `(req.body ?? {}) as Record<string, unknown>` con éxito → confirma patrón válido.
+- Cazador P-016 (`scripts/invariantes/check-whatsapp-webhook-hmac.ts`) chequea `bodyParser: false` SOLO en `webhook.ts`, no en `send.ts` → no se rompe.
+- Cazador P-018 (`scripts/invariantes/check-whatsapp-send-idempotency.ts`, si existe del SPRINT-WA-2) — verificar que no chequea presencia de `export const config`. Si lo chequea, ajustar el cazador.
+
+### Hallazgos laterales
+
+Ninguno esperado. El bug es aislado a un solo archivo.
+
+### Verificación post-cambio
+
+1. `npm run build` — typecheck + vite build limpios.
+2. `npm run check:regression` — 17/17 PASS (no se toca ningún invariante).
+3. Reviewer obligatorio: confirmar que el parseo defensivo no introduce vector de inyección (el `JSON.parse` ya valida shape; los validadores posteriores ya gateaban `wa_id-invalido`, `tipo-invalido`, etc.).
+4. NO QA con curl real — Jorge lo hace post-deploy fuera del sprint (requiere token Firebase fresh + tempId único).
+
+### Cierre
+
+- **Sin postmortem** — no es bug de producción (módulo en QA, ningún cliente afectado).
+- **Sin cazador P-XXX nuevo** — patrón demasiado específico (sintaxis cross-framework). Si se repite en 2-3 sprints más, evaluar P-020.
+- **Sí actualizar `CLAUDE.md`** con el gotcha de la sección touch-list punto 2.
+- Commit message sugerido: `fix(wa): SPRINT-WA-2-FIX-BODYPARSER parseo defensivo body (Vite+@vercel/node no respeta export const config)`.
+
+---
+
+**Última actualización previa:** 2026-05-18 noche por Cowork — **QA visual sidepanel post-deploy reveló 2 FAILs en SPRINT-185 + SPRINT-178/186 end-to-end.** SPRINT-187 escrito a la cola con dos investigaciones:
 
 (A) **`/admin/clientes` listado + typeahead muestra soft-deleted** — el dedup mergeó OK pero la UI no filtra `where eliminado != true` → ilusión visual de duplicación post-fix.
 
