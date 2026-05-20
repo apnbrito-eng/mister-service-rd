@@ -1,4 +1,69 @@
-**Última actualización:** 2026-05-19 noche por Cowork — **Bug crítico módulo WhatsApp saliente: SPRINT-WA-2-FIX-BODYPARSER agregado al tope de la cola.** El endpoint `api/whatsapp/send.ts` (commit `58a642a`, SPRINT-WA-2) rechaza con HTTP 400 `{"error":"body-invalido"}` toda llamada POST con JSON válido. Causa raíz: usa `export const config = { api: { bodyParser: true } }`, sintaxis del Next.js Pages Router que **no aplica en `@vercel/node`** (runtime real del repo, Vite + Vercel). Jorge probó con curl real (Content-Length 243, body JSON parseable, token Firebase fresh) y siempre devuelve `body-invalido`. Bloquea el QA E2E del módulo. Sprint procesable autónomo (no toca rules, no integra terceros). Definición completa más abajo.
+**Última actualización:** 2026-05-19 noche por Cowork — **SPRINT-WA-2-HEADER-IMAGE agregado al tope de la cola.** Tras el fix bodyparser (9cf8f9a) el curl E2E llegó a Meta pero ésta rechaza con código `132012` "header: Format mismatch, expected IMAGE, received UNKNOWN" porque la plantilla `cita_confirmada` (y todas las HSM activas con apariencia empresarial) fueron creadas en Meta con header IMAGE pero el endpoint actual solo construye el componente `body` con texto. Jorge confirmó que quiere mantener el header IMAGE (aspecto empresarial). Solución: extender `PlantillaInput` con `headerImageUrl?` opcional + prepend del componente `header` al payload Meta cuando aplica. Default fallback al logo público del sitio (`https://www.misterservicerd.com/logo-full.png`) cuando el caller no pasa URL explícita. Sprint procesable autónomo (no toca rules, no integra terceros, cambio aditivo retrocompatible). Definición completa más abajo.
+
+---
+
+## SPRINT-WA-2-HEADER-IMAGE — Soporte header IMAGE en plantillas WhatsApp
+
+**Prioridad:** ALTA (bloquea curl E2E con plantillas reales; sin esto Meta sigue devolviendo 132012 en todas las plantillas con apariencia empresarial).
+
+**Estado:** PENDIENTE
+
+**Origen:** Jorge corrió curl E2E el 2026-05-19 post-fix bodyparser (`9cf8f9a`). El endpoint llegó a Meta correctamente, autenticó, pero Meta devolvió HTTP 502 con `codigoMeta: 132012` y detalle `header: Format mismatch, expected IMAGE, received UNKNOWN`. Causa: la plantilla `cita_confirmada` en WABA tiene header de tipo IMAGE configurado (decisión de diseño para mantener apariencia empresarial), pero `construirPayloadMeta` en `api/whatsapp/send.ts:226-248` solo construye el componente `body` con parámetros de texto — nunca emite el componente `header`. Aplica a TODAS las plantillas HSM activas que tengan header IMAGE (no solo `cita_confirmada`).
+
+### Touch-list
+
+1. **`api/whatsapp/send.ts`** — cuatro cambios:
+   - Línea 148-152 (interface `PlantillaInput`): agregar campo opcional `headerImageUrl?: string`.
+   - Línea 180-183 (interface `PayloadMeta['template']['components']`): ampliar el union para aceptar también `{ type: 'header'; parameters: Array<{ type: 'image'; image: { link: string } }> }` además del existente `type: 'body'`.
+   - Línea 226-248 (función `construirPayloadMeta`, rama plantilla): construir array `componentes` que incluye opcionalmente un componente `header` al inicio si `input.plantilla.headerImageUrl` está definido, seguido del `body` existente. Mantener el caso donde no hay variables y no hay header → no emitir `components` (tpl sin la propiedad).
+   - Línea 612-625 (parseo del body request): aceptar `p.headerImageUrl` opcional. Validar que es `string` y empieza con `https://`. Si no cumple, ignorar silenciosamente (no romper retrocompatibilidad).
+
+2. **Default fallback URL del logo** — al construir el componente header en `construirPayloadMeta`, si `headerImageUrl` no viene en el input, usar la constante `DEFAULT_HEADER_IMAGE_URL = 'https://www.misterservicerd.com/logo-full.png'`. Declarar la constante al tope del archivo (después de los `import`). Esto resuelve el caso default de plantillas empresariales sin requerir cambio en frontend.
+
+3. **JSDoc** en `construirPayloadMeta`: documentar el nuevo comportamiento del header IMAGE (default logo, override via `headerImageUrl`).
+
+### Consumidores verificados (read-only check)
+
+- **Frontend que llama el endpoint:** correr `grep -rn "fetch.*api/whatsapp/send\|whatsappSendRequest\|/api/whatsapp/send" src/` y verificar que ninguno construya `plantilla.headerImageUrl` ya (debería no haber ninguno todavía — feature nueva). Si hay callers existentes que pasen `headerImageUrl`, son intencionales y deben seguir funcionando.
+- **Tests:** no hay (CLAUDE.md confirma "no test suite").
+- **Documentación interna:** ninguna referencia actual a `headerImageUrl` esperada (campo nuevo).
+
+### Consumidores NO afectados (justificación)
+
+- `api/whatsapp/webhook.ts` — solo lee mensajes entrantes, no construye payload Meta saliente.
+- `src/services/whatsapp.service.ts` (si existe) — wrapper genérico; el cambio es retrocompatible (campo nuevo opcional).
+- `firestore.rules` — no se toca.
+
+### Hallazgos laterales
+
+Ninguno detectado durante esta auditoría. Si el builder encuentra un caller que pase `headerImageUrl` con dominio distinto a `misterservicerd.com` o `firebasestorage.googleapis.com`, documentar como deuda para SPRINT-WA-2-HEADER-IMAGE-WHITELIST (futuro) — no fixear silenciosamente acá.
+
+### Verificación
+
+1. `npm run check:regression` → 17/17 PASS.
+2. `npm run build` → typecheck + build OK.
+3. `npm run lint` → 0 warnings.
+4. Curl E2E (Jorge corre desde su Mac):
+   ```bash
+   curl -sw '\nHTTP %{http_code}\n' -X POST \
+     https://www.misterservicerd.com/api/whatsapp/send \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"wa_id":"8494580318","tipo":"plantilla","plantilla":{"nombre":"cita_confirmada","idioma":"es","variables":["Jorge","jue 22/05 9:30am","OS-9999","Aury","sin notas"]},"tempId":"test-header-image-2026051903"}'
+   ```
+   Esperado: HTTP 200 + outboxId + wamid + estado="sent" → mensaje real entregado a 849-458-0318 con header IMAGE (logo Mister Service) + body con las 5 variables.
+
+### No requiere
+
+- Postmortem (módulo en QA, sin clientes reales).
+- Cazador P-XXX nuevo (cambio aditivo, no patrón de bug).
+- Cambio en `firestore.rules`.
+- Cambio en frontend (default fallback al logo elimina necesidad).
+
+### Sub-tareas para el coordinator
+
+- builder → tester → regression_guardian → reviewer → commit + push.
+- Commit message: `feat(wa): SPRINT-WA-2-HEADER-IMAGE soporte header IMAGE en plantillas`.
 
 ---
 
