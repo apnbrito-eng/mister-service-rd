@@ -20,6 +20,7 @@ import { enviarTexto } from '../services/whatsapp.service';
 import MensajeBubble from '../components/inbox/MensajeBubble';
 import IndicadorVentana24h from '../components/inbox/IndicadorVentana24h';
 import ToggleBot from '../components/inbox/ToggleBot';
+import CardCliente from '../components/inbox/CardCliente';
 import type {
   WhatsAppConversacion,
   WhatsAppMensajeInbox,
@@ -339,11 +340,11 @@ export default function InboxConversacion() {
                     }
                   />
                 </div>
-                {/* SPRINT-INBOX-5 amplía esta columna con CardCliente
-                    (búsqueda de cliente por teléfono + órdenes activas). */}
-                <p className="text-xs text-gray-400 italic border-t border-gray-100 pt-3">
-                  Datos del cliente y órdenes vinculadas: próximamente.
-                </p>
+                {/* SPRINT-INBOX-5 (2026-05-20): datos del cliente +
+                    órdenes activas vinculadas por teléfono. */}
+                <div className="pt-3 border-t border-gray-100">
+                  <CardCliente waId={conversacionActual.wa_id} />
+                </div>
               </div>
             ) : (
               <p className="text-sm text-gray-400">Cargando conversación...</p>

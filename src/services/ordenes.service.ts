@@ -1075,3 +1075,74 @@ export async function limpiarVisitaFallida(ordenId: string): Promise<void> {
     updatedAt: serverTimestamp(),
   });
 }
+
+/**
+ * Busca órdenes activas (fase != cerrado/cancelado) por teléfono del
+ * cliente. SPRINT-INBOX-5 (2026-05-20).
+ *
+ * Estrategia:
+ *   - Query `ordenes_servicio where clienteTelefono == <telNorm>`.
+ *   - Filter client-side por fase != ('cerrado', 'cancelado') y `eliminada
+ *     != true`. Evita índice compuesto (single where + filter).
+ *
+ * IMPORTANTE: `clienteTelefono` puede estar guardado en formato distinto
+ * según el path de creación (raw vs normalizado). Hacemos query con
+ * la versión normalizada Y con la raw recibida, mergeando resultados.
+ * Si no hay match exacto, retornamos array vacío.
+ *
+ * @param telefonoRaw teléfono en cualquier formato (será normalizado).
+ * @returns lista de órdenes activas ordenadas por fechaCreacion desc.
+ */
+export async function obtenerOrdenesActivasPorTelefono(
+  telefonoRaw: string,
+): Promise<OrdenServicio[]> {
+  if (!telefonoRaw || telefonoRaw.length < 7) return [];
+  // Normalización RD: 10 dígitos al final.
+  const soloDigitos = telefonoRaw.replace(/\D/g, '');
+  const telNorm = soloDigitos.length >= 10 ? soloDigitos.slice(-10) : soloDigitos;
+  if (telNorm.length < 7) return [];
+
+  const fasesTerminales = new Set<string>(['cerrado', 'cancelado']);
+  const docsMap = new Map<string, OrdenServicio>();
+
+  // Búsqueda por teléfono normalizado.
+  const q1 = query(
+    collection(db, 'ordenes_servicio'),
+    where('clienteTelefono', '==', telNorm),
+  );
+  const snap1 = await getDocs(q1);
+  snap1.docs.forEach((d) => {
+    const data = d.data();
+    if (data.eliminada === true) return;
+    if (fasesTerminales.has(data.fase as string)) return;
+    docsMap.set(d.id, parseOrden(d.id, data));
+  });
+
+  // Si llegan formatos distintos (ej: cliente guardado con guiones),
+  // probamos también un match exacto del raw.
+  if (telefonoRaw !== telNorm) {
+    const q2 = query(
+      collection(db, 'ordenes_servicio'),
+      where('clienteTelefono', '==', telefonoRaw),
+    );
+    const snap2 = await getDocs(q2);
+    snap2.docs.forEach((d) => {
+      if (docsMap.has(d.id)) return;
+      const data = d.data();
+      if (data.eliminada === true) return;
+      if (fasesTerminales.has(data.fase as string)) return;
+      docsMap.set(d.id, parseOrden(d.id, data));
+    });
+  }
+
+  // Sort client-side: createdAt desc (fallback updatedAt).
+  const ordenes = Array.from(docsMap.values());
+  ordenes.sort((a, b) => {
+    const aTime = a.createdAt ?? a.updatedAt;
+    const bTime = b.createdAt ?? b.updatedAt;
+    const ta = aTime instanceof Date ? aTime.getTime() : 0;
+    const tb = bTime instanceof Date ? bTime.getTime() : 0;
+    return tb - ta;
+  });
+  return ordenes;
+}
