@@ -1757,7 +1757,7 @@ Password común sugerido (Jorge decide el real, NO commitear): formato fuerte �
 
 ### SPRINT-PORTAL-1 — Portal cliente con CTA "Solicitar nuevo servicio"
 
-**Estado:** PENDIENTE — no depende de aprobación de plantillas WA, puede deployarse en paralelo. Mejora el portal `/garantia/:token` al que apuntan los links de plantillas `conduce_emitido` y `garantia_por_vencer`.
+**Estado:** 🚧 ESCALADO A BLOQUEOS 2026-05-19 por coordinator autónomo (sesión 4). Razón: el spec requiere modificar `firestore.rules` con rule pública nueva para `solicitudes/{id}` con gate por `origen=='portal_cliente_garantia'` + token válido + rate-limit. CLAUDE.md exige OK explícito de Jorge para cambios a rules + servicios públicos sin auth. Ver entrada en `docs/sprints/BLOQUEOS.md` con touch-list completo. Spec original preservada abajo para forensia.
 **Prioridad:** 🟡 MEDIA — UX self-service, multiplica el valor del link enviado por WhatsApp. Sin esto, el cliente que clickea el link solo ve la garantía y tiene que responder por WhatsApp para pedir otro servicio.
 **Origen:** Decisión Jorge 2026-05-15 durante creación de plantillas WhatsApp HSM. Las plantillas `conduce_emitido` y `garantia_por_vencer` envían link al portal `/garantia/:token`. Jorge pidió que ese portal sirva también para que el cliente pueda agendar otro servicio (no solo reclamar garantía).
 

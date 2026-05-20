@@ -1912,3 +1912,96 @@ Notif sistema (manejarErrorMeta, crearNotificacion server-side) seguirán vía A
 **OK Jorge:** _pendiente_
 
 ---
+
+## SPRINT-PORTAL-1 — Portal cliente con CTA "Solicitar nuevo servicio"
+
+**Tipo:** UX portal público + rule nueva sobre `solicitudes` + endpoint write público sin auth.
+**Estado:** BLOQUEADO 2026-05-19 — escalado por coordinator autónomo (sesión 4) desde `COLA_AUTONOMA.md:1758`. Spec original ahí preservada para forensia.
+**Prioridad:** 🟡 MEDIA — UX self-service, multiplica el valor del link enviado por WhatsApp. Cliente que clickea link `/garantia/:token` hoy solo ve garantía; con esto puede agendar otro servicio sin pasar por operaria.
+
+#### Por qué se escaló
+
+CLAUDE.md exige OK explícito de Jorge para:
+- Cambios a `firestore.rules` (este sprint agrega rule pública para `solicitudes/{id}` create).
+- Endpoints / writes públicos sin auth (el form del portal escribe a `solicitudes` desde un cliente no autenticado, validado solo por token).
+
+El sprint también requiere:
+- Rate-limit por token (1 solicitud/hora) — debe implementarse en rule (no se puede confiar en client-side).
+- Auditoría de que el token sigue válido en el momento del write.
+
+#### Touch-list expandido (audited)
+
+**Archivos a modificar/crear (4):**
+
+1. `src/pages/public/PortalGarantia.tsx` (o el componente real que renderiza `/garantia/:token` — auditar con grep) — agregar sección expandible "¿Necesita otro servicio?" con form (tipo equipo, marca/modelo, falla, zona, fecha preferida, franja horaria, teléfono). Después de submit: confirmación "Hemos recibido su solicitud...".
+
+2. `src/services/solicitudes.service.ts` — nueva función `crearSolicitudDesdePortalGarantia(data, garantiaToken)`:
+   - Valida token con read a `clientes` (ya hace algo similar el resto del portal).
+   - Persiste a `solicitudes` con `origen: 'portal_cliente_garantia'`, `garantiaTokenOrigen: token`, `creadaEn: serverTimestamp()`.
+   - Trigger fan-out de notif (puede ser fire-and-forget si rule no lo permite directo).
+
+3. `src/services/notificaciones.service.ts` (sin modificar, usar) — emitir tipo nuevo `'solicitud_nueva_portal'` a coordinadora + operaria principal.
+
+4. `src/types/index.ts` — agregar `'solicitud_nueva_portal'` a `TipoNotificacion` (P-010 exige call site emisor literal).
+
+5. `firestore.rules` — rule nueva en `solicitudes`:
+   ```javascript
+   match /solicitudes/{id} {
+     allow read: if esStaffOficina();
+     // Existente: create desde admin/staff
+     allow create: if esStaff() && ...existing-checks;
+     // NUEVA: create público desde portal garantía (gateado por origen literal + shape)
+     allow create: if request.resource.data.origen == 'portal_cliente_garantia'
+       && request.resource.data.garantiaTokenOrigen is string
+       && request.resource.data.garantiaTokenOrigen.size() > 20
+       && request.resource.data.tipoEquipo is string
+       && request.resource.data.descripcionFalla is string
+       && request.resource.data.descripcionFalla.size() >= 10
+       && request.resource.data.descripcionFalla.size() <= 500
+       && request.resource.data.creadaEn == request.time;
+     // NOTA: rate-limit NO se puede implementar en rule (no hay query-en-condición).
+     // El client lo hace cliente-side + el WAF de Vercel/Firebase lo limita externamente.
+     // Defense-in-depth real: revisar logs Firebase si volumen sospechoso.
+   }
+   ```
+
+#### Decisiones de negocio pendientes (Jorge confirma antes de OK)
+
+- **D1:** ¿Rate-limit por token (1/hora) es enforced solo client-side o se acepta esa limitación? Alternativas:
+  - (A) Solo client-side (el spec sugiere esto). Riesgo: atacante salta el client-side y spamea. Mitigación: rule solo permite create con shape válido + token válido. WAF de Firebase limita ~10/seg burst.
+  - (B) Implementar Cloud Function que valide rate-limit server-side (introduce nueva dependencia + costo).
+  - **Recomendado (A)** porque el riesgo es bajo (solo crea solicitudes, no hace daño persistente) y el costo de (B) es alto.
+
+- **D2:** ¿Notif a `coordinadora.uid + operaria.uid` específico (hardcoded) o fan-out a `where rol in ['coordinadora','operaria']`? Recomendado: fan-out (alineado con patrón canónico de SPRINT-177).
+
+- **D3:** ¿Confirmación por WhatsApp template al cliente? Spec menciona "plantilla 5 en sprint dedicado" — fuera de scope acá. Cliente solo ve "Hemos recibido su solicitud..." en la UI.
+
+#### Criterios de éxito
+
+- [ ] Sección "¿Necesita otro servicio?" visible debajo de detalles garantía.
+- [ ] Form completo con validaciones (tipo, falla min 10 chars, zona, fecha >=mañana).
+- [ ] Submit OK → doc en `solicitudes` con shape correcto.
+- [ ] Coordinadora + operaria reciben notif `'solicitud_nueva_portal'`.
+- [ ] Token expirado/inválido → form bloqueado.
+- [ ] Mobile responsive.
+- [ ] Cazadores 17+1=18 PASS (si se agrega cazador nuevo) o 17/17 si no.
+- [ ] Rules deployadas con `npm run deploy:rules` antes de cerrar.
+
+#### Tiempo realista
+
+**4-6 horas:**
+- archivist PRE-CHANGE: 15 min.
+- builder (UI + service + types + rule): 2-3 h.
+- tester + regression_guardian: 30 min.
+- reviewer + security obligatorios: 1-1.5 h.
+- Deploy rules + verificación post-deploy: 30 min.
+
+#### Cómo desbloquear
+
+1. Jorge responde D1 + D2 + D3 inline.
+2. Jorge agrega `OK: jorge YYYY-MM-DD HH:MM portal solicitud`.
+3. Coordinator procesa con flujo completo: archivist → builder → tester → regression_guardian → reviewer → security → npm run deploy:rules → commit + push → devops.
+
+**OK Jorge:** _pendiente_
+
+---
