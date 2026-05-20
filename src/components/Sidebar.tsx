@@ -5,6 +5,7 @@ import {
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight, ChevronDown,
   Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
   CalendarCheck, Sparkles, History, Star, RefreshCw, Banknote,
+  MessageSquare,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { signOut } from 'firebase/auth';
@@ -15,6 +16,7 @@ import Logo from './Logo';
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { suscribirContadorSinLeer } from '../services/whatsappInbox.service';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -70,6 +72,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [facturacionPendienteCount, setFacturacionPendienteCount] = useState(0);
   const [sugerenciasChequeoCount, setSugerenciasChequeoCount] = useState(0);
   const [reprogramacionesCount, setReprogramacionesCount] = useState(0);
+  const [whatsappInboxCount, setWhatsappInboxCount] = useState(0);
   const [sectionsState, setSectionsState] = useState<Record<string, boolean>>(loadState);
 
   useEffect(() => {
@@ -154,6 +157,27 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     return () => unsub();
   }, [userProfile?.rol]);
 
+  // SPRINT-INBOX-2 (2026-05-20): badge de mensajes WhatsApp sin leer.
+  // Gateamos por rol staff oficina (D6=C); técnico/ayudante no llegan
+  // acá porque TecnicoRoute/AyudanteRoute redirigen antes del Layout.
+  // La rule `whatsapp_conversaciones` (firestore.rules:730) restringe
+  // a esStaffOficina(); el gate cliente evita listener inútil para
+  // roles que no van a ver el ítem.
+  useEffect(() => {
+    const rol = userProfile?.rol;
+    if (
+      rol !== 'administrador' &&
+      rol !== 'coordinadora' &&
+      rol !== 'secretaria' &&
+      rol !== 'operaria'
+    ) {
+      setWhatsappInboxCount(0);
+      return;
+    }
+    const unsub = suscribirContadorSinLeer(setWhatsappInboxCount);
+    return () => unsub();
+  }, [userProfile?.rol]);
+
   const handleLogout = async () => {
     await signOut(auth);
     navigate('/login');
@@ -193,6 +217,10 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         icon: Inbox,
         defaultExpanded: true,
         items: [
+          // SPRINT-INBOX-2 (2026-05-20): Inbox WhatsApp visible para staff
+          // oficina (D6=C admin/coord/secretaria/operaria). Badge suma
+          // noLeidos de todas las conversaciones.
+          { to: '/admin/inbox', icon: MessageSquare, label: 'Inbox WhatsApp', badge: whatsappInboxCount, show: esAdminOCoord || isOperaria || isSecretaria },
           { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
           { to: '/admin/reprogramaciones', icon: RefreshCw, label: 'Reprogramaciones', badge: reprogramacionesCount, show: esAdminOCoord },
           { to: '/admin/sugerencias-chequeo', icon: ClipboardCheck, label: 'Sugerencias chequeo', badge: sugerenciasChequeoCount, show: esAdminOCoord },

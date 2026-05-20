@@ -66,6 +66,9 @@ const Reprogramaciones = lazy(() => import('./pages/Reprogramaciones'));
 const ConfiguracionMarketing = lazy(() => import('./pages/ConfiguracionMarketing'));
 const Notificaciones = lazy(() => import('./pages/Notificaciones'));
 const Admin404 = lazy(() => import('./pages/Admin404'));
+// SPRINT-INBOX-2 (2026-05-20): bandeja CRM WhatsApp para staff oficina.
+// El bloque INBOX-3..6 agrega vistas hijas; ver `docs/sprints/COLA_AUTONOMA.md`.
+const Inbox = lazy(() => import('./pages/Inbox'));
 
 // Public website pages (también lazy — el sitio público es un viewport distinto)
 import PublicLayout from './components/public/PublicLayout';
@@ -276,6 +279,10 @@ function AppRoutes() {
         <Route path="sugerencias-chequeo" element={<RolRoute roles={['administrador', 'coordinadora']}><SugerenciasChequeo /></RolRoute>} />
         <Route path="reprogramaciones" element={<RolRoute roles={['administrador', 'coordinadora']}><Reprogramaciones /></RolRoute>} />
         <Route path="configuracion-marketing" element={<RolRoute roles={['administrador']}><ConfiguracionMarketing /></RolRoute>} />
+        {/* SPRINT-INBOX-2 (2026-05-20): Inbox WhatsApp para staff oficina.
+            Decisión D6=C: admin/coord/secretaria/operaria. Técnicos y
+            ayudantes no entran (TecnicoRoute/AyudanteRoute ya gateaban). */}
+        <Route path="inbox" element={<RolRoute roles={['administrador', 'coordinadora', 'secretaria', 'operaria']}><Inbox /></RolRoute>} />
         {/* SPRINT-171 (2026-05-14): ruta `/admin/notificaciones` faltaba y el
             fallback `*` mandaba al landing público — confundía a la
             coordinadora. La rule de Firestore ya filtra por userId == auth.uid,
