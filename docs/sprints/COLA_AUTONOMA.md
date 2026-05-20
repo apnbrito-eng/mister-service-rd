@@ -1,4 +1,70 @@
-**Última actualización:** 2026-05-19 noche por Cowork — **SPRINT-WA-2-HEADER-IMAGE agregado al tope de la cola.** Tras el fix bodyparser (9cf8f9a) el curl E2E llegó a Meta pero ésta rechaza con código `132012` "header: Format mismatch, expected IMAGE, received UNKNOWN" porque la plantilla `cita_confirmada` (y todas las HSM activas con apariencia empresarial) fueron creadas en Meta con header IMAGE pero el endpoint actual solo construye el componente `body` con texto. Jorge confirmó que quiere mantener el header IMAGE (aspecto empresarial). Solución: extender `PlantillaInput` con `headerImageUrl?` opcional + prepend del componente `header` al payload Meta cuando aplica. Default fallback al logo público del sitio (`https://www.misterservicerd.com/logo-full.png`) cuando el caller no pasa URL explícita. Sprint procesable autónomo (no toca rules, no integra terceros, cambio aditivo retrocompatible). Definición completa más abajo.
+**Última actualización:** 2026-05-19 noche por Cowork — **SPRINT-WA-2-BUTTON-URL agregado al tope de la cola.** Habilita soporte para componente `button` (sub_type `url`) en plantillas WhatsApp con variable dinámica (ej: token del portal cliente). Bloquea actualización plantilla `cita_confirmada` en Meta con botón "Reagendar" que abre `https://www.misterservicerd.com/cliente/{{token}}` (portal existente con flujo de reprogramación ya implementado vía `ModalPosponer` + vista admin `/admin/reprogramaciones`). Sprint procesable autónomo (no toca rules, no integra terceros, cambio aditivo retrocompatible).
+
+---
+
+## SPRINT-WA-2-BUTTON-URL — Soporte componente button URL en plantillas WhatsApp
+
+**Prioridad:** ALTA (bloquea agregar botón "Reagendar" al payload Meta apuntando a `/cliente/:token`; sin esto plantillas con botón URL dinámico no se pueden enviar).
+
+**Estado:** PENDIENTE
+
+**Origen:** Tras SPRINT-WA-2-HEADER-IMAGE (`7f6b17a`) el curl E2E entregó WhatsApp con logo + body correctamente. Jorge confirmó que quiere agregar 2 botones a la plantilla `cita_confirmada`: (1) Quick Reply "Consultar" (al bot 24/7), (2) URL "Reagendar" → portal cliente existente `/cliente/:token`. La auditoría descubrió que la infraestructura del portal de reagendamiento YA existe (`src/pages/public/PortalCliente.tsx` con `ModalPosponer`, type `PropuestaReprogramacion`, servicios `resolverPropuestaReprogramacionConNotif`, vista admin `/admin/reprogramaciones`). Lo único que falta: el endpoint `api/whatsapp/send.ts` no soporta componente `button` en el payload Meta. Si la plantilla en Meta tiene botón URL dinámico y el endpoint no manda la variable, Meta responde con error similar al `132012` del header.
+
+### Touch-list
+
+1. **`api/whatsapp/send.ts`** — cuatro cambios localizados:
+   - Interface `PlantillaInput` (línea 148-152): agregar campo opcional `buttonUrlVariable?: string`. Se usa para el componente button con sub_type `url` cuando la plantilla tiene URL dinámica con `{{1}}` en el botón.
+   - Interface `PayloadMeta['template']['components']` (línea 180-183): ampliar el union para aceptar también `{ type: 'button'; sub_type: 'url'; index: '0'; parameters: Array<{ type: 'text'; text: string }> }` además de los existentes `header` y `body`.
+   - Función `construirPayloadMeta` rama plantilla (línea 226-248 después de los cambios de HEADER-IMAGE): si `input.plantilla.buttonUrlVariable` está definido y no es vacío, append al array `componentes` un objeto button con `sub_type='url'`, `index='0'`, `parameters: [{ type: 'text', text: input.plantilla.buttonUrlVariable }]`. Va DESPUÉS del header y body, al final del array (Meta es sensible al orden: header → body → button).
+   - Parseo del body request (línea 612-625 después de los cambios de HEADER-IMAGE): aceptar `p.buttonUrlVariable` opcional. Validar que es `string` con length 1-256. Si no cumple, ignorar silenciosamente (no romper retrocompatibilidad — plantillas sin botón siguen funcionando).
+
+2. **JSDoc** de `construirPayloadMeta`: documentar el nuevo comportamiento del componente button (cuándo se emite, formato esperado de la variable, antiprecedente del bug si la plantilla en Meta tiene botón dinámico pero el endpoint no pasa variable).
+
+### Consumidores verificados (read-only check)
+
+- **Frontend que llama el endpoint:** correr `grep -rn "fetch.*api/whatsapp/send\|/api/whatsapp/send" src/` y verificar que ningún caller actual pase `plantilla.buttonUrlVariable` (debería no existir — campo nuevo).
+- **Plantillas Meta actuales:** ninguna tiene botón URL dinámico hoy (verificable en WhatsApp Manager). Cambio aditivo no rompe nada existente.
+- **Tests:** no hay (CLAUDE.md confirma "no test suite").
+
+### Consumidores NO afectados (justificación)
+
+- `api/whatsapp/webhook.ts` — solo lee mensajes entrantes.
+- `firestore.rules` — no se toca.
+- Otras plantillas (`conduce_emitido`, `recordatorio_mantenimiento`, `garantia_por_vencer`) — no llevan botón URL, no afectadas.
+
+### Hallazgos laterales
+
+- **Generación + persistencia del `tokenPortalCliente` al disparar `cita_confirmada` desde frontend:** fuera de scope. Pertenece a SPRINT-WA-3/4 (frontend integration, en BLOQUEOS). Por ahora curl manual pasa el token de una orden de prueba real.
+- **Componente button Quick Reply** (sub_type `quick_reply` para el botón "Consultar"): Meta NO requiere variable para Quick Reply estático. El endpoint no necesita cambio para soportarlo. La plantilla en Meta lo lleva con texto fijo.
+
+### Verificación
+
+1. `npm run check:regression` → 17/17 PASS.
+2. `npm run build` → typecheck + build OK.
+3. `npm run lint` → 0 warnings.
+4. Curl E2E (Jorge corre desde su Mac, post-deploy Vercel):
+   - Paso 1: Editar plantilla `cita_confirmada` en Meta para agregar botón URL con variable (`https://www.misterservicerd.com/cliente/{{1}}`) + botón Quick Reply "Consultar". Esperar APPROVED por Meta.
+   - Paso 2: Generar `tokenPortalCliente` manual en una orden de prueba (Firebase Console o desde admin).
+   - Paso 3:
+   ```bash
+   curl -sw '\nHTTP %{http_code}\n' -X POST \
+     https://www.misterservicerd.com/api/whatsapp/send \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"wa_id":"8494580318","tipo":"plantilla","plantilla":{"nombre":"cita_confirmada","idioma":"es","variables":["Jorge","jue 22/05 9:30am","OS-9999","Aury","sin notas"],"buttonUrlVariable":"TOKEN_REAL_DE_LA_ORDEN"},"tempId":"test-button-url-2026051904"}'
+   ```
+   Esperado: HTTP 200 + estado="sent" → mensaje WhatsApp con header IMAGE + body + 2 botones (Consultar + Reagendar). Click en Reagendar abre `/cliente/TOKEN_REAL` que es el portal existente.
+
+### No requiere
+
+- Postmortem (feature nueva, no bug en producción).
+- Cazador P-XXX nuevo (cambio aditivo retrocompatible).
+- Cambio en `firestore.rules`.
+
+### Sub-tareas para el coordinator
+
+- builder → tester → regression_guardian → reviewer → commit + push.
+- Commit message: `feat(wa): SPRINT-WA-2-BUTTON-URL soporte componente button URL en plantillas`.
 
 ---
 
