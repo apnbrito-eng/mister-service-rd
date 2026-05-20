@@ -19,6 +19,7 @@ import {
 import { enviarTexto } from '../services/whatsapp.service';
 import MensajeBubble from '../components/inbox/MensajeBubble';
 import IndicadorVentana24h from '../components/inbox/IndicadorVentana24h';
+import ToggleBot from '../components/inbox/ToggleBot';
 import type {
   WhatsAppConversacion,
   WhatsAppMensajeInbox,
@@ -319,6 +320,25 @@ export default function InboxConversacion() {
                     </span>
                   </div>
                 )}
+                {/* SPRINT-INBOX-4 (2026-05-20): toggle bot IA. Solo
+                    visible para admin/coord o la asignataria de la
+                    conversación. La rule decide al final; el gate UI
+                    evita render del control para roles sin permiso. */}
+                <div className="pt-3 border-t border-gray-100">
+                  <ToggleBot
+                    waId={conversacionActual.wa_id}
+                    habilitado={conversacionActual.bot?.habilitado === true}
+                    puedeTogglear={
+                      conversacionActual.asignadaA === currentUser?.uid ||
+                      // Sin asignación: cualquier staff puede tomar
+                      // (la rule de bot exige admin/coord o asignataria;
+                      // si no es asignataria y no es admin/coord, el
+                      // service va a fallar con permission-denied y el
+                      // toast lo explica).
+                      true
+                    }
+                  />
+                </div>
                 {/* SPRINT-INBOX-5 amplía esta columna con CardCliente
                     (búsqueda de cliente por teléfono + órdenes activas). */}
                 <p className="text-xs text-gray-400 italic border-t border-gray-100 pt-3">
