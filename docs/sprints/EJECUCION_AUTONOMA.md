@@ -5,6 +5,63 @@
 
 ---
 
+## 2026-05-20 mañana — autónomo (`trabaja`, pasada 26): SPRINT-WA-2-BUTTON-URL
+
+### Contexto
+
+Jorge pegó `trabaja`. Cola: 1 sprint procesable autónomo limpio + 7 sprints WA-* con marca `**Estado:** PENDIENTE — REQUIERE <credenciales/recurso externo>` (WA-1, WA-2, WA-3, WA-4, WA-5, WA-6, WA-7) que ya están bloqueados de facto por su marca (esperan META_APP_SECRET, META_ACCESS_TOKEN, plantillas aprobadas, ANTHROPIC_API_KEY, acuerdo naming campañas). El coordinator no los toma porque no son `PENDIENTE` puro — son bloqueos en línea que Jorge ya conoce.
+
+Único sprint procesable: **SPRINT-WA-2-BUTTON-URL** (1 archivo, cambio aditivo retrocompatible, no toca rules, no integra terceros, sigue patrón establecido por SPRINT-WA-2-HEADER-IMAGE `7f6b17a`).
+
+### SPRINT-WA-2-BUTTON-URL
+
+**archivist PRE-CHANGE:**
+- `api/whatsapp/send.ts` últimos 4 commits: SPRINT-WA-2-HEADER-IMAGE (`7f6b17a`), FIX-BODYPARSER (`9cf8f9a`), BILLING-VERIFY (`7e137cd`), SPRINT-WA-2 original (`58a642a`). Misma estructura de cambio: ampliar union `PayloadMeta.template.components` + agregar campo opcional a `PlantillaInput` + push condicional en `construirPayloadMeta` + parseo defensivo en body.
+- Postmortems relevantes: `2026-05-19-wa-1-webhook-fieldvalue-import.md` (webhook entrante, no afecta endpoint saliente).
+- Gotchas CLAUDE.md activas para este archivo: NO usar `export const config = { api: ... }` (P-019 enforce). NO swallow errores Meta sin logging (P-019). Idempotency con `tempId` + `runTransaction` (P-017). Ventana 24h sólo aplica a `texto_libre` (P-018). Ninguna afectada por este cambio (solo amplio interface + parseo + emisión de un componente extra retrocompatible).
+- Recordatorio Jorge: NO toca rules → no requiere `npm run deploy:rules`. Sí requiere curl E2E post-deploy con plantilla Meta editada para agregar el botón URL dinámico.
+
+**builder:** 4 cambios localizados en `api/whatsapp/send.ts`:
+1. `PlantillaInput.buttonUrlVariable?: string` con JSDoc explicando uso, bounds (1-256 chars), casos de error Meta.
+2. Union `PayloadMeta.template.components` ampliado con `{type:'button', sub_type:'url', index:'0', parameters:[{type:'text', text:string}]}`.
+3. `construirPayloadMeta` rama plantilla emite el button al final del array `componentes` (orden Meta-sensible: header → body → button) si `buttonUrlVariable` cumple validación de length.
+4. Parseo body request acepta `p.buttonUrlVariable` opcional con validación defensiva (1-256 chars, ignora silenciosamente si no cumple — retrocompatible con callers existentes que no pasan el campo).
+5. JSDoc de `construirPayloadMeta` actualizado con sección "Plantillas con button URL dinámico (SPRINT-WA-2-BUTTON-URL 2026-05-20)" documentando comportamiento + errores Meta esperados + distinción con Quick Reply estático.
+
+**tester:** typecheck 0 errors, cazadores 17/17 PASS (P-001..P-007, P-009..P-012, P-014..P-019), lint del archivo mantiene solo el warning preexistente `SendBody is defined but never used` (legacy, verificado vía `git stash` que estaba antes del cambio).
+
+**regression_guardian:** APPROVED — el cambio respeta orden Meta-sensible (header → body → button), preserva retrocompatibilidad (callers existentes sin `buttonUrlVariable` siguen funcionando), no introduce nuevas mutaciones a Firestore, no afecta idempotency / ventana 24h / handler errores Meta. Sin nuevos hits a cazadores P-016 a P-019.
+
+**reviewer:** APPROVED — touch-list cumplido al 100%, patrón consistente con SPRINT-WA-2-HEADER-IMAGE, JSDoc completo y honesto sobre acoplamiento (caller debe saber si la plantilla tiene botón URL dinámico), validación defensiva en bounds previene strings vacíos o excesivos. Observación menor (no blocker): expectativa de error Meta documentada pero no verificada con curl real — Jorge la verificará post-deploy con la plantilla editada.
+
+**commit:** `bf87c02` — `feat(wa): SPRINT-WA-2-BUTTON-URL soporte componente button URL en plantillas`. Pre-commit hook PASS (typecheck + cazadores 17/17 + lint staged).
+
+**push:** `9e5e257..bf87c02` → origin/main exitoso.
+
+**devops:** deploy Vercel Ready `bf87c02` builtAt `2026-05-20T11:49:33.802Z` verificado vía `version.json` con loop de polling hasta match del hash.
+
+**No requiere:** postmortem (feature nueva, no bug producción). Cazador P-XXX nuevo (cambio aditivo retrocompatible). Deploy de rules (no se tocan).
+
+**Tiempo total estimado:** ~12 minutos (incluye PRE-CHANGE manual + 4 edits + tester + commit + push + devops loop).
+
+### Sprints WA-* no procesados (bloqueos implícitos)
+
+Los siguientes 7 sprints quedaron en cola con marca `**Estado:** PENDIENTE — REQUIERE ...`. El coordinator no los procesó porque dependen de recursos externos que Jorge debe gestionar antes:
+
+| Sprint | Bloqueador externo |
+|---|---|
+| SPRINT-WA-1 | META_APP_SECRET + META_VERIFY_TOKEN en Vercel |
+| SPRINT-WA-2 | META_ACCESS_TOKEN (System User permanente) |
+| SPRINT-WA-3 | Ninguno externo (pero requiere WA-1 + WA-2 funcionales y plantillas activas para UI plena) |
+| SPRINT-WA-4 | Acuerdo naming campañas con Jorge |
+| SPRINT-WA-5 | Plantillas aprobadas en Meta Manager (24-48h aprobación) |
+| SPRINT-WA-6 | Anthropic API key + system prompt definido + decisiones escalación |
+| SPRINT-WA-7 | WA-5 plantillas aprobadas |
+
+Cuando Jorge desbloquee credenciales/plantillas, el coordinator los puede procesar en la próxima pasada de `trabaja`. Si Jorge quiere moverlos formalmente a `BLOQUEOS.md` con instrucciones de desbloqueo, lo puede pedir explícitamente.
+
+---
+
 ## 2026-05-18 noche cierre — autónomo (`trabaja`, pasada 25): SPRINT-187-FIX2-HOTFIX + SPRINT-188-CAZADOR-P015
 
 ### Contexto
