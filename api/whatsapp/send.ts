@@ -167,6 +167,16 @@ interface PlantillaInput {
    * Si se pasa string no válido (no `https://`) se ignora silenciosamente.
    */
   headerImageUrl?: string;
+  /**
+   * Valor de la variable `{{1}}` del componente `button` con `sub_type='url'`
+   * (opcional). Solo aplica si la plantilla en WABA tiene configurado un
+   * botón con URL dinámica (ej: `https://misterservicerd.com/cliente/{{1}}`).
+   * Si la plantilla NO tiene botón URL dinámico, el campo se ignora.
+   * Si la plantilla TIENE botón URL dinámico y este campo NO viene, Meta
+   * devolverá un error similar al `132012` del header (mismatch de variable).
+   * Debe ser string de length 1-256.
+   */
+  buttonUrlVariable?: string;
 }
 
 interface MediaInput {
@@ -204,6 +214,12 @@ interface PayloadMeta {
           type: 'body';
           parameters: Array<{ type: 'text'; text: string }>;
         }
+      | {
+          type: 'button';
+          sub_type: 'url';
+          index: '0';
+          parameters: Array<{ type: 'text'; text: string }>;
+        }
     >;
   };
   image?: { link: string; caption?: string };
@@ -235,6 +251,23 @@ interface ResultadoMeta {
  *    pero el endpoint no lo emite, Meta devuelve `132012 — header
  *    Format mismatch, expected IMAGE, received UNKNOWN` (antiprecedente
  *    SPRINT-WA-2-HEADER-IMAGE).
+ *
+ * Plantillas con button URL dinámico (SPRINT-WA-2-BUTTON-URL 2026-05-20):
+ *  - Si el caller pasa `plantilla.buttonUrlVariable` (string 1-256 chars),
+ *    se emite un componente `button` con `sub_type='url'`, `index='0'` y
+ *    `parameters: [{ type: 'text', text: buttonUrlVariable }]` al final del
+ *    array `components` (orden Meta-sensible: header → body → button).
+ *  - Sólo aplica si la plantilla en WABA tiene un botón URL con variable
+ *    dinámica `{{1}}` (ej: `https://misterservicerd.com/cliente/{{1}}`).
+ *  - Si la plantilla TIENE botón URL dinámico y el caller NO pasa
+ *    `buttonUrlVariable`, Meta devuelve error de variable faltante similar
+ *    al `132012` del header. Si la plantilla NO tiene botón URL dinámico
+ *    y el caller pasa el campo igual, Meta retorna error de componente
+ *    inesperado. El caller es responsable de saber si la plantilla espera
+ *    el botón (acoplamiento esperado: el frontend que dispara `cita_confirmada`
+ *    debe conocer su shape).
+ *  - Botones Quick Reply (`sub_type='quick_reply'`) NO requieren variable
+ *    cuando son texto estático; no se manejan acá.
  */
 function construirPayloadMeta(input: {
   wa_id: string;
@@ -285,6 +318,19 @@ function construirPayloadMeta(input: {
           type: 'text' as const,
           text: v,
         })),
+      });
+    }
+    // Button URL dinámico (SPRINT-WA-2-BUTTON-URL 2026-05-20): si la plantilla
+    // en WABA tiene botón con URL dinámica (ej: `cita_confirmada` con botón
+    // "Reagendar" → /cliente/{{1}}), el caller pasa `buttonUrlVariable` con
+    // el valor a sustituir. Va DESPUÉS del body — Meta es sensible al orden.
+    const btnVar = input.plantilla.buttonUrlVariable;
+    if (typeof btnVar === 'string' && btnVar.length >= 1 && btnVar.length <= 256) {
+      componentes.push({
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: [{ type: 'text', text: btnVar }],
       });
     }
     const tpl: PayloadMeta['template'] = {
@@ -676,7 +722,22 @@ export default async function handler(
         p.headerImageUrl.startsWith('https://')
           ? p.headerImageUrl
           : undefined;
-      plantilla = { nombre: p.nombre, idioma: p.idioma, variables, headerImageUrl };
+      // buttonUrlVariable es opcional (SPRINT-WA-2-BUTTON-URL). Validamos
+      // string 1-256 chars — si NO cumple, ignoramos silenciosamente
+      // (retrocompatible: plantillas sin botón URL dinámico siguen funcionando).
+      const buttonUrlVariable =
+        typeof p.buttonUrlVariable === 'string' &&
+        p.buttonUrlVariable.length >= 1 &&
+        p.buttonUrlVariable.length <= 256
+          ? p.buttonUrlVariable
+          : undefined;
+      plantilla = {
+        nombre: p.nombre,
+        idioma: p.idioma,
+        variables,
+        headerImageUrl,
+        buttonUrlVariable,
+      };
     }
   }
 
