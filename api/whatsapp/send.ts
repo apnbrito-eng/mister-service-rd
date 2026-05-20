@@ -55,6 +55,17 @@ import {
 
 const LOG_PREFIX = '[whatsapp/send]';
 
+/**
+ * URL del logo público usado como fallback del componente `header IMAGE`
+ * cuando una plantilla HSM lo requiere y el caller NO pasa `headerImageUrl`
+ * explícito. Las plantillas activas en WABA están configuradas con header
+ * IMAGE para mantener aspecto empresarial (decisión Jorge 2026-05-19).
+ *
+ * Si en el futuro el dominio cambia, actualizar esta constante. Domino
+ * confiable público (no expira, sin token).
+ */
+const DEFAULT_HEADER_IMAGE_URL = 'https://www.misterservicerd.com/logo-full.png';
+
 /** Roles autorizados a enviar mensajes salientes (D6=C). */
 const ROLES_AUTORIZADOS = new Set<string>([
   'administrador',
@@ -149,6 +160,13 @@ interface PlantillaInput {
   nombre: string;
   idioma: string;
   variables: string[];
+  /**
+   * URL de la imagen del header (opcional). Si la plantilla en WABA tiene
+   * configurado header IMAGE pero el caller NO la pasa, se usa
+   * DEFAULT_HEADER_IMAGE_URL como fallback empresarial. Debe ser HTTPS.
+   * Si se pasa string no válido (no `https://`) se ignora silenciosamente.
+   */
+  headerImageUrl?: string;
 }
 
 interface MediaInput {
@@ -177,10 +195,16 @@ interface PayloadMeta {
   template?: {
     name: string;
     language: { code: string };
-    components?: Array<{
-      type: 'body';
-      parameters: Array<{ type: 'text'; text: string }>;
-    }>;
+    components?: Array<
+      | {
+          type: 'header';
+          parameters: Array<{ type: 'image'; image: { link: string } }>;
+        }
+      | {
+          type: 'body';
+          parameters: Array<{ type: 'text'; text: string }>;
+        }
+    >;
   };
   image?: { link: string; caption?: string };
   audio?: { link: string };
@@ -199,6 +223,18 @@ interface ResultadoMeta {
  * Defensa: el caller debe haber validado `tipo` y los sub-objetos
  * (plantilla/media) antes de invocar — si algún campo requerido falta,
  * lanza `Error` (caller debe atrapar y responder 400 al cliente original).
+ *
+ * Plantillas con header IMAGE (SPRINT-WA-2-HEADER-IMAGE 2026-05-19):
+ *  - Toda plantilla `type='plantilla'` emite un componente `header` con
+ *    `parameters: [{ type: 'image', image: { link } }]` antes del body.
+ *  - Si el caller pasa `plantilla.headerImageUrl` (HTTPS) → usa esa URL.
+ *  - Si NO pasa o no es HTTPS → fallback a `DEFAULT_HEADER_IMAGE_URL`
+ *    (logo Mister Service público).
+ *  - Si una plantilla específica NO tiene header configurado en WABA,
+ *    Meta ignora el componente extra (sin error). Si tiene header IMAGE
+ *    pero el endpoint no lo emite, Meta devuelve `132012 — header
+ *    Format mismatch, expected IMAGE, received UNKNOWN` (antiprecedente
+ *    SPRINT-WA-2-HEADER-IMAGE).
  */
 function construirPayloadMeta(input: {
   wa_id: string;
@@ -227,23 +263,35 @@ function construirPayloadMeta(input: {
     if (!input.plantilla) {
       throw new Error('plantilla-requerida-en-construir-payload');
     }
-    const componentes =
-      input.plantilla.variables.length > 0
-        ? [
-            {
-              type: 'body' as const,
-              parameters: input.plantilla.variables.map((v) => ({
-                type: 'text' as const,
-                text: v,
-              })),
-            },
-          ]
-        : undefined;
+    // Header IMAGE: las plantillas WABA con apariencia empresarial vienen
+    // configuradas con header tipo IMAGE (Jorge 2026-05-19). Si el caller
+    // no pasa URL explícita, fallback al logo público. Sin este header
+    // Meta tira 132012 "header: Format mismatch, expected IMAGE,
+    // received UNKNOWN" en toda plantilla con header IMAGE configurado.
+    const headerUrl =
+      input.plantilla.headerImageUrl &&
+      input.plantilla.headerImageUrl.startsWith('https://')
+        ? input.plantilla.headerImageUrl
+        : DEFAULT_HEADER_IMAGE_URL;
+    const componentes: NonNullable<PayloadMeta['template']>['components'] = [];
+    componentes.push({
+      type: 'header',
+      parameters: [{ type: 'image', image: { link: headerUrl } }],
+    });
+    if (input.plantilla.variables.length > 0) {
+      componentes.push({
+        type: 'body',
+        parameters: input.plantilla.variables.map((v) => ({
+          type: 'text' as const,
+          text: v,
+        })),
+      });
+    }
     const tpl: PayloadMeta['template'] = {
       name: input.plantilla.nombre,
       language: { code: input.plantilla.idioma },
+      components: componentes,
     };
-    if (componentes) tpl.components = componentes;
     return { ...base, type: 'template', template: tpl };
   }
 
@@ -620,7 +668,15 @@ export default async function handler(
       const variables = p.variables.filter(
         (v): v is string => typeof v === 'string',
       );
-      plantilla = { nombre: p.nombre, idioma: p.idioma, variables };
+      // headerImageUrl es opcional. Validamos forma básica (HTTPS) —
+      // si NO cumple, ignoramos silenciosamente (el fallback al logo
+      // público de DEFAULT_HEADER_IMAGE_URL aplica en construirPayloadMeta).
+      const headerImageUrl =
+        typeof p.headerImageUrl === 'string' &&
+        p.headerImageUrl.startsWith('https://')
+          ? p.headerImageUrl
+          : undefined;
+      plantilla = { nombre: p.nombre, idioma: p.idioma, variables, headerImageUrl };
     }
   }
 
