@@ -628,6 +628,26 @@ export interface OrdenServicio {
    */
   propuestasReprogramacion?: PropuestaReprogramacion[];
   /**
+   * SPRINT-177 (2026-05-18) — el técnico llega al sitio pero la visita no se
+   * concreta (cliente no abre, pidió otra fecha en persona, dirección
+   * incorrecta, etc.) y necesita que oficina coordine. El técnico graba un
+   * texto libre con lo que pasó y la oficina ve un banner destacado en
+   * `OrdenDetailModal` con acciones rápidas (llamar / WhatsApp / reagendar /
+   * cancelar). NO es flag terminal: la fase NO cambia, la orden sigue en
+   * `agendado` para permitir reagendar sin retroceder en el pipeline. Al
+   * reagendar exitosamente se limpia (`limpiarVisitaFallida()`).
+   */
+  visitaFallida?: {
+    /** Texto libre crudo del técnico (mínimo 10 chars al persistir). */
+    detalleCliente: string;
+    /** serverTimestamp() al persistir, Date post-parse. */
+    reportadoAt: Timestamp | Date;
+    /** auth.uid del técnico (la rule valida tecnicoId == auth.uid). */
+    tecnicoUid: string;
+    /** snapshot del nombre al reportar (denormalizado para render rápido). */
+    tecnicoNombre: string;
+  };
+  /**
    * Historial de sugerencias de "solo chequeo" enviadas por el técnico a
    * oficina. Mismo patrón que `propuestasReprogramacion[]`: la más reciente
    * con `estado === 'pendiente'` representa el estado activo. Cuando oficina
@@ -1857,6 +1877,14 @@ export type TipoNotificacion =
   //   spam, 132000/132001 templates) → operación rota sin ser plata.
   | 'whatsapp_billing_error'
   | 'whatsapp_meta_error'
+  // SPRINT-177 (2026-05-18): técnico marca visita fallida desde móvil
+  // (TecnicoVista.tsx) — fan-out a operarias activas + coordinadoras +
+  // admins para gestionar (reagendar, llamar cliente, cancelar). Tipo
+  // genérico extensible si surgen otros motivos de "avisar a oficina".
+  // El render UI muestra "Visita fallida" en el título de la notif sin
+  // cambiar el tipo (precedente: 'cierre_completado' con título "Servicio
+  // cerrado").
+  | 'aviso_oficina'
   | 'otro';
 
 export interface Notificacion {

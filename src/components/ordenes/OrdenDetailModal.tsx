@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Phone, MapPin, Edit2, AlertTriangle, XCircle, Package, RotateCcw, TrendingUp, Camera, CheckCircle2, Shield, FileSignature } from 'lucide-react';
+import { Phone, MapPin, Edit2, AlertTriangle, XCircle, Package, RotateCcw, TrendingUp, Camera, CheckCircle2, Shield, FileSignature, Bell } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { OrdenServicio, Usuario, StandbyPieza } from '../../types';
@@ -10,6 +10,7 @@ import {
   estadoSimpleLabel, estadoSimpleColor, tiempoTranscurrido, tieneStandby,
   labelTipoMotor,
 } from '../../utils';
+import { whatsappUrl } from '../../utils/whatsapp';
 import { coordsFromLatLng, googleMapsViewUrl } from '../../utils/maps';
 import BotonComoLlegar from '../shared/BotonComoLlegar';
 import FotoEquipoDisplay from '../shared/FotoEquipoDisplay';
@@ -24,7 +25,7 @@ import EnviarFacturacionButton from './EnviarFacturacionButton';
 import EnviarPortalButton from './EnviarPortalButton';
 import BadgeSoloChequeo from '../shared/BadgeSoloChequeo';
 import { Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
-import { reactivarOrdenPostChequeo } from '../../services/ordenes.service';
+import { reactivarOrdenPostChequeo, limpiarVisitaFallida } from '../../services/ordenes.service';
 import { useConfigWeb } from '../../hooks/useConfigWeb';
 import toast from 'react-hot-toast';
 import type { ChequeoVigenteInfo } from '../../utils/descuentoChequeo';
@@ -75,6 +76,10 @@ export default function OrdenDetailModal({
   const [showReagendarModal, setShowReagendarModal] = useState(false);
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [reactivandoChequeo, setReactivandoChequeo] = useState(false);
+  // SPRINT-177: limpiar `visitaFallida` cuando oficina resuelve manualmente
+  // sin reagendar (ej: ya hizo follow-up por WhatsApp y no necesita más
+  // acción). El botón "Marcar resuelto" en el banner llama este handler.
+  const [limpiandoAviso, setLimpiandoAviso] = useState(false);
   const conStandby = tieneStandby(orden, standbyItems);
   const tienePiezaPendiente = standbyItems.some(s => s.ordenId === orden.id && s.estado !== 'llego');
   const mostrarBannerReagendar = orden.fase === 'aprobado' && tienePiezaPendiente && !orden.eliminada;
@@ -126,6 +131,25 @@ export default function OrdenDetailModal({
       setReactivandoChequeo(false);
     }
   };
+
+  // SPRINT-177: marcar aviso como resuelto (limpia `visitaFallida`). Se usa
+  // cuando oficina coordinó por otro canal (WhatsApp manual, llamada) y no
+  // quiere reagendar — solo cerrar el banner. Si se reagenda desde el banner,
+  // el limpiado ocurre automáticamente vía `onSuccess` de ReagendarModal.
+  const handleMarcarResueltoAviso = async () => {
+    if (!orden.visitaFallida) return;
+    if (!confirm('¿Marcar este aviso como resuelto? La orden vuelve a su estado normal.')) return;
+    setLimpiandoAviso(true);
+    try {
+      await limpiarVisitaFallida(orden.id);
+      toast.success('Aviso marcado como resuelto');
+    } catch (err) {
+      console.error(err);
+      toast.error('No se pudo marcar como resuelto');
+    } finally {
+      setLimpiandoAviso(false);
+    }
+  };
   return (
     <div className="space-y-6">
       {/* SPRINT-181 (2026-05-18): badge "Solo chequeo" en el header del modal.
@@ -136,6 +160,89 @@ export default function OrdenDetailModal({
       {(orden.tipoCierre === 'solo_chequeo' || orden.soloChequeo === true) && (
         <div className="-mt-1">
           <BadgeSoloChequeo orden={orden} prominent />
+        </div>
+      )}
+
+      {/* SPRINT-177: banner "Visita fallida" cuando el técnico avisó a oficina.
+          Necesita coordinación (reagendar, llamar, cancelar). Botones rápidos
+          que reusan flujos existentes: ReagendarModal + CancelarOrdenModal.
+          Al confirmar reagendar, `onSuccess` limpia `visitaFallida` automáticamente.
+          Si oficina ya coordinó por otro canal (WhatsApp manual), "Marcar resuelto"
+          limpia sin reagendar. */}
+      {orden.visitaFallida && !orden.eliminada && orden.fase !== 'cancelado' && orden.fase !== 'cerrado' && (
+        <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded">
+          <div className="flex items-start gap-2">
+            <Bell size={18} className="text-amber-700 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-amber-900 text-sm">
+                Visita fallida — necesita coordinación
+              </h4>
+              <p className="text-xs text-amber-800 mt-1">
+                <strong>{orden.visitaFallida.tecnicoNombre || 'El técnico'}</strong> reportó:
+              </p>
+              <p className="text-sm text-amber-900 mt-1 italic">
+                &ldquo;{orden.visitaFallida.detalleCliente}&rdquo;
+              </p>
+              <p className="text-[11px] text-amber-700 mt-2">
+                Reportado{' '}
+                {orden.visitaFallida.reportadoAt instanceof Date
+                  ? format(orden.visitaFallida.reportadoAt, "d 'de' MMMM yyyy 'a las' HH:mm", { locale: es })
+                  : ''}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {orden.clienteTelefono && (
+              <a
+                href={`tel:${orden.clienteTelefono}`}
+                className="text-xs px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium"
+              >
+                Llamar cliente
+              </a>
+            )}
+            {orden.clienteTelefono && (
+              <a
+                href={whatsappUrl(
+                  orden.clienteTelefono,
+                  `Hola ${orden.clienteNombre?.trim().split(/\s+/)[0] || ''}, te escribo de Mister Service por tu orden ${orden.numero || ''}. ¿Cuándo podríamos coordinar la visita?`,
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs px-3 py-1.5 rounded bg-green-600 hover:bg-green-700 text-white font-medium inline-flex items-center gap-1"
+              >
+                <WhatsAppIcon filled={false} className="text-white" size={12} /> WhatsApp
+              </a>
+            )}
+            {puedeModificar && (
+              <button
+                type="button"
+                onClick={() => setShowReagendarModal(true)}
+                className="text-xs px-3 py-1.5 rounded bg-amber-600 hover:bg-amber-700 text-white font-medium"
+              >
+                Reagendar
+              </button>
+            )}
+            {puedeModificar && (
+              <button
+                type="button"
+                onClick={() => setShowCancelModal(true)}
+                className="text-xs px-3 py-1.5 rounded bg-red-100 hover:bg-red-200 text-red-700 font-medium border border-red-300"
+              >
+                Cancelar orden
+              </button>
+            )}
+            {puedeModificar && (
+              <button
+                type="button"
+                onClick={handleMarcarResueltoAviso}
+                disabled={limpiandoAviso}
+                className="text-xs px-3 py-1.5 rounded bg-white hover:bg-gray-50 text-gray-700 font-medium border border-gray-300 disabled:opacity-60 ml-auto"
+                title="Cerrar el aviso sin reagendar (ya coordiné por otro canal)"
+              >
+                {limpiandoAviso ? 'Marcando...' : 'Marcar resuelto'}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -376,11 +483,38 @@ export default function OrdenDetailModal({
         onClose={() => setShowCancelModal(false)}
         orden={orden}
         userProfile={userProfile}
+        onCancelled={async () => {
+          // SPRINT-177: si la orden estaba marcada como visita fallida y se
+          // cancela, limpiar el banner para que no quede UI fantasma sobre
+          // una orden cancelada (defense-in-depth + el banner además ya
+          // está condicionado a fase !== 'cancelado').
+          if (orden.visitaFallida) {
+            try {
+              await limpiarVisitaFallida(orden.id);
+            } catch (err) {
+              console.warn('[OrdenDetailModal] limpiarVisitaFallida post-cancel:', err);
+            }
+          }
+        }}
       />
       <ReagendarModal
         isOpen={showReagendarModal}
         onClose={() => setShowReagendarModal(false)}
         orden={orden}
+        onSuccess={async () => {
+          // SPRINT-177: si la orden estaba marcada como visita fallida y se
+          // reagenda exitosamente, limpiar el banner para que vuelva a su
+          // estado normal. Best-effort: si el limpiado falla, la orden ya
+          // está reagendada (operación principal) — el banner queda hasta
+          // que oficina haga "Marcar resuelto" manualmente.
+          if (orden.visitaFallida) {
+            try {
+              await limpiarVisitaFallida(orden.id);
+            } catch (err) {
+              console.warn('[OrdenDetailModal] limpiarVisitaFallida post-reagendar:', err);
+            }
+          }
+        }}
       />
 
       {/* Client Info */}

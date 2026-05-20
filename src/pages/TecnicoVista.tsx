@@ -8,6 +8,7 @@ import BannerEstadoSugerenciaSoloChequeo from '../components/cierre/BannerEstado
 import FotoEquipoDisplay from '../components/shared/FotoEquipoDisplay';
 import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
 import { crearNotificacion } from '../services/notificaciones.service';
+import { marcarVisitaFallida } from '../services/ordenes.service';
 import { calcularQuincenaActual, rangoQuincena } from '../utils/comisiones';
 import { ComisionRegistro } from '../types';
 import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
@@ -115,6 +116,14 @@ export default function TecnicoVista() {
   });
   const [savingStandby, setSavingStandby] = useState(false);
   const [reactivandoId, setReactivandoId] = useState<string | null>(null);
+
+  // SPRINT-177: "Avisar a oficina" — el técnico marca visita fallida (no abrió,
+  // dirección incorrecta, cliente pidió otra fecha, etc.) y la oficina recibe
+  // notif para gestionar (reagendar / llamar / cancelar). NO cambia fase: la
+  // orden sigue en `agendado` para permitir reagendar sin retroceder.
+  const [ordenAvisar, setOrdenAvisar] = useState<OrdenServicio | null>(null);
+  const [detalleVisita, setDetalleVisita] = useState('');
+  const [guardandoAviso, setGuardandoAviso] = useState(false);
 
   const precioChequeoSugerido =
     empresaConfig.precioChequeoDefault ?? PRECIO_CHEQUEO_DEFAULT_FALLBACK;
@@ -571,6 +580,46 @@ export default function TecnicoVista() {
   const handleLogout = async () => {
     await signOut(auth);
     navigate('/login');
+  };
+
+  // SPRINT-177: confirmar "Avisar a oficina" desde el modal. Persiste
+  // `visitaFallida` en la orden + audit log + notifs a operarias/coords/admins.
+  // currentUser.uid es OBLIGATORIO (la rule de ordenes_servicio gatea por
+  // tecnicoId == auth.uid; userProfile.id puede ser personalDocId vía fallback
+  // — ver gotcha CLAUDE.md). P-001 cazador.
+  const handleConfirmarAviso = async () => {
+    if (!ordenAvisar) return;
+    if (!currentUser?.uid) {
+      toast.error('Sesión inválida — recargá la página');
+      return;
+    }
+    const detalleTrim = detalleVisita.trim();
+    if (detalleTrim.length < 10) {
+      toast.error('Escribí al menos 10 caracteres explicando qué pasó');
+      return;
+    }
+    setGuardandoAviso(true);
+    try {
+      await marcarVisitaFallida(ordenAvisar.id, {
+        detalleCliente: detalleTrim,
+        tecnicoUid: currentUser.uid,
+        tecnicoNombre: userProfile?.nombre || 'Técnico',
+      });
+      toast.success('Aviso enviado a oficina');
+      setOrdenAvisar(null);
+      setDetalleVisita('');
+    } catch (err) {
+      console.error('[TecnicoVista] marcarVisitaFallida:', err);
+      toast.error('No se pudo enviar el aviso. Reintentá.');
+    } finally {
+      setGuardandoAviso(false);
+    }
+  };
+
+  const cerrarAvisoModal = () => {
+    if (guardandoAviso) return;
+    setOrdenAvisar(null);
+    setDetalleVisita('');
   };
 
   // Sprint R4 endurecida: el técnico ya NO cierra como solo chequeo
@@ -1302,6 +1351,27 @@ export default function TecnicoVista() {
                             <Pause size={12} /> ⏸ Pendiente de piezas
                           </button>
                         )}
+                        {/* SPRINT-177: "Avisar a oficina" — el técnico llega
+                            pero la visita no se concreta. Disponible mientras
+                            la orden esté agendada o en diagnóstico inicial y
+                            no haya un aviso activo (banner amarillo). */}
+                        {['agendado', 'en_diagnostico'].includes(orden.fase) && !orden.visitaFallida && (
+                          <button
+                            type="button"
+                            onClick={() => setOrdenAvisar(orden)}
+                            className="flex items-center gap-1 bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-2 rounded-lg text-xs font-medium border border-amber-300"
+                            title="No pude completar la visita — avisar a oficina"
+                            data-testid="btn-avisar-oficina"
+                          >
+                            <Bell size={12} /> Avisar a oficina
+                          </button>
+                        )}
+                        {/* Indicador: aviso ya enviado (oficina debe gestionar) */}
+                        {orden.visitaFallida && (
+                          <div className="w-full bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-800 flex items-center gap-1">
+                            <Bell size={12} /> Aviso enviado a oficina — esperando coordinación
+                          </div>
+                        )}
                         {permisos.puedeAgregarNotas && (
                           <button onClick={() => openNota(orden)}
                             className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-medium">
@@ -1585,6 +1655,64 @@ export default function TecnicoVista() {
               className="px-5 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
             >
               {savingStandby ? 'Guardando...' : '⏸ Poner en stand-by'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* SPRINT-177: Modal "Avisar a oficina" — el técnico describe qué pasó
+          en la visita y la oficina recibe notif para gestionar (reagendar /
+          llamar / cancelar). Mínimo 10 chars, máximo 500 chars. */}
+      <Modal
+        isOpen={!!ordenAvisar}
+        onClose={cerrarAvisoModal}
+        title="¿Qué pasó con esta visita?"
+      >
+        <div className="space-y-4">
+          {ordenAvisar && (
+            <div className="bg-gray-50 rounded-lg p-3 text-xs">
+              <p className="font-semibold">{ordenAvisar.clienteNombre}</p>
+              <p>{ordenAvisar.equipoTipo}{ordenAvisar.equipoMarca ? ` · ${ordenAvisar.equipoMarca}` : ''}</p>
+              <p className="text-gray-500 mt-0.5">{ordenAvisar.numero || ''}</p>
+            </div>
+          )}
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
+            Escribí lo que el cliente te dijo o lo que pasó. La oficina recibirá un aviso para coordinar (reagendar, llamar, cancelar).
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Qué pasó *</label>
+            <textarea
+              value={detalleVisita}
+              onChange={(e) => setDetalleVisita(e.target.value)}
+              placeholder="Por ejemplo: 'No abrió, llamé y no contestó' / 'Cliente pidió que volvamos el sábado' / 'No encontré la dirección'"
+              rows={5}
+              maxLength={500}
+              autoFocus
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+            <p className="text-[11px] text-gray-500 mt-1">
+              {detalleVisita.length}/500 — mínimo 10 caracteres
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={cerrarAvisoModal}
+              disabled={guardandoAviso}
+              className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmarAviso}
+              disabled={guardandoAviso || detalleVisita.trim().length < 10}
+              className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {guardandoAviso ? 'Enviando...' : 'Enviar a oficina'}
             </button>
           </div>
         </div>

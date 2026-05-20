@@ -1,10 +1,11 @@
 import {
   runTransaction, doc, serverTimestamp, Timestamp,
   updateDoc, arrayUnion, collection, query, where, getDocs, onSnapshot,
-  limit,
+  limit, deleteField,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { crearRegistroAuditoria, generarTokenPortalCliente, parseOrden } from '../utils';
+import { stripUndefined } from '../utils/firestore';
 import type { OrdenServicio, Personal, PropuestaReprogramacion, SugerenciaSoloChequeo } from '../types';
 import { crearNotificacion } from './notificaciones.service';
 import { diasRestantesVigencia, type ChequeoVigenteInfo } from '../utils/descuentoChequeo';
@@ -908,4 +909,169 @@ export async function buscarChequeoVigentePorCliente(
     console.warn('[buscarChequeoVigentePorCliente] error buscando chequeo previo:', err);
     return null;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// SPRINT-177 (2026-05-18) — "Avisar a oficina" desde vista técnico
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * El técnico llega al sitio pero la visita no se concreta (cliente no abre,
+ * pidió otra fecha, dirección incorrecta). Marca `visitaFallida` en la
+ * orden, persiste un audit log y notifica a operarias/coordinadoras/admins
+ * activos para que gestionen (reagendar / llamar / cancelar).
+ *
+ * IMPORTANTE: la fase de la orden NO cambia (sigue en `agendado`). Esto
+ * permite reagendar sin retroceder en el pipeline. Cuando se reagenda
+ * exitosamente, el caller debe llamar `limpiarVisitaFallida(ordenId)` para
+ * borrar el banner (la orden vuelve a su estado normal).
+ *
+ * IMPORTANTE: `tecnicoUid` DEBE ser `currentUser.uid` (Firebase Auth) — la
+ * rule de `ordenes_servicio` gatea el update por `tecnicoId == auth.uid`.
+ * NO usar `userProfile.id` (puede ser `personalDocId` vía fallback, ver
+ * gotcha CLAUDE.md "userProfile.id NO siempre es auth.uid"). P-001 cazador.
+ *
+ * Patrón canónico (mismo que `crearSugerenciaSoloChequeo` arriba):
+ *  - tx covers orden + audit log atómicamente.
+ *  - fan-out de notificaciones FUERA del tx (best-effort, no bloquea).
+ *  - lookup de destinatarios filtra por `p.uid` truthy (P-006 — excluye
+ *    empleados sin Auth, ej: alta vieja sin onboarding completo).
+ */
+export async function marcarVisitaFallida(
+  ordenId: string,
+  params: { detalleCliente: string; tecnicoUid: string; tecnicoNombre: string },
+): Promise<void> {
+  const { detalleCliente, tecnicoUid, tecnicoNombre } = params;
+  if (!ordenId || !detalleCliente || detalleCliente.length < 10) {
+    throw new Error('marcarVisitaFallida: ordenId requerido y detalleCliente mínimo 10 chars');
+  }
+  if (!tecnicoUid) {
+    throw new Error('marcarVisitaFallida: tecnicoUid (auth.uid) requerido');
+  }
+
+  const ordenRef = doc(db, 'ordenes_servicio', ordenId);
+  let ordenNumero = '';
+  let clienteNombre = '';
+  let clienteTelefono = '';
+
+  // Tx: actualizar orden + crear audit log atómicamente. Si una de las dos
+  // mutaciones falla, ambas se rollback.
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ordenRef);
+    if (!snap.exists()) throw new Error('orden-no-encontrada');
+    const data = snap.data() as Record<string, unknown>;
+    ordenNumero = typeof data.numero === 'string' ? data.numero : '';
+    clienteNombre = typeof data.clienteNombre === 'string' ? data.clienteNombre : '';
+    clienteTelefono = typeof data.clienteTelefono === 'string' ? data.clienteTelefono : '';
+
+    tx.update(ordenRef, {
+      visitaFallida: {
+        detalleCliente,
+        reportadoAt: serverTimestamp(),
+        tecnicoUid,
+        tecnicoNombre,
+      },
+      updatedAt: serverTimestamp(),
+    });
+
+    const auditRef = doc(collection(db, 'auditoria_admin'));
+    // Shape canónico de audit alineado con campanasMarketing.service.ts:388
+    // y recordatorios.service.ts: actorUid/actorNombre + tipoEntidad/entidadId
+    // + meta para datos específicos de la acción. Habilita queries
+    // cross-acción tipo "todo lo que hizo X uid" sin OR de campos.
+    tx.set(auditRef, stripUndefined({
+      accion: 'avisar_oficina',
+      tipoEntidad: 'orden',
+      entidadId: ordenId,
+      actorUid: tecnicoUid,
+      actorNombre: tecnicoNombre,
+      meta: {
+        ordenNumero: ordenNumero || null,
+        detalleCliente,
+      },
+      timestamp: serverTimestamp(),
+    }));
+  });
+
+  // Fan-out de notificaciones FUERA del tx (best-effort). Si Firestore
+  // está caído o falla la query de operarias, la orden YA quedó marcada
+  // como visita fallida — el operativo no se rompe.
+  try {
+    const operariasSnap = await getDocs(
+      query(
+        collection(db, 'personal'),
+        where('activo', '==', true),
+        where('rol', 'in', ['operaria', 'coordinadora', 'administrador']),
+      ),
+    );
+    // P-006: filtrar `p.uid` truthy — empleados sin Auth doc no reciben
+    // notifs (la rule las descarta por userId == auth.uid sin match).
+    const destinatarios = operariasSnap.docs
+      .map((d) => {
+        const dd = d.data() as Record<string, unknown>;
+        return {
+          uid: typeof dd.uid === 'string' ? dd.uid : undefined,
+          nombre: typeof dd.nombre === 'string' ? dd.nombre : '',
+        };
+      })
+      .filter((p): p is { uid: string; nombre: string } => typeof p.uid === 'string' && p.uid.length > 0);
+
+    if (destinatarios.length === 0) {
+      // Sin destinatarios: ningún staff oficina activo con uid Auth válido.
+      // La orden YA quedó marcada — el técnico ve "Aviso enviado" pero
+      // operativamente nadie recibe la notif. Loggeamos para que el admin
+      // detecte el gap (típicamente alta de empleado sin onboarding completo).
+      console.warn(
+        `[marcarVisitaFallida] 0 destinatarios para OS-${ordenNumero}: ` +
+          'no hay staff oficina activo con uid Auth. Operaria debe revisar ' +
+          'el listado de personal o el flujo de alta de empleado (P-004).',
+      );
+    }
+
+    const recorte = detalleCliente.length > 100
+      ? `${detalleCliente.substring(0, 100)}...`
+      : detalleCliente;
+    // `orden.numero` ya viene prefijado por el contador atómico
+    // (contadores.service.ts:16). NO reprefijar — causaría "OS-OS-####".
+    const tituloPrefijo = ordenNumero || ordenId;
+    const titulo = `Visita fallida — ${tituloPrefijo}`;
+    const clienteParte = clienteNombre || 'sin nombre';
+    const telParte = clienteTelefono ? `, tel ${clienteTelefono}` : '';
+    const mensaje =
+      `${tecnicoNombre} reporta: "${recorte}". Cliente ${clienteParte}${telParte}. Llamar para coordinar.`;
+
+    await Promise.all(
+      destinatarios.map((d) =>
+        crearNotificacion({
+          userId: d.uid,
+          destinatarioNombre: d.nombre,
+          tipo: 'aviso_oficina',
+          titulo,
+          mensaje,
+          ordenId,
+          ordenNumero,
+        }).catch((err) => {
+          // Cada notif es independiente. Una falla NO aborta las demás.
+          console.warn('[marcarVisitaFallida] notif fallback:', err);
+        }),
+      ),
+    );
+  } catch (err) {
+    console.warn('[marcarVisitaFallida] fan-out notifs falló (orden ya actualizada):', err);
+  }
+}
+
+/**
+ * Limpia el banner `visitaFallida` de una orden. Se llama después de que
+ * oficina coordina (reagenda, contacta al cliente, etc.) para indicar que
+ * la situación ya fue resuelta. Es un update simple — la traza queda en
+ * `auditoria_admin` con la entry `accion: 'avisar_oficina'` que creó el
+ * marcado original.
+ */
+export async function limpiarVisitaFallida(ordenId: string): Promise<void> {
+  if (!ordenId) throw new Error('limpiarVisitaFallida: ordenId requerido');
+  await updateDoc(doc(db, 'ordenes_servicio', ordenId), {
+    visitaFallida: deleteField(),
+    updatedAt: serverTimestamp(),
+  });
 }

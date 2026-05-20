@@ -1054,6 +1054,29 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
           })
           .filter((p): p is PropuestaReprogramacion => p !== null)
       : undefined,
+    // SPRINT-177 (2026-05-18): visita fallida reportada por técnico desde
+    // móvil. Antiprecedente P-009 (firma cliente, notaConduce, etc.): si el
+    // parser omite el campo, el banner en OrdenDetailModal nunca renderiza
+    // aunque Firestore tenga el doc. Conversión defensiva de Timestamp→Date
+    // en reportadoAt (mismo patrón que firmaClienteAt).
+    visitaFallida: raw.visitaFallida && typeof raw.visitaFallida === 'object' && !Array.isArray(raw.visitaFallida)
+      ? (() => {
+          const vf = raw.visitaFallida as Record<string, unknown>;
+          const detalleCliente = typeof vf.detalleCliente === 'string' && vf.detalleCliente.length > 0
+            ? vf.detalleCliente
+            : '';
+          const tecnicoUid = typeof vf.tecnicoUid === 'string' && vf.tecnicoUid.length > 0
+            ? vf.tecnicoUid
+            : '';
+          if (!detalleCliente || !tecnicoUid) return undefined;
+          return {
+            detalleCliente,
+            reportadoAt: parseFirestoreDate(vf.reportadoAt) || new Date(),
+            tecnicoUid,
+            tecnicoNombre: typeof vf.tecnicoNombre === 'string' ? vf.tecnicoNombre : '',
+          };
+        })()
+      : undefined,
     // ROI tracking sprint Mapa Clientes Commit 3 — `reactivadaPor` snapshot
     // de la campaña que reactivó esta orden. Defensivo: si el bloque no es
     // un objeto válido o le falta `campanaId`/fechas, devolvemos undefined
