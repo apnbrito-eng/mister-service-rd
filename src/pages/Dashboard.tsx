@@ -33,6 +33,12 @@ import {
   obtenerRecordatoriosDelDia, marcarNotificadoAAdmin,
 } from '../services/recordatorios.service';
 import { crearNotificacion } from '../services/notificaciones.service';
+// SPRINT-INBOX-6 (2026-05-20): cards de comunicación.
+import {
+  suscribirMetricasInbox,
+  type MetricasInbox,
+} from '../services/whatsappInbox.service';
+import { MessageSquare, Clock as ClockIcon } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,6 +47,30 @@ import { crearNotificacion } from '../services/notificaciones.service';
 const FASES_EMBUDO: FaseOrden[] = [...FASES_ORDENADAS, 'cancelado'];
 
 type PeriodoVentas = 'hoy' | 'semana' | 'mes' | 'año';
+
+// SPRINT-INBOX-6 helpers (2026-05-20).
+function formatearLagRespuesta(segundos: number): string {
+  if (segundos < 60) return `${Math.round(segundos)}s`;
+  const min = Math.round(segundos / 60);
+  if (min < 60) return `${min}min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  if (h < 24) return m > 0 ? `${h}h ${m}min` : `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d`;
+}
+
+function hace(t: unknown): string {
+  if (!t) return '—';
+  const date =
+    t instanceof Date
+      ? t
+      : new Date((t as { toMillis?: () => number })?.toMillis?.() ?? 0);
+  if (date.getTime() === 0) return '—';
+  const segundos = (Date.now() - date.getTime()) / 1000;
+  if (segundos < 0) return 'hace 0s';
+  return `hace ${formatearLagRespuesta(segundos)}`;
+}
 
 // ---------------------------------------------------------------------------
 // Dashboard
@@ -248,6 +278,24 @@ export default function Dashboard() {
   // ---- operaria filter ----
   const esOperaria = userProfile?.rol === 'operaria';
   const esCoordinadora = userProfile?.rol === 'coordinadora';
+
+  // SPRINT-INBOX-6 (2026-05-20): métricas de comunicación WhatsApp.
+  // Gateado por rol oficina (admin/coord/secretaria); operaria/técnico
+  // no necesitan estas cards en su Dashboard (su rol está en operativa).
+  const [metricasInbox, setMetricasInbox] = useState<MetricasInbox>({
+    sinResponder: 0,
+    medianaRespuestaSegundos: null,
+    masAntiguaSinResponder: null,
+  });
+  const verCardsInbox =
+    userProfile?.rol === 'administrador' ||
+    userProfile?.rol === 'coordinadora' ||
+    userProfile?.rol === 'secretaria';
+  useEffect(() => {
+    if (!verCardsInbox) return;
+    const unsub = suscribirMetricasInbox(setMetricasInbox);
+    return () => unsub();
+  }, [verCardsInbox]);
   const filtroOperariaActivo = esOperaria && !verTodasOperarias;
   // Coordinadora puede filtrar por una operaria específica (default: ver todas)
   const [filtroOperariaCoord, setFiltroOperariaCoord] = useState<string>('');
@@ -652,6 +700,64 @@ export default function Dashboard() {
           onClick={() => navigate('/admin/facturas')}
         />
       </div>
+
+      {/* ======== 1.5 CARDS COMUNICACIÓN (SPRINT-INBOX-6, 2026-05-20) ========
+          Gate por rol oficina (admin/coord/secretaria). Operaria/técnico no
+          ven estas cards en su Dashboard. Datos derivan de
+          suscribirMetricasInbox (single listener sobre whatsapp_conversaciones
+          con denormalización lista, sin leer _inbox masivo). */}
+      {verCardsInbox && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <KpiCard
+            title="Conversaciones sin responder"
+            value={metricasInbox.sinResponder}
+            subtitle={
+              metricasInbox.sinResponder === 0
+                ? 'Bandeja al día'
+                : 'mensajes esperando respuesta'
+            }
+            icon={<MessageSquare size={22} />}
+            color={metricasInbox.sinResponder > 0 ? 'bg-amber-500' : 'bg-gray-400'}
+            onClick={() => navigate('/admin/inbox')}
+          />
+          <KpiCard
+            title="Tiempo de respuesta (mediana)"
+            value={
+              metricasInbox.medianaRespuestaSegundos === null
+                ? '—'
+                : formatearLagRespuesta(metricasInbox.medianaRespuestaSegundos)
+            }
+            subtitle={
+              metricasInbox.medianaRespuestaSegundos === null
+                ? 'sin datos todavía'
+                : 'desde último entrante a respuesta'
+            }
+            icon={<ClockIcon size={22} />}
+            color="bg-blue-500"
+            onClick={() => navigate('/admin/inbox')}
+          />
+          <KpiCard
+            title="Más antigua sin responder"
+            value={
+              metricasInbox.masAntiguaSinResponder
+                ? hace(metricasInbox.masAntiguaSinResponder.ultimoMensajeEntrante?.timestamp)
+                : '—'
+            }
+            subtitle={
+              metricasInbox.masAntiguaSinResponder
+                ? `Tel ${metricasInbox.masAntiguaSinResponder.wa_id.slice(-4)} — atender`
+                : 'nada urgente'
+            }
+            icon={<MessageSquare size={22} />}
+            color={metricasInbox.masAntiguaSinResponder ? 'bg-red-500' : 'bg-gray-400'}
+            onClick={() =>
+              metricasInbox.masAntiguaSinResponder
+                ? navigate(`/admin/inbox/${metricasInbox.masAntiguaSinResponder.wa_id}`)
+                : navigate('/admin/inbox')
+            }
+          />
+        </div>
+      )}
 
       {/* ======== 2. ORDENES ATRASADAS ======== */}
       {ordenesAtrasadas.length > 0 && (

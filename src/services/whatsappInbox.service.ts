@@ -374,3 +374,86 @@ export function suscribirContadorSinLeer(callback: (total: number) => void): Uns
     callback(total);
   });
 }
+
+/**
+ * Heurística "sin responder": último mensaje entrante existe Y es más
+ * nuevo que el último saliente (o no hay saliente).
+ * Compartida con la página /admin/inbox.
+ */
+function estaSinResponder(c: WhatsAppConversacion): boolean {
+  const ent = c.ultimoMensajeEntrante?.timestamp;
+  if (!ent) return false;
+  const sal = c.ultimoMensajeSaliente?.timestamp;
+  if (!sal) return true;
+  const tEnt = ent instanceof Date ? ent.getTime() : (ent as { toMillis?: () => number }).toMillis?.() ?? 0;
+  const tSal = sal instanceof Date ? sal.getTime() : (sal as { toMillis?: () => number }).toMillis?.() ?? 0;
+  return tEnt > tSal;
+}
+
+/**
+ * Métricas agregadas del inbox para cards del Dashboard (SPRINT-INBOX-6,
+ * 2026-05-20). Single listener que emite las 3 métricas en cada cambio:
+ *   - `sinResponder`: cantidad de conversaciones con último entrante más
+ *     nuevo que último saliente (o sin saliente).
+ *   - `medianaRespuestaSegundos`: mediana del lag entre ultimoEntrante
+ *     y ultimoSaliente para conversaciones que SÍ tuvieron respuesta
+ *     (mide qué tan rápido contesta el equipo). `null` si no hay datos.
+ *   - `masAntiguaSinResponder`: la conversación más vieja sin responder,
+ *     para CTA "Atender la más urgente". `null` si todas están al día.
+ *
+ * Eficiente: las 3 derivan del mismo snapshot — no triplica el listener.
+ */
+export interface MetricasInbox {
+  sinResponder: number;
+  medianaRespuestaSegundos: number | null;
+  masAntiguaSinResponder: WhatsAppConversacion | null;
+}
+
+export function suscribirMetricasInbox(
+  callback: (m: MetricasInbox) => void,
+): Unsubscribe {
+  return suscribirConversaciones((convs) => {
+    const sinResponderList = convs.filter(estaSinResponder);
+
+    // Mediana de tiempo de respuesta: para conversaciones donde el
+    // último saliente es más nuevo que el último entrante (= se respondió
+    // al menos una vez). Distancia entre los 2 timestamps.
+    const lags: number[] = [];
+    for (const c of convs) {
+      const ent = c.ultimoMensajeEntrante?.timestamp;
+      const sal = c.ultimoMensajeSaliente?.timestamp;
+      if (!ent || !sal) continue;
+      const tEnt = ent instanceof Date ? ent.getTime() : (ent as { toMillis?: () => number }).toMillis?.() ?? 0;
+      const tSal = sal instanceof Date ? sal.getTime() : (sal as { toMillis?: () => number }).toMillis?.() ?? 0;
+      if (tSal > tEnt) {
+        // Saliente más nuevo → ya se respondió al último entrante.
+        lags.push((tSal - tEnt) / 1000);
+      }
+    }
+    lags.sort((a, b) => a - b);
+    let mediana: number | null = null;
+    if (lags.length > 0) {
+      const mid = Math.floor(lags.length / 2);
+      mediana = lags.length % 2 === 0 ? (lags[mid - 1] + lags[mid]) / 2 : lags[mid];
+    }
+
+    // Más antigua sin responder: la del último entrante más viejo.
+    let masAntigua: WhatsAppConversacion | null = null;
+    let tMin = Infinity;
+    for (const c of sinResponderList) {
+      const ent = c.ultimoMensajeEntrante?.timestamp;
+      if (!ent) continue;
+      const t = ent instanceof Date ? ent.getTime() : (ent as { toMillis?: () => number }).toMillis?.() ?? 0;
+      if (t > 0 && t < tMin) {
+        tMin = t;
+        masAntigua = c;
+      }
+    }
+
+    callback({
+      sinResponder: sinResponderList.length,
+      medianaRespuestaSegundos: mediana,
+      masAntiguaSinResponder: masAntigua,
+    });
+  });
+}
