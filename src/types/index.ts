@@ -1974,3 +1974,232 @@ export interface Ponche {
   corregidoPor?: string;
   corregidoEn?: Timestamp | Date;
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// WhatsApp inbox / CRM (SPRINT-INBOX-1, 2026-05-20)
+//
+// Estos tipos ESPEJAN el shape REAL del backend (no inventan campos). Las
+// referencias canónicas son:
+//   - `api/whatsapp/webhook.ts` (entrantes + merge a conversación).
+//   - `api/whatsapp/send.ts` (salientes + outbox).
+//   - `api/_lib/whatsappWebhook.ts` (`MensajeEntranteNormalizado`,
+//     `ContenidoMensaje`).
+//   - `firestore.rules:686-844` (qué campos puede tocar UI vs sólo Admin SDK).
+//
+// REGLA DE ORO: cualquier campo NO marcado en el comentario como
+// "UI puede tocar" es inmutable desde cliente. Update parcial dot-path
+// (`{ 'bot.habilitado': true }`) o updateDoc específico — un updateDoc
+// que mande TODO el objeto re-escribe campos inmutables y la rule
+// rechaza con `permission-denied`.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Tipos de mensaje entrante WhatsApp Cloud API. Coincide con
+ * `TipoMensajeEntrante` en `api/_lib/whatsappWebhook.ts`.
+ */
+export type WhatsAppTipoMensajeEntrante =
+  | 'text'
+  | 'image'
+  | 'audio'
+  | 'video'
+  | 'document'
+  | 'location'
+  | 'button'
+  | 'interactive'
+  | 'reaction'
+  | 'contacts'
+  | 'sticker'
+  | 'unsupported';
+
+/**
+ * Estados del lifecycle de un mensaje saliente (outbox + status callbacks
+ * de Meta). Coincide con `EstadoEnvio` en `src/services/whatsapp.service.ts`
+ * más el estado intermedio `queued` que el outbox usa antes de llamar Meta.
+ */
+export type WhatsAppEstadoMensajeOutbox =
+  | 'queued'
+  | 'sent'
+  | 'delivered'
+  | 'read'
+  | 'failed';
+
+/**
+ * Contenido normalizado de un mensaje entrante. Cada `tipo` puebla un
+ * subset distinto. Coincide con `ContenidoMensaje` del backend.
+ */
+export interface WhatsAppContenidoEntrante {
+  texto?: string;
+  mediaId?: string;
+  mediaMimeType?: string;
+  mediaSha256?: string;
+  mediaCaption?: string;
+  mediaFilename?: string;
+  location?: {
+    lat: number;
+    lng: number;
+    name?: string;
+    address?: string;
+  };
+  buttonText?: string;
+  buttonPayload?: string;
+  interactiveType?: string;
+  interactivePayload?: Record<string, unknown>;
+  reactionEmoji?: string;
+  reactionTargetWamid?: string;
+  contactsPayload?: Record<string, unknown>;
+  /** Solo para `unsupported`: motivo del tipo desconocido. */
+  unsupportedReason?: string;
+}
+
+/**
+ * Documento `whatsapp_mensajes_inbox/{wamid}`. Persistido por el webhook
+ * entrante en `api/whatsapp/webhook.ts:215-227`. Read-only desde UI
+ * (`allow write: if false` en rules).
+ */
+export interface WhatsAppMensajeInbox {
+  /** Doc id = `wamid` (idempotency key de Meta). */
+  id: string;
+  wamid: string;
+  phoneNumberId: string;
+  /** Teléfono RD normalizado a 10 dígitos (doc id de conversación). */
+  wa_id: string;
+  /** Remitente WhatsApp en formato Meta. */
+  from: string;
+  tipo: WhatsAppTipoMensajeEntrante;
+  contenido: WhatsAppContenidoEntrante;
+  /** Timestamp que Meta asoció al mensaje. */
+  timestampMeta: Timestamp | Date;
+  /** Cuando el webhook recibió el evento (server-side). */
+  timestampRecibido: Timestamp | Date;
+  /** False hasta que el bot/operadora lo procese (SPRINT-WA-6). */
+  procesadoBot: boolean;
+  /** = wa_id (denormalizado para join client-side). */
+  conversacionId: string;
+  /** Payload Meta crudo capeado (raw_payload). NO renderizar como PII. */
+  raw?: Record<string, unknown>;
+}
+
+/**
+ * Documento `whatsapp_mensajes_outbox/{tempId}`. Persistido por
+ * `api/whatsapp/send.ts:1064-1083`. Read-only desde UI (`allow write: if
+ * false`); el endpoint Admin SDK lo crea y actualiza estado vía status
+ * callback del webhook.
+ */
+export interface WhatsAppMensajeOutbox {
+  /** Doc id = `tempId` del cliente (idempotency key P-017). */
+  id: string;
+  /** = doc id (denormalizado). */
+  tempId: string;
+  /** wamid devuelto por Meta tras envío exitoso. `null` mientras estado=queued. */
+  wamid: string | null;
+  phoneNumberId: string;
+  wa_id: string;
+  tipo: 'texto_libre' | 'plantilla' | 'media';
+  /** Shape preservado en outbox para audit. Null si no aplica al tipo. */
+  plantilla: {
+    nombre: string;
+    idioma: string;
+    variables: string[];
+    headerImageUrl?: string;
+    buttonUrlVariable?: string;
+  } | null;
+  texto: string | null;
+  media: {
+    storageUrl: string;
+    mimeType: string;
+    caption?: string;
+  } | null;
+  estado: WhatsAppEstadoMensajeOutbox;
+  intentosEnvio: number;
+  /** auth.uid del staff que disparó el envío. */
+  creadoPor: string;
+  /** Nombre denormalizado del staff (para render rápido en timeline). */
+  creadoPorNombre?: string;
+  /** Si el envío fue contextual a una orden de servicio. */
+  ordenId: string | null;
+  /** = wa_id (denormalizado para join client-side). */
+  conversacionId: string;
+  createdAt: Timestamp | Date;
+  updatedAt: Timestamp | Date;
+  /** Solo cuando estado=failed. */
+  errorMeta?: {
+    code?: number;
+    title?: string;
+    mensaje?: string;
+    detalles?: string;
+  };
+}
+
+/**
+ * Preview denormalizado del último mensaje (entrante o saliente). Persistido
+ * por webhook (`ultimoMensajeEntrante`) y endpoint send (`ultimoMensajeSaliente`).
+ */
+export interface WhatsAppUltimoMensajePreview {
+  wamid: string;
+  /** Timestamp Meta del mensaje. */
+  timestamp: Timestamp | Date;
+  /** Hasta 80 chars del texto o `<tipo>` placeholder. */
+  preview: string;
+  tipo: WhatsAppTipoMensajeEntrante | 'texto_libre' | 'plantilla' | 'media';
+}
+
+/**
+ * Documento `whatsapp_conversaciones/{wa_id}`. Doc id = `wa_id` (10 dígitos
+ * RD normalizados). Creado por el webhook al primer mensaje entrante;
+ * merge incremental en cada mensaje subsiguiente.
+ *
+ * Campos que UI PUEDE tocar (rule `whatsapp_conversaciones` line 729-773):
+ *   - `noLeidos` (resetear a 0 al abrir la conversación).
+ *   - `etiquetas[]` (clasificación libre).
+ *   - `asignadaA` (anti-robo asimétrico: solo tomar/soltar; admin/coord libre).
+ *   - `bot.habilitado` (toggle pausar IA).
+ *
+ * TODO lo demás (`wa_id`, `clienteId`, `ultimoMensaje*`, contadores,
+ * `ventana24h`, `primeraInteraccion`, `ultimaActividad`, `ultimoPhoneNumberId`,
+ * `bot.contexto`, `bot.turnosCount`) es INMUTABLE desde cliente — solo el
+ * Admin SDK los muta desde webhook/send. Si mandás un updateDoc con estos
+ * campos da `permission-denied`. Use dot-path o updateDoc selectivo.
+ */
+export interface WhatsAppConversacion {
+  /** Doc id = wa_id (RD 10 dígitos). */
+  id: string;
+  wa_id: string;
+  /** Último número de la cuenta WABA por donde habló el cliente (sticky D1=D). */
+  ultimoPhoneNumberId: string;
+  /** Cliente vinculado (denormalizado al primer match — opcional). */
+  clienteId?: string;
+  /** Solo poblado si hubo al menos 1 mensaje entrante. */
+  ultimoMensajeEntrante?: WhatsAppUltimoMensajePreview;
+  /** Solo poblado si hubo al menos 1 mensaje saliente. */
+  ultimoMensajeSaliente?: WhatsAppUltimoMensajePreview;
+  /** Mensajes sin leer (FieldValue.increment server-side; UI resetea a 0). */
+  noLeidos: number;
+  /** Contadores totales (solo Admin SDK los toca). */
+  totalMensajesEntrantes?: number;
+  totalMensajesSalientes?: number;
+  /** Ventana de respuesta libre 24h post-último entrante. */
+  ventana24h: {
+    abierta: boolean;
+    cierraEn: Timestamp | Date;
+  };
+  /** True si el bot escaló a humano (D4 escalado). */
+  requiereHumano?: boolean;
+  /** Operaria/coord asignada (auth.uid). UI puede tomar/soltar la propia
+   * (anti-robo). Admin/coord puede reasignar libremente. */
+  asignadaA?: string | null;
+  /** Etiquetas libres (UI las puede agregar/quitar). */
+  etiquetas?: string[];
+  /** Estado del bot IA. Solo `habilitado` es mutable desde UI. */
+  bot?: {
+    habilitado: boolean;
+    /** Solo Admin SDK (webhook bot logic). */
+    turnosCount?: number;
+    /** Solo Admin SDK. */
+    contexto?: Record<string, unknown>;
+  };
+  /** Primer mensaje recibido (server timestamp). */
+  primeraInteraccion?: Timestamp | Date;
+  /** Última actividad (sort key bandeja). server-side. */
+  ultimaActividad?: Timestamp | Date;
+  updatedAt?: Timestamp | Date;
+}
