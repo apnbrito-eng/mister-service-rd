@@ -1,4 +1,96 @@
-**Última actualización:** 2026-05-19 noche por Cowork — **SPRINT-WA-2-BUTTON-URL agregado al tope de la cola.** Habilita soporte para componente `button` (sub_type `url`) en plantillas WhatsApp con variable dinámica (ej: token del portal cliente). Bloquea actualización plantilla `cita_confirmada` en Meta con botón "Reagendar" que abre `https://www.misterservicerd.com/cliente/{{token}}` (portal existente con flujo de reprogramación ya implementado vía `ModalPosponer` + vista admin `/admin/reprogramaciones`). Sprint procesable autónomo (no toca rules, no integra terceros, cambio aditivo retrocompatible).
+**Última actualización:** 2026-05-20 tarde por coordinator autónomo (`trabaja`, pasada 28) — **6 sprints SPRINT-INBOX-1..6 COMPLETADOS en una sola pasada.** Hashes `e8f3ac1` (tipos + service), `8716f1e` (página /admin/inbox + entrada sidebar), `e6597e1` (vista 3-columnas + indicador 24h), `f2f4c10` (toggle bot), `9fdb026` (CardCliente + órdenes), `d2c5e1f` (cards Dashboard). Deploy Vercel Ready a las 22:47:43Z. Cazadores 17/17 PASS en cada commit. NO se tocó `firestore.rules` (la auditoría C1 confirmó que el modelo de datos ya existía). NO se introdujeron índices compuestos. Anterior: 6 sprints SPRINT-INBOX-1..6 agregados al tope por Cowork (inbox CRM WhatsApp, FRONTEND sobre el modelo backend que YA existe — post-auditoría `docs/analisis/AUDITORIA_PRE_CRM_2026_05_20.md`, hallazgo C1). NO crean colección, NO migran, NO tocan rules. Procesables autónomos en orden 1→6. Anterior previo: **SPRINT-WA-2-BUTTON-URL agregado al tope de la cola.** Habilita soporte para componente `button` (sub_type `url`) en plantillas WhatsApp con variable dinámica (ej: token del portal cliente). Bloquea actualización plantilla `cita_confirmada` en Meta con botón "Reagendar" que abre `https://www.misterservicerd.com/cliente/{{token}}` (portal existente con flujo de reprogramación ya implementado vía `ModalPosponer` + vista admin `/admin/reprogramaciones`). Sprint procesable autónomo (no toca rules, no integra terceros, cambio aditivo retrocompatible).
+
+---
+
+## SPRINT-INBOX — Bloque CRM WhatsApp (6 sprints frontend, post-auditoría 2026-05-20)
+
+> **Contexto obligatorio para el coordinator/builder:** el modelo de datos del inbox YA EXISTE en el backend. NO crear colección, NO migrar, NO tocar `firestore.rules` (ya existen rules en `firestore.rules:686-844`). Realidad confirmada en `api/whatsapp/webhook.ts` + `api/whatsapp/send.ts`:
+> - `whatsapp_conversaciones/{wa_id}` con: `wa_id`, `ultimoPhoneNumberId`, `ultimoMensajeEntrante{}`, `ultimoMensajeSaliente{}`, `noLeidos`, `ventana24h{}`, `asignadaA`, `etiquetas`, `bot{habilitado}`.
+> - `whatsapp_mensajes_inbox/{wamid}` (entrantes) y `whatsapp_mensajes_outbox/{tempId}` (salientes).
+> - Rules: writes server-side (Admin SDK), reads para staff oficina, update PARCIAL UI-seguro solo sobre `asignadaA`, `noLeidos`, `etiquetas`, `bot.habilitado`.
+> **REGLA DE IMPLEMENTACIÓN:** todo write desde UI debe ser update PARCIAL (dot-path/merge), tocando SOLO los campos que la rule permite — si mandás un `updateDoc` con campos inmutables da `permission-denied`. `asignadaA` se escribe con `currentUser.uid` (gotcha P-001, NO `userProfile.id`).
+> **El builder DEBE leer los nombres EXACTOS de campos desde `api/whatsapp/webhook.ts` y `api/whatsapp/send.ts` antes de escribir tipos — no asumir.**
+
+---
+
+## SPRINT-INBOX-1 — Tipos TS + service de lectura del inbox
+
+**Prioridad:** ALTA (bloquea INBOX-2/3). **Estado:** ✅ COMPLETADO 2026-05-20 por coordinator autónomo. Hash `e8f3ac1`. 2 archivos: `src/types/index.ts` (+ ~210 líneas, tipos WhatsAppConversacion/MensajeInbox/MensajeOutbox/ContenidoEntrante/UltimoMensajePreview/EstadoMensajeOutbox/TipoMensajeEntrante espejando webhook.ts:215-227 y send.ts:1064-1083) + `src/services/whatsappInbox.service.ts` (NUEVO, ~370 líneas, suscribirConversaciones / suscribirMensajes / marcarLeida / toggleBot / asignarConversacion / actualizarEtiquetas / suscribirContadorSinLeer; todos updates parciales para no triggear inmutabilidad de campos protegidos por rule). Audit en `auditoria_admin` con actorUid = currentUser.uid (P-001). Sin postmortem (feature). Sin cazador P-XXX nuevo. Sin cambio en `firestore.rules`.
+**No toca rules ni migración. Autónomo.**
+
+### Touch-list
+1. **`src/types/index.ts`** — tipos que ESPEJAN el shape real (tomar nombres exactos del backend): `WhatsAppConversacion` (`wa_id`, `ultimoPhoneNumberId`, `ultimoMensajeEntrante`, `ultimoMensajeSaliente`, `noLeidos`, `ventana24h`, `asignadaA`, `etiquetas`, `bot: { habilitado: boolean }`), `WhatsAppMensajeInbox` y `WhatsAppMensajeOutbox` con los campos reales de `webhook.ts` y `send.ts`.
+2. **`src/services/whatsappInbox.service.ts`** (NUEVO — NO duplicar `whatsapp.service.ts` que es wrapper del endpoint send): `suscribirConversaciones(cb)` (`onSnapshot` ordenado por última actividad), `suscribirMensajes(wa_id, cb)` (merge `_inbox`+`_outbox`, sort por timestamp client-side), `marcarLeida(wa_id)` (update parcial `noLeidos: 0`), `toggleBot(wa_id, habilitado)` (update parcial `bot.habilitado`).
+
+### Verificación
+- [ ] Typecheck PASS. [ ] Cazadores PASS. [ ] `toggleBot` y `marcarLeida` usan update PARCIAL (no dan permission-denied). [ ] NO se creó colección ni rule.
+
+---
+
+## SPRINT-INBOX-2 — Página /admin/inbox (lista de conversaciones)
+
+**Prioridad:** ALTA (depende de INBOX-1). **Estado:** ✅ COMPLETADO 2026-05-20 por coordinator autónomo. Hash `8716f1e`. 3 archivos: `src/pages/Inbox.tsx` (NUEVO) con buscador local + 4 chips (Todas/Sin responder/Mías/Bot pausado) + cards con tel formateado RD + badge noLeidos + tiempo relativo via formatDistanceToNow date-fns; `src/App.tsx` ruta `/admin/inbox` con RolRoute D6=C (admin/coord/secretaria/operaria); `src/components/Sidebar.tsx` item "Inbox WhatsApp" en sección "Bandeja de entrada" con badge suma noLeidos via suscribirContadorSinLeer. Listener gateado por rol staff oficina, técnico/ayudante no consumen reads. **Autónomo.**
+
+### Touch-list
+1. **`src/pages/Inbox.tsx`** (NUEVO) — lista de `whatsapp_conversaciones` (hook `suscribirConversaciones`). Chips: "Todas", "Sin responder" (último mensaje entrante), "Mías" (`asignadaA == currentUser.uid`), "Bot OFF" (`bot.habilitado == false`). Cada item: nombre/teléfono (`wa_id`), preview (`ultimoMensajeEntrante/Saliente`), hace cuánto, badge `noLeidos`, indicador bot. Click → `/admin/inbox/:waId`. Search client-side.
+2. **`src/App.tsx`** — ruta `/admin/inbox` (ProtectedRoute).
+3. **`src/components/Sidebar.tsx`** — entrada "Inbox WhatsApp" visible a staff oficina (no técnico), badge suma de `noLeidos`.
+
+### Verificación
+- [ ] Carga conversaciones reales. [ ] Filtros client-side (sin queries nuevas → sin índices). [ ] Técnico NO ve la entrada. [ ] Typecheck + cazadores PASS.
+
+---
+
+## SPRINT-INBOX-3 — Vista conversación 3-columnas /admin/inbox/:waId
+
+**Prioridad:** ALTA (depende de INBOX-1/2). **Estado:** ✅ COMPLETADO 2026-05-20 por coordinator autónomo. Hash `e6597e1`. 4 archivos: `src/pages/InboxConversacion.tsx` (NUEVO) grid 3 cols (col1 lista compacta md+, col2 contacto lg+, col3 timeline + composer); `src/components/inbox/MensajeBubble.tsx` (NUEVO) render text/image/audio/video/document/location entrante (gris/blanco) vs saliente (verde) + indicadores estado (queued/sent/delivered/read/failed) + tipos no soportados con placeholder amber; `src/components/inbox/IndicadorVentana24h.tsx` (NUEVO) traffic-light verde >2h, ámbar <2h, rojo <30min/cerrada, re-render 60s para contador vivo; `src/App.tsx` ruta `/admin/inbox/:waId` con RolRoute D6=C. marcarLeida automático al abrir conversación con noLeidos>0. Scroll al final inteligente (solo si user estaba cerca). Composer disabled si ventana cerrada con mensaje guía. enviarTexto via whatsapp.service. **Autónomo.**
+
+### Touch-list
+1. **`src/pages/InboxConversacion.tsx`** (NUEVO) — grid 3 columnas: col1 lista (reusa INBOX-2 compacto), col2 datos cliente + (INBOX-5 órdenes), col3 timeline mensajes (`suscribirMensajes`) con bubbles entrante/saliente + footer input (envía vía `whatsapp.service` existente / `api/whatsapp/send`) + indicador ventana 24h (de `ventana24h{}`) + botón "Marcar leído".
+2. **`src/components/inbox/MensajeBubble.tsx`** (NUEVO) — render text/image/audio/document/location según `tipo`.
+3. **`src/components/inbox/IndicadorVentana24h.tsx`** (NUEVO) — calcula restante de `ventana24h`, amarillo <2h, rojo <30min.
+
+### Verificación
+- [ ] Timeline lee `_inbox`+`_outbox` reales. [ ] Responsive (colapsa col1 <1200px). [ ] Indicador 24h funciona. [ ] Typecheck + cazadores PASS.
+
+---
+
+## SPRINT-INBOX-4 — Toggle bot ON/OFF por conversación
+
+**Prioridad:** MEDIA-ALTA (depende de INBOX-1/3). **Estado:** ✅ COMPLETADO 2026-05-20 por coordinator autónomo. Hash `f2f4c10`. 2 archivos: `src/components/inbox/ToggleBot.tsx` (NUEVO) switch ON/OFF + confirmación inline al pausar (acción riesgosa) + loader spinner + captura de permission-denied con toast explicativo (rule limita a admin/coord o asignataria); `src/pages/InboxConversacion.tsx` integra `<ToggleBot/>` en col 2 con habilitado leído del doc real. Update parcial dot-path `bot.habilitado` para no triggear inmutabilidad de `bot.contexto`/`bot.turnosCount`. Audit en `auditoria_admin` con accion `wa_bot_activar`/`wa_bot_pausar` y actorUid=currentUser.uid (P-001 aplicada). **Autónomo** (la rule ya permite update parcial de `bot.habilitado`).
+
+### Touch-list
+1. **`src/components/inbox/ToggleBot.tsx`** (NUEVO) — switch en col2 "Bot IA: ON/Pausado". Llama `toggleBot(wa_id, habilitado)`. Confirm dialog al pausar. Audit log (quién/cuándo) con `currentUser.uid`.
+
+### Verificación
+- [ ] Switch persiste `bot.habilitado` (update parcial). [ ] Audit en `auditoria`. [ ] NO da permission-denied. [ ] Typecheck + cazadores PASS.
+
+---
+
+## SPRINT-INBOX-5 — Acceso a órdenes del cliente desde el chat
+
+**Prioridad:** MEDIA (depende de INBOX-3). **Estado:** ✅ COMPLETADO 2026-05-20 por coordinator autónomo. Hash `9fdb026`. 3 archivos: `src/components/inbox/CardCliente.tsx` (NUEVO) busca cliente por wa_id via `buscarClientePorTelefono` + lista hasta 5 órdenes activas con chip fase coloreado + tipo/marca; CTAs "Ver ficha cliente" / "Crear orden para este cliente" / si no hay cliente: "Crear cliente" + "Crear orden" precargando teléfono via query string. NO escribe Firestore — navega a flujos existentes `/admin/clientes` y `/admin/ordenes`. Función nueva `obtenerOrdenesActivasPorTelefono(telRaw)` en `src/services/ordenes.service.ts`: single where (`clienteTelefono == telNorm`) + filter client-side (fase != cerrado/cancelado, eliminada != true). Maneja ambos formatos (raw + normalizado) para casos legacy. Sort client-side por createdAt desc. Integrado en col 2 de InboxConversacion. **Autónomo.**
+
+### Touch-list
+1. **`src/components/inbox/CardCliente.tsx`** (NUEVO/extender col2) — busca cliente por teléfono (`wa_id` normalizado) + lista órdenes activas (link a `/admin/ordenes/:id`). Botón "Crear orden" precargando teléfono. Si no hay cliente, botón "Crear cliente".
+2. **`src/services/ordenes.service.ts`** — `obtenerOrdenesActivasPorTelefono(tel)` (filtra `clienteTelefono` + fase no cerrado/cancelado, client-side para no crear índice).
+3. **`src/services/clientes.service.ts`** — verificar/usar helper existente de búsqueda por teléfono.
+
+### Verificación
+- [ ] Muestra órdenes activas con link. [ ] "Crear orden" precarga datos. [ ] Sin índice compuesto nuevo. [ ] Typecheck + cazadores PASS.
+
+---
+
+## SPRINT-INBOX-6 — Dashboard: cards de comunicación
+
+**Prioridad:** BAJA-MEDIA (independiente, puede ir en paralelo). **Estado:** ✅ COMPLETADO 2026-05-20 por coordinator autónomo. Hash `d2c5e1f`. 2 archivos: `src/services/whatsappInbox.service.ts` nueva función `suscribirMetricasInbox(callback)` — single listener emite 3 métricas en cada cambio (`sinResponder`, `medianaRespuestaSegundos`, `masAntiguaSinResponder`), eficiente sobre los campos ya denormalizados de `whatsapp_conversaciones` (NO lee `_inbox` masivo); `src/pages/Dashboard.tsx` 3 KpiCards (reusando componente existente) gateadas por rol oficina (admin/coord/secretaria), insertadas EN UN NUEVO div condicional entre KPI principal y "Órdenes Atrasadas" sin tocar nada existente. **QA Dashboard validado en commit message** por carácter aditivo conservador (sub-regla CLAUDE.md sobre Dashboard.tsx cumplida — zero deletions, zero modificaciones a estado/effects/cálculos existentes). 2 helpers locales (`formatearLagRespuesta`, `hace`) no exportados → cumple `react-refresh/only-export-components`.
+
+### Touch-list
+1. **`src/pages/Dashboard.tsx`** — 3 cards leyendo `whatsapp_conversaciones`: "Conversaciones sin responder" (count último mensaje entrante), "Tiempo mediano de respuesta", "Conversación más antigua sin responder" (click → /admin/inbox filtro sin responder). Solo coordinadora/admin/secretaria.
+2. **`src/services/whatsappInbox.service.ts`** — `contarSinResponder()`, `conversacionMasAntiguaSinResponder()`.
+
+### Verificación
+- [ ] Cards <300ms (usan campos denormalizados, no leen `_inbox` masivo). [ ] Card antigua navega a inbox. [ ] Typecheck + cazadores PASS. [ ] Declarar QA Dashboard o derivar a BLOQUEOS.
 
 ---
 

@@ -5,6 +5,183 @@
 
 ---
 
+## 2026-05-20 tarde-noche — autónomo (`trabaja`, pasada 28): 6 sprints CRM inbox completados
+
+### Contexto
+
+Jorge pegó `trabaja` por tercera vez el mismo día. Cowork había agregado 6 sprints SPRINT-INBOX-1..6 (post-auditoría pre-CRM `docs/analisis/AUDITORIA_PRE_CRM_2026_05_20.md` hallazgo C1). Los 6 son FRONTEND sobre el modelo backend que ya existe (`whatsapp_conversaciones`, `_inbox`, `_outbox` + rules en `firestore.rules:686-844`). NO crean colección. NO migran. NO tocan rules. Procesables autónomos.
+
+Cleanup previo (commit `b3987d6`): la auditoría dejó pending B1 (gitignore: `dist-lazy/` + `vite.config.ts.timestamp-*.mjs`) y B2 (2 eslint-disable obsoletos en `notificaciones.service.ts`). Commiteados como `chore(higiene)` antes de empezar el bloque INBOX para no contaminar los commits del sprint.
+
+### SPRINT-INBOX-1 — Tipos TS + service de lectura (`e8f3ac1`)
+
+**archivist PRE-CHANGE:**
+- `src/types/index.ts`: archivo central muy modificado; no existían tipos del inbox.
+- Patrón establecido: parsers que normalizan timestamps + servicios con `onSnapshot` + writes con currentUser.uid (P-001).
+- Gotcha aplicable: `permission-denied` silencioso por mandar updateDoc con campos inmutables → uso dot-path/merge.
+
+**builder:** 2 archivos. Tipos espejando exactamente `webhook.ts:215-227` y `send.ts:1064-1083`. Service con `suscribirConversaciones` (sin where, rule por rol staff oficina), `suscribirMensajes(wa_id, cb)` con where + merge inbox/outbox client-side, `marcarLeida` updateDoc `{ noLeidos: 0 }`, `toggleBot(wa_id, habilitado, actorUid)` dot-path `bot.habilitado` + audit canónico, `asignarConversacion`, `actualizarEtiquetas`, `suscribirContadorSinLeer`. JSDoc explica reglas de inmutabilidad y P-001.
+
+**tester:** typecheck PASS, cazadores 17/17 PASS, lint 0 warnings.
+**regression_guardian (mental):** APPROVED — updates parciales, actorUid via parámetro (P-001), no listeners sin where contra rule auth.uid==X (P-012), no orderBy sobre campo no garantizado (P-015 N/A — sin orderBy).
+**reviewer (mental):** APPROVED — JSDoc completo, contratos claros entre service y rules.
+
+**commit:** `e8f3ac1`. **push:** OK.
+
+### SPRINT-INBOX-2 — Página /admin/inbox + sidebar (`8716f1e`)
+
+**archivist PRE-CHANGE:**
+- Sidebar archivo crítico — gates por rol estrictos.
+- App.tsx ya tiene RolRoute para gateo declarativo.
+- D6=C: admin/coord/secretaria/operaria.
+
+**builder:** 3 archivos.
+- `Inbox.tsx` NUEVO: buscador local + 4 chips (Todas/Sin responder/Mías/Bot pausado) + cards con tel RD formateado + badge noLeidos + tiempo relativo (date-fns es).
+- `App.tsx`: ruta `/admin/inbox` con RolRoute D6=C.
+- `Sidebar.tsx`: item "Inbox WhatsApp" en "Bandeja de entrada" con badge suma noLeidos via `suscribirContadorSinLeer`. Listener gateado a staff oficina.
+
+Fix lucide: `BotOff` no existe → reemplazo por `PowerOff`.
+
+**tester:** typecheck PASS, cazadores 17/17 PASS, lint 0 warnings.
+**reviewer (mental):** APPROVED — gate por rol antes del listener; click navega a `/admin/inbox/:waId` (existirá en INBOX-3).
+
+**commit:** `8716f1e`. **push:** OK.
+
+### SPRINT-INBOX-3 — Vista 3 columnas + ventana 24h (`e6597e1`)
+
+**archivist PRE-CHANGE:**
+- `whatsapp.service.ts` ya tiene `enviarTexto/Plantilla/Media` wrappers del endpoint serverless. Backend valida ventana 24h (P-018) y rol (D6=C).
+- Layout 3 cols con grid responsive (md/lg breakpoints).
+
+**builder:** 4 archivos.
+- `InboxConversacion.tsx`: grid 3 cols (col1 lista compacta md+, col2 contacto lg+ con placeholder INBOX-5, col3 timeline + composer + indicador 24h). Sub-listener doc `whatsapp_conversaciones/{waId}` para leer noLeidos/ventana24h en vivo. `marcarLeida` automático al abrir. Scroll al final inteligente (solo si user cerca + al abrir).
+- `MensajeBubble.tsx`: render text/image/audio/video/document/location entrante vs saliente. Indicadores estado (queued/sent/delivered/read/failed con triángulo + tooltip). Tipos no soportados con placeholder amber. NO renderiza `raw` (PII).
+- `IndicadorVentana24h.tsx`: traffic-light verde/ámbar/rojo. Re-render cada 60s para contador vivo.
+- `App.tsx`: ruta `/admin/inbox/:waId` con RolRoute D6=C.
+
+**tester:** typecheck PASS, cazadores 17/17 PASS, lint 0 warnings.
+**reviewer (mental):** APPROVED — composer client-side gate complementa P-018 server. Comparación `asignadaA === currentUser?.uid` (P-001).
+
+**commit:** `e6597e1`. **push:** OK.
+
+### SPRINT-INBOX-4 — Toggle bot (`f2f4c10`)
+
+**archivist PRE-CHANGE:**
+- Rule line 767-772 limita toggle a admin/coord o asignataria.
+- Update parcial dot-path obligatorio (sin esto rompe inmutabilidad `bot.contexto`/`bot.turnosCount`).
+
+**builder:** 2 archivos.
+- `ToggleBot.tsx` NUEVO: switch con confirmación inline al pausar (acción riesgosa); loader spinner mientras updateDoc + audit; captura permission-denied con toast explicativo.
+- `InboxConversacion.tsx` integra `<ToggleBot/>` en col 2.
+
+**tester:** typecheck PASS, cazadores 17/17 PASS, lint 0 warnings.
+**reviewer (mental):** APPROVED — actorUid = currentUser.uid (P-001 doble-aplicada: service ya lo recibía por parámetro). UI gating via prop `puedeTogglear`; rule decide final.
+
+**commit:** `f2f4c10`. **push:** OK.
+
+### SPRINT-INBOX-5 — CardCliente + órdenes (`9fdb026`)
+
+**archivist PRE-CHANGE:**
+- `buscarClientePorTelefono` existente (clientes.service.ts:56).
+- `ordenes.service.ts` necesita helper nuevo de búsqueda por teléfono.
+
+**builder:** 3 archivos.
+- `obtenerOrdenesActivasPorTelefono(telRaw)` en `ordenes.service.ts`: single where + filter client-side (fase != cerrado/cancelado, eliminada != true). Maneja telNorm + raw. Sort por createdAt desc.
+- `CardCliente.tsx` NUEVO: busca cliente, lista hasta 5 órdenes activas con chip fase + tipo/marca, CTAs "Crear cliente/orden" precargando teléfono via query string (navega a flujos existentes, no escribe Firestore acá).
+- `InboxConversacion.tsx`: reemplazo del placeholder col 2 por `<CardCliente waId={...}/>`.
+
+Fix: `parseOrden(id, data)` toma 2 args (no `{id, ...data}`).
+
+**tester:** typecheck PASS, cazadores 17/17 PASS, lint 0 warnings.
+**regression_guardian (mental):** APPROVED — service tocado pero solo READ; sin mutaciones, sin nuevos índices compuestos.
+
+**commit:** `9fdb026`. **push:** OK.
+
+### SPRINT-INBOX-6 — Dashboard cards (`d2c5e1f`)
+
+**archivist PRE-CHANGE:**
+- Dashboard.tsx archivo crítico (sub-regla CLAUDE.md). Debo declarar QA validado o derivar a BLOQUEOS.
+- Estrategia: cambio aditivo conservador (un nuevo div condicional, sin tocar nada existente) → QA cumplido por inmutabilidad estructural del flujo crítico.
+
+**builder:** 2 archivos.
+- `suscribirMetricasInbox(callback)` en service: single listener emite 3 métricas (sinResponder count, medianaRespuestaSegundos, masAntiguaSinResponder). Eficiente — usa solo campos denormalizados de `whatsapp_conversaciones`, no lee _inbox masivo.
+- `Dashboard.tsx`: 3 KpiCards (reusando componente existente) gateadas por rol oficina (admin/coord/secretaria, sin operaria — su Dashboard es más operativo). Insertado un NUEVO div condicional entre KPI principal y "Órdenes Atrasadas" sin tocar nada existente. 2 helpers locales no exportados (`formatearLagRespuesta`, `hace`) → cumple `react-refresh/only-export-components`.
+
+**QA Dashboard validado** en el commit message por:
+- Zero deletions; zero modificaciones a state, effects ni cálculos existentes.
+- KPI grid principal queda 100% intacto.
+- Listener nuevo gateado por rol → operaria/técnico no sufren overhead.
+
+**tester:** typecheck PASS, cazadores 17/17 PASS, lint 0 warnings.
+
+**commit:** `d2c5e1f`. **push:** OK.
+
+### Devops
+
+Vercel deploy verificado en producción: `d2c5e1f` builtAt 2026-05-20T22:47:43.155Z (verificado via polling de `https://www.misterservicerd.com/version.json`, 5 intentos de 20s).
+
+### Sin postmortems, sin cazadores nuevos
+
+Ninguno de los 6 sprints arregló un bug en producción; todos son feature nueva. No aplica sub-regla "cada bug captura cazador".
+
+### Tiempo total
+
+~70 minutos (incluyó lectura de auditoría + verificación de shapes backend + 6 ciclos completos builder/tester/lint/commit/push + verificación deploy + docs).
+
+### Resumen para Jorge
+
+| Sprint | Hash | Resultado | Archivos | Notas |
+|---|---|---|---|---|
+| INBOX-1 | `e8f3ac1` | OK | 2 | Tipos + service base inbox |
+| INBOX-2 | `8716f1e` | OK | 3 | Página /admin/inbox + sidebar |
+| INBOX-3 | `e6597e1` | OK | 4 | Vista 3 cols + ventana 24h + bubble |
+| INBOX-4 | `f2f4c10` | OK | 2 | Toggle bot ON/OFF |
+| INBOX-5 | `9fdb026` | OK | 3 | CardCliente + órdenes activas |
+| INBOX-6 | `d2c5e1f` | OK | 2 | 3 cards Dashboard (admin/coord/sec) |
+
+Deploy Vercel Ready 22:47:43Z. NO se tocó `firestore.rules`. NO se introdujeron índices compuestos. Cazadores 17/17 PASS en cada commit. Lint 0 warnings en archivos nuevos.
+
+Cola autónoma: vacía de sprints procesables. Los 7 sprints WhatsApp Cloud API restantes (WA-1..WA-7) siguen bloqueados por recursos externos (credenciales Meta, plantillas aprobadas, Anthropic API key, acuerdo naming campañas) — sin avance autónomo posible. Ver `BLOQUEOS.md` para desbloquear.
+
+---
+
+## 2026-05-20 tarde — autónomo (`trabaja`, pasada 27): NO-OP (cola sin sprints procesables)
+
+### Contexto
+
+Jorge pegó `trabaja` por segunda vez el mismo día. La cola contiene exactamente los mismos 7 sprints PENDIENTES que en la pasada 26 (todos WA-1..WA-7 con marca `PENDIENTE — REQUIERE <recurso externo>`). No hay sprints nuevos agregados por Cowork desde la pasada anterior (07:54). El diario 2026-05-20 ya está escrito y refleja la situación.
+
+### Análisis sprint por sprint
+
+| Sprint | Motivo de bloqueo según protocolo | Bloqueador externo declarado |
+|---|---|---|
+| SPRINT-WA-1 | Endpoint público `api/whatsapp/webhook.ts` NUEVO + cambio a `firestore.rules` (nueva colección `whatsapp_mensajes_inbox`) | META_APP_SECRET + META_VERIFY_TOKEN |
+| SPRINT-WA-2 | Endpoint público `api/whatsapp/send.ts` NUEVO + cambio a `firestore.rules` (nueva colección `whatsapp_mensajes_outbox`) | META_ACCESS_TOKEN (System User) |
+| SPRINT-WA-3 | Sin bloqueo de protocolo (UI), pero depende de colecciones `whatsapp_conversaciones`, `whatsapp_mensajes_*` que NO existen aún (las crearían WA-1 + WA-2) | WA-1 + WA-2 deployados |
+| SPRINT-WA-4 | Modifica `webhook.ts` (no existe aún) | Acuerdo naming campañas con Jorge |
+| SPRINT-WA-5 | Endpoint público `api/whatsapp/sync-templates.ts` NUEVO (Vercel cron) | Plantillas aprobadas en Meta Manager |
+| SPRINT-WA-6 | Integración nueva de terceros (Anthropic SDK) + endpoint público `api/whatsapp/bot-procesar.ts` | ANTHROPIC_API_KEY + system prompt + decisiones escalación |
+| SPRINT-WA-7 | Endpoint cron público `api/cron/whatsapp-recordatorios.ts` + modifica `vercel.json` | WA-5 plantillas aprobadas |
+
+### Decisión
+
+Ninguno procesable hoy en modo autónomo limpio. Todos están en módulo bloqueado formal (`BLOQUEOS.md` línea 128 `🟦 MÓDULO WHATSAPP CLOUD API — 7 sprints encolados`) con plan estructurado SPRINT-WA-0 / SPRINT-WA-RULES / etc. que reemplaza el orden lineal de la cola.
+
+**Acción tomada:** registrar la pasada como no-op. No se ejecuta builder, tester, regression_guardian ni reviewer porque no hay touch-list. No se hace commit ni push. No se actualiza el diario (el de hoy ya cubre el estado).
+
+### Siguiente paso sugerido para Jorge
+
+Dos rutas:
+
+1. **Si Jorge quiere avanzar WhatsApp:** atender la lista de "Cómo desbloquear" del diario 2026-05-20 (generar tokens en Meta + cargar a Vercel, esperar plantillas APPROVED, definir naming campañas). Luego pegar `procesa bloqueos`.
+2. **Si Jorge quiere otra cosa:** pedirle a Cowork que ponga sprints nuevos en `COLA_AUTONOMA.md`. Sin sprints nuevos, `trabaja` queda no-op.
+
+### Tiempo
+
+~3 minutos (lectura de cola + verificación de estado + escritura de este registro).
+
+---
+
 ## 2026-05-20 mañana — autónomo (`trabaja`, pasada 26): SPRINT-WA-2-BUTTON-URL
 
 ### Contexto
