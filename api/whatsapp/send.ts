@@ -15,7 +15,10 @@
  *    ese `telefonoNormalizado` y `optOutMarketing == true`.
  *
  * Convenciones críticas (NO violar — disparan cazadores P-016, P-017, P-018):
- *  - bodyParser: true (JSON request del cliente; HMAC sólo aplica al webhook).
+ *  - body se parsea defensivamente (string|object|null); `@vercel/node`
+ *    auto-parsea `application/json` pero el endpoint tolera ambas formas.
+ *    NO usar `export const config = { api: {...} }` — esa sintaxis es del
+ *    Next.js Pages Router y NO aplica en `@vercel/node`. Ver gotcha CLAUDE.md.
  *  - Idempotency: tempId pre-Meta + `runTransaction` + `tx.get` antes del
  *    `tx.set` en `whatsapp_mensajes_outbox` (defensa contra retries del
  *    cliente o re-envíos por timeout de Meta).
@@ -49,17 +52,6 @@ import {
   stripUndefinedDeep,
   truncarWaIdParaLog,
 } from '../_lib/whatsappWebhook.js';
-
-/**
- * Vercel config: el body de este endpoint es JSON del cliente — NO necesita
- * raw body (HMAC sólo aplica al webhook entrante). Activar bodyParser
- * acelera el parseo y simplifica el flujo.
- */
-export const config = {
-  api: {
-    bodyParser: true,
-  },
-};
 
 const LOG_PREFIX = '[whatsapp/send]';
 
@@ -552,13 +544,32 @@ export default async function handler(
     return;
   }
 
-  // 5) Validar body.
-  const rawBody = req.body;
-  if (!rawBody || typeof rawBody !== 'object') {
-    res.status(400).json({ error: 'body-invalido' });
+  // 5) Validar body. `@vercel/node` auto-parsea `application/json` a objeto,
+  //    pero algunos clientes mandan string o sin Content-Type — parseamos
+  //    defensivamente. Patrón ya usado en `api/admin/crear-usuario.ts:140`.
+  //    SPRINT-WA-2-FIX-BODYPARSER: la sintaxis `export const config = { api:
+  //    { bodyParser: true } }` (Next.js Pages Router) NO aplica acá; el
+  //    intento previo dejó el endpoint rechazando todo POST con HTTP 400.
+  let body: Record<string, unknown>;
+  try {
+    const raw = req.body;
+    if (raw == null) {
+      body = {};
+    } else if (typeof raw === 'string') {
+      body = raw.trim().length > 0 ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    } else if (typeof raw === 'object') {
+      body = raw as Record<string, unknown>;
+    } else {
+      res.status(400).json({ error: 'body-invalido', detalle: `tipo=${typeof raw}` });
+      return;
+    }
+    // @safe-meta-catch: parseo JSON local del request body antes de cualquier
+    // llamada Meta — no es error estructurado de Graph API.
+  } catch (err) {
+    const m = err instanceof Error ? err.message.substring(0, 200) : 'unknown';
+    res.status(400).json({ error: 'body-invalido', detalle: `json-parse-failed: ${m}` });
     return;
   }
-  const body = rawBody as Record<string, unknown>;
 
   const wa_id = normalizarWaIdRd(String(body.wa_id ?? ''));
   if (!wa_id) {

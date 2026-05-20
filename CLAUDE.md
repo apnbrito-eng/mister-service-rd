@@ -83,6 +83,7 @@ Admins build forms in `FormularioEditor` → `formularios` collection. Public us
 
 ## Conventions & gotchas
 
+- **`@vercel/node` ignora `export const config = { api: {...} }`.** Esa sintaxis es del Next.js Pages Router; este repo es Vite + `@vercel/node` (runtime real de la carpeta `api/`). Para parseo de body en endpoints nuevos, usar el patrón defensivo de `api/admin/crear-usuario.ts:140` y `api/whatsapp/send.ts:548-571`: aceptar `string | object | null` con `JSON.parse` fallback. Cualquier endpoint nuevo en `api/` debe probarse con `curl` real (con `--data` JSON y header `Content-Type: application/json`) ANTES de cerrar el sprint — no asumir que la config aplica. Antiprecedente SPRINT-WA-2 commit `58a642a`: el endpoint rechazó todo POST con `body-invalido` HTTP 400 hasta el hotfix SPRINT-WA-2-FIX-BODYPARSER. Para el webhook entrante (`api/whatsapp/webhook.ts`) el body raw SÍ es necesario por HMAC — `req.on('data')` ya lo lee directo del stream sin depender de `bodyParser`.
 - **Phone normalization (RD):** strip non-digits, drop leading `1` if 11 digits, take last 10. WhatsApp links prepend `1` again. Use helpers in `utils/index.ts` / `utils/whatsapp.ts`; don't reinvent.
 - **WhatsApp is manual.** `utils/whatsapp.ts` builds `wa.me/...?text=...` URLs. There is no Business API integration — don't add "automatic" send calls.
 - **Checklists are hardcoded** in `utils/checklistTemplates.ts` (per `equipoTipo`). The UI does not edit them.
