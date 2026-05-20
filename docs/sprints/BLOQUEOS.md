@@ -10,11 +10,23 @@
 
 ---
 
-## SPRINT-WA-REAGENDAR-PORTAL — Portal público para reagendamiento de citas
+## ~~SPRINT-WA-REAGENDAR-PORTAL~~ — CANCELADO 2026-05-19
+
+**Motivo de cancelación:** Jorge señaló que el sidebar admin ya tiene "Reprogramaciones" y verificación confirmó que TODA la infraestructura existe:
+- Ruta pública `/cliente/:token` (`src/pages/public/PortalCliente.tsx`) con flujo de proponer reprogramación vía `ModalPosponer`.
+- Vista admin `/admin/reprogramaciones` (`src/pages/Reprogramaciones.tsx`) que lista propuestas pendientes con aprobar/rechazar + notificación al cliente.
+- Type `PropuestaReprogramacion` + servicios `resolverPropuestaReprogramacionConNotif` y `suscribirOrdenesConPropuestaReprogramacionPendiente` en `ordenes.service.ts`.
+- `tokenPortalCliente` con expiración (SPRINT-139).
+
+**Lo único que falta:** que la plantilla WhatsApp `cita_confirmada` lleve botón URL → `https://www.misterservicerd.com/cliente/{{token}}`. Eso es config en Meta + posiblemente extender el helper que envía la plantilla para incluir el token como variable del botón. Sprint chico, va a COLA, no necesita OK rules.
+
+---
+
+## SPRINT-WA-REAGENDAR-PORTAL — Portal público para reagendamiento de citas (ORIGINAL — IGNORAR)
 
 **Prioridad:** ALTA (bloquea actualización plantilla `cita_confirmada` en Meta con botón "Reagendar" → portal).
 
-**Estado:** PENDIENTE OK JORGE (toca `firestore.rules` con rule pública nueva).
+**Estado:** ❌ CANCELADO 2026-05-19 — ver bloque arriba. Sprint era duplicación de infraestructura existente.
 
 **Origen:** SPRINT-WA-2-HEADER-IMAGE cerró ok (commit `7f6b17a`). Curl E2E entregó WhatsApp con logo + body. Jorge decidió 2026-05-19 noche que la plantilla `cita_confirmada` debe llevar 2 botones: (1) "Consultar" Quick Reply al bot 24/7, (2) "Reagendar" URL al portal donde el cliente sugiere nuevo día/hora. El portal NO existe. Si se agregan botones a la plantilla apuntando a URL inexistente, Meta puede rechazar la aprobación. Hay que crear el portal PRIMERO.
 
