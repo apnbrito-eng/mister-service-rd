@@ -946,10 +946,20 @@ Aunque el bot atienda 24/7, las **notificaciones** a Maria/Wilainy fuera de hora
 
 ## SPRINT-186 — Surface aviso descuento chequeo previo en modal creación + bugs UX modal orden
 
-**✅ DESBLOQUEADO 2026-05-18 — movido a COLA tras OK Jorge cliente consolidado (audit `33M7G5z6lEBVBdSf6yKK`). Ver bloque original abajo (preservado por trazabilidad).**
+**✅ COMPLETADO 2026-05-18 — commit `f41d106` (pasada 23). Trazabilidad adicional en `d9454e7`. Sync de BLOQUEOS 2026-05-19 noche por coordinator autónomo durante `procesa bloqueos` (el bloque seguía marcado BLOQUEADO desde antes del fix — el archivist PRE-CHANGE cazó la inconsistencia).**
+
+**Resumen de lo entregado en `f41d106`:**
+
+- **Item 1 — Banner descuento al crear orden**: hook `useOrdenCreateForm` llama `buscarChequeoVigentePorCliente` con debounce 300ms al cambiar `clienteId + equipoTipo`. Banner naranja con checkbox auto-check si chequeo vigente; vencido se muestra read-only. Patrón replicado del banner "Operaria asignada" SPRINT-170. Visible en "Crear Orden" y "Confirmar y Agendar".
+- **Item 2 — Modelo perdido al editar**: causa real fue `OrdenEditForm.tsx` + `ModalEditarOrdenAdmin.tsx` no incluían input para `equipoModeloFabricante` (campo nuevo SPRINT-172). Agregado input en ambos formularios.
+- **Item 3 — `MessageNotSentError` al cerrar con Esc**: confirmado FALSO POSITIVO. Auditoría estática no encontró listeners keyboard problemáticos en `Modal.tsx`/`OrdenCreateModal.tsx`/`OrdenEditForm.tsx`. El único listener Esc del repo está en `FotoEquipoDisplay.tsx` con cleanup correcto. El error viene de extensión Chrome externa (Claude in Chrome / sidepanel) intentando enviar a content script unloaded — no accionable desde el código.
+
+Detalle completo en `docs/sprints/DIARIO_2026-05-18.md:240-269`.
+
+**Bloque original (preservado para forensia — antes del COMPLETADO):**
 
 **Tipo:** Feature UX + bugfixes UX. ESPERA confirmación humana del estado de datos.
-**Estado:** BLOQUEADO 2026-05-18 — ESPERANDO OK JORGE (cliente consolidado).
+**Estado:** ~~BLOQUEADO 2026-05-18 — ESPERANDO OK JORGE (cliente consolidado).~~ → resuelto, OK firmado + sprint procesado mismo día.
 **Origen:** QA puntual sidepanel 2026-05-18 sobre SPRINT-178. Movido por coordinator autónomo pasada 22 a este archivo por dependencia explícita marcada en la cola.
 
 **Por qué está bloqueado:**
