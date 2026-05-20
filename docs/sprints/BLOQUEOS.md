@@ -10,6 +10,109 @@
 
 ---
 
+## SPRINT-WA-REAGENDAR-PORTAL — Portal público para reagendamiento de citas
+
+**Prioridad:** ALTA (bloquea actualización plantilla `cita_confirmada` en Meta con botón "Reagendar" → portal).
+
+**Estado:** PENDIENTE OK JORGE (toca `firestore.rules` con rule pública nueva).
+
+**Origen:** SPRINT-WA-2-HEADER-IMAGE cerró ok (commit `7f6b17a`). Curl E2E entregó WhatsApp con logo + body. Jorge decidió 2026-05-19 noche que la plantilla `cita_confirmada` debe llevar 2 botones: (1) "Consultar" Quick Reply al bot 24/7, (2) "Reagendar" URL al portal donde el cliente sugiere nuevo día/hora. El portal NO existe. Si se agregan botones a la plantilla apuntando a URL inexistente, Meta puede rechazar la aprobación. Hay que crear el portal PRIMERO.
+
+### Touch-list
+
+1. **`src/pages/public/ReagendarCita.tsx`** (NUEVO) — formulario público standalone:
+   - Lee orden por `:token` desde URL.
+   - Si token inválido/expirado → estado de error con CTA a contactar por WhatsApp.
+   - Muestra (read-only): nombre cliente, equipo, día/hora actualmente confirmada, técnico asignado, OS#.
+   - Inputs: `nuevoDiaPreferido` (DatePicker, mínimo hoy), `nuevaHoraPreferida` (TimePicker, rango 8am-6pm), `nota` (textarea opcional, 200 chars).
+   - Submit → llama servicio que escribe a `solicitudes_reagendamiento`.
+   - Pantalla de confirmación post-submit con resumen y mensaje "una operaria te contactará para confirmar".
+
+2. **`src/App.tsx`** — agregar ruta pública `/reagendar/:token` en el bloque de rutas standalone (no `PublicLayout`, no `Layout`, sin auth). Patrón ya establecido en `/cita/:calendarId`, `/tracking/:token`, `/f/:slug`.
+
+3. **`src/services/reagendamiento.service.ts`** (NUEVO):
+   - `leerOrdenPorTokenReagendamiento(token: string)` → query `ordenes_servicio` where `tokenReagendamiento.token == token`. Valida `tokenReagendamiento.expiraEn > now`. Retorna `Orden | null`.
+   - `crearSolicitudReagendamiento(payload)` → `addDoc` a `solicitudes_reagendamiento` con shape `{ ordenId, ordenOS, clienteNombre, fechaActualConfirmada, nuevoDiaPreferido, nuevaHoraPreferida, nota, token, estado: 'pendiente', creadoEn: serverTimestamp() }`. Strip de `undefined` (patrón ya en repo).
+
+4. **`src/utils/tokenReagendamiento.ts`** (NUEVO):
+   - `generarTokenReagendamiento(ordenId: string)` → string random URL-safe + expiración 90 días desde envío.
+   - Patrón heredado de `tokenPortalCliente` (SPRINT-139) y `garantia.token` (SPRINT-140).
+   - Persiste en `ordenes_servicio/{ordenId}.tokenReagendamiento = { token, generadoEn, expiraEn }`.
+
+5. **`firestore.rules`** — dos cambios:
+   - Nuevo match `/solicitudes_reagendamiento/{id}`:
+     - `allow create: if request.resource.data.token is string && request.resource.data.token.size() >= 32 && request.resource.data.estado == 'pendiente' && request.resource.data.creadoEn == request.time;`
+     - `allow read, update, delete: if isInternalUser();` (operaria/coordinadora/admin).
+   - Ampliar rule de `ordenes_servicio` read: permitir lectura por token reagendamiento (similar a `tokenPortalCliente` existente — patrón ya en archivo).
+   - **Sub-regla obligatoria post-deploy:** correr `npm run deploy:rules` ANTES de marcar el sprint COMPLETADO. Sin esto, la rule no aplica y `/reagendar/:token` falla con permission-denied en producción.
+
+6. **Helper de envío plantilla `cita_confirmada`** — el lugar donde el sistema dispara la plantilla (a determinar por builder via grep `cita_confirmada`) debe:
+   - Generar token reagendamiento + persistir en orden ANTES de enviar plantilla.
+   - Pasar el token como variable adicional del componente de URL del botón en el payload Meta (requiere extender `PayloadMeta.template.components` para soportar `type: 'button', sub_type: 'url', index: '0', parameters: [{ type: 'text', text: token }]`).
+
+7. **UI admin `/admin/reagendamientos`** (NUEVO) — vista para operaria/coordinadora:
+   - Lista `solicitudes_reagendamiento` con `estado == 'pendiente'` (real-time via onSnapshot).
+   - Por cada solicitud: card con datos cliente + fecha actual + nueva fecha preferida + nota + botones "Aprobar" / "Rechazar".
+   - Aprobar: actualiza orden con nueva fecha + estado solicitud `aprobada` + dispara notificación al cliente (sprint propio para esto último).
+   - Rechazar: estado solicitud `rechazada` + nota interna.
+
+### Consumidores verificados (read-only check)
+
+- **`firestore.rules`:** ya tiene patrones de "token público" para `tokenPortalCliente` (SPRINT-139), `garantia.token` (SPRINT-140), `formularios.slug`. Usar mismo formato.
+- **`src/App.tsx`:** ya tiene rutas standalone agrupadas (`/cita/:calendarId`, `/tracking/:token`, `/f/:slug`). Agregar `/reagendar/:token` en mismo bloque.
+- **`src/services/`:** patrón establecido en `solicitudes.service.ts` y `formularios.service.ts` (writes públicos a colecciones nuevas con strip de `undefined`).
+- **Plantilla `cita_confirmada` (Meta):** ID `954386164046647`. Sin botones actuales. Una vez deployado el portal, Jorge editará la plantilla en Meta para agregar botones (prompt sidepanel separado).
+
+### Consumidores NO afectados (justificación)
+
+- `api/whatsapp/webhook.ts` — solo lee mensajes entrantes, no afectado por el portal saliente.
+- `api/whatsapp/send.ts` — el cambio del payload con componente button puede ir como sub-sprint dentro del helper de envío (touch-list #6). No requiere fix nuevo del endpoint, solo extensión de la interface.
+- Plantillas `conduce_emitido`, `recordatorio_mantenimiento`, `garantia_por_vencer` — no llevan botón Reagendar.
+
+### Hallazgos laterales
+
+- **Notificación al cliente cuando operaria aprueba/rechaza:** fuera de scope. Documentar como SPRINT-WA-REAGENDAR-NOTIF (futuro). Si se mete acá, scope crece >50% y el sprint se vuelve inmanejable.
+- **Validación de slot disponible en agenda** (que el día/hora preferida no choque con otra cita): fuera de scope. Por ahora operaria revisa manual. Sprint futuro: `SPRINT-WA-REAGENDAR-SLOT-CHECK`.
+- **Cazador P-020 "rule pública sin validación de token":** evaluar si el patrón se repite en 1-2 sprints más. Por ahora no se crea.
+
+### Verificación
+
+1. `npm run check:regression` → 17/17 PASS.
+2. `npm run build` → typecheck + build OK.
+3. `npm run lint` → 0 warnings.
+4. `npm run deploy:rules` → rules deployadas a Firebase (sub-regla CLAUDE.md obligatoria).
+5. QA manual:
+   - Generar token de prueba en una orden mock.
+   - Abrir `https://www.misterservicerd.com/reagendar/<token>` en navegador anónimo.
+   - Verificar que muestra datos de orden.
+   - Submit con nuevo día/hora + nota.
+   - Verificar doc creado en `solicitudes_reagendamiento`.
+6. QA negativo:
+   - `/reagendar/token-expirado` → muestra estado de error.
+   - `/reagendar/token-inexistente` → muestra estado de error.
+   - POST directo a `solicitudes_reagendamiento` sin token válido (curl con SDK Firebase) → rule rechaza.
+7. UI admin: verificar que `/admin/reagendamientos` lista la solicitud creada.
+
+### No requiere
+
+- Postmortem (feature nueva, no bug).
+
+### Sub-tareas para el coordinator
+
+- archivist PRE-CHANGE (touch-list ≥7 archivos, sub-regla obligatoria).
+- builder → tester → regression_guardian → reviewer.
+- devops corre `npm run deploy:rules` ANTES de marcar COMPLETADO.
+- Commit messages: separar en 2-3 commits lógicos si scope grande (servicio + UI pública + UI admin + rules deploy).
+
+### Decisión Jorge (para desbloquear)
+
+OK Jorge si:
+1. Confirma rule pública nueva (`/solicitudes_reagendamiento` create sin auth, gate por token + estado).
+2. Confirma OK para 90 días de expiración del token (mismo patrón que `tokenPortalCliente`).
+3. Confirma OK para vista admin `/admin/reagendamientos` con acceso operaria/coordinadora/admin (no técnico).
+
+---
+
 ## 🟦 MÓDULO WHATSAPP CLOUD API — 7 sprints encolados
 
 **Origen:** Jorge eligió Opción A (planning estructurado por bloques) el 2026-05-18 tras el coordinator detectar que el pedido "trabaja en una sola pasada" violaba las sub-reglas de CLAUDE.md (rules nuevas + endpoints públicos + integraciones de terceros requieren OK explícito).
