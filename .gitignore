@@ -8,6 +8,9 @@ node_modules/
 
 # Build
 dist/
+dist-lazy/
+# Vite escribe archivos temporales de config al arrancar; no versionar
+vite.config.ts.timestamp-*.mjs
 
 # Version metadata (generado por Vite en cada build)
 public/version.json

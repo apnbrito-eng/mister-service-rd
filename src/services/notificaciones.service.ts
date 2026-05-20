@@ -24,14 +24,12 @@ export async function crearNotificacion(
   // si el shape se desvía del contrato (userId requerido, destinatarioId no
   // debe ser escrito por callers nuevos).
   if (!data.userId || typeof data.userId !== 'string') {
-    // eslint-disable-next-line no-console
     console.warn(
       '[notificaciones] crearNotificacion sin userId — la notificación quedará invisible para su destinatario (rule filtra por userId == auth.uid). data=',
       data
     );
   }
   if ((data as { destinatarioId?: unknown }).destinatarioId !== undefined) {
-    // eslint-disable-next-line no-console
     console.warn(
       '[notificaciones] crearNotificacion recibió `destinatarioId` (campo legacy deprecated). Renombrar a `userId` en el caller. data=',
       data
