@@ -10,7 +10,13 @@
 
 ---
 
-## SPRINT-INBOX-8b-DRAWER-LATERAL — Refinamiento UX inbox: form de orden al lado del chat + copiar-a-orden por mensaje/ubicación/foto
+## SPRINT-INBOX-8b-DRAWER-LATERAL — DESBLOQUEADO 2026-05-21 (OK: jorge 2026-05-21 10:30 approach=A1 + items=4,5,6)
+
+**Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-21 por coordinator (`procesa bloqueos`, pasada 33). desbloqueadoPor: jorge 2026-05-21 10:30 vía `OK: jorge 2026-05-21 10:30 approach=A1 + items=4,5,6`.** Conservado acá como stub para forensia.
+
+**Scope aprobado por Jorge:** approach A1 (refactor `OrdenCreateModal` con prop `presentationMode: 'modal' | 'drawer'` default `'modal'`). Items 4 (drawer no tapa chat), 5 (copiar mensaje a orden) y 6 (ubicación → orden) in-scope. Item 7 (fotos del chat → orden) queda como follow-up `SPRINT-INBOX-8c-FOTOS-A-ORDEN` aparte. Reviewer obligatorio con foco en regresión de `Ordenes.tsx` + `Citas.tsx`.
+
+<details><summary>Contexto original del bloqueo (preservado para forensia)</summary>
 
 **Prioridad:** MEDIA (UX — refinamiento sobre INBOX-8 ya completado, no bloquea producción).
 **Estado:** BLOQUEADO esperando OK de Jorge al approach + touch-list expandido.
@@ -55,14 +61,24 @@
 3. Editar esta entrada con `OK: jorge 2026-05-21 HH:MM approach=A<N> + items=<4,5,6,7|4|...>`.
 4. Pegar `procesa bloqueos` al coordinator.
 
+**OK: jorge 2026-05-21 10:30 approach=A1 + items=4,5,6** — IMPORTANTE: el modo drawer/panel lateral debe ir detrás de un prop (ej. `presentationMode: 'modal' | 'drawer'`) con **default = 'modal'**, de modo que `Ordenes.tsx` y `Citas.tsx` (que NO pasan el prop) queden EXACTAMENTE igual (sin regresión). Solo `InboxConversacion.tsx` pasa `presentationMode='drawer'` para abrir el form al lado del chat sin taparlo. Reviewer obligatorio con foco en regresión de Ordenes/Citas. Item 7 (fotos) queda como follow-up, NO en este sprint.
+
 ### Salvaguarda mientras tanto
 
 - INBOX-8 actual funciona — la operaria/coord puede crear orden EN el inbox (modal centrado). El refinamiento UX es mejora, no fix de bug.
 - La sección "Refinamiento UX" dentro de INBOX-8 en `COLA_AUTONOMA.md` queda como referencia histórica de lo que Jorge pidió 2026-05-21 pero no se procesó autónomo. Quitarla NO es prioridad, deja trazabilidad.
 
+</details>
+
 ---
 
-## SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B — Defense-in-depth + refactor modelo de datos pagos[] → subcolección
+## SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B — DESBLOQUEADO 2026-05-21 (OK: jorge 2026-05-21 10:30 opcion 1)
+
+**Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-21 por coordinator (`procesa bloqueos`, pasada 33). desbloqueadoPor: jorge 2026-05-21 10:30 vía `OK: jorge 2026-05-21 10:30 opcion 1`.** Conservado acá como stub para forensia.
+
+**Plan aprobado por Jorge:** opción 1 — 3 fases con QA entre cada una. **Pasada 33 procesa SÓLO B.1** (helper `confirmarPagoOrden` + página `/admin/pagos-pendientes` leyendo del array, sin tocar rules ni migrar datos). B.2 (refactor 7 consumidores + migración script) y B.3 (deploy rule estricta de subcolección) quedan pendientes hasta que Jorge dé QA explícito de B.1 vía otro `procesa bloqueos`.
+
+<details><summary>Contexto original del bloqueo (preservado para forensia)</summary>
 
 **Prioridad:** ALTA (cierra el gap de defense-in-depth — fase A es solo client-side).
 **Estado:** BLOQUEADO esperando OK de Jorge al plan de deploy.
@@ -112,12 +128,16 @@
 3. Si opción 2: `OK: jorge YYYY-MM-DD HH:MM opcion 2 single-shot`. Coordinator procesa todo en una pasada.
 4. Pegar `procesa bloqueos` al coordinator.
 
+**OK: jorge 2026-05-21 10:30 opcion 1** — migración por 3 fases con QA entre cada una (más seguro para datos financieros + cambio de rules). Procesar B.1, esperar QA de Jorge, luego B.2, etc. La rule de la subcolección `ordenes_servicio/{id}/pagos/{pagoId}` debe deployarse con `npm run deploy:rules` antes de cerrar (sub-regla P-005). Reviewer obligatorio con foco en inmutabilidad de `verificado/verificadoPor*` (solo coord/admin puede setear true, con `.get(field,null)`).
+
 ### Salvaguardas que YA cubre Fase A
 - Operaria registra pago → queda explícitamente `verificado=false` → conduce bloqueado hasta confirmación.
 - Solo admin/coord puede tildar "Pago verificado" en `ProcesarFacturacionModal` (defense-in-depth UI, antes de tener rule).
 - Operaria NO puede borrar pagos `verificado=true` (defense-in-depth UI).
 
 **El gap pendiente para Fase B:** usuario que sortee la UI (ej: console) sigue pudiendo escribir `verificado=true` a Firestore directamente — la rule no enforce nada (hoy `firestore.rules:351` da carta blanca sobre `ordenes_servicio` para staff). La fase B cierra ese gap con la rule de subcolección.
+
+</details>
 
 ---
 

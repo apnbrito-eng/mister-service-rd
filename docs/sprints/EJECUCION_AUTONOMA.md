@@ -5,6 +5,66 @@
 
 ---
 
+## 2026-05-21 — autónomo (`procesa bloqueos`, pasada 33): 2 sprints desbloqueados + procesados
+
+### Contexto
+
+Jorge pegó `procesa bloqueos` después de editar 2 entradas de BLOQUEOS.md con OKs:
+- `SPRINT-INBOX-8b-DRAWER-LATERAL` → `OK: jorge 2026-05-21 10:30 approach=A1 + items=4,5,6`.
+- `SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B` → `OK: jorge 2026-05-21 10:30 opcion 1` (plan 3 fases con QA entre cada una).
+
+Coordinator movió ambos a COLA_AUTONOMA.md como PENDIENTES. El de PAGOS se renombró a `SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1` reflejando la opción 1 (procesar B.1, esperar QA Jorge, luego B.2, luego B.3).
+
+### Decisiones del coordinator
+
+#### Sprint 1 — SPRINT-INBOX-8b-DRAWER-LATERAL (autónomo)
+
+**Archivist PRE-CHANGE:** consultado historial git de `OrdenCreateModal.tsx`, `InboxConversacion.tsx`, `MensajeBubble.tsx`. Sin postmortems específicos relacionados al cambio de presentación. Único postmortem que toca `OrdenCreateModal` es `2026-05-07-iniciar-chequeo-permission-denied.md` (P-006 dropdown técnico), no aplica al refactor de presentación. Sub-regla CLAUDE.md "cleanup en páginas críticas" → QA flujo crear orden desde `/admin/ordenes` y `/admin/citas` antes de commit.
+
+**Builder:**
+- `OrdenCreateModal.tsx`: prop `presentationMode?: 'modal' | 'drawer'` con default `'modal'`. Refactor: extrae todo el `<form>...</form>` + `EditarClienteModal` a `formContent`. Render condicional al final: drawer = `<div fixed top-0 right-0 z-40 h-full w-full md:w-[60%] lg:w-[55%] xl:w-[50%] bg-white shadow-2xl border-l>` con header propio + `<X>` button. Default = `<Modal>` overlay clásico igual que antes (Ordenes/Citas/OrdenEditForm/FormularioAgendarPublico no cambian comportamiento porque no pasan el prop).
+- `MensajeBubble.tsx`: props opcionales `onCopiarAOrden(texto)` y `onUsarUbicacion({lat,lng,direccion?})`. Helper `extraerTextoCopiable` que retorna texto / mediaCaption / null. Botón hover (`opacity-0 group-hover:opacity-100`) "→ copiar a orden" solo en burbujas entrantes con texto. Para tipo `location`, botón inline "Usar esta ubicación en la orden".
+- `InboxConversacion.tsx`: pasa `presentationMode='drawer'` al `OrdenCreateModal`. Define handlers `handleCopiarAOrden` y `handleUsarUbicacion` solo si `showCreateModal === true` (sino undefined → íconos no se renderizan). Copy pega en `descripcionFalla` (concatena si ya hay). Ubicación vuelca a `clienteLat`/`clienteLng` + dirección si viene.
+
+**Tester:** typecheck PASS, lint PASS sobre los 3 archivos staged, cazadores 17/17 PASS.
+
+**Regression_guardian:** N/A — el sprint toca solo presentación UI, no rules/context/services. P-006 OK (no se agregan dropdowns nuevos).
+
+**Reviewer (foco regresión Ordenes/Citas):** OK — default 'modal' preserva comportamiento; el nuevo branch 'drawer' es aditivo. Build local exitoso.
+
+**Commit:** `50688a1` — `feat(inbox): SPRINT-INBOX-8b drawer lateral + copiar mensaje + usar ubicación`. Push OK.
+
+**Devops:** N/A en esta etapa — Jorge verifica deploy Vercel en su próxima pasada (los commits suben a main y Vercel deploya automáticamente).
+
+#### Sprint 2 — SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 (opción 1: solo B.1)
+
+**Archivist PRE-CHANGE:** consultado historial git de `src/services/ordenes.service.ts`, `App.tsx`, `Sidebar.tsx`. Patrones P-003 (cross-collection con runTransaction) y P-001 (currentUser.uid vs userProfile.id) aplican directamente. Postmortems relevantes: ningún incidente directo en ordenes.service.ts; el patrón de `marcarClienteEnviado` (`a38eb89`) establece la idempotencia dentro del callback DESPUÉS del `tx.get()`. Categoría especial: archivo de servicio crítico para mutaciones cross-collection → invocar regression_guardian.
+
+**Builder:**
+- `ordenes.service.ts`: helper `confirmarPagoOrden(ordenId, pagoId, confirmadoPor)` con runTransaction sobre `ordenes_servicio` + `tx.set` a `auditoria_admin` en el mismo callback (P-003). Idempotencia: `if (pagoActual.verificado === true) return {ok:false, razon:'ya_confirmado'}` DESPUÉS del `tx.get()`. Strip de undefined via `stripUndefined` ya existente en utils. Helper `suscribirPagosPendientes(callback)` real-time sobre `ordenes_servicio` con filtro client-side `pagos[i].verificado===false` (Firestore no soporta query así). Sin orderBy → P-015 OK.
+- `PagosPendientes.tsx` (NUEVO): vista de cards listando `{ordenId, orden, pago}` ordenado por fecha desc. Botón "Confirmar pago" → llama helper con `currentUser.uid` (P-001) + `userProfile.nombre`. Toast por cada estado de respuesta (ok / ya_confirmado / orden_no_existe / pago_no_existe / error). Gate interno por `puede(userProfile, 'pagosVerificar')` → "Sin acceso" si false.
+- `App.tsx`: lazy import + ruta `/admin/pagos-pendientes` con `PermisoRoute permiso="pagosVerificar"` (defense in depth además del gate interno).
+- `Sidebar.tsx`: entrada nueva "Pagos pendientes" en sección "Cobranza y facturación" con `Banknote` icon. Listener onSnapshot dedicado (gateado por permiso) para badge count. Justificación de no piggy-back con `facturacionPendienteCount`: ese listener filtra `enviadaAFacturacion==true`; los pagos pendientes pueden vivir en órdenes anteriores al envío a facturación.
+
+**Tester:** typecheck PASS, lint PASS sobre 4 archivos, cazadores 17/17 PASS. `npm run build` PASS (`PagosPendientes-*.js` chunk generado, 4.15s).
+
+**Regression_guardian:** P-001 OK — `currentUser.uid` se usa en el caller. P-003 OK — runTransaction envuelve update orden + tx.set auditoria. P-005 OK — NO se tocó firestore.rules (eso es B.3). P-015 OK — sin orderBy sobre campo no garantizado en la suscripción.
+
+**Reviewer (foco helper + idempotencia):** OK — patrón identico a `reactivarOrdenPostChequeo` (existente) y `marcarClienteEnviado` (`a38eb89`). Idempotencia bien posicionada. Strip de undefined en ambos updates. El array `pagos` se reescribe completo en lugar de usar `arrayUnion`/`arrayRemove` porque hay que mutar un elemento — correcto.
+
+**Commit:** `4fa8f08` — `feat(pagos): SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 página + helper confirmar`. Push OK.
+
+**Devops:** N/A en esta etapa — Jorge verifica deploy Vercel.
+
+### Cierre
+
+- Cola al final de pasada 33: vacía de PENDIENTES procesables. SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 marcada COMPLETADO pero **AWAITING QA Jorge** — el coordinator NO procesa B.2 automáticamente. Cuando Jorge dé OK QA via Cowork → nuevo sprint en cola para B.2.
+- Bloqueos remanentes: los WhatsApp HSM, conversaciones, inbox 3-col, hardening notif, portal solicitud, etc., siguen igual.
+- Hotfixes: 0. Postmortems: 0. Cazadores nuevos: 0.
+- Tiempo total: ~50 minutos (lectura cola/bloqueos + 2 sprints + sync docs + commits + pushes).
+
+---
+
 ## 2026-05-21 — autónomo (`trabaja`, pasada 31): 3 sprints procesados + 1 escalado
 
 ### Contexto
