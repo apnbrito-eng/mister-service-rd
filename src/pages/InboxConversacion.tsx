@@ -21,6 +21,7 @@ import MensajeBubble from '../components/inbox/MensajeBubble';
 import IndicadorVentana24h from '../components/inbox/IndicadorVentana24h';
 import ToggleBot from '../components/inbox/ToggleBot';
 import CardCliente from '../components/inbox/CardCliente';
+import SelectorPlantillas from '../components/inbox/SelectorPlantillas';
 import type {
   WhatsAppConversacion,
   WhatsAppMensajeInbox,
@@ -403,14 +404,16 @@ export default function InboxConversacion() {
 
           {/* Composer */}
           <div className="bg-white border-t border-gray-200 p-3">
-            {!ventanaAbierta && (
+            {!ventanaAbierta && waId && (
               <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-800 flex items-start gap-2">
                 <CheckCheck size={14} className="mt-0.5 flex-shrink-0" />
-                <span>
-                  Ventana 24h cerrada. Para reabrir la conversación necesitás
-                  enviar una plantilla aprobada por Meta (selector de plantillas
-                  próximamente — SPRINT-WA-5/INBOX next).
-                </span>
+                <div className="flex-1 flex items-start justify-between gap-3">
+                  <span>
+                    Ventana 24h cerrada. Para reabrir la conversación enviá una
+                    plantilla aprobada por Meta.
+                  </span>
+                  <SelectorPlantillas waId={waId} />
+                </div>
               </div>
             )}
             <div className="flex items-end gap-2">
