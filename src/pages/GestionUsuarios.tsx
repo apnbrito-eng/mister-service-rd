@@ -979,6 +979,13 @@ export default function GestionUsuarios() {
                   { titulo: 'Órdenes', keys: ['ordenesVer', 'ordenesCrear', 'ordenesModificar', 'ordenesModificarFueraGrupo', 'ordenesEliminar', 'ordenesVerEliminadas'] },
                   { titulo: 'Cotizaciones', keys: ['cotizacionesVer', 'cotizacionesCrear', 'cotizacionesModificar', 'cotizacionesAprobarPrecio'] },
                   { titulo: 'Facturas', keys: ['facturasVer', 'facturasCrear', 'facturasModificar', 'facturasEliminar'] },
+                  /* SPRINT-PAGOS-CONFIRMA-MARIA fase A (2026-05-21): incluir
+                     la categoría Pagos en el editor de permisos personalizados.
+                     Antes los toggles existían en types pero NO se exponían en
+                     la UI — solo se podía cambiar via defaults de rol. Incluye
+                     el nuevo `pagosVerificar` (solo admin/coord puede confirmar
+                     un pago como cotejado). */
+                  { titulo: 'Pagos y facturación', keys: ['pagosRegistrar', 'pagosVerificar', 'ordenesEnviarAFacturacion', 'facturasCerrar'] },
                   { titulo: 'Clientes', keys: ['clientesVer', 'clientesCrear', 'clientesModificar', 'clientesEliminar'] },
                   { titulo: 'Personal', keys: ['personalVer', 'personalCrear', 'personalModificar', 'personalEliminar'] },
                   { titulo: 'Gastos', keys: ['gastosVer', 'gastosCrear', 'gastosEliminar'] },

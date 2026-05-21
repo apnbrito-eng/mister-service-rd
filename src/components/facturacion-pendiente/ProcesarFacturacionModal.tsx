@@ -35,7 +35,7 @@ import {
   calcularCostoPiezasDeItems,
 } from '../../utils/comisiones';
 import { obtenerConfigFiscal } from '../../services/configFiscal.service';
-import { esAdminOCoord } from '../../utils/permisos';
+import { esAdminOCoord, puede } from '../../utils/permisos';
 import Modal from '../Modal';
 import BadgeSoloChequeo from '../shared/BadgeSoloChequeo';
 import FacturaItemsEditor from '../facturas/FacturaItemsEditor';
@@ -151,6 +151,11 @@ export default function ProcesarFacturacionModal({
 
   const puedeConfigurarGarantia = esAdminOCoord(userProfile);
   const puedeOverrideModalidad = esAdminOCoord(userProfile);
+  // SPRINT-PAGOS-CONFIRMA-MARIA fase A (2026-05-21): gate del checkbox
+  // "Pago verificado". Solo admin/coordinadora. La operaria registra
+  // banco/monto/efectivo pero NO puede confirmar. El enforcement
+  // estricto (rule + subcolección) queda para fase B.
+  const puedeVerificarPagos = puede(userProfile, 'pagosVerificar');
 
   // ─── Cargar cliente al abrir el modal (getDoc puntual) ───
   useEffect(() => {
@@ -379,6 +384,28 @@ export default function ProcesarFacturacionModal({
       toast.error('La nota del conduce no puede superar 500 caracteres.');
       return;
     }
+    // SPRINT-PAGOS-CONFIRMA-MARIA fase A C3 (2026-05-21): bloquear emisión
+    // del conduce si CUALQUIER pago PREVIO de la orden está EXPLÍCITAMENTE
+    // sin verificar (verificado === false). Antes (SPRINT-151) sólo se
+    // chequeaba el pago nuevo. Esto cierra el gap: una operaria registra
+    // pago con verificado=false + admin/coord no lo confirmó → el conduce
+    // queda bloqueado hasta que María lo confirme.
+    //
+    // RETROCOMPAT: pagos legacy (pre-SPRINT-151) tienen verificado=undefined
+    // y NO se bloquean — se asume verificación implícita por la práctica
+    // anterior. Solo bloqueamos cuando el flag está explícitamente en false
+    // (= registrado por operaria post-fase A sin confirmación de María).
+    const pagosSinVerificar = pagosPrevios.filter(p => p.verificado === false);
+    if (pagosSinVerificar.length > 0) {
+      const detalle = pagosSinVerificar
+        .map(p => `RD$${Number(p.monto || 0).toLocaleString('es-DO')}`)
+        .join(', ');
+      toast.error(
+        `Hay ${pagosSinVerificar.length} pago${pagosSinVerificar.length === 1 ? '' : 's'} sin confirmar (${detalle}). María/admin debe confirmarlo antes de emitir el conduce.`,
+      );
+      return;
+    }
+
     // SPRINT-151: validación del pago nuevo.
     const montoPagoNuevo = Math.max(0, Number(pagoMonto) || 0);
     if (montoPagoNuevo > 0) {
@@ -1210,6 +1237,14 @@ export default function ProcesarFacturacionModal({
                             VERIFICADO
                           </span>
                         )}
+                        {/* SPRINT-PAGOS-CONFIRMA-MARIA fase A: badge pendiente
+                            cuando un pago fue registrado por operaria pero
+                            María/admin todavía no lo confirmó. */}
+                        {p.verificado === false && (
+                          <span className="ml-2 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                            PENDIENTE DE CONFIRMAR
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1299,21 +1334,41 @@ export default function ProcesarFacturacionModal({
                 </div>
               </div>
               <label
-                className={`mt-3 flex items-center gap-2 text-sm font-medium select-none ${pagoMonto > 0 ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
-                title={pagoMonto <= 0 ? 'Sin monto a verificar (la orden ya está pagada)' : undefined}
+                className={`mt-3 flex items-center gap-2 text-sm font-medium select-none ${pagoMonto > 0 && puedeVerificarPagos ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                title={
+                  pagoMonto <= 0
+                    ? 'Sin monto a verificar (la orden ya está pagada)'
+                    : !puedeVerificarPagos
+                      ? 'Solo la coordinadora / admin puede confirmar pagos'
+                      : undefined
+                }
               >
                 <input
                   type="checkbox"
                   checked={pagoVerificado}
-                  disabled={generando || pagoMonto <= 0}
+                  disabled={generando || pagoMonto <= 0 || !puedeVerificarPagos}
                   onChange={e => setPagoVerificado(e.target.checked)}
-                  title={pagoMonto <= 0 ? 'Sin monto a verificar (la orden ya está pagada)' : undefined}
+                  title={
+                    pagoMonto <= 0
+                      ? 'Sin monto a verificar (la orden ya está pagada)'
+                      : !puedeVerificarPagos
+                        ? 'Solo la coordinadora / admin puede confirmar pagos'
+                        : undefined
+                  }
                   className="w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
                 />
                 <span className={pagoVerificado ? 'text-emerald-700' : 'text-gray-700'}>
                   Pago verificado (cotejado con banco / efectivo en mano)
                 </span>
               </label>
+              {/* SPRINT-PAGOS-CONFIRMA-MARIA fase A: hint cuando el rol
+                  no tiene permiso de verificar. */}
+              {pagoMonto > 0 && !puedeVerificarPagos && (
+                <p className="mt-1 text-xs text-amber-600">
+                  Solo la coordinadora (Maria) o admin pueden marcar el pago
+                  como verificado. Registralo sin tildar y avisale.
+                </p>
+              )}
               {/* SPRINT-152: helper text contextual según estado del checkbox */}
               {pagoMonto <= 0 && (
                 <p className="mt-1 text-xs text-slate-400">

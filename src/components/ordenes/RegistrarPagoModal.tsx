@@ -6,6 +6,7 @@ import { useApp } from '../../context/AppContext';
 import { suscribirBancos } from '../../services/bancos.service';
 import { crearNotificacion } from '../../services/notificaciones.service';
 import { crearRegistroAuditoria } from '../../utils';
+import { puede } from '../../utils/permisos';
 import { mensajeDatosCuentaBancaria, whatsappUrl } from '../../utils/whatsapp';
 import Modal from '../Modal';
 import toast from 'react-hot-toast';
@@ -134,6 +135,13 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
       }
       if (notas.trim()) pago.notas = notas.trim();
 
+      // SPRINT-PAGOS-CONFIRMA-MARIA fase A (2026-05-21): los pagos nuevos
+      // nacen con verificado=false EXPLÍCITO (no undefined). Esto permite
+      // que ProcesarFacturacionModal bloquee la emisión del conduce hasta
+      // que María/admin confirme. Pagos legacy (pre-SPRINT-151) tienen
+      // verificado=undefined y NO se bloquean (se asume verificación
+      // implícita por la práctica anterior — la spec del sprint cubre
+      // este caso de retrocompat).
       // Stripping undefined antes del write (convención del repo).
       const pagoSerializado: Record<string, unknown> = {
         id: pago.id,
@@ -142,6 +150,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
         fecha: ahoraTimestamp,
         registradoPorId: pago.registradoPorId,
         registradoPorNombre: pago.registradoPorNombre,
+        verificado: false,
       };
       if (pago.recibidoPorId !== undefined) pagoSerializado.recibidoPorId = pago.recibidoPorId;
       if (pago.recibidoPorNombre !== undefined) pagoSerializado.recibidoPorNombre = pago.recibidoPorNombre;
@@ -279,6 +288,18 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
 
   const handleEliminarPago = async (pago: PagoOrden) => {
     if (!orden) return;
+    // SPRINT-PAGOS-CONFIRMA-MARIA fase A M2 (2026-05-21): la operaria NO
+    // puede borrar un pago YA verificado por María/admin (verificado===true).
+    // Esto evita que se subvierta la confirmación borrando el registro
+    // original. Si el pago aún no está confirmado (verificado=false o
+    // undefined), cualquiera con pagosRegistrar puede borrarlo (caso
+    // típico: corrigió un monto mal tipeado).
+    if (pago.verificado === true && !puede(userProfile, 'pagosVerificar')) {
+      toast.error(
+        'Este pago ya fue confirmado por la coordinadora / admin. Solo ellos pueden eliminarlo.',
+      );
+      return;
+    }
     if (!confirm(`¿Eliminar este pago de ${formatearMonto(pago.monto)}?`)) return;
     // Capturamos el id UNA vez, antes de la transacción. Si Firestore reintenta
     // el callback internamente, el mismo id se usa en cada intento.

@@ -1367,6 +1367,20 @@ export interface PermisosSistema {
   cierreDiaEjecutar: boolean;
   // Pagos y facturación (Fase 7)
   pagosRegistrar: boolean;
+  /**
+   * SPRINT-PAGOS-CONFIRMA-MARIA fase A (2026-05-21): separación de funciones.
+   * Permite marcar un pago como verificado (cotejado con banco / efectivo en
+   * mano). Solo admin/coordinadora por default — operaria/secretaria/técnico
+   * registran pagos con `pagosRegistrar` pero NO pueden auto-confirmarlos.
+   *
+   * Defense-in-depth de rule (sub-colección + inmutabilidad) queda para
+   * fase B (escalado a BLOQUEOS.md). Por ahora el enforcement es 100%
+   * client-side. CAUTION: hasta que la rule de fase B esté deployada, un
+   * usuario que sortee la UI (ej: console) sigue pudiendo escribir
+   * `verificado=true` — el gate UI cubre el 99% del caso de uso pero NO es
+   * seguridad estricta.
+   */
+  pagosVerificar: boolean;
   ordenesEnviarAFacturacion: boolean;
   facturasCerrar: boolean;
   bancosGestionar: boolean;
@@ -1402,7 +1416,7 @@ const TODO_FALSE: PermisosSistema = {
   rendimientoVer: false,
   configuracionVer: false, configuracionModificar: false,
   cierreDiaEjecutar: false,
-  pagosRegistrar: false, ordenesEnviarAFacturacion: false,
+  pagosRegistrar: false, pagosVerificar: false, ordenesEnviarAFacturacion: false,
   facturasCerrar: false, bancosGestionar: false,
   avancesGestionar: false,
   clientesReactivacionGestionar: false,
@@ -1419,7 +1433,7 @@ const TODO_TRUE: PermisosSistema = {
   rendimientoVer: true,
   configuracionVer: true, configuracionModificar: true,
   cierreDiaEjecutar: true,
-  pagosRegistrar: true, ordenesEnviarAFacturacion: true,
+  pagosRegistrar: true, pagosVerificar: true, ordenesEnviarAFacturacion: true,
   facturasCerrar: true, bancosGestionar: true,
   avancesGestionar: true,
   clientesReactivacionGestionar: true,
