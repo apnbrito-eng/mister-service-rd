@@ -1,4 +1,124 @@
-**Última actualización:** 2026-05-21 por coordinator autónomo (`trabaja`, pasada 29) — **sync de cola: 0 sprints procesables, sincronización de 7 SPRINT-WA-1..7 PENDIENTES viejos.** WA-1/WA-2/WA-3 marcados ⊘ REDUNDANTE (ya implementados en producción bajo otros slugs: api/whatsapp/webhook.ts + api/whatsapp/send.ts + bloque SPRINT-INBOX-1..6). WA-4/WA-5/WA-6/WA-7 marcados ⊘ MOVIDO A BLOQUEOS (apuntando a sus entradas detalladas en BLOQUEOS.md). Decisión: cumplir instrucción explícita Jorge "lo que requiera Meta config bloqueado movelo a BLOQUEOS.md con instrucciones claras de desbloqueo". Cola limpia para próximas adiciones de Cowork. Sin commits de código. Anterior: 2026-05-20 tarde — **6 sprints SPRINT-INBOX-1..6 COMPLETADOS en una sola pasada.** Hashes `e8f3ac1` (tipos + service), `8716f1e` (página /admin/inbox + entrada sidebar), `e6597e1` (vista 3-columnas + indicador 24h), `f2f4c10` (toggle bot), `9fdb026` (CardCliente + órdenes), `d2c5e1f` (cards Dashboard). Deploy Vercel Ready a las 22:47:43Z. Cazadores 17/17 PASS en cada commit. NO se tocó `firestore.rules` (la auditoría C1 confirmó que el modelo de datos ya existía). NO se introdujeron índices compuestos. Anterior: 6 sprints SPRINT-INBOX-1..6 agregados al tope por Cowork (inbox CRM WhatsApp, FRONTEND sobre el modelo backend que YA existe — post-auditoría `docs/analisis/AUDITORIA_PRE_CRM_2026_05_20.md`, hallazgo C1). NO crean colección, NO migran, NO tocan rules. Procesables autónomos en orden 1→6. Anterior previo: **SPRINT-WA-2-BUTTON-URL agregado al tope de la cola.** Habilita soporte para componente `button` (sub_type `url`) en plantillas WhatsApp con variable dinámica (ej: token del portal cliente). Bloquea actualización plantilla `cita_confirmada` en Meta con botón "Reagendar" que abre `https://www.misterservicerd.com/cliente/{{token}}` (portal existente con flujo de reprogramación ya implementado vía `ModalPosponer` + vista admin `/admin/reprogramaciones`). Sprint procesable autónomo (no toca rules, no integra terceros, cambio aditivo retrocompatible).
+**Última actualización:** 2026-05-21 por coordinator autónomo (`procesa bloqueos`, pasada 30) — **1 sprint desbloqueado por Jorge movido al tope: SPRINT-PAGOS-CONFIRMA-MARIA** (`OK: jorge 2026-05-20 14:00 pagos confirma maria`). El sprint incluye una corrección obligatoria de auditoría (`AUDITORIA_PRE_CRM_2026_05_20.md`) que **cambia el approach técnico** del original: campo top-level → subcolección `ordenes_servicio/{id}/pagos/{pagoId}` + migración de array a subcolección. Esto significa que el sprint, al procesarse, **probablemente desencadene un sub-sprint adicional de migración masiva** que el coordinator escalará por separado a BLOQUEOS.md (sub-regla CLAUDE.md "migraciones de datos sobre >500 docs"). La parte de touch a `firestore.rules` ya cuenta con OK explícito de Jorge. Anterior: 2026-05-21 — **sync de cola: 0 sprints procesables, sincronización de 7 SPRINT-WA-1..7 PENDIENTES viejos.** WA-1/WA-2/WA-3 marcados ⊘ REDUNDANTE (ya implementados en producción bajo otros slugs: api/whatsapp/webhook.ts + api/whatsapp/send.ts + bloque SPRINT-INBOX-1..6). WA-4/WA-5/WA-6/WA-7 marcados ⊘ MOVIDO A BLOQUEOS (apuntando a sus entradas detalladas en BLOQUEOS.md). Decisión: cumplir instrucción explícita Jorge "lo que requiera Meta config bloqueado movelo a BLOQUEOS.md con instrucciones claras de desbloqueo". Cola limpia para próximas adiciones de Cowork. Sin commits de código. Anterior: 2026-05-20 tarde — **6 sprints SPRINT-INBOX-1..6 COMPLETADOS en una sola pasada.** Hashes `e8f3ac1` (tipos + service), `8716f1e` (página /admin/inbox + entrada sidebar), `e6597e1` (vista 3-columnas + indicador 24h), `f2f4c10` (toggle bot), `9fdb026` (CardCliente + órdenes), `d2c5e1f` (cards Dashboard). Deploy Vercel Ready a las 22:47:43Z. Cazadores 17/17 PASS en cada commit. NO se tocó `firestore.rules` (la auditoría C1 confirmó que el modelo de datos ya existía). NO se introdujeron índices compuestos. Anterior: 6 sprints SPRINT-INBOX-1..6 agregados al tope por Cowork (inbox CRM WhatsApp, FRONTEND sobre el modelo backend que YA existe — post-auditoría `docs/analisis/AUDITORIA_PRE_CRM_2026_05_20.md`, hallazgo C1). NO crean colección, NO migran, NO tocan rules. Procesables autónomos en orden 1→6. Anterior previo: **SPRINT-WA-2-BUTTON-URL agregado al tope de la cola.** Habilita soporte para componente `button` (sub_type `url`) en plantillas WhatsApp con variable dinámica (ej: token del portal cliente). Bloquea actualización plantilla `cita_confirmada` en Meta con botón "Reagendar" que abre `https://www.misterservicerd.com/cliente/{{token}}` (portal existente con flujo de reprogramación ya implementado vía `ModalPosponer` + vista admin `/admin/reprogramaciones`). Sprint procesable autónomo (no toca rules, no integra terceros, cambio aditivo retrocompatible).
+
+---
+
+## SPRINT-PAGOS-CONFIRMA-MARIA — Separación de funciones: operaria registra pago, María confirma
+
+**Prioridad:** ALTA (control financiero — separación de funciones).
+**Estado:** PENDIENTE — desbloqueado por Jorge 2026-05-20 14:00, movido desde `BLOQUEOS.md` por coordinator `procesa bloqueos` pasada 30 el 2026-05-21.
+**desbloqueadoPor:** jorge 2026-05-20 14:00 vía `OK: jorge 2026-05-20 14:00 pagos confirma maria`.
+**Origen:** Jorge 2026-05-20. Regla de negocio: "quien confirma los depósitos y pagos es María, y las operarias ponen de qué banco y el monto o si fue efectivo". Hoy NO hay separación — la misma persona que registra puede marcar el pago como verificado.
+
+> ### CONTEXTO PRESERVADO DEL BLOQUEO (BLOQUEOS.md → COLA, 2026-05-21)
+> Originalmente en BLOQUEOS.md por: **toca `firestore.rules`** (enforce que solo coordinadora/admin confirme pagos). Requería OK + deploy de rules. **Jorge dio OK explícito al touch a rules.** El deploy se hará con `npm run deploy:rules` antes de marcar el sprint COMPLETADO (sub-regla CLAUDE.md P-005).
+
+### ⚠️ CORRECCIÓN auditoría 2026-05-20 (`docs/analisis/AUDITORIA_PRE_CRM_2026_05_20.md`) — OBLIGATORIA
+
+El sprint original asumía un approach de rule que NO es viable. Correcciones obligatorias antes de procesar:
+
+- **A1 — El campo top-level `pagoConfirmadoPorCoordUid` NO sirve.** Los pagos viven en `pagos[]` dentro de la orden; un escalar no distingue cuál pago se confirmó ni soporta abonos parciales, y la rule `firestore.rules:351` (`allow update: if esStaffOficina()`) no inspecciona el array. **Solución correcta: mover pagos a subcolección `ordenes_servicio/{id}/pagos/{pagoId}`** con rule granular: create por quien tenga `pagosRegistrar`; el campo `verificado/verificadoPor*` solo lo puede setear admin/coordinadora (rule con `.get('verificado', false)` para inmutabilidad). **Esto es una MIGRACIÓN de datos (pagos de array → subcolección)** → el sprint ahora SÍ toca migración además de rules.
+- **C2 — Hoy la separación es 100% client-side.** `firestore.rules:351` da carta blanca total sobre `ordenes_servicio` (sin inmutabilidad de `pagos/montoPagado/verificado`). La rule de la subcolección es indispensable, no opcional.
+- **C3 — El gate del conduce no cubre pagos previos.** `ProcesarFacturacionModal.tsx:384-389`: `if(!pagoVerificado)` solo corre si `montoPagoNuevo > 0`. Hay que bloquear el conduce si CUALQUIER pago de la orden está sin confirmar (no solo el nuevo).
+- **A2 — Gatear el checkbox** `ProcesarFacturacionModal.tsx:1305-1316` a `puede(userProfile,'pagosVerificar')`.
+- **M2 — Gatear `handleEliminarPago`** en `RegistrarPagoModal.tsx`: una operaria NO debe poder borrar un pago ya confirmado.
+- **M1 — `EnviarFacturacionButton.tsx` / `FacturacionPendiente.tsx`:** la lista de "qué se puede facturar" debe filtrar/avisar por estado de confirmación.
+- **Confirmado OK:** `RegistrarPagoModal` ya usa `currentUser?.uid` (no cae en P-001); la sincronización de fase está correcta.
+
+> **ALERTA AL COORDINATOR — sub-sprint adicional posible:** La migración de `pagos[]` array → subcolección sobre órdenes existentes con pagos registrados es una migración de datos productivos. Si el conteo de docs afectados es >500, el coordinator DEBE escalar a BLOQUEOS.md como sub-sprint separado (`SPRINT-PAGOS-CONFIRMA-MARIA-MIGRACION`) y NO ejecutar el `--apply` autónomo. Hacer DRY-RUN primero, reportar conteo, esperar OK ampliado de Jorge si supera el umbral. Si ≤500 docs, puede procesarse autónomo en el mismo flujo.
+
+### Decisiones de Jorge (RESUELTAS 2026-05-20)
+
+- **D1 — Quién confirma:** SOLO María (coordinadora) + admin. La operaria registra banco+monto+efectivo pero NO puede marcar verificado. Se agrega permiso `pagosVerificar` (default true solo admin/coordinadora) + rule que lo enforce.
+- **D2 — Dónde confirma María:** AMBAS opciones → (a) lista nueva "Pagos pendientes de confirmar" donde María ve todos los pagos registrados por operarias esperando confirmación, Y (b) también puede confirmar en `FacturacionPendiente` al emitir conduce (como hoy, pero el check gateado).
+- **D3 — Bloqueo de conduce:** El conduce se bloquea hasta que María confirme el pago. Nada se factura sin confirmación de coordinadora/admin. Consistente con la regla.
+
+### Estado actual auditado (read-only, 2026-05-20)
+
+- `PagoOrden` (src/types/index.ts:1592) ya tiene `verificado`, `verificadoPorId/Nombre`, `verificadoAt` (SPRINT-151) + `registradoPorId/Nombre`.
+- Permiso `pagosRegistrar`: operaria=true, secretaria=true, coordinadora=true, admin=true. **NO existe `pagosVerificar`.**
+- `RegistrarPagoModal.tsx` — donde operarias registran pagos (desde OrdenDetalle + OrdenDetailModal). NO setea `verificado` → los pagos quedan sin verificar. ✓ ya alineado.
+- `FacturacionPendiente.tsx` — pantalla de María (gateada a `facturasCerrar`/admin/coordinadora). → `ProcesarFacturacionModal.tsx` tiene el checkbox "Pago verificado" SIN gate de permiso, y setea `verificadoPorId = usuarioId` (quien procesa). El conduce ya requiere `pagoVerificado=true` (línea ~386).
+- **Gap:** el checkbox de verificado no está gateado; cualquiera que abra el modal puede auto-confirmar. No hay lista de pendientes. La rule no enforce quién confirma.
+
+### Touch-list (con auditoría de consumidores, ACTUALIZADO post-corrección)
+
+**Archivos a modificar:**
+
+1. **`src/types/index.ts`** — agregar `pagosVerificar: boolean` a `PermisosSistema`. Agregarlo a `TODO_FALSE` (false) y `TODO_TRUE` (true). Defaults: ADMINISTRADOR=true (ya por TODO_TRUE), COORDINADORA=true (agregar explícito), OPERARIA=false, SECRETARIA=false, TECNICO=false (TODO_FALSE), AYUDANTE=false. **Nota retrocompat:** usuarios con `permisosPersonalizados` viejos no tendrán la key → `obtenerPermisos` debe tratar `undefined` como false (verificar `puede()` ya hace `=== true`, así que undefined → false ✓).
+
+2. **`src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx`** — (a) gate el checkbox "Pago verificado" (línea ~1307) a `puede(userProfile, 'pagosVerificar')`. Si el usuario NO puede verificar: el checkbox se muestra disabled con tooltip "Solo la coordinadora confirma pagos". (b) **C3 fix:** el gate del conduce debe bloquear si CUALQUIER pago de la orden está sin confirmar (no solo el nuevo). Reemplazar `if(!pagoVerificado)` (línea 384-389) por `if (pagosOrden.some(p => !p.verificado))`. (c) El `verificadoPorId/Nombre` debe ser el uid del que confirma (no necesariamente el que registró). Si el pago ya viene verificado de antes, mostrar quién/cuándo.
+
+3. **`src/components/ordenes/RegistrarPagoModal.tsx`** — (a) confirmar que sigue registrando con `verificado: false`. (b) **M2 fix:** gatear `handleEliminarPago` para que una operaria NO pueda borrar un pago ya confirmado. (c) Agregar (opcional) un affordance "Confirmar pago" visible SOLO si `puede(userProfile, 'pagosVerificar')`, para que María pueda confirmar directo desde la orden sin ir a facturación.
+
+4. **`src/pages/PagosPendientes.tsx`** (NUEVO) — vista lista de pagos con `verificado=false` across órdenes. Solo accesible a `pagosVerificar`. Cada item: OS#, cliente, método, banco/efectivo, monto, registrado por (operaria), fecha. Botón "Confirmar" por pago. Real-time `onSnapshot`. Entrada en sidebar gateada por `pagosVerificar`.
+
+5. **`src/services/ordenes.service.ts`** — helper `confirmarPagoOrden(ordenId, pagoId, confirmadoPor)` que marca el pago como `verificado: true` + `verificadoPorId/Nombre/At`, en `runTransaction` (patrón P-003), con audit log. **Refactor A1:** los pagos se leen/escriben en la subcolección `ordenes_servicio/{id}/pagos/{pagoId}`, NO en el array dentro del doc orden.
+
+6. **`firestore.rules`** — **APPROACH CORREGIDO (A1):**
+   - Subcolección nueva: `match /ordenes_servicio/{ordenId}/pagos/{pagoId}`.
+   - `allow create`: si `puede('pagosRegistrar')` Y `request.resource.data.verificado == false` (no pueden crear con verificado=true).
+   - `allow update`: si el cambio toca `verificado/verificadoPorId/verificadoPorNombre/verificadoAt` → solo si `puede('pagosVerificar')` (admin/coordinadora). Para otros campos del pago → `puede('pagosRegistrar')`. Usar `.get('verificado', false)` para inmutabilidad (gotcha P-002). Una vez `verificado=true`, no se puede revertir a `false` salvo admin.
+   - `allow delete`: si `puede('pagosVerificar')` (solo admin/coordinadora pueden borrar; operaria NO puede borrar confirmados).
+   - `allow read`: si `esStaffOficina()`.
+   - **Inmutabilidad:** el monto/método/banco no se pueden modificar después de verificar (`.get('verificado', false) == false` en update permite cambiar monto; si ya verificado, solo admin puede modificar).
+
+7. **`src/App.tsx`** — ruta `/admin/pagos-pendientes` gateada por `pagosVerificar`.
+
+8. **`src/components/Sidebar.tsx`** — entrada "Pagos pendientes" visible solo con `pagosVerificar`, con badge count de pagos sin confirmar.
+
+9. **`src/pages/GestionUsuarios.tsx`** — agregar el toggle `pagosVerificar` en el editor de permisos personalizados (para que el toggle aparezca en la UI de permisos por usuario).
+
+10. **`scripts/migrar-pagos-array-a-subcoleccion.ts`** (NUEVO) — script DRY-RUN/`--apply` que recorre `ordenes_servicio` con `pagos.length > 0`, crea docs en subcolección `ordenes_servicio/{id}/pagos/{auto-id}` espejando cada elemento del array (preservando `verificado`, `verificadoPorId/Nombre/At`, `registradoPorId/Nombre`, etc.), y limpia el array array en el doc orden. Patrón espejo de `scripts/dedup-clientes-por-telefono.ts` con DRY-RUN/`--apply`/`--ok-ampliado`. Audit log en `auditoria_admin` con `accion=migracion_pagos_a_subcoleccion`. **Idempotente:** verifica si el doc subcolección ya existe antes de crear (skip duplicados).
+
+**Consumidores verificados (read-only check) — usan `pagos`/`PagoOrden` pero necesitan adaptación post-migración:**
+
+- `src/components/ordenes/OrdenDetailModal.tsx` (lee `orden.pagos` para mostrar, usa `pagosRegistrar`). Post-A1: leer subcolección con `onSnapshot` en lugar de del array del doc. Solo lectura del estado verificado — agregar badge "confirmado/pendiente" en el render.
+- `src/pages/OrdenDetalle.tsx` (líneas 1349-1417, render de pagos + RegistrarPagoModal). Igual: leer de subcolección + agregar badge confirmado/pendiente.
+- `src/pages/AgendaDia.tsx`, `src/pages/FacturacionPendiente.tsx` (lee pagos), `src/utils/index.ts`, `src/utils/tooltipsBotones.ts`, `src/components/ordenes/EnviarFacturacionButton.tsx` — todos los lectores del array `orden.pagos` deben adaptarse a leer subcolección. **Hallazgo a confirmar en el sprint:** `EnviarFacturacionButton` no debe permitir enviar a facturación si algún pago no está confirmado (M1).
+
+**Consumidores NO afectados:** `src/components/CierreServicioWizard.tsx`, `IniciarChequeoButton.tsx`, `Avances.tsx` — usan `verificado` en otro contexto (no pagos). Justificación: el `verificado` ahí es de otros flujos (chequeo/avances), no del pago. Verificar con grep antes de tocar.
+
+### Criterio de éxito
+
+- [ ] Permiso `pagosVerificar` agregado; defaults correctos (admin/coord true, resto false).
+- [ ] Operaria NO puede tildar "Pago verificado" en ningún lugar (checkbox disabled + tooltip).
+- [ ] María/admin pueden confirmar pagos en (a) `/admin/pagos-pendientes` y (b) facturación-pendiente.
+- [ ] Conduce bloqueado si CUALQUIER pago de la orden no está confirmado por coordinadora/admin (C3).
+- [ ] Rule subcolección `pagos/{pagoId}` deployada que enforce verificación solo por coord/admin (con `.get(field,null)` para opcional, gotcha P-002).
+- [ ] Migración de `pagos[]` array a subcolección ejecutada (DRY-RUN reportado + `--apply` autorizado).
+- [ ] archivist PRE-CHANGE obligatorio (toca `ordenes.service.ts`, `firestore.rules`).
+- [ ] regression_guardian obligatorio (toca rules, services, modelo de datos).
+- [ ] Reviewer obligatorio (toca rules) + foco en inmutabilidad del campo de confirmación.
+- [ ] Badge "confirmado/pendiente" visible en render de pagos (OrdenDetalle, OrdenDetailModal).
+- [ ] Audit log de cada confirmación (quién + cuándo) — actorUid via `currentUser.uid` (P-001).
+- [ ] QA manual: operaria registra pago → queda pendiente → María lo ve en lista → confirma → recién ahí se puede emitir conduce.
+
+### Flujo del coordinator al procesar
+
+1. **archivist PRE-CHANGE** con touch-list completo (11 archivos incluyendo `firestore.rules` y script de migración).
+2. **builder** implementa los 10 archivos + script de migración. CRÍTICO: usar approach corregido A1 (subcolección, NO campo top-level).
+3. **tester** typecheck + lint + cazadores 17/17 PASS.
+4. **regression_guardian** obligatorio (rules + services + context).
+5. **reviewer** obligatorio con foco rules (inmutabilidad de `verificado/verificadoPorId/At` + gotcha P-002 `.get(field,null)`).
+6. **DRY-RUN de migración** `npx tsx scripts/migrar-pagos-array-a-subcoleccion.ts` — reporta conteo.
+7. **Decisión coordinator:**
+   - Si DRY-RUN reporta ≤500 docs afectados → ejecutar `--apply` autónomo + audit log.
+   - Si DRY-RUN reporta >500 docs → ESCALAR a `BLOQUEOS.md` como sub-sprint `SPRINT-PAGOS-CONFIRMA-MARIA-MIGRACION` esperando OK ampliado de Jorge. NO bloquear el resto del sprint — el código puede mergearse SIN ejecutar la migración si el código es retrocompatible (leer ambos: array Y subcolección). Pero la migración debe correrse antes de eliminar el código de lectura del array.
+8. **`npm run deploy:rules`** ANTES de marcar COMPLETADO (sub-regla P-005).
+9. **`git add` + commit + push** con mensaje `feat(pagos): SPRINT-PAGOS-CONFIRMA-MARIA separación operaria/coord + subcolección + rule`.
+10. **devops** verifica deploy Vercel Ready.
+11. **NO postmortem** (feature nueva, no bug en producción).
+12. **NO cazador P-XXX nuevo** (a menos que durante el sprint se detecte un patrón nuevo de bug).
+
+**Tiempo realista:** 6-8 horas (toca rules + UI nueva + service + permiso + migración).
+
+**Restricciones operacionales:**
+
+- `--apply` del script de migración: si ≤500 docs, coordinator lo ejecuta autónomo; si >500, ESCALAR.
+- archivist PRE-CHANGE obligatorio antes de tocar `ordenes.service.ts` y `firestore.rules`.
+- reviewer obligatorio (toca rules) + foco en inmutabilidad del campo de confirmación.
+- regression_guardian obligatorio (toca rules, services, modelo de datos).
+- `npm run deploy:rules` antes de cerrar COMPLETADO (sub-regla CLAUDE.md P-005).
 
 ---
 

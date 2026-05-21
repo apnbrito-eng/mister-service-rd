@@ -2535,7 +2535,18 @@ El sprint también requiere:
 
 ---
 
-## SPRINT-PAGOS-CONFIRMA-MARIA — Separación de funciones: operaria registra pago, María confirma
+## SPRINT-PAGOS-CONFIRMA-MARIA — DESBLOQUEADO 2026-05-21 (OK: jorge 2026-05-20 14:00 pagos confirma maria)
+
+**Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-21 por coordinator (`procesa bloqueos`, pasada 30). desbloqueadoPor: jorge 2026-05-20 14:00.**
+
+Conservado acá para histórico/forensia. NO procesar desde acá — la entrada activa está en `COLA_AUTONOMA.md` al tope, incluye la corrección obligatoria de auditoría (`AUDITORIA_PRE_CRM_2026_05_20.md`) que cambia el approach técnico (campo top-level → subcolección + migración de array a subcolección).
+
+**Resumen del cambio de scope con OK Jorge:**
+- Touch a `firestore.rules`: OK explícito (rule en subcolección `ordenes_servicio/{id}/pagos/{pagoId}`).
+- Migración de datos (`pagos[]` array → subcolección): el coordinator escalará a sub-sprint separado en BLOQUEOS.md si DRY-RUN reporta >500 docs afectados.
+
+<details>
+<summary>Spec original preservado para forensia</summary>
 
 > ### ⚠️ CORRECCIÓN auditoría 2026-05-20 (`AUDITORIA_PRE_CRM_2026_05_20.md`)
 > El sprint original asumía un approach de rule que NO es viable. Correcciones obligatorias antes de procesar:
@@ -2615,5 +2626,7 @@ El sprint también requiere:
 **Tiempo realista:** 6-8 horas (toca rules + UI nueva + service + permiso).
 
 **OK Jorge PAGOS-CONFIRMA-MARIA:** OK: jorge 2026-05-20 14:00 pagos confirma maria
+
+</details>
 
 ---
