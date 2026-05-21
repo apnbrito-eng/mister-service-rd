@@ -5,6 +5,59 @@
 
 ---
 
+## 2026-05-21 — autónomo (`trabaja`, pasada 29): sync de cola, 0 sprints procesables
+
+### Contexto
+
+Jorge pegó `trabaja` con instrucción explícita: "lo que requiera Meta config bloqueado movelo a BLOQUEOS.md con instrucciones claras de desbloqueo. Avanzá con lo que esté listo." Coordinator leyó cola + BLOQUEOS:
+
+- Working tree limpio (todos los untracked del start de sesión ya fueron commiteados ayer en `8a21034`).
+- Cola: 7 sprints PENDIENTES detectados via grep (`^\*\*Estado:\*\* PENDIENTE`), todos del bloque histórico viejo `### SPRINT-WA-1..7` (líneas 1677-1956).
+- Análisis de cada PENDIENTE vs estado real del repo confirmó que WA-1/WA-2/WA-3 YA ESTÁN IMPLEMENTADOS en producción (artefactos en `api/whatsapp/{webhook.ts,send.ts}` + bloque SPRINT-INBOX-1..6 de ayer), mientras WA-4/WA-5/WA-6/WA-7 ya tienen entradas detalladas en BLOQUEOS.md desde 2026-05-18.
+- Conclusión: 0 sprints procesables autónomos. Acción válida = sincronizar etiquetas de los 7 PENDIENTES viejos.
+
+### Acción tomada
+
+7 edits sobre `docs/sprints/COLA_AUTONOMA.md`:
+
+| Línea | Sprint | Cambio | Razón |
+|---|---|---|---|
+| 1677 | SPRINT-WA-1 | PENDIENTE → ⊘ REDUNDANTE | Superado por `## SPRINT-WA-1` línea 308 (COMPLETADO `e6597e1`-era) — código en `api/whatsapp/webhook.ts` + cazadores P-016/P-017 |
+| 1727 | SPRINT-WA-2 | PENDIENTE → ⊘ REDUNDANTE | Implementado en `api/whatsapp/send.ts` (hashes `bf87c02` + `7f6b17a` + `9cf8f9a` ya en main) |
+| 1768 | SPRINT-WA-3 | PENDIENTE → ⊘ REDUNDANTE | Implementado bajo bloque SPRINT-INBOX-1..6 2026-05-20 |
+| 1805 | SPRINT-WA-4 | PENDIENTE → ⊘ MOVIDO A BLOQUEOS | Entrada detallada en `BLOQUEOS.md:681` |
+| 1838 | SPRINT-WA-5 | PENDIENTE → ⊘ MOVIDO A BLOQUEOS | Entrada detallada en `BLOQUEOS.md:453` |
+| 1872 | SPRINT-WA-6 | PENDIENTE → ⊘ MOVIDO A BLOQUEOS | Entrada detallada en `BLOQUEOS.md:822` |
+| 1926 | SPRINT-WA-7 | PENDIENTE → ⊘ MOVIDO A BLOQUEOS | Entrada detallada en `BLOQUEOS.md:745` + `SPRINT-VERCEL-PLAN-DECISION:1901` |
+
+Plus actualización del header de la cola (línea 1) para documentar la pasada 29.
+
+### Por qué NO se eliminaron las entradas viejas
+
+Sub-regla CLAUDE.md "documentación viva": al deprecar patrones, preservar forensia. Las entradas quedaron tachadas en estado (⊘) con apuntador a la fuente actual.
+
+### Verificaciones
+
+- `grep '^**Estado:** PENDIENTE' COLA_AUTONOMA.md` → 2 hits restantes, ambos falsos positivos verificados:
+  - Línea 5689: plantilla de sprint (markdown code fence dentro de sección "Plantilla para sprints nuevos").
+  - Línea 6341: sprint SPRINT-117b ya COMPLETADO, dentro de `<details>` histórico.
+- `npm run check:regression` NO se corrió (sin cambios de código).
+- `npm run build` NO se corrió (sin cambios de código).
+
+### Sin invocar otros agentes
+
+Sub-regla del protocolo: archivist PRE-CHANGE aplica a sprints con touch-list de código. Este sync es 100% documental (toca solo `docs/sprints/COLA_AUTONOMA.md`, `docs/sprints/DIARIO_2026-05-21.md`, `docs/sprints/EJECUCION_AUTONOMA.md`). No requiere builder/tester/regression_guardian/reviewer.
+
+### Commit
+
+Pendiente al cierre de esta pasada — incluye los 3 archivos doc tocados.
+
+### Tiempo
+
+~10 minutos (lectura cola/BLOQUEOS para diagnóstico + 7 edits sync + diario + EJECUCION + commit).
+
+---
+
 ## 2026-05-20 tarde-noche — autónomo (`trabaja`, pasada 28): 6 sprints CRM inbox completados
 
 ### Contexto

@@ -1,4 +1,4 @@
-**Última actualización:** 2026-05-20 tarde por coordinator autónomo (`trabaja`, pasada 28) — **6 sprints SPRINT-INBOX-1..6 COMPLETADOS en una sola pasada.** Hashes `e8f3ac1` (tipos + service), `8716f1e` (página /admin/inbox + entrada sidebar), `e6597e1` (vista 3-columnas + indicador 24h), `f2f4c10` (toggle bot), `9fdb026` (CardCliente + órdenes), `d2c5e1f` (cards Dashboard). Deploy Vercel Ready a las 22:47:43Z. Cazadores 17/17 PASS en cada commit. NO se tocó `firestore.rules` (la auditoría C1 confirmó que el modelo de datos ya existía). NO se introdujeron índices compuestos. Anterior: 6 sprints SPRINT-INBOX-1..6 agregados al tope por Cowork (inbox CRM WhatsApp, FRONTEND sobre el modelo backend que YA existe — post-auditoría `docs/analisis/AUDITORIA_PRE_CRM_2026_05_20.md`, hallazgo C1). NO crean colección, NO migran, NO tocan rules. Procesables autónomos en orden 1→6. Anterior previo: **SPRINT-WA-2-BUTTON-URL agregado al tope de la cola.** Habilita soporte para componente `button` (sub_type `url`) en plantillas WhatsApp con variable dinámica (ej: token del portal cliente). Bloquea actualización plantilla `cita_confirmada` en Meta con botón "Reagendar" que abre `https://www.misterservicerd.com/cliente/{{token}}` (portal existente con flujo de reprogramación ya implementado vía `ModalPosponer` + vista admin `/admin/reprogramaciones`). Sprint procesable autónomo (no toca rules, no integra terceros, cambio aditivo retrocompatible).
+**Última actualización:** 2026-05-21 por coordinator autónomo (`trabaja`, pasada 29) — **sync de cola: 0 sprints procesables, sincronización de 7 SPRINT-WA-1..7 PENDIENTES viejos.** WA-1/WA-2/WA-3 marcados ⊘ REDUNDANTE (ya implementados en producción bajo otros slugs: api/whatsapp/webhook.ts + api/whatsapp/send.ts + bloque SPRINT-INBOX-1..6). WA-4/WA-5/WA-6/WA-7 marcados ⊘ MOVIDO A BLOQUEOS (apuntando a sus entradas detalladas en BLOQUEOS.md). Decisión: cumplir instrucción explícita Jorge "lo que requiera Meta config bloqueado movelo a BLOQUEOS.md con instrucciones claras de desbloqueo". Cola limpia para próximas adiciones de Cowork. Sin commits de código. Anterior: 2026-05-20 tarde — **6 sprints SPRINT-INBOX-1..6 COMPLETADOS en una sola pasada.** Hashes `e8f3ac1` (tipos + service), `8716f1e` (página /admin/inbox + entrada sidebar), `e6597e1` (vista 3-columnas + indicador 24h), `f2f4c10` (toggle bot), `9fdb026` (CardCliente + órdenes), `d2c5e1f` (cards Dashboard). Deploy Vercel Ready a las 22:47:43Z. Cazadores 17/17 PASS en cada commit. NO se tocó `firestore.rules` (la auditoría C1 confirmó que el modelo de datos ya existía). NO se introdujeron índices compuestos. Anterior: 6 sprints SPRINT-INBOX-1..6 agregados al tope por Cowork (inbox CRM WhatsApp, FRONTEND sobre el modelo backend que YA existe — post-auditoría `docs/analisis/AUDITORIA_PRE_CRM_2026_05_20.md`, hallazgo C1). NO crean colección, NO migran, NO tocan rules. Procesables autónomos en orden 1→6. Anterior previo: **SPRINT-WA-2-BUTTON-URL agregado al tope de la cola.** Habilita soporte para componente `button` (sub_type `url`) en plantillas WhatsApp con variable dinámica (ej: token del portal cliente). Bloquea actualización plantilla `cita_confirmada` en Meta con botón "Reagendar" que abre `https://www.misterservicerd.com/cliente/{{token}}` (portal existente con flujo de reprogramación ya implementado vía `ModalPosponer` + vista admin `/admin/reprogramaciones`). Sprint procesable autónomo (no toca rules, no integra terceros, cambio aditivo retrocompatible).
 
 ---
 
@@ -1676,8 +1676,8 @@ Password común sugerido (Jorge decide el real, NO commitear): formato fuerte �
 
 ### SPRINT-WA-1 — Endpoint webhook entrante WhatsApp Cloud API
 
-**Estado:** PENDIENTE — REQUIERE credenciales Meta antes de ejecutar (META_APP_SECRET + META_VERIFY_TOKEN)
-**Prioridad:** 🔴 ALTA — fundación de toda la integración WhatsApp. Sin webhook, no hay forma de recibir mensajes de leads de Click-to-WhatsApp.
+**Estado:** ⊘ REDUNDANTE — superado por `## SPRINT-WA-1 — Webhook entrante WhatsApp Cloud API (HMAC + idempotencia) — FUNDACIÓN` arriba en este mismo archivo (línea 308, COMPLETADO 2026-05-19). El código vive en `api/whatsapp/webhook.ts` + `api/_lib/whatsappWebhook.ts` + cazadores P-016/P-017. Entrada paralela actualizada en `BLOQUEOS.md` línea 350. Esta entrada queda preservada para forensia histórica.
+**Prioridad:** ~~🔴 ALTA~~ N/A (superado).
 **Origen:** Decisión arquitectónica 2026-05-15 (handoff de otro Claude). CRM directo a Meta Cloud API (sin BSP intermediario).
 
 #### Touch-list
@@ -1726,8 +1726,8 @@ Password común sugerido (Jorge decide el real, NO commitear): formato fuerte �
 
 ### SPRINT-WA-2 — Servicio saliente proxy `api/whatsapp/send`
 
-**Estado:** PENDIENTE — REQUIERE META_ACCESS_TOKEN (System User permanente)
-**Prioridad:** 🔴 ALTA — sin esto el CRM no puede enviar mensajes (conduces, recordatorios, respuestas).
+**Estado:** ⊘ REDUNDANTE — implementado en producción. El endpoint vive en `api/whatsapp/send.ts` (47KB, last touched 2026-05-20 con SPRINT-WA-2-BUTTON-URL hash `bf87c02` + SPRINT-WA-2-HEADER-IMAGE hash `7f6b17a` + SPRINT-WA-2-FIX-BODYPARSER hash `9cf8f9a`). Wrapper cliente en `src/services/whatsapp.service.ts`. Entrada paralela en `BLOQUEOS.md` línea 519. Esta entrada queda preservada para forensia.
+**Prioridad:** ~~🔴 ALTA~~ N/A (superado).
 
 #### Touch-list
 
@@ -1767,8 +1767,8 @@ Password común sugerido (Jorge decide el real, NO commitear): formato fuerte �
 
 ### SPRINT-WA-3 — UI conversaciones WhatsApp por cliente/orden
 
-**Estado:** PENDIENTE
-**Prioridad:** 🟡 MEDIA — UX importante pero no bloquea recepción/envío.
+**Estado:** ⊘ REDUNDANTE — implementado bajo SPRINT-INBOX-1..6 (2026-05-20, hashes `e8f3ac1` → `d2c5e1f`). La UI vive en `src/pages/Inbox.tsx` (lista global) + `src/pages/InboxConversacion.tsx` (3 columnas) + `src/components/inbox/*` (MensajeBubble, IndicadorVentana24h, ToggleBot, CardCliente) + `src/services/whatsappInbox.service.ts`. Sidebar item + badge + dashboard cards también incluidos. Entrada paralela en `BLOQUEOS.md` línea 605. Esta entrada queda preservada para forensia.
+**Prioridad:** ~~🟡 MEDIA~~ N/A (superado).
 
 #### Touch-list
 
@@ -1804,7 +1804,7 @@ Password común sugerido (Jorge decide el real, NO commitear): formato fuerte �
 
 ### SPRINT-WA-4 — Tracking referral → extender `campanas_marketing`
 
-**Estado:** PENDIENTE — requiere acuerdo de naming campañas con Jorge
+**Estado:** ⊘ MOVIDO A BLOQUEOS — ver `docs/sprints/BLOQUEOS.md` línea 681 (entrada más detallada). Requiere decisión Jorge sobre naming campañas + integración Meta producción. NO procesable autónomo.
 **Prioridad:** 🟢 BAJA-MEDIA — sin esto los leads no se atribuyen a campañas.
 
 #### Touch-list
@@ -1837,7 +1837,7 @@ Password común sugerido (Jorge decide el real, NO commitear): formato fuerte �
 
 ### SPRINT-WA-5 — Plantillas HSM (sync + UI + envío)
 
-**Estado:** PENDIENTE — REQUIERE plantillas aprobadas en Meta Manager (24-48h aprobación)
+**Estado:** ⊘ MOVIDO A BLOQUEOS — ver `docs/sprints/BLOQUEOS.md` línea 453 (entrada más detallada). Requiere D7 + D9 de SPRINT-WA-0 + plantillas aprobadas en Meta Manager (24-48h). NO procesable autónomo. Nota: la INFRAESTRUCTURA de envío plantillas ya existe en `api/whatsapp/send.ts` (SPRINT-WA-2-BUTTON-URL + HEADER-IMAGE) — lo que falta es sync automático (`api/whatsapp/cron/sync-plantillas.ts`) + UI selector (`SelectorPlantilla.tsx`).
 **Prioridad:** 🟡 MEDIA — sin esto solo se pueden enviar mensajes en ventana de 24h post-cliente.
 
 #### Touch-list
@@ -1871,7 +1871,7 @@ Password común sugerido (Jorge decide el real, NO commitear): formato fuerte �
 
 ### SPRINT-WA-6 — Bot IA conversacional con Claude Haiku
 
-**Estado:** PENDIENTE — REQUIERE Anthropic API key + system prompt definido + decisiones de escalación
+**Estado:** ⊘ MOVIDO A BLOQUEOS — ver `docs/sprints/BLOQUEOS.md` línea 822 (entrada más detallada). Requiere `ANTHROPIC_API_KEY` + system prompt en `docs/specs/bot-ia-system-prompt.md` (ya existe v1.0 según SPRINT-WA-0-CIERRE) + plantilla HSM `auto_respuesta_fuera_horario` aprobada por Meta (blocker identificado en SPRINT-WA-0-CIERRE). NO procesable autónomo.
 **Prioridad:** 🟡 MEDIA-ALTA — diferencial competitivo grande. Empieza después de WA-1 + WA-2 + WA-3.
 **Origen:** Decisión Jorge 2026-05-15. Bot atiende mensajes entrantes, conversa, captura datos, crea OS automáticamente. Escala a humano cuando es complejo.
 
@@ -1925,7 +1925,7 @@ Password común sugerido (Jorge decide el real, NO commitear): formato fuerte �
 
 ### SPRINT-WA-7 — Cron jobs proactivos (recordatorios + NPS + garantía a vencer)
 
-**Estado:** PENDIENTE — requiere WA-5 plantillas aprobadas
+**Estado:** ⊘ MOVIDO A BLOQUEOS — ver `docs/sprints/BLOQUEOS.md` línea 745 (entrada más detallada) + `SPRINT-VERCEL-PLAN-DECISION` línea 1901 (decisión Hobby vs Pro pendiente Jorge). Requiere WA-5 plantillas aprobadas + decisión plan Vercel (3 crons WhatsApp exceden Hobby tier). NO procesable autónomo.
 **Prioridad:** 🟢 BAJA — mejora marketing, no funcionalidad core.
 
 #### Touch-list
