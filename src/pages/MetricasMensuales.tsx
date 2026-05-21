@@ -7,6 +7,7 @@ import {
   formatMoneda, parseOrden, getTecnicoColor,
 } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
+import AnalisisFunnel from '../components/AnalisisFunnel';
 import { useApp } from '../context/AppContext';
 import {
   TIERS_BONO_SECRETARIA, calcularBonoSecretaria, rangoMesCalendario,
@@ -256,6 +257,9 @@ export default function MetricasMensuales() {
           </div>
         </div>
       </div>
+
+      {/* SPRINT-FUNNEL-CONVERSION-FASES — Embudo de conversión por fase */}
+      <AnalisisFunnel ordenes={ordenes} rangoFecha={rango} />
 
       {/* Operarias */}
       <section className="space-y-3">
