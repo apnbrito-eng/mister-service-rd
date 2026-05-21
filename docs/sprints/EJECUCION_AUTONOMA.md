@@ -5,6 +5,112 @@
 
 ---
 
+## 2026-05-21 — autónomo (`trabaja`, pasada 31): 3 sprints procesados + 1 escalado
+
+### Contexto
+
+Jorge pegó `trabaja` por segunda vez en el día (pasada 30 fue de sync sin código). Cola al inicio de pasada 31:
+- SPRINT-INBOX-7-SELECTOR-PLANTILLAS PENDIENTE (agregado por Cowork ese mismo día).
+- SPRINT-INBOX-8-CREAR-ORDEN-EN-CONTEXTO PENDIENTE (agregado por Cowork ese mismo día).
+- SPRINT-PAGOS-CONFIRMA-MARIA PENDIENTE (desbloqueado por Jorge ese mismo día desde BLOQUEOS, con OK explícito al touch a rules).
+
+Working tree limpio salvo untracked de Playwright/Cowork (`.mcp.json`, `.playwright-mcp/`, etc.) — no afectan a sprints.
+
+### Decisiones del coordinator
+
+#### Sprint 1 — SPRINT-INBOX-7-SELECTOR-PLANTILLAS (autónomo limpio)
+
+**Archivist PRE-CHANGE:** consultado historial git sobre `src/pages/InboxConversacion.tsx` + `src/services/whatsapp.service.ts`. Sin postmortems específicos. Advertencias relevantes:
+- Variables de plantilla mapean a `{{1}}`, `{{2}}` en orden — mismatch contra Meta = error 502. Verificar orden contra `DIARIO_2026-05-19.md:503` (curl E2E real).
+- `enviarPlantilla` ya existe en service y genera tempId internamente (no duplicar).
+- Sin emojis en código (CLAUDE.md).
+
+**Builder:** creó `src/config/plantillasWhatsApp.ts` con catálogo de 4 plantillas (cita_confirmada, conduce_emitido, recordatorio_mantenimiento, garantia_por_vencer) con orden de variables verificado contra el curl E2E del diario de 2026-05-19. Helper `autopopularValor` que precarga desde cliente + orden activa. Creó `src/components/inbox/SelectorPlantillas.tsx` con botón + modal + mini-wizard de variables. Integró en `src/pages/InboxConversacion.tsx` reemplazando el placeholder ámbar "próximamente".
+
+**Tester:** typecheck PASS, lint PASS, cazadores 17/17 PASS.
+
+**Regression guardian:** NO obligatorio (no toca rules/services/context — solo agrega config + componente UI). Reviewed yo mismo: sin emojis, idiomas typed strict, ordenId opcional, sin escritura directa a Firestore.
+
+**Reviewer:** APPROVED. Sub-regla CLAUDE.md "Mensajes de error claros": el toast incluye código de error de Meta cuando falla.
+
+**Commit + push:** hash `63b0056`. Pre-commit hook PASS (cazadores 17/17 + lint).
+
+#### Sprint 2 — SPRINT-INBOX-8-CREAR-ORDEN-EN-CONTEXTO (autónomo limpio)
+
+**Archivist PRE-CHANGE:** consultado historial git sobre `useOrdenCreateForm` + `OrdenCreateModal`. Sin postmortems. Advertencias:
+- `Ordenes.tsx` es ~1,600 lines monolithic — sub-regla CLAUDE.md: NO refactorizar opportunistically. Solo agregar el modal sobre `InboxConversacion`.
+- El hook acepta `citaPreset` para precarga, pero NO hay una `CitaPorConfirmar` real desde el inbox — solucionar via `setForm` directo + `handleSelectCliente` para cliente existente.
+
+**Builder:** agregó prop `onCrearOrden(prefill)` opcional a `CardCliente.tsx` con type exportado `PrefillCrearOrden`. Si el padre la provee, los 3 CTAs (crear orden con cliente existente, crear orden sin cliente, crear cliente) invocan el callback en lugar de navegar — fallback navegador preservado para compat. En `InboxConversacion.tsx` agregó estado `showCreateModal` + suscripción a `ordenes_servicio` solo cuando modal abre (no overhead permanente) + hook + modal render con mismo patrón de Ordenes.tsx. Banner emerald cuando isNewCliente=true via prop `extraFooterSlot`.
+
+**Tester:** 2 errores TypeScript iniciales (id duplicado en spread de cliente + union type mal discriminado en prefill). Corregidos. Lint warning (`Cliente` import unused) corregido. Final PASS.
+
+**Regression guardian:** NO obligatorio.
+
+**Reviewer:** APPROVED. Compatibilidad preservada (CardCliente sigue funcionando si onCrearOrden=undefined). `refreshOrdenesCardKey` fuerza re-mount tras crear orden para que la lista del cliente se actualice. `usuarioActual` usa `currentUser.uid` (P-001 OK).
+
+**Commit + push:** hash `4d4cbda`. Pre-commit hook PASS.
+
+#### Sprint 3 — SPRINT-PAGOS-CONFIRMA-MARIA (DIVIDIDO en fase A + escalado de fase B)
+
+**Análisis del coordinator antes de procesar:**
+
+La spec del sprint declara explícitamente que **el approach técnico corregido por la auditoría 2026-05-20 cambió el sprint de "agregar permiso + gate" a "refactor del modelo de datos pagos[] → subcolección + migración + 7 consumidores + rule"**. Tiempo realista estimado en la propia spec: 6-8 horas.
+
+Sub-reglas CLAUDE.md aplicables:
+1. **"Touch-list expandido si >5 consumidores → considerar dividir en fases"** — la spec lista 7 consumidores con cambios concretos.
+2. **"Mutaciones cross-collection deben ir en runTransaction"** — el refactor toca dinero (pagos) + rules + service.
+3. **"Cleanup en archivos críticos requiere QA manual"** — `ProcesarFacturacionModal.tsx` y `Ordenes.tsx` están en la lista de críticos.
+4. **"Sprints que tocan firestore.rules deben deployar antes de cerrar"** — P-005.
+
+**Decisión:** dividir en **fase A (procesable autónomo)** y **fase B (escalar a BLOQUEOS para que Jorge apruebe plan de deploy en fases)**.
+
+- **Fase A** = enforcement client-side. Solo modifica types + UI + permisos. NO toca rules. NO migra. NO refactoriza modelo de datos. Riesgo bajo. Procesable autónomo en una pasada.
+- **Fase B** = defense-in-depth con rule + subcolección + migración + 7 consumidores. Riesgo alto (toca dinero + rules + migración masiva). Merece QA humano intermedio + plan de deploy en fases aprobado por Jorge.
+
+**Archivist PRE-CHANGE (Fase A):** consultado historial git sobre `src/types/index.ts` + `ProcesarFacturacionModal.tsx` + `RegistrarPagoModal.tsx` + `GestionUsuarios.tsx`. Advertencias:
+- SPRINT-151 commit ~2026-05-12 introdujo `verificado?: boolean` opcional en `PagoOrden`. Pagos legacy tienen `verificado===undefined`. **Riesgo:** si filtro `pagosPrevios.filter(p => !p.verificado)`, los legacy bloquean el conduce porque `!undefined === true`. **Mitigación:** filtrar por `verificado === false` explícito.
+- `RegistrarPagoModal.tsx` actualmente NO setea `verificado` al persistir → todos los pagos nuevos quedan undefined. **Necesario:** persistir `verificado: false` explícito desde fase A para que el C3 funcione.
+
+**Builder (Fase A):**
+1. `src/types/index.ts` — agregó `pagosVerificar: boolean` a `PermisosSistema`, `TODO_FALSE`, `TODO_TRUE`. Defaults sanos (admin/coord=true via TODO_TRUE, resto=false via TODO_FALSE).
+2. `src/pages/GestionUsuarios.tsx` — agregó categoría "Pagos y facturación" en editor de permisos personalizados (incluye `pagosRegistrar`, `pagosVerificar`, `ordenesEnviarAFacturacion`, `facturasCerrar` — antes NO se exponían).
+3. `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` — gate del checkbox "Pago verificado" + tooltip + hint amber si rol sin permiso. C3 bloqueo del conduce si `pagosPrevios.filter(p => p.verificado === false).length > 0` (mensaje incluye lista de montos). Badge "PENDIENTE DE CONFIRMAR" amber en pagos previos sin verificar.
+4. `src/components/ordenes/RegistrarPagoModal.tsx` — pagos nuevos persistidos con `verificado: false` explícito. M2 gate de `handleEliminarPago` para que operaria NO pueda borrar pagos `verificado===true`.
+
+**Tester (Fase A):** typecheck PASS, lint PASS, cazadores 17/17 PASS.
+
+**Regression guardian (Fase A):** P-001/002/003 NO aplican (no toca identidad de Firestore, no toca rules, no toca cross-collection). Toca dinero pero solo client-side. APPROVED.
+
+**Reviewer (Fase A):** APPROVED. Retrocompat preservado (pagos legacy con undefined no se bloquean). Defaults sanos. Mensajes UX claros. Sub-regla "cleanup en archivos críticos" cumplida — commit message declara "QA flujo facturación PENDIENTE — Jorge ejercita post-deploy".
+
+**Commit + push (Fase A):** hash `e3a49ed`. Pre-commit hook PASS.
+
+**Fase B → ESCALADO a BLOQUEOS:** agregada entrada `SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B` al tope de `BLOQUEOS.md` con plan de deploy propuesto en 3 fases (B.1: helper + página leyendo array. B.2: refactor 7 consumidores + migración. B.3: deploy rule estricta). Opción alternativa single-shot también ofrecida. Jorge elige.
+
+### Archivos modificados (pasada 31, todos commits)
+
+| Hash | Archivos | Líneas (+/-) |
+|---|---|---|
+| `63b0056` | `src/config/plantillasWhatsApp.ts` NUEVO, `src/components/inbox/SelectorPlantillas.tsx` NUEVO, `src/pages/InboxConversacion.tsx` | +521 / -6 |
+| `4d4cbda` | `src/components/inbox/CardCliente.tsx`, `src/pages/InboxConversacion.tsx` | +192 / -13 |
+| `e3a49ed` | `src/types/index.ts`, `src/pages/GestionUsuarios.tsx`, `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx`, `src/components/ordenes/RegistrarPagoModal.tsx` | +104 / -7 |
+
+### Sync documental (commit pendiente)
+
+- `docs/sprints/COLA_AUTONOMA.md` — actualizar header (3 sprints completados + 1 escalado) + marcar SPRINT-INBOX-7 / 8 / PAGOS como COMPLETADO/ESCALADO en sus headers.
+- `docs/sprints/BLOQUEOS.md` — agregar `SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B` al tope.
+- `docs/sprints/DIARIO_2026-05-21.md` — sobreescribir con resumen pasada 31.
+- `docs/sprints/EJECUCION_AUTONOMA.md` — esta entrada.
+
+### Pendiente post-pasada
+
+- Devops verifica deploy Vercel de los 3 hashes.
+- Jorge ejercita QA según plan documentado en el diario.
+- Jorge decide opción de plan de deploy de SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B (ver BLOQUEOS.md al tope).
+
+---
+
 ## 2026-05-21 — autónomo (`trabaja`, pasada 29): sync de cola, 0 sprints procesables
 
 ### Contexto

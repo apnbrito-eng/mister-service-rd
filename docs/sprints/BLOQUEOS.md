@@ -10,6 +10,65 @@
 
 ---
 
+## SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B — Defense-in-depth + refactor modelo de datos pagos[] → subcolección
+
+**Prioridad:** ALTA (cierra el gap de defense-in-depth — fase A es solo client-side).
+**Estado:** BLOQUEADO esperando OK de Jorge al plan de deploy.
+**Origen:** Coordinator autónomo 2026-05-21 pasada 31. La fase A del sprint completó la parte de separación de funciones a nivel UI/cliente (commit `e3a49ed`). La fase B aborda el approach corregido por la auditoría 2026-05-20 que cambió un sprint de "agregar permiso" a refactor estructural.
+
+### Por qué se escaló (sub-regla CLAUDE.md)
+1. **Touch-list expandido con >5 consumidores con cambios concretos** — la spec lista 7 archivos consumidores (`OrdenDetailModal`, `OrdenDetalle`, `AgendaDia`, `FacturacionPendiente`, `utils/index.ts`, `utils/tooltipsBotones`, `EnviarFacturacionButton`) que deben adaptarse a leer pagos desde subcolección en lugar del array dentro del doc orden. La sub-regla CLAUDE.md exige considerar dividir el sprint en fases cuando hay >5 consumidores afectados.
+2. **Migración de datos productivos** — `pagos[]` array → subcolección `ordenes_servicio/{id}/pagos/{pagoId}`. Si el conteo es >500 docs, sub-regla "migraciones masivas requieren OK explícito".
+3. **Toca dinero + rules de seguridad** — errores acá = pagos rotos en producción. Merece QA humano intermedio que un sprint single-shot autónomo no puede dar.
+4. **Tiempo realista 6-8 horas (declarado en la spec)** — no factible como sprint autónomo confiable single-shot.
+5. **Riesgo de inconsistencia entre commits** — durante el período entre "código nuevo deployado" y "migración aplicada", coexisten dos modelos de datos. Si la lectura no es retrocompat perfecto, hay flujo de pagos roto en producción.
+
+### Lo que ya está commiteado (Fase A — referencia)
+- Permiso `pagosVerificar` en types + defaults sanos.
+- Gate UI del checkbox "Pago verificado" en `ProcesarFacturacionModal`.
+- Bloqueo C3 del conduce si hay pagos previos con `verificado===false` (retrocompat: undefined legacy NO bloquea).
+- Pagos nuevos nacen con `verificado=false` explícito en `RegistrarPagoModal`.
+- Gate M2 de `handleEliminarPago` (operaria NO puede borrar `verificado===true`).
+- Categoría "Pagos y facturación" en editor de permisos.
+- Badge "PENDIENTE DE CONFIRMAR" amber en pagos previos sin verificar.
+
+### Touch-list de la Fase B (pendiente OK)
+1. **`firestore.rules`** — nuevo `match /ordenes_servicio/{ordenId}/pagos/{pagoId}`:
+   - `allow create`: si `puede('pagosRegistrar')` Y `request.resource.data.verificado == false`.
+   - `allow update`: si toca `verificado/verificadoPorId/verificadoPorNombre/verificadoAt` → solo `puede('pagosVerificar')`. Otros campos → `puede('pagosRegistrar')`. Usar `.get('verificado', false)` para inmutabilidad (gotcha P-002).
+   - `allow delete`: solo `puede('pagosVerificar')`.
+   - `allow read`: `esStaffOficina()`.
+   - Inmutabilidad de monto/método/banco post-verificación.
+2. **`src/services/ordenes.service.ts`** — helper `confirmarPagoOrden(ordenId, pagoId, confirmadoPor)` con `runTransaction` (patrón P-003) + audit log.
+3. **`src/pages/PagosPendientes.tsx`** (NUEVO) — vista lista de pagos `verificado=false` across órdenes. Real-time `onSnapshot` collectionGroup sobre la subcolección. Botón "Confirmar" por pago. Solo accesible con `pagosVerificar`.
+4. **`src/App.tsx`** — ruta `/admin/pagos-pendientes` gateada por `pagosVerificar`.
+5. **`src/components/Sidebar.tsx`** — entrada "Pagos pendientes" con badge count.
+6. **`scripts/migrar-pagos-array-a-subcoleccion.ts`** (NUEVO) — script DRY-RUN/`--apply`/`--ok-ampliado` que espeja `pagos[]` → subcolección preservando `verificado/verificadoPorId/At`, registradoPorId/Nombre, etc. Idempotente. Audit log en `auditoria_admin`.
+7. **Adaptación de 7 consumidores** — todos los lectores del array `orden.pagos` deben migrar a leer la subcolección con `onSnapshot` (o helper que abstraiga la fuente): `OrdenDetailModal.tsx`, `OrdenDetalle.tsx`, `AgendaDia.tsx`, `FacturacionPendiente.tsx`, `utils/index.ts`, `utils/tooltipsBotones.ts`, `EnviarFacturacionButton.tsx`. Agregar badge "confirmado/pendiente" en render.
+
+### Plan de deploy propuesto (Jorge confirma o cambia)
+**Opción 1: 3 fases con QA entre cada una.**
+- **B.1** Helper `confirmarPagoOrden` + página `/admin/pagos-pendientes` LEYENDO del array (no requiere migración aún). María empieza a confirmar pagos desde la nueva página, los flags `verificado` se persisten en el array. Sin tocar rules todavía. QA Jorge: María entra a la página, ve pendientes, confirma 1, refresca, queda verde. **Riesgo bajo.**
+- **B.2** Refactor de los 7 consumidores para leer pagos via helper común con fallback array→subcolección. Migración script DRY-RUN reporta conteo. Si <500 docs → `--apply` autónomo; si >500 → escalado nuevo a BLOQUEOS. QA Jorge: abrir orden con pagos legacy, abrir orden con pagos nuevos, ambos renderean igual. **Riesgo medio.**
+- **B.3** Deploy de rule estricta de la subcolección (inmutabilidad + .get(field,null)) + remoción del path de lectura del array. `npm run deploy:rules`. QA Jorge: operaria NO puede confirmar via console, admin sí. **Riesgo alto — toca rules.**
+
+**Opción 2: single shot (NO recomendado).** Procesar todo de una pasada y aceptar el riesgo. ~6-8h.
+
+### Cómo desbloquear
+1. Jorge elige opción (1) o (2).
+2. Si opción 1: Jorge edita esta entrada con `OK: jorge YYYY-MM-DD HH:MM opcion 1`. El coordinator procesará B.1, esperará QA Jorge, luego B.2, etc.
+3. Si opción 2: `OK: jorge YYYY-MM-DD HH:MM opcion 2 single-shot`. Coordinator procesa todo en una pasada.
+4. Pegar `procesa bloqueos` al coordinator.
+
+### Salvaguardas que YA cubre Fase A
+- Operaria registra pago → queda explícitamente `verificado=false` → conduce bloqueado hasta confirmación.
+- Solo admin/coord puede tildar "Pago verificado" en `ProcesarFacturacionModal` (defense-in-depth UI, antes de tener rule).
+- Operaria NO puede borrar pagos `verificado=true` (defense-in-depth UI).
+
+**El gap pendiente para Fase B:** usuario que sortee la UI (ej: console) sigue pudiendo escribir `verificado=true` a Firestore directamente — la rule no enforce nada (hoy `firestore.rules:351` da carta blanca sobre `ordenes_servicio` para staff). La fase B cierra ese gap con la rule de subcolección.
+
+---
+
 ## ~~SPRINT-WA-REAGENDAR-PORTAL~~ — CANCELADO 2026-05-19
 
 **Motivo de cancelación:** Jorge señaló que el sidebar admin ya tiene "Reprogramaciones" y verificación confirmó que TODA la infraestructura existe:
