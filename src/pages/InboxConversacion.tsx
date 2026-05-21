@@ -8,7 +8,7 @@ import {
   MessageSquare,
   CheckCheck,
 } from 'lucide-react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useApp } from '../context/AppContext';
 import {
@@ -20,13 +20,17 @@ import { enviarTexto } from '../services/whatsapp.service';
 import MensajeBubble from '../components/inbox/MensajeBubble';
 import IndicadorVentana24h from '../components/inbox/IndicadorVentana24h';
 import ToggleBot from '../components/inbox/ToggleBot';
-import CardCliente from '../components/inbox/CardCliente';
+import CardCliente, { type PrefillCrearOrden } from '../components/inbox/CardCliente';
 import SelectorPlantillas from '../components/inbox/SelectorPlantillas';
+import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
+import { useOrdenCreateForm } from '../hooks/useOrdenCreateForm';
 import type {
+  OrdenServicio,
   WhatsAppConversacion,
   WhatsAppMensajeInbox,
   WhatsAppMensajeOutbox,
 } from '../types';
+import { parseOrden } from '../utils';
 import toast from 'react-hot-toast';
 
 /**
@@ -59,7 +63,7 @@ type MensajeRender =
 export default function InboxConversacion() {
   const { waId } = useParams<{ waId: string }>();
   const navigate = useNavigate();
-  const { currentUser } = useApp();
+  const { currentUser, userProfile } = useApp();
 
   const [conversaciones, setConversaciones] = useState<WhatsAppConversacion[]>([]);
   const [conversacionActual, setConversacionActual] = useState<WhatsAppConversacion | null>(null);
@@ -69,8 +73,84 @@ export default function InboxConversacion() {
   const [buscar, setBuscar] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // SPRINT-INBOX-8 (2026-05-21): modal crear orden EN contexto del inbox,
+  // sin navegar a /admin/ordenes. Replica patrón Ordenes.tsx/Citas.tsx:
+  // hook compartido useOrdenCreateForm + OrdenCreateModal, alimentado con
+  // un prefill cuando el operario clickea desde CardCliente.
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [ordenesInbox, setOrdenesInbox] = useState<OrdenServicio[]>([]);
+  const [prefillPendiente, setPrefillPendiente] = useState<PrefillCrearOrden | null>(null);
+  const [refreshOrdenesCardKey, setRefreshOrdenesCardKey] = useState(0);
+
   const timelineRef = useRef<HTMLDivElement>(null);
   const ultimoCountRef = useRef(0);
+
+  // Suscripción liviana a ordenes_servicio para alimentar useOrdenCreateForm
+  // (necesita la lista para validar double-booking del técnico). Mismo patrón
+  // que Ordenes.tsx — orderBy createdAt desc.
+  useEffect(() => {
+    if (!showCreateModal) return;
+    const q = query(collection(db, 'ordenes_servicio'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+      setOrdenesInbox(
+        snap.docs
+          .filter((d) => d.data().eliminada !== true)
+          .map((d) => parseOrden(d.id, d.data() as Record<string, unknown>)),
+      );
+    });
+    return () => unsub();
+  }, [showCreateModal]);
+
+  const createForm = useOrdenCreateForm({
+    ordenes: ordenesInbox,
+    usuarioActual: { id: currentUser?.uid, nombre: userProfile?.nombre },
+    onAfterCreate: () => {
+      setShowCreateModal(false);
+      setPrefillPendiente(null);
+      // Forzar re-mount de CardCliente para que recargue órdenes activas.
+      setRefreshOrdenesCardKey((k) => k + 1);
+    },
+  });
+
+  // Aplicar prefill al hook una vez que el modal se abre y el cliente está
+  // bien cargado. Se ejecuta UNA sola vez por waId+tipo de prefill para no
+  // pisar ediciones del operario.
+  const prefillAplicadoRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!showCreateModal || !prefillPendiente) return;
+    const clave =
+      prefillPendiente.tipo === 'cliente-existente'
+        ? `existente:${prefillPendiente.cliente.id}`
+        : `nuevo:${prefillPendiente.telefono}`;
+    if (prefillAplicadoRef.current === clave) return;
+    prefillAplicadoRef.current = clave;
+
+    if (prefillPendiente.tipo === 'cliente-existente') {
+      createForm.handleSelectCliente(prefillPendiente.cliente);
+    } else {
+      const tel = prefillPendiente.telefono;
+      const nombre = prefillPendiente.nombre;
+      createForm.setIsNewCliente(true);
+      createForm.setForm((f) => ({
+        ...f,
+        clienteTelefono: tel,
+        clienteNombre: nombre ?? f.clienteNombre,
+      }));
+    }
+  }, [showCreateModal, prefillPendiente, createForm]);
+
+  // Limpiar prefillAplicadoRef al cerrar el modal — el siguiente abrir
+  // puede traer otro prefill.
+  useEffect(() => {
+    if (!showCreateModal) {
+      prefillAplicadoRef.current = null;
+    }
+  }, [showCreateModal]);
+
+  function handleCrearOrden(prefill: PrefillCrearOrden) {
+    setPrefillPendiente(prefill);
+    setShowCreateModal(true);
+  }
 
   // Lista de conversaciones (col 1).
   useEffect(() => {
@@ -342,9 +422,16 @@ export default function InboxConversacion() {
                   />
                 </div>
                 {/* SPRINT-INBOX-5 (2026-05-20): datos del cliente +
-                    órdenes activas vinculadas por teléfono. */}
+                    órdenes activas vinculadas por teléfono.
+                    SPRINT-INBOX-8 (2026-05-21): se le pasa
+                    onCrearOrden para que crear orden NO navegue afuera
+                    del inbox sino que abra el modal en contexto. */}
                 <div className="pt-3 border-t border-gray-100">
-                  <CardCliente waId={conversacionActual.wa_id} />
+                  <CardCliente
+                    key={`${conversacionActual.wa_id}-${refreshOrdenesCardKey}`}
+                    waId={conversacionActual.wa_id}
+                    onCrearOrden={handleCrearOrden}
+                  />
                 </div>
               </div>
             ) : (
@@ -443,6 +530,54 @@ export default function InboxConversacion() {
           </div>
         </main>
       </div>
+
+      {/* SPRINT-INBOX-8 (2026-05-21): modal crear orden EN contexto del
+          inbox. Replica el patrón Ordenes.tsx/Citas.tsx (mismo hook +
+          mismo componente). Cuando isNewCliente=true mostramos un banner
+          arriba del form para que el operario entienda que el cliente
+          se creara automaticamente al guardar. */}
+      {showCreateModal && (
+        <OrdenCreateModal
+          form={createForm.form}
+          setForm={createForm.setForm}
+          clienteBusqueda={createForm.clienteBusqueda}
+          setClienteBusqueda={createForm.setClienteBusqueda}
+          showClienteDropdown={createForm.showClienteDropdown}
+          setShowClienteDropdown={createForm.setShowClienteDropdown}
+          isNewCliente={createForm.isNewCliente}
+          setIsNewCliente={createForm.setIsNewCliente}
+          saving={createForm.saving}
+          clientes={createForm.clientes}
+          clientesFiltrados={createForm.clientesFiltrados}
+          tecnicos={createForm.tecnicos}
+          horariosOcupadosCreate={createForm.horariosOcupadosCreate}
+          ordenesActivasCliente={createForm.ordenesActivasCliente}
+          buscandoTelefono={createForm.buscandoTelefono}
+          showTelefonoDropdown={createForm.showTelefonoDropdown}
+          setShowTelefonoDropdown={createForm.setShowTelefonoDropdown}
+          clientesFiltradosTelefono={createForm.clientesFiltradosTelefono}
+          onSubmit={createForm.handleSubmit}
+          onClose={() => {
+            setShowCreateModal(false);
+            setPrefillPendiente(null);
+            createForm.resetForm();
+          }}
+          handleDireccionChange={createForm.handleDireccionChange}
+          handleSelectCliente={createForm.handleSelectCliente}
+          handleClienteTelefonoChange={createForm.handleClienteTelefonoChange}
+          chequeoPrevio={createForm.chequeoPrevioCreate}
+          aplicarDescuento={createForm.aplicarDescuentoCreate}
+          setAplicarDescuento={createForm.setAplicarDescuentoCreate}
+          extraFooterSlot={
+            createForm.isNewCliente && prefillPendiente?.tipo === 'cliente-nuevo' ? (
+              <div className="mb-3 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-800">
+                Este contacto no esta registrado como cliente. Se creara
+                automaticamente al guardar la orden.
+              </div>
+            ) : null
+          }
+        />
+      )}
     </div>
   );
 }

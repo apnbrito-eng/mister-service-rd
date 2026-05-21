@@ -25,18 +25,35 @@ import { faseLabel, faseColor } from '../../utils';
  *     activas (fase != cerrado/cancelado).
  *   - Si NO encuentra: muestra CTA "Crear cliente" + "Crear orden con
  *     este teléfono" (precarga el wa_id en la URL de Ordenes con query).
- *   - Las CTAs no escriben Firestore desde acá — navegan a flujos
- *     existentes (`/admin/clientes` y `/admin/ordenes`).
+ *   - SPRINT-INBOX-8 (2026-05-21): si el padre provee `onCrearOrden`,
+ *     los CTAs de crear orden invocan ese callback en lugar de
+ *     navigate(...) — abre el modal SOBRE el inbox. La ficha del cliente
+ *     sigue navegando (Jorge no objetó eso).
  *
  * Sin query con dos `where` → no requiere índice compuesto. La lógica
  * de fase activa corre client-side.
  */
 
+/**
+ * Prefill que CardCliente le pasa al padre cuando el operario clickea
+ * "Crear orden". El padre lo usa para precargar el modal.
+ */
+export type PrefillCrearOrden =
+  | { tipo: 'cliente-existente'; cliente: Cliente }
+  | { tipo: 'cliente-nuevo'; telefono: string; nombre?: string };
+
 interface Props {
   waId: string;
+  /**
+   * Callback opcional. Si el padre lo provee, los CTAs "Crear orden" lo
+   * invocan en lugar de navegar a /admin/ordenes. Permite abrir el modal
+   * crear orden EN contexto del inbox. Si es undefined, el componente
+   * mantiene el comportamiento navegador legacy (fallback seguro).
+   */
+  onCrearOrden?: (prefill: PrefillCrearOrden) => void;
 }
 
-export default function CardCliente({ waId }: Props) {
+export default function CardCliente({ waId, onCrearOrden }: Props) {
   const navigate = useNavigate();
   const [cliente, setCliente] = useState<{ id: string; data: Cliente } | null>(null);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
@@ -145,10 +162,22 @@ export default function CardCliente({ waId }: Props) {
               </ul>
             )}
 
-            {/* CTA crear orden con este cliente */}
+            {/* CTA crear orden con este cliente — SPRINT-INBOX-8: si el
+                padre proveyó callback, abre modal en contexto. */}
             <button
               type="button"
-              onClick={() => navigate(`/admin/ordenes?nueva=1&clienteId=${cliente.id}`)}
+              onClick={() => {
+                if (onCrearOrden) {
+                  // El shape del state interno es { id, data } pero el
+                  // Cliente type espera `id` como property top-level. Para
+                  // evitar el TS2783 ("id especificado mas de una vez"),
+                  // spreadeamos data primero y sobreescribimos id explicito.
+                  const clienteCompleto = { ...cliente.data, id: cliente.id } as Cliente;
+                  onCrearOrden({ tipo: 'cliente-existente', cliente: clienteCompleto });
+                } else {
+                  navigate(`/admin/ordenes?nueva=1&clienteId=${cliente.id}`);
+                }
+              }}
               className="w-full mt-2 inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md"
             >
               <Plus size={12} />
@@ -168,15 +197,30 @@ export default function CardCliente({ waId }: Props) {
           </p>
           <button
             type="button"
-            onClick={() => navigate(`/admin/clientes?nuevo=1&telefono=${waId}`)}
+            onClick={() => {
+              // SPRINT-INBOX-8: si el padre provee callback de crear orden,
+              // abrimos el modal en modo nuevo cliente (el cliente se crea
+              // al guardar la orden via path isNewCliente del hook).
+              if (onCrearOrden) {
+                onCrearOrden({ tipo: 'cliente-nuevo', telefono: waId });
+              } else {
+                navigate(`/admin/clientes?nuevo=1&telefono=${waId}`);
+              }
+            }}
             className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-md"
           >
             <UserPlus size={12} />
-            Crear cliente
+            {onCrearOrden ? 'Crear cliente + orden aqui' : 'Crear cliente'}
           </button>
           <button
             type="button"
-            onClick={() => navigate(`/admin/ordenes?nueva=1&telefono=${waId}`)}
+            onClick={() => {
+              if (onCrearOrden) {
+                onCrearOrden({ tipo: 'cliente-nuevo', telefono: waId });
+              } else {
+                navigate(`/admin/ordenes?nueva=1&telefono=${waId}`);
+              }
+            }}
             className="w-full inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-md"
           >
             <ClipboardList size={12} />
