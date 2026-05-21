@@ -10,6 +10,45 @@
 
 ---
 
+## SPRINT-INBOX-9-FOTOS-CHAT-ORDEN — Adjuntar fotos del chat a la orden
+
+**Movido a BLOQUEOS.md el 2026-05-21 noche por coordinator autónomo `trabaja` pasada 35.**
+
+**Motivo del bloqueo (3 causas concurrentes — cualquiera bastaría):**
+
+1. **Endpoint público nuevo en `api/`** — requiere OK explícito (sub-regla CLAUDE.md "Nuevas integraciones de pago, OAuth, terceros" + "Cambios a endpoints `api/` públicos"). El webhook actual (`api/_lib/whatsappWebhook.ts:242`) solo guarda `contenido.mediaId` (id de Meta), NO descarga ni almacena la imagen. Para usarla en la orden hace falta un endpoint serverless `api/whatsapp/media-proxy.ts` que (a) reciba `{mediaId, conversacionId}`, (b) llame Meta Graph API `GET /{mediaId}` con `Authorization: Bearer ${WHATSAPP_ACCESS_TOKEN}` para obtener la URL temporal (~5 min de TTL), (c) descargue el binario, (d) lo suba a Firebase Storage en `whatsapp-media/{wa_id}/{wamid}.{ext}`, (e) retorne la URL pública. Exponer el access token al cliente NO es opción.
+
+2. **Firebase Storage rules** — el path `whatsapp-media/**` no existe hoy. El repo NO tiene `storage.rules` versionado (NO existe el archivo). Las rules actuales son las default de Firebase Console, NO versionadas. Para gobernar el path nuevo hace falta: (a) crear `storage.rules` versionado en el repo (cuenta como infraestructura nueva — sprint propio que vive en BLOQUEOS como SPRINT-138 desde hace tiempo); (b) agregar match para `whatsapp-media/**` con read gateado por staff oficina; (c) `firebase deploy --only storage:rules`. **El SPRINT-138 ya en cola de bloqueos es prerequisito de este.**
+
+3. **Decisión de negocio pendiente** — ¿adónde van las fotos en la orden? Opciones: (i) sumarlas al array `fotos[]` del equipo (que hoy se llena en el form de orden + cierre); (ii) crear un sub-array nuevo `fotosCliente[]` o `adjuntosChat[]`; (iii) usar el campo `descripcionFalla` con un link a la imagen. Cada opción tiene implicaciones distintas en `types/index.ts`, `OrdenCreateModal`, vista técnico, y cierre. Jorge debe elegir el approach.
+
+**Approach técnico recomendado (a discutir con Jorge):**
+
+- **Opción A — máxima fidelidad (recomendada):** crear endpoint `api/whatsapp/media-proxy.ts` + `storage.rules` con path `whatsapp-media/**`. Bajar la imagen y subirla a Storage. Sumarla al `fotos[]` del equipo en el form. **Pros:** la imagen persiste, sobrevive a la rotación del access_token Meta, es indexable. **Contras:** requiere desbloquear SPRINT-138 primero + decidir Storage layout + costo de storage adicional.
+- **Opción B — pragmatic shortcut:** NO re-subir. Mostrar la imagen via `<img src="api/whatsapp/media-proxy/{mediaId}">` cada vez (el endpoint hace stream pass-through con el access_token server-side). **Pros:** no requiere Storage. **Contras:** dependencia online del token Meta para verla, latencia, no funciona offline.
+- **Opción C — no implementar:** marcar el item 7 del INBOX-8b como cancelado. Jorge usa screenshots manuales si necesita una foto del chat en la orden.
+
+**Cómo desbloquear:**
+
+1. Decidir Opción A / B / C.
+2. **Si A**: desbloquear primero `SPRINT-138 — Crear storage.rules versionado` (ya en BLOQUEOS). Después agregar `OK: jorge YYYY-MM-DD HH:MM opcion=A` a este sprint con el approach final.
+3. **Si B**: agregar `OK: jorge YYYY-MM-DD HH:MM opcion=B` — el coordinator implementa solo el endpoint proxy.
+4. **Si C**: agregar `RECHAZADO: jorge YYYY-MM-DD HH:MM opcion=C` — se cierra el follow-up.
+
+**Touch-list previsto si Jorge dice OK (opción A):**
+- NUEVO `api/whatsapp/media-proxy.ts` (endpoint serverless).
+- NUEVO `storage.rules` versionado (SPRINT-138 desbloqueado).
+- `src/components/inbox/MensajeBubble.tsx` — agregar acción "Adjuntar a la orden" en burbujas tipo `image` cuando `onAdjuntarAOrden` callback está presente.
+- `src/pages/InboxConversacion.tsx` — wirea callback con setter del form abierto.
+- `src/hooks/useOrdenCreateForm.ts` (o el form) — exponer setter para sumar URL al array de fotos.
+- Posible `src/services/storage.service.ts` — helper si la suba la hace el cliente (no recomendado).
+
+**Comando de desbloqueo:** después del OK, pegá `procesa bloqueos` al coordinator.
+
+**Pendiente desde:** 2026-05-21 noche, pasada 35. **Bloqueo escalado limpio — el resto del bloque nocturno (FEED-UNIFICADO, FUNNEL, WA-TEMPLATE-METRICS) completado normalmente.**
+
+---
+
 ## SPRINT-INBOX-8b-DRAWER-LATERAL — DESBLOQUEADO 2026-05-21 (OK: jorge 2026-05-21 10:30 approach=A1 + items=4,5,6)
 
 **Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-21 por coordinator (`procesa bloqueos`, pasada 33). desbloqueadoPor: jorge 2026-05-21 10:30 vía `OK: jorge 2026-05-21 10:30 approach=A1 + items=4,5,6`.** Conservado acá como stub para forensia.

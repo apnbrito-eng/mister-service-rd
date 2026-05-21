@@ -5,6 +5,80 @@
 
 ---
 
+## 2026-05-21 noche — autónomo (`trabaja`, pasada 35): BLOQUE NOCTURNO, 3 sprints + 1 escalado
+
+### Contexto
+
+Jorge pegó `trabaja toda la cola: procesa el BLOQUE NOCTURNO` con instrucciones explícitas: procesar 4 sprints en orden (FEED-UNIFICADO-ORDEN → FUNNEL-CONVERSION-FASES → WA-TEMPLATE-METRICS → INBOX-9-FOTOS-CHAT-ORDEN), regla de escalado limpio si topa rules/endpoint/migración/decisión, prohibición de tocar PAGOS-FASE-B-2.
+
+### Sprints procesados
+
+| Sprint | Estado | Commit | Archivos | Tiempo |
+|---|---|---|---|---|
+| SPRINT-FEED-UNIFICADO-ORDEN | COMPLETADO | `6a3ec1d` | NUEVO `utils/timelineUnificado.ts`, NUEVO `components/ordenes/TimelineUnificadoOrden.tsx`, `pages/OrdenDetalle.tsx`, `components/ordenes/OrdenDetailModal.tsx` | ~12min |
+| SPRINT-FUNNEL-CONVERSION-FASES | COMPLETADO | `7c83a30` | NUEVO `components/AnalisisFunnel.tsx`, `pages/MetricasMensuales.tsx` | ~10min |
+| SPRINT-WA-TEMPLATE-METRICS | COMPLETADO | `5f9c40f` | NUEVO `components/inbox/MetricasPlantillas.tsx`, `pages/MetricasMensuales.tsx` | ~8min |
+| SPRINT-INBOX-9-FOTOS-CHAT-ORDEN | ESCALADO BLOQUEOS | — | — (sprint movido a BLOQUEOS.md con 3 opciones de approach) | ~5min análisis |
+
+### Archivist PRE-CHANGE
+
+**SPRINT-FEED-UNIFICADO-ORDEN:**
+- Touch-list: `OrdenDetalle.tsx`, `OrdenDetailModal.tsx`, NUEVO `TimelineUnificadoOrden.tsx`, NUEVO `timelineUnificado.ts`.
+- Historial: ambos archivos son críticos (alta actividad). `OrdenDetalle.tsx` ya tiene TimelineAcciones de SPRINT-113c (hash `0909237`). Ningún postmortem apunta a estos archivos.
+- Recordatorios: P-001 N/A (solo lectura), P-015 N/A (sort client-side ya en `suscribirMensajes`), `react-refresh/only-export-components` (helpers van en `utils/`).
+
+**SPRINT-FUNNEL-CONVERSION-FASES:**
+- Touch-list: NUEVO `AnalisisFunnel.tsx`, `MetricasMensuales.tsx`.
+- Historial: MetricasMensuales reciente, sin postmortems.
+- Recordatorios: lectura pura, sin índice nuevo.
+
+**SPRINT-WA-TEMPLATE-METRICS:**
+- Touch-list: NUEVO `MetricasPlantillas.tsx`, `MetricasMensuales.tsx`.
+- Historial: outbox WhatsApp se monta sobre `whatsapp_mensajes_outbox`, rule `firestore.rules:697` esStaffOficina(). Listener global OK (cazador P-012 no aplica — no es rule auth.uid==X).
+- Recordatorios: @safe-listener-sin-where ya documentado en patrón existente.
+
+**SPRINT-INBOX-9-FOTOS-CHAT-ORDEN:**
+- PRE-CHANGE detectó 3 bloqueadores estructurales antes de tocar código → escalado a BLOQUEOS sin commit.
+
+### Tester (typecheck + lint + cazadores)
+
+PASS en los 3 commits. Pre-commit hook husky corrió correctamente (typecheck + cazadores + lint staged).
+
+### Reviewer
+
+NO necesario — ninguno tocó `firestore.rules`. Los 3 son frontend de solo-lectura.
+
+### Regression guardian
+
+NO necesario — ninguno tocó rules/services con mutaciones. `whatsappInbox.service` se usa pero solo en modo lectura (`suscribirMensajes` que ya existe en producción desde INBOX-1..6).
+
+### Push y deploy
+
+Los 3 commits pusheados a `origin/main` (head: `5f9c40f`). Deploy Vercel pendiente — devops verificará en próxima invocación.
+
+### Cazadores anti-regresión
+
+17/17 PASS en cada commit (P-001..P-007, P-009..P-012, P-014..P-019). Sin hits nuevos en ningún sprint.
+
+### Nuevos artefactos creados (FYI Cowork)
+
+- `src/components/ordenes/TimelineUnificadoOrden.tsx` — feed unificado, reusable, variant page/modal.
+- `src/utils/timelineUnificado.ts` — helper que combina los 4 orígenes (fases + auditoría + WhatsApp inbox + WhatsApp outbox).
+- `src/components/AnalisisFunnel.tsx` — embudo de conversión reusable, recibe ordenes + rangoFecha.
+- `src/components/inbox/MetricasPlantillas.tsx` — tabla de rendimiento por plantilla HSM.
+
+### Sprint escalado limpio
+
+SPRINT-INBOX-9-FOTOS-CHAT-ORDEN movido a BLOQUEOS.md con 3 causas concurrentes documentadas y 3 opciones de approach (A=full proxy + storage rules versionadas; B=stream pass-through sin Storage; C=cancelar feature). Sprint mismo anticipaba el escalado.
+
+### Próximos pasos
+
+1. Jorge confirma que los 3 commits del bloque nocturno deployan OK en Vercel.
+2. QA Jorge sigue pendiente sobre PAGOS-FASE-B-1 (`4fa8f08`) antes de procesar B.2.
+3. Si Jorge quiere INBOX-9, leer BLOQUEOS.md y decidir Opción A/B/C.
+
+---
+
 ## 2026-05-21 — autónomo (`procesa bloqueos`, pasada 33): 2 sprints desbloqueados + procesados
 
 ### Contexto
