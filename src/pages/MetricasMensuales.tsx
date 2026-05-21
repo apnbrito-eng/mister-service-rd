@@ -8,6 +8,7 @@ import {
 } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import AnalisisFunnel from '../components/AnalisisFunnel';
+import MetricasPlantillas from '../components/inbox/MetricasPlantillas';
 import { useApp } from '../context/AppContext';
 import {
   TIERS_BONO_SECRETARIA, calcularBonoSecretaria, rangoMesCalendario,
@@ -260,6 +261,9 @@ export default function MetricasMensuales() {
 
       {/* SPRINT-FUNNEL-CONVERSION-FASES — Embudo de conversión por fase */}
       <AnalisisFunnel ordenes={ordenes} rangoFecha={rango} />
+
+      {/* SPRINT-WA-TEMPLATE-METRICS — Rendimiento de plantillas WhatsApp */}
+      <MetricasPlantillas />
 
       {/* Operarias */}
       <section className="space-y-3">
