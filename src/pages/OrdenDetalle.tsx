@@ -26,6 +26,7 @@ import FaseStepper from '../components/ordenes/FaseStepper';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import BannerSiguientePaso from '../components/ordenes/BannerSiguientePaso';
 import TimelineAcciones from '../components/ordenes/TimelineAcciones';
+import TimelineUnificadoOrden from '../components/ordenes/TimelineUnificadoOrden';
 import ReagendarModal from '../components/ordenes/ReagendarModal';
 import RegistrarPagoModal from '../components/ordenes/RegistrarPagoModal';
 import EnviarFacturacionButton from '../components/ordenes/EnviarFacturacionButton';
@@ -1460,6 +1461,9 @@ export default function OrdenDetalle() {
             onClose={() => setModalPiezasAbierto(false)}
           />
 
+
+          {/* SPRINT-FEED-UNIFICADO-ORDEN — Timeline unificado (fases + auditoría + WhatsApp del cliente) */}
+          <TimelineUnificadoOrden orden={orden} max={80} />
 
           {/* Registro de Auditoría */}
           {orden.auditoria && orden.auditoria.length > 0 && (

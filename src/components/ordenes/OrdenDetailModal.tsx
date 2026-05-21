@@ -23,6 +23,7 @@ import ReagendarModal from './ReagendarModal';
 import RegistrarPagoModal from './RegistrarPagoModal';
 import EnviarFacturacionButton from './EnviarFacturacionButton';
 import EnviarPortalButton from './EnviarPortalButton';
+import TimelineUnificadoOrden from './TimelineUnificadoOrden';
 import BadgeSoloChequeo from '../shared/BadgeSoloChequeo';
 import { Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
 import { reactivarOrdenPostChequeo, limpiarVisitaFallida } from '../../services/ordenes.service';
@@ -1199,6 +1200,9 @@ export default function OrdenDetailModal({
           <span className="text-gray-400">- {tiempoTranscurrido(orden.createdAt)}</span>
         </p>
       </div>
+
+      {/* SPRINT-FEED-UNIFICADO-ORDEN — Timeline unificado en modal lateral */}
+      <TimelineUnificadoOrden orden={orden} max={40} variant="modal" />
 
       {/* Registro de Auditoria */}
       {orden.auditoria && orden.auditoria.length > 0 && (
