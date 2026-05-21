@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1100" font-family="-apple-system, BlinkMacSystemFont, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#374151"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1400" height="1100" fill="#fafafa"/>
+
+  <!-- Title -->
+  <text x="700" y="50" font-size="28" font-weight="700" fill="#0f3460" text-anchor="middle">Flujo Orden de Servicio · Mister Service RD</text>
+  <text x="700" y="78" font-size="13" fill="#6b7280" text-anchor="middle">Desde creación hasta facturación · estado del código al 2026-05-16</text>
+
+  <!-- ROW 1 - Creación -->
+  <!-- Box 1: Cliente -->
+  <rect x="60" y="120" width="220" height="120" rx="14" fill="#FEF9C3" stroke="#CA8A04" stroke-width="2"/>
+  <text x="170" y="148" font-size="13" font-weight="700" fill="#713F12" text-anchor="middle">1 · CLIENTE CONTACTA</text>
+  <text x="170" y="172" font-size="11" fill="#4B5563" text-anchor="middle">WhatsApp / Form web / Llamada</text>
+  <text x="170" y="190" font-size="11" fill="#4B5563" text-anchor="middle">Origen: formulario_publico,</text>
+  <text x="170" y="206" font-size="11" fill="#4B5563" text-anchor="middle">whatsapp, oficina</text>
+  <text x="170" y="228" font-size="11" font-weight="600" fill="#7C2D12" text-anchor="middle">→ citas_por_confirmar</text>
+
+  <!-- Arrow 1→2 -->
+  <line x1="285" y1="180" x2="345" y2="180" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Box 2: Secretaria -->
+  <rect x="350" y="120" width="220" height="120" rx="14" fill="#DBEAFE" stroke="#2563EB" stroke-width="2"/>
+  <text x="460" y="148" font-size="13" font-weight="700" fill="#1E3A8A" text-anchor="middle">2 · SECRETARIA</text>
+  <text x="460" y="172" font-size="11" fill="#4B5563" text-anchor="middle">Registra/confirma cita</text>
+  <text x="460" y="190" font-size="11" fill="#4B5563" text-anchor="middle">Asigna técnico (P-006 ✓)</text>
+  <text x="460" y="208" font-size="11" fill="#4B5563" text-anchor="middle">Auto-detecta operaria del técnico</text>
+  <text x="460" y="228" font-size="11" font-weight="600" fill="#1E40AF" text-anchor="middle">→ OS-XXXX · Agendado</text>
+
+  <!-- Arrow 2→3 -->
+  <line x1="575" y1="180" x2="635" y2="180" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Box 3: Técnico inicia -->
+  <rect x="640" y="120" width="220" height="120" rx="14" fill="#FCE7F3" stroke="#DB2777" stroke-width="2"/>
+  <text x="750" y="148" font-size="13" font-weight="700" fill="#831843" text-anchor="middle">3 · TÉCNICO LLEGA</text>
+  <text x="750" y="172" font-size="11" fill="#4B5563" text-anchor="middle">Click "Iniciar chequeo"</text>
+  <text x="750" y="190" font-size="11" fill="#4B5563" text-anchor="middle">Foto del equipo + captura GPS</text>
+  <text x="750" y="208" font-size="11" fill="#4B5563" text-anchor="middle">(rules R4 verifican operaria)</text>
+  <text x="750" y="228" font-size="11" font-weight="600" fill="#9F1239" text-anchor="middle">→ En Diagnóstico</text>
+
+  <!-- Bifurcación -->
+  <text x="950" y="155" font-size="14" font-weight="700" fill="#374151" text-anchor="middle">↓</text>
+  <text x="950" y="175" font-size="12" font-weight="600" fill="#374151" text-anchor="middle">¿Repara in-situ?</text>
+
+  <!-- Línea bifurcación -->
+  <line x1="950" y1="180" x2="950" y2="320" stroke="#9CA3AF" stroke-width="2" stroke-dasharray="4 4"/>
+  <line x1="700" y1="320" x2="1200" y2="320" stroke="#9CA3AF" stroke-width="2" stroke-dasharray="4 4"/>
+
+  <!-- ROW 2 - Bifurcación -->
+  <!-- Path A: Solo chequeo -->
+  <rect x="540" y="340" width="320" height="150" rx="14" fill="#FEE2E2" stroke="#DC2626" stroke-width="2"/>
+  <text x="700" y="370" font-size="14" font-weight="700" fill="#991B1B" text-anchor="middle">PATH A · SOLO CHEQUEO</text>
+  <text x="700" y="392" font-size="11" font-style="italic" fill="#6B7280" text-anchor="middle">(no se repara in-situ)</text>
+  <text x="700" y="418" font-size="11" fill="#4B5563" text-anchor="middle">▸ Técnico sugiere monto + motivo</text>
+  <text x="700" y="436" font-size="11" fill="#4B5563" text-anchor="middle">▸ Coord aprueba en /sugerencias-chequeo</text>
+  <text x="700" y="454" font-size="11" fill="#4B5563" text-anchor="middle">▸ tipoCierre: solo_chequeo · precioFinal seteado</text>
+  <text x="700" y="478" font-size="11" font-weight="600" fill="#991B1B" text-anchor="middle">Vigencia 30 días: aplicable a cotización futura</text>
+
+  <!-- Path B: Cotización con piezas -->
+  <rect x="900" y="340" width="320" height="150" rx="14" fill="#D1FAE5" stroke="#059669" stroke-width="2"/>
+  <text x="1060" y="370" font-size="14" font-weight="700" fill="#065F46" text-anchor="middle">PATH B · COTIZACIÓN CON PIEZAS</text>
+  <text x="1060" y="392" font-size="11" font-style="italic" fill="#6B7280" text-anchor="middle">(repara con piezas)</text>
+  <text x="1060" y="418" font-size="11" fill="#4B5563" text-anchor="middle">▸ Técnico cotiza piezas + mano de obra</text>
+  <text x="1060" y="436" font-size="11" fill="#4B5563" text-anchor="middle">▸ Operaria autoriza precio</text>
+  <text x="1060" y="454" font-size="11" fill="#4B5563" text-anchor="middle">▸ Coord visto final · fase: Aprobado</text>
+  <text x="1060" y="478" font-size="11" font-weight="600" fill="#047857" text-anchor="middle">SPRINT-173: fase avanza al aprobar</text>
+
+  <!-- Arrows convergen al cierre -->
+  <line x1="700" y1="495" x2="700" y2="555" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1060" y1="495" x2="700" y2="555" stroke="#374151" stroke-width="2" stroke-dasharray="2 2" marker-end="url(#arrow)"/>
+
+  <!-- ROW 3 - Cierre -->
+  <!-- Box 5: Técnico cierra -->
+  <rect x="540" y="560" width="320" height="160" rx="14" fill="#FCE7F3" stroke="#DB2777" stroke-width="2"/>
+  <text x="700" y="588" font-size="13" font-weight="700" fill="#831843" text-anchor="middle">4 · TÉCNICO CIERRA (Wizard)</text>
+  <text x="700" y="610" font-size="11" fill="#4B5563" text-anchor="middle">✓ Equipo funciona? · Cliente satisfecho?</text>
+  <text x="700" y="626" font-size="11" fill="#4B5563" text-anchor="middle">✓ Revisó conexiones?</text>
+  <text x="700" y="642" font-size="11" fill="#4B5563" text-anchor="middle">✓ Foto del cierre + Firma del cliente</text>
+  <text x="700" y="658" font-size="11" fill="#4B5563" text-anchor="middle">✓ Período de garantía (default 60 días)</text>
+  <text x="700" y="676" font-size="11" fill="#4B5563" text-anchor="middle">✓ Piezas usadas (opcional, solo path B)</text>
+  <text x="700" y="700" font-size="11" font-weight="600" fill="#9F1239" text-anchor="middle">→ Trabajo Realizado</text>
+
+  <!-- Arrow 5→6 -->
+  <line x1="865" y1="640" x2="935" y2="640" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Box 6: Coord emite conduce -->
+  <rect x="940" y="560" width="320" height="160" rx="14" fill="#DBEAFE" stroke="#2563EB" stroke-width="2"/>
+  <text x="1100" y="588" font-size="13" font-weight="700" fill="#1E3A8A" text-anchor="middle">5 · COORDINADORA · EMITE CONDUCE</text>
+  <text x="1100" y="610" font-size="11" fill="#4B5563" text-anchor="middle">/admin/facturacion-pendiente</text>
+  <text x="1100" y="626" font-size="11" fill="#4B5563" text-anchor="middle">Modal Procesar (SPRINT-151):</text>
+  <text x="1100" y="642" font-size="11" fill="#4B5563" text-anchor="middle">▸ Items editables · Notas</text>
+  <text x="1100" y="658" font-size="11" fill="#4B5563" text-anchor="middle">▸ Garantía pre-poblada del wizard</text>
+  <text x="1100" y="674" font-size="11" fill="#4B5563" text-anchor="middle">▸ Verificar pago checkbox</text>
+  <text x="1100" y="700" font-size="11" font-weight="600" fill="#1E40AF" text-anchor="middle">→ CG-XXXXX · fase: Cerrado</text>
+
+  <!-- Arrow 6→7 -->
+  <line x1="1100" y1="730" x2="1100" y2="780" stroke="#374151" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Box 7: Cliente recibe -->
+  <rect x="940" y="785" width="320" height="120" rx="14" fill="#FEF3C7" stroke="#D97706" stroke-width="2"/>
+  <text x="1100" y="813" font-size="13" font-weight="700" fill="#92400E" text-anchor="middle">6 · CLIENTE RECIBE</text>
+  <text x="1100" y="837" font-size="11" fill="#4B5563" text-anchor="middle">WhatsApp con link de conduce + garantía</text>
+  <text x="1100" y="855" font-size="11" fill="#4B5563" text-anchor="middle">Token expira en N días (SPRINT-140)</text>
+  <text x="1100" y="873" font-size="11" fill="#4B5563" text-anchor="middle">Puede reclamar garantía 60 días desde cierre</text>
+  <text x="1100" y="895" font-size="11" font-style="italic" fill="#6B7280" text-anchor="middle">/garantia/{token}</text>
+
+  <!-- KPI / Side info: Dashboard -->
+  <rect x="60" y="560" width="440" height="160" rx="14" fill="#F3F4F6" stroke="#6B7280" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text x="280" y="588" font-size="13" font-weight="700" fill="#374151" text-anchor="middle">EFECTOS PARALELOS (sistema)</text>
+  <text x="80" y="612" font-size="11" fill="#4B5563">▸ Notificaciones: operaria, coord, admins</text>
+  <text x="80" y="630" font-size="11" fill="#4B5563">▸ Audit log en orden.auditoria[] + auditoria_admin</text>
+  <text x="80" y="648" font-size="11" fill="#4B5563">▸ Comisión técnico registrada (utils/comisiones.ts)</text>
+  <text x="80" y="666" font-size="11" fill="#4B5563">▸ KPI dashboard: Conduces ↑, Órdenes en curso ↓</text>
+  <text x="80" y="684" font-size="11" fill="#4B5563">▸ Storage: fotos-servicio/, firmas_cierre/</text>
+  <text x="80" y="702" font-size="11" fill="#4B5563">▸ Cazadores P-001 a P-011 protegen invariantes</text>
+
+  <!-- Hallazgos del QA E2E 2026-05-16 -->
+  <rect x="60" y="745" width="860" height="280" rx="14" fill="#FEF2F2" stroke="#DC2626" stroke-width="1.5"/>
+  <text x="490" y="775" font-size="14" font-weight="700" fill="#991B1B" text-anchor="middle">Hallazgos QA E2E · sesión 2026-05-16 · OS-0058 / CG-00020</text>
+
+  <text x="80" y="803" font-size="11" font-weight="700" fill="#7F1D1D">CRÍTICO / ALTO</text>
+  <text x="80" y="821" font-size="11" fill="#374151">▸ #17 Lógica 30 días vigencia chequeo + descuento a cotización NO implementada</text>
+
+  <text x="80" y="847" font-size="11" font-weight="700" fill="#9F1239">MEDIO</text>
+  <text x="80" y="865" font-size="11" fill="#374151">▸ #1 Toast "(cliente creado)" cuando es asociado al existente</text>
+  <text x="80" y="881" font-size="11" fill="#374151">▸ #9 permission-denied en console al cargar /tecnico (listener sin filter)</text>
+  <text x="80" y="897" font-size="11" fill="#374151">▸ #10 Stepper visual no refleja atajo "Solo chequeo"</text>
+  <text x="80" y="913" font-size="11" fill="#374151">▸ #11 Wizard cierre no se adapta a soloChequeo: true</text>
+  <text x="80" y="929" font-size="11" fill="#374151">▸ #13 Wizard pregunta mangueras de desagüe en Aire Acondicionado</text>
+
+  <text x="80" y="955" font-size="11" font-weight="700" fill="#A16207">BAJO / DOC</text>
+  <text x="80" y="973" font-size="11" fill="#374151">▸ #2,3,4,5,7,12,14,15,16 — listado completo en sesión Cowork</text>
+
+  <text x="80" y="1005" font-size="11" font-style="italic" fill="#6B7280">Validaciones OK: SPRINT-159 firma · SPRINT-158a foto · SPRINT-160 garantía 60d · SPRINT-161 fase cerrado · SPRINT-170 operaria autoinforma · SPRINT-173 (path B)</text>
+
+  <!-- Leyenda -->
+  <rect x="940" y="940" width="400" height="85" rx="14" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1"/>
+  <text x="1140" y="965" font-size="12" font-weight="700" fill="#374151" text-anchor="middle">Leyenda actores</text>
+  <rect x="955" y="978" width="14" height="14" fill="#FEF9C3" stroke="#CA8A04"/>
+  <text x="975" y="990" font-size="11" fill="#374151">Cliente</text>
+  <rect x="1040" y="978" width="14" height="14" fill="#DBEAFE" stroke="#2563EB"/>
+  <text x="1060" y="990" font-size="11" fill="#374151">Oficina (Sec/Op/Coord/Admin)</text>
+  <rect x="955" y="1000" width="14" height="14" fill="#FCE7F3" stroke="#DB2777"/>
+  <text x="975" y="1012" font-size="11" fill="#374151">Técnico</text>
+  <rect x="1040" y="1000" width="14" height="14" fill="#FEE2E2" stroke="#DC2626"/>
+  <text x="1060" y="1012" font-size="11" fill="#374151">Path A · Solo chequeo</text>
+  <rect x="1230" y="1000" width="14" height="14" fill="#D1FAE5" stroke="#059669"/>
+  <text x="1250" y="1012" font-size="11" fill="#374151">Path B · Reparación</text>
+</svg>

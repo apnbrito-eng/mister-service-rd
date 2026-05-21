@@ -2130,3 +2130,490 @@ El sprint también requiere:
 **OK Jorge:** _pendiente_
 
 ---
+
+> ## ⚠️ CORRECCIÓN GLOBAL WA-CHAT (auditoría 2026-05-20)
+>
+> La auditoría pre-CRM (`docs/analisis/AUDITORIA_PRE_CRM_2026_05_20.md`, hallazgo C1) descubrió que **el modelo de datos del inbox YA EXISTE en el backend**. NO crear nada nuevo de datos. Realidad confirmada en `api/whatsapp/webhook.ts` + `api/whatsapp/send.ts` + `firestore.rules:686-844`:
+> - `whatsapp_conversaciones/{wa_id}` ya existe, con denormalización: `ultimoPhoneNumberId`, `ultimoMensajeEntrante{}`, `ultimoMensajeSaliente{}`, `noLeidos` (FieldValue.increment), `ventana24h{}`, `asignadaA`, `etiquetas`, `bot.habilitado`.
+> - Mensajes en `whatsapp_mensajes_inbox/{wamid}` y `whatsapp_mensajes_outbox/{tempId}` (NO existe `whatsapp_mensajes`).
+> - Rules ya escritas: writes server-side (Admin SDK, `allow write: if false`), reads para staff oficina, update PARCIAL UI-seguro (marcar leído, asignación anti-robo, `bot.habilitado`).
+>
+> **Por tanto, los WA-CHAT dejan de ser "crear modelo + migración + rules" y pasan a ser SOLO frontend:** tipos TS del inbox, página `/admin/inbox` que LEE `whatsapp_conversaciones`, vista de conversación que LEE `_inbox`+`_outbox`, toggle bot que escribe `bot.habilitado` (update parcial dot-path, con `auth.uid` no `userProfile.id`), shortcut plantillas, acceso a órdenes. **Casi ninguno toca rules ni migración** → varios pueden ir directo a COLA, no a BLOQUEOS.
+>
+> Reglas de implementación heredadas de las rules existentes:
+> - Updates desde UI deben tocar SOLO `asignadaA` y `bot.habilitado` (todo lo demás es inmutable por rule → `permission-denied` si mandás un `updateDoc` no-parcial; usar merge/dot-path).
+> - `asignadaA` se escribe con `currentUser.uid` (gotcha P-001).
+> - El "robo" de conversación (uid ajeno → propio) está bloqueado salvo admin/coord.
+
+## ~~SPRINT-WA-CHAT-1 — Modelo de datos "Conversación por cliente"~~ → REEMPLAZADO
+
+**Estado:** ❌ OBSOLETO. El modelo `whatsapp_conversaciones` YA existe (ver corrección global arriba). NO crear colección, NO migrar `whatsapp_mensajes` (no existe), NO crear rule (ya existe). La decisión D4 de multi-número ya está cubierta: el backend escribe `ultimoPhoneNumberId` por conversación y `phoneNumberId` por mensaje en `_inbox`/`_outbox`.
+
+### SPRINT-WA-CHAT-1B (reemplazo) — Tipos frontend + capa de lectura del inbox
+
+**Prioridad:** ALTA (bloquea WA-CHAT-2/3).
+**Por qué NO va a BLOQUEOS:** no toca rules ni migración → puede ir a COLA_AUTONOMA. Lo dejo acá solo para que revises el cambio de scope.
+
+**Touch-list:**
+1. **`src/types/index.ts`** — agregar tipos TS que ESPEJEN el shape real del backend (no inventar): `WhatsAppConversacion` con `wa_id`, `ultimoPhoneNumberId`, `ultimoMensajeEntrante`, `ultimoMensajeSaliente`, `noLeidos`, `ventana24h`, `asignadaA`, `etiquetas`, `bot` (`{ habilitado: boolean }`). Mensajes `WhatsAppMensajeInbox` / `WhatsAppMensajeOutbox` con los campos reales de `webhook.ts:215-227` y `send.ts:1064-1083`. Tomar los nombres EXACTOS del backend.
+2. **`src/services/whatsappInbox.service.ts`** (NUEVO) — `suscribirConversaciones(callback)` (`onSnapshot` sobre `whatsapp_conversaciones` ordenado por última actividad), `suscribirMensajes(wa_id, callback)` (lee `_inbox` + `_outbox`, merge + sort por timestamp client-side), `marcarLeida(wa_id)` (update parcial `noLeidos: 0`), `toggleBot(wa_id, habilitado)` (update parcial `bot.habilitado` con `currentUser.uid` en audit). Todos los writes son updates PARCIALES (dot-path) por la rule.
+
+**Criterio de éxito:** tipos compilan; service lee conversaciones reales; toggle bot no da `permission-denied` (update parcial correcto). NO duplica `whatsapp.service.ts` existente (que es solo wrapper del endpoint send).
+
+**OK Jorge:** _no requiere OK de rules — mover a COLA cuando confirmes el scope corregido._
+
+---
+
+## ~~SPRINT-WA-CHAT-1 (original) — referencia histórica~~
+
+**Estado:** ❌ OBSOLETO 2026-05-20 — ver corrección C1. El texto original abajo se conserva tachado como forensia del error (asumía `whatsapp_mensajes` y campos inexistentes).
+
+**Origen:** Análisis Kommo CRM 2026-05-20. **Por qué se anuló:** crea colección nueva + migración sobre `whatsapp_mensajes` (inexistente) + rule (ya existe). Todo duplicado.
+
+### Decisiones de Jorge
+
+- **D1:** ¿Particionar conversaciones por número de teléfono normalizado (RD 10 dígitos sin `+1`) o por `clienteId`? Recomendación: por número, porque cliente puede no existir en `clientes` aún cuando llega el primer WA. Si el cliente se crea después, denormalizar `clienteId` cuando esté disponible.
+- **D2:** ¿Persistir contador `noLeidosCount` por conversación o calcularlo on-the-fly desde mensajes? Recomendación: persistido + incrementado en webhook entrante + reseteado cuando operaria abre la vista. Más performante a escala.
+- **D3:** ¿Migración one-time corre desde `scripts/migrar-conversaciones-desde-mensajes.ts` (dry-run primero) o se deja vacío y solo nuevas conversaciones se crean adelante? Recomendación: migrar todo, sin migración los inbox arrancan vacíos y el chat no muestra historial.
+- **D4 (RESUELTA 2026-05-20 por Jorge):** El modelo DEBE soportar agregar más números cuando se desee, pero por ahora solo se usan los que ya están programados en Meta (la WABA del proyecto: 8495646767 + 8294716265). → **Decisión: particionar por `(numeroNegocio + telefonoCliente)` (doc id compuesto) desde el día 1.** Multi-número listo en el modelo de datos, pero arranca usando solo los 2 números Cloud API directos del proyecto. NO se replican los 7+ números de Kommo. Cuando Jorge quiera agregar un número nuevo, se programa en Meta y el modelo ya lo soporta sin re-migrar. Contexto del hallazgo: en Kommo había 7+ números (uno por técnico/flota) vía la integración WhatsApp de Kommo — eso NO se migra, se consolida en los números Cloud API oficiales.
+
+### Touch-list
+
+1. **`src/types/index.ts`** — agregar type `WhatsAppConversacion`:
+   - `id: string` (doc id = `${numeroNegocio}_${telefono}` si D4=multi-número, o solo teléfono si D4=single)
+   - `numeroNegocio: string` (el número de WA del negocio que recibió/envió — soporta multi-número)
+   - `telefono: string` (10 dígitos RD del cliente)
+   - `telefonoE164: string` (con `+1`)
+   - `clienteId: string | null` (denormalizado cuando existe)
+   - `clienteNombre: string | null`
+   - `ultimoMensajeAt: Timestamp`
+   - `ultimoMensajeTexto: string` (truncado a 100 chars)
+   - `ultimoMensajeDireccion: 'entrante' | 'saliente'`
+   - `noLeidosCount: number` (default 0)
+   - `botActivo: boolean` (default true)
+   - `responsableUid: string | null`
+   - `creadaEn: Timestamp`
+   - `actualizadaEn: Timestamp`
+
+2. **`firestore.rules`** — nueva rule para colección `whatsapp_conversaciones`:
+   - Read: autenticado con rol `operaria | coordinadora | administrador | secretaria`.
+   - Create/Update: igual + invariantes (no se puede cambiar `telefono`, `creadaEn` post-create).
+   - Delete: bloqueado (solo admin via console manual).
+   - Toggle `botActivo`: permitido a operaria/coordinadora/admin (cualquiera puede pausar el bot).
+
+3. **`src/services/conversaciones.service.ts`** (NUEVO):
+   - `obtenerOCrearConversacion(telefono): Promise<WhatsAppConversacion>` — `runTransaction` con `tx.get` para idempotencia (patrón P-003).
+   - `actualizarUltimoMensaje(telefono, texto, direccion)` — denormaliza preview.
+   - `incrementarNoLeidos(telefono)` — solo si `direccion === 'entrante'`.
+   - `marcarLeida(telefono)` — `noLeidosCount = 0`, audit.
+   - `toggleBot(telefono, activo)` — escribe + audit en `auditoria` (quien, cuando, valor anterior).
+   - `suscribirConversaciones(filtros, callback)` — `onSnapshot` con orden por `ultimoMensajeAt desc`.
+
+4. **`api/whatsapp/webhook.ts`** — integrar llamadas a `obtenerOCrearConversacion` + `actualizarUltimoMensaje` + `incrementarNoLeidos` cuando llega mensaje entrante. Mantener idempotencia ya existente.
+
+5. **`api/whatsapp/send.ts`** — al confirmar Meta `wamid`, llamar `actualizarUltimoMensaje` con `direccion: 'saliente'`.
+
+6. **`scripts/migrar-conversaciones-desde-mensajes.ts`** (NUEVO):
+   - Lee TODOS los docs de `whatsapp_mensajes` ordenados por `creadoEn asc`.
+   - Agrupa por número.
+   - Por cada grupo, calcula `ultimoMensajeAt`, `ultimoMensajeTexto`, `ultimoMensajeDireccion`, `noLeidosCount` (cuenta entrantes sin contraparte saliente posterior).
+   - Si existe `cliente` matcheando el teléfono, denormaliza `clienteId` + `clienteNombre`.
+   - Modo `--dry-run` por default. Flag `--commit` para escribir.
+   - Output: count de conversaciones creadas, count de mensajes procesados, tiempo total.
+
+### Criterio de éxito
+
+- [ ] Type agregado y exportado.
+- [ ] Rule deployada y validada (curl que intenta delete falla; curl que pausa bot ok).
+- [ ] Service con 100% paths cubiertos por cazadores (P-003 sobre `runTransaction`).
+- [ ] Webhook + send.ts actualizan denormalización después de confirmar el mensaje.
+- [ ] Migración corre en dry-run sin errores y reporta counts esperados.
+- [ ] Después de `--commit`, query `whatsapp_conversaciones` retorna count ≈ unique-numbers de `whatsapp_mensajes`.
+
+### Cómo desbloquear
+
+1. Jorge responde D1 + D2 + D3 (recomendaciones arriba).
+2. Jorge agrega `OK: jorge YYYY-MM-DD HH:MM whatsapp conversaciones modelo`.
+3. Coordinator procesa con flujo completo: archivist PRE-CHANGE → builder → tester → regression_guardian → reviewer → security → `npm run deploy:rules` → migración dry-run para validar → commit + push → devops → migración `--commit` con Jorge mirando.
+
+**Tiempo realista:** 6-8 horas (con migración).
+
+**OK Jorge WA-CHAT-1:** _pendiente_
+
+---
+
+## SPRINT-WA-CHAT-2 — Inbox global `/admin/inbox`
+
+**Prioridad:** ALTA (depende de WA-CHAT-1).
+**Origen:** Análisis Kommo CRM 2026-05-20. Equivalente del módulo "Chats" de Kommo.
+**Por qué va a BLOQUEOS:** Agrega entrada al sidebar (afecta navegación). Cambio de UX visible para operarias/coordinadora.
+
+### Decisiones de Jorge
+
+- **D1:** ¿El inbox lo ven todos los roles (operaria, coordinadora, secretaria, admin) o solo operaria + coordinadora? Recomendación: todos menos técnico.
+- **D2:** Filtros default al abrir: ¿"Sin responder" o "Mías"? Recomendación: "Sin responder" sorted by oldest first (cazar awaiting reply largos).
+- **D3:** ¿Posición en sidebar — encima de "Órdenes" o debajo? Recomendación: encima, con badge de no-leídos.
+
+### Touch-list
+
+1. **`src/pages/Inbox.tsx`** (NUEVO) — vista lista de conversaciones:
+   - Hook `suscribirConversaciones` (de WA-CHAT-1).
+   - Tabs/chips: "Todas", "Sin responder", "Mías", "Bot OFF", "Con orden activa".
+   - Cada item: avatar, nombre/teléfono, preview último mensaje, hace cuánto, badge no-leídos, indicador bot ON/OFF.
+   - Click navega a `/admin/inbox/:telefono` (sprint WA-CHAT-3).
+   - Search bar arriba (filtra por nombre/teléfono client-side).
+   - Real-time con `onSnapshot`.
+
+2. **`src/App.tsx`** — agregar ruta `/admin/inbox` debajo de `/admin/ordenes` en el bloque ProtectedRoute.
+
+3. **`src/components/Sidebar.tsx`** — agregar entrada "Inbox WhatsApp" con icon de chat, badge contador `noLeidosCount` sumado de todas las conversaciones. Visible para operaria/coordinadora/secretaria/admin (no técnico).
+
+### Criterio de éxito
+
+- [ ] Inbox carga <500ms con 1000 conversaciones (test sintético).
+- [ ] Filtros funcionan en client (sin queries Firestore adicionales, evita índices nuevos).
+- [ ] Badge sidebar actualiza en real-time cuando entra mensaje.
+- [ ] Search filtra por nombre + teléfono.
+- [ ] Técnico NO ve la entrada en sidebar (filtrada por rol).
+
+### Cómo desbloquear
+
+1. Jorge responde D1 + D2 + D3.
+2. Jorge agrega `OK: jorge YYYY-MM-DD HH:MM inbox global`.
+3. Procesar con flujo normal. NO requiere deploy de rules.
+
+**Tiempo realista:** 4-5 horas.
+
+**OK Jorge WA-CHAT-2:** _pendiente_
+
+---
+
+## SPRINT-WA-CHAT-3 — Vista 3-columnas `/admin/inbox/:telefono`
+
+**Prioridad:** ALTA (depende de WA-CHAT-1 + WA-CHAT-2).
+**Origen:** Análisis Kommo CRM 2026-05-20. Equivalente del lead detail que motivó este análisis.
+**Por qué va a BLOQUEOS:** UX nueva grande, componente >300 líneas. Quiero que Jorge revise approach antes de invertir.
+
+### Decisiones de Jorge
+
+- **D1:** ¿La columna 2 (datos cliente) es scrollable independiente o se mueve con la página? Recomendación: scroll independiente estilo Kommo, mejor uso del espacio.
+- **D2:** ¿Indicador ventana 24h WhatsApp (Messaging session ends in: Xh Ym) se muestra cuando el último mensaje entrante es <24h? Recomendación: sí, con color amarillo cuando <2h restantes, rojo cuando <30min.
+- **D3:** ¿Botones "Mark answered" y "Close conversation" de Kommo se incluyen? Recomendación: solo "Mark answered" (resetea `noLeidosCount` + setea `responsableUid` = currentUser). "Close" no aplica porque las conversaciones de Mister Service son persistentes.
+
+### Touch-list
+
+1. **`src/pages/InboxConversacion.tsx`** (NUEVO) — layout 3 columnas (grid CSS):
+   - Col 1 (250px): reutiliza componente lista de WA-CHAT-2 (modo compacto).
+   - Col 2 (320px): card cliente con nombre, teléfono, email, dirección + sub-sección "Órdenes activas" (link a cada `/admin/ordenes/:id`) + toggle bot ON/OFF (WA-CHAT-4) + responsable assignable.
+   - Col 3 (resto): timeline de mensajes con bubbles (entrante gris izq, saliente azul der), separadores por día, render de imágenes inline + URLs con preview. Footer con input + botones encima (Mark answered, Summarize en WA-CHAT-8, indicador ventana 24h).
+
+2. **`src/components/inbox/MensajeBubble.tsx`** (NUEVO) — render de cada mensaje. Soporta text, image, video, audio, document, location (Google Maps embed).
+
+3. **`src/components/inbox/InputChat.tsx`** (NUEVO) — input controlado. En WA-CHAT-5 se extiende con menú "/" para plantillas. Por ahora solo texto libre + botón enviar que llama `api/whatsapp/send`.
+
+4. **`src/components/inbox/IndicadorVentana24h.tsx`** (NUEVO) — calcula tiempo restante desde último mensaje entrante. Re-render cada minuto.
+
+5. **`src/services/conversaciones.service.ts`** — agregar `suscribirMensajesDeConversacion(telefono, callback)` con `onSnapshot` ordenado por `creadoEn asc`.
+
+### Criterio de éxito
+
+- [ ] Layout responsive: en pantallas <1200px colapsa a 2 columnas (oculta col 1).
+- [ ] Timeline scroll auto al fondo cuando llega mensaje nuevo y el usuario está cerca del fondo.
+- [ ] Imágenes/videos cargan lazy.
+- [ ] Indicador 24h actualiza en tiempo real.
+- [ ] Click en orden activa de col 2 navega a la orden sin perder estado del inbox.
+
+### Cómo desbloquear
+
+1. Jorge responde D1 + D2 + D3.
+2. Jorge agrega `OK: jorge YYYY-MM-DD HH:MM inbox vista 3 columnas`.
+3. Procesar con flujo normal.
+
+**Tiempo realista:** 6-8 horas.
+
+**OK Jorge WA-CHAT-3:** _pendiente_
+
+---
+
+## SPRINT-WA-CHAT-4 — Toggle bot ON/OFF por conversación
+
+**Prioridad:** MEDIA-ALTA (depende de WA-CHAT-1 + WA-CHAT-3).
+**Origen:** Análisis Kommo CRM 2026-05-20. Kommo controla el bot por etapa de pipeline (frágil); Mister Service lo hará por conversación (UI explícita).
+**Por qué va a BLOQUEOS:** Cambia el comportamiento del bot IA — la operaria puede pausar el bot para un cliente específico.
+
+### Decisiones de Jorge
+
+- **D1:** Cuando la operaria apaga el bot, ¿se queda apagado hasta que ella lo prenda manualmente, o se re-prende automáticamente después de N horas/días? Recomendación: queda apagado hasta acción manual. Predecible > smart-pero-confuso.
+- **D2:** ¿Cualquier rol puede apagar/prender el bot, o solo coordinadora/admin? Recomendación: cualquier rol con acceso a inbox (operaria, secretaria, coordinadora, admin).
+- **D3:** ¿Mostrar en el timeline un evento "🤖 Bot pausado por [usuario] a las HH:MM"? Recomendación: sí, evento sistema visible para auditoría visual.
+
+### Touch-list
+
+1. **`src/components/inbox/ToggleBot.tsx`** (NUEVO) — switch UI en col 2 con label "Bot IA: ON / Pausado". Click llama `toggleBot` del service. Confirmation dialog cuando va de ON a OFF.
+
+2. **`src/services/conversaciones.service.ts`** — método `toggleBot` ya creado en WA-CHAT-1. Aquí solo agregar emisión de evento sistema al timeline (mensaje tipo `evento_sistema` con texto "Bot pausado por [nombre]").
+
+3. **`firestore.rules`** — la rule de WA-CHAT-1 ya cubre. Solo verificar que el campo `botActivo` no esté en una allowlist de campos inmutables.
+
+4. **Hook backend para bot IA (futuro WA-CHAT-9 fuera de scope):** cuando exista el bot IA backend, antes de responder consulta `conversaciones/{telefono}.botActivo === true`. Si está pausado, NO responde.
+
+### Criterio de éxito
+
+- [ ] Switch funciona y persiste.
+- [ ] Audit log queda en `auditoria` collection con actor + timestamp + valor anterior.
+- [ ] Evento sistema visible en timeline (col 3).
+- [ ] Confirmation dialog al pausar (para evitar mistaps).
+
+### Cómo desbloquear
+
+1. Jorge responde D1 + D2 + D3.
+2. Jorge agrega `OK: jorge YYYY-MM-DD HH:MM toggle bot conversacion`.
+
+**Tiempo realista:** 3-4 horas.
+
+**OK Jorge WA-CHAT-4:** _pendiente_
+
+---
+
+## SPRINT-WA-CHAT-5 — Shortcut "/" para insertar plantillas
+
+**Prioridad:** MEDIA (depende de WA-CHAT-3 + sprint WA-3 de envío de plantillas).
+**Origen:** Análisis Kommo CRM 2026-05-20. UX gem de Kommo — operaria escribe "/" y aparece menú de bots/plantillas.
+**Por qué va a BLOQUEOS:** Toca el endpoint `api/whatsapp/send` (público) y depende de que WA-3 esté procesado primero.
+
+### Decisiones de Jorge
+
+- **D1:** ¿Las 4 plantillas APPROVED actuales (`cita_confirmada`, `conduce_emitido`, `recordatorio_mantenimiento`, `garantia_por_vencer`) aparecen TODAS, o solo las relevantes según contexto? Recomendación: todas, con flag "Recomendada" cuando hay una orden agendada para esa conversación (caso `cita_confirmada`).
+- **D2:** El wizard de variables ¿precarga datos del cliente/orden cuando aplique? Recomendación: sí, autopopula desde la orden más reciente.
+- **D3:** ¿Permitir editar el texto generado antes de enviar, o solo confirmar/cancelar? Meta no permite mensaje libre si la conversación está fuera de ventana 24h. Recomendación: solo confirmar/cancelar para plantillas; texto libre solo dentro de ventana 24h.
+
+### Touch-list
+
+1. **`src/components/inbox/InputChat.tsx`** — detectar `/` al inicio del input. Abrir popover con lista de plantillas APPROVED desde cache `whatsapp_plantillas`.
+
+2. **`src/components/inbox/WizardPlantilla.tsx`** (NUEVO) — modal con campos para cada variable de la plantilla seleccionada. Botón "Enviar plantilla" → llama `api/whatsapp/send` con `templateName`, `variables`, `headerImageUrl`, `buttonUrlVariable`.
+
+3. **`src/services/plantillas.service.ts`** (NUEVO si no existe) — `obtenerPlantillasAPPROVED()` lee de cache `whatsapp_plantillas`. Patrón ya documentado en sprint WA-5 pendiente.
+
+### Criterio de éxito
+
+- [ ] Escribir "/" en el input abre popover en <100ms.
+- [ ] Cada plantilla muestra preview del body con variables placeholder.
+- [ ] Wizard valida variables (min/max chars, formato).
+- [ ] Click "Enviar" llama endpoint y al confirmar `wamid` el mensaje aparece en timeline.
+- [ ] Texto libre (sin `/`) deshabilitado cuando ventana 24h cerrada, con tooltip explicativo.
+
+### Cómo desbloquear
+
+1. WA-3 debe estar COMPLETADO primero (frontend dispara plantillas).
+2. WA-5 (cache plantillas) debe estar COMPLETADO primero.
+3. Jorge responde D1 + D2 + D3.
+4. Jorge agrega `OK: jorge YYYY-MM-DD HH:MM shortcut plantillas`.
+
+**Tiempo realista:** 4-5 horas.
+
+**OK Jorge WA-CHAT-5:** _pendiente_
+
+---
+
+## SPRINT-WA-CHAT-6 — Acceso a órdenes del cliente desde el chat
+
+**Prioridad:** MEDIA (depende de WA-CHAT-3).
+**Origen:** Análisis Kommo CRM 2026-05-20. Jorge dijo explícitamente "acceder a las órdenes del cliente" desde la conversación.
+**Por qué va a BLOQUEOS:** Cambia el modelo mental de la operaria. Quiero que Jorge confirme el approach.
+
+### Decisiones de Jorge
+
+- **D1:** En "Órdenes activas" del col 2, ¿mostrar todas o solo activas (fase ≠ cerrado/cancelado)? Recomendación: activas por default, con expand para ver cerradas.
+- **D2:** Botón "Crear nueva orden desde esta conversación" ¿precarga teléfono+nombre del cliente o lleva a wizard normal? Recomendación: precarga, navega a `/admin/ordenes/nueva?telefono=X&clienteId=Y`.
+- **D3:** Si el teléfono NO está asociado a un cliente en `clientes`, ¿mostrar botón "Crear cliente desde esta conversación"? Recomendación: sí.
+
+### Touch-list
+
+1. **`src/components/inbox/CardCliente.tsx`** (NUEVO o extender) — sección "Órdenes activas" con lista compacta: OS#, fase, técnico, fecha. Click navega a la orden.
+
+2. **`src/services/clientes.service.ts`** — método `obtenerClientePorTelefono(telefono)` (ya debería existir, verificar).
+
+3. **`src/services/ordenes.service.ts`** — método `obtenerOrdenesActivasPorTelefono(telefono)` que filtra `clienteTelefono === telefono AND fase NOT IN ['cerrado', 'cancelado']`.
+
+4. **`src/pages/Ordenes.tsx`** — soporte para query params `?telefono=X&clienteId=Y` que precarga el wizard de nueva orden.
+
+### Criterio de éxito
+
+- [ ] Card cliente muestra órdenes activas con link funcional.
+- [ ] Botón "Crear orden" precarga datos correctos.
+- [ ] Si no hay cliente, botón "Crear cliente" visible.
+- [ ] Performance: render <200ms con 20 órdenes activas.
+
+### Cómo desbloquear
+
+1. Jorge responde D1 + D2 + D3.
+2. Jorge agrega `OK: jorge YYYY-MM-DD HH:MM ordenes desde chat`.
+
+**Tiempo realista:** 3-4 horas.
+
+**OK Jorge WA-CHAT-6:** _pendiente_
+
+---
+
+## SPRINT-WA-CHAT-7 — Dashboard de comunicación (3 cards)
+
+**Prioridad:** BAJA-MEDIA (independiente — puede correr en paralelo con CHAT-2 a CHAT-6).
+**Origen:** Análisis Kommo CRM 2026-05-20. Kommo tiene "Unanswered: 6551", "Longest awaiting: 47 weeks" — Mister Service NO mide nada de esto.
+**Por qué va a BLOQUEOS:** Toca `Dashboard.tsx` (página crítica), y agrega queries Firestore.
+
+### Decisiones de Jorge
+
+- **D1:** ¿Mostrar las 3 cards a todos los roles que ven Dashboard, o solo a coordinadora/admin? Recomendación: a coordinadora/admin/secretaria (operaria ya ve su inbox directo).
+- **D2:** Definición de "sin responder": ¿conversación cuyo último mensaje es entrante? Recomendación: sí.
+- **D3:** ¿Card "Longest awaiting reply" clickeable navega al inbox con filtro "Sin responder" sorted oldest first? Recomendación: sí.
+
+### Touch-list
+
+1. **`src/pages/Dashboard.tsx`** — agregar 3 cards nuevas:
+   - "Conversaciones sin responder" — count + sparkline 7 días.
+   - "Tiempo mediano de respuesta" — calculado desde último N mensajes salientes vs entrante anterior.
+   - "Conversación más antigua sin responder" — display "Hace X días" + nombre/teléfono del cliente. Click navega a inbox.
+
+2. **`src/services/conversaciones.service.ts`** — métricas agregadas:
+   - `contarSinResponder(): Promise<number>`
+   - `tiempoMedianoRespuesta(diasAtras: number): Promise<number>` (segundos)
+   - `conversacionMasAntiguaSinResponder(): Promise<WhatsAppConversacion | null>`
+
+### Criterio de éxito
+
+- [ ] 3 cards renderizan en <300ms.
+- [ ] Queries usan colección `whatsapp_conversaciones` con campos denormalizados.
+- [ ] Card "Longest awaiting" navega a inbox con filtro aplicado.
+
+### Cómo desbloquear
+
+1. Jorge responde D1 + D2 + D3.
+2. Jorge agrega `OK: jorge YYYY-MM-DD HH:MM dashboard comunicacion`.
+
+**Tiempo realista:** 3-4 horas.
+
+**OK Jorge WA-CHAT-7:** _pendiente_
+
+---
+
+## SPRINT-WA-CHAT-8 (opcional) — Botón "Resumir" con IA
+
+**Prioridad:** BAJA — nice to have.
+**Origen:** Análisis Kommo CRM 2026-05-20. Kommo tiene botón "Summarize" que resume la conversación con IA.
+**Por qué va a BLOQUEOS:** Endpoint nuevo `api/ai/resumir-conversacion` que llama Claude API. Costo recurring (~$0.01 por click).
+
+### Decisiones de Jorge
+
+- **D1:** ¿OpenAI (GPT-4o-mini barato) o Anthropic Claude (Haiku 4.5)? Recomendación: Claude Haiku — mejor en español + ya tienes cuenta Anthropic.
+- **D2:** ¿Cache de resumen por X horas para evitar recálculos? Recomendación: 1 hora, invalidar si entra mensaje nuevo.
+- **D3:** ¿Mostrar el resumen como popover, modal, o pegado al timeline? Recomendación: popover sticky arriba del timeline con botón "Cerrar resumen".
+
+### Touch-list
+
+1. **`api/ai/resumir-conversacion.ts`** (NUEVO) — endpoint Vercel function. Recibe `telefono` + Bearer token Firebase. Lee últimos 50 mensajes, manda a Claude Haiku con prompt "Resume esta conversación en 3 líneas en español dominicano".
+
+2. **`src/components/inbox/BotonResumir.tsx`** (NUEVO) — botón en barra superior de col 3.
+
+3. **`.env`** — agregar `ANTHROPIC_API_KEY` a Vercel env vars.
+
+### Criterio de éxito
+
+- [ ] Endpoint responde en <5s para conversación de 50 mensajes.
+- [ ] Costo por click <$0.01.
+- [ ] Cache evita llamadas duplicadas dentro de 1h.
+
+### Cómo desbloquear
+
+1. Jorge responde D1 + D2 + D3.
+2. Jorge agrega `OK: jorge YYYY-MM-DD HH:MM resumen IA`.
+3. Jorge agrega `ANTHROPIC_API_KEY` a Vercel Project Settings.
+
+**Tiempo realista:** 3-4 horas.
+
+**OK Jorge WA-CHAT-8:** _pendiente_
+
+---
+
+## SPRINT-PAGOS-CONFIRMA-MARIA — Separación de funciones: operaria registra pago, María confirma
+
+> ### ⚠️ CORRECCIÓN auditoría 2026-05-20 (`AUDITORIA_PRE_CRM_2026_05_20.md`)
+> El sprint original asumía un approach de rule que NO es viable. Correcciones obligatorias antes de procesar:
+> - **A1 — El campo top-level `pagoConfirmadoPorCoordUid` NO sirve.** Los pagos viven en `pagos[]` dentro de la orden; un escalar no distingue cuál pago se confirmó ni soporta abonos parciales, y la rule `firestore.rules:351` (`allow update: if esStaffOficina()`) no inspecciona el array. **Solución correcta: mover pagos a subcolección `ordenes_servicio/{id}/pagos/{pagoId}`** con rule granular: create por quien tenga `pagosRegistrar`; el campo `verificado/verificadoPor*` solo lo puede setear admin/coordinadora (rule con `.get('verificado', false)` para inmutabilidad). Esto es una MIGRACIÓN de datos (pagos de array → subcolección) → el sprint ahora SÍ toca migración además de rules.
+> - **C2 — Hoy la separación es 100% client-side.** `firestore.rules:351` da carta blanca total sobre `ordenes_servicio` (sin inmutabilidad de `pagos/montoPagado/verificado`). La rule de la subcolección es indispensable, no opcional.
+> - **C3 — El gate del conduce no cubre pagos previos.** `ProcesarFacturacionModal.tsx:384-389`: `if(!pagoVerificado)` solo corre si `montoPagoNuevo > 0`. Hay que bloquear el conduce si CUALQUIER pago de la orden está sin confirmar (no solo el nuevo).
+> - **A2 — Gatear el checkbox** `ProcesarFacturacionModal.tsx:1305-1316` a `puede(userProfile,'pagosVerificar')`.
+> - **M2 — Gatear `handleEliminarPago`** en `RegistrarPagoModal.tsx`: una operaria NO debe poder borrar un pago ya confirmado.
+> - **M1 — `EnviarFacturacionButton.tsx` / `FacturacionPendiente.tsx`:** la lista de "qué se puede facturar" debe filtrar/avisar por estado de confirmación.
+> - **Confirmado OK:** `RegistrarPagoModal` ya usa `currentUser?.uid` (no cae en P-001); la sincronización de fase está correcta.
+
+**Prioridad:** ALTA (control financiero — separación de funciones).
+**Origen:** Jorge 2026-05-20. Regla de negocio: "quien confirma los depósitos y pagos es María, y las operarias ponen de qué banco y el monto o si fue efectivo". Hoy NO hay separación — la misma persona que registra puede marcar el pago como verificado.
+**Por qué va a BLOQUEOS:** Toca `firestore.rules` (enforce que solo coordinadora/admin confirme pagos). Requiere OK + deploy de rules.
+
+### Decisiones de Jorge (RESUELTAS 2026-05-20)
+
+- **D1 — Quién confirma:** SOLO María (coordinadora) + admin. La operaria registra banco+monto+efectivo pero NO puede marcar verificado. Se agrega permiso `pagosVerificar` (default true solo admin/coordinadora) + rule que lo enforce.
+- **D2 — Dónde confirma María:** AMBAS opciones → (a) lista nueva "Pagos pendientes de confirmar" donde María ve todos los pagos registrados por operarias esperando confirmación, Y (b) también puede confirmar en `FacturacionPendiente` al emitir conduce (como hoy, pero el check gateado).
+- **D3 — Bloqueo de conduce:** El conduce se bloquea hasta que María confirme el pago. Nada se factura sin confirmación de coordinadora/admin. Consistente con la regla.
+
+### Estado actual auditado (read-only, 2026-05-20)
+
+- `PagoOrden` (src/types/index.ts:1592) ya tiene `verificado`, `verificadoPorId/Nombre`, `verificadoAt` (SPRINT-151) + `registradoPorId/Nombre`.
+- Permiso `pagosRegistrar`: operaria=true, secretaria=true, coordinadora=true, admin=true. **NO existe `pagosVerificar`.**
+- `RegistrarPagoModal.tsx` — donde operarias registran pagos (desde OrdenDetalle + OrdenDetailModal). NO setea `verificado` → los pagos quedan sin verificar. ✓ ya alineado.
+- `FacturacionPendiente.tsx` — pantalla de María (gateada a `facturasCerrar`/admin/coordinadora). → `ProcesarFacturacionModal.tsx` tiene el checkbox "Pago verificado" SIN gate de permiso, y setea `verificadoPorId = usuarioId` (quien procesa). El conduce ya requiere `pagoVerificado=true` (línea ~386).
+- **Gap:** el checkbox de verificado no está gateado; cualquiera que abra el modal puede auto-confirmar. No hay lista de pendientes. La rule no enforce quién confirma.
+
+### Touch-list (con auditoría de consumidores)
+
+**Archivos a modificar:**
+
+1. **`src/types/index.ts`** — agregar `pagosVerificar: boolean` a `PermisosSistema`. Agregarlo a `TODO_FALSE` (false) y `TODO_TRUE` (true). Defaults: ADMINISTRADOR=true (ya por TODO_TRUE), COORDINADORA=true (agregar explícito), OPERARIA=false, SECRETARIA=false, TECNICO=false (TODO_FALSE), AYUDANTE=false. **Nota retrocompat:** usuarios con `permisosPersonalizados` viejos no tendrán la key → `obtenerPermisos` debe tratar `undefined` como false (verificar `puede()` ya hace `=== true`, así que undefined → false ✓).
+
+2. **`src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx`** — gate el checkbox "Pago verificado" (línea ~1307) a `puede(userProfile, 'pagosVerificar')`. Si el usuario NO puede verificar: el checkbox se muestra disabled con tooltip "Solo la coordinadora confirma pagos". El `verificadoPorId/Nombre` debe ser el uid del que confirma (no necesariamente el que registró). Si el pago ya viene verificado de antes, mostrar quién/cuándo.
+
+3. **`src/components/ordenes/RegistrarPagoModal.tsx`** — confirmar que sigue registrando con `verificado: false`. Agregar (opcional) un affordance "Confirmar pago" visible SOLO si `puede(userProfile, 'pagosVerificar')`, para que María pueda confirmar directo desde la orden sin ir a facturación.
+
+4. **`src/pages/PagosPendientes.tsx`** (NUEVO) — vista lista de pagos con `verificado=false` across órdenes. Solo accesible a `pagosVerificar`. Cada item: OS#, cliente, método, banco/efectivo, monto, registrado por (operaria), fecha. Botón "Confirmar" por pago. Real-time `onSnapshot`. Entrada en sidebar gateada por `pagosVerificar`.
+
+5. **`src/services/ordenes.service.ts`** — helper `confirmarPagoOrden(ordenId, pagoId, confirmadoPor)` que marca el pago como `verificado: true` + `verificadoPorId/Nombre/At`, en `runTransaction` (patrón P-003), con audit log. Como los pagos viven en un array dentro de `ordenes_servicio`, leer el doc, mapear el array, reescribir. Considerar también setear un campo top-level `pagoConfirmadoPorCoordUid` para que la rule pueda gatear (ver punto 6).
+
+6. **`firestore.rules`** — enforce que la confirmación de pago solo la haga coordinadora/admin. **RETO TÉCNICO (flag para reviewer):** los pagos viven en un array dentro de `ordenes_servicio`; las rules de Firestore NO pueden validar mutaciones de elementos de array de forma granular. **Approach recomendado:** agregar campo top-level `pagoConfirmadoPorCoordUid` (string) + `pagoConfirmadoAt` en la orden, que SOLO coordinadora/admin pueden setear (rule gateable). El `confirmarPagoOrden` lo setea junto con la mutación del array. La rule de `ordenes_servicio` update valida: si `request.resource.data.pagoConfirmadoPorCoordUid` cambió, entonces `esAdminOCoord()`. Usar `.get('pagoConfirmadoPorCoordUid', null)` para campos opcionales (gotcha P-002). La emisión de conduce (que ya está en el flujo de María) valida que el pago esté confirmado.
+
+7. **`src/App.tsx`** — ruta `/admin/pagos-pendientes` gateada por `pagosVerificar`.
+
+8. **`src/components/Sidebar.tsx`** — entrada "Pagos pendientes" visible solo con `pagosVerificar`, con badge count de pagos sin confirmar.
+
+9. **`src/pages/GestionUsuarios.tsx`** — agregar el toggle `pagosVerificar` en el editor de permisos personalizados (para que el toggle aparezca en la UI de permisos por usuario).
+
+**Consumidores verificados (read-only check) — usan `pagos`/`PagoOrden` pero NO se tocan o solo lectura:**
+
+- `src/components/ordenes/OrdenDetailModal.tsx` (lee `orden.pagos` para mostrar, usa `pagosRegistrar`). Solo lectura del estado verificado — agregar badge "confirmado/pendiente" en el render (cambio menor de display).
+- `src/pages/OrdenDetalle.tsx` (líneas 1349-1417, render de pagos + RegistrarPagoModal). Igual: agregar badge confirmado/pendiente.
+- `src/pages/AgendaDia.tsx`, `src/pages/FacturacionPendiente.tsx` (lee pagos), `src/utils/index.ts`, `src/utils/tooltipsBotones.ts`, `src/components/ordenes/EnviarFacturacionButton.tsx` — verificar que ninguno asuma que un pago registrado está confirmado. **Hallazgo a confirmar en el sprint:** `EnviarFacturacionButton` no debe permitir enviar a facturación dependiendo de confirmación (la confirmación es paso de María en facturación, no de operaria al enviar). Mantener.
+
+**Consumidores NO afectados:** `src/components/CierreServicioWizard.tsx`, `IniciarChequeoButton.tsx`, `Avances.tsx` — usan `verificado` en otro contexto (no pagos). Justificación: el `verificado` ahí es de otros flujos (chequeo/avances), no del pago. Verificar con grep antes de tocar.
+
+### Criterio de éxito
+
+- [ ] Permiso `pagosVerificar` agregado; defaults correctos (admin/coord true, resto false).
+- [ ] Operaria NO puede tildar "Pago verificado" en ningún lugar (checkbox disabled + tooltip).
+- [ ] María/admin pueden confirmar pagos en (a) `/admin/pagos-pendientes` y (b) facturación-pendiente.
+- [ ] Conduce bloqueado si el pago no está confirmado por coordinadora/admin.
+- [ ] Rule deployada que enforce `pagoConfirmadoPorCoordUid` solo seteable por coord/admin (con `.get(field,null)` para opcional).
+- [ ] Reviewer obligatorio (toca rules) + foco en inmutabilidad del campo de confirmación.
+- [ ] Badge "confirmado/pendiente" visible en render de pagos (OrdenDetalle, OrdenDetailModal).
+- [ ] Audit log de cada confirmación (quién + cuándo).
+- [ ] QA manual: operaria registra pago → queda pendiente → María lo ve en lista → confirma → recién ahí se puede emitir conduce.
+
+### Cómo desbloquear
+
+1. Jorge agrega `OK: jorge YYYY-MM-DD HH:MM pagos confirma maria`.
+2. Coordinator procesa con flujo completo: archivist PRE-CHANGE → builder → tester → regression_guardian → reviewer (foco rules) → security → `npm run deploy:rules` → commit + push → devops. QA manual del flujo operaria-registra → María-confirma → conduce.
+
+**Tiempo realista:** 6-8 horas (toca rules + UI nueva + service + permiso).
+
+**OK Jorge PAGOS-CONFIRMA-MARIA:** OK: jorge 2026-05-20 14:00 pagos confirma maria
+
+---
