@@ -1146,3 +1146,192 @@ export async function obtenerOrdenesActivasPorTelefono(
   });
   return ordenes;
 }
+
+/**
+ * Resultado del helper `confirmarPagoOrden`.
+ *
+ * - `ok=true` → el pago se confirmó OK (o ya estaba confirmado y la operación
+ *   fue idempotente sin escribir).
+ * - `ok=false, razon='orden_no_existe'` → orden borrada/inválida.
+ * - `ok=false, razon='pago_no_existe'` → el pago no está en el array (race
+ *   con borrado/edición).
+ * - `ok=false, razon='ya_confirmado'` → idempotencia: el pago ya estaba
+ *   `verificado=true`. No se reescribe ni se duplica audit log.
+ * - `ok=false, razon='error_interno'` → throw inesperado.
+ */
+export interface ConfirmarPagoResult {
+  ok: boolean;
+  razon?: 'orden_no_existe' | 'pago_no_existe' | 'ya_confirmado' | 'error_interno';
+}
+
+/**
+ * SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 (2026-05-21).
+ *
+ * Confirma un pago previamente registrado por la operaria. La separación de
+ * funciones de fase A bloquea el conduce hasta que un usuario con permiso
+ * `pagosVerificar` (típicamente María / coord / admin) confirme cada pago.
+ * Esta helper centraliza la confirmación con tres garantías:
+ *
+ * 1. **Atomicidad cross-collection (P-003).** El update a `ordenes_servicio`
+ *    + el audit log a `auditoria_admin` van en el mismo `runTransaction`.
+ *    Si la red corta entre ambas, ninguna queda persistida.
+ *
+ * 2. **Idempotencia (patrón establecido en `marcarClienteEnviado` `a38eb89`).**
+ *    La verificación `pago.verificado === true` va DENTRO del callback,
+ *    DESPUÉS del `tx.get()`. Re-confirmar un pago ya confirmado retorna
+ *    `{ok:false, razon:'ya_confirmado'}` sin escribir nada → 0 escrituras
+ *    duplicadas, 0 audit logs dobles.
+ *
+ * 3. **Defense-in-depth client-side (gap de fase B).** Hasta que B.3 deploye
+ *    la rule de subcolección, la rule actual de `ordenes_servicio` permite a
+ *    cualquier staff escribir cualquier campo. Esta función es el único path
+ *    sancionado para confirmar — la página `/admin/pagos-pendientes` la
+ *    consume con `useApp().currentUser.uid` (P-001).
+ *
+ * El array `pagos` se reescribe completo en lugar de usar `arrayUnion`/`arrayRemove`
+ * porque necesitamos mutar un elemento existente (no agregar uno nuevo). Strip
+ * de undefined inline para evitar el clásico "Function setDoc() called with
+ * invalid data" (sub-regla CLAUDE.md).
+ *
+ * @param ordenId — ID del doc en `ordenes_servicio`.
+ * @param pagoId — `pagos[i].id` a confirmar.
+ * @param confirmadoPor — `{id: currentUser.uid, nombre: userProfile.nombre}`.
+ *   IMPORTANTE: el `id` debe ser `currentUser.uid`, NO `userProfile.id`
+ *   (gotcha P-001). El caller es responsable.
+ */
+export async function confirmarPagoOrden(
+  ordenId: string,
+  pagoId: string,
+  confirmadoPor: { id: string; nombre: string },
+): Promise<ConfirmarPagoResult> {
+  const ordenRef = doc(db, 'ordenes_servicio', ordenId);
+  const auditoriaRef = doc(collection(db, 'auditoria_admin'));
+
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ordenRef);
+      if (!snap.exists()) return { ok: false, razon: 'orden_no_existe' as const };
+      const data = snap.data() as Record<string, unknown>;
+
+      const pagosActuales = Array.isArray(data.pagos)
+        ? (data.pagos as Array<Record<string, unknown>>)
+        : [];
+      const idx = pagosActuales.findIndex((p) => p.id === pagoId);
+      if (idx === -1) return { ok: false, razon: 'pago_no_existe' as const };
+
+      const pagoActual = pagosActuales[idx];
+      // Idempotencia: si ya está verificado, no doble-escribir ni duplicar
+      // audit log. Retorna ok=false con razón clara para que la UI muestre
+      // "ya estaba confirmado" sin lanzar error rojo.
+      if (pagoActual.verificado === true) {
+        return { ok: false, razon: 'ya_confirmado' as const };
+      }
+
+      const ahora = Timestamp.now();
+      const pagoActualizado: Record<string, unknown> = {
+        ...pagoActual,
+        verificado: true,
+        verificadoPorId: confirmadoPor.id,
+        verificadoPorNombre: confirmadoPor.nombre,
+        verificadoAt: ahora,
+      };
+      const nuevosPagos = pagosActuales.slice();
+      nuevosPagos[idx] = pagoActualizado;
+
+      const ordenUpdate: Record<string, unknown> = {
+        pagos: nuevosPagos,
+        updatedAt: serverTimestamp(),
+      };
+      tx.update(ordenRef, stripUndefined(ordenUpdate));
+
+      // Audit log dentro de la misma transacción (P-003).
+      const auditPayload: Record<string, unknown> = {
+        accion: 'pago.confirmado',
+        ordenId,
+        pagoId,
+        actorId: confirmadoPor.id,
+        actorNombre: confirmadoPor.nombre,
+        monto: typeof pagoActual.monto === 'number' ? pagoActual.monto : 0,
+        metodo: pagoActual.metodo ?? null,
+        ts: serverTimestamp(),
+      };
+      tx.set(auditoriaRef, stripUndefined(auditPayload));
+
+      return { ok: true };
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[confirmarPagoOrden] error:', err);
+    return { ok: false, razon: 'error_interno' as const };
+  }
+}
+
+/**
+ * SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 (2026-05-21).
+ *
+ * Suscripción real-time a órdenes con al menos un pago `verificado === false`.
+ * Lee del array `orden.pagos` (modelo legacy de fase A — fase B.2 migrará a
+ * subcolección).
+ *
+ * La query subscribe TODA la colección `ordenes_servicio` activa (no terminada).
+ * Filtra client-side porque Firestore no soporta queries sobre campos dentro de
+ * arrays en docs (`array-contains` no calza con la semántica que necesitamos:
+ * "al menos un elemento con verificado=false"). El volumen esperado en
+ * producción es bajo (órdenes activas <500) y la mayoría no tiene pagos.
+ *
+ * Sin `orderBy` para evitar P-015 (campos no garantizados). El ordering
+ * cliente-side por `updatedAt` desc es suficiente.
+ *
+ * @param callback — recibe pairs `[ordenId, pagoPendiente]` planos para la UI.
+ */
+export function suscribirPagosPendientes(
+  callback: (
+    items: Array<{
+      ordenId: string;
+      orden: OrdenServicio;
+      pago: NonNullable<OrdenServicio['pagos']>[number];
+    }>,
+  ) => void,
+): () => void {
+  // No usar where() sobre `fase != 'cerrado'` porque Firestore no soporta `!=`
+  // sin índice + restringe a 1 inequality filter. Filtramos client-side.
+  const q = collection(db, 'ordenes_servicio');
+  const unsub = onSnapshot(q, (snap) => {
+    const items: Array<{
+      ordenId: string;
+      orden: OrdenServicio;
+      pago: NonNullable<OrdenServicio['pagos']>[number];
+    }> = [];
+
+    snap.docs.forEach((d) => {
+      const data = d.data() as Record<string, unknown>;
+      if (data.eliminada === true) return;
+      const pagos = Array.isArray(data.pagos)
+        ? (data.pagos as Array<Record<string, unknown>>)
+        : [];
+      if (pagos.length === 0) return;
+
+      const pagosPendientes = pagos.filter((p) => p?.verificado === false);
+      if (pagosPendientes.length === 0) return;
+
+      const orden = parseOrden(d.id, data);
+      pagosPendientes.forEach((p) => {
+        // El parser ya retorna `pagos` tipados — buscamos por id para
+        // recuperar la versión tipada (con Date en lugar de Timestamp).
+        const pagoTipado = orden.pagos?.find((pp) => pp.id === p.id);
+        if (!pagoTipado) return;
+        items.push({ ordenId: d.id, orden, pago: pagoTipado });
+      });
+    });
+
+    // Ordenar por fecha de pago desc (más reciente primero).
+    items.sort((a, b) => {
+      const ta = a.pago.fecha instanceof Date ? a.pago.fecha.getTime() : 0;
+      const tb = b.pago.fecha instanceof Date ? b.pago.fecha.getTime() : 0;
+      return tb - ta;
+    });
+
+    callback(items);
+  });
+  return unsub;
+}

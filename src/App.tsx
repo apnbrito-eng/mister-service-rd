@@ -53,6 +53,11 @@ const AgendaDia = lazy(() => import('./pages/AgendaDia'));
 const MetricasMensuales = lazy(() => import('./pages/MetricasMensuales'));
 const Bancos = lazy(() => import('./pages/Bancos'));
 const FacturacionPendiente = lazy(() => import('./pages/FacturacionPendiente'));
+// SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 (2026-05-21): página dedicada para
+// que coord/admin (María) confirme pagos pendientes registrados por la
+// operaria. Lee del array `orden.pagos` legacy (fase B.2 migrará a
+// subcolección). Gateada por permiso `pagosVerificar`.
+const PagosPendientes = lazy(() => import('./pages/PagosPendientes'));
 const Avances = lazy(() => import('./pages/Avances'));
 const Prestamos = lazy(() => import('./pages/Prestamos'));
 const EstadoResultado = lazy(() => import('./pages/EstadoResultado'));
@@ -268,6 +273,11 @@ function AppRoutes() {
         <Route path="historial-anuladas" element={<PermisoRoute permiso="ordenesVerEliminadas"><HistorialAnuladas /></PermisoRoute>} />
         <Route path="bancos" element={<PermisoRoute permiso="bancosGestionar"><Bancos /></PermisoRoute>} />
         <Route path="facturacion-pendiente" element={<RolRoute roles={['administrador', 'coordinadora']}><FacturacionPendiente /></RolRoute>} />
+        {/* SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 (2026-05-21): pagos pendientes
+            de confirmación por coord/admin. La página tiene gate interno por
+            permiso `pagosVerificar`; el PermisoRoute lo reforzá en routing
+            para evitar pintar la página a roles sin acceso. */}
+        <Route path="pagos-pendientes" element={<PermisoRoute permiso="pagosVerificar"><PagosPendientes /></PermisoRoute>} />
         <Route path="avances" element={<PermisoRoute permiso="avancesGestionar"><Avances /></PermisoRoute>} />
         <Route path="prestamos" element={<RolRoute roles={['administrador', 'coordinadora']}><Prestamos /></RolRoute>} />
         <Route path="estado-resultado" element={<RolRoute roles={['administrador', 'coordinadora']}><EstadoResultado /></RolRoute>} />

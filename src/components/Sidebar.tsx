@@ -73,6 +73,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const [sugerenciasChequeoCount, setSugerenciasChequeoCount] = useState(0);
   const [reprogramacionesCount, setReprogramacionesCount] = useState(0);
   const [whatsappInboxCount, setWhatsappInboxCount] = useState(0);
+  // SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 (2026-05-21): count de pagos
+  // pendientes de confirmación. Solo se lee si el user tiene permiso
+  // `pagosVerificar` (mismo gate que la entrada del sidebar). Sin gate por
+  // rol — el permiso ya es defaults admin/coord=true, resto=false.
+  const [pagosPendientesCount, setPagosPendientesCount] = useState(0);
   const [sectionsState, setSectionsState] = useState<Record<string, boolean>>(loadState);
 
   useEffect(() => {
@@ -156,6 +161,33 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     });
     return () => unsub();
   }, [userProfile?.rol]);
+
+  // SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 (2026-05-21): count de pagos
+  // verificado===false across órdenes activas. Listener separado del
+  // facturacionPendienteCount (que filtra por `enviadaAFacturacion`)
+  // porque acá necesitamos todas las órdenes con pagos pendientes,
+  // incluyendo las que todavía NO se enviaron a facturación. Solo se
+  // suscribe si el user tiene `pagosVerificar` — gate por permiso, no
+  // por rol (defaults coinciden pero la categoría es editable).
+  useEffect(() => {
+    if (!puede(userProfile, 'pagosVerificar')) {
+      setPagosPendientesCount(0);
+      return;
+    }
+    const unsub = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
+      let count = 0;
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        if (data.eliminada === true) return;
+        const pagos = Array.isArray(data.pagos) ? data.pagos : [];
+        if (pagos.some((p: { verificado?: boolean }) => p?.verificado === false)) {
+          count++;
+        }
+      });
+      setPagosPendientesCount(count);
+    });
+    return () => unsub();
+  }, [userProfile]);
 
   // SPRINT-INBOX-2 (2026-05-20): badge de mensajes WhatsApp sin leer.
   // Gateamos por rol staff oficina (D6=C); técnico/ayudante no llegan
@@ -274,6 +306,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
         defaultExpanded: true,
         items: [
           { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: p('cotizacionesVer') },
+          { to: '/admin/pagos-pendientes', icon: Banknote, label: 'Pagos pendientes', badge: pagosPendientesCount, show: p('pagosVerificar') },
           { to: '/admin/facturacion-pendiente', icon: Inbox, label: 'Conduces Pendientes', badge: facturacionPendienteCount, show: esAdminOCoord },
           { to: '/admin/facturas', icon: Receipt, label: 'Conduces de Garantía', show: p('facturasVer') },
         ],
