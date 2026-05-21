@@ -152,6 +152,38 @@ export default function InboxConversacion() {
     setShowCreateModal(true);
   }
 
+  // SPRINT-INBOX-8b (2026-05-21): callbacks que pasamos a MensajeBubble
+  // SOLO cuando el form de orden está abierto (drawer). Si no hay form
+  // abierto, callbacks son undefined → los íconos no se renderizan.
+  // - onCopiarAOrden: pega el texto en `descripcionFalla`. Heurística simple
+  //   pero útil: en el flujo típico la operaria abre la orden y quiere
+  //   trasladar el reclamo del cliente al campo de falla. Si ya hay texto,
+  //   concatena con salto de línea.
+  // - onUsarUbicacion: vuelca lat/lng (+ dirección si viene) a los campos
+  //   correspondientes del form mediante setForm.
+  const handleCopiarAOrden = showCreateModal
+    ? (texto: string) => {
+        createForm.setForm((f) => ({
+          ...f,
+          descripcionFalla: f.descripcionFalla
+            ? `${f.descripcionFalla}\n${texto}`
+            : texto,
+        }));
+        toast.success('Texto copiado a la orden (falla)');
+      }
+    : undefined;
+  const handleUsarUbicacion = showCreateModal
+    ? (loc: { lat: number; lng: number; direccion?: string }) => {
+        createForm.setForm((f) => ({
+          ...f,
+          clienteLat: loc.lat,
+          clienteLng: loc.lng,
+          clienteDireccion: loc.direccion?.trim() ? loc.direccion : f.clienteDireccion,
+        }));
+        toast.success('Ubicación volcada a la orden');
+      }
+    : undefined;
+
   // Lista de conversaciones (col 1).
   useEffect(() => {
     const unsub = suscribirConversaciones(setConversaciones);
@@ -485,7 +517,14 @@ export default function InboxConversacion() {
                 <p className="text-sm">Sin mensajes en esta conversación todavía</p>
               </div>
             ) : (
-              mensajes.map((m) => <MensajeBubble key={m.id} mensaje={m} />)
+              mensajes.map((m) => (
+                <MensajeBubble
+                  key={m.id}
+                  mensaje={m}
+                  onCopiarAOrden={handleCopiarAOrden}
+                  onUsarUbicacion={handleUsarUbicacion}
+                />
+              ))
             )}
           </div>
 
@@ -568,6 +607,7 @@ export default function InboxConversacion() {
           chequeoPrevio={createForm.chequeoPrevioCreate}
           aplicarDescuento={createForm.aplicarDescuentoCreate}
           setAplicarDescuento={createForm.setAplicarDescuentoCreate}
+          presentationMode="drawer"
           extraFooterSlot={
             createForm.isNewCliente && prefillPendiente?.tipo === 'cliente-nuevo' ? (
               <div className="mb-3 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-800">

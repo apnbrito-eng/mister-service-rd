@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, User, Wrench, Calendar, AlertTriangle, CheckCircle, Loader2, Edit2, Home, ChevronDown, Shield, Tag } from 'lucide-react';
+import { Plus, User, Wrench, Calendar, AlertTriangle, CheckCircle, Loader2, Edit2, Home, ChevronDown, Shield, Tag, X } from 'lucide-react';
 import { Cliente, Personal, OrdenServicio, DireccionCliente, CitaPorConfirmar } from '../../types';
 import {
   DURACIONES, HORARIOS, HORARIOS_LABEL,
@@ -94,6 +94,16 @@ interface OrdenCreateModalProps {
    *  `useOrdenCreateForm` (auto-marca true si chequeo vigente). */
   aplicarDescuento?: boolean;
   setAplicarDescuento?: (v: boolean) => void;
+  /**
+   * SPRINT-INBOX-8b: modo de presentación. `'modal'` (default) usa el overlay
+   * centrado clásico — comportamiento histórico, idéntico para Ordenes/Citas/
+   * OrdenEditForm/FormularioAgendarPublico que NO pasan este prop. `'drawer'`
+   * renderiza el form en un panel lateral derecho (50% lg+, 100% mobile) sin
+   * overlay opaco, dejando visible la página de abajo — usado por
+   * InboxConversacion para que el chat (columna 3) quede visible mientras se
+   * crea la orden. Approach A1 aprobado por Jorge 2026-05-21 10:30.
+   */
+  presentationMode?: 'modal' | 'drawer';
 }
 
 export default function OrdenCreateModal({
@@ -125,6 +135,7 @@ export default function OrdenCreateModal({
   chequeoPrevio,
   aplicarDescuento,
   setAplicarDescuento,
+  presentationMode = 'modal',
 }: OrdenCreateModalProps) {
   const esClienteExistente = !!form.clienteId && !isNewCliente;
   const readonlyInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-blue-50/50 text-gray-700 cursor-not-allowed';
@@ -230,13 +241,10 @@ export default function OrdenCreateModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.equipoTipo]);
 
-  return (
-    <Modal
-      isOpen={true}
-      onClose={onClose}
-      title={citaPreset ? 'Confirmar y Agendar Cita' : 'Crear Orden de Servicio'}
-      size="xl"
-    >
+  const tituloHeader = citaPreset ? 'Confirmar y Agendar Cita' : 'Crear Orden de Servicio';
+
+  const formContent = (
+    <>
       <form onSubmit={onSubmit} className="space-y-6">
         {/* Banner de origen — solo cuando viene de cita pública */}
         {citaPreset && (
@@ -968,6 +976,49 @@ export default function OrdenCreateModal({
           }}
         />
       )}
+    </>
+  );
+
+  // SPRINT-INBOX-8b: render condicional. Default 'modal' = comportamiento
+  // histórico (overlay centrado vía <Modal />). 'drawer' = panel lateral
+  // derecho para que la conversación de InboxConversacion quede visible.
+  // El wrapper drawer NO usa <Modal /> porque ese componente fuerza overlay
+  // centrado + backdrop opaco. Acá necesitamos un panel sin backdrop opaco
+  // para no tapar la página de fondo.
+  if (presentationMode === 'drawer') {
+    return (
+      <div
+        role="dialog"
+        aria-modal="false"
+        aria-label={tituloHeader}
+        className="fixed top-0 right-0 z-40 h-full w-full md:w-[60%] lg:w-[55%] xl:w-[50%] bg-white shadow-2xl border-l border-gray-200 flex flex-col"
+      >
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 shrink-0">
+          <h2 className="text-lg font-semibold text-gray-900">{tituloHeader}</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
+            aria-label="Cerrar"
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-6">
+          {formContent}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={tituloHeader}
+      size="xl"
+    >
+      {formContent}
     </Modal>
   );
 }
