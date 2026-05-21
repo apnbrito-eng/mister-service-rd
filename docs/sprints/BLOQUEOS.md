@@ -10,6 +10,58 @@
 
 ---
 
+## SPRINT-INBOX-8b-DRAWER-LATERAL — Refinamiento UX inbox: form de orden al lado del chat + copiar-a-orden por mensaje/ubicación/foto
+
+**Prioridad:** MEDIA (UX — refinamiento sobre INBOX-8 ya completado, no bloquea producción).
+**Estado:** BLOQUEADO esperando OK de Jorge al approach + touch-list expandido.
+**Origen:** Coordinator autónomo 2026-05-21 pasada 32. Tras procesar SPRINT-INBOX-8 (commit `4d4cbda` en pasada 31) que abre `OrdenCreateModal` como modal centrado sobre el inbox, Cowork agregó una sección "Refinamiento UX (Jorge 2026-05-21, OBLIGATORIO)" dentro del bloque INBOX-8 ya cerrado en `COLA_AUTONOMA.md:51-59`. Esa sección agrega 4 items NUEVOS que requieren refactor invasivo y no estaban en los criterios originales del sprint cerrado. Pasada 32 NO los procesó autónomo porque la propia spec dice "Si refactorizar `OrdenCreateModal` a contenedor no-modal es muy invasivo, el builder debe REPORTAR y proponer alternativa antes de forzar" — eso es un explicit stop autónomo.
+
+### Por qué se escaló (sub-reglas CLAUDE.md)
+
+1. **Spec ambigua sobre approach** — el item 4 dice "drawer/panel lateral 50% derecho", pero advierte que refactorizar `OrdenCreateModal` puede ser "muy invasivo" y dice "NO romper `OrdenCreateModal` para el resto de la app (`Ordenes.tsx` lo sigue usando como modal)". Hay 2 approaches plausibles:
+   - **A1:** refactor de `OrdenCreateModal` con un prop `presentationMode: 'modal' | 'drawer'` (single component, dos estilos).
+   - **A2:** crear un wrapper nuevo `OrdenCreateDrawer` en `src/components/inbox/` que reuse el form interno (`useOrdenCreateForm` + sub-componentes) sin tocar `OrdenCreateModal`.
+   - **A3:** no refactor — embed el form directamente en una nueva columna del layout 3-cols del inbox (sin overlay), con scroll independiente.
+   - **Touch-list potencial:** 3-8 archivos según approach. Sub-regla CLAUDE.md exige consumidor-audit (`OrdenCreateModal` se usa en `Ordenes.tsx`, `Citas.tsx`, `InboxConversacion.tsx`, posiblemente más).
+2. **Items 5-7 dependen del approach del item 4** — "Copiar mensaje a orden" y "Usar esta ubicación en la orden" requieren acceso al setter del form desde fuera (desde `MensajeBubble.tsx`). Si el form vive en un modal centrado se tapa el chat = inviable; si vive en drawer/panel paralelo, factible.
+3. **Item 7 marcado nice-to-have** — fotos del chat → adjuntar a orden requiere refactor de `subirFotoEquipoOrden` para aceptar fotos desde URL de WhatsApp Media + reverse-proxy si Meta exige token. Esto solo es feasible si los demás items ya pasaron.
+4. **Riesgo de romper `Ordenes.tsx` + `Citas.tsx`** — `OrdenCreateModal` es shared. Una refactor sin auditoría rompe los 2 callers externos.
+5. **No hay reproducción del bug que justifique fix urgente** — Jorge dijo el flow del modal centrado es "frustrante" como UX pero no bloquea ningún proceso. Va a media prioridad, no alta.
+
+### Items pendientes (copiados de `COLA_AUTONOMA.md:51-59`)
+
+4. **El formulario de orden NO debe cubrir el chat.** Form abre al lado (drawer/panel lateral/split-view) con la conversación VISIBLE para copiar datos.
+5. **"Copiar a la orden" por mensaje:** cada burbuja de `MensajeBubble.tsx` tiene acción rápida (ícono al hover) que pega el texto del mensaje en el campo activo/relevante del form.
+6. **Ubicación de WhatsApp → un clic:** mensaje `tipo === 'location'` con lat/lng → botón "Usar esta ubicación en la orden" que llena `clienteLat`/`clienteLng` (+ dirección si viene, o reverse-geocode opcional).
+7. **Fotos del chat → a la orden** (nice-to-have): adjuntar fotos del cliente a la orden con un clic. Si complica, dejarlo como follow-up.
+
+### Touch-list previsto (aproximado — depende del approach)
+
+- **Si approach A1 (modal con `presentationMode`):**
+  - `src/components/ordenes/OrdenCreateModal.tsx` — prop nuevo + render condicional.
+  - `src/pages/InboxConversacion.tsx` — pasar `presentationMode='drawer'`.
+  - `src/components/inbox/MensajeBubble.tsx` — acción "copiar a orden".
+  - `src/pages/InboxConversacion.tsx` — handler ubicación + state del form expuesto.
+- **Si approach A2 (wrapper drawer dedicado):**
+  - `src/components/inbox/OrdenCreateDrawer.tsx` (NUEVO) — wrapper drawer + reuse del form interno.
+  - `src/pages/InboxConversacion.tsx` — usa el wrapper.
+  - `src/components/inbox/MensajeBubble.tsx` — acción "copiar a orden".
+- **Para los 3 approaches:** el item 7 (fotos → orden) toca también `src/services/storage.service.ts` si requiere bajar de Meta Media URL y re-subir a Firebase Storage.
+
+### Cómo desbloquear
+
+1. **Jorge elige approach** (A1 / A2 / A3 / dejar tal cual con UX modal centrado).
+2. **Jorge opcionalmente delimita scope** — ¿procesar items 4+5+6 juntos como sprint mediano? ¿items 4 solo como sprint chico + 5/6/7 después? ¿item 7 fuera de scope?
+3. Editar esta entrada con `OK: jorge 2026-05-21 HH:MM approach=A<N> + items=<4,5,6,7|4|...>`.
+4. Pegar `procesa bloqueos` al coordinator.
+
+### Salvaguarda mientras tanto
+
+- INBOX-8 actual funciona — la operaria/coord puede crear orden EN el inbox (modal centrado). El refinamiento UX es mejora, no fix de bug.
+- La sección "Refinamiento UX" dentro de INBOX-8 en `COLA_AUTONOMA.md` queda como referencia histórica de lo que Jorge pidió 2026-05-21 pero no se procesó autónomo. Quitarla NO es prioridad, deja trazabilidad.
+
+---
+
 ## SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B — Defense-in-depth + refactor modelo de datos pagos[] → subcolección
 
 **Prioridad:** ALTA (cierra el gap de defense-in-depth — fase A es solo client-side).
