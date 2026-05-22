@@ -454,6 +454,19 @@ export function stripUndefinedDeep<T>(value: T): T {
     return value.map((v) => stripUndefinedDeep(v)) as unknown as T;
   }
   if (typeof value === 'object') {
+    // CRÍTICO: solo recursar en objetos PLANOS ({} literal). Las instancias de
+    // clase —Date, Timestamp, GeoPoint, DocumentReference, Buffer y los
+    // sentinels de Firestore (FieldValue.increment / serverTimestamp /
+    // arrayUnion, etc.)— se devuelven INTACTAS. Recursar sobre ellas las
+    // reconstruye como mapas planos y destruye el sentinel: `increment(1)` se
+    // guardaba como `{operand:1}` y `serverTimestamp()` / `Date` como `{}`,
+    // corrompiendo contadores y fechas en whatsapp_conversaciones / inbox /
+    // outbox (síntoma: la conversación no sube al tope de la lista, no marca
+    // "no leídos" y la ventana 24h queda rota). Bug detectado 2026-05-22.
+    const proto = Object.getPrototypeOf(value as object);
+    if (proto !== Object.prototype && proto !== null) {
+      return value;
+    }
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       if (v === undefined) continue;
