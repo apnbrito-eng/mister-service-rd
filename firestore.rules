@@ -569,6 +569,31 @@ service cloud.firestore {
       allow write: if esStaff();
     }
 
+    // Configuración del selector de número de envío WhatsApp (SPRINT-WA-
+    // NUMERO-RESPALDO-MANUAL Fase 1, 2026-05-22). Override admin-only
+    // para forzar el número entre los del WABA actual cuando Meta bloquea
+    // uno. `phoneNumberIdForzado: null` = modo automático (sticky intacto).
+    // Doc shape: { phoneNumberIdForzado: string|null, etiqueta?, actualizadoEn, actualizadoPor }.
+    //
+    // Múltiples matches: Firestore evalúa AMBOS matches al escribir. El
+    // genérico /config/{docId} de arriba permite write a staff; este match
+    // específico restringe a admin. Resultado efectivo: solo admin escribe.
+    // Read sigue siendo staff (heredado del genérico) — UI lee para mostrar
+    // estado actual a coord/secretaria/operaria sin permitir cambio.
+    match /config/whatsapp_envio {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
+    // Catálogo de números disponibles para el selector. Mismo gate.
+    // Shape: { numeros: [{ phoneNumberId: string, etiqueta: string }], actualizadoEn, actualizadoPor }.
+    // Seed inicial en el cliente (CONFIG_WHATSAPP_NUMEROS_DEFAULT) con
+    // los 2 phone_number_ids actuales del WABA.
+    match /config/whatsapp_numeros {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
     // Configuración del sistema GPS
     match /config_gps/{docId} {
       allow read: if esStaff();

@@ -751,30 +751,56 @@ export default async function handler(
   }
 
   // 6) Determinar phoneNumberId destino (D1=D sticky).
-  //    Override > conversación.ultimoPhoneNumberId > env default.
+  //    Cascada (SPRINT-WA-NUMERO-RESPALDO-MANUAL Fase 1, 2026-05-22):
+  //    Override-param > config/whatsapp_envio.phoneNumberIdForzado > sticky > env.
+  //
+  //    `phoneNumberIdForzado` lo setea un admin desde /admin/configuracion
+  //    para forzar el número de envío cuando Meta bloquea uno. Modo automático
+  //    (default) es `null` y la cascada vuelve al comportamiento original.
+  //    Validación contra allowlist sigue intacta abajo (defense-in-depth).
   const allowlistPhones = obtenerPhoneNumberIdsAllowlist();
   let phoneNumberId = '';
   if (phoneNumberIdOverride) {
     phoneNumberId = phoneNumberIdOverride;
   } else {
+    // Override admin via config/whatsapp_envio (gana sobre sticky).
     try {
-      const convSnap = await db
-        .collection('whatsapp_conversaciones')
-        .doc(wa_id)
-        .get();
-      if (convSnap.exists) {
-        const conv = convSnap.data() as Record<string, unknown> | undefined;
-        const sticky =
-          conv && typeof conv.ultimoPhoneNumberId === 'string'
-            ? conv.ultimoPhoneNumberId
+      const envioSnap = await db.collection('config').doc('whatsapp_envio').get();
+      if (envioSnap.exists) {
+        const envio = envioSnap.data() as Record<string, unknown> | undefined;
+        const forzado =
+          envio && typeof envio.phoneNumberIdForzado === 'string'
+            ? envio.phoneNumberIdForzado.trim()
             : '';
-        if (sticky) phoneNumberId = sticky;
+        if (forzado) phoneNumberId = forzado;
       }
     } catch (err) {
       const m = err instanceof Error ? err.message.substring(0, 200) : 'unknown';
       console.warn(
-        `${LOG_PREFIX} lookup conversación sticky falló (sigo con env default): ${m}`,
+        `${LOG_PREFIX} lookup config/whatsapp_envio falló (sigo con sticky): ${m}`,
       );
+    }
+    // Sticky por conversación (modo automático).
+    if (!phoneNumberId) {
+      try {
+        const convSnap = await db
+          .collection('whatsapp_conversaciones')
+          .doc(wa_id)
+          .get();
+        if (convSnap.exists) {
+          const conv = convSnap.data() as Record<string, unknown> | undefined;
+          const sticky =
+            conv && typeof conv.ultimoPhoneNumberId === 'string'
+              ? conv.ultimoPhoneNumberId
+              : '';
+          if (sticky) phoneNumberId = sticky;
+        }
+      } catch (err) {
+        const m = err instanceof Error ? err.message.substring(0, 200) : 'unknown';
+        console.warn(
+          `${LOG_PREFIX} lookup conversación sticky falló (sigo con env default): ${m}`,
+        );
+      }
     }
   }
   if (!phoneNumberId) {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff, MapPin, Loader2, FileText, ChevronUp, ChevronDown, ListPlus } from 'lucide-react';
+import { Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff, MapPin, Loader2, FileText, ChevronUp, ChevronDown, ListPlus, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfigGPS, ProveedorGPS, Personal, OrdenServicio } from '../types';
 import { obtenerConfigGPS, guardarConfigGPS } from '../services/gps.service';
@@ -11,6 +11,15 @@ import {
   sincronizarTiposEquipoPublicos,
   sincronizarModelosPorTipoEquipo,
 } from '../services/configWeb.service';
+import {
+  suscribirConfigWhatsappEnvio,
+  suscribirConfigWhatsappNumeros,
+  actualizarConfigWhatsappEnvio,
+  ConfigWhatsappEnvio,
+  ConfigWhatsappNumeros,
+  CONFIG_WHATSAPP_ENVIO_DEFAULT,
+  CONFIG_WHATSAPP_NUMEROS_DEFAULT,
+} from '../services/configWhatsappEnvio.service';
 import { useConfigWeb } from '../hooks/useConfigWeb';
 import { collection, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -21,6 +30,10 @@ import { puede } from '../utils/permisos';
 export default function Configuracion() {
   const { userProfile } = useApp();
   const esAdmin = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  // Selector de número WhatsApp: write rule en firestore.rules permite SOLO
+  // administrador (NO coord). Mantenemos esto sincronizado con la rule para
+  // que la UI no permita un submit que retornaría permission-denied.
+  const esSoloAdministrador = userProfile?.rol === 'administrador';
   const puedeModificar = puede(userProfile, 'configuracionModificar');
 
   // Geocoding batch state
@@ -42,6 +55,61 @@ export default function Configuracion() {
     const unsub = suscribirConfigFiscal(cfg => setConfigFiscalState(cfg));
     return () => unsub();
   }, []);
+
+  // Config WhatsApp envío (SPRINT-WA-NUMERO-RESPALDO-MANUAL Fase 1)
+  const [configWaEnvio, setConfigWaEnvio] = useState<ConfigWhatsappEnvio>({
+    ...CONFIG_WHATSAPP_ENVIO_DEFAULT,
+  });
+  const [configWaNumeros, setConfigWaNumeros] = useState<ConfigWhatsappNumeros>({
+    ...CONFIG_WHATSAPP_NUMEROS_DEFAULT,
+  });
+  const [waEnvioSaving, setWaEnvioSaving] = useState(false);
+  const [waEnvioSeleccion, setWaEnvioSeleccion] = useState<string>('');
+
+  useEffect(() => {
+    const unsubE = suscribirConfigWhatsappEnvio(setConfigWaEnvio);
+    const unsubN = suscribirConfigWhatsappNumeros(setConfigWaNumeros);
+    return () => {
+      unsubE();
+      unsubN();
+    };
+  }, []);
+
+  // Sincronizar el dropdown con el valor remoto (modo automático = "").
+  useEffect(() => {
+    setWaEnvioSeleccion(configWaEnvio.phoneNumberIdForzado ?? '');
+  }, [configWaEnvio.phoneNumberIdForzado]);
+
+  const handleSaveWaEnvio = async () => {
+    if (!esSoloAdministrador) {
+      toast.error('Solo administrador puede cambiar el número de envío');
+      return;
+    }
+    setWaEnvioSaving(true);
+    try {
+      const seleccion = waEnvioSeleccion.trim();
+      // "" = modo automático (null en Firestore).
+      const forzado = seleccion === '' ? null : seleccion;
+      const etiqueta =
+        forzado === null
+          ? undefined
+          : configWaNumeros.numeros.find((n) => n.phoneNumberId === forzado)?.etiqueta;
+      await actualizarConfigWhatsappEnvio(
+        { phoneNumberIdForzado: forzado, etiqueta },
+        userProfile?.nombre,
+      );
+      toast.success(
+        forzado
+          ? `Número de envío forzado: ${etiqueta || forzado}`
+          : 'Modo automático activado (sticky por conversación)',
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar el número de envío');
+    } finally {
+      setWaEnvioSaving(false);
+    }
+  };
 
   const handleSaveFiscal = async () => {
     if (!puedeModificar) return;
@@ -674,6 +742,73 @@ export default function Configuracion() {
           )}
         </div>
       </div>
+
+      {/* Número de envío WhatsApp (SPRINT-WA-NUMERO-RESPALDO-MANUAL Fase 1) */}
+      {esSoloAdministrador && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <div className="flex items-center gap-2 mb-2">
+            <MessageCircle size={20} className="text-[#1a5fa8]" />
+            <h2 className="text-lg font-semibold text-gray-900">Número de envío de WhatsApp</h2>
+          </div>
+          <p className="text-xs text-gray-500 mb-4">
+            Respaldo manual ante bloqueos de Meta. En <b>Automático</b> (default) cada
+            cliente recibe la respuesta por el último número usado en esa conversación
+            (lógica sticky). Si elegís un número específico, <b>TODOS los envíos
+            salientes</b> saldrán por ese número hasta que vuelvas a Automático.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Modo
+              </label>
+              <select
+                value={waEnvioSeleccion}
+                onChange={(e) => setWaEnvioSeleccion(e.target.value)}
+                disabled={waEnvioSaving}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]/30"
+              >
+                <option value="">Automático (sticky por conversación)</option>
+                {configWaNumeros.numeros.map((n) => (
+                  <option key={n.phoneNumberId} value={n.phoneNumberId}>
+                    {n.etiqueta} — {n.phoneNumberId}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={handleSaveWaEnvio}
+                disabled={
+                  waEnvioSaving ||
+                  waEnvioSeleccion === (configWaEnvio.phoneNumberIdForzado ?? '')
+                }
+                className="bg-[#1a5fa8] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#144a87] disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {waEnvioSaving ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-gray-600">
+            {configWaEnvio.phoneNumberIdForzado ? (
+              <span>
+                Estado actual: <b>Forzado</b> →{' '}
+                <span className="font-mono">{configWaEnvio.phoneNumberIdForzado}</span>
+                {configWaEnvio.etiqueta ? ` (${configWaEnvio.etiqueta})` : ''}
+              </span>
+            ) : (
+              <span>
+                Estado actual: <b>Automático</b> (sticky por conversación)
+              </span>
+            )}
+            {configWaEnvio.actualizadoEn && (
+              <span className="text-gray-400 ml-2">
+                · actualizado {configWaEnvio.actualizadoEn.toLocaleString('es-DO')}
+                {configWaEnvio.actualizadoPor ? ` por ${configWaEnvio.actualizadoPor}` : ''}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Tipos equipo */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">

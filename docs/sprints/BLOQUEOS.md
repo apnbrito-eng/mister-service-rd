@@ -10,7 +10,13 @@
 
 ---
 
-## SPRINT-WA-NUMERO-RESPALDO-MANUAL — Selector admin del número de envío WhatsApp (escalado por coordinator pasada 40, 2026-05-22)
+## SPRINT-WA-NUMERO-RESPALDO-MANUAL — DESBLOQUEADO 2026-05-22 22:53 (OK: jorge opcion=A fase=1 deploy=auto)
+
+**Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-22 por coordinator (`procesa bloqueos`, pasada 41). desbloqueadoPor: jorge 2026-05-22 22:53 vía `OK: jorge 2026-05-22 22:53 opcion=A fase=1 deploy=auto`.** Conservado acá como stub para forensia.
+
+**Scope aprobado:** opción A — implementar SOLO la Fase 1 (selector admin en `/admin/configuracion` para forzar el número de envío entre los 2 números del WABA actual, default automático/sticky intacto) + deployar `firestore.rules` automáticamente. Reviewer obligatorio (toca rules + endpoint). La Fase 2 (2º WABA con token propio) queda como sub-sprint follow-up `SPRINT-WA-NUMERO-RESPALDO-MANUAL-FASE-2`, BLOQUEADO hasta que Jorge cree el 2º WABA en Meta y cargue `phone_number_id` + token en Vercel env + allowlist.
+
+<details><summary>Contexto original del bloqueo (preservado para forensia)</summary>
 
 **Estado:** BLOQUEADO esperando OK explícito de Jorge al touch-list final + autorización de deploy:rules + decisión de scope (Fase 1 sola, o esperar Meta config para Fase 2).
 **Origen:** Cowork lo agregó al tope de la cola 2026-05-22 con dirección aprobada por Jorge (manual + admin + Configuración). Coordinator pasada 40 escala porque toca dos áreas que sub-regla CLAUDE.md exige OK formal: `firestore.rules` (rule nueva para `config/whatsapp_envio` + `config/whatsapp_numeros`) y `api/whatsapp/send.ts` (endpoint público — lee el override config).
@@ -83,6 +89,10 @@ Permitir al admin cambiar manualmente el número de envío de WhatsApp desde `/a
 Editá este sprint en `docs/sprints/BLOQUEOS.md` con la opción elegida y pegá `procesa bloqueos`.
 
 **Pendiente desde:** 2026-05-22 pasada 40. Cowork lo agregó al tope de la cola con dirección aprobada por Jorge; coordinator escaló por requerir OK formal a las áreas sensibles según sub-reglas CLAUDE.md.
+
+**OK: jorge 2026-05-22 22:53 opcion=A fase=1 deploy=auto** — Jorge eligió (vía Cowork): implementar SOLO la Fase 1 (selector admin en `/admin/configuracion` para forzar el número de envío entre los 2 números del WABA actual, default automático/sticky intacto) + deployar `firestore.rules` automáticamente. Reviewer obligatorio (toca rules + endpoint). La Fase 2 (2º WABA con token propio) queda como sub-sprint follow-up `SPRINT-WA-NUMERO-RESPALDO-MANUAL-FASE-2`, BLOQUEADO hasta que Jorge cree el 2º WABA en Meta y cargue `phone_number_id` + token en Vercel env + allowlist.
+
+</details>
 
 ---
 
