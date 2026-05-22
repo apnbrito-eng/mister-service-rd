@@ -20,7 +20,8 @@ import { enviarTexto } from '../services/whatsapp.service';
 import MensajeBubble from '../components/inbox/MensajeBubble';
 import IndicadorVentana24h from '../components/inbox/IndicadorVentana24h';
 import ToggleBot from '../components/inbox/ToggleBot';
-import CardCliente, { type PrefillCrearOrden } from '../components/inbox/CardCliente';
+import { type PrefillCrearOrden } from '../components/inbox/CardCliente';
+import PanelCliente360 from '../components/inbox/PanelCliente360';
 import SelectorPlantillas from '../components/inbox/SelectorPlantillas';
 import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
 import { useOrdenCreateForm } from '../hooks/useOrdenCreateForm';
@@ -446,19 +447,29 @@ export default function InboxConversacion() {
           </ul>
         </aside>
 
-        {/* COL 2 — info cliente (placeholder, INBOX-5 lo amplía con órdenes).
-            SPRINT-INBOX-8c (2026-05-22): se OCULTA cuando el drawer está
-            abierto. La razón: el drawer es el centro de la acción cuando
-            está abierto; el operario necesita ver chat+drawer lado a lado.
-            Los datos del cliente (CardCliente) ya viajaron al form vía el
-            prefill al momento de abrir, así que no se pierde info accionable. */}
-        <aside className={`${showCreateModal ? 'hidden' : 'hidden lg:flex'} flex-col w-64 border-r border-gray-200 bg-white`}>
-          <div className="p-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Contacto
-            </h3>
-            {conversacionActual ? (
-              <div className="space-y-3">
+        {/* COL 2 — Panel cliente 360 (SPRINT-INBOX-10, 2026-05-22).
+            Antes: bloque simple con datos+CardCliente (INBOX-5).
+            Ahora: centro de mando del cliente con tabs (Datos, Órdenes,
+            Garantías, Facturas, Historial) — `PanelCliente360` envuelve
+            a `CardCliente` (que sigue siendo el responsable del tab Datos)
+            y suma los tabs nuevos. El header con teléfono/etiquetas/
+            asignación/toggle bot vive ARRIBA fijo, los tabs llenan el
+            resto del aside con scroll interno.
+
+            SPRINT-INBOX-8c (2026-05-22): el aside completo se OCULTA
+            cuando el drawer de crear orden está abierto, para que el chat
+            quede visible al lado del form. Sin regresión.
+
+            Ancho ampliado a w-72 xl:w-80 para acomodar los tabs sin
+            apretar. */}
+        <aside className={`${showCreateModal ? 'hidden' : 'hidden lg:flex'} flex-col w-72 xl:w-80 border-r border-gray-200 bg-white`}>
+          {conversacionActual ? (
+            <>
+              {/* Header fijo con info de la CONVERSACIÓN (no del cliente) */}
+              <div className="p-3 border-b border-gray-100 space-y-2 flex-shrink-0">
+                <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                  Conversación
+                </h3>
                 <div className="flex items-center gap-2 text-sm">
                   <Phone size={14} className="text-gray-400" />
                   <span className="font-medium text-gray-900">
@@ -466,22 +477,19 @@ export default function InboxConversacion() {
                   </span>
                 </div>
                 {conversacionActual.etiquetas && conversacionActual.etiquetas.length > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-500 mb-1">Etiquetas</p>
-                    <div className="flex flex-wrap gap-1">
-                      {conversacionActual.etiquetas.map((e) => (
-                        <span
-                          key={e}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700"
-                        >
-                          {e}
-                        </span>
-                      ))}
-                    </div>
+                  <div className="flex flex-wrap gap-1">
+                    {conversacionActual.etiquetas.map((e) => (
+                      <span
+                        key={e}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700"
+                      >
+                        {e}
+                      </span>
+                    ))}
                   </div>
                 )}
                 {conversacionActual.asignadaA && (
-                  <div className="text-xs text-gray-500">
+                  <div className="text-[11px] text-gray-500">
                     Asignada a:{' '}
                     <span
                       className={`font-medium ${
@@ -496,42 +504,34 @@ export default function InboxConversacion() {
                     </span>
                   </div>
                 )}
-                {/* SPRINT-INBOX-4 (2026-05-20): toggle bot IA. Solo
-                    visible para admin/coord o la asignataria de la
-                    conversación. La rule decide al final; el gate UI
-                    evita render del control para roles sin permiso. */}
-                <div className="pt-3 border-t border-gray-100">
-                  <ToggleBot
-                    waId={conversacionActual.wa_id}
-                    habilitado={conversacionActual.bot?.habilitado === true}
-                    puedeTogglear={
-                      conversacionActual.asignadaA === currentUser?.uid ||
-                      // Sin asignación: cualquier staff puede tomar
-                      // (la rule de bot exige admin/coord o asignataria;
-                      // si no es asignataria y no es admin/coord, el
-                      // service va a fallar con permission-denied y el
-                      // toast lo explica).
-                      true
-                    }
-                  />
-                </div>
-                {/* SPRINT-INBOX-5 (2026-05-20): datos del cliente +
-                    órdenes activas vinculadas por teléfono.
-                    SPRINT-INBOX-8 (2026-05-21): se le pasa
-                    onCrearOrden para que crear orden NO navegue afuera
-                    del inbox sino que abra el modal en contexto. */}
-                <div className="pt-3 border-t border-gray-100">
-                  <CardCliente
-                    key={`${conversacionActual.wa_id}-${refreshOrdenesCardKey}`}
-                    waId={conversacionActual.wa_id}
-                    onCrearOrden={handleCrearOrden}
-                  />
-                </div>
+                {/* SPRINT-INBOX-4 (2026-05-20): toggle bot IA. */}
+                <ToggleBot
+                  waId={conversacionActual.wa_id}
+                  habilitado={conversacionActual.bot?.habilitado === true}
+                  puedeTogglear={
+                    conversacionActual.asignadaA === currentUser?.uid ||
+                    // Sin asignación: cualquier staff puede tomar (la rule
+                    // de bot decide al final; si no aplica, el service
+                    // emite permission-denied y el toast lo explica).
+                    true
+                  }
+                />
               </div>
-            ) : (
+
+              {/* Panel cliente 360 con tabs — flex-1 para llenar el resto */}
+              <div className="flex-1 min-h-0">
+                <PanelCliente360
+                  key={`${conversacionActual.wa_id}-${refreshOrdenesCardKey}`}
+                  waId={conversacionActual.wa_id}
+                  onCrearOrden={handleCrearOrden}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="p-4">
               <p className="text-sm text-gray-400">Cargando conversación...</p>
-            )}
-          </div>
+            </div>
+          )}
         </aside>
 
         {/* COL 3 — timeline + composer.

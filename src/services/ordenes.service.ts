@@ -1148,6 +1148,70 @@ export async function obtenerOrdenesActivasPorTelefono(
 }
 
 /**
+ * SPRINT-INBOX-10-CLIENTE-360 (2026-05-22).
+ *
+ * Variante de `obtenerOrdenesActivasPorTelefono` que devuelve TODAS las
+ * órdenes del cliente (incluidas cerradas/canceladas) ordenadas por
+ * `createdAt` descendente (más recientes primero). Pensado para el panel
+ * cliente 360 del inbox que muestra el histórico completo del cliente,
+ * no sólo las activas en curso.
+ *
+ * Misma lógica de búsqueda dual (telefonoNormalizado RD 10 dígitos + raw)
+ * para tolerar formatos heredados con guiones / paréntesis. Sin `orderBy`
+ * en la query Firestore (cazador P-015): sort 100% client-side con
+ * cascada de fallbacks (createdAt → updatedAt → 0). Filtra
+ * `eliminada === true` defensivamente.
+ *
+ * Nota: este helper NO filtra por fase terminal. El consumidor decide
+ * cómo agrupar/etiquetar activas vs cerradas.
+ */
+export async function obtenerTodasOrdenesPorTelefono(
+  telefonoRaw: string,
+): Promise<OrdenServicio[]> {
+  if (!telefonoRaw || telefonoRaw.length < 7) return [];
+  const soloDigitos = telefonoRaw.replace(/\D/g, '');
+  const telNorm = soloDigitos.length >= 10 ? soloDigitos.slice(-10) : soloDigitos;
+  if (telNorm.length < 7) return [];
+
+  const docsMap = new Map<string, OrdenServicio>();
+
+  const q1 = query(
+    collection(db, 'ordenes_servicio'),
+    where('clienteTelefono', '==', telNorm),
+  );
+  const snap1 = await getDocs(q1);
+  snap1.docs.forEach((d) => {
+    const data = d.data();
+    if (data.eliminada === true) return;
+    docsMap.set(d.id, parseOrden(d.id, data));
+  });
+
+  if (telefonoRaw !== telNorm) {
+    const q2 = query(
+      collection(db, 'ordenes_servicio'),
+      where('clienteTelefono', '==', telefonoRaw),
+    );
+    const snap2 = await getDocs(q2);
+    snap2.docs.forEach((d) => {
+      if (docsMap.has(d.id)) return;
+      const data = d.data();
+      if (data.eliminada === true) return;
+      docsMap.set(d.id, parseOrden(d.id, data));
+    });
+  }
+
+  const ordenes = Array.from(docsMap.values());
+  ordenes.sort((a, b) => {
+    const aTime = a.createdAt ?? a.updatedAt;
+    const bTime = b.createdAt ?? b.updatedAt;
+    const ta = aTime instanceof Date ? aTime.getTime() : 0;
+    const tb = bTime instanceof Date ? bTime.getTime() : 0;
+    return tb - ta;
+  });
+  return ordenes;
+}
+
+/**
  * Resultado del helper `confirmarPagoOrden`.
  *
  * - `ok=true` → el pago se confirmó OK (o ya estaba confirmado y la operación

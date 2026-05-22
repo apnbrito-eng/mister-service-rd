@@ -4,7 +4,7 @@
 
 ## SPRINT-INBOX-8c-FIX-DRAWER-TAPA-CHAT — El drawer de crear orden tapa el chat en pantallas normales
 
-**Prioridad:** ALTA (bug de UX, rompe lo que pidió Jorge). **Estado:** EN_EJECUCION (coordinator autónomo pasada 37 — 2026-05-22). **Autónomo (frontend/layout, sin rules/endpoint).**
+**Prioridad:** ALTA (bug de UX, rompe lo que pidió Jorge). **Estado:** ✅ COMPLETADO 2026-05-22 pasada 37 hash `65522c5`. Archivos: `src/pages/InboxConversacion.tsx`. Col 1 (lista convs) y Col 2 (CardCliente lateral) se ocultan cuando `showCreateModal===true`. Main (chat) recibe `pr-[60%/55%/50%]` para reservar el espacio del drawer (matchea EXACTO widths de OrdenCreateModal.tsx). Transición suave `transition-[padding] duration-150`. Resultado: a 1280px chat 40%/drawer 60%, a 1440 chat 45%/drawer 55%, a 1720 chat 50%/drawer 50%. NO se tocó OrdenCreateModal.tsx ni default `presentationMode='modal'` (Ordenes/Citas/OrdenEditForm sin regresión). Cazadores 17/17 PASS (P-013 WARN cold start). Typecheck PASS. Lint clean. Deploy Vercel pendiente. **Autónomo (frontend/layout, sin rules/endpoint).**
 
 **Bug confirmado por Cowork con Playwright (2026-05-22):** el INBOX-8b abre el form de orden como drawer derecho al 50%, PERO el chat solo queda visible a anchos grandes (verificado: a 1720px el chat se ve al lado; a anchos normales de laptop el drawer TAPA la columna del chat). Jorge lo confirmó con screenshot: al abrir "Crear orden" se ve la lista + tarjeta de contacto pero NO los mensajes del chat — justo lo contrario del objetivo (copiar datos del chat a la orden).
 
@@ -20,7 +20,7 @@
 
 ## SPRINT-INBOX-10-CLIENTE-360 — Centro de mando del cliente en el panel del inbox
 
-**Prioridad:** ALTA. **Estado:** PENDIENTE. **Autónomo (frontend; reusa componentes/servicios existentes; NO toca rules/endpoint/migración).** **Depende de INBOX-8c** — procesar 8c primero (el chat no debe taparse).
+**Prioridad:** ALTA. **Estado:** EN_EJECUCION (coordinator autónomo pasada 37 — 2026-05-22). **Autónomo (frontend; reusa componentes/servicios existentes; NO toca rules/endpoint/migración).** **Depende de INBOX-8c** — procesar 8c primero (el chat no debe taparse).
 
 **Pedido de Jorge (2026-05-22, verbatim):** "desde el panel de whatsapp osea desde la conversacion acceder a todo lo concerniente al cliente que se este atendiendo garantias ordenes crear orden todo lo concerniente incluso mandar a facturacion mientras en un lateral se ve la orden en curso y lo que el tecnico ha dicho osea el historial del cliente en base a todo lo pertinente a el incluso reagendar crear ordenes".
 
