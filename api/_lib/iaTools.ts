@@ -544,6 +544,11 @@ function omitirCamposSensiblesSecretaria(data: DocumentData): DocumentData {
 }
 
 /** Convierte recursivamente Timestamps a Date para serialización JSON estable. */
+// @safe-recursive-strip: read-only — convierte docs leídos de Firestore a JSON
+// para output de IA tools. NUNCA recibe FieldValue (los sentinels solo viven
+// en payloads de escritura). Maneja Date (línea 549) y Timestamp via toDate()
+// (línea 553). Si se reusara para WRITE a Firestore con sentinels, agregar
+// guard de Object.getPrototypeOf antes de la recursión (P-020).
 function serializarTimestamps(val: unknown): unknown {
   if (val === null || val === undefined) return val;
   if (val instanceof Date) return val.toISOString();

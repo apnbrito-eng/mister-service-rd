@@ -36,6 +36,7 @@ import { check as checkWhatsappWebhookHmac } from './check-whatsapp-webhook-hmac
 import { check as checkWhatsappIdempotency } from './check-whatsapp-idempotency.js';
 import { check as checkWhatsappWindow24h } from './check-whatsapp-window-24h.js';
 import { check as checkBillingErroresNoSilenciados } from './check-billing-errors-no-silenciados.js';
+import { check as checkHelpersLimpiezaRecursivaFirestore } from './check-helpers-limpieza-recursiva-firestore.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -65,6 +66,7 @@ async function main() {
     checkWhatsappIdempotency,
     checkWhatsappWindow24h,
     checkBillingErroresNoSilenciados,
+    checkHelpersLimpiezaRecursivaFirestore,
   ];
 
   const t0 = Date.now();

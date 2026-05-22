@@ -606,6 +606,35 @@ Si falta cualquiera de los 4 → FAIL.
 
 ---
 
+## P-020 — Helper de limpieza recursiva sin guard de prototipo plano que escribe a Firestore con sentinels FieldValue/Date/Timestamp
+
+**Bug original:** `142d4da` (SPRINT-WA-1, 2026-05-19). El helper `stripUndefinedDeep` en `api/_lib/whatsappWebhook.ts` recursaba sobre cualquier `typeof === 'object'`, incluyendo sentinels FieldValue y instancias `Date`/`Timestamp`. Resultado en producción: `FieldValue.increment(1)` se guardaba como `{operand:1}`, `FieldValue.serverTimestamp()` y `Date` como `{}`, corrompiendo contadores y fechas en `whatsapp_conversaciones`/`whatsapp_mensajes_inbox`/`whatsapp_mensajes_outbox`. La conversación no subía al tope de la lista del inbox, no marcaba "no leídos", y la ventana 24h quedaba rota. Bug detectado por Cowork con Playwright + Admin SDK 3 días después del deploy. Fix `0baf8b7` (2026-05-22): guard `Object.getPrototypeOf(val) !== Object.prototype && proto !== null → return val` antes de recursar.
+
+**Síntoma de una regresión:** un helper futuro con el mismo shape (recursión sobre `Object.entries`/`Object.keys` para borrar `undefined`, deep-clonar, sanitizar payloads, etc.) repite el bug en otro archivo. El endpoint NO crashea — escribe basura silenciosamente. Síntomas UI dependen del caller: listas no ordenan, badges no aparecen, contadores no incrementan, fechas se muestran como `Invalid Date`. Silent data corruption.
+
+**Causa raíz prevenida:** la check `typeof value === 'object'` es verdadera para CUALQUIER objeto JS — instancias de clase, sentinels FieldValue, `Date`, `Timestamp`, `Buffer`, etc. Un helper que recursa "para limpiar" sin distinguir destruye las instancias. El conocimiento "qué preservar" vivía solo en el frontend (`src/utils/firestore.ts` tiene chequeos `instanceof Date && instanceof Timestamp`) y no se replicó al portar el patrón al backend Admin SDK (donde además existen los sentinels FieldValue, no usados en frontend). Sin cazador determinístico, cualquier nuevo helper deep en `api/` o `src/services/` repite el bug.
+
+**Regla:** cualquier archivo bajo `api/**` o `src/services/**` que (a) importe `firebase-admin` o `firebase/firestore` y (b) defina una función con shape de "limpieza recursiva" (contiene `Object.entries` o `Object.keys` + se llama a sí misma) DEBE contener en el cuerpo de la función AL MENOS UNA de estas señales:
+
+1. Guard explícito de prototipo plano: `Object.getPrototypeOf(val)` comparado con `Object.prototype` o `null`. Si el prototipo no es el de `Object` ni `null`, devolver el valor intacto antes de recursar.
+2. Checks explícitos de instancias preservables: `instanceof Date` Y `instanceof Timestamp` (ambos — frontend usa `firebase/firestore::Timestamp`, backend `firebase-admin/firestore::Timestamp`).
+3. Tag de allowlist por línea: `// @safe-recursive-strip: <razón>` en la línea de la declaración o hasta 5 líneas arriba. Útil para helpers que SOLO procesan strings/primitivos y nunca reciben payloads de Firestore.
+
+Sin ninguna de las 3 señales → FAIL.
+
+**Cazador:** `scripts/invariantes/check-helpers-limpieza-recursiva-firestore.ts`. Estrategia: walk de `api/` + `src/services/`, filtro por imports de Firestore, regex para detectar declaraciones de función (function/const/arrow), balanceo de llaves para extraer cuerpo, heurística `Object.entries`+autorefencia para identificar recursión, verificación de las 3 señales. Falsos positivos manejables con la allowlist por tag inline.
+
+**Allowlist por archivo:** vacía al inicio. Si crece a >5 entradas, refactorear.
+
+**Limitaciones conocidas:**
+- Heurística por regex. Helpers definidos como arrow function inline en otra función (closure interno) no se detectan — agregar el archivo a la allowlist con razón documentada si aparece el patrón.
+- El balanceo de llaves es básico — strings con `{`/`}` literales muy largos podrían romperlo (no se observa en el repo).
+- No verifica orden lógico (que el guard corra ANTES de la recursión, etc.) — solo presencia. Reviewer humano lo valida semánticamente.
+
+**Postmortem:** `docs/postmortems/2026-05-22-stripundefineddeep-mangle-fieldvalue.md`.
+
+---
+
 ## P-019 — Errores billing Meta swallowed sin notificación admin
 
 **Bug original (anticipado):** SPRINT-WA-BILLING-VERIFY (2026-05-19). Cazador preventivo. Sin él, una regresión típica del módulo WhatsApp es agregar un `catch` que responda 502 al cliente sin loggear ni notificar, dejando que errores billing/spam/ban de Meta caigan silenciosos hasta que un cliente externo se queja.
