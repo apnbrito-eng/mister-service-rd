@@ -5,6 +5,64 @@
 
 ---
 
+## 2026-05-22 — autónomo (`procesa bloqueos`, pasada 41): SPRINT-WA-NUMERO-RESPALDO-MANUAL Fase 1
+
+### Disparo
+
+Jorge pegó `procesa bloqueos` tras editar `docs/sprints/BLOQUEOS.md` con
+`OK: jorge 2026-05-22 22:53 opcion=A fase=1 deploy=auto` sobre el sprint
+escalado en pasada 40.
+
+### archivist PRE-CHANGE (inline)
+
+Touch-list expandido y consumidores verificados:
+- `firestore.rules` — match `/config/{docId}` existente (read=esStaff, write=esStaff). Agregar 2 matches específicos (read=esStaff, write=esAdmin) — Firestore evalúa AMBOS matches, intersección = esAdmin efectivo.
+- `api/whatsapp/send.ts` líneas 753-783 — cascada `phoneNumberIdOverride > sticky > env`. Verificado: `obtenerPhoneNumberIdsAllowlist` validation (línea 791) intacta — el override no escapa la allowlist.
+- `src/services/configWhatsappEnvio.service.ts` (NUEVO) — sigue template `configFiscal.service.ts`.
+- `src/pages/Configuracion.tsx` — `esAdmin` local incluye coord (mismatch con rule). Necesito flag `esSoloAdministrador` separado.
+
+Historial git relevante:
+- `api/whatsapp/send.ts`: `bf87c02` (button URL), `7f6b17a` (header image), `9cf8f9a` (bodyparser fix — patrón defensivo aplicado).
+- `firestore.rules`: `7e137cd` (WA billing), `be0ef32` (WA-RULES 6 colecciones), `c7c8e34` (campo opcional `.get(field, null)` fix — P-002 enseñanza).
+- `Configuracion.tsx`: `43a2087` (P-006 fix), `9c9927e` (catalogo modelos).
+
+Postmortems revisados:
+- `2026-05-07-iniciar-chequeo-rules-sin-deploy.md` — enseñanza: `npm run deploy:rules` antes de cerrar sprint (P-005 enforcement). **Aplico al cierre.**
+- `2026-05-22-stripundefineddeep-mangle-fieldvalue.md` — sin overlap directo (este sprint no usa helpers de limpieza recursiva).
+
+### Builder + tester + regression_guardian + reviewer (inline)
+
+Aplicados los 7 archivos (ver DIARIO_2026-05-22.md pasada 41 para detalle por archivo).
+
+- **Typecheck:** PASS.
+- **Cazadores pre-deploy-rules:** P-005 ROJO (esperado — rules modificadas no deployadas).
+- **Deploy rules:** `npm run deploy:rules` OK. Lock 07251e9684be… 23:00:08Z.
+- **Cazadores post-deploy:** 20/20 PASS.
+- **Lint staged:** PASS.
+- **Build:** PASS 4.69s.
+- **Regression guardian inline:** P-001/P-002/P-003 NO aplican (rules nuevas son `read/write: esStaff/esAdmin` puro, no comparan old/new; service hace setDoc a un solo doc; no hay writes con `auth.uid` gate). Allowlist intacta.
+- **Reviewer inline:** APPROVED. Rules añadidas como matches específicos sin tocar existentes, default deny preservado, comentarios explican la intersección. UI gate sincronizado con rule.
+
+### Commit + push + deploy
+
+- Commit `c277fa1`: `feat(wa): SPRINT-WA-NUMERO-RESPALDO-MANUAL Fase 1 selector admin del numero de envio`.
+- Push a `main` OK.
+- Deploy Vercel: Ready `c277fa1` 23:02:24 UTC (5 polls, ~75s).
+
+### Follow-up
+
+- `SPRINT-WA-NUMERO-RESPALDO-MANUAL-FASE-2` queda BLOQUEADO hasta que Jorge cree el 2º WABA en Meta + cargue `phone_number_id` + token en Vercel env + allowlist. Sin eso, la Fase 2 (mapeo `phoneNumberId → access token`) no es funcional.
+
+### Acción manual de Jorge (opcional)
+
+Smoke test:
+1. `/admin/configuracion` → sección "Número de envío de WhatsApp" → elegir "Respaldo".
+2. Mandar un mensaje desde el inbox.
+3. Verificar en Firestore (`whatsapp_mensajes_outbox`) que `phoneNumberId === '1151997541323577'` (no el sticky).
+4. Volver a "Automático" cuando termine la prueba.
+
+---
+
 ## 2026-05-22 — autónomo (`trabaja`, pasada 40): cierre formal bug stripUndefinedDeep + escalado WA-NUMERO
 
 ### Disparo
