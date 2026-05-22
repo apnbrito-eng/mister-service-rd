@@ -1,0 +1,8 @@
+# storage.rules deployed lock
+# Escrito por scripts/invariantes/marcar-storage-rules-deployadas.ts después de
+# `firebase deploy --only storage:rules`. NO editar a mano.
+# Cazador P-013 lo compara contra el SHA-256 actual de storage.rules
+# para detectar diff pendiente de deployar.
+
+sha256: 618056e908528a4a1f7b3debf2e7349d869076bae0083c0fe9dfc50f5733f287
+deployedAt: 2026-05-22T20:40:42.283Z
