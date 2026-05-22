@@ -10,6 +10,82 @@
 
 ---
 
+## SPRINT-WA-NUMERO-RESPALDO-MANUAL — Selector admin del número de envío WhatsApp (escalado por coordinator pasada 40, 2026-05-22)
+
+**Estado:** BLOQUEADO esperando OK explícito de Jorge al touch-list final + autorización de deploy:rules + decisión de scope (Fase 1 sola, o esperar Meta config para Fase 2).
+**Origen:** Cowork lo agregó al tope de la cola 2026-05-22 con dirección aprobada por Jorge (manual + admin + Configuración). Coordinator pasada 40 escala porque toca dos áreas que sub-regla CLAUDE.md exige OK formal: `firestore.rules` (rule nueva para `config/whatsapp_envio` + `config/whatsapp_numeros`) y `api/whatsapp/send.ts` (endpoint público — lee el override config).
+
+### Resumen del sprint (preservado para forensia)
+
+Permitir al admin cambiar manualmente el número de envío de WhatsApp desde `/admin/configuracion`, con respaldo manual ante bloqueos de Meta. Hoy `api/whatsapp/send.ts` (~líneas 753-783) elige el número así: `phoneNumberIdOverride` (param) > `whatsapp_conversaciones/{wa_id}.ultimoPhoneNumberId` (sticky D1=D) > `process.env.META_PHONE_NUMBER_ID`. Hay 2 phone_number_ids en uso (`1226992440486630` y `1151997541323577`) que comparten el mismo WABA y access token.
+
+**Fase 1 (sin dependencia de Meta — usa los 2 números del mismo WABA actual):**
+
+1. Doc Firestore `config/whatsapp_envio` con shape `{ phoneNumberIdForzado: string | null, etiqueta?, actualizadoPor, actualizadoEn }`. `null` = automático (sticky actual intacto).
+2. Doc `config/whatsapp_numeros` admin-editable: array `[{ phoneNumberId, etiqueta }]` (seed con los 2 conocidos: "Principal" / "Respaldo").
+3. UI en `/admin/configuracion` (solo-admin): selector "Número de envío de WhatsApp" → Automático / <A> / <B (Respaldo)>. Escribe el doc. No-admin no ve el control.
+4. `api/whatsapp/send.ts`: leer (Admin SDK) `config/whatsapp_envio.phoneNumberIdForzado`; si está seteado, GANA sobre el sticky. Orden nuevo: override-param > **forzado-config** > sticky > env. Validar contra la `META_PHONE_NUMBER_IDS_ALLOWLIST` existente (defense-in-depth).
+
+**Fase 2 (depende de acción de Jorge en Meta):**
+
+5. Soporte token por número/WABA. Hoy `send.ts` usa un solo token. Para un WABA de respaldo distinto, mapear `phoneNumberId → access token` desde env (`META_TOKENS_POR_PHONE_ID` JSON o pares de env). **Bloqueada hasta que Jorge cree el 2º WABA en Meta + obtenga `phone_number_id` + token y los cargue en Vercel env + allowlist.** Sin eso, Fase 2 no es funcional (Fase 1 ya cubre cambiar entre los 2 números del WABA actual).
+
+### Por qué se escaló (sub-reglas CLAUDE.md)
+
+1. **Cambios a `firestore.rules`** — sprint requiere rules nuevas para `config/whatsapp_envio` + `config/whatsapp_numeros` (read auth, write solo administrador). Coordinator necesita OK explícito antes de modificar `firestore.rules` y debe ejecutar `npm run deploy:rules` antes de cerrar COMPLETADO (P-005 enforce esto en pre-commit hook).
+2. **Cambios a endpoint `api/` público** — `api/whatsapp/send.ts` es endpoint expuesto en producción que envía mensajes WhatsApp (con costo por envío). Cualquier cambio a su lógica de selección de número impacta TODOS los envíos salientes. Sub-regla CLAUDE.md exige OK formal antes de tocarlo.
+3. **Aunque Cowork escribió "Jorge aprobó la dirección"** (manual + admin + Configuración), el OK formal con shape `OK: jorge YYYY-MM-DD HH:MM ...` NO está como entrada formal acá. Jorge aprobó la dirección general; falta confirmar:
+   - ¿Procesar Fase 1 sola ahora, esperar Fase 2 para cuando exista el 2º WABA?
+   - ¿O bloquear el sprint entero hasta tener todo listo?
+   - ¿Permitir al coordinator deployar `firestore.rules` solo (sin pasar por Jorge), o Jorge prefiere revisar el diff de rules antes de deploy?
+
+### Opciones de desbloqueo
+
+- **Opción A — Fase 1 sola, autorizar deploy:rules autónomo** (recomendada, valor inmediato):
+
+  ```
+  OK: jorge YYYY-MM-DD HH:MM opcion=A fase=1 deploy=auto
+  ```
+
+  Coordinator implementa solo la Fase 1, deploya `firestore.rules` automáticamente, marca COMPLETADO. Fase 2 queda como sub-sprint follow-up (`SPRINT-WA-NUMERO-RESPALDO-MANUAL-FASE-2`) bloqueado hasta tener Meta config del 2º WABA. Funcional inmediato: Jorge puede cambiar entre los 2 números actuales.
+
+- **Opción B — Fase 1 sola, Jorge revisa rules antes de deploy**:
+
+  ```
+  OK: jorge YYYY-MM-DD HH:MM opcion=B fase=1 deploy=manual
+  ```
+
+  Coordinator implementa Fase 1 y commitea `firestore.rules` SIN deployar. Jorge revisa el diff con `git show <hash> -- firestore.rules` y ejecuta `npm run deploy:rules` manualmente. Más lento pero da control. P-005 bloqueará pre-commits siguientes hasta que el lock se actualice tras deploy.
+
+- **Opción C — Esperar Fase 2 (todo o nada)**:
+
+  ```
+  OK: jorge YYYY-MM-DD HH:MM opcion=C # con WABA 2 + token cargados en Vercel env
+  ```
+
+  Coordinator NO empieza hasta que Jorge cree el 2º WABA en Meta Business Suite, obtenga `phone_number_id` + access token, y los cargue en Vercel env. Riesgo: bloquea el valor inmediato de Fase 1 por meses si Jorge no tiene tiempo de gestionar Meta.
+
+- **Opción D — Rechazar**: si Jorge prefiere lógica automática (no manual) o quiere otra UX:
+
+  ```
+  RECHAZADO: jorge YYYY-MM-DD HH:MM <motivo>
+  ```
+
+### Touch-list previsto si Opción A o B
+
+- `firestore.rules` — rules para `config/whatsapp_envio` (read auth, write admin) + `config/whatsapp_numeros` (idem). Reviewer obligatorio (sub-regla CLAUDE.md "Reviewer obligatorio cuando un sprint toca firestore.rules").
+- `src/pages/Configuracion.tsx` (o equivalente — confirmar nombre exacto del archivo en /admin/configuracion) — selector admin-only con `useApp().userProfile?.rol === 'administrador'`.
+- NUEVO `src/services/configWhatsappEnvio.service.ts` — lee/escribe los 2 docs.
+- `api/whatsapp/send.ts` (~líneas 753-783) — leer `config/whatsapp_envio.phoneNumberIdForzado` con Admin SDK; si seteado, gana sobre sticky. Validar contra `META_PHONE_NUMBER_IDS_ALLOWLIST` existente.
+
+### Comando de desbloqueo
+
+Editá este sprint en `docs/sprints/BLOQUEOS.md` con la opción elegida y pegá `procesa bloqueos`.
+
+**Pendiente desde:** 2026-05-22 pasada 40. Cowork lo agregó al tope de la cola con dirección aprobada por Jorge; coordinator escaló por requerir OK formal a las áreas sensibles según sub-reglas CLAUDE.md.
+
+---
+
 ## SPRINT-INBOX-9-FOTOS-CHAT-ORDEN — DESBLOQUEADO 2026-05-22 (OK: jorge 2026-05-22 opcion=A)
 
 **Movido a `COLA_AUTONOMA.md` como COMPLETADO el 2026-05-22 por coordinator (`procesa bloqueos`, pasada 36). desbloqueadoPor: jorge 2026-05-22 vía `OK: jorge 2026-05-22 opcion=A`. Hash: `dae93c2`.** Procesado inmediatamente después de SPRINT-138 (prerequisito). Conservado acá como stub para forensia.

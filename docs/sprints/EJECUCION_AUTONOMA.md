@@ -5,6 +5,135 @@
 
 ---
 
+## 2026-05-22 — autónomo (`trabaja`, pasada 40): cierre formal bug stripUndefinedDeep + escalado WA-NUMERO
+
+### Disparo
+
+Jorge pegó `trabaja` con 2 sprints al tope de COLA agregados por Cowork hoy:
+1. `SPRINT-WA-STRIPUNDEFINED-POSTMORTEM-CAZADOR-LIMPIEZA` — cierre formal del bug del commit `0baf8b7` con los 3 artefactos obligatorios (postmortem + cazador + backfill).
+2. `SPRINT-WA-NUMERO-RESPALDO-MANUAL` — selector admin del número de envío WhatsApp con respaldo manual ante bloqueos de Meta.
+
+Instrucción explícita: NO TOCAR PAGOS-FASE-B-2. 0 OKs nuevos en BLOQUEOS posteriores a `3f7b023` (commit pasada 39).
+
+### archivist PRE-CHANGE (manual)
+
+Touch-list expandido del SPRINT-WA-STRIPUNDEFINED:
+- NUEVO `docs/postmortems/2026-05-22-stripundefineddeep-mangle-fieldvalue.md`
+- NUEVO `scripts/invariantes/check-helpers-limpieza-recursiva-firestore.ts`
+- `scripts/invariantes/run-all.ts` (registrar cazador)
+- `docs/PATRONES_REGRESION.md` (entrada P-020)
+- NUEVO `scripts/backfill-convs-corruptas-stripundefined.ts`
+
+Hallazgos pre-change:
+- Bug original commit `142d4da` (SPRINT-WA-1, 2026-05-19) introdujo `stripUndefinedDeep`. Fix `0baf8b7` (2026-05-22, 13 líneas) agregó guard `Object.getPrototypeOf`.
+- Postmortems previos: `2026-05-19-wa-1-webhook-fieldvalue-import.md` (mismo archivo `webhook.ts`, otra clase de bug — imports cross-archivo no tipechequeados). Comparte la acción preventiva pendiente "tsconfig extendido a `api/`".
+- Postmortems del módulo WhatsApp: P-016, P-017, P-018, P-019 ya catalogados. P-020 es la 5ª clase del módulo (silent data corruption por helper de limpieza).
+- Convención de cazadores: ya hay 17 activos (P-001..P-007, P-009..P-019). Próximo libre: P-020.
+- Próximo libre en `PATRONES_REGRESION.md`: confirmado P-020.
+- Helpers similares en el repo: `src/utils/firestore.ts::stripUndefined` (frontend, ya tiene checks `instanceof Date && Timestamp` — safe), `src/services/ordenes.service.ts::stripUndefinedShallow` (no es recursivo — safe por diseño), `scripts/importar-clientes-calendar.ts::stripUndefined` (script one-shot, no escribe FieldValue).
+
+### Builder (coordinator inline)
+
+#### Artefacto 1 — postmortem
+
+Creado `docs/postmortems/2026-05-22-stripundefineddeep-mangle-fieldvalue.md` siguiendo `_TEMPLATE.md`:
+- Resumen ejecutivo de 1 frase.
+- Timeline 2026-05-19 push → 2026-05-22 fix.
+- Impacto: módulo WhatsApp Inbox cosmético; 3 convs `5618096402`/`8292733505`/`8494580318` con shape corrupto.
+- 5 porqués hasta causa raíz "silent data corruption sin cazador determinístico".
+- 4 acciones preventivas: (a) cazador P-020 ✓, (b) entrada P-020 ✓, (c) backfill ✓, (d) tsconfig extendido — heredada pendiente.
+- Métricas: 3 días detección, MTTR ~horas, clase nueva → propuesta P-020.
+- Lecciones aprendidas: silent data corruption es peor que crashes; el conocimiento debe vivir en código.
+
+#### Artefacto 2 — cazador P-020
+
+Creado `scripts/invariantes/check-helpers-limpieza-recursiva-firestore.ts`:
+- Walk de `api/` + `src/services/`, skip `node_modules`/`dist`/`.d.ts`/`.test.ts`.
+- Filtro por archivos que importan `firebase-admin`/`firebase/firestore` O viven en `api/_lib/` (el bug original estaba en `whatsappWebhook.ts` que es módulo puro pero usado por callers que SÍ escriben FieldValue).
+- Regex captura declaraciones: `function NAME(`, `const NAME = (`, `export function`, `export const`, con soporte de generics `<T>`.
+- Balanceo de llaves desde primer `{` post-firma extrae cuerpo de la función.
+- Heurística "limpieza recursiva": cuerpo contiene `Object.entries`/`Object.keys` Y se auto-referencia.
+- 3 señales válidas (al menos una): (a) `Object.getPrototypeOf` + `Object.prototype`/null, (b) `instanceof Date && Timestamp`, (c) tag allowlist `// @safe-recursive-strip: <razón>` en línea decl o hasta 5 líneas arriba.
+- Allowlist por archivo vacía con política "refactorear si >5".
+- Output: `pass` si todos los candidatos cumplen, `fail` con hit por candidato sin señal.
+
+Test del cazador post-creación:
+- Detecta `stripUndefinedDeep` (post-fix `0baf8b7`) → PASS por guard `Object.getPrototypeOf`. ✓
+- Detecta `serializarTimestamps` (`api/_lib/iaTools.ts:547`) → FAIL inicialmente (sin señal). **Hallazgo lateral**: helper read-only legítimo. Resolución según política CLAUDE.md: agregar tag allowlist + razón documentada en código (5 líneas de comentario), NO fix silencioso. Post-tag → PASS. ✓
+- Verificación de cobertura: si se revirtiera `0baf8b7`, el cazador habría hecho FAIL en `stripUndefinedDeep` (probado mentalmente — el guard es la única señal del helper). ✓
+
+#### Artefacto 3 — backfill
+
+Creado `scripts/backfill-convs-corruptas-stripundefined.ts`:
+- One-shot idempotente para 3 convs hard-codeadas (`5618096402`, `8292733505`, `8494580318`).
+- Lee `whatsapp_mensajes_inbox`/`outbox` con `where('conversacionId', '==', wa_id)`.
+- Reconstruye desde `timestampMeta` (Timestamp plano, no afectado por el bug): `totalMensajes*` (counts), `primeraInteraccion`/`ultimaActividad`/`updatedAt` (min/max), `ultimoMensajeEntrante`/`ultimoMensajeSaliente`, `ventana24h.cierraEn` (último entrante + 24h).
+- Escribe con `set(..., {merge:true})` sin FieldValue (no requiere el guard).
+- Flag `--dry-run` muestra diff.
+- Preserva `noLeidos` si es number plain válido; sino resetea al count entrantes (heurística conservadora).
+- Auth tri-mode estándar del repo.
+
+#### Hallazgo lateral documentado
+
+`api/_lib/iaTools.ts::serializarTimestamps` línea 552:
+- Detectado por P-020 inicial (sin tag) — pre-existente, no introducido por este sprint.
+- Análisis: read-only (output de IA tools, convierte docs Firestore leídos a JSON estable). NUNCA recibe FieldValue (sentinels solo viven en payloads de escritura).
+- Maneja `Date` (línea 549) y `Timestamp` via `toDate()` (línea 553) preservándolos como ISO strings.
+- Aplica Señal 3 del cazador: tag `// @safe-recursive-strip` con razón documentada (5 líneas de comentario explicando que es read-only y advirtiendo a futuros devs que si lo reusan para WRITE deben agregar guard).
+- NO fix más allá del tag — sub-regla CLAUDE.md "Hallazgos laterales: documentar como deuda, NO fixear silenciosamente".
+
+### Tester
+
+- Typecheck: PASS.
+- Cazadores 18/18 PASS (P-020 nuevo verde; sube de 17 a 18 cazadores activos).
+- Lint clean en archivos no-ignored. `iaTools.ts` está en `.eslintignore` por estar en `api/` (esperado, no es regresión).
+
+### Reviewer (autoaudit del coordinator)
+
+- Postmortem cubre los 9 puntos del template (timeline, impacto, 5 porqués, lo que funcionó/falló, acciones, métricas, lecciones, referencias).
+- Cazador P-020 sigue el patrón de los otros 17 (header con bug original, sub-regla CLAUDE.md, hash + fecha, allowlist política, limitaciones conocidas).
+- Backfill idempotente, dry-run flag, auth tri-mode estándar.
+- Hallazgo lateral documentado sin fix silencioso.
+- Sin regresión en archivos críticos.
+- Sub-regla "sprint hotfix requiere postmortem antes de COMPLETADO" cumplida.
+
+### Commit + push
+
+- Hash: `ad90de4`.
+- Files changed: 7 (3 nuevos + 4 modificados).
+- 871 insertions, 1 deletion.
+- Pre-commit hook PASS: typecheck + 18/18 cazadores + lint staged.
+- Push a `main`: `0baf8b7..ad90de4`.
+
+### Sprint 2 — SPRINT-WA-NUMERO-RESPALDO-MANUAL escalado
+
+**Motivo:** Toca `firestore.rules` (rule nueva para `config/whatsapp_envio` + `config/whatsapp_numeros`) Y `api/whatsapp/send.ts` (endpoint público de envíos, con costo). Sub-regla CLAUDE.md exige OK formal con shape `OK: jorge YYYY-MM-DD HH:MM ...` antes de ambos.
+
+Cowork escribió que Jorge "aprobó la dirección general" (manual + admin + Configuración), pero falta:
+- Confirmar scope: ¿Fase 1 sola (los 2 números del WABA actual) o esperar Fase 2 (2º WABA con token aparte)?
+- Autorizar deploy de rules (auto vs manual).
+
+Escalado a `BLOQUEOS.md` con 4 opciones (A: Fase 1 + auto-deploy / B: Fase 1 + manual / C: esperar Fase 2 / D: rechazar) + touch-list previsto.
+
+### Estado del sistema post-pasada 40
+
+- Pasadas día: 36 (procesa bloqueos), 37 (trabaja), 38 (trabaja), 39 (NO-OP), 40 (trabaja).
+- Cazadores activos: 18 (sube de 17 con P-020).
+- Postmortems: 11 total (sube de 10).
+- Bloqueos abiertos: +1 nuevo (SPRINT-WA-NUMERO-RESPALDO-MANUAL).
+
+### Tiempo
+
+~25 minutos coordinator (archivist PRE-CHANGE manual + 7 archivos creados/modificados + autoreviewer + commit + push + escalado WA-NUMERO + diario + EJECUCION).
+
+### Próximos pasos para Jorge
+
+1. **Decisión sobre SPRINT-WA-NUMERO-RESPALDO-MANUAL** — elegir opción A/B/C/D en `docs/sprints/BLOQUEOS.md` y pegar `procesa bloqueos`.
+2. **Opcional:** `npx tsx scripts/backfill-convs-corruptas-stripundefined.ts --dry-run` (luego sin flag) si quiere sanear las 3 convs cosméticamente. NO es urgente.
+3. Heredados: `npm run deploy:storage-rules` (SPRINT-138) + QA INBOX-11/INBOX-10/INBOX-8c en producción + QA PAGOS-FASE-B-1.
+
+---
+
 ## 2026-05-22 — autónomo (`trabaja`, pasada 39): NO-OP — cola limpia, sin OKs nuevos
 
 ### Contexto
