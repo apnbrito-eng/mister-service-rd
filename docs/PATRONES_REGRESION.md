@@ -450,6 +450,24 @@ Si la allowlist crece >10 entradas o aparece una página NO-admin con tag, refac
 
 ---
 
+## P-013 — `storage.rules` modificado pero no deployado a producción
+
+**Bug original:** patrón establecido proactivamente en SPRINT-138 (commit pendiente al crear el cazador — se commitea junto, 2026-05-22). Patrón espejo de P-005 (firestore.rules), motivado por el antiprecedente SPRINT-103/106 (2026-05-06/07) donde el feature "Iniciar chequeo Aury" se pusheó con rules de Firestore actualizadas pero sin ejecutar `npm run deploy:rules` — las rules activas siguieron la versión vieja y los técnicos recibieron `permission-denied` silencioso por ~24h. Antes de SPRINT-138, `storage.rules` ni siquiera existía versionado en el repo; al crearlo, el riesgo de la misma clase de bug aplica análogamente a Storage.
+
+**Síntoma:** código en producción intenta leer/escribir un path cubierto por las rules NUEVAS, pero las rules ACTIVAS en Firebase Console son la versión anterior. Resultado: `storage/unauthorized` silencioso (no diff visible en repo vs lo que Firebase está aplicando). NO hay error en build/deploy de Vercel — el frontend ya está pusheado y "funciona" salvo cuando toca el path no gateado.
+
+**Causa raíz:** `git push` no triggerea deploy de rules. Vercel deploy del frontend SÍ se dispara automático por GitHub webhook. Las rules de Storage requieren `firebase deploy --only storage:rules` ejecutado a mano por el coordinator/Jorge. Si nadie lo ejecuta, hay desincronía silenciosa.
+
+**Regla:** sprints que tocan `storage.rules` deben ejecutar `npm run deploy:storage-rules` ANTES de marcar COMPLETADO. El script compuesto corre `firebase deploy --only storage:rules` + actualiza `storage.rules.deployed.lock`. Sin esto, el código nuevo en producción puede chocar con rules viejas y romper flujos silenciosamente. Patrón espejo de la sub-regla CLAUDE.md para P-005.
+
+**Cazador:** `scripts/invariantes/check-storage-rules-pendientes-deploy.ts`. Estrategia: calcular SHA-256 de `storage.rules` actual, compararlo contra el hash registrado en `storage.rules.deployed.lock` (escrito por `marcar-storage-rules-deployadas.ts`). Si difieren → FAIL. Si el lock no existe → WARN (cold start, primer setup). Si `storage.rules` no existe → PASS (N/A para repos que no versionan rules de Storage).
+
+**Allowlist:** NO HAY. Si el cazador grita y el commit no toca `storage.rules`, alguien hizo deploy fuera de banda y olvidó actualizar el lock — ejecutar `npx tsx scripts/invariantes/marcar-storage-rules-deployadas.ts` para sincronizar.
+
+**Bypass de emergencia (NO recomendado):** `git commit --no-verify` deja deuda.
+
+---
+
 ## P-014 — `addDoc`/`setDoc` a `clientes` sin guard por `telefonoNormalizado`
 
 **Bug original:** SPRINT-185 (commit pendiente al crear el cazador — se commitea junto). Detección: QA puntual sidepanel 2026-05-18 sobre SPRINT-178 reveló que el descuento de chequeo previo NO aplicaba para OS-0058/OS-0059 del cliente "QA Test" porque las dos órdenes apuntaban a `clienteId` distintos del mismo cliente físico (typeahead mostraba 2 entradas idénticas con mismo tel `8090000000`).

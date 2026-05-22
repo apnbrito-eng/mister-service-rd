@@ -1,0 +1,66 @@
+rules_version = '2';
+
+// Storage rules — Mister Service RD
+//
+// Source of truth versionada del repo. NO editar desde Firebase Console —
+// siempre commitearlo acá primero, hacer PR, y deployar con
+// `npm run deploy:storage-rules` (corre `firebase deploy --only storage:rules`
+// + actualiza `storage.rules.deployed.lock` para que el cazador P-013 bloquee
+// pre-commit si hay diff entre repo y producción).
+//
+// Patrón espejo de `firestore.rules` (sub-regla CLAUDE.md, P-005).
+//
+// SPRINT-138 (2026-05-22) — Jorge dio OK con REGLA DE ORO: versionar el
+// baseline EXACTAMENTE como está en consola hoy + agregar SOLO el match
+// nuevo `whatsapp-media/**`. NO endurecer el comodín `{allPaths=**}` —
+// ese comodín es lo que hace funcionar hoy las fotos de cierre y las
+// firmas de cliente. Endurecerlo es deuda para un sprint de seguridad
+// aparte con QA exhaustivo de cada path.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Fotos de ponche (técnicos marcan entrada/salida del día con selfie).
+    // Path: `fotos-ponche/{uid}/{archivo}`. Solo el propio técnico escribe.
+    match /fotos-ponche/{uid}/{fileName} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 5 * 1024 * 1024;
+      allow delete: if false;
+    }
+
+    // Fotos de equipos subidas desde el formulario público de agendar
+    // (sin auth). Limitado por content-type + size. Lectura solo staff
+    // autenticado.
+    // Path: `fotos-equipos-publico/{citaId}/{archivo}`.
+    match /fotos-equipos-publico/{citaId}/{fileName} {
+      allow write: if request.resource.contentType.matches('image/.*')
+                   && request.resource.size < 5 * 1024 * 1024;
+      allow read: if request.auth != null;
+      allow delete: if false;
+    }
+
+    // Media de WhatsApp (imágenes que llegan al inbox y se persisten en
+    // Storage vía endpoint server-side `api/whatsapp/media-proxy.ts`).
+    // Path: `whatsapp-media/{wa_id}/{archivo}`. La subida real la hace el
+    // endpoint con Admin SDK (que ignora rules); este match cubre lecturas
+    // desde el inbox + defensa por si algún día el cliente sube directo.
+    // SPRINT-138 + SPRINT-INBOX-9-FOTOS-CHAT-ORDEN (2026-05-22).
+    match /whatsapp-media/{waId}/{archivo} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null
+                   && request.resource.contentType.matches('image/.*')
+                   && request.resource.size < 16 * 1024 * 1024;
+    }
+
+    // Comodín — fotos de cierre, firmas de cliente, todo lo demás que la app
+    // sube hoy. PERMISIVO por diseño en este sprint (preservar comportamiento
+    // actual de producción). Endurecerlo a paths explícitos es deuda futura
+    // (audit forense 2026-05-11 — hallazgo CRÍTICO #5 ya identificado).
+    // NO removerlo ni endurecerlo en este sprint — rompería subidas existentes.
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

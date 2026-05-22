@@ -23,6 +23,7 @@ import { check as checkRulesImmutability } from './check-rules-immutability.js';
 import { check as checkCrossCollectionTx } from './check-cross-collection-tx.js';
 import { check as checkAltaEmpleadoDobleDoc } from './check-alta-empleado-doble-doc.js';
 import { check as checkRulesPendientesDeploy } from './check-rules-pendientes-deploy.js';
+import { check as checkStorageRulesPendientesDeploy } from './check-storage-rules-pendientes-deploy.js';
 import { check as checkTecnicoidPersonalIdMisuse } from './check-tecnicoid-personal-id-misuse.js';
 import { check as checkCrearnotificacionUseridShape } from './check-crearnotificacion-userid-shape.js';
 import { check as checkParserCamposFaltantes } from './check-parser-campos-faltantes.js';
@@ -51,6 +52,7 @@ async function main() {
     checkCrossCollectionTx,
     checkAltaEmpleadoDobleDoc,
     checkRulesPendientesDeploy,
+    checkStorageRulesPendientesDeploy,
     checkTecnicoidPersonalIdMisuse,
     checkCrearnotificacionUseridShape,
     checkParserCamposFaltantes,
