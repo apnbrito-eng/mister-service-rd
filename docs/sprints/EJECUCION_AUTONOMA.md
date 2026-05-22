@@ -5,6 +5,64 @@
 
 ---
 
+## 2026-05-22 — autónomo (`trabaja`, pasada 37): SPRINT-INBOX-8c + SPRINT-INBOX-10, 2 sprints completados
+
+### Contexto
+
+Jorge pegó `trabaja` con orden estricto: procesar primero SPRINT-INBOX-8c (fix drawer tapa chat — prerequisito de INBOX-10), luego SPRINT-INBOX-10 (cliente 360 en el panel del inbox). Notas explícitas: reusar máximo (CardCliente, TimelineUnificadoOrden, EnviarFacturacionButton, obtenerOrdenesActivasPorTelefono, resolverPropuestaReprogramacion, consulta facturas patrón Clientes.tsx:143). Reviewer obligatorio aunque no toque rules. NO bundling de commits.
+
+### Sprints procesados
+
+| Sprint | Estado | Commit | Archivos | Tiempo |
+|---|---|---|---|---|
+| SPRINT-INBOX-8c-FIX-DRAWER-TAPA-CHAT | COMPLETADO | `65522c5` | `src/pages/InboxConversacion.tsx` | ~10min |
+| SPRINT-INBOX-10-CLIENTE-360 | COMPLETADO | `a4b3873` | NUEVO `src/components/inbox/PanelCliente360.tsx`, `src/services/ordenes.service.ts`, `src/pages/InboxConversacion.tsx` | ~28min |
+
+### Archivist PRE-CHANGE
+
+**SPRINT-INBOX-8c:**
+- Touch-list: `InboxConversacion.tsx`, `OrdenCreateModal.tsx` (auditar — solo lectura).
+- Historial: `InboxConversacion.tsx` ya tocado en 4 sprints en 3 días (INBOX-5, INBOX-8, INBOX-8b, INBOX-9). Archivo crítico. SPRINT-INBOX-8b commit `50688a1` introdujo el bug: drawer `fixed right-0 md:w-[60%] lg:w-[55%] xl:w-[50%]` flotando z-40 → a 1280px el chat queda con ~50px usables (col1 320 + col2 256 + drawer 768 = 1344 > 1280, chat tapado).
+- Postmortems aplicables: `2026-05-15-orden-asignada-regresion-sprint-163-no-commit.md` (UX cambios pueden romper flujos en producción si no se QA varios anchos).
+- Recordatorios: NO tocar `presentationMode='modal'` default (Ordenes/Citas/OrdenEditForm dependen). Reviewer obligatorio.
+
+**SPRINT-INBOX-10:**
+- Touch-list expandido (sub-regla CLAUDE.md): NUEVO `PanelCliente360.tsx`, MODIFICADO `InboxConversacion.tsx`, `ordenes.service.ts` (NUEVO helper). Consumidores READ-ONLY verificados: `CardCliente` único consumidor InboxConversacion (grep -rn confirmó), `TimelineUnificadoOrden` ya consumido por OrdenDetalle + OrdenDetailModal, `EnviarFacturacionButton` ya consumido por OrdenDetailModal + OrdenDetalle + AgendaDia + FacturacionPendiente.
+- Postmortems aplicables: `2026-05-18-banner-descuento-query-orderby-mal-escrita.md` → P-015 activo. NO usar orderBy en query del nuevo helper. `2026-05-15-orden-asignada-regresion-sprint-163-no-commit.md` → reviewer obligatorio.
+- Recordatorios: el campo `garantia` vive en `Factura.garantia: GarantiaInfo`, NO en `OrdenServicio` (en OrdenServicio es `garantiaVencimiento: Date`). Para listar garantías del cliente uso facturas. Panel angosto (lg:w-64) NO da para todo → ensancho a w-72 xl:w-80 + tabs internos para no apretar.
+
+### Reviewer (yo en rol coordinator — no hay Task subagents)
+
+**SPRINT-INBOX-8c — APPROVED:**
+- Layout: col1 (`hidden md:flex`) y col2 (`hidden lg:flex`) ahora condicional sobre `showCreateModal` (oculto cuando true). Main recibe `pr-[60%/55%/50%]` matcheando EXACTAMENTE los widths del drawer.
+- Sin regresión Ordenes/Citas: `OrdenCreateModal.tsx` NO se tocó, default `presentationMode='modal'` idéntico.
+- Mobile (<md): drawer `w-full` cubre todo, comportamiento esperado (no hay UX 2-cols en 375px).
+- Edge case showCreateModal=false: las clases vuelven a ser exactamente las originales (`hidden md:flex` y `hidden lg:flex`).
+- Cazadores 17/17 PASS (P-013 WARN cold start).
+
+**SPRINT-INBOX-10 — APPROVED:**
+- Reusa correctamente: CardCliente en tab Datos sin cambio de API; TimelineUnificadoOrden en tab Historial con variant='modal'; EnviarFacturacionButton dentro de ItemOrden con stopPropagation para no navegar al clickear; obtenerOrdenesActivasPorTelefono no se toca (helper paralelo nuevo).
+- Helper nuevo `obtenerTodasOrdenesPorTelefono`: búsqueda dual (telNorm + raw) sin orderBy en query → P-015 PASS. Filtra `eliminada === true`. Sort client-side por createdAt desc.
+- Facturas: where('clienteId', '==', cliente.id) sort client-side por fechaEmision desc — patrón Clientes.tsx:143 exactamente. Sin índice compuesto.
+- Lazy load de facturas: solo se carga al entrar a tabs `facturas | historial | garantias`. La carga global (cliente + ordenes) es eager.
+- Defense-in-depth: EnviarFacturacionButton gateado internamente por tienePago && !facturada (sin cambios). PanelCliente360 no escribe directamente — todas las acciones delegan a componentes que ya tienen sus guards.
+- Sin regresión refresh key: `key={`${wa_id}-${refreshOrdenesCardKey}`}` propaga a PanelCliente360, que a su vez re-monta CardCliente.
+- Doble onSnapshot al mismo wa_id (deuda documentada): InboxConversacion (chat) + TimelineUnificadoOrden (historial orden) suscriben al mismo `suscribirMensajes(wa_id)`. No es regresión — son los mismos mensajes y solo lectura. Follow-up tentativo: SPRINT-INBOX-11-DEDUP-WA-LISTENERS.
+- Cazadores 17/17 PASS (P-013 WARN cold start). Typecheck PASS. Lint clean.
+
+### Estado del sistema post-pasada 37
+
+- 2 sprints procesados completos en una pasada. Commits + push individuales por sprint (no bundling — Jorge lo pidió explícito).
+- PAGOS-FASE-B-2 sigue esperando QA Jorge de B.1 (no se tocó).
+- Storage.rules deploy productivo manual de Jorge sigue pendiente (SPRINT-138 desde pasada 36).
+- Bloque nocturno 2026-05-21 sigue pendiente smoke en producción tras deploy Vercel.
+
+### Tiempo
+
+~38 minutos de coordinator. 2 sprints. PRE-CHANGE archivist manual + reviewer manual + commit + push por cada uno.
+
+---
+
 ## 2026-05-21 noche — autónomo (`trabaja`, pasada 35): BLOQUE NOCTURNO, 3 sprints + 1 escalado
 
 ### Contexto
