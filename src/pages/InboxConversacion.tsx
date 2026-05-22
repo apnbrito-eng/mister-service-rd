@@ -372,8 +372,13 @@ export default function InboxConversacion() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
       <div className="flex flex-1 min-h-0">
-        {/* COL 1 — lista de conversaciones (hidden <md, w-72 md:w-80) */}
-        <aside className="hidden md:flex flex-col w-72 lg:w-80 border-r border-gray-200 bg-white">
+        {/* COL 1 — lista de conversaciones (hidden <md, w-72 md:w-80).
+            SPRINT-INBOX-8c (2026-05-22): se OCULTA cuando el drawer de crear
+            orden está abierto, para que el chat (Col 3) tenga ancho real
+            disponible y no quede tapado por el drawer. A 1280px típico de
+            laptop: sin esto el chat queda con ~50px aprovechables. Con esto,
+            el chat ocupa ~45% (≈575px) y el drawer ~55% (≈700px). */}
+        <aside className={`${showCreateModal ? 'hidden' : 'hidden md:flex'} flex-col w-72 lg:w-80 border-r border-gray-200 bg-white`}>
           <div className="p-3 border-b border-gray-200 flex items-center gap-2">
             <button
               type="button"
@@ -441,8 +446,13 @@ export default function InboxConversacion() {
           </ul>
         </aside>
 
-        {/* COL 2 — info cliente (placeholder, INBOX-5 lo amplía con órdenes) */}
-        <aside className="hidden lg:flex flex-col w-64 border-r border-gray-200 bg-white">
+        {/* COL 2 — info cliente (placeholder, INBOX-5 lo amplía con órdenes).
+            SPRINT-INBOX-8c (2026-05-22): se OCULTA cuando el drawer está
+            abierto. La razón: el drawer es el centro de la acción cuando
+            está abierto; el operario necesita ver chat+drawer lado a lado.
+            Los datos del cliente (CardCliente) ya viajaron al form vía el
+            prefill al momento de abrir, así que no se pierde info accionable. */}
+        <aside className={`${showCreateModal ? 'hidden' : 'hidden lg:flex'} flex-col w-64 border-r border-gray-200 bg-white`}>
           <div className="p-4">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Contacto
@@ -524,8 +534,20 @@ export default function InboxConversacion() {
           </div>
         </aside>
 
-        {/* COL 3 — timeline + composer */}
-        <main className="flex-1 flex flex-col min-w-0 bg-gray-50">
+        {/* COL 3 — timeline + composer.
+            SPRINT-INBOX-8c (2026-05-22): cuando el drawer está abierto,
+            reservamos espacio a la derecha con padding-right igual al ancho
+            del drawer (md:60% / lg:55% / xl:50%). Sin esto, el main se
+            estiraba al 100% del viewport y el drawer fixed-right lo tapaba.
+            El padding desplaza visualmente el contenido del chat hacia la
+            izquierda para que coexista con el drawer sin solapamiento. */}
+        <main
+          className={`flex-1 flex flex-col min-w-0 bg-gray-50 transition-[padding] duration-150 ${
+            showCreateModal
+              ? 'md:pr-[60%] lg:pr-[55%] xl:pr-[50%]'
+              : ''
+          }`}
+        >
           {/* Header */}
           <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
