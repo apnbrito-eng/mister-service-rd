@@ -5,6 +5,72 @@
 
 ---
 
+## 2026-05-22 — autónomo (`trabaja`, pasada 38): SPRINT-INBOX-11-FIX-FICHA-Y-DRAWER
+
+### Contexto
+
+Jorge pegó `trabaja` tras probar en producción los deploys de pasadas 36+37 y cazar 2 bugs UX. Cowork ya había escrito el sprint `SPRINT-INBOX-11-FIX-FICHA-Y-DRAWER` al tope de la cola con causa raíz verificada de ambos bugs y approach robusto para BUG 2 (drawer en flujo como columna flex izquierda, NO `fixed`-right + padding hack).
+
+Verificación de BLOQUEOS posteriores al commit `2c87b0e`: 0 OKs nuevos. Solo 1 sprint procesable. Restricciones del sprint: frontend puro, sin rules/endpoint/migración → autónomo limpio.
+
+### archivist PRE-CHANGE (integrado por coordinator)
+
+Touch-list (3 archivos):
+- `src/pages/Clientes.tsx` — sin postmortems recientes. Riesgo bajo (solo agregar read de query param + effect con guard).
+- `src/components/ordenes/OrdenCreateModal.tsx` — componente shared con 5 callers. Cambio reciente `50688a1` introdujo `presentationMode`. **Reviewer obligatorio** con foco en rama default `'modal'` (no debe cambiar).
+- `src/pages/InboxConversacion.tsx` — INBOX-8c hash `65522c5` introdujo el padding hack a remover. Preservar oculta col1/col2 cuando `showCreateModal===true`. P-013 storage cold start WARN esperado (no es regresión del sprint).
+
+Recordatorios: cazadores 17/17 PASS (P-013 WARN aceptable), no tocar rules, QA manual del flujo crear orden desde /admin/ordenes + /admin/citas.
+
+### Sprints procesados
+
+| Sprint | Estado | Commit | Archivos | Tiempo |
+|---|---|---|---|---|
+| SPRINT-INBOX-11-FIX-FICHA-Y-DRAWER | COMPLETADO | `c8b81d5` | `src/pages/Clientes.tsx`, `src/components/ordenes/OrdenCreateModal.tsx`, `src/pages/InboxConversacion.tsx` | ~12min |
+
+### Detalle (SPRINT-INBOX-11 — commit `c8b81d5`)
+
+**BUG 1 — `Clientes.tsx` ahora abre el cliente específico al deep-linkear con `?id=`:**
+- Agregado `useSearchParams` al import de `react-router-dom`.
+- Effect nuevo que lee `searchParams.get('id')` cuando `clientes.length > 0`. Match → `setSelectedCliente(match)`. Guard `idAbiertoRef` impide re-disparar.
+- Si el id no existe (soft-deleted, typo), limpia el param con `setSearchParams(..., { replace: true })` para no quedar en loop.
+
+**BUG 2 — drawer ya no tapa el chat, abre a la IZQUIERDA en flujo:**
+- `OrdenCreateModal.tsx` rama `'drawer'`: quitado `fixed top-0 right-0 w-full md:w-[60%] lg:w-[55%] xl:w-[50%]`. Ahora `h-full w-full bg-white shadow-2xl border-r border-gray-200 flex flex-col`. Ancho/lado los controla el padre.
+- `InboxConversacion.tsx`: cuando `showCreateModal===true`, `<OrdenCreateModal>` se monta DENTRO del contenedor flex como PRIMERA columna con `w-1/2 lg:w-[55%] xl:w-[50%]`. `<main>` (chat) queda hermana derecha `flex-1`. Cero solapamiento a cualquier ancho.
+- QUITADO el hack `pr-[60%/55%/50%]` del `<main>`. Eliminado el bloque viejo `<OrdenCreateModal>` afuera del contenedor flex.
+- Col 1 (lista convs) y Col 2 (PanelCliente360) siguen ocultas cuando `showCreateModal===true` (preservado de INBOX-8c).
+
+Default `presentationMode='modal'` preservado → Ordenes/Citas/OrdenEditForm/FormularioAgendarPublico SIN regresión (grep confirma único caller drawer: `InboxConversacion.tsx:417`).
+
+### Reviewer inline (integrado por coordinator)
+
+- Grep `presentationMode` en `src/`: 5 matches, 1 caller drawer. SIN regresión en otros callers.
+- Rama `return <Modal />` no tocada. Default `'modal'` intacto.
+- Guard `idAbiertoRef` no rompe flujo de click manual.
+- `replace: true` en limpieza de id inválido evita pollute del history.
+- APPROVED.
+
+### Tester
+
+- `npx tsc --noEmit`: PASS (no output).
+- `npm run check:regression`: 17/17 PASS (P-013 WARN cold start, sigue del SPRINT-138 pendiente `npm run deploy:storage-rules` por Jorge).
+- Lint `eslint` sobre los 3 archivos: clean.
+- Pre-commit hook: PASS.
+
+### Bloqueos abiertos
+
+- 0 nuevos creados en pasada 38.
+- Persisten: SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2 (QA Jorge B-1), SPRINT-WA-RULES y descendientes (decisiones de negocio), SPRINT-138 deploy de storage.rules pendiente de Jorge.
+
+### Próximos pasos para Jorge
+
+- Probar "Ver ficha del cliente" desde el panel del inbox → abre el cliente específico (no el listado).
+- Probar "Crear orden" en el inbox → form aparece a la IZQUIERDA, chat a la derecha siempre visible (1280/1440/1720).
+- Confirmar deploy Vercel Ready del commit `c8b81d5`.
+
+---
+
 ## 2026-05-22 — autónomo (`trabaja`, pasada 37): SPRINT-INBOX-8c + SPRINT-INBOX-10, 2 sprints completados
 
 ### Contexto
