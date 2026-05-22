@@ -3,6 +3,7 @@ import { initializeApp, getApps, cert, type App } from 'firebase-admin/app';
 import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth, type Auth } from 'firebase-admin/auth';
 import { getFirestore, FieldValue, type Firestore } from 'firebase-admin/firestore';
+import { getStorage, type Storage } from 'firebase-admin/storage';
 
 let adminApp: App | null = null;
 
@@ -35,6 +36,12 @@ export function getAdminApp(): App {
   // Reemplazar \n literales por saltos reales (formato estándar para envs)
   const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
 
+  // SPRINT-INBOX-9 (2026-05-22): storageBucket opcional. Si no está seteado,
+  // los endpoints que usan `getAdminStorage()` deben pasar el bucket explícito.
+  // Convención: `{projectId}.firebasestorage.app` (default de Firebase).
+  const storageBucket =
+    process.env.FIREBASE_STORAGE_BUCKET ?? `${projectId}.firebasestorage.app`;
+
   adminApp = initializeApp({
     credential: cert({
       projectId,
@@ -42,6 +49,7 @@ export function getAdminApp(): App {
       privateKey,
     }),
     projectId,
+    storageBucket,
   });
 
   return adminApp;
@@ -53,6 +61,22 @@ export function getAdminAuth(): Auth {
 
 export function getAdminFirestore(): Firestore {
   return getFirestore(getAdminApp());
+}
+
+/**
+ * Storage Admin SDK — ignora rules de Storage (escribe/lee con privilegios
+ * service-account). Usar SOLO en endpoints server-side con auth validada
+ * upstream (verifyIdToken + check de rol).
+ *
+ * Bucket por defecto: el del proyecto activo. Si el código necesita un
+ * bucket específico, pasarlo a `.bucket('nombre.firebasestorage.app')`.
+ *
+ * Introducido en SPRINT-INBOX-9-FOTOS-CHAT-ORDEN (2026-05-22) para el
+ * endpoint `api/whatsapp/media-proxy.ts` que descarga media de Meta y la
+ * persiste en `whatsapp-media/{wa_id}/{wamid}.{ext}`.
+ */
+export function getAdminStorage(): Storage {
+  return getStorage(getAdminApp());
 }
 
 export interface VerificarAppCheckResult {

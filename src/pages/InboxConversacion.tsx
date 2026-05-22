@@ -184,6 +184,58 @@ export default function InboxConversacion() {
       }
     : undefined;
 
+  // SPRINT-INBOX-9 (2026-05-22): callback que pasamos a MensajeBubble para
+  // mensajes tipo image entrantes. POST a `/api/whatsapp/media-proxy` con
+  // el wamid; el endpoint descarga de Meta + persiste en Firebase Storage
+  // (path `whatsapp-media/{wa_id}/{wamid}.{ext}`) + retorna URL firmada
+  // 7 días. La URL se vuelca al campo `fotoEquipoUrl` del form.
+  //
+  // Idempotencia: el endpoint detecta si el archivo ya existe y reutiliza
+  // (responde `reused: true`); siempre regenera la URL firmada.
+  //
+  // Prerequisito storage.rules: SPRINT-138 deployado (path `whatsapp-media/`
+  // gateado). Si Jorge aún no corrió `npm run deploy:storage-rules`, el
+  // endpoint funciona (Admin SDK ignora rules) pero la URL pública puede
+  // fallar lecturas client-side hasta el deploy.
+  const handleAdjuntarFotoAOrden = showCreateModal && waId
+    ? async (wamid: string) => {
+        if (!currentUser) {
+          toast.error('Sesión expirada — recargá la página');
+          return;
+        }
+        try {
+          const idToken = await currentUser.getIdToken();
+          const resp = await fetch('/api/whatsapp/media-proxy', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({ wamid, wa_id: waId }),
+          });
+          if (!resp.ok) {
+            const body = (await resp.json().catch(() => ({}))) as { error?: string };
+            toast.error(`No se pudo adjuntar la foto (${body.error ?? resp.status})`);
+            return;
+          }
+          const data = (await resp.json()) as { urlImagen?: string };
+          if (!data.urlImagen) {
+            toast.error('La respuesta del proxy no incluye URL');
+            return;
+          }
+          createForm.setForm((f) => ({ ...f, fotoEquipoUrl: data.urlImagen as string }));
+          toast.success(
+            createForm.form.fotoEquipoUrl
+              ? 'Foto adjuntada (reemplazó la anterior)'
+              : 'Foto adjuntada a la orden',
+          );
+        } catch (err) {
+          console.error('[inbox/media-proxy] error:', err);
+          toast.error('Error de red al adjuntar la foto');
+        }
+      }
+    : undefined;
+
   // Lista de conversaciones (col 1).
   useEffect(() => {
     const unsub = suscribirConversaciones(setConversaciones);
@@ -523,6 +575,7 @@ export default function InboxConversacion() {
                   mensaje={m}
                   onCopiarAOrden={handleCopiarAOrden}
                   onUsarUbicacion={handleUsarUbicacion}
+                  onAdjuntarAOrden={handleAdjuntarFotoAOrden}
                 />
               ))
             )}

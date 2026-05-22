@@ -57,6 +57,14 @@ export interface CreateFormState {
   duracionMin: number;
   fechaCita: string;
   horaInicio: string;
+  /**
+   * URL de la foto del equipo. Se llena desde el botón "Adjuntar a la orden"
+   * en las burbujas de imagen del inbox (SPRINT-INBOX-9, 2026-05-22) o
+   * heredándolo de `citaPreset?.fotoEquipoUrl` al submit. Persiste como
+   * `OrdenServicio.fotoEquipoUrl` (campo opcional ya existente desde citas
+   * públicas).
+   */
+  fotoEquipoUrl?: string;
 }
 
 const FORM_INICIAL: CreateFormState = {
@@ -775,8 +783,15 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
         if (citaPreset.referenciaOrdenId) ordenData.referenciaOrdenId = citaPreset.referenciaOrdenId;
       }
 
-      // Foto del equipo capturada en el form público (si la cita la tenía)
-      if (citaPreset?.fotoEquipoUrl) ordenData.fotoEquipoUrl = citaPreset.fotoEquipoUrl;
+      // Foto del equipo: priorizar la adjuntada desde el inbox (SPRINT-INBOX-9,
+      // 2026-05-22) sobre la heredada de la cita pública. Si la operaria
+      // adjuntó una imagen del chat de WhatsApp, esa pisa la del form
+      // público (decisión: la más reciente gana).
+      if (form.fotoEquipoUrl) {
+        ordenData.fotoEquipoUrl = form.fotoEquipoUrl;
+      } else if (citaPreset?.fotoEquipoUrl) {
+        ordenData.fotoEquipoUrl = citaPreset.fotoEquipoUrl;
+      }
 
       // Metadatos de origen del lead público
       if (citaPreset) {

@@ -1,4 +1,5 @@
-import { FileText, MapPin, Mic, Image as ImageIcon, AlertTriangle, Check, CheckCheck, Clock, ClipboardCopy } from 'lucide-react';
+import { useState } from 'react';
+import { FileText, MapPin, Mic, Image as ImageIcon, AlertTriangle, Check, CheckCheck, Clock, ClipboardCopy, Paperclip, Loader2 } from 'lucide-react';
 import type { Timestamp } from 'firebase/firestore';
 import type {
   WhatsAppMensajeInbox,
@@ -41,6 +42,15 @@ interface Props {
    * viene). Solo se llama desde la burbuja `location`.
    */
   onUsarUbicacion?: (loc: { lat: number; lng: number; direccion?: string }) => void;
+  /**
+   * SPRINT-INBOX-9: cuando el mensaje es imagen entrante y el form está
+   * abierto, pasar este callback para descargar la imagen de Meta + subir
+   * a Firebase Storage + adjuntarla al campo `fotoEquipoUrl` de la orden.
+   * Recibe el wamid del mensaje (la lookup completa la hace el endpoint
+   * server-side `api/whatsapp/media-proxy.ts`). Si callback NO se provee,
+   * el botón no se renderiza.
+   */
+  onAdjuntarAOrden?: (wamid: string) => Promise<void>;
 }
 
 function toDate(t: Timestamp | Date | undefined | null): Date {
@@ -84,17 +94,29 @@ function IconoEstadoSaliente({ estado, errorMeta }: { estado: WhatsAppMensajeOut
 function RenderContenidoEntrante({
   mensaje,
   onUsarUbicacion,
+  onAdjuntarAOrden,
 }: {
   mensaje: WhatsAppMensajeInbox;
   onUsarUbicacion?: (loc: { lat: number; lng: number; direccion?: string }) => void;
+  onAdjuntarAOrden?: (wamid: string) => Promise<void>;
 }) {
   const { tipo, contenido } = mensaje;
+  const [adjuntando, setAdjuntando] = useState(false);
 
   if (tipo === 'text') {
     return <p className="text-sm whitespace-pre-wrap break-words">{contenido.texto ?? ''}</p>;
   }
 
   if (tipo === 'image') {
+    const handleAdjuntar = async () => {
+      if (!onAdjuntarAOrden || !mensaje.wamid) return;
+      setAdjuntando(true);
+      try {
+        await onAdjuntarAOrden(mensaje.wamid);
+      } finally {
+        setAdjuntando(false);
+      }
+    };
     return (
       <div className="space-y-1">
         <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -103,6 +125,18 @@ function RenderContenidoEntrante({
         </div>
         {contenido.mediaCaption && (
           <p className="text-sm whitespace-pre-wrap">{contenido.mediaCaption}</p>
+        )}
+        {onAdjuntarAOrden && contenido.mediaId && (
+          <button
+            type="button"
+            onClick={handleAdjuntar}
+            disabled={adjuntando}
+            className="mt-1 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors disabled:opacity-60 disabled:cursor-wait"
+            title="Bajar la imagen y adjuntarla a la orden abierta"
+          >
+            {adjuntando ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />}
+            {adjuntando ? 'Adjuntando…' : 'Adjuntar a la orden'}
+          </button>
         )}
       </div>
     );
@@ -251,7 +285,7 @@ function extraerTextoCopiable(mensaje: MensajeRender): string | null {
   return null;
 }
 
-export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion }: Props) {
+export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion, onAdjuntarAOrden }: Props) {
   const esSaliente = mensaje._direccion === 'saliente';
   const fecha =
     mensaje._direccion === 'entrante'
@@ -284,7 +318,11 @@ export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion
         {esSaliente ? (
           <RenderContenidoSaliente mensaje={mensaje} />
         ) : (
-          <RenderContenidoEntrante mensaje={mensaje} onUsarUbicacion={onUsarUbicacion} />
+          <RenderContenidoEntrante
+            mensaje={mensaje}
+            onUsarUbicacion={onUsarUbicacion}
+            onAdjuntarAOrden={onAdjuntarAOrden}
+          />
         )}
         <div
           className={`flex items-center gap-1.5 mt-1 text-[10px] ${
