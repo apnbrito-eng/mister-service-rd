@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, onSnapshot, updateDoc, doc, Timestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cliente, OrdenServicio, ZONAS_RD } from '../types';
@@ -31,6 +31,7 @@ import toast from 'react-hot-toast';
 
 export default function Clientes() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { userProfile } = useApp();
   const puedeCrear = puede(userProfile, 'clientesCrear');
   const puedeModificar = puede(userProfile, 'clientesModificar');
@@ -135,6 +136,36 @@ export default function Clientes() {
     );
     return () => unsub();
   }, []);
+
+  // SPRINT-INBOX-11 (2026-05-22): deep-link `/admin/clientes?id=<docId>`.
+  // CardCliente del inbox navega con `?id=` para abrir el detalle del cliente
+  // específico. Acá lo leemos una sola vez cuando la lista de clientes está
+  // cargada y seteamos el `selectedCliente`. Guard `idAbiertoRef` evita
+  // re-disparar el setter si el usuario después cierra el panel y la URL
+  // sigue trayendo `?id=`. Si el id no existe en la lista, no hacemos nada
+  // (queda en el listado sin romper).
+  const idAbiertoRef = useRef<string | null>(null);
+  useEffect(() => {
+    const idQS = searchParams.get('id');
+    if (!idQS) {
+      idAbiertoRef.current = null;
+      return;
+    }
+    if (clientes.length === 0) return;
+    if (idAbiertoRef.current === idQS) return;
+    const match = clientes.find((c) => c.id === idQS);
+    if (match) {
+      setSelectedCliente(match);
+      idAbiertoRef.current = idQS;
+    } else {
+      // ID no encontrado (o cliente soft-deleted). Limpiamos el param para
+      // que el usuario vea el listado en vez de quedar atrapado en un loop.
+      idAbiertoRef.current = idQS;
+      const next = new URLSearchParams(searchParams);
+      next.delete('id');
+      setSearchParams(next, { replace: true });
+    }
+  }, [clientes, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!selectedCliente) return;

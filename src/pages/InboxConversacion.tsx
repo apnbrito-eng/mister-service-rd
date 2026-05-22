@@ -373,12 +373,63 @@ export default function InboxConversacion() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
       <div className="flex flex-1 min-h-0">
+        {/* SPRINT-INBOX-11 (2026-05-22): cuando el drawer de crear orden está
+            abierto, lo montamos COMO PRIMERA COLUMNA EN FLUJO (izquierda), y
+            el chat queda a la derecha como segunda columna. Así `[form|chat]`
+            son hermanas → cero solapamiento a cualquier ancho. Antes (8c) el
+            drawer era `fixed top-0 right-0` con % del viewport + padding hack
+            en el main; eso seguía tapando el borde derecho del chat a anchos
+            normales de laptop. Col 1 (lista) y Col 2 (PanelCliente360) siguen
+            ocultas con el drawer abierto, como en 8c. */}
+        {showCreateModal && (
+          <section className="flex flex-col w-full md:w-1/2 lg:w-[55%] xl:w-[50%] min-h-0 shrink-0">
+            <OrdenCreateModal
+              form={createForm.form}
+              setForm={createForm.setForm}
+              clienteBusqueda={createForm.clienteBusqueda}
+              setClienteBusqueda={createForm.setClienteBusqueda}
+              showClienteDropdown={createForm.showClienteDropdown}
+              setShowClienteDropdown={createForm.setShowClienteDropdown}
+              isNewCliente={createForm.isNewCliente}
+              setIsNewCliente={createForm.setIsNewCliente}
+              saving={createForm.saving}
+              clientes={createForm.clientes}
+              clientesFiltrados={createForm.clientesFiltrados}
+              tecnicos={createForm.tecnicos}
+              horariosOcupadosCreate={createForm.horariosOcupadosCreate}
+              ordenesActivasCliente={createForm.ordenesActivasCliente}
+              buscandoTelefono={createForm.buscandoTelefono}
+              showTelefonoDropdown={createForm.showTelefonoDropdown}
+              setShowTelefonoDropdown={createForm.setShowTelefonoDropdown}
+              clientesFiltradosTelefono={createForm.clientesFiltradosTelefono}
+              onSubmit={createForm.handleSubmit}
+              onClose={() => {
+                setShowCreateModal(false);
+                setPrefillPendiente(null);
+                createForm.resetForm();
+              }}
+              handleDireccionChange={createForm.handleDireccionChange}
+              handleSelectCliente={createForm.handleSelectCliente}
+              handleClienteTelefonoChange={createForm.handleClienteTelefonoChange}
+              chequeoPrevio={createForm.chequeoPrevioCreate}
+              aplicarDescuento={createForm.aplicarDescuentoCreate}
+              setAplicarDescuento={createForm.setAplicarDescuentoCreate}
+              presentationMode="drawer"
+              extraFooterSlot={
+                createForm.isNewCliente && prefillPendiente?.tipo === 'cliente-nuevo' ? (
+                  <div className="mb-3 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-800">
+                    Este contacto no esta registrado como cliente. Se creara
+                    automaticamente al guardar la orden.
+                  </div>
+                ) : null
+              }
+            />
+          </section>
+        )}
+
         {/* COL 1 — lista de conversaciones (hidden <md, w-72 md:w-80).
             SPRINT-INBOX-8c (2026-05-22): se OCULTA cuando el drawer de crear
-            orden está abierto, para que el chat (Col 3) tenga ancho real
-            disponible y no quede tapado por el drawer. A 1280px típico de
-            laptop: sin esto el chat queda con ~50px aprovechables. Con esto,
-            el chat ocupa ~45% (≈575px) y el drawer ~55% (≈700px). */}
+            orden está abierto, para que el chat tenga ancho real disponible. */}
         <aside className={`${showCreateModal ? 'hidden' : 'hidden md:flex'} flex-col w-72 lg:w-80 border-r border-gray-200 bg-white`}>
           <div className="p-3 border-b border-gray-200 flex items-center gap-2">
             <button
@@ -535,19 +586,11 @@ export default function InboxConversacion() {
         </aside>
 
         {/* COL 3 — timeline + composer.
-            SPRINT-INBOX-8c (2026-05-22): cuando el drawer está abierto,
-            reservamos espacio a la derecha con padding-right igual al ancho
-            del drawer (md:60% / lg:55% / xl:50%). Sin esto, el main se
-            estiraba al 100% del viewport y el drawer fixed-right lo tapaba.
-            El padding desplaza visualmente el contenido del chat hacia la
-            izquierda para que coexista con el drawer sin solapamiento. */}
-        <main
-          className={`flex-1 flex flex-col min-w-0 bg-gray-50 transition-[padding] duration-150 ${
-            showCreateModal
-              ? 'md:pr-[60%] lg:pr-[55%] xl:pr-[50%]'
-              : ''
-          }`}
-        >
+            SPRINT-INBOX-11 (2026-05-22): drawer ahora es columna flex en
+            flujo (primera columna izquierda); el chat (`main`) es su
+            hermana derecha vía `flex-1`. Sin padding hack — el flexbox se
+            encarga del layout. Cero solapamiento a cualquier ancho. */}
+        <main className="flex-1 flex flex-col min-w-0 bg-gray-50">
           {/* Header */}
           <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -645,54 +688,12 @@ export default function InboxConversacion() {
         </main>
       </div>
 
-      {/* SPRINT-INBOX-8 (2026-05-21): modal crear orden EN contexto del
-          inbox. Replica el patrón Ordenes.tsx/Citas.tsx (mismo hook +
-          mismo componente). Cuando isNewCliente=true mostramos un banner
-          arriba del form para que el operario entienda que el cliente
-          se creara automaticamente al guardar. */}
-      {showCreateModal && (
-        <OrdenCreateModal
-          form={createForm.form}
-          setForm={createForm.setForm}
-          clienteBusqueda={createForm.clienteBusqueda}
-          setClienteBusqueda={createForm.setClienteBusqueda}
-          showClienteDropdown={createForm.showClienteDropdown}
-          setShowClienteDropdown={createForm.setShowClienteDropdown}
-          isNewCliente={createForm.isNewCliente}
-          setIsNewCliente={createForm.setIsNewCliente}
-          saving={createForm.saving}
-          clientes={createForm.clientes}
-          clientesFiltrados={createForm.clientesFiltrados}
-          tecnicos={createForm.tecnicos}
-          horariosOcupadosCreate={createForm.horariosOcupadosCreate}
-          ordenesActivasCliente={createForm.ordenesActivasCliente}
-          buscandoTelefono={createForm.buscandoTelefono}
-          showTelefonoDropdown={createForm.showTelefonoDropdown}
-          setShowTelefonoDropdown={createForm.setShowTelefonoDropdown}
-          clientesFiltradosTelefono={createForm.clientesFiltradosTelefono}
-          onSubmit={createForm.handleSubmit}
-          onClose={() => {
-            setShowCreateModal(false);
-            setPrefillPendiente(null);
-            createForm.resetForm();
-          }}
-          handleDireccionChange={createForm.handleDireccionChange}
-          handleSelectCliente={createForm.handleSelectCliente}
-          handleClienteTelefonoChange={createForm.handleClienteTelefonoChange}
-          chequeoPrevio={createForm.chequeoPrevioCreate}
-          aplicarDescuento={createForm.aplicarDescuentoCreate}
-          setAplicarDescuento={createForm.setAplicarDescuentoCreate}
-          presentationMode="drawer"
-          extraFooterSlot={
-            createForm.isNewCliente && prefillPendiente?.tipo === 'cliente-nuevo' ? (
-              <div className="mb-3 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-md text-xs text-emerald-800">
-                Este contacto no esta registrado como cliente. Se creara
-                automaticamente al guardar la orden.
-              </div>
-            ) : null
-          }
-        />
-      )}
+      {/* SPRINT-INBOX-11 (2026-05-22): el `OrdenCreateModal` con
+          `presentationMode='drawer'` ya NO se monta acá afuera del
+          contenedor flex. Ahora vive como primera columna flex izquierda
+          dentro de `<div className="flex flex-1 min-h-0">` (ver arriba).
+          Esto elimina el solapamiento drawer-vs-chat sin necesidad de
+          padding hack en el `<main>`. */}
     </div>
   );
 }

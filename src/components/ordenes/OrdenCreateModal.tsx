@@ -980,18 +980,28 @@ export default function OrdenCreateModal({
   );
 
   // SPRINT-INBOX-8b: render condicional. Default 'modal' = comportamiento
-  // histórico (overlay centrado vía <Modal />). 'drawer' = panel lateral
-  // derecho para que la conversación de InboxConversacion quede visible.
+  // histórico (overlay centrado vía <Modal />). 'drawer' = panel lateral.
   // El wrapper drawer NO usa <Modal /> porque ese componente fuerza overlay
-  // centrado + backdrop opaco. Acá necesitamos un panel sin backdrop opaco
-  // para no tapar la página de fondo.
+  // centrado + backdrop opaco.
+  //
+  // SPRINT-INBOX-11 (2026-05-22): el drawer ya NO es `fixed top-0 right-0`
+  // con porcentajes del viewport (hack que en INBOX-8c requería un
+  // padding-right en el `<main>` y aún así dejaba el chat tapado a anchos
+  // típicos de laptop). Ahora es un panel en flujo (`h-full w-full`) que
+  // llena el contenedor que le da el padre. El padre (InboxConversacion)
+  // lo monta como **primera columna flex izquierda** dentro de la fila del
+  // inbox: `[form | chat]`. Cero solapamiento a cualquier ancho.
+  //
+  // Borde: `border-r` (antes era `border-l`) — ahora el drawer está a la
+  // izquierda y el contenido a la derecha. El ancho y el lado los controla
+  // el padre.
   if (presentationMode === 'drawer') {
     return (
       <div
         role="dialog"
         aria-modal="false"
         aria-label={tituloHeader}
-        className="fixed top-0 right-0 z-40 h-full w-full md:w-[60%] lg:w-[55%] xl:w-[50%] bg-white shadow-2xl border-l border-gray-200 flex flex-col"
+        className="z-40 h-full w-full bg-white shadow-2xl border-r border-gray-200 flex flex-col"
       >
         <div className="flex items-center justify-between p-4 border-b border-gray-100 shrink-0">
           <h2 className="text-lg font-semibold text-gray-900">{tituloHeader}</h2>
