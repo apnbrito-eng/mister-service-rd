@@ -5,6 +5,50 @@
 
 ---
 
+## 2026-05-22 — autónomo (`trabaja`, pasada 39): NO-OP — cola limpia, sin OKs nuevos
+
+### Contexto
+
+Jorge pegó `trabaja` tras commit `f7d0798` (cierre pasada 38). Verificación:
+
+1. **`docs/sprints/COLA_AUTONOMA.md`** — recorrido completo:
+   - Tope: SPRINT-INBOX-11-FIX-FICHA-Y-DRAWER (✅ COMPLETADO pasada 38 hash `c8b81d5`).
+   - INBOX-8c, INBOX-10, FEED-UNIFICADO, FUNNEL, WA-TEMPLATE-METRICS, INBOX-9, INBOX-8b, PAGOS-B-1, INBOX-7, INBOX-8, PAGOS-CONFIRMA-MARIA fase A — todos ✅ COMPLETADOS en pasadas previas.
+   - Bloque SPRINT-INBOX-1..6 — COMPLETADO 2026-05-20.
+   - SPRINT-WA-* — completados o ⊘ REDUNDANTE/MOVIDO A BLOQUEOS.
+   - Sprints históricos abajo — todos cerrados.
+   - Único `**Estado:** PENDIENTE` literal en el archivo: línea 6154 (template ejemplo dentro del bloque de plantilla para Cowork — NO es sprint real) y línea 6806 (spec original de SPRINT-117b dentro de `<details>` — el sprint padre dice `[MOVIDO A HISTÓRICO]` con COMPLETADO 2026-05-08).
+
+2. **`docs/sprints/BLOQUEOS.md`** — OKs detectados:
+   - Línea 48 `OK: jorge 2026-05-22 opcion=A` (INBOX-9) → YA procesado pasada 36 (hash `dae93c2`).
+   - Línea 117 `OK: jorge 2026-05-21 10:30 approach=A1` (INBOX-8b) → YA procesado pasada 33.
+   - Línea 184 `OK: jorge 2026-05-21 10:30 opcion 1` (PAGOS-FASE-B) → B.1 YA procesado pasada 33 (hash `4fa8f08`). **B.2 explícitamente NO procesar — espera QA de Jorge.** Instrucción de Jorge en el prompt: "NO TOCAR PAGOS-FASE-B-2 (sigue en QA de B.1)".
+   - Línea 1188 (2026-05-18 SPRINT-186) → YA COMPLETADO hash `f41d106`.
+   - Línea 1269 (2026-05-18 SPRINT-178) → YA DESBLOQUEADO+COMPLETADO hash `bd2b2a8`.
+   - Línea 1615 `OK: jorge 2026-05-22` (SPRINT-138) → YA procesado pasada 36 (hash `a2cd146`).
+   - Líneas 1529, 1707 — históricos cerrados.
+   - Bloqueos abiertos sin OK: SPRINT-WA-NOTIF-CREATE-RULE-FIX (línea 2237 "_pendiente_"), SPRINT-PORTAL-1 (línea 2273), SPRINT-VERCEL-PLAN-DECISION, SPRINT-WA-CHAT-* serie (todos esperando decisiones de negocio o Meta config). 0 OKs nuevos posteriores a la pasada 38.
+
+### Resultado
+
+**0 sprints procesados. 0 commits. 0 escalados.**
+
+Tiempo coordinator: ~5 min (read CLAUDE.md + protocolo + cola + bloqueos + sync diario).
+
+### Pendientes operativos heredados
+
+1. **`npm run deploy:storage-rules`** — Jorge debe ejecutarlo (SPRINT-138 commiteado en pasada 36, lock file pendiente de actualización tras deploy productivo). Hasta que corra, P-013 sigue en WARN (cold start).
+2. **QA Jorge de SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1** — sin esto, B.2 no se puede procesar.
+3. **Deploy Vercel** de los pushes pendientes pasadas 36-38 — devops verificará al próximo `trabaja`/`procesa bloqueos`.
+
+### Próximos pasos sugeridos al usuario
+
+- **Si Jorge tiene feedback de QA del INBOX-11**: pegarlo a Cowork → nuevo sprint a la cola → próximo `trabaja`.
+- **Si Jorge ejecutó `deploy:storage-rules`** y quiere validar smoke test → no requiere coordinator, solo verificación visual + abrir conversación con imagen → click "Adjuntar a la orden".
+- **Si Jorge dio QA OK a B.1** → editar `BLOQUEOS.md` con `OK: jorge YYYY-MM-DD HH:MM B.2 ready` y `procesa bloqueos`.
+
+---
+
 ## 2026-05-22 — autónomo (`trabaja`, pasada 38): SPRINT-INBOX-11-FIX-FICHA-Y-DRAWER
 
 ### Contexto
