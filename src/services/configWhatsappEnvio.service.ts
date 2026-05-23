@@ -36,6 +36,15 @@ export interface ConfigWhatsappEnvio {
   phoneNumberIdForzado: string | null;
   /** Etiqueta humana opcional (ej: "Respaldo") — solo UI. */
   etiqueta?: string;
+  /**
+   * SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS (2026-05-23) — función 2:
+   * cuando `true`, los mensajes salientes de `texto_libre` reciben prepend
+   * `*<PrimerNombre>:* ` antes del texto. Default `true` (Jorge lo pidió ON
+   * explícito en el OK 2026-05-23 12:27). NO aplica a `plantilla` ni `media`.
+   * El doc puede no tener el campo (legacy/pre-sprint) → parser lo trata
+   * como `true` por default. Toggle en /admin/configuracion (admin-only).
+   */
+  nombreAgenteAlClienteActivo: boolean;
   actualizadoEn?: Date;
   actualizadoPor?: string;
 }
@@ -56,6 +65,7 @@ export interface ConfigWhatsappNumeros {
 
 export const CONFIG_WHATSAPP_ENVIO_DEFAULT: ConfigWhatsappEnvio = {
   phoneNumberIdForzado: null,
+  nombreAgenteAlClienteActivo: true,
 };
 
 export const CONFIG_WHATSAPP_NUMEROS_DEFAULT: ConfigWhatsappNumeros = {
@@ -76,10 +86,16 @@ export const CONFIG_WHATSAPP_NUMEROS_DEFAULT: ConfigWhatsappNumeros = {
 function parseConfigEnvio(data: Record<string, unknown> | undefined): ConfigWhatsappEnvio {
   if (!data) return { ...CONFIG_WHATSAPP_ENVIO_DEFAULT };
   const forzado = data.phoneNumberIdForzado;
+  // Default ON cuando el campo está missing (docs legacy pre-sprint).
+  const flagActivo =
+    typeof data.nombreAgenteAlClienteActivo === 'boolean'
+      ? data.nombreAgenteAlClienteActivo
+      : CONFIG_WHATSAPP_ENVIO_DEFAULT.nombreAgenteAlClienteActivo;
   return {
     phoneNumberIdForzado:
       typeof forzado === 'string' && forzado.trim().length > 0 ? forzado.trim() : null,
     etiqueta: typeof data.etiqueta === 'string' ? data.etiqueta : undefined,
+    nombreAgenteAlClienteActivo: flagActivo,
     actualizadoEn:
       data.actualizadoEn && typeof (data.actualizadoEn as { toDate?: unknown }).toDate === 'function'
         ? (data.actualizadoEn as { toDate: () => Date }).toDate()
@@ -146,14 +162,24 @@ export function suscribirConfigWhatsappEnvio(
 
 /** Actualiza la config de envío (write rule: solo admin). */
 export async function actualizarConfigWhatsappEnvio(
-  cambios: { phoneNumberIdForzado: string | null; etiqueta?: string },
+  cambios: {
+    phoneNumberIdForzado?: string | null;
+    etiqueta?: string;
+    /** Toggle del prepend de nombre del agente en texto libre saliente. */
+    nombreAgenteAlClienteActivo?: boolean;
+  },
   usuario?: string,
 ): Promise<void> {
   const payload: Record<string, unknown> = {
-    phoneNumberIdForzado: cambios.phoneNumberIdForzado,
     actualizadoEn: Timestamp.now(),
   };
+  if (cambios.phoneNumberIdForzado !== undefined) {
+    payload.phoneNumberIdForzado = cambios.phoneNumberIdForzado;
+  }
   if (cambios.etiqueta !== undefined) payload.etiqueta = cambios.etiqueta;
+  if (cambios.nombreAgenteAlClienteActivo !== undefined) {
+    payload.nombreAgenteAlClienteActivo = cambios.nombreAgenteAlClienteActivo;
+  }
   if (usuario) payload.actualizadoPor = usuario;
   await setDoc(doc(db, COL, DOC_ENVIO), payload, { merge: true });
 }

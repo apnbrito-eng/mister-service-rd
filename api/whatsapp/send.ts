@@ -701,7 +701,9 @@ export default async function handler(
     body.phoneNumberIdOverride.length > 0
       ? body.phoneNumberIdOverride
       : undefined;
-  const texto = typeof body.texto === 'string' ? body.texto : undefined;
+  // `texto` puede ser modificado más adelante por el prepend del nombre del
+  // agente (SPRINT-WA-TRAZABILIDAD 2026-05-23, función 2). Por eso `let`.
+  let texto = typeof body.texto === 'string' ? body.texto : undefined;
 
   let plantilla: PlantillaInput | undefined;
   if (body.plantilla && typeof body.plantilla === 'object') {
@@ -1056,6 +1058,41 @@ export default async function handler(
     if (!media.mimeType) {
       res.status(400).json({ error: 'media-mimeType-requerido' });
       return;
+    }
+  }
+
+  // 10b) Prepend nombre del agente al cliente (SPRINT-WA-TRAZABILIDAD
+  //      2026-05-23, función 2). Default ON via config/whatsapp_envio
+  //      .nombreAgenteAlClienteActivo (parser usa default true si missing).
+  //      Solo aplica a `texto_libre`. NO afecta `plantilla` (formato Meta
+  //      aprobado) ni `media` (caption va aparte). El outbox guarda el
+  //      texto MODIFICADO — lo que efectivamente se mandó. Idempotente:
+  //      si ya empieza con `*Nombre:* ` no duplica el prepend (defensa
+  //      contra retries que reenvían el body original).
+  if (tipo === 'texto_libre' && typeof texto === 'string' && texto.length > 0) {
+    try {
+      const envioSnap = await db.collection('config').doc('whatsapp_envio').get();
+      let flagActivo = true; // default ON (Jorge 2026-05-23 OK explícito)
+      if (envioSnap.exists) {
+        const envio = envioSnap.data() as Record<string, unknown> | undefined;
+        if (envio && typeof envio.nombreAgenteAlClienteActivo === 'boolean') {
+          flagActivo = envio.nombreAgenteAlClienteActivo;
+        }
+      }
+      if (flagActivo && perfilNombre && perfilNombre.trim().length > 0) {
+        const primerNombre = perfilNombre.trim().split(/\s+/)[0];
+        const prefijo = `*${primerNombre}:* `;
+        if (!texto.startsWith(prefijo)) {
+          texto = `${prefijo}${texto}`;
+        }
+      }
+    } catch (err) {
+      // Fail-soft: si el lookup falla, mandar el texto sin prepend. NO bloquear
+      // el envío por un blip de Firestore en una feature cosmética.
+      const m = err instanceof Error ? err.message.substring(0, 200) : 'unknown';
+      console.warn(
+        `${LOG_PREFIX} lookup config/whatsapp_envio para flag nombreAgenteAlClienteActivo falló (sigo sin prepend): ${m}`,
+      );
     }
   }
 

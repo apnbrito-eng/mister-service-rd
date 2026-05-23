@@ -17,6 +17,10 @@ import {
   marcarLeida,
 } from '../services/whatsappInbox.service';
 import { enviarTexto } from '../services/whatsapp.service';
+import {
+  suscribirRespuestasRapidas,
+  type WhatsappRespuestaRapida,
+} from '../services/whatsappRespuestasRapidas.service';
 import MensajeBubble from '../components/inbox/MensajeBubble';
 import IndicadorVentana24h from '../components/inbox/IndicadorVentana24h';
 import ToggleBot from '../components/inbox/ToggleBot';
@@ -85,6 +89,19 @@ export default function InboxConversacion() {
 
   const timelineRef = useRef<HTMLDivElement>(null);
   const ultimoCountRef = useRef(0);
+
+  // SPRINT-WA-TRAZABILIDAD (2026-05-23) — respuestas rápidas. Sub-realtime
+  // a config/whatsapp_respuestas_rapidas + dropdown que se abre al escribir
+  // "/" como primer char del input (o ante un nuevo "/" tras espacio).
+  const [respuestasRapidas, setRespuestasRapidas] = useState<WhatsappRespuestaRapida[]>([]);
+  const [mostrarDropdownRespuestas, setMostrarDropdownRespuestas] = useState(false);
+  const [filtroRespuestas, setFiltroRespuestas] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const unsub = suscribirRespuestasRapidas((cfg) => setRespuestasRapidas(cfg.items));
+    return () => unsub();
+  }, []);
 
   // Suscripción liviana a ordenes_servicio para alimentar useOrdenCreateForm
   // (necesita la lista para validar double-booking del técnico). Mismo patrón
@@ -357,12 +374,95 @@ export default function InboxConversacion() {
     }
   }
 
+  // SPRINT-WA-TRAZABILIDAD (2026-05-23) — detección del prefix "/atajo" en
+  // la posición actual del cursor. Devuelve { match, start, end } si hay
+  // un "/" reciente sin espacios después (= candidato para autocomplete);
+  // null si no aplica.
+  function detectarPrefixSlash(value: string, cursor: number): { match: string; start: number } | null {
+    if (cursor <= 0) return null;
+    // Buscar el "/" más cercano hacia atrás, sin atravesar espacios/saltos.
+    let i = cursor - 1;
+    while (i >= 0) {
+      const ch = value.charAt(i);
+      if (ch === '/') {
+        // Verificar que el char anterior sea inicio-de-input o whitespace
+        // (para no matchear URLs ni "x/y").
+        if (i === 0 || /\s/.test(value.charAt(i - 1))) {
+          return { match: value.substring(i + 1, cursor), start: i };
+        }
+        return null;
+      }
+      if (/\s/.test(ch)) return null;
+      i--;
+    }
+    return null;
+  }
+
+  function handleTextoChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const value = e.target.value;
+    setTexto(value);
+    const cursor = e.target.selectionStart ?? value.length;
+    const det = detectarPrefixSlash(value, cursor);
+    if (det) {
+      setMostrarDropdownRespuestas(true);
+      setFiltroRespuestas(det.match.toLowerCase());
+    } else {
+      setMostrarDropdownRespuestas(false);
+      setFiltroRespuestas('');
+    }
+  }
+
+  function aplicarRespuestaRapida(item: WhatsappRespuestaRapida) {
+    // Reemplazar el "/atajo<filtro>" en la posición del cursor por `item.texto`.
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const cursor = ta.selectionStart ?? texto.length;
+    const det = detectarPrefixSlash(texto, cursor);
+    if (!det) {
+      // Fallback: append al final.
+      setTexto((prev) => (prev.length > 0 ? `${prev}${prev.endsWith(' ') ? '' : ' '}${item.texto}` : item.texto));
+      setMostrarDropdownRespuestas(false);
+      setFiltroRespuestas('');
+      return;
+    }
+    const antes = texto.substring(0, det.start);
+    const despues = texto.substring(cursor);
+    const nuevo = `${antes}${item.texto}${despues}`;
+    setTexto(nuevo);
+    setMostrarDropdownRespuestas(false);
+    setFiltroRespuestas('');
+    // Mover cursor al final del texto insertado.
+    setTimeout(() => {
+      const ta2 = textareaRef.current;
+      if (ta2) {
+        const pos = antes.length + item.texto.length;
+        ta2.focus();
+        ta2.setSelectionRange(pos, pos);
+      }
+    }, 0);
+  }
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Si el dropdown de respuestas está abierto, ESC lo cierra sin enviar.
+    if (mostrarDropdownRespuestas && e.key === 'Escape') {
+      e.preventDefault();
+      setMostrarDropdownRespuestas(false);
+      setFiltroRespuestas('');
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleEnviar();
     }
   }
+
+  // Lista filtrada de respuestas para el dropdown (case-insensitive prefix).
+  const respuestasFiltradas = useMemo(() => {
+    if (!mostrarDropdownRespuestas) return [];
+    const f = filtroRespuestas.trim().toLowerCase();
+    if (f.length === 0) return respuestasRapidas;
+    return respuestasRapidas.filter((r) => r.atajo.toLowerCase().startsWith(f));
+  }, [respuestasRapidas, filtroRespuestas, mostrarDropdownRespuestas]);
 
   function formatTelRD(wa: string): string {
     if (!wa || wa.length < 10) return wa;
@@ -660,20 +760,56 @@ export default function InboxConversacion() {
                 </div>
               </div>
             )}
-            <div className="flex items-end gap-2">
-              <textarea
-                value={texto}
-                onChange={(e) => setTexto(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={
-                  ventanaAbierta
-                    ? 'Escribí un mensaje... (Enter para enviar, Shift+Enter salto de línea)'
-                    : 'Ventana cerrada — usá una plantilla'
-                }
-                rows={2}
-                disabled={!ventanaAbierta || enviando}
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none disabled:bg-gray-50 disabled:text-gray-400"
-              />
+            <div className="flex items-end gap-2 relative">
+              <div className="flex-1 relative">
+                <textarea
+                  ref={textareaRef}
+                  value={texto}
+                  onChange={handleTextoChange}
+                  onKeyDown={handleKeyDown}
+                  onBlur={() => {
+                    // Cerrar dropdown con un pequeño delay para permitir click en items.
+                    setTimeout(() => setMostrarDropdownRespuestas(false), 150);
+                  }}
+                  placeholder={
+                    ventanaAbierta
+                      ? 'Escribí un mensaje... (Enter para enviar, Shift+Enter salto de línea, "/" para respuestas rápidas)'
+                      : 'Ventana cerrada — usá una plantilla'
+                  }
+                  rows={2}
+                  disabled={!ventanaAbierta || enviando}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none disabled:bg-gray-50 disabled:text-gray-400"
+                />
+                {/* SPRINT-WA-TRAZABILIDAD (2026-05-23) — dropdown respuestas rápidas */}
+                {mostrarDropdownRespuestas && respuestasFiltradas.length > 0 && (
+                  <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-20">
+                    {respuestasFiltradas.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          // mouseDown (no onClick) para ganar al onBlur del textarea.
+                          e.preventDefault();
+                          aplicarRespuestaRapida(r);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                      >
+                        <div className="text-xs font-mono text-[#1a5fa8] font-semibold">
+                          /{r.atajo}
+                        </div>
+                        <div className="text-xs text-gray-700 line-clamp-2 whitespace-pre-wrap">
+                          {r.texto}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {mostrarDropdownRespuestas && respuestasFiltradas.length === 0 && filtroRespuestas.length > 0 && (
+                  <div className="absolute bottom-full left-0 right-0 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg px-3 py-2 text-xs text-gray-400 z-20">
+                    Sin respuestas que matcheen "/{filtroRespuestas}".
+                  </div>
+                )}
+              </div>
               {/* SPRINT-WA-INBOX-UX-QUICKWINS quickwin 4 (2026-05-23): el
                   selector de plantillas también accesible con la ventana 24h
                   ABIERTA (Meta permite enviar plantillas en cualquier

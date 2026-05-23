@@ -10,54 +10,11 @@
 
 ---
 
-## SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS — BLOQUEADO esperando OK de Jorge (2026-05-23)
+## SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS — DESBLOQUEADO 2026-05-23 12:27 (OK: jorge opcion=1 nombreAgente=ON respuestasRapidas=admin deploy=auto)
 
-**Origen:** Cowork lo agregó a `COLA_AUTONOMA.md` el 2026-05-23 con marca explícita "**ESCALA a BLOQUEOS** — toca `api/whatsapp/send.ts` endpoint público + `firestore.rules` nuevo doc". Coordinator (`trabaja`, pasada 42, 2026-05-23) escala según sub-regla CLAUDE.md.
+**Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-23 por coordinator (`procesa bloqueos`, pasada 43). desbloqueadoPor: jorge 2026-05-23 12:27 vía `OK: jorge 2026-05-23 12:27 opcion=1 nombreAgente=ON respuestasRapidas=admin deploy=auto`.** Conservado acá como stub para forensia.
 
-**Estado:** BLOQUEADO esperando OK explícito de Jorge al touch-list + scope + autorización deploy:rules.
-
-### Resumen del sprint (preservado)
-
-3 funciones:
-
-1. **Trazabilidad de quién envía cada mensaje.** En `api/whatsapp/send.ts`, al crear el doc en `whatsapp_mensajes_outbox`, persistir `enviadoPorUid` + `enviadoPorNombre` del staff que envió (del idToken verificado). El caller (`InboxConversacion`) pasa `currentUser.uid`/nombre (gotcha P-001 — usar `currentUser` del `useApp()`, NO `userProfile.id`). Mostrar internamente en el chat ("enviado por María").
-
-2. **Nombre del agente al cliente.** Anteponer el nombre del agente al cuerpo del mensaje saliente de **texto libre** (ej. "*María:* …") — WhatsApp no muestra agentes por separado, así que va en el texto. Configurable on/off (admin). NO aplica a plantillas (formato fijo aprobado por Meta).
-
-3. **Respuestas rápidas programables (tipo WhatsApp Business).** Nuevo doc `config/whatsapp_respuestas_rapidas` (admin-editable) = array `[{ id, atajo, texto }]`. Rule: read staff, write admin (espejo de `config/whatsapp_envio`). UI: editor en `/admin/configuracion` + inserción en el composer del inbox (atajo "/"). Inserta texto en el input, NO envía solo.
-
-**Touch-list:** `api/whatsapp/send.ts` (enviadoPor + prepend nombre agente), `src/pages/InboxConversacion.tsx` (pasar uid/nombre + UI respuestas rápidas + mostrar enviadoPor), `src/components/inbox/MensajeBubble.tsx` (mostrar enviadoPor), `firestore.rules` (`config/whatsapp_respuestas_rapidas`), `src/services/` (service respuestas rápidas + flag nombre-agente). **Reviewer obligatorio (endpoint + rules). Deploy rules antes de cerrar.**
-
-### Decisiones que necesitamos de Jorge
-
-A. **Scope completo (las 3 funciones juntas)** o **fases separadas**:
-   - **Opción 1 — todo junto:** procesar las 3 funciones en un sólo sprint con deploy de rules al final.
-   - **Opción 2 — fases:**
-     - Fase A: trazabilidad (función 1, solo endpoint + UI, sin rules nuevas).
-     - Fase B: nombre del agente (función 2, solo endpoint con flag config — agrega rule mínima para flag).
-     - Fase C: respuestas rápidas (función 3, rule nueva + UI editor + UI composer).
-
-B. **Flag "nombre del agente al cliente":** ¿default ON u OFF? Por defecto sugerimos OFF (el cliente no espera ver agentes; lo encendemos solo si Jorge lo pide). Confirmar.
-
-C. **Permiso de escritura de `config/whatsapp_respuestas_rapidas`:** ¿solo administrador (espejo de `config/whatsapp_envio`), o también coord/staff? Por defecto sugerimos **solo admin** para evitar que cualquier usuario edite las plantillas internas.
-
-D. **Deploy rules automático:** ¿OK para correr `npm run deploy:rules` desde el coordinator al cerrar el sprint? (precedente: SPRINT-WA-NUMERO-RESPALDO-MANUAL Fase 1 lo aprobó con `deploy=auto`).
-
-### Para desbloquear
-
-Editar este bloque con una sola línea al final, ej.:
-
-```
-OK: jorge 2026-05-23 HH:MM opcion=1 nombreAgente=OFF respuestasRapidas=admin deploy=auto
-```
-
-o bien:
-
-```
-OK: jorge 2026-05-23 HH:MM fases=A,B,C nombreAgente=ON respuestasRapidas=admin deploy=auto
-```
-
-El coordinator lee la línea y procesa según las decisiones. Sin esa línea formal, no toca `firestore.rules` ni el endpoint.
+**Scope aprobado:** opción 1 — las 3 funciones juntas en un solo sprint. Flag `nombreAgenteAlCliente` default **ON**. Rule `config/whatsapp_respuestas_rapidas`: read staff / write admin. Deploy de `firestore.rules` automático al cerrar. Reviewer obligatorio (toca `api/whatsapp/send.ts` + `firestore.rules`).
 
 ---
 

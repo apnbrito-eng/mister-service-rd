@@ -362,6 +362,17 @@ export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion
             esSaliente ? 'text-emerald-100/80 justify-end' : 'text-gray-400 justify-start'
           }`}
         >
+          {/* SPRINT-WA-TRAZABILIDAD 2026-05-23 función 1: mostrar quién envió en salientes.
+              `creadoPor`/`creadoPorNombre` ya viven en el outbox desde antes (parser
+              whatsappInbox.service.ts:136-137). Si no hay nombre, fallback "Sistema". */}
+          {esSaliente && (
+            <span
+              className="opacity-80"
+              title={`Enviado por ${mensaje.creadoPorNombre || 'Sistema'}`}
+            >
+              {mensaje.creadoPorNombre || 'Sistema'} ·
+            </span>
+          )}
           <span>{formatHora(fecha)}</span>
           {esSaliente && (
             <IconoEstadoSaliente estado={mensaje.estado} errorMeta={mensaje.errorMeta} />

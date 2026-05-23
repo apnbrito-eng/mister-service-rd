@@ -22,6 +22,11 @@ import {
   CONFIG_WHATSAPP_ENVIO_DEFAULT,
   CONFIG_WHATSAPP_NUMEROS_DEFAULT,
 } from '../services/configWhatsappEnvio.service';
+import {
+  suscribirRespuestasRapidas,
+  actualizarRespuestasRapidas,
+  WhatsappRespuestaRapida,
+} from '../services/whatsappRespuestasRapidas.service';
 import { useConfigWeb } from '../hooks/useConfigWeb';
 import { collection, getDocs, updateDoc, doc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -73,12 +78,21 @@ export default function Configuracion() {
   const [editandoNumeros, setEditandoNumeros] = useState<NumeroWhatsapp[] | null>(null);
   const [waNumerosSaving, setWaNumerosSaving] = useState(false);
 
+  // SPRINT-WA-TRAZABILIDAD (2026-05-23) — toggle flag prepend nombre del agente
+  // + editor de respuestas rápidas (read staff / write admin).
+  const [respuestasRapidas, setRespuestasRapidas] = useState<WhatsappRespuestaRapida[]>([]);
+  const [editandoRespuestas, setEditandoRespuestas] = useState<WhatsappRespuestaRapida[] | null>(null);
+  const [respuestasSaving, setRespuestasSaving] = useState(false);
+  const [flagNombreAgenteSaving, setFlagNombreAgenteSaving] = useState(false);
+
   useEffect(() => {
     const unsubE = suscribirConfigWhatsappEnvio(setConfigWaEnvio);
     const unsubN = suscribirConfigWhatsappNumeros(setConfigWaNumeros);
+    const unsubR = suscribirRespuestasRapidas((cfg) => setRespuestasRapidas(cfg.items));
     return () => {
       unsubE();
       unsubN();
+      unsubR();
     };
   }, []);
 
@@ -134,6 +148,62 @@ export default function Configuracion() {
       toast.error('Error al guardar el catálogo de números');
     } finally {
       setWaNumerosSaving(false);
+    }
+  };
+
+  // SPRINT-WA-TRAZABILIDAD (2026-05-23) — toggle prepend nombre del agente.
+  const handleToggleNombreAgente = async (nuevo: boolean) => {
+    if (!esSoloAdministrador) {
+      toast.error('Solo administrador puede cambiar este ajuste');
+      return;
+    }
+    setFlagNombreAgenteSaving(true);
+    try {
+      await actualizarConfigWhatsappEnvio(
+        { nombreAgenteAlClienteActivo: nuevo },
+        userProfile?.nombre,
+      );
+      toast.success(
+        nuevo
+          ? 'Se antepone el nombre del agente al cliente'
+          : 'No se antepone el nombre del agente',
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar el ajuste');
+    } finally {
+      setFlagNombreAgenteSaving(false);
+    }
+  };
+
+  // SPRINT-WA-TRAZABILIDAD (2026-05-23) — guardar respuestas rápidas.
+  const handleSaveRespuestas = async () => {
+    if (!esSoloAdministrador) {
+      toast.error('Solo administrador puede editar las respuestas rápidas');
+      return;
+    }
+    if (!editandoRespuestas) return;
+    // Validación client-side: atajos únicos, no vacíos.
+    const atajos = editandoRespuestas.map((r) => r.atajo.trim().toLowerCase());
+    const setAtajos = new Set(atajos);
+    if (setAtajos.size !== atajos.length) {
+      toast.error('Los atajos deben ser únicos');
+      return;
+    }
+    if (editandoRespuestas.some((r) => !r.atajo.trim() || !r.texto.trim())) {
+      toast.error('Atajo y texto son obligatorios');
+      return;
+    }
+    setRespuestasSaving(true);
+    try {
+      await actualizarRespuestasRapidas(editandoRespuestas, userProfile?.nombre);
+      toast.success('Respuestas rápidas guardadas');
+      setEditandoRespuestas(null);
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar respuestas rápidas');
+    } finally {
+      setRespuestasSaving(false);
     }
   };
 
@@ -943,6 +1013,159 @@ export default function Configuracion() {
                 ))}
                 <p className="text-[10px] text-gray-400">
                   El código de Meta (phoneNumberId) no se edita acá — viene fijo por número.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* SPRINT-WA-TRAZABILIDAD (2026-05-23) — toggle prepend nombre del agente */}
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-gray-800">
+                  Anteponer nombre del agente al cliente
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Cuando está activo, los mensajes de texto libre salen como{' '}
+                  <span className="font-mono">*Nombre:* mensaje</span>. No aplica a
+                  plantillas ni media.
+                </p>
+              </div>
+              <label className="inline-flex items-center gap-2 cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={configWaEnvio.nombreAgenteAlClienteActivo}
+                  onChange={(e) => handleToggleNombreAgente(e.target.checked)}
+                  disabled={flagNombreAgenteSaving}
+                  className="w-4 h-4"
+                />
+                <span className="text-xs text-gray-700">
+                  {configWaEnvio.nombreAgenteAlClienteActivo ? 'Activo' : 'Inactivo'}
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* SPRINT-WA-TRAZABILIDAD (2026-05-23) — editor de respuestas rápidas */}
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-800">
+                  Respuestas rápidas
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Atajos de texto reutilizables. En el inbox, escribí{' '}
+                  <span className="font-mono">/</span> y elegí el atajo para insertar el texto.
+                </p>
+              </div>
+              {editandoRespuestas === null ? (
+                <button
+                  onClick={() => setEditandoRespuestas(respuestasRapidas.map((r) => ({ ...r })))}
+                  className="text-xs text-[#1a5fa8] hover:underline shrink-0"
+                >
+                  Editar
+                </button>
+              ) : (
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => setEditandoRespuestas(null)}
+                    disabled={respuestasSaving}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveRespuestas}
+                    disabled={respuestasSaving}
+                    className="text-xs bg-[#1a5fa8] text-white px-3 py-1 rounded hover:bg-[#144a87] disabled:opacity-50"
+                  >
+                    {respuestasSaving ? 'Guardando…' : 'Guardar respuestas'}
+                  </button>
+                </div>
+              )}
+            </div>
+            {editandoRespuestas === null ? (
+              respuestasRapidas.length === 0 ? (
+                <p className="text-xs text-gray-400 italic">
+                  Sin respuestas rápidas configuradas. Tocá "Editar" para agregar la primera.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {respuestasRapidas.map((r) => (
+                    <li
+                      key={r.id}
+                      className="flex items-start gap-3 text-xs bg-gray-50 rounded-md px-3 py-2"
+                    >
+                      <span className="font-mono text-[#1a5fa8] font-medium shrink-0">
+                        /{r.atajo}
+                      </span>
+                      <span className="text-gray-700 whitespace-pre-wrap break-words">
+                        {r.texto}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )
+            ) : (
+              <div className="space-y-2">
+                {editandoRespuestas.map((r, idx) => (
+                  <div
+                    key={r.id}
+                    className="grid grid-cols-1 md:grid-cols-[140px_1fr_auto] gap-2 bg-gray-50 rounded-md p-2 items-start"
+                  >
+                    <input
+                      type="text"
+                      value={r.atajo}
+                      placeholder="atajo"
+                      onChange={(e) => {
+                        const copia = editandoRespuestas.map((x, i) =>
+                          i === idx ? { ...x, atajo: e.target.value.replace(/[^a-zA-Z0-9_-]/g, '') } : x,
+                        );
+                        setEditandoRespuestas(copia);
+                      }}
+                      className="rounded border border-gray-300 px-2 py-1 text-xs font-mono"
+                    />
+                    <textarea
+                      value={r.texto}
+                      placeholder="Texto que se inserta en el composer"
+                      rows={2}
+                      onChange={(e) => {
+                        const copia = editandoRespuestas.map((x, i) =>
+                          i === idx ? { ...x, texto: e.target.value } : x,
+                        );
+                        setEditandoRespuestas(copia);
+                      }}
+                      className="rounded border border-gray-300 px-2 py-1 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const copia = editandoRespuestas.filter((_, i) => i !== idx);
+                        setEditandoRespuestas(copia);
+                      }}
+                      className="p-1 text-gray-400 hover:text-red-500 self-start"
+                      title="Eliminar"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nuevoId = `r-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                    setEditandoRespuestas([
+                      ...editandoRespuestas,
+                      { id: nuevoId, atajo: '', texto: '' },
+                    ]);
+                  }}
+                  className="inline-flex items-center gap-1 text-xs text-[#1a5fa8] hover:underline"
+                >
+                  <Plus size={12} />
+                  Agregar respuesta
+                </button>
+                <p className="text-[10px] text-gray-400">
+                  Atajos pueden tener letras, números, guión y guión bajo. Atajos únicos.
                 </p>
               </div>
             )}

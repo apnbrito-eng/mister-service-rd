@@ -594,6 +594,19 @@ service cloud.firestore {
       allow write: if esAdmin();
     }
 
+    // Respuestas rápidas programables del inbox WhatsApp (SPRINT-WA-
+    // TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS, 2026-05-23, función 3). Admin
+    // edita el catálogo desde /admin/configuracion; staff las consume
+    // desde el composer del inbox con el atajo "/". Mismo patrón que
+    // whatsapp_envio/whatsapp_numeros: match específico restringe
+    // write a admin; el genérico /config/{docId} arriba permite write
+    // a staff, pero la intersección efectiva resulta admin-only.
+    // Shape: { items: [{ id: string, atajo: string, texto: string }], actualizadoEn, actualizadoPor }.
+    match /config/whatsapp_respuestas_rapidas {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
     // Configuración del sistema GPS
     match /config_gps/{docId} {
       allow read: if esStaff();
