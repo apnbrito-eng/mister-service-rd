@@ -69,27 +69,34 @@ El coordinator commitea + pushea cuando todo pasa. Los pre-commit hooks (`.husky
 
 ---
 
-## Estado actual (al momento de escribir este archivo)
+## Estado actual — actualizado 2026-05-22 por Cowork
 
-**Cazadores anti-regresión:** P-001 a P-006, todos en 0 hits.
+> ⚠️ Este bloque se queda viejo rápido. La fuente VIVA del estado siempre es, en este orden:
+> el tope de `docs/sprints/COLA_AUTONOMA.md` (qué hay pendiente), `docs/sprints/BLOQUEOS.md`
+> (qué espera OK de Jorge) y el último `docs/sprints/DIARIO_<fecha>.md`. **Leelos antes de
+> asumir nada** — no confíes solo en este resumen.
 
-**Sprints completados recientemente:**
-- SPRINT-101 a SPRINT-107 — sistema anti-regresión completo + Continuous Improvement Loop
-- SPRINT-108 — disciplina de hotfix Aury (postmortem + cazador P-006)
-- SPRINT-109/110 — limpiar hits P-001/P-002 (cerrados retro, ya estaban en 0)
-- SPRINT-111 fase 111a — auditoría de campos ID análogos (0 bugs nuevos)
-- SPRINT-113a — banner "siguiente paso" contextual (en revisión humana al cierre de la última sesión)
+**Cazadores anti-regresión:** 17 activos (P-001 … P-015 + otros), en 0 hits. Catálogo en `docs/PATRONES_REGRESION.md`.
 
-**Sprints pendientes en cola:**
-- SPRINT-100 — Yohana valida notificaciones (humano)
-- SPRINT-112 — schema drift + matriz permisos (QA manual por rol)
-- SPRINT-113b/c — UX flujo orden, badges + timeline (después de aprobar 113a)
-- SPRINT-114 — 4 inconsistencias menores de IDs (baja prioridad)
+**Iniciativa grande en curso — Inbox CRM de WhatsApp "cliente 360" dentro del admin** (para reemplazar a Kommo):
+- COMPLETADO: SPRINT-INBOX-1..10 — inbox de 3 columnas, toggle bot por conversación, selector de plantillas cuando la ventana 24h está cerrada, crear orden EN el inbox, drawer lateral, fotos del chat → orden (a Firebase Storage), y `PanelCliente360` con 5 tabs (Datos / Órdenes / Garantías / Facturas / Historial).
+- COMPLETADO soporte: feed/timeline unificado de orden, funnel de conversión por fase, métricas de plantillas WhatsApp, `storage.rules` versionado + endpoint `api/whatsapp/media-proxy.ts`.
+- PENDIENTE en cola (correr `trabaja`): **SPRINT-INBOX-11-FIX-FICHA-Y-DRAWER** — 2 bugs que Jorge cazó: (1) "Ver ficha del cliente" abría el listado en vez del cliente específico (Clientes.tsx no leía `?id=`); (2) el form de crear orden tapaba el chat → ahora abre a la IZQUIERDA como columna flex, chat siempre visible.
+- Deuda opcional: dedup de listeners WA (doble onSnapshot al mismo wa_id en InboxConversacion + TimelineUnificadoOrden).
 
-**Hotfix grande de 2026-05-07** (lleva su propio postmortem):
-- Aury Mon (técnico) no podía iniciar chequeo. Cadena de 2 bugs:
-  - P-006: dropdowns guardaban `personal.id` en lugar de `personal.uid` (auth.uid)
-  - P-002 variante `!=`: rule `modificaPrecioFinal()` con acceso directo a campo opcional
+**Separación de funciones en pagos (operaria registra banco/monto, María/coordinadora confirma):**
+- COMPLETADO fase A (permiso `pagosVerificar` + gate UI + bloqueo de conduce si hay pagos sin confirmar) y B.1 (página `/admin/pagos-pendientes` + helper `confirmarPagoOrden`).
+- PENDIENTE B.2 (migrar `pagos[]` array → subcolección + rule + migración) — espera QA de Jorge de B.1 y su "OK" en BLOQUEOS.md.
+
+**Acciones manuales pendientes de Jorge (las que Cowork NO puede hacer):**
+- `npm run deploy:storage-rules` + smoke test (sin esto las fotos de INBOX-9 no andan en prod; el cazador P-013 queda en WARN).
+- QA de `/admin/pagos-pendientes` (B.1) → luego decirle a Cowork "B.1 OK, agregá B.2".
+
+**Próximos candidatos (a OK de Jorge):** motor de automatización por fase + encuesta NPS al cerrar (toca `api/whatsapp/send` → va a BLOQUEOS); dashboard de SLA de chat; atribución UTM del lead. Análisis fuente en `docs/analisis/KOMMO_*.md`.
+
+**Hotfix histórico 2026-05-07** (sigue siendo contexto válido): Aury Mon (técnico) no podía iniciar chequeo. Cadena de 2 bugs:
+- P-006: dropdowns guardaban `personal.id` en lugar de `personal.uid` (auth.uid)
+- P-002 variante `!=`: rule `modificaPrecioFinal()` con acceso directo a campo opcional
 - Resuelto. 47 órdenes migradas.
 
 ---

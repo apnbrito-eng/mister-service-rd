@@ -5,6 +5,174 @@
 
 ---
 
+## 2026-05-23 noche — autónomo (`trabaja`, pasada 44): SPRINT-WA-SEGURIDAD-CONFIG-RULES ESCALADO (emulator no levanta sin Java)
+
+### Disparo
+
+Jorge pegó `trabaja` el 2026-05-23 noche con autorización explícita para el único sprint procesable PENDIENTE en la cola: `SPRINT-WA-SEGURIDAD-CONFIG-RULES`. Autorizaciones del prompt:
+- Verificar con emulator.
+- Implementar fix de `firestore.rules` si hace falta.
+- Deployar las rules automáticamente (`deploy=auto`).
+- Reviewer obligatorio.
+
+Condición dura no negociable: el test del emulator DEBE probar, ANTES de deployar, que (a) un admin SÍ escribe, (b) un NO-admin NO, (c) el resto de `config/*` no se rompe. Si NO se puede probar limpio con emulator → NO DEPLOYAR, escalar a BLOQUEOS.md con diff propuesto + razón + qué se necesita para destrabar, y CONTINUAR con el siguiente sprint.
+
+Reglas adicionales activas: NO tocar PAGOS-FASE-B-2, NO crear WABA en Meta, NO integraciones de pago/OAuth/migraciones masivas, escalar y continuar (no parar la cola).
+
+### archivist PRE-CHANGE (inline manual)
+
+Touch-list: `firestore.rules` (líneas 560-608 — un match genérico `/config/{docId}` + 3 matches específicos `whatsapp_envio` / `whatsapp_numeros` / `whatsapp_respuestas_rapidas`).
+
+Historial de `firestore.rules` (`git log --all --follow` limit 18):
+- `d7b320b` 2026-05-23 — `whatsapp_respuestas_rapidas` rule (pasada 43).
+- `c277fa1` 2026-05-22 — `whatsapp_envio` + `whatsapp_numeros` rules (Fase 1 SPRINT-WA-NUMERO-RESPALDO-MANUAL).
+- `7e137cd` 2026-05-19 — handler errores Meta (P-019).
+- `be0ef32` 2026-05-19 — defense-in-depth 6 colecciones WhatsApp.
+- `ce0d1ad` 2026-05-10 — fix delete orden gateado por permiso.
+- `b7b6464` 2026-05-07 — fix P-002 (modificaPrecioFinal con `.get`).
+- `c7c8e34` 2026-05-05 — fix P-002 inicial (tolerar campos missing en inmutabilidad).
+- `1568a63` 2026-05-06 — SPRINT-101+102+103 (introdujo el bug de "rules sin deployar" que pasó a postmortem).
+- `0ab1196` 2026-04-30 — C2 R4 gate aprobación oficina.
+- `c607f4c` 2026-04-29 — versionar rules + counters.
+
+Postmortems clase rules en `docs/postmortems/`:
+- `2026-05-07-iniciar-chequeo-rules-sin-deploy.md` — clase P-005, deploy obligatorio.
+- `2026-05-07-iniciar-chequeo-permission-denied.md` — clase P-002, `.get` para campos opcionales.
+
+Categorías especiales detectadas:
+- `firestore.rules` en touch-list → P-005 (deploy obligatorio antes de cerrar) + reviewer obligatorio (sub-regla CLAUDE.md).
+- Foco semántica multi-match: la deuda declarada por el coordinator en pasada 43 dice que la semántica real de Firestore para múltiples matches es OR, no AND. Si se confirma → los comentarios actuales (líneas 578-580, 588-590, 600-603) son incorrectos y hay hueco de permisos real.
+
+Patrones P-XXX que aplican:
+- P-005 — `npm run deploy:rules` antes de cerrar.
+- P-002 — si el fix usa comparaciones con campos opcionales, usar `.get(field, null)` (no aplica al fix elegido, que es exclusión por docId).
+- P-019 precedente — defense-in-depth.
+
+Recomendaciones:
+1. Levantar emulator antes de tocar nada (lo exige el prompt).
+2. Auditar consumidores del genérico `/config/{docId}` con `grep -rn "'config'" src/` antes del fix — verificar que ningún path legítimo se rompe con un endurecimiento del genérico.
+3. Si emulator no levanta → escalar a BLOQUEOS, NO deployar, CONTINUAR cola.
+
+### Diagnóstico técnico (sin emulator — documentación oficial Firebase)
+
+Firestore Rules evalúa **TODOS** los matches que coinciden con un path. La operación se permite si **al menos uno** dice `true` — semántica **OR**.
+
+Caso concreto, write a `config/whatsapp_envio` desde un usuario con rol `secretaria` (staff pero no admin):
+- match `/config/{docId}` línea 560: `allow write: if esStaff()` → **true** (staff).
+- match `/config/whatsapp_envio` línea 583: `allow write: if esAdmin()` → **false** (no admin).
+- Resultado: **true** (OR) → escribe.
+
+Esto contradice los comentarios actuales del repo (líneas 578-580, 588-590, 600-603) que declaran "Resultado efectivo: solo admin escribe". El comentario es incorrecto.
+
+**Impacto teórico (no regresión activa):** cualquier staff (operaria/secretaria/técnico/ayudante/coord) puede:
+- Mutar `config/whatsapp_envio.phoneNumberIdForzado` y `etiqueta` → cambiar el número de envío saliente.
+- Mutar `config/whatsapp_numeros` → renombrar/agregar/quitar números del catálogo.
+- Mutar `config/whatsapp_respuestas_rapidas` → editar el catálogo del inbox.
+
+La UI YA gatea por `esSoloAdministrador` en `/admin/configuracion` así que el hueco solo se explota con cliente custom (curl/Firestore SDK desde consola del browser). Defense-in-depth roto pero sin reportes en producción.
+
+### Intento de emulator (cumple condición dura del prompt)
+
+```bash
+$ firebase --version
+15.16.0    # OK
+
+$ java -version
+The operation couldn't be completed. Unable to locate a Java Runtime.
+Please visit http://www.java.com for information on installing Java.
+
+$ /usr/libexec/java_home
+(stderr) Unable to locate a Java Runtime.
+$ ls /Library/Java/JavaVirtualMachines/
+(silencio — directorio vacío)
+$ brew list | grep -iE "java|jdk"
+(silencio)
+```
+
+**Java JRE NO está instalado.** El Firebase Emulator de Firestore Rules requiere JRE. La librería `@firebase/rules-unit-testing` también necesita el emulator binary debajo. No hay manera de probar localmente sin Java.
+
+Instalar Java NO es autorizado autónomamente (modifica el sistema, requiere password admin en muchos casos, está fuera del scope del prompt nocturno).
+
+### Decisión
+
+Cumplo cita textual del prompt: escalar a BLOQUEOS.md con diff propuesto + razón + qué se necesita para destrabar, y CONTINUAR.
+
+### Builder — NO ejecutado (escalado antes)
+
+Sin builder. Sin cambios a `firestore.rules`. Sin cambios a `firestore.rules.deployed.lock`. Sin reviewer. Sin tester de código (solo cazadores de baseline).
+
+### Audit de consumidores del genérico `/config/{docId}` (para validar que el fix propuesto NO rompe nada)
+
+`grep -rn "'config'" src/` retorna 12 hits relevantes en 8 archivos:
+- `src/services/contadores.service.ts` (3 hits) — `doc(db, 'config', 'contadores')` — runTransaction al crear OS/QT/FAC. Write a `config/contadores`. Staff. **No afectado por la exclusión.**
+- `src/services/configEmpresa.service.ts` — `const COLLECTION = 'config'`. Write a `config/empresa`. Staff. **No afectado.**
+- `src/services/configFiscal.service.ts` — `const COL = 'config'`. Write a `config/fiscal`. Staff. **No afectado.**
+- `src/services/configTiposEquipo.service.ts` — `const COLLECTION = 'config'`. Write a `config/tiposEquipo`. Staff. **No afectado.**
+- `src/firebase/seedData.ts` — write a `config/sistema` + `config/contadores`. Staff seed. **No afectado.**
+- `src/firebase/seedPrecios.ts` — write a `config/sistema`. Staff seed. **No afectado.**
+- `src/services/configWhatsappEnvio.service.ts` — write a `config/whatsapp_envio` y `config/whatsapp_numeros`. **Bloqueado intencionalmente por exclusión + match específico admin.**
+- `src/services/whatsappRespuestasRapidas.service.ts` — write a `config/whatsapp_respuestas_rapidas`. **Igual.**
+- `src/utils/cleanFirestore.ts` (1 hit) — `'config'` en allowlist de colecciones para no limpiar (read-only / safety).
+
+Ningún path legítimo de staff (counters, empresa, fiscal, tiposEquipo, sistema, seeds) se rompe con la exclusión. Confirmado el fix de opción A es seguro.
+
+### Fix propuesto (NO aplicado — vive en `BLOQUEOS.md`)
+
+Opción A — excluir explícitamente los 3 docId del genérico:
+
+```diff
+     match /config/{docId} {
+       allow read: if esStaff();
+-      allow write: if esStaff();
++      allow write: if esStaff() &&
++        docId != 'whatsapp_envio' &&
++        docId != 'whatsapp_numeros' &&
++        docId != 'whatsapp_respuestas_rapidas';
+     }
+```
+
+Mínimo blast radius. 1 línea efectiva. Los 3 matches específicos quedan tal cual — ahora SÍ son la única regla de write para esos docs.
+
+Opciones B (blindar matches específicos sin tocar genérico) y C (mover los 3 docs a colección propia `config_whatsapp/`) **descartadas** con razón documentada en BLOQUEOS.md.
+
+### Continuación de cola
+
+Después del escalado, verifiqué que NO hay otros sprints procesables PENDIENTE:
+
+```bash
+$ awk '/^## SPRINT-/{sprint=$0} /\*\*Estado:\*\*/{print sprint" || "$0}' docs/sprints/COLA_AUTONOMA.md | \
+    grep -iE "PENDIENTE" | grep -v "COMPLETADO\|REDUNDANTE\|MOVIDO\|ESCALADO\|EXPANDIDO"
+```
+
+Resultado: solo aparecen (a) el sprint que acabo de escalar, (b) la plantilla de ejemplo (línea 6297, no es sprint real), (c) `SPRINT-117a-NOTIFICACIONES-AUDITORIA` dentro de un bloque `<details>` histórico ya superado (ABSORBIDO por SPRINT-117 fase A2 el 2026-05-08).
+
+**Cola limpia.** No hay nada más procesable autónomo. Fin de pasada.
+
+### Cazadores
+
+Pre-pasada: 20/20 PASS (0 hits). Post-pasada: 20/20 PASS (sin tocar código de producción). Sin diferencia.
+
+### Archivos modificados (pasada 44)
+
+Solo docs:
+- `docs/sprints/BLOQUEOS.md` — entrada `SPRINT-WA-SEGURIDAD-CONFIG-RULES — BLOQUEADO 2026-05-23` al tope.
+- `docs/sprints/COLA_AUTONOMA.md` — sprint marcado `⊘ MOVIDO A BLOQUEOS` + header pasada 44.
+- `docs/sprints/EJECUCION_AUTONOMA.md` — esta entrada.
+- `docs/sprints/DIARIO_2026-05-23.md` — sección pasada 44 al tope.
+- `COWORK_CONTEXTO.md` — sin cambios del coordinator (modificado por Cowork antes; incluido en commit final por estar en working tree).
+
+### Commit + push
+
+Commit + push individual al final de la pasada con mensaje `docs(sprints): pasada 44 — SEGURIDAD-CONFIG-RULES escalado por falta de emulator`.
+
+### Deuda registrada
+
+1. **Bloqueo a destrabar:** `SPRINT-WA-SEGURIDAD-CONFIG-RULES` espera OK de Jorge para opción A.
+2. **Meta-deuda operativa:** Java JRE no instalado. Sin Java, **cualquier sprint futuro de rules con condición dura "emulator" va a escalar igual**. Sugerencia: `brew install --cask temurin@17` (~5 min, requiere password admin) habilita Firebase Emulator local de aquí en adelante.
+3. **Comentarios obsoletos** en `firestore.rules` líneas 578-580 + 588 + 600-603 quedan tal cual (sin tocar) — se actualizan en el sprint del fix cuando se aplique opción A.
+
+---
+
 ## 2026-05-23 — autónomo (`procesa bloqueos`, pasada 43): SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS COMPLETADO
 
 ### Disparo

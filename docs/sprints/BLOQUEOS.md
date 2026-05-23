@@ -10,6 +10,110 @@
 
 ---
 
+## SPRINT-WA-SEGURIDAD-CONFIG-RULES — BLOQUEADO 2026-05-23 (coordinator pasada 44 — emulator no levanta sin Java)
+
+**Movido a `BLOQUEOS.md` el 2026-05-23 por coordinator autónomo (`trabaja`, pasada 44). Razón: la condición dura del prompt exigía probar el fix con Firebase Emulator ANTES de deployar; el emulator requiere Java JRE que NO está instalado en esta máquina, así que NO se deployó. El bug está confirmado por documentación oficial de Firebase pero no se pudo reproducir limpio en local.**
+
+### Diagnóstico (confirmado por documentación, NO por emulator)
+
+Las 3 rules específicas agregadas en pasadas 41+43 (`/config/whatsapp_envio` líneas 583-586, `/config/whatsapp_numeros` líneas 592-595, `/config/whatsapp_respuestas_rapidas` líneas 605-608) declaran "intersección efectiva admin-only" en sus comentarios. Eso es **incorrecto**: Firestore Rules evalúa múltiples matches con semántica **OR** (no AND/intersección). Cuando un usuario `staff` (operaria/secretaria/técnico/ayudante/coord) intenta escribir `config/whatsapp_envio`, Firestore evalúa:
+- match `/config/{docId}` (línea 560): `write: if esStaff()` → **true** para staff.
+- match `/config/whatsapp_envio` (línea 583): `write: if esAdmin()` → **false** para staff.
+- Resultado efectivo: **true** (porque al menos uno permite) → staff PUEDE escribir.
+
+**Impacto teórico hoy en producción (sin reportes — no es regresión activa):** cualquier `staff` (no solo admin) puede mutar `config/whatsapp_envio.phoneNumberIdForzado` (cambiar el número de envío saliente), el catálogo `config/whatsapp_numeros` (renombrar/agregar/quitar números) y `config/whatsapp_respuestas_rapidas` (editar el catálogo de respuestas rápidas). La UI YA gatea por `esSoloAdministrador` en `/admin/configuracion`, así que el hueco solo se explota con cliente custom (curl/script) — defense-in-depth roto.
+
+### Fix propuesto (NO aplicado — espera OK Jorge)
+
+**Opción A (recomendada — más explícita y simple):** consolidar el genérico para que excluya por nombre los 3 docs sensibles. Patch:
+
+```diff
+-    match /config/{docId} {
+-      // Public read SOLO para tipos que el form público lee (tiposEquipo).
+-      // Hoy se sincroniza a config_web/sitio.tiposEquipoPublicos para
+-      // evitar exponer este doc — mantenemos read solo a staff.
+-      allow read: if esStaff();
+-      // Counters (config/contadores) requieren write desde transactions
+-      // del cliente al crear orden/cotización/factura. Permitimos write a
+-      // staff oficina (admin/coord/secretaria/operaria) + tecnico (que
+-      // crea cotizaciones) + ayudante.
+-      allow write: if esStaff();
+-    }
++    match /config/{docId} {
++      // Public read SOLO para tipos que el form público lee (tiposEquipo).
++      // Hoy se sincroniza a config_web/sitio.tiposEquipoPublicos para
++      // evitar exponer este doc — mantenemos read solo a staff.
++      allow read: if esStaff();
++      // Counters (config/contadores) requieren write desde transactions
++      // del cliente al crear orden/cotización/factura. Permitimos write a
++      // staff oficina (admin/coord/secretaria/operaria) + tecnico (que
++      // crea cotizaciones) + ayudante.
++      //
++      // SPRINT-WA-SEGURIDAD-CONFIG-RULES: excluir explícitamente los 3
++      // docs WhatsApp admin-only — semántica OR de múltiples matches
++      // significaba que el write: esStaff() de este genérico GANABA sobre
++      // los matches específicos `/config/whatsapp_envio|numeros|respuestas_rapidas`
++      // con write: esAdmin(). Sin la exclusión, cualquier staff podía
++      // mutar esos docs por cliente custom.
++      allow write: if esStaff() &&
++        docId != 'whatsapp_envio' &&
++        docId != 'whatsapp_numeros' &&
++        docId != 'whatsapp_respuestas_rapidas';
++    }
+```
+
+Los 3 matches específicos (líneas 583-608) quedan tal cual — ahora SÍ son la única regla de write para esos docs (admin-only). Read se queda staff (heredado del genérico, sin exclusión).
+
+**Consumidores read-only audit del genérico (verificado antes de proponer el fix — write NO debe romperse):**
+- `src/services/contadores.service.ts` — write a `config/contadores` desde transactions (alta de OS/QT/FAC). Staff escribe. ✅ NO afectado por la exclusión.
+- `src/services/configEmpresa.service.ts` — write a `config/empresa`. Staff. ✅ NO afectado.
+- `src/services/configFiscal.service.ts` — write a `config/fiscal`. Staff. ✅ NO afectado.
+- `src/services/configTiposEquipo.service.ts` — write a `config/tiposEquipo`. Staff. ✅ NO afectado.
+- `src/firebase/seedData.ts` + `src/firebase/seedPrecios.ts` — write a `config/sistema`, `config/contadores`. Staff. ✅ NO afectado.
+- `src/services/configWhatsappEnvio.service.ts` — write a `config/whatsapp_envio` y `config/whatsapp_numeros`. ⚠️ ADMIN. ✅ Bloqueado intencionalmente por exclusión + match específico admin.
+- `src/services/whatsappRespuestasRapidas.service.ts` — write a `config/whatsapp_respuestas_rapidas`. ⚠️ ADMIN. ✅ Igual.
+
+**Opción B (alternativa — menos local):** dejar el genérico tal cual y blindar también los 3 matches específicos con `if esAdmin() && resource == null` para create y `esAdmin()` para update — pero como Firestore evalúa OR igual gana el genérico, esto NO arregla el problema. **DESCARTADA por análisis.**
+
+**Opción C (alternativa — cirugía mayor):** sacar los 3 docs `whatsapp_*` del namespace `config/` y moverlos a colección propia (ej. `config_whatsapp/{docId}`) con su propio match. Más limpio semánticamente pero requiere migración de datos (2 docs en producción) + cambio en 3 services + tests. **DESCARTADA — sobreingeniería para fix de seguridad.**
+
+### Qué se necesita para destrabar
+
+1. **Verificar el bug en producción** (opcional pero recomendable). Jorge o Cowork puede crear una cuenta QA con rol `secretaria` o `operaria` (las cuentas QA dedicadas ya existen — ver `docs/QA_SUPER_USER.md`) y desde la consola del browser ejecutar:
+   ```js
+   firebase.firestore().doc('config/whatsapp_envio').update({phoneNumberIdForzado: 'TEST_HACK'})
+   ```
+   Si pasa → bug confirmado, fix obligatorio. Si rechaza con `permission-denied` → bug NO existía (los comentarios eran correctos), sprint cierra como verificación.
+
+2. **Jorge agrega `OK: jorge YYYY-MM-DD HH:MM opcion=A`** al final de esta entrada para autorizar el fix.
+
+3. **Coordinator** (en el próximo `procesa bloqueos`) mueve a la cola, aplica el patch, corre `npm run deploy:rules`, hace post-commit y push. Reviewer obligatorio (rules + seguridad).
+
+4. **Alternativa rápida**: instalar Java en la máquina para poder probar con emulator local en futuros sprints de rules:
+   ```bash
+   brew install --cask temurin@17
+   sudo /usr/sbin/softwareupdate --install-rosetta --agree-to-license   # si es Apple Silicon y aplica
+   ```
+   Una vez con Java, los siguientes sprints de rules pueden levantar `firebase emulators:start --only firestore` + `@firebase/rules-unit-testing` para tests reales pre-deploy.
+
+### Por qué NO se deployó este sprint
+
+Cita textual del prompt de Jorge: *"CONDICIÓN DURA NO NEGOCIABLE: el test del emulator DEBE probar, ANTES de deployar, que: (a) un admin SÍ puede escribir ..., (b) un NO-admin NO puede ..., (c) el resto de `config/*` no se rompe. Si NO podés probar limpio con emulator (ej: no se puede levantar, falta config, falla el setup): NO DEPLOYES. Escalá a BLOQUEOS.md con el diff propuesto + razón + qué se necesita para destrabar."*
+
+Esto se cumple al pie de la letra: el emulator NO levanta porque Java está ausente. Fix propuesto + razón + qué necesita Jorge están arriba.
+
+### Archivos preparados (cambios NO commiteados — el fix vive solo en este doc)
+
+- `firestore.rules` líneas 560-570 — patch arriba (opción A). NO aplicado en el archivo del repo.
+- `firestore.rules.deployed.lock` — sin cambios (no se deployó nada).
+- Cazadores P-001..P-020 — sin cambios.
+
+### Riesgo de NO arreglar
+
+Bajo en magnitud (los 3 docs `whatsapp_*` no contienen secretos, los UIs gatean por rol, y los únicos consumidores que escriben usan el rol admin), pero el hueco es defense-in-depth roto. Si en el futuro se agrega un endpoint público que también lee config (ej. portal cliente leyendo `whatsapp_envio` para mostrar el número), o si un empleado curioso con cuenta `secretaria` decide jugar con la consola del browser, podría romper el envío saliente cambiando el `phoneNumberIdForzado`. Recomiendo desbloquear en menos de 7 días.
+
+---
+
 ## SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS — DESBLOQUEADO 2026-05-23 12:27 (OK: jorge opcion=1 nombreAgente=ON respuestasRapidas=admin deploy=auto)
 
 **Movido a `COLA_AUTONOMA.md` como PENDIENTE el 2026-05-23 por coordinator (`procesa bloqueos`, pasada 43). desbloqueadoPor: jorge 2026-05-23 12:27 vía `OK: jorge 2026-05-23 12:27 opcion=1 nombreAgente=ON respuestasRapidas=admin deploy=auto`.** Conservado acá como stub para forensia.
