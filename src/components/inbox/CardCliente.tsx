@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import {
   User,
   Phone,
@@ -9,11 +10,43 @@ import {
   Plus,
   UserPlus,
   ExternalLink,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { buscarClientePorTelefono } from '../../services/clientes.service';
 import { obtenerOrdenesActivasPorTelefono } from '../../services/ordenes.service';
 import type { Cliente, OrdenServicio } from '../../types';
 import { faseLabel, faseColor } from '../../utils';
+
+/**
+ * SPRINT-WA-INBOX-UX-QUICKWINS quickwin 3 (2026-05-23) — botones de copiar
+ * sobre datos del cliente (teléfono/email/dirección). Pequeño helper local
+ * para feedback (Check verde por 1.5s) + toast.
+ */
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copiado, setCopiado] = useState(false);
+  const handleClick = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiado(true);
+      toast.success(`${label} copiado`);
+      window.setTimeout(() => setCopiado(false), 1500);
+    } catch {
+      toast.error('No se pudo copiar');
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="p-1 text-gray-400 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors flex-shrink-0"
+      title={`Copiar ${label.toLowerCase()}`}
+      aria-label={`Copiar ${label.toLowerCase()}`}
+    >
+      {copiado ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+    </button>
+  );
+}
 
 /**
  * CardCliente — datos del cliente vinculado a la conversación + listado
@@ -97,20 +130,31 @@ export default function CardCliente({ waId, onCrearOrden }: Props) {
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <User size={14} className="text-gray-400 flex-shrink-0" />
-              <span className="text-sm font-medium text-gray-900 truncate">
+              <span className="text-sm font-medium text-gray-900 truncate flex-1">
                 {cliente.data.nombre || 'Sin nombre'}
               </span>
+              {cliente.data.nombre && (
+                <CopyButton value={cliente.data.nombre} label="Nombre" />
+              )}
+            </div>
+            {/* Teléfono del waId — quickwin 3: botón copiar */}
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <Phone size={12} className="text-gray-400 flex-shrink-0" />
+              <span className="truncate flex-1 font-mono">{waId}</span>
+              <CopyButton value={waId} label="Teléfono" />
             </div>
             {cliente.data.email && (
               <div className="flex items-center gap-2 text-xs text-gray-500">
                 <Mail size={12} className="text-gray-400 flex-shrink-0" />
-                <span className="truncate">{cliente.data.email}</span>
+                <span className="truncate flex-1">{cliente.data.email}</span>
+                <CopyButton value={cliente.data.email} label="Email" />
               </div>
             )}
             {cliente.data.direccion && (
               <div className="flex items-start gap-2 text-xs text-gray-500">
                 <MapPin size={12} className="text-gray-400 flex-shrink-0 mt-0.5" />
-                <span className="break-words">{cliente.data.direccion}</span>
+                <span className="break-words flex-1">{cliente.data.direccion}</span>
+                <CopyButton value={cliente.data.direccion} label="Dirección" />
               </div>
             )}
           </div>

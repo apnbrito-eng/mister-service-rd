@@ -171,6 +171,33 @@ export default function PanelCliente360({ waId, onCrearOrden }: Props) {
     return null;
   }, [ordenesActivas, todasOrdenes]);
 
+  // SPRINT-WA-INBOX-UX-QUICKWINS quickwin 2 (2026-05-23) — último servicio
+  // realizado (orden terminal más reciente). Sort client-side (P-015: NO
+  // agregar orderBy a la query Firestore). Cascada de fechas: fechaCita →
+  // fechaCierre raíz → cierreServicio.fechaCierre → createdAt.
+  const ultimoServicioRealizado = useMemo<OrdenServicio | null>(() => {
+    if (ordenesCerradas.length === 0) return null;
+    const fechaDe = (o: OrdenServicio): number => {
+      type O = OrdenServicio & {
+        fechaCierre?: Date | { toDate?: () => Date };
+        cierreServicio?: { fechaCierre?: Date | { toDate?: () => Date } };
+      };
+      const ox = o as O;
+      const cand: unknown =
+        ox.cierreServicio?.fechaCierre ??
+        ox.fechaCierre ??
+        ox.fechaCita ??
+        ox.createdAt;
+      if (!cand) return 0;
+      if (cand instanceof Date) return cand.getTime();
+      const obj = cand as { toDate?: () => Date };
+      if (typeof obj.toDate === 'function') return obj.toDate().getTime();
+      return 0;
+    };
+    const ordenadas = [...ordenesCerradas].sort((a, b) => fechaDe(b) - fechaDe(a));
+    return ordenadas[0] ?? null;
+  }, [ordenesCerradas]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Tabs header — compacto, scrollable horizontal en angosto */}
@@ -199,9 +226,18 @@ export default function PanelCliente360({ waId, onCrearOrden }: Props) {
 
       <div className="flex-1 overflow-y-auto p-3">
         {tab === 'datos' && (
-          /* Reusa CardCliente intacto — datos + órdenes activas + CTAs
-             de crear orden/cliente. CardCliente carga lo suyo. */
-          <CardCliente waId={waId} onCrearOrden={onCrearOrden} />
+          <div className="space-y-3">
+            {/* SPRINT-WA-INBOX-UX-QUICKWINS quickwin 2: último servicio realizado.
+                Aparece solo si hay órdenes terminales. NO suprime ni reemplaza
+                a CardCliente — es un destacado contextual arriba de los datos. */}
+            {ultimoServicioRealizado && (
+              <UltimoServicioCard
+                orden={ultimoServicioRealizado}
+                onClick={() => navigate(`/admin/ordenes/${ultimoServicioRealizado.id}`)}
+              />
+            )}
+            <CardCliente waId={waId} onCrearOrden={onCrearOrden} />
+          </div>
         )}
 
         {tab === 'ordenes' && (
@@ -568,5 +604,75 @@ function HistorialTab({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Destacado: Último servicio realizado (quickwin 2) ─────────────────────
+function UltimoServicioCard({
+  orden,
+  onClick,
+}: {
+  orden: OrdenServicio;
+  onClick: () => void;
+}) {
+  // Misma cascada de fechas que el sort que eligió esta orden, para mostrar
+  // la fecha más representativa del cierre.
+  type O = OrdenServicio & {
+    fechaCierre?: Date | { toDate?: () => Date };
+    cierreServicio?: { fechaCierre?: Date | { toDate?: () => Date } };
+  };
+  const ox = orden as O;
+  const cand =
+    ox.cierreServicio?.fechaCierre ??
+    ox.fechaCierre ??
+    ox.fechaCita ??
+    ox.createdAt;
+  const fechaCierre =
+    cand instanceof Date
+      ? cand
+      : ((cand as { toDate?: () => Date })?.toDate?.() ?? null);
+  const falla =
+    (orden as { descripcionFalla?: string; falla?: string }).descripcionFalla ??
+    (orden as { descripcionFalla?: string; falla?: string }).falla ??
+    null;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left bg-emerald-50/60 hover:bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 transition-colors"
+      title="Abrir esta orden"
+    >
+      <div className="flex items-center gap-1.5 mb-1">
+        <CheckCircle2 size={12} className="text-emerald-600" />
+        <span className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wide">
+          Último servicio realizado
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-mono font-medium text-gray-900 truncate">
+          {orden.numero || `OS-${orden.id.slice(0, 6)}`}
+        </span>
+        <span
+          className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white flex-shrink-0"
+          style={{ backgroundColor: faseColor(orden.fase) }}
+        >
+          {faseLabel(orden.fase)}
+        </span>
+      </div>
+      <p className="text-[11px] text-gray-700 mt-0.5 truncate">
+        <Wrench size={10} className="inline mr-1 text-gray-500" />
+        {orden.equipoTipo}
+        {orden.equipoMarca ? ` · ${orden.equipoMarca}` : ''}
+      </p>
+      {falla && (
+        <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2">{falla}</p>
+      )}
+      {fechaCierre && (
+        <p className="text-[10px] text-gray-500 mt-1">
+          Cerrado · {formatFecha(fechaCierre)}
+        </p>
+      )}
+    </button>
   );
 }

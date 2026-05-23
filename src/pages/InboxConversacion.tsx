@@ -674,6 +674,14 @@ export default function InboxConversacion() {
                 disabled={!ventanaAbierta || enviando}
                 className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none disabled:bg-gray-50 disabled:text-gray-400"
               />
+              {/* SPRINT-WA-INBOX-UX-QUICKWINS quickwin 4 (2026-05-23): el
+                  selector de plantillas también accesible con la ventana 24h
+                  ABIERTA (Meta permite enviar plantillas en cualquier
+                  momento). Con ventana CERRADA el botón ya aparece arriba
+                  dentro del banner amarillo — no lo duplicamos acá. */}
+              {ventanaAbierta && waId && (
+                <SelectorPlantillas waId={waId} />
+              )}
               <button
                 type="button"
                 onClick={handleEnviar}

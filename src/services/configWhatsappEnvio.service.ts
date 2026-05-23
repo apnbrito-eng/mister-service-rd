@@ -6,6 +6,17 @@ const DOC_ENVIO = 'whatsapp_envio';
 const DOC_NUMEROS = 'whatsapp_numeros';
 
 /**
+ * SPRINT-WA-INBOX-UX-QUICKWINS (2026-05-23) — quickwin 1: el selector de
+ * número de envío en /admin/configuracion muestra el número de teléfono
+ * REAL (humano) además del `phoneNumberId` (código interno de Meta).
+ * El `numeroReal` se persiste en el catálogo `config/whatsapp_numeros`
+ * y se sincroniza con la UI; los defaults vienen seedeados con los 2
+ * números reales que Jorge confirmó:
+ *   - 1226992440486630 → +1 829-471-6265 (Principal)
+ *   - 1151997541323577 → +1 849-564-6767 (Respaldo)
+ */
+
+/**
  * Configuración de envío de WhatsApp — selector admin-only para forzar
  * el número de envío cuando se necesita respaldo manual.
  *
@@ -32,6 +43,9 @@ export interface ConfigWhatsappEnvio {
 export interface NumeroWhatsapp {
   phoneNumberId: string;
   etiqueta: string;
+  /** Número de teléfono REAL (humano) ej: "+1 829-471-6265". Opcional para
+   *  retrocompatibilidad — los docs viejos pueden no tenerlo. */
+  numeroReal?: string;
 }
 
 export interface ConfigWhatsappNumeros {
@@ -46,8 +60,16 @@ export const CONFIG_WHATSAPP_ENVIO_DEFAULT: ConfigWhatsappEnvio = {
 
 export const CONFIG_WHATSAPP_NUMEROS_DEFAULT: ConfigWhatsappNumeros = {
   numeros: [
-    { phoneNumberId: '1226992440486630', etiqueta: 'Principal' },
-    { phoneNumberId: '1151997541323577', etiqueta: 'Respaldo' },
+    {
+      phoneNumberId: '1226992440486630',
+      etiqueta: 'Principal',
+      numeroReal: '+1 829-471-6265',
+    },
+    {
+      phoneNumberId: '1151997541323577',
+      etiqueta: 'Respaldo',
+      numeroReal: '+1 849-564-6767',
+    },
   ],
 };
 
@@ -76,8 +98,14 @@ function parseConfigNumeros(data: Record<string, unknown> | undefined): ConfigWh
           const obj = n as Record<string, unknown>;
           const phoneNumberId = typeof obj.phoneNumberId === 'string' ? obj.phoneNumberId.trim() : '';
           const etiqueta = typeof obj.etiqueta === 'string' ? obj.etiqueta.trim() : '';
+          const numeroReal = typeof obj.numeroReal === 'string' ? obj.numeroReal.trim() : '';
           if (!phoneNumberId) return null;
-          return { phoneNumberId, etiqueta: etiqueta || phoneNumberId };
+          const item: NumeroWhatsapp = {
+            phoneNumberId,
+            etiqueta: etiqueta || phoneNumberId,
+          };
+          if (numeroReal) item.numeroReal = numeroReal;
+          return item;
         })
         .filter((n): n is NumeroWhatsapp => n !== null)
     : [];
@@ -160,11 +188,17 @@ export async function actualizarConfigWhatsappNumeros(
   numeros: NumeroWhatsapp[],
   usuario?: string,
 ): Promise<void> {
+  // CLAUDE.md "strip undefined fields before addDoc/setDoc": NO incluir
+  // `numeroReal: undefined` en el payload (Firestore rechaza undefined).
   const limpio = numeros
-    .map((n) => ({
-      phoneNumberId: n.phoneNumberId?.trim() ?? '',
-      etiqueta: n.etiqueta?.trim() || n.phoneNumberId?.trim() || '',
-    }))
+    .map((n) => {
+      const phoneNumberId = n.phoneNumberId?.trim() ?? '';
+      const etiqueta = n.etiqueta?.trim() || phoneNumberId;
+      const numeroReal = n.numeroReal?.trim() ?? '';
+      const item: NumeroWhatsapp = { phoneNumberId, etiqueta };
+      if (numeroReal) item.numeroReal = numeroReal;
+      return item;
+    })
     .filter((n) => n.phoneNumberId.length > 0);
   const payload: Record<string, unknown> = {
     numeros: limpio,

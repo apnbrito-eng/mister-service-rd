@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { FileText, MapPin, Mic, Image as ImageIcon, AlertTriangle, Check, CheckCheck, Clock, ClipboardCopy, Paperclip, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { FileText, MapPin, Mic, Image as ImageIcon, AlertTriangle, Check, CheckCheck, Clock, ClipboardCopy, Paperclip, Loader2, Copy } from 'lucide-react';
 import type { Timestamp } from 'firebase/firestore';
 import type {
   WhatsAppMensajeInbox,
@@ -292,20 +293,52 @@ export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion
       ? toDate(mensaje.timestampMeta)
       : toDate(mensaje.createdAt);
 
-  const textoCopiable = onCopiarAOrden ? extraerTextoCopiable(mensaje) : null;
+  // SPRINT-INBOX-8b: "copiar a orden" solo cuando el form está abierto.
+  const textoParaOrden = onCopiarAOrden ? extraerTextoCopiable(mensaje) : null;
+  // SPRINT-WA-INBOX-UX-QUICKWINS quickwin 3: "copiar al portapapeles" SIEMPRE
+  // que el mensaje tenga texto copiable (sin depender del form abierto).
+  const textoClipboard = extraerTextoCopiable(mensaje);
+  const [copiadoClipboard, setCopiadoClipboard] = useState(false);
+  const handleCopiarClipboard = async () => {
+    if (!textoClipboard) return;
+    try {
+      await navigator.clipboard.writeText(textoClipboard);
+      setCopiadoClipboard(true);
+      toast.success('Mensaje copiado');
+      window.setTimeout(() => setCopiadoClipboard(false), 1500);
+    } catch {
+      toast.error('No se pudo copiar');
+    }
+  };
 
   return (
     <div className={`group flex items-end gap-1 ${esSaliente ? 'justify-end' : 'justify-start'}`}>
       {/* SPRINT-INBOX-8b: botón "copiar a orden" (solo entrante, solo si form abierto y hay texto) */}
-      {!esSaliente && textoCopiable && onCopiarAOrden && (
+      {!esSaliente && textoParaOrden && onCopiarAOrden && (
         <button
           type="button"
-          onClick={() => onCopiarAOrden(textoCopiable)}
+          onClick={() => onCopiarAOrden(textoParaOrden)}
           className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-500 hover:text-emerald-700 hover:bg-emerald-50 rounded-full focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-emerald-200"
           title="Copiar este mensaje al form de orden abierto"
           aria-label="Copiar este mensaje a la orden"
         >
           <ClipboardCopy size={14} />
+        </button>
+      )}
+      {/* SPRINT-WA-INBOX-UX-QUICKWINS quickwin 3: copiar al portapapeles (cualquier dirección, cualquier momento) */}
+      {!esSaliente && textoClipboard && (
+        <button
+          type="button"
+          onClick={handleCopiarClipboard}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-500 hover:text-brand-700 hover:bg-brand-50 rounded-full focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-brand-200"
+          title="Copiar este mensaje al portapapeles"
+          aria-label="Copiar al portapapeles"
+        >
+          {copiadoClipboard ? (
+            <Check size={14} className="text-emerald-600" />
+          ) : (
+            <Copy size={14} />
+          )}
         </button>
       )}
       <div
@@ -335,6 +368,22 @@ export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion
           )}
         </div>
       </div>
+      {/* SPRINT-WA-INBOX-UX-QUICKWINS quickwin 3: copiar mensaje saliente al portapapeles */}
+      {esSaliente && textoClipboard && (
+        <button
+          type="button"
+          onClick={handleCopiarClipboard}
+          className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 text-gray-400 hover:text-brand-700 hover:bg-brand-50 rounded-full focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-brand-200"
+          title="Copiar este mensaje al portapapeles"
+          aria-label="Copiar al portapapeles"
+        >
+          {copiadoClipboard ? (
+            <Check size={14} className="text-emerald-600" />
+          ) : (
+            <Copy size={14} />
+          )}
+        </button>
+      )}
     </div>
   );
 }

@@ -15,8 +15,10 @@ import {
   suscribirConfigWhatsappEnvio,
   suscribirConfigWhatsappNumeros,
   actualizarConfigWhatsappEnvio,
+  actualizarConfigWhatsappNumeros,
   ConfigWhatsappEnvio,
   ConfigWhatsappNumeros,
+  NumeroWhatsapp,
   CONFIG_WHATSAPP_ENVIO_DEFAULT,
   CONFIG_WHATSAPP_NUMEROS_DEFAULT,
 } from '../services/configWhatsappEnvio.service';
@@ -65,6 +67,11 @@ export default function Configuracion() {
   });
   const [waEnvioSaving, setWaEnvioSaving] = useState(false);
   const [waEnvioSeleccion, setWaEnvioSeleccion] = useState<string>('');
+  // SPRINT-WA-INBOX-UX-QUICKWINS quickwin 1 — editor admin del catálogo de
+  // números (etiqueta + número humano). Borrador local hasta que el admin
+  // pulse "Guardar números". null = no editando.
+  const [editandoNumeros, setEditandoNumeros] = useState<NumeroWhatsapp[] | null>(null);
+  const [waNumerosSaving, setWaNumerosSaving] = useState(false);
 
   useEffect(() => {
     const unsubE = suscribirConfigWhatsappEnvio(setConfigWaEnvio);
@@ -108,6 +115,25 @@ export default function Configuracion() {
       toast.error('Error al guardar el número de envío');
     } finally {
       setWaEnvioSaving(false);
+    }
+  };
+
+  const handleSaveWaNumeros = async () => {
+    if (!esSoloAdministrador) {
+      toast.error('Solo administrador puede editar el catálogo de números');
+      return;
+    }
+    if (!editandoNumeros) return;
+    setWaNumerosSaving(true);
+    try {
+      await actualizarConfigWhatsappNumeros(editandoNumeros, userProfile?.nombre);
+      toast.success('Catálogo de números actualizado');
+      setEditandoNumeros(null);
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al guardar el catálogo de números');
+    } finally {
+      setWaNumerosSaving(false);
     }
   };
 
@@ -768,11 +794,19 @@ export default function Configuracion() {
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]/30"
               >
                 <option value="">Automático (sticky por conversación)</option>
-                {configWaNumeros.numeros.map((n) => (
-                  <option key={n.phoneNumberId} value={n.phoneNumberId}>
-                    {n.etiqueta} — {n.phoneNumberId}
-                  </option>
-                ))}
+                {/* SPRINT-WA-INBOX-UX-QUICKWINS (2026-05-23) — mostrar el
+                    número humano destacado (numeroReal) + el código secundario. */}
+                {configWaNumeros.numeros.map((n) => {
+                  const real = n.numeroReal?.trim();
+                  const label = real
+                    ? `${real} · ${n.etiqueta} · cód ${n.phoneNumberId}`
+                    : `${n.etiqueta} — ${n.phoneNumberId}`;
+                  return (
+                    <option key={n.phoneNumberId} value={n.phoneNumberId}>
+                      {label}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div className="flex justify-end">
@@ -790,11 +824,23 @@ export default function Configuracion() {
           </div>
           <div className="mt-3 text-xs text-gray-600">
             {configWaEnvio.phoneNumberIdForzado ? (
-              <span>
-                Estado actual: <b>Forzado</b> →{' '}
-                <span className="font-mono">{configWaEnvio.phoneNumberIdForzado}</span>
-                {configWaEnvio.etiqueta ? ` (${configWaEnvio.etiqueta})` : ''}
-              </span>
+              (() => {
+                const item = configWaNumeros.numeros.find(
+                  (n) => n.phoneNumberId === configWaEnvio.phoneNumberIdForzado,
+                );
+                const real = item?.numeroReal?.trim();
+                return (
+                  <span>
+                    Estado actual: <b>Forzado</b> →{' '}
+                    {real ? <b>{real}</b> : null}
+                    {real ? ' · ' : null}
+                    <span className="font-mono">
+                      {configWaEnvio.phoneNumberIdForzado}
+                    </span>
+                    {configWaEnvio.etiqueta ? ` (${configWaEnvio.etiqueta})` : ''}
+                  </span>
+                );
+              })()
             ) : (
               <span>
                 Estado actual: <b>Automático</b> (sticky por conversación)
@@ -805,6 +851,100 @@ export default function Configuracion() {
                 · actualizado {configWaEnvio.actualizadoEn.toLocaleString('es-DO')}
                 {configWaEnvio.actualizadoPor ? ` por ${configWaEnvio.actualizadoPor}` : ''}
               </span>
+            )}
+          </div>
+
+          {/* Editor admin del catálogo de números — SPRINT-WA-INBOX-UX-QUICKWINS quickwin 1 */}
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-semibold text-gray-800">
+                Catálogo de números
+              </h3>
+              {editandoNumeros === null ? (
+                <button
+                  onClick={() => setEditandoNumeros(configWaNumeros.numeros.map((n) => ({ ...n })))}
+                  className="text-xs text-[#1a5fa8] hover:underline"
+                >
+                  Editar
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditandoNumeros(null)}
+                    disabled={waNumerosSaving}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveWaNumeros}
+                    disabled={waNumerosSaving}
+                    className="text-xs bg-[#1a5fa8] text-white px-3 py-1 rounded hover:bg-[#144a87] disabled:opacity-50"
+                  >
+                    {waNumerosSaving ? 'Guardando…' : 'Guardar números'}
+                  </button>
+                </div>
+              )}
+            </div>
+            {editandoNumeros === null ? (
+              <ul className="space-y-1.5">
+                {configWaNumeros.numeros.map((n) => (
+                  <li
+                    key={n.phoneNumberId}
+                    className="flex items-center justify-between gap-3 text-xs bg-gray-50 rounded-md px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-gray-900 font-medium truncate">
+                        {n.numeroReal?.trim() || '(sin número humano)'}
+                        <span className="text-gray-400 font-normal"> · {n.etiqueta}</span>
+                      </div>
+                      <div className="text-gray-400 font-mono mt-0.5 truncate">
+                        cód {n.phoneNumberId}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="space-y-2">
+                {editandoNumeros.map((n, idx) => (
+                  <div
+                    key={n.phoneNumberId || idx}
+                    className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-gray-50 rounded-md p-2"
+                  >
+                    <input
+                      type="text"
+                      value={n.numeroReal ?? ''}
+                      placeholder="+1 829-471-6265"
+                      onChange={(e) => {
+                        const copia = editandoNumeros.map((x, i) =>
+                          i === idx ? { ...x, numeroReal: e.target.value } : x,
+                        );
+                        setEditandoNumeros(copia);
+                      }}
+                      className="rounded border border-gray-300 px-2 py-1 text-xs"
+                    />
+                    <input
+                      type="text"
+                      value={n.etiqueta}
+                      placeholder="Principal"
+                      onChange={(e) => {
+                        const copia = editandoNumeros.map((x, i) =>
+                          i === idx ? { ...x, etiqueta: e.target.value } : x,
+                        );
+                        setEditandoNumeros(copia);
+                      }}
+                      className="rounded border border-gray-300 px-2 py-1 text-xs"
+                    />
+                    <div className="text-[10px] text-gray-500 font-mono self-center">
+                      cód {n.phoneNumberId}
+                    </div>
+                  </div>
+                ))}
+                <p className="text-[10px] text-gray-400">
+                  El código de Meta (phoneNumberId) no se edita acá — viene fijo por número.
+                </p>
+              </div>
             )}
           </div>
         </div>
