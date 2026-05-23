@@ -5,6 +5,95 @@
 
 ---
 
+## 2026-05-23 — autónomo (`trabaja`, pasada 42): SPRINT-WA-INBOX-UX-QUICKWINS + escalado SPRINT-WA-TRAZABILIDAD
+
+### Disparo
+
+Jorge pegó `trabaja` el 2026-05-23 con la fecha cambiada respecto al día anterior. Contexto: 2 sprints PENDIENTES al tope agregados por Cowork ese mismo día (1 autónomo + 1 que el sprint mismo marcaba ESCALA).
+
+### archivist PRE-CHANGE (inline) — SPRINT-WA-INBOX-UX-QUICKWINS
+
+Touch-list expandido y consumidores verificados:
+- `src/services/configWhatsappEnvio.service.ts` — creado en `c277fa1`. Agregar `numeroReal?` opcional a `NumeroWhatsapp` + parser que NO persista undefined (CLAUDE.md gotcha "strip undefined fields before setDoc"). Defaults seedeados con los 2 números reales confirmados por Jorge: `1226992440486630 → +1 829-471-6265`, `1151997541323577 → +1 849-564-6767`.
+- `src/pages/Configuracion.tsx` (1237 LOC) — solo modificado en c277fa1 dentro del scope wa. La sección está gated por `esSoloAdministrador` (rol === 'administrador'). Mantener ese gate intacto. Importar `actualizarConfigWhatsappNumeros` + `NumeroWhatsapp`. Agregar editor admin del catálogo.
+- `src/components/inbox/CardCliente.tsx` (233 LOC) — no leía `telefono` del cliente; usa `waId` del padre. Para el quickwin 3 (botones copiar) el bloque teléfono se pinta desde `waId`. Helper local `CopyButton` con Check verde 1.5s + toast.
+- `src/components/inbox/PanelCliente360.tsx` (572 LOC) — creado en SPRINT-INBOX-10 (`a4b3873`). Importa `obtenerTodasOrdenesPorTelefono` SIN orderBy (P-015). Agregar `useMemo ultimoServicioRealizado` sort client-side sobre `ordenesCerradas` (NO modificar la query). Componente `UltimoServicioCard` al final del archivo, render en tab Datos arriba de `CardCliente`.
+- `src/components/inbox/MensajeBubble.tsx` (340 LOC) — tocado por INBOX-8b + INBOX-9. Tiene `extraerTextoCopiable` ya — reusar para el botón clipboard. Posición simétrica al "copiar a orden" existente, sin colisión.
+- `src/pages/InboxConversacion.tsx` (699 LOC) — tocado por SPRINT-INBOX-11. `SelectorPlantillas` ya importado, montado solo si `!ventanaAbierta`. Para quickwin 4 agregar montaje paralelo cuando `ventanaAbierta` entre textarea y send button. NO duplicar.
+
+Historial git relevante:
+- 0 hits en `git log` para "selector plantillas ventana abierta" o "numero real catalogo".
+- Recordatorios: cazadores 20/20 activos. P-015 cuidar especialmente. P-001 no aplica (no escribimos a Firestore con userProfile.id). Sin gotcha relevante en BLOQUEOS.
+
+Sin advertencias bloqueantes.
+
+### Builder (inline)
+
+6 archivos, 408 insertions / 27 deletions.
+
+**Quickwin 1 — service + Configuracion:**
+- `configWhatsappEnvio.service.ts`: interface `NumeroWhatsapp` con `numeroReal?: string` opcional. Parser asigna `numeroReal` solo si llega con trim no vacío (preserva backcompat — docs viejos sin el campo siguen funcionando). Setter `actualizarConfigWhatsappNumeros` arma `item: NumeroWhatsapp` con `if (numeroReal) item.numeroReal = numeroReal` para NO persistir `undefined`. Defaults `CONFIG_WHATSAPP_NUMEROS_DEFAULT` actualizados con los 2 números reales de Jorge.
+- `Configuracion.tsx`: dropdown muestra `${real} · ${etiqueta} · cód ${phoneNumberId}` cuando `numeroReal` existe, fallback al label viejo si no. Estado actual destacado con `real` en negrita. Editor admin del catálogo abre/cierra borrador local (state `editandoNumeros: NumeroWhatsapp[] | null`). 3 inputs por item: numeroReal (texto), etiqueta (texto), cód (read-only). Botones "Guardar números" / "Cancelar". Handler `handleSaveWaNumeros` invoca `actualizarConfigWhatsappNumeros(editandoNumeros, userProfile?.nombre)` con toast y limpia el borrador al éxito. Sin tocar `firestore.rules` — la rule de `config/whatsapp_numeros` (creada en c277fa1) ya permite write admin.
+
+**Quickwin 2 — PanelCliente360:**
+- `useMemo ultimoServicioRealizado` sobre `ordenesCerradas` (filter ya calculado: fase === 'cerrado' || 'cancelado'). Sort client-side por cascada de fechas: `cierreServicio.fechaCierre` → `fechaCierre` raíz → `fechaCita` → `createdAt`. Cada candidato chequeado con `instanceof Date || .toDate?.()` para manejar Timestamps de Firestore. Devuelve `ordenadas[0] ?? null`.
+- Render en tab Datos arriba de CardCliente con `<UltimoServicioCard orden={ultimoServicioRealizado} onClick={() => navigate(`/admin/ordenes/${id}`)} />`.
+- `UltimoServicioCard` al final del archivo: bloque verde-claro con CheckCircle2, número de orden + fase badge, equipoTipo · marca, descripcionFalla (line-clamp-2), fecha de cierre formateada.
+
+**Quickwin 3 — botones copiar:**
+- `CardCliente`: helper local `CopyButton` (Copy/Check + toast). Pintado en nombre/teléfono/email/dirección. Bloque teléfono nuevo desde `waId` (CardCliente no leía `cliente.telefono` antes).
+- `MensajeBubble`: handler `handleCopiarClipboard` usa `navigator.clipboard.writeText(textoClipboard)` + toast + Check 1.5s. Botón se renderiza siempre que `textoClipboard !== null` (audio/sticker sin caption no muestran). Posición: entrante → izquierda junto al "copiar a orden", saliente → derecha del bubble (simétrico). Opacity 0 → 100 on group-hover (no satura el chat).
+
+**Quickwin 4 — InboxConversacion:**
+- `<SelectorPlantillas waId={waId} />` agregado entre textarea y send button, gated por `ventanaAbierta && waId`. Con `!ventanaAbierta` sigue en el banner amarillo arriba (cláusula `!ventanaAbierta` intacta). NO se duplica.
+
+### Tester (typecheck + cazadores + lint)
+
+- `npx tsc --noEmit`: exit 0.
+- `npm run check:regression`: 20/20 PASS (P-001..P-007, P-009..P-012, P-014..P-020). Sin hits.
+- `npx eslint <6 archivos> --max-warnings=0`: exit 0.
+- `npm run build`: PASS 4.63s. Bundle `Configuracion-DWXXdM48.js` 38.72 kB (+~5kB del editor admin). `InboxConversacion-Dh72VvD0.js` 50.71 kB.
+
+### Reviewer (inline)
+
+Sprint no toca rules ni endpoint, pero igual re-leí el diff con foco en:
+- Backcompat de `NumeroWhatsapp`: ✅ campo opcional, parsers manejan ausencia, defaults seedeados.
+- Gate admin: ✅ editor solo aparece para `esSoloAdministrador` (consistente con rule).
+- P-015 (orderBy): ✅ NO se agregó orderBy a ninguna query. `ultimoServicioRealizado` ordena client-side.
+- P-001 (userProfile.id vs auth.uid): ✅ no escribimos a Firestore con userProfile.id en este sprint (el setter usa `userProfile?.nombre` que es solo display, no clave).
+- Strip undefined: ✅ branch `if (numeroReal) item.numeroReal = numeroReal` antes de armar el payload.
+- UX no satura: ✅ botones clipboard opacity-0 → group-hover-100. Editor admin colapsable.
+
+APPROVED.
+
+### Commit + push + deploy
+
+- `git add` de los 6 archivos modificados (NO incluyo COWORK_CONTEXTO.md ni los untracked .png/.md).
+- `git commit` con HEREDOC, hook pre-commit: typecheck + cazadores 20/20 + lint staged → PASS.
+- Hash: **`3eff5eb`**.
+- `git push` → `d212020..3eff5eb main -> main` OK.
+- Deploy Vercel: pendiente (no monitoreado en esta pasada — push recién hecho, devops vendrá si Jorge lo dispara).
+- Deploy rules: N/A (no se tocaron rules).
+
+### SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS — escalado a BLOQUEOS
+
+El sprint mismo declaraba "ESCALA a BLOQUEOS" en su propio header (Cowork dejó la marca explícita). Toca `api/whatsapp/send.ts` (endpoint público) + `firestore.rules` (rule nueva para `config/whatsapp_respuestas_rapidas`). Sub-regla CLAUDE.md exige OK formal con shape `OK: jorge YYYY-MM-DD HH:MM ...` para cualquiera de esas 2 áreas. Cowork solo aportó el spec — Jorge no agregó OK formal.
+
+Coordinator (esta pasada):
+1. Agregó stub al tope de `BLOQUEOS.md` con resumen + 4 decisiones requeridas (scope completo vs fases A/B/C / default flag nombreAgente ON-OFF / permiso respuestasRapidas / deploy auto) + ejemplo de línea OK.
+2. Marcó la entrada en `COLA_AUTONOMA.md` como ⊘ MOVIDO A BLOQUEOS con razón documentada.
+3. Para desbloquear: Jorge edita la entrada de BLOQUEOS con `OK: jorge ...` + pega `procesa bloqueos`.
+
+### Pendientes operativos heredados (acción manual de Jorge)
+
+Mismos que en pasada 41 — no avanzados esta pasada:
+- `npm run deploy:storage-rules` para SPRINT-138 (P-013 sigue WARN cold start).
+- QA visual INBOX-11/INBOX-10/INBOX-8c en producción.
+- QA B.1 (`SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1`).
+- (Opcional) `npx tsx scripts/backfill-convs-corruptas-stripundefined.ts` para las 3 convs corruptas — las convs se auto-sanan en su próximo mensaje tras `0baf8b7`.
+
+---
+
 ## 2026-05-22 — autónomo (`procesa bloqueos`, pasada 41): SPRINT-WA-NUMERO-RESPALDO-MANUAL Fase 1
 
 ### Disparo
