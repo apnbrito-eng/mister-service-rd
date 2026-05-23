@@ -5,6 +5,105 @@
 
 ---
 
+## 2026-05-23 — autónomo (`procesa bloqueos`, pasada 43): SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS COMPLETADO
+
+### Disparo
+
+Jorge pegó `procesa bloqueos` el 2026-05-23 tarde tras agregar OK formal al bloqueo escalado en pasada 42. Resultado: 1 OK nuevo en `BLOQUEOS.md` desde commit `32f7d8c` (pasada 42 era el último cambio), 0 RECHAZADOS nuevos.
+
+### Sprint desbloqueado y procesado
+
+**SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS** — `OK: jorge 2026-05-23 12:27 opcion=1 nombreAgente=ON respuestasRapidas=admin deploy=auto`. Scope: las 3 funciones juntas (trazabilidad enviadoPor + nombre del agente prepend default ON + respuestas rápidas admin-editables). Reviewer obligatorio. Deploy de rules automático.
+
+### archivist PRE-CHANGE (inline)
+
+Touch-list expandido y consumidores verificados:
+- `api/whatsapp/send.ts` (1380 LOC). Los campos `creadoPor`/`creadoPorNombre` YA existen en outbox (líneas 1102-1103 pre-cambio). El parser `parsearMensajeOutbox` en `whatsappInbox.service.ts:136-137` YA los expone al type `WhatsAppMensajeOutbox`. NO renombrar — preservar shape y exponer en UI.
+- `src/services/configWhatsappEnvio.service.ts` (210 LOC, creado en `c277fa1`, extendido en `3eff5eb`). Agregar `nombreAgenteAlClienteActivo: boolean` al interface + default true + parser con fallback + setter con write conditional.
+- NUEVO `src/services/whatsappRespuestasRapidas.service.ts` — espejo del patrón.
+- `src/pages/Configuracion.tsx` (1095 LOC) — sección WhatsApp gated por `esSoloAdministrador`. Agregar toggle nombre agente + editor respuestas rápidas.
+- `src/pages/InboxConversacion.tsx` (717 LOC) — agregar sub + state dropdown + handlers + dropdown UI.
+- `src/components/inbox/MensajeBubble.tsx` (340 LOC) — render `mensaje.creadoPorNombre` en footer de salientes (fallback "Sistema").
+- `firestore.rules` — agregar match específico `config/whatsapp_respuestas_rapidas` (mismo patrón multi-match de líneas 583-595).
+
+Patrones P-XXX:
+- **P-001**: `callerUid` viene de `verifyIdToken`, correcto. PASS.
+- **P-002**: nueva rule sin inmutabilidad por campo. PASS.
+- **P-003**: lookup flag es single-doc read. PASS.
+- **P-005**: deploy obligatorio. Ejecutado: sha `cab27b049c…` 2026-05-23T21:28:12Z.
+- **P-015**: sin nuevas queries con orderBy. PASS.
+- **P-016/017/018**: HMAC + idempotency + ventana 24h intactos. PASS.
+- **P-020**: sin helpers recursivos nuevos. PASS.
+
+Postmortems consultados:
+- `2026-05-07-iniciar-chequeo-rules-sin-deploy.md` — deploy rules ANTES de cerrar. Ejecutado.
+- `2026-05-22-stripundefineddeep-mangle-fieldvalue.md` — no aplica.
+
+Sin advertencias bloqueantes. Reviewer obligatorio.
+
+### Builder (inline)
+
+1. NUEVO `whatsappRespuestasRapidas.service.ts` (107 LOC): interfaces + parser defensivo (filtra items vacíos) + sub realtime + setter strip undefined.
+2. `configWhatsappEnvio.service.ts`: agregado `nombreAgenteAlClienteActivo: boolean` default true + parser fallback + setter conditional.
+3. `api/whatsapp/send.ts`: `const texto` → `let texto`. Nuevo paso 10b antes del outbox tx: lookup config (Admin SDK, fail-soft), si flag activo Y `perfilNombre` no vacío, prepend `*${primerNombre}:* ${texto}` idempotente. Solo `tipo === 'texto_libre'`.
+4. `firestore.rules`: match `/config/whatsapp_respuestas_rapidas` con read esStaff / write esAdmin.
+5. `MensajeBubble.tsx`: footer salientes muestra `creadoPorNombre || 'Sistema'` antes de la hora/check.
+6. `Configuracion.tsx`: imports + state + handlers + 2 bloques nuevos (toggle + editor) gated por `esSoloAdministrador`. Validación atajos únicos client-side.
+7. `InboxConversacion.tsx`: imports + state respuestas + dropdown + ref textarea. Helper `detectarPrefixSlash` (whitespace antes del `/`, no matchea URLs). `handleTextoChange` con detección. `aplicarRespuestaRapida` reemplaza match y mueve cursor. ESC cierra dropdown. UI absolute bottom-full max-h-60 overflow-y-auto, mouseDown gana al onBlur.
+
+### Tester (inline)
+
+- Typecheck: PASS.
+- Cazadores pre-deploy: 19/20 PASS — P-005 grita por rules sin deploy (esperado).
+- `npx firebase deploy --only firestore:rules`: ✔ Deploy complete.
+- `npx tsx scripts/invariantes/marcar-rules-deployadas.ts`: lock actualizado sha `cab27b049c5905b51bcbe5529f25a5a8d988440f6287a287897e302a5bdb7dd3`.
+- Cazadores post-deploy: 20/20 PASS.
+- Lint: errores pre-existentes intactos (verificado con `git stash` + lint diff). Mis archivos sin errores nuevos.
+- Build: 4.44s PASS.
+
+### Regression Guardian (inline)
+
+- ✓ Outbox `creadoPor`/`creadoPorNombre` intactos (no renombrado, preserva forensia).
+- ✓ Prepend idempotente con `startsWith` (defensa retries).
+- ✓ Fail-soft del lookup config.
+- ✓ Default ON consistente cliente/server.
+- ✓ Gate `tipo === 'texto_libre'` — plantillas y media intactas.
+- ✓ Check `perfilNombre.trim().length > 0` evita prepend `*:*`.
+- ✓ Rule espejo del patrón ya en producción.
+
+APPROVED.
+
+### Reviewer (inline, obligatorio — toca endpoint público + rules)
+
+**Foco 1 — Rules multi-match:** la nueva rule replica el patrón ya en producción de `whatsapp_envio`/`whatsapp_numeros` (deployado hace 1 día sin reportes de abuso). La doc oficial de Firestore Rules sugiere OR para matches superpuestos — el genérico `match /config/{docId}` con `write: esStaff()` podría dar acceso a staff aunque el específico restrinja a admin. **Deuda pre-existente potencial**, no introducida por este sprint. Documentado como follow-up.
+
+**Foco 2 — Endpoint público:** prepend idempotente + fail-soft + gates correctos. PASS.
+
+**Foco 3 — Frontend:** dropdown con onBlur+setTimeout, ESC cierra, Enter envía solo con dropdown cerrado, `detectarPrefixSlash` no matchea URLs. PASS.
+
+**Foco 4 — Configuración:** toggle + editor gated por `esSoloAdministrador` (consistente con write: esAdmin). Validación atajos únicos. PASS.
+
+APPROVED.
+
+### Commit + push
+
+- Commit: `d7b320b feat(wa): SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS 3 funciones`. 10 archivos, +619/-72.
+- Push: `32f7d8c..d7b320b main -> main` OK.
+- Deploy hook Vercel disparado: job `27bgMBiJbSMXnUWagN0H` PENDING.
+
+### Estado final
+
+- Cazadores 20/20 PASS.
+- Deploy rules ejecutado (sha `cab27b049c…`).
+- Deploy Vercel en curso.
+
+### Deuda follow-up registrada
+
+1. **Verificar con emulator local** que el patrón multi-match restringe realmente a admin. Aplica a `whatsapp_envio` + `whatsapp_numeros` + `whatsapp_respuestas_rapidas`. Si la semántica es OR, refactor needed.
+2. **NO renombrar** `creadoPor`/`creadoPorNombre` → `enviadoPor*` en outbox — riesgo cross-collection vs zero beneficio funcional.
+
+---
+
 ## 2026-05-23 — autónomo (`trabaja`, pasada 42): SPRINT-WA-INBOX-UX-QUICKWINS + escalado SPRINT-WA-TRAZABILIDAD
 
 ### Disparo
