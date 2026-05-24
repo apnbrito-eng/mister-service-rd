@@ -39,6 +39,7 @@ Este proyecto tiene un sistema raro pero potente. Cowork (vos) escribe sprints e
 - `tester` — typecheck + lint
 - `regression_guardian` — busca patrones de bugs ya catalogados
 - `archivist` — historia y postmortems
+- `memoria` — mantiene `docs/sprints/MEMORIA_MAESTRA.md` al día (el estado vivo de todo)
 - `reviewer` — code review independiente
 
 El coordinator commitea + pushea cuando todo pasa. Los pre-commit hooks (`.husky/pre-commit`) corren cazadores anti-regresión que **bloquean** commits con bugs conocidos.
@@ -199,11 +200,13 @@ Estas son sub-reglas obligatorias en `CLAUDE.md`. Si las violás, vas a re-intro
 
 ## Cuando empieces una sesión nueva
 
-1. Leé este archivo entero (`COWORK_CONTEXTO.md`).
-2. Leé `CLAUDE.md`.
-3. Leé el último `docs/sprints/DIARIO_<fecha>.md` para saber el último estado.
-4. Leé `docs/sprints/COLA_AUTONOMA.md` para ver qué hay pendiente.
+1. **Leé `docs/sprints/MEMORIA_MAESTRA.md` PRIMERO** — es la foto siempre-actual del estado (pendiente / en curso / hecho reciente / decisiones de Jorge). Te pone al día en 1 minuto. (Gatillo de Jorge: cuando dice **"ponte al día"**, esto es lo primero que leés.)
+2. Leé este archivo entero (`COWORK_CONTEXTO.md`) para el contexto general.
+3. Leé `CLAUDE.md`.
+4. Si necesitás más detalle, leé el último `docs/sprints/DIARIO_<fecha>.md` y el tope de `docs/sprints/COLA_AUTONOMA.md`.
 5. Si Jorge te pide algo, seguí el flujo de "Cuando Jorge te pide algo" (arriba).
+
+> **Al CERRAR la sesión (o tras un cambio importante): actualizá `docs/sprints/MEMORIA_MAESTRA.md`.** Mové lo completado a "Hecho reciente", agregá lo nuevo a "Pendiente", refrescá la fecha. Mantenelo corto (es un índice, no una copia). Así la próxima conversación arranca con todo cargado. El agente `memoria` (`.claude/agents/memoria.md`) define esta disciplina; en Cowork la seguís vos a mano.
 
 ---
 

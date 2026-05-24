@@ -188,8 +188,21 @@ Antiprecedente SPRINT-145 (2026-05-12): tenía 4 cambios mapeados pero faltaban 
 
 Complementaria al archivist PRE-CHANGE (histórico de bugs), no lo reemplaza. PRE-CHANGE pregunta "¿qué pasó antes con esto?"; touch-list expandido pregunta "¿quién depende de esto ahora?".
 
+## Memoria viva (agente `memoria` + `MEMORIA_MAESTRA.md`)
+
+> **Objetivo:** que el estado del trabajo nunca se pierda entre conversaciones. Jorge cambia de conversación / día / herramienta (Cowork ↔ Claude Code) y debe poder retomar TODO sin re-explicar nada.
+
+`docs/sprints/MEMORIA_MAESTRA.md` es la **foto siempre-actual** del estado: pendiente, en curso, hecho reciente, decisiones de Jorge que no se olvidan, y un índice a las fuentes vivas (cola, BLOQUEOS, diarios). Es un ÍNDICE corto de ~1 página, NO una copia de todo. El agente `memoria` (`.claude/agents/memoria.md`) es su guardián.
+
+**Sub-regla obligatoria — actualizar `MEMORIA_MAESTRA.md` al cerrar cada pasada autónoma.** El coordinator invoca al agente `memoria` en modo ACTUALIZAR al final de cada pasada (después de cerrar/escalar sprints, antes del commit de docs): mover lo completado a "Hecho reciente" (con hash + fecha), agregar lo nuevo a "Pendiente", refrescar la fecha de "Última actualización". Es el espejo operativo del DIARIO_<fecha> (detalle del día) — la memoria es el estado acumulado y corto. Sin esto, las conversaciones nuevas arrancan a ciegas aunque el diario exista, porque nadie lee 15 diarios.
+
+**Para Cowork (fuera de Claude Code):** misma disciplina a mano. Leer `MEMORIA_MAESTRA.md` PRIMERO al abrir (gatillo de Jorge: "ponte al día"), y actualizarla al cerrar la conversación o tras un cambio importante. Detalle en `COWORK_CONTEXTO.md`.
+
+**Convivencia:** `memoria` ve el AHORA (qué falta, qué se hizo); `archivist` ve el TIEMPO (incidentes, postmortems, métricas). No se solapan ni se duplican: la memoria APUNTA a la cola/diarios, no los copia.
+
 ## Related docs in repo
 
+- `docs/sprints/MEMORIA_MAESTRA.md` — **memoria viva**: foto siempre-actual del estado (pendiente / en curso / hecho reciente / decisiones de Jorge / índice). Leer PRIMERO al abrir cualquier sesión; actualizar al cerrar. Mantenida por el agente `memoria`.
 - `README.md` — setup and module list.
 - `CONTEXTO_PROYECTO.md` — deeper architecture reference (some sections predate recent refactors; treat as historical context, verify against current code).
 - `CONTEXTO_PAGINA_WEB.md` — public-website requirements and Firestore-permission matrix for public pages.
@@ -211,6 +224,9 @@ Este repo tiene un equipo de 5 agentes especializados que trabajan en conjunto:
 | `tester` | Typecheck + lint + regresiones conocidas antes del commit. |
 | `reviewer` | Code review independiente con ojos frescos. |
 | `devops` | Monitorea Vercel + GitHub, dispara Deploy Hook si el webhook se atora. |
+| `memoria` | Mantiene `docs/sprints/MEMORIA_MAESTRA.md` al día — el estado vivo de todo. El coordinator lo invoca al cerrar cada pasada. |
+
+(El repo tiene además agentes de apoyo: `architect`, `tech_lead`, `qa`, `security`, `docs`, `archivist`, `regression_guardian`, `mejora_continua`, `user_advocate`.)
 
 **Uso:** desde Claude Code, escribe `/equipo` para activar al coordinator. El coordinator delega al resto automáticamente.
 

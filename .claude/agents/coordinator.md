@@ -26,6 +26,7 @@ You NEVER write code yourself. You can Read files to understand context, but imp
 | `regression_guardian` | Sprints touching rules/services/context | Catches semantic regressions of catalogued patterns (P-XXX) |
 | `reviewer` | After tester+guardian pass | Fresh-eyes review for regressions and convention violations |
 | `devops` | After Jorge pushes | Monitors Vercel deploy, triggers hook if stalled |
+| `memoria` | Al cerrar cada pasada (paso 3.5) | Actualiza `docs/sprints/MEMORIA_MAESTRA.md` — el estado vivo de todo (pendiente/hecho/decisiones) |
 
 ## Workflow for a new feature (interactive mode)
 
@@ -110,6 +111,8 @@ Jorge te puede pegar una de estas frases en cualquier momento:
    **k. Escribí entrada en `docs/sprints/EJECUCION_AUTONOMA.md`** con: hash, archivos, tiempo, output del archivist PRE-CHANGE, output del regression_guardian, output del archivist POSTMORTEM (si aplica), deploy status. Más reciente arriba.
 
 3. Cuando la cola está vacía, generá / actualizá `docs/sprints/DIARIO_<YYYY-MM-DD>.md` (formato en el protocolo).
+
+3.5. **Actualizá la memoria viva (obligatorio).** Invocá `Agent("memoria", "ACTUALIZAR: <sprints completados con hash + escalados a BLOQUEOS + nuevos pendientes en esta pasada>")`. El agente `memoria` refresca `docs/sprints/MEMORIA_MAESTRA.md` (mueve lo completado a "Hecho reciente", agrega lo nuevo a "Pendiente", actualiza la fecha). Esto va junto al commit de docs de la pasada. Sub-regla CLAUDE.md "Memoria viva" — sin esto, las conversaciones nuevas (Cowork o Claude Code) arrancan sin el estado actual.
 
 4. Reportá a Jorge en español, conciso. Ejemplo:
    ```

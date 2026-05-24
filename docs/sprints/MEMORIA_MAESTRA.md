@@ -1,0 +1,76 @@
+# 🧠 MEMORIA MAESTRA — Mister Service RD
+
+> **Qué es esto:** la foto SIEMPRE actual de en qué andamos. Pendiente, en curso, hecho reciente, y las decisiones de Jorge que no se olvidan. **Es lo PRIMERO que se lee al abrir cualquier conversación** (Cowork o Claude Code) y lo ÚLTIMO que se actualiza al cerrar.
+>
+> **Cómo usarlo (Jorge):** al abrir una conversación nueva, escribí **"ponte al día"**. Claude lee este archivo y queda cargado con todo. Vos podés abrirlo cuando quieras para ver el estado: está en `docs/sprints/MEMORIA_MAESTRA.md`.
+>
+> **Quién lo mantiene:** el agente **`memoria`** (`.claude/agents/memoria.md`). El coordinator lo actualiza al cerrar cada pasada; Cowork lo actualiza al cerrar cada conversación. Este archivo es un ÍNDICE corto — el detalle vive en los archivos enlazados abajo.
+
+**Última actualización:** 2026-05-24 por Cowork.
+
+---
+
+## ⏳ PENDIENTE AHORA
+
+### En la cola autónoma (Jorge corre `trabaja` en Claude Code)
+
+- **SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2** — migrar los pagos del array `orden.pagos` a una subcolección, con lectura de respaldo (las órdenes viejas y nuevas se ven igual) + script de migración idempotente (DRY-RUN primero; si <500 órdenes lo aplica solo, si >500 escala a BLOQUEOS). **No toca reglas** (eso es B-3). Está al tope de `COLA_AUTONOMA.md`. Plan de 3 fases ya aprobado por Jorge.
+
+### Esperando acción manual de Jorge (Cowork NO puede hacerlas)
+
+- **`npm run deploy:storage-rules`** (SPRINT-138) — sin esto las fotos del chat→orden no andan 100% en producción; el cazador P-013 queda en WARN (no bloquea).
+- **Smoke test en producción** — selector de número con números reales, trazabilidad (quién envió + nombre del agente), respuestas rápidas con "/", y el inbox (fotos, ficha cliente, form a la izquierda).
+- **Crear 2da/3ra WABA en Meta** + cargar `phone_number_id` + token en Vercel env + allowlist → desbloquea `SPRINT-WA-NUMERO-RESPALDO-MANUAL-FASE-2`.
+
+---
+
+## 🔧 EN CURSO
+
+Nada activo en construcción ahora mismo. La cola tiene B-2 esperando que Jorge corra `trabaja`.
+
+---
+
+## ✅ HECHO RECIENTE (últimos hitos)
+
+- **2026-05-24** — `SPRINT-WA-SEGURIDAD-CONFIG-RULES` COMPLETADO (commit `e9aa3ef`). Se cerró un hueco de permisos: los 3 docs de config de WhatsApp (`whatsapp_envio`, `whatsapp_numeros`, `whatsapp_respuestas_rapidas`) ahora son escribibles SOLO por admin. Verificado con emulator (Java Temurin 25, 22 tests OK) + rules deployadas. 20 cazadores OK.
+- **2026-05-24** — **QA de PAGOS-FASE-B-1 aprobada** (Jorge + Cowork verificaron en producción): se confirmó el pago de prueba de OS-0059 → salió de pendientes → desbloquea la emisión del conduce. Por eso B-2 ya está en la cola.
+- **2026-05-23** — `SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS` (commit `d7b320b`): trazabilidad de quién envía cada mensaje + nombre del agente al cliente + respuestas rápidas tipo WhatsApp Business.
+- **2026-05-23** — `SPRINT-WA-INBOX-UX-QUICKWINS` (commit `3eff5eb`): número real + código en el selector, último servicio en el panel del cliente, botones de copiar, plantillas accesibles con la ventana abierta.
+- **2026-05-22** — `SPRINT-WA-NUMERO-RESPALDO-MANUAL` Fase 1 + arreglo del bug `stripUndefinedDeep` (mensajes de WhatsApp que no se reflejaban en el CRM) + arreglo del script `deploy:storage-rules`.
+
+> El detalle completo de cada día está en `docs/sprints/DIARIO_<fecha>.md`.
+
+---
+
+## 📌 DECISIONES DE JORGE QUE NO SE OLVIDAN
+
+- **Buzón de seguimiento (nurture) — regla anti-bloqueo:** a un cliente que NO quiere agendar se le manda **UN solo recordatorio automático**, nada más automático. Después, todo es **manual por lotes** que selecciona el admin/coordinador (para no disparar bloqueos de Meta). WhatsApp Flows se ven más adelante.
+- **PAGOS por fases con QA entre cada una.** B-1 ya pasó QA → B-2 habilitada. B-3 (toca reglas) espera nueva QA de Jorge antes de procesarse.
+- **Cowork NO hace solo:** crear WABA / cuentas, pagos, OAuth, integraciones nuevas, migraciones >500 docs, ni tocar reglas de Firestore sin OK. Eso se escala a `BLOQUEOS.md`.
+- **Comunicación:** español latino/dominicano, breve, sin jerga. Decir siempre si un comando va en la **Terminal de la Mac** o en **Claude Code**.
+- **Números WhatsApp:** `1226992440486630` = +1 829-471-6265 (Principal) · `1151997541323577` = +1 849-564-6767 (Respaldo).
+
+---
+
+## 🔮 PROYECTOS FUTUROS (necesitan diseño antes de cola)
+
+- **IA Coordinadora de Citas** — agente de WhatsApp que agende solo, transcriba audios del cliente, y el buzón de seguimiento con la regla anti-bloqueo. Visión + preguntas de diseño en `docs/sprints/PROPUESTA_IA_COORDINADORA_CITAS.md`. **No construir sin sesión de diseño.**
+
+---
+
+## 🗂️ DÓNDE VIVE TODO (índice de la fuente viva)
+
+| Si querés saber… | Mirá aquí |
+|---|---|
+| Qué hay pendiente en la cola | `docs/sprints/COLA_AUTONOMA.md` (el tope) |
+| Qué espera OK de Jorge | `docs/sprints/BLOQUEOS.md` |
+| Qué hizo el coordinator cada día | `docs/sprints/DIARIO_<fecha>.md` |
+| Log detallado de ejecución autónoma | `docs/sprints/EJECUCION_AUTONOMA.md` |
+| Reglas del proyecto + gotchas | `CLAUDE.md` |
+| Contexto general para Cowork | `COWORK_CONTEXTO.md` |
+| Bugs catalogados (cazadores) | `docs/PATRONES_REGRESION.md` |
+| Análisis de bugs de producción | `docs/postmortems/*.md` |
+
+---
+
+> **Recordatorio para quien edite este archivo:** mantenelo CORTO. Esto es un índice del estado, no una copia de todo. Si una sección crece mucho, movela al archivo fuente que corresponde y dejá solo el enlace. Tachar (`~~...~~`) en vez de borrar cuando algo se completa y querés preservar el rastro por unos días.
