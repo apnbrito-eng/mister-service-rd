@@ -98,7 +98,8 @@ APPROVED.
 
 ### Commit + push
 
-- Hash: `<pendiente>` (commit con `firestore.rules` + `firestore.rules.deployed.lock` + actualización de `COLA_AUTONOMA.md` + `BLOQUEOS.md` + `EJECUCION_AUTONOMA.md` + `DIARIO_2026-05-24.md`).
+- Hash: `e9aa3ef` (commit con `firestore.rules` + `firestore.rules.deployed.lock` + actualización de `COLA_AUTONOMA.md` + `BLOQUEOS.md` + `EJECUCION_AUTONOMA.md` + `DIARIO_2026-05-24.md`).
+- Deploy Vercel hook disparado: job `cPgLhAPi5DIe6xpLcUMs` PENDING (backup, webhook GitHub→Vercel automático también activo).
 - Pre-commit hook: PASS (20/20 cazadores + typecheck + lint staged files).
 
 ### devops
