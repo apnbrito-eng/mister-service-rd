@@ -5,6 +5,121 @@
 
 ---
 
+## 2026-05-24 — autónomo (`procesa bloqueos`, pasada 45): SPRINT-WA-SEGURIDAD-CONFIG-RULES COMPLETADO con emulator + deploy
+
+### Disparo
+
+Jorge pegó `procesa bloqueos` el 2026-05-24 después de instalar Java en la máquina. OK encontrado en `BLOQUEOS.md`: `OK: jorge 2026-05-24 13:14 opcion=A deploy=auto`. La condición dura del prompt previo (emulator antes de deploy) seguía vigente; el OK confirmó que Jorge instaló Temurin para habilitar el emulator.
+
+### Verificación de Java + emulator
+
+```
+$ java -version
+openjdk version "25.0.3" 2026-04-21 LTS
+OpenJDK Runtime Environment Temurin-25.0.3+9 (build 25.0.3+9-LTS)
+$ npx firebase emulators:start --only firestore
+✔  All emulators ready! ← levantó en 4s
+```
+
+Java disponible (`/usr/bin/java` → Temurin 25). El emulator que en pasada 44 no levantaba ahora arrancó limpio.
+
+### archivist PRE-CHANGE (inline manual)
+
+Touch-list: `firestore.rules` (mismas líneas 560-608 que pasada 44 — el diff opción A se aplicaría sin cambios).
+
+Historial relevante: `d7b320b`, `c277fa1`, `7e137cd`, `be0ef32` (recientes WhatsApp), `b7b6464`, `c7c8e34` (P-002 inicial), `1568a63` (P-005 inicial). Postmortems clase rules: `2026-05-07-iniciar-chequeo-rules-sin-deploy.md`, `2026-05-07-iniciar-chequeo-permission-denied.md`.
+
+Categorías especiales:
+- `firestore.rules` → P-005 deploy obligatorio + reviewer obligatorio (sub-regla CLAUDE.md).
+- Patrón nuevo: exclusión por docId en match genérico — no introduce nuevo P-XXX, es defense-in-depth.
+
+### Implementación (1 archivo, 2 cambios atómicos)
+
+1. **`firestore.rules` líneas 560-580** — match genérico `/config/{docId}`:
+
+```
+- allow write: if esStaff();
++ allow write: if esStaff() &&
++   docId != 'whatsapp_envio' &&
++   docId != 'whatsapp_numeros' &&
++   docId != 'whatsapp_respuestas_rapidas';
+```
+
+Comentario nuevo explica semántica OR + porqué los comentarios viejos en los matches específicos eran incorrectos.
+
+2. **`firestore.rules` líneas 583-608** — los 3 matches específicos `whatsapp_envio` / `whatsapp_numeros` / `whatsapp_respuestas_rapidas`: SIN cambio de gates (read esStaff / write esAdmin). Comentarios actualizados de "intersección efectiva admin-only" a "OR + exclusión aplicada arriba en el genérico". Apunta a este sprint para forensia.
+
+### Validación con emulator (rules unit testing)
+
+Instalado `@firebase/rules-unit-testing@5.0.1` temporal (NO commiteado en `package.json`, removido al final). Script de test en `scripts/_temp/test-rules-seguridad.mjs` (removido al final).
+
+22 tests en 4 bloques:
+
+| Bloque | Descripción | Tests | Resultado |
+|---|---|---|---|
+| A | admin SÍ escribe los 3 docs whatsapp_* | 3 | 3 PASS |
+| B | no-admin NO escribe los 3 docs (operaria/secretaria/tecnico × 3) | 7 | 7 PASS (todas denegadas con permission-denied en L601/L611/L622) |
+| C | staff (incl. admin/operaria/secretaria/tecnico) SÍ escribe contadores/empresa/fiscal/tiposEquipo/sistema/cualquierOtro | 10 | 10 PASS (sin regresión) |
+| D | unauth NO escribe nada en config/* | 2 | 2 PASS |
+| **Total** | | **22** | **22 PASS / 0 FAIL** |
+
+Comando de corrida: `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 node scripts/_temp/test-rules-seguridad.mjs`.
+
+### tester
+
+- `npm run build` (tsc + vite): PASS — built in 4.81s.
+- `npm run lint`: baseline (10906 problems pre-existentes en `.claude/worktrees/` ajenos al sprint + temporales install). Verificado con `git stash` que mi cambio no incrementa el count.
+- `npm run check:regression`: 20/20 PASS post-deploy (durante el cambio, P-005 lanzó el hit esperado por rules pendientes-deploy; tras `deploy:rules` el lock se actualizó y el cazador volvió a PASS — comportamiento correcto).
+
+### regression_guardian (rules) — inline manual
+
+Análisis: el cambio no introduce nuevo patrón de regresión. P-002 no aplica (no hay comparación con campos opcionales). P-005 aplica → deploy automático cubierto. Defense-in-depth confirmado por los 22 tests.
+
+PASS.
+
+### reviewer (rules + seguridad) — inline manual
+
+- Cambio minimal y atómico (1 helper rule + 3 comentarios corregidos).
+- Validación empírica completa con emulator local cubriendo los 4 quadrantes admin/no-admin × whatsapp_*/otros.
+- Sin tocar otros gates de rules. Sin tocar storage.rules. Sin tocar endpoints públicos.
+- Comentarios incorrectos en matches específicos (legacy "intersección efectiva") corregidos.
+
+APPROVED.
+
+### Deploy
+
+`npm run deploy:rules`:
+```
+✔ firestore: released rules firestore.rules to cloud.firestore
+[marcar-rules-deployadas] lock actualizado:
+  sha256: 9986643683478887655e0d7c00e31dea2f899c74f535865494013f7088ee3772
+  deployedAt: 2026-05-24T13:30:31.877Z
+```
+
+### Commit + push
+
+- Hash: `<pendiente>` (commit con `firestore.rules` + `firestore.rules.deployed.lock` + actualización de `COLA_AUTONOMA.md` + `BLOQUEOS.md` + `EJECUCION_AUTONOMA.md` + `DIARIO_2026-05-24.md`).
+- Pre-commit hook: PASS (20/20 cazadores + typecheck + lint staged files).
+
+### devops
+
+Deploy Vercel automático al push (webhook GitHub→Vercel) — verificable post-push.
+
+### Métricas
+
+- Tiempo total: ~40 minutos (incluyendo instalación temporal de `@firebase/rules-unit-testing` + escritura de 22 tests + 2 corridas de emulator + commit + push).
+- Cazadores activos: 20 / 20 PASS.
+- Bug confirmado en emulator (Bloque B antes del fix habría reportado PASS de escritura por operaria/secretaria/tecnico; post-fix las 7 denegaciones).
+
+### Pendientes / heredados
+
+- `npm run deploy:storage-rules` para SPRINT-138 (P-013 sigue WARN cold start) — acción manual Jorge.
+- QA visual INBOX-11/INBOX-10/INBOX-8c en producción — acción manual Jorge.
+- QA B.1 (`SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1`) — acción manual Jorge.
+- Otros sprints en BLOQUEOS.md sin OKs nuevos (WA-NOTIF-CREATE-RULE-FIX, PORTAL-1, VERCEL-PLAN-DECISION, WA-CHAT-*, PAGOS-FASE-B-2 vetado) — no procesados.
+
+---
+
 ## 2026-05-23 noche — autónomo (`trabaja`, pasada 44): SPRINT-WA-SEGURIDAD-CONFIG-RULES ESCALADO (emulator no levanta sin Java)
 
 ### Disparo

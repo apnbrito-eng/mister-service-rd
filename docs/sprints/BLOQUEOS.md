@@ -10,7 +10,13 @@
 
 ---
 
-## SPRINT-WA-SEGURIDAD-CONFIG-RULES — BLOQUEADO 2026-05-23 (coordinator pasada 44 — emulator no levanta sin Java)
+## SPRINT-WA-SEGURIDAD-CONFIG-RULES — DESBLOQUEADO 2026-05-24 13:14 (OK: jorge opcion=A deploy=auto) — COMPLETADO en pasada 45
+
+**Movido a `COLA_AUTONOMA.md` como EN_EJECUCION el 2026-05-24 por coordinator (`procesa bloqueos`, pasada 45). desbloqueadoPor: jorge 2026-05-24 13:14 vía `OK: jorge 2026-05-24 13:14 opcion=A deploy=auto`. Jorge instaló Java (Temurin 25 verificado), emulator levantó limpio en 4s, 22/22 tests PASS en 4 bloques (admin SÍ × 3 docs / no-admin NO × 7 combinaciones / staff sin regresión × 10 docs / unauth denegado × 2), deploy `npm run deploy:rules` ejecutado, sprint COMPLETADO mismo día. Conservado acá como stub para forensia.** El historial original (diagnóstico, diff opción A, audit de consumidores, opciones B/C descartadas) se preserva debajo.
+
+---
+
+## SPRINT-WA-SEGURIDAD-CONFIG-RULES — BLOQUEADO 2026-05-23 (coordinator pasada 44 — emulator no levanta sin Java) [HISTÓRICO — DESBLOQUEADO]
 
 **Movido a `BLOQUEOS.md` el 2026-05-23 por coordinator autónomo (`trabaja`, pasada 44). Razón: la condición dura del prompt exigía probar el fix con Firebase Emulator ANTES de deployar; el emulator requiere Java JRE que NO está instalado en esta máquina, así que NO se deployó. El bug está confirmado por documentación oficial de Firebase pero no se pudo reproducir limpio en local.**
 
@@ -111,6 +117,8 @@ Esto se cumple al pie de la letra: el emulator NO levanta porque Java está ause
 ### Riesgo de NO arreglar
 
 Bajo en magnitud (los 3 docs `whatsapp_*` no contienen secretos, los UIs gatean por rol, y los únicos consumidores que escriben usan el rol admin), pero el hueco es defense-in-depth roto. Si en el futuro se agrega un endpoint público que también lee config (ej. portal cliente leyendo `whatsapp_envio` para mostrar el número), o si un empleado curioso con cuenta `secretaria` decide jugar con la consola del browser, podría romper el envío saliente cambiando el `phoneNumberIdForzado`. Recomiendo desbloquear en menos de 7 días.
+
+**OK: jorge 2026-05-24 13:14 opcion=A deploy=auto** — Jorge eligió (vía Cowork) cerrar el hueco con la opción A (excluir los 3 docs `whatsapp_*` de la regla general `match /config/{docId}` para que solo el match específico admin-only los gobierne). Cowork ya confirmó leyendo `firestore.rules` que el hueco es real (Firestore usa unión/OR entre matches; el comentario que decía "intersección" estaba mal). **Jorge va a instalar Java (`brew install --cask temurin@17`) para que el emulator pueda correr la prueba pre-deploy.** CONDICIÓN DURA sigue vigente: el emulator DEBE probar (a) admin SÍ escribe los 3 docs, (b) NO-admin NO, (c) resto de `config/*` (especialmente `config/contadores`) sin romper, ANTES de deployar. Reviewer obligatorio. Si el emulator aún no levanta, NO deployar y reportar.
 
 ---
 

@@ -566,7 +566,21 @@ service cloud.firestore {
       // del cliente al crear orden/cotización/factura. Permitimos write a
       // staff oficina (admin/coord/secretaria/operaria) + tecnico (que
       // crea cotizaciones) + ayudante.
-      allow write: if esStaff();
+      //
+      // SPRINT-WA-SEGURIDAD-CONFIG-RULES (2026-05-24): excluir explícitamente
+      // los 3 docs WhatsApp admin-only. Firestore Rules evalúa múltiples
+      // matches con semántica OR (no intersección), así que sin esta
+      // exclusión el `write: esStaff()` de este genérico GANABA sobre los
+      // matches específicos `/config/whatsapp_envio|numeros|respuestas_rapidas`
+      // (líneas 583-608) con write: esAdmin(). Resultado: cualquier staff
+      // podía mutar esos 3 docs por cliente custom. Los comentarios viejos
+      // en los matches específicos decían "intersección efectiva" — eran
+      // incorrectos. Corregidos también abajo. Verificado con emulator
+      // (rules unit test) — ver pasada 45.
+      allow write: if esStaff() &&
+        docId != 'whatsapp_envio' &&
+        docId != 'whatsapp_numeros' &&
+        docId != 'whatsapp_respuestas_rapidas';
     }
 
     // Configuración del selector de número de envío WhatsApp (SPRINT-WA-
@@ -575,11 +589,13 @@ service cloud.firestore {
     // uno. `phoneNumberIdForzado: null` = modo automático (sticky intacto).
     // Doc shape: { phoneNumberIdForzado: string|null, etiqueta?, actualizadoEn, actualizadoPor }.
     //
-    // Múltiples matches: Firestore evalúa AMBOS matches al escribir. El
-    // genérico /config/{docId} de arriba permite write a staff; este match
-    // específico restringe a admin. Resultado efectivo: solo admin escribe.
-    // Read sigue siendo staff (heredado del genérico) — UI lee para mostrar
-    // estado actual a coord/secretaria/operaria sin permitir cambio.
+    // Múltiples matches: Firestore Rules evalúa OR (no AND). Sin la
+    // exclusión por docId en el match genérico /config/{docId} arriba, el
+    // write: esStaff() del genérico ganaría sobre este admin-only. La
+    // exclusión está aplicada desde SPRINT-WA-SEGURIDAD-CONFIG-RULES
+    // (2026-05-24); este match específico es ahora la única regla de
+    // write y restringe efectivamente a admin. Read sigue siendo staff
+    // (heredado del genérico vía OR) — UI lee para mostrar estado actual.
     match /config/whatsapp_envio {
       allow read: if esStaff();
       allow write: if esAdmin();
@@ -589,6 +605,7 @@ service cloud.firestore {
     // Shape: { numeros: [{ phoneNumberId: string, etiqueta: string }], actualizadoEn, actualizadoPor }.
     // Seed inicial en el cliente (CONFIG_WHATSAPP_NUMEROS_DEFAULT) con
     // los 2 phone_number_ids actuales del WABA.
+    // Ver nota multi-match arriba (whatsapp_envio) — exclusión en /config/{docId} aplicada en SPRINT-WA-SEGURIDAD-CONFIG-RULES.
     match /config/whatsapp_numeros {
       allow read: if esStaff();
       allow write: if esAdmin();
@@ -597,11 +614,9 @@ service cloud.firestore {
     // Respuestas rápidas programables del inbox WhatsApp (SPRINT-WA-
     // TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS, 2026-05-23, función 3). Admin
     // edita el catálogo desde /admin/configuracion; staff las consume
-    // desde el composer del inbox con el atajo "/". Mismo patrón que
-    // whatsapp_envio/whatsapp_numeros: match específico restringe
-    // write a admin; el genérico /config/{docId} arriba permite write
-    // a staff, pero la intersección efectiva resulta admin-only.
+    // desde el composer del inbox con el atajo "/".
     // Shape: { items: [{ id: string, atajo: string, texto: string }], actualizadoEn, actualizadoPor }.
+    // Ver nota multi-match arriba (whatsapp_envio) — exclusión en /config/{docId} aplicada en SPRINT-WA-SEGURIDAD-CONFIG-RULES.
     match /config/whatsapp_respuestas_rapidas {
       allow read: if esStaff();
       allow write: if esAdmin();

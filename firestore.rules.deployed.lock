@@ -4,5 +4,5 @@
 # Cazador P-005 lo compara contra el SHA-256 actual de firestore.rules
 # para detectar diff pendiente de deployar.
 
-sha256: cab27b049c5905b51bcbe5529f25a5a8d988440f6287a287897e302a5bdb7dd3
-deployedAt: 2026-05-23T21:28:12.852Z
+sha256: 9986643683478887655e0d7c00e31dea2f899c74f535865494013f7088ee3772
+deployedAt: 2026-05-24T13:30:31.877Z
