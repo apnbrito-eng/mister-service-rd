@@ -12,9 +12,13 @@
 
 ## ⏳ PENDIENTE AHORA
 
-### En la cola autónoma (Jorge corre `trabaja` en Claude Code)
+### En la cola autónoma (Jorge corre `trabaja` en Claude Code) — en orden
 
-- **SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2** — migrar los pagos del array `orden.pagos` a una subcolección, con lectura de respaldo (las órdenes viejas y nuevas se ven igual) + script de migración idempotente (DRY-RUN primero; si <500 órdenes lo aplica solo, si >500 escala a BLOQUEOS). **No toca reglas** (eso es B-3). Está al tope de `COLA_AUTONOMA.md`. Plan de 3 fases ya aprobado por Jorge.
+1. **SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2** — migrar los pagos del array `orden.pagos` a una subcolección, con lectura de respaldo (las órdenes viejas y nuevas se ven igual) + script de migración idempotente (DRY-RUN primero; si <500 órdenes lo aplica solo, si >500 escala a BLOQUEOS). **No toca reglas** (eso es B-3). Plan de 3 fases ya aprobado por Jorge.
+2. **Bloque AGENTES (ideas robadas de Ruflo, sin instalarlo):**
+   - **SPRINT-AGENTES-1-AUDITORIA-CONTABLE** — agente `auditor_contable` + cazadores de invariantes de dinero + barrido de los módulos financieros (REPORTA, no arregla).
+   - **SPRINT-AGENTES-2-MEMORIA-DIRIGE** — `MAPA_RIESGOS_MODULOS.md`: mapa de riesgo por módulo que todo agente lee antes de tocar (la memoria pasa a guía activa).
+   - **SPRINT-AGENTES-3-PARALELIZAR** — el coordinator corre verificación + auditorías de módulos disjuntos en paralelo (sin escrituras concurrentes).
 
 ### Esperando acción manual de Jorge (Cowork NO puede hacerlas)
 
