@@ -62,6 +62,13 @@ interface PlantillaArgs {
   nombre: string;
   idioma: 'es' | 'es_DO';
   variables: string[];
+  /**
+   * URL HTTPS opcional del encabezado IMAGE de la plantilla (SPRINT-WA-FIX-PLANTILLAS-PARAMS
+   * 2026-05-25). Si la plantilla en Meta tiene configurado header IMAGE,
+   * pasar acá la URL del banner branded. Ver `api/whatsapp/send.ts` L164-169
+   * — si no se pasa, send.ts cae al logo público fallback.
+   */
+  headerImageUrl?: string;
 }
 
 interface MediaArgs {
@@ -179,6 +186,12 @@ export async function enviarTexto(
  * `nombre` debe matchear una plantilla aprobada en Meta Business Manager.
  * `variables` se mapea a `{{1}}`, `{{2}}`, ... en orden.
  *
+ * `headerImageUrl` (opcional, HTTPS) — si la plantilla en Meta tiene
+ * configurado header IMAGE, pasar la URL del banner branded. Si no se pasa,
+ * el endpoint cae al logo público fallback (ver `api/whatsapp/send.ts`
+ * L164-169 + L300-312). Se incluye en el body solo si está definido para
+ * mantener el patrón "strip undefined" del repo.
+ *
  * Nota: WA-5 implementará validación contra cache `whatsapp_plantillas`
  * (estado APPROVED + cantidad de variables matchea). Hoy el backend NO
  * valida la plantilla — un nombre inválido o variables faltantes resultan
@@ -189,12 +202,17 @@ export async function enviarPlantilla(
   nombre: string,
   idioma: 'es' | 'es_DO',
   variables: string[],
+  headerImageUrl?: string,
   opciones?: OpcionesEnvio,
 ): Promise<RespuestaEnvio> {
+  const plantilla: PlantillaArgs = { nombre, idioma, variables };
+  if (headerImageUrl) {
+    plantilla.headerImageUrl = headerImageUrl;
+  }
   return llamarApiSend({
     wa_id,
     tipo: 'plantilla',
-    plantilla: { nombre, idioma, variables },
+    plantilla,
     ordenId: opciones?.ordenId,
     phoneNumberIdOverride: opciones?.phoneNumberIdOverride,
   });

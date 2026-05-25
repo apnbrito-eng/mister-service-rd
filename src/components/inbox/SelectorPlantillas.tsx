@@ -120,6 +120,7 @@ export default function SelectorPlantillas({ waId }: Props) {
         plantillaElegida.nombre,
         plantillaElegida.idioma,
         valores,
+        plantillaElegida.imagenEncabezadoUrl,
         opciones,
       );
       if ('error' in r && r.error) {
