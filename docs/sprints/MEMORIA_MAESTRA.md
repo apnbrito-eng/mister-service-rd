@@ -6,7 +6,7 @@
 >
 > **Quién lo mantiene:** el agente **`memoria`** (`.claude/agents/memoria.md`). El coordinator lo actualiza al cerrar cada pasada; Cowork lo actualiza al cerrar cada conversación. Este archivo es un ÍNDICE corto — el detalle vive en los archivos enlazados abajo.
 
-**Última actualización:** 2026-05-25 por Cowork (agregó `SPRINT-WA-FIX-PLANTILLAS-PARAMS` a la cola + imágenes branded).
+**Última actualización:** 2026-05-25 por coordinator (pasada 50 `trabaja`: cerró `SPRINT-WA-FIX-PLANTILLAS-PARAMS` hash `0ab73c5`, deploy job `Yr0nTylm03jpzaalsPhd`).
 
 ---
 
@@ -14,16 +14,17 @@
 
 ### En la cola autónoma (Jorge corre `trabaja` en Claude Code) — en orden
 
-1. **SPRINT-WA-FIX-PLANTILLAS-PARAMS** (🔴 ALTA, al tope) — arregla las plantillas de WhatsApp que fallan ⚠️ al enviarse desde el inbox. El catálogo `plantillasWhatsApp.ts` está desfasado de Meta (4/5 con variables mal → #132000). **Scope SOLO FRONTEND** (Cowork verificó que `send.ts` YA soporta header de imagen + botones → no toca endpoint/rules/migración). Las 4 imágenes branded ya están en `public/plantillas/`. Spec: `PLANTILLAS_META_SPEC_2026-05-25.md` (sección "⚠️ CORRECCIÓN IMPORTANTE"). QA de envío real la hace Jorge desde el inbox.
-2. **SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL** (follow-up nuevo, NO en cola formal aún) — migrar `Cotizaciones.tsx:314` de `generateNumeroCotizacion(count)` deprecated a `siguienteNumeroCotizacion()` atomic. Severidad ALTA, riesgo BAJO, autónomo. Documentado en `AUDITORIA_CONTABLE_2026-05-24.md`. Cowork puede agregarlo a la cola cuando quiera.
+1. **SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL** (follow-up, NO en cola formal aún) — migrar `Cotizaciones.tsx:314` de `generateNumeroCotizacion(count)` deprecated a `siguienteNumeroCotizacion()` atomic. Severidad ALTA, riesgo BAJO, autónomo. Documentado en `AUDITORIA_CONTABLE_2026-05-24.md`. Cowork puede agregarlo a la cola cuando quiera.
+2. **SPRINT-WA-AUTORESPUESTA-SIN-HEADER** (follow-up nuevo, NO en cola formal) — hallazgo lateral de SPRINT-WA-FIX-PLANTILLAS-PARAMS: `auto_respuesta_fuera_horario` no tiene encabezado en Meta pero `send.ts` SIEMPRE agrega header (fallback al logo). Si el webhook envía esa plantilla → header indebido. **ESCALA** — toca `api/whatsapp/webhook.ts` o `api/whatsapp/send.ts` para soportar "sin header". Cowork puede agregarlo.
 
 ### En BLOQUEOS esperando QA o OK de Jorge
 
+- **SPRINT-WA-FIX-PLANTILLAS-PARAMS** — código commiteado + pusheado (hash `0ab73c5` 2026-05-25 pasada 50). Frontend-only; deploy automático (job Vercel `Yr0nTylm03jpzaalsPhd`). **QA Jorge:** desde el inbox, mandar cada una de las 4 plantillas a un número de prueba y confirmar ✓✓ (entregado) + banner branded correcto (no ⚠️). Hallazgo lateral documentado como follow-up: `SPRINT-WA-AUTORESPUESTA-SIN-HEADER`.
 - **SPRINT-GARANTIA-FLUJO-COMPLETO** — ⏸ código FASE A commiteado + pusheado (hash `59c5fb0` 2026-05-25 pasada 49). Aplica las reglas de Jorge: técnico original conserva su comisión, descuento del 10% sobre piezas al cerrar la orden de garantía (no al confirmar cita), cazador P-024 anti-reintroducción del patrón viejo. **NO marcado COMPLETADO** — Jorge debe correr 4 casos QA (mismo técnico cubre / otro técnico cubre / sin piezas / sin comisión original). Plan QA + deuda fase B en `BLOQUEOS.md`. Deuda fase B: botón "Abrir garantía" desde orden/ficha, gate "solo oficina no técnicos", capturar si el cliente paga, notifs al reabrir, regla "mismo técnico que cubre no gana comisión adicional".
 
 ### Esperando acción manual de Jorge (Cowork NO puede hacerlas)
 
-- **DRY-RUN del script de migración B-2:** `npx tsx scripts/migrar-pagos-array-a-subcoleccion.ts` — reporta conteo de órdenes con pagos. Si <500 → correr con `--apply` (autónomo). Si >500 → re-escalar con conteo exacto. Sin esto, la subcolección queda vacía y B-3 no puede arrancar.
+- ~~**DRY-RUN del script de migración B-2**~~ **[HECHO 2026-05-25 por Jorge]** — corrió DRY-RUN (16 órdenes, 18 pagos) + `--apply`: subcolección poblada (16 órdenes migradas, 18 pagos escritos, arrays `orden.pagos` intactos = source-of-truth). <500 → aplicado autónomo según spec. **B-3 (cut-over + endurecer rules) sigue esperando QA de Jorge.**
 - **QA SPRINT-GARANTIA Fase A** en producción/staging — 4 casos detallados en `BLOQUEOS.md`. Hash `59c5fb0`.
 - **QA SPRINT-FIX-LEADS-FORMULARIO-PUBLICO** — enviar un formulario público real con foto + firma + PDF y verificar que llega como solicitud. Hash `01df699`. Storage rules ya deployadas.
 - **Smoke test en producción** — selector de número con números reales, trazabilidad (quién envió + nombre del agente), respuestas rápidas con "/", y el inbox (fotos, ficha cliente, form a la izquierda).
@@ -39,6 +40,8 @@ Nada activo en construcción ahora mismo. SPRINT-GARANTIA Fase A está commitead
 
 ## ✅ HECHO RECIENTE (últimos hitos)
 
+- **2026-05-25 (pasada 50, `trabaja`)** — 1 sprint COMPLETADO:
+  - `SPRINT-WA-FIX-PLANTILLAS-PARAMS` COMPLETADO hash `0ab73c5`. Arregla las 4 plantillas WhatsApp desfasadas del rediseño Meta ~15 may 2026 (error #132000 en `recordatorio` + variables/slots equivocados en las otras 3 + faltaba header IMAGE). Solo FRONTEND — `send.ts` ya soportaba `headerImageUrl` desde SPRINT-WA-2-HEADER-IMAGE. Archivos: `src/config/plantillasWhatsApp.ts` (tipo `PlantillaCatalogo` con `imagenEncabezadoUrl?`, union `AutopopularDe` +4 fuentes nuevas, 2 helpers nuevos `formatearFechaCitaDia`/`formatearFechaCitaHora`, las 4 plantillas reescritas según `PLANTILLAS_META_SPEC_2026-05-25.md`), `src/services/whatsapp.service.ts` (`PlantillaArgs` con `headerImageUrl?`, `enviarPlantilla` acepta nuevo param posicional, patrón strip-undefined), `src/components/inbox/SelectorPlantillas.tsx` (reenvía URL). 24/24 cazadores PASS. Build 4.36s. Pre-commit hook PASS. Push `ae1a6a6..0ab73c5`. Deploy job `Yr0nTylm03jpzaalsPhd` PENDING. QA Jorge envío real pendiente. Hallazgo lateral documentado follow-up `SPRINT-WA-AUTORESPUESTA-SIN-HEADER`.
 - **2026-05-25 (pasada 49, `trabaja` autorizaciones explícitas Jorge)** — 2 sprints procesados:
   - `SPRINT-FIX-LEADS-FORMULARIO-PUBLICO` COMPLETADO hash `01df699` (Jorge OK opción A + deploy auto + incluir-gps=si). Archivos: `storage.rules` (match nuevo `solicitudes-publico/**` whitelist `image/*` + `application/pdf` < 10MB, REGLA DE ORO preservada — comodín `{allPaths=**}` y `fotos-equipos-publico` intactos), `src/services/solicitudes.service.ts` (path migra a `solicitudes-publico/...`), `src/pages/public/FormularioPublico.tsx` (fix lateral GPS hallazgo #7 — busca por `campo.tipo === 'ubicacion'` con cascada a clave literal, type guard refinado). Deploy ejecutado `npm run deploy:storage-rules` sha `accf5550...` 12:24:57Z. P-013 lock actualizado. 23/23 cazadores PASS.
   - `SPRINT-GARANTIA-FLUJO-COMPLETO` FASE A hash `59c5fb0` (Jorge OK FASE A; NO cerrado COMPLETADO hasta QA). Aplica reglas Jorge: técnico original conserva comisión, 10% costo piezas al cerrar orden garantía (no anulación 100%). NUEVO helper `aplicarDescuentoGarantiaPorPiezas` (calcula `-(piezas × 0.10)`, busca comisión por ordenId+tecnicoId, NO toca `estaAnulada`). Helper invocado en `CierreServicioWizard` post-cierre cuando orden `esGarantia=true` + piezas. `Citas.tsx::onAfterCreate` reemplazado bloque anulación-100% por solo snapshot factura + audit `garantia_reabierta`. UI `Comisiones.tsx` columnas "Desc. garantía" + "Neto" + CSV + panel totales con sub-línea bruto/desc. Banner modal "Cambio de técnico" reformulado (10% piezas vs 100% comisión). NUEVO cazador P-024 + entrada `PATRONES_REGRESION.md` + registrado en `run-all.ts` (24/24 PASS). Deuda fase B documentada en `BLOQUEOS.md`: botón "abrir garantía", gate "solo oficina", capturar cliente paga, notifs, regla "mismo técnico no gana comisión adicional".

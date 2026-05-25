@@ -5,6 +5,101 @@
 
 ---
 
+## 2026-05-25 — autónomo (`trabaja`, pasada 50): SPRINT-WA-FIX-PLANTILLAS-PARAMS
+
+### Disparo
+
+Jorge tiró `trabaja` PASADA 50 con instrucciones de procesar sprints SEGUROS nuevos. Cowork había agregado `SPRINT-WA-FIX-PLANTILLAS-PARAMS` al tope desde la pasada 49 (las plantillas WhatsApp fallaban ⚠️ — Jorge lo reprodujo mandándose una).
+
+### Estado leído
+
+- **MEMORIA_MAESTRA.md** confirma: pasada 49 cerró cola sin SEGUROS pendientes; GARANTIA Fase A + FIX-LEADS esperando QA Jorge (NO procesables); SPRINT-WA-FIX-PLANTILLAS-PARAMS agregado por Cowork al tope.
+- **COLA_AUTONOMA.md** tope: 1 sprint PENDIENTE real (`SPRINT-WA-FIX-PLANTILLAS-PARAMS`). El resto de la cola son COMPLETADOS históricos.
+- **BLOQUEOS.md**: solo SPRINT-GARANTIA Fase A + SPRINT-FIX-LEADS como stubs "awaiting QA Jorge". CERO OKs nuevos para desbloquear.
+
+### Procesamiento — SPRINT-WA-FIX-PLANTILLAS-PARAMS
+
+**Restricciones verificadas:**
+- NO toca `firestore.rules` (spec lo dice explícitamente).
+- NO toca `storage.rules`.
+- NO toca `api/whatsapp/send.ts` — verificado que ya soporta `headerImageUrl` desde SPRINT-WA-2-HEADER-IMAGE (`7f6b17a` 2026-05-19): L164-169 (declaración campo opcional), L300-312 (uso en `construirPayloadMeta`), L719-742 (validación HTTPS y parseo del body).
+- NO hay migración de datos.
+- Procesable autónomo.
+
+**Archivist PRE-CHANGE (resumido):**
+- 3 archivos del touch-list. Sin postmortems previos para ninguno.
+- `plantillasWhatsApp.ts` solo modificado en SPRINT-INBOX-7 (`63b0056`).
+- `whatsapp.service.ts` última modificación `d7b320b` (SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS).
+- `SelectorPlantillas.tsx` creado en SPRINT-INBOX-7, refinado en SPRINT-WA-INBOX-UX-QUICKWINS (`3eff5eb`).
+- Sin advertencias.
+
+**Mapa de Riesgos (módulo WhatsApp):**
+- Patrones P-016..P-020 aplican al módulo. Este sprint NO toca ninguno: solo extiende tipos y propaga un string opcional. No crea helpers recursivos. No toca webhook/HMAC/idempotency/ventana 24h.
+- Decisión Jorge respetada: las 4 plantillas viven en `src/config/plantillasWhatsApp.ts` (no en config docs).
+
+**Builder (implementación):**
+
+1. `src/config/plantillasWhatsApp.ts` (+115 / -38):
+   - Tipo `PlantillaCatalogo` extendido con `imagenEncabezadoUrl?: string`.
+   - Union `AutopopularDe` extendida con 4 fuentes: `cliente.direccion`, `orden.equipoTipo`, `orden.fechaCitaDia`, `orden.fechaCitaHora`.
+   - 2 nuevos helpers: `formatearFechaCitaDia(fecha)` ("jue 22/05") y `formatearFechaCitaHora(fecha)` ("9:30am") — partidas de la fechaCita.
+   - `autopopularValor` maneja los 4 cases nuevos.
+   - **Las 4 plantillas reescritas con variables exactas de la spec:**
+     - `cita_confirmada` (5+IMG): Nombre / Día / Hora / Técnico / Dirección.
+     - `conduce_emitido` (4+IMG): Nombre / #conduce / Días garantía / Enlace.
+     - `recordatorio_mantenimiento` (3+IMG): Nombre / #meses / Equipo.
+     - `garantia_por_vencer` (5+IMG): Nombre / fecha venc / Equipo / #orden / Enlace.
+   - Cada plantilla apunta a su PNG branded en `https://www.misterservicerd.com/plantillas/<archivo>.png`.
+
+2. `src/services/whatsapp.service.ts` (+18 / -2):
+   - `PlantillaArgs` extendida con `headerImageUrl?: string`.
+   - `enviarPlantilla` acepta nuevo parámetro posicional `headerImageUrl` ANTES de `opciones`. Se incluye en el body SOLO si está definido (patrón strip-undefined).
+
+3. `src/components/inbox/SelectorPlantillas.tsx` (+1 / -0):
+   - `handleEnviar` reenvía `plantillaElegida.imagenEncabezadoUrl`.
+
+**Verificación cross-callers:** único caller real de `enviarPlantilla` es `SelectorPlantillas.tsx` línea 118.
+
+**Tester:**
+- `npm run build` → PASS (typecheck + build) en 4.36s.
+- `npm run check:regression` → **24/24 cazadores PASS**.
+- `npx eslint --max-warnings 0` sobre los 3 archivos → clean.
+
+**Reviewer + regression_guardian (paralelo, autoaplicado por coordinator único):**
+- Sin cambios a `api/`, rules, services Firestore, helpers recursivos.
+- `headerImageUrl` omitido del body si undefined → idempotente con validación de send.ts L722-726 (`startsWith('https://')`).
+- Helpers nuevos exportados desde `.ts` → no viola `react-refresh/only-export-components`.
+- Tipos verificados: `Cliente.direccion` string, `OrdenServicio.equipoTipo` string, `OrdenServicio.fechaCita?: Date`.
+- APPROVED.
+
+**Commit + push:**
+- Commit `0ab73c5` — `feat(wa): SPRINT-WA-FIX-PLANTILLAS-PARAMS catalogo alineado con Meta + header IMAGE`.
+- Pre-commit hook PASS.
+- Push: `ae1a6a6..0ab73c5  main -> main`.
+
+**Devops:**
+- Deploy hook disparado por las dudas: job `Yr0nTylm03jpzaalsPhd` PENDING.
+
+**Hallazgo lateral (NO fixeado, follow-up documentado):**
+- `auto_respuesta_fuera_horario` no tiene encabezado en Meta pero `send.ts` SIEMPRE agrega header de imagen (fallback al logo). Si el webhook envía esa plantilla vía `send.ts`, header indebido al cliente. Sprint follow-up `SPRINT-WA-AUTORESPUESTA-SIN-HEADER` (escala — tocaría `api/`).
+
+### Resultado
+
+| Sprint | Estado | Hash | Notas |
+|---|---|---|---|
+| SPRINT-WA-FIX-PLANTILLAS-PARAMS | COMPLETADO | `0ab73c5` | Frontend-only; deploy job `Yr0nTylm03jpzaalsPhd`; **QA Jorge envío real desde inbox pendiente** |
+
+**QA pendiente Jorge:** desde el inbox, mandar cada una de las 4 plantillas a un número de prueba y confirmar ✓✓ (entregado) + banner correcto (no ⚠️).
+
+**Pendientes operativos heredados:**
+- QA SPRINT-GARANTIA Fase A (hash `59c5fb0`, 4 casos en BLOQUEOS.md).
+- QA SPRINT-FIX-LEADS-FORMULARIO-PUBLICO (hash `01df699`).
+- Smoke test inbox (selector número + trazabilidad + respuestas rápidas).
+- Crear 2da/3ra WABA en Meta + cargar `phone_number_id`/token → desbloquea NUMERO-RESPALDO-FASE-2.
+- Sprint follow-up no agregado: `SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL` (severidad ALTA, riesgo BAJO, autónomo — Cowork puede agregarlo).
+
+---
+
 ## 2026-05-25 — autónomo (`trabaja`, pasada 49): autorizaciones explícitas Jorge — FIX-LEADS opción A + GARANTIA fase A
 
 ### Disparo
