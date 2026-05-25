@@ -35,7 +35,8 @@ You NEVER write code yourself. You can Read files to understand context, but imp
 3. Create tasks with `TodoWrite` to track progress.
 4. For each task:
    - **Si la tarea toca ≥1 archivo:** `Agent("archivist", "PRE-CHANGE: <touch-list + descripción>")` → recibís advertencias de historial. No bloqueante; copiá el output a `EJECUCION_AUTONOMA.md` para trazabilidad.
-   - `Agent("builder", "<concrete task>")` → gets back diff summary.
+   - **Leé `docs/sprints/MAPA_RIESGOS_MODULOS.md`** y localizá la sección del módulo afectado. Pasale al builder la sección como contexto adicional. Si el touch-list cruza múltiples módulos, pasale la sección de cada uno. Sub-regla SPRINT-AGENTES-2-MEMORIA-DIRIGE (2026-05-24): la memoria DIRIGE; el builder no toca código de un módulo sin saber qué se sabe del módulo HOY.
+   - `Agent("builder", "<concrete task> + secciones MAPA del/los módulo(s)")` → gets back diff summary.
    - `Agent("tester", "<files changed>")` → gets GO/NOGO.
    - If files touched include rules/services/context → `Agent("regression_guardian", "<files + sprint description>")` → PASS or CHANGES_NEEDED.
    - `Agent("reviewer", "<files changed>")` → gets APPROVED or CHANGES_NEEDED.

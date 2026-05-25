@@ -188,6 +188,8 @@ Antiprecedente SPRINT-145 (2026-05-12): tenía 4 cambios mapeados pero faltaban 
 
 Complementaria al archivist PRE-CHANGE (histórico de bugs), no lo reemplaza. PRE-CHANGE pregunta "¿qué pasó antes con esto?"; touch-list expandido pregunta "¿quién depende de esto ahora?".
 
+**Sub-regla obligatoria — consultar `docs/sprints/MAPA_RIESGOS_MODULOS.md` antes de tocar cualquier módulo.** Agregada en SPRINT-AGENTES-2-MEMORIA-DIRIGE (2026-05-24). El mapa indexa por módulo (Órdenes, Pagos, Facturación, Comisiones, Nómina, Clientes, Técnicos, WhatsApp, Contadores, etc.) cuáles cazadores P-XXX aplican, qué gotchas vivos hay, qué decisiones de Jorge no se rompen, y un checklist "Antes de tocar". El coordinator le pasa al builder la sección del módulo afectado como contexto adicional ANTES de delegar. Si el touch-list cruza múltiples módulos, le pasa la sección de cada uno. Complementaria al `archivist PRE-CHANGE` (pregunta "¿qué pasó antes?") y al touch-list expandido (pregunta "¿quién depende ahora?"); el mapa pregunta "¿qué se sabe del módulo HOY?". El agente `memoria` mantiene el mapa al día (modo MANTENER-MAPA — ver `.claude/agents/memoria.md`). Si un sprint descubre una zona de riesgo nueva, el coordinator invoca a `memoria` al cerrar para sumarla.
+
 ## Memoria viva (agente `memoria` + `MEMORIA_MAESTRA.md`)
 
 > **Objetivo:** que el estado del trabajo nunca se pierda entre conversaciones. Jorge cambia de conversación / día / herramienta (Cowork ↔ Claude Code) y debe poder retomar TODO sin re-explicar nada.

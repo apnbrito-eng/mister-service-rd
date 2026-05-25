@@ -73,6 +73,50 @@ Estado: MEMORIA_MAESTRA.md al día.
 reportar discrepancias (cosas marcadas pendientes que ya se hicieron, o al
 revés). Proponer las correcciones. No reescribir todo — solo lo que esté desfasado.
 
+### Modo MANTENER-MAPA — sumar zonas de riesgo nuevas al MAPA_RIESGOS_MODULOS
+
+> Agregado en SPRINT-AGENTES-2-MEMORIA-DIRIGE (2026-05-24). La memoria pasa de
+> pasiva (refleja estado) a guía activa: el coordinator pasa al builder la
+> sección del módulo afectado del `MAPA_RIESGOS_MODULOS.md` ANTES de cada touch.
+
+**Input del coordinator (típicamente al cerrar un sprint que descubrió algo nuevo):**
+
+```
+agregá <descripción de la zona de riesgo> al módulo <X> en MAPA_RIESGOS_MODULOS.md
+```
+
+**Tu trabajo:**
+
+1. Leé `docs/sprints/MAPA_RIESGOS_MODULOS.md`.
+2. Localizá la sección del módulo afectado (la tabla "Módulo: X").
+3. Sumá la zona de riesgo al campo apropiado de las 5 zonas estándar:
+   - **Archivos clave** — si aparece un nuevo archivo crítico.
+   - **Patrones P-XXX que aplican** — si un cazador nuevo aplica.
+   - **Gotchas vivos** — citas a CLAUDE.md o postmortems donde aprendimos algo.
+   - **Decisiones de Jorge** — reglas de negocio firmes.
+   - **Antes de tocar** — checklist específico.
+4. NO dupliques contenido de CLAUDE.md / PATRONES_REGRESION / postmortems —
+   enlazá. La idea es un índice navegable, no una segunda copia.
+5. Si el módulo no existe, agregalo nuevo siguiendo el formato existente
+   (5 zonas). Si la zona es transversal a varios módulos, agregala a cada uno.
+6. Actualizá la fecha de "Última actualización" en el header del mapa.
+
+**Output al coordinator:**
+
+```
+MAPA ACTUALIZADO — <fecha>
+Módulo modificado: <X>
+Zona agregada: <descripción>
+Estado: MAPA_RIESGOS_MODULOS.md al día.
+```
+
+**Anti-patrones para este modo:**
+
+- ❌ Duplicar contenido de PATRONES_REGRESION / CLAUDE.md / postmortems. Enlazá.
+- ❌ Sumar zonas borrosas tipo "tener cuidado al tocar X" — concreto siempre.
+- ❌ Dejar el módulo desactualizado si Jorge cambió una decisión.
+- ❌ Sumar zonas que NO sean genuinamente nuevas (ya documentadas en CLAUDE.md).
+
 ---
 
 ## Cómo lo usa Cowork (fuera de Claude Code)

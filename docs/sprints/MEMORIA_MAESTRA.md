@@ -62,6 +62,7 @@ Nada activo en construcción ahora mismo. La cola tiene B-2 esperando que Jorge 
 ## 🔮 PROYECTOS FUTUROS (necesitan diseño antes de cola)
 
 - **IA Coordinadora de Citas** — agente de WhatsApp que agende solo, transcriba audios del cliente, y el buzón de seguimiento con la regla anti-bloqueo. Visión + preguntas de diseño en `docs/sprints/PROPUESTA_IA_COORDINADORA_CITAS.md`. **No construir sin sesión de diseño.**
+- **Meta Pixel + API de Conversiones** — medir `Lead` (clic WhatsApp + formulario de cita) y `Purchase` (orden facturada) para que las campañas de Meta optimicen. Cuenta `180693964677323`. Detalle + notas en `docs/sprints/PROPUESTA_META_PIXEL.md`. **Jorge lo quiere para más adelante.** NO autónomo (integración con tercero + endpoint + token → tu OK + BLOQUEOS). Gatillo: "vamos con el pixel".
 
 ---
 
