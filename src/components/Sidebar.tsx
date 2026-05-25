@@ -174,6 +174,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       setPagosPendientesCount(0);
       return;
     }
+    // SPRINT-PAGOS-FASE-B-2 (opción B 2026-05-25): este callsite opera sobre
+    // el doc raw de Firestore (no sobre OrdenServicio parseado), así que NO
+    // usa el helper `obtenerPagosDeOrden` (que toma OrdenServicio tipado).
+    // Cuando B-3 cambie source-of-truth a subcolección, este sitio se
+    // refactoriza junto con `suscribirPagosPendientes` y el resto.
+    // @safe-pagos-raw: lectura defensiva sobre data.pagos del doc Firestore.
     const unsub = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
       let count = 0;
       snap.docs.forEach((d) => {

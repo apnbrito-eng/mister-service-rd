@@ -1371,6 +1371,12 @@ export function suscribirPagosPendientes(
     snap.docs.forEach((d) => {
       const data = d.data() as Record<string, unknown>;
       if (data.eliminada === true) return;
+      // SPRINT-PAGOS-FASE-B-2 (opción B 2026-05-25): este loop opera sobre
+      // raw data del snapshot (no sobre OrdenServicio parseado todavía), así
+      // que NO usa `obtenerPagosDeOrden`. Cuando B-3 cambie source-of-truth
+      // a subcolección, este sitio migra a `collectionGroup('pagos')` y
+      // el helper común evoluciona en paralelo.
+      // @safe-pagos-raw: lectura defensiva sobre data.pagos del doc Firestore.
       const pagos = Array.isArray(data.pagos)
         ? (data.pagos as Array<Record<string, unknown>>)
         : [];
@@ -1399,4 +1405,33 @@ export function suscribirPagosPendientes(
     callback(items);
   });
   return unsub;
+}
+
+// ---------------------------------------------------------------------------
+// SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2 (2026-05-25) — Helper común de pagos
+// ---------------------------------------------------------------------------
+//
+// Punto único de acceso a los pagos de una orden. En B-2 (opción B aprobada
+// por Jorge `OK: jorge 2026-05-25 01:04 opcion=B`), la lectura sigue
+// preferencia ARRAY como source-of-truth real — la subcolección
+// `ordenes_servicio/{id}/pagos/{pagoId}` queda como espejo histórico poblado
+// por el script de migración pero NO se lee en B-2.
+//
+// El valor de este helper en B-2 es preparar terreno para B-3: cuando B-3
+// haga el cut-over (lectores prefieren subcolección + writers van a
+// subcolección + endurecimiento de rules), solo cambia el cuerpo de este
+// helper, NO los 7 sitios que llaman a `obtenerPagosDeOrden(orden)`.
+//
+// Writers W2-W5 (RegistrarPagoModal, ProcesarFacturacionModal, AgendaDia)
+// NO se tocan en B-2 — siguen escribiendo al array. El gate del conduce
+// (P-023) sigue intacto leyendo del array vía este helper.
+//
+// IMPORTANTE: este helper es síncrono y trabaja sobre el doc Orden ya cargado.
+// NO hace lectura adicional a Firestore — la lectura ya pasó cuando el caller
+// obtuvo el doc orden vía snapshot/getDoc. Esto evita N+1 queries en listas.
+export function obtenerPagosDeOrden(
+  orden: Pick<OrdenServicio, 'pagos'> | null | undefined,
+): NonNullable<OrdenServicio['pagos']> {
+  if (!orden) return [];
+  return Array.isArray(orden.pagos) ? orden.pagos : [];
 }

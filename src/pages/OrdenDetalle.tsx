@@ -36,7 +36,7 @@ import { whatsappUrl } from '../utils/whatsapp';
 import { coordsFromLatLng, googleMapsViewUrl } from '../utils/maps';
 import BotonComoLlegar from '../components/shared/BotonComoLlegar';
 import { crearNotificacion } from '../services/notificaciones.service';
-import { buscarChequeoVigentePorCliente } from '../services/ordenes.service';
+import { buscarChequeoVigentePorCliente, obtenerPagosDeOrden } from '../services/ordenes.service';
 import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -1346,8 +1346,8 @@ export default function OrdenDetalle() {
             </div>
           )}
 
-          {/* Pagos y facturación */}
-          {(puede(userProfile, 'pagosRegistrar') || puede(userProfile, 'ordenesEnviarAFacturacion') || (orden.pagos && orden.pagos.length > 0)) && (
+          {/* Pagos y facturación — SPRINT-PAGOS-FASE-B-2 (opción B): lectura vía helper común. */}
+          {(puede(userProfile, 'pagosRegistrar') || puede(userProfile, 'ordenesEnviarAFacturacion') || obtenerPagosDeOrden(orden).length > 0) && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
               <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
                 <h3 className="text-sm font-semibold text-gray-500 uppercase">💵 Pagos y Conduce de Garantía</h3>
@@ -1402,9 +1402,9 @@ export default function OrdenDetalle() {
                 );
               })()}
 
-              {orden.pagos && orden.pagos.length > 0 && (
+              {obtenerPagosDeOrden(orden).length > 0 && (
                 <div className="space-y-1.5">
-                  {orden.pagos.map(p => (
+                  {obtenerPagosDeOrden(orden).map(p => (
                     <div key={p.id} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-xs">
                       <div className="flex items-center gap-2">
                         {p.metodo === 'efectivo' && <Banknote size={14} className="text-green-600" />}

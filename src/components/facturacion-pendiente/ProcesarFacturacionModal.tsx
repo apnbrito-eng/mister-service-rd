@@ -27,6 +27,7 @@ import { useApp } from '../../context/AppContext';
 import { crearRegistroAuditoria, formatMonedaPrecisa, parseCliente } from '../../utils';
 import { abrirWhatsApp, mensajeConduceGarantia } from '../../utils/whatsapp';
 import { siguienteNumeroFactura } from '../../services/contadores.service';
+import { obtenerPagosDeOrden } from '../../services/ordenes.service';
 import { crearNotificacion } from '../../services/notificaciones.service';
 import {
   registrarComisionPorFactura,
@@ -341,9 +342,11 @@ export default function ProcesarFacturacionModal({
     [items],
   );
 
-  const pagosPrevios = useMemo<PagoOrden[]>(() => {
-    return Array.isArray(orden?.pagos) ? (orden!.pagos as PagoOrden[]) : [];
-  }, [orden]);
+  // SPRINT-PAGOS-FASE-B-2 (opción B): lectura vía helper común. El gate del
+  // conduce (P-023, NO-ALLOWLIST) sigue intacto: filtro `verificado === false`
+  // se mantiene EXACTO sobre el resultado de obtenerPagosDeOrden. El writer
+  // L824 (`arrayUnion(pagoNuevoFinal)`) NO se toca en B-2.
+  const pagosPrevios = useMemo<PagoOrden[]>(() => obtenerPagosDeOrden(orden), [orden]);
   const totalPagado = useMemo(
     () => pagosPrevios.reduce((acc, p) => acc + Number(p.monto || 0), 0),
     [pagosPrevios],

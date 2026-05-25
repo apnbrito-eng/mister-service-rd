@@ -26,7 +26,7 @@ import EnviarPortalButton from './EnviarPortalButton';
 import TimelineUnificadoOrden from './TimelineUnificadoOrden';
 import BadgeSoloChequeo from '../shared/BadgeSoloChequeo';
 import { Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
-import { reactivarOrdenPostChequeo, limpiarVisitaFallida } from '../../services/ordenes.service';
+import { reactivarOrdenPostChequeo, limpiarVisitaFallida, obtenerPagosDeOrden } from '../../services/ordenes.service';
 import { useConfigWeb } from '../../hooks/useConfigWeb';
 import toast from 'react-hot-toast';
 import type { ChequeoVigenteInfo } from '../../utils/descuentoChequeo';
@@ -843,7 +843,7 @@ export default function OrdenDetailModal({
       )}
 
       {/* Pagos y facturación */}
-      {(puedeRegistrarPago || puedeEnviarAFacturacion || (orden.pagos && orden.pagos.length > 0)) && (
+      {(puedeRegistrarPago || puedeEnviarAFacturacion || obtenerPagosDeOrden(orden).length > 0) && (
         <div>
           <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
             <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
@@ -907,10 +907,10 @@ export default function OrdenDetailModal({
             );
           })()}
 
-          {/* Lista de pagos */}
-          {orden.pagos && orden.pagos.length > 0 && (
+          {/* Lista de pagos — SPRINT-PAGOS-FASE-B-2 (opción B): vía helper común. */}
+          {obtenerPagosDeOrden(orden).length > 0 && (
             <div className="space-y-1.5">
-              {orden.pagos.map(p => (
+              {obtenerPagosDeOrden(orden).map(p => (
                 <div
                   key={p.id}
                   className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 text-xs"

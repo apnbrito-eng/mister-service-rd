@@ -4,6 +4,7 @@ import { db } from '../../firebase/config';
 import { OrdenServicio, Usuario, Banco, PagoOrden, EstadoPagoOrden, Personal } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { suscribirBancos } from '../../services/bancos.service';
+import { obtenerPagosDeOrden } from '../../services/ordenes.service';
 import { crearNotificacion } from '../../services/notificaciones.service';
 import { crearRegistroAuditoria } from '../../utils';
 import { puede } from '../../utils/permisos';
@@ -62,9 +63,10 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
     }
   }, [isOpen, orden]);
 
-  const pagosPrevios = useMemo<PagoOrden[]>(() => {
-    return Array.isArray(orden?.pagos) ? (orden!.pagos as PagoOrden[]) : [];
-  }, [orden]);
+  // SPRINT-PAGOS-FASE-B-2 (opción B): lectura vía helper común. Los writes
+  // (handleGuardar L173, handleEliminarPago L323) NO se tocan en B-2 —
+  // siguen escribiendo al array `data.pagos` dentro de runTransaction.
+  const pagosPrevios = useMemo<PagoOrden[]>(() => obtenerPagosDeOrden(orden), [orden]);
 
   const total = Number(orden?.precioFinal || orden?.precioAprobado || orden?.precioSugerido || 0);
   const montoYaPagado = Number(orden?.montoPagado || 0);
