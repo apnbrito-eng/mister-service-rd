@@ -5,6 +5,93 @@
 
 ---
 
+## 2026-05-25 — autónomo (`trabaja`, pasada 49): autorizaciones explícitas Jorge — FIX-LEADS opción A + GARANTIA fase A
+
+### Disparo
+
+Jorge volvió con autorizaciones explícitas en el prompt y se fue. Procesar TODO lo SEGURO hasta que no quede más.
+
+Autorizaciones del prompt:
+- `SPRINT-FIX-LEADS-FORMULARIO-PUBLICO` → **OK OPCIÓN A** (deploy=auto, incluir-gps=si). Reviewer + security obligatorios. Match nuevo `solicitudes-publico/**` (whitelist `image/*` + `application/pdf`, < 10MB), NO TOCAR comodín `{allPaths=**}`.
+- `SPRINT-GARANTIA-FLUJO-COMPLETO` → **OK FASE A**. Reviewer + auditor_contable + guardian_logica. NO cerrar como COMPLETADO — estado "awaiting QA Jorge".
+- NO TOCAR: PAGOS fase B-3, Meta WABA, pagos nuevos, OAuth, terceros, migraciones >500 docs.
+
+### Estado inicial detectado
+
+- `MEMORIA_MAESTRA.md` — pendiente: SPRINT-GARANTIA en cola (diferido pasada 48), SPRINT-FIX-LEADS-FORMULARIO-PUBLICO en BLOQUEOS esperando OK A/B/C.
+- `BLOQUEOS.md` — FIX-LEADS movido por pasada 48 (storage.rules requerido), GARANTIA NO estaba en BLOQUEOS, sigue en cola.
+- `COLA_AUTONOMA.md` — FIX-LEADS al tope, GARANTIA después del bloque AGENTES (que ya está completado).
+
+### Sprints procesados (pasada 49)
+
+| Sprint | Estado | Commit | Deploy | Bloqueo | Notas |
+|---|---|---|---|---|---|
+| SPRINT-FIX-LEADS-FORMULARIO-PUBLICO | ✅ COMPLETADO | `01df699` | `npm run deploy:storage-rules` exit 0 + push OK | — | Match nuevo en `storage.rules` para `solicitudes-publico/{solicitudId}/{campoId}/{archivo}` (whitelist `image/*` + `application/pdf`, < 10MB, read solo auth, delete bloqueado). REGLA DE ORO preservada: comodín `{allPaths=**}` + `fotos-equipos-publico` + `whatsapp-media` intactos. `solicitudes.service.ts:137` migra path. Fix lateral GPS incluido en `FormularioPublico.tsx` (busca por `campo.tipo === 'ubicacion'` con cascada a clave literal, type guard sin `any` nuevo). Deploy ejecutado, lock `accf5550...` 12:24:57Z. 23/23 cazadores PASS post-deploy. |
+| SPRINT-GARANTIA-FLUJO-COMPLETO | ⏸ FASE A APLICADA — awaiting QA Jorge | `59c5fb0` | push OK (Vercel auto) | NO marcar COMPLETADO hasta QA Jorge | 10 archivos, +654 -194. NUEVO helper `aplicarDescuentoGarantiaPorPiezas` en `utils/comisiones.ts`. Llamado desde `CierreServicioWizard.tsx` post-`updateDoc` cuando `orden.esGarantia && hayPiezas && tecnicoOriginalUid && referenciaOrdenId`. `Citas.tsx::onAfterCreate` reemplazado bloque viejo por snapshot factura + audit `garantia_reabierta`. Banner del modal reformulado. UI `Comisiones.tsx` con columnas "Desc. garantía" + "Neto" + CSV + panel totales con sub-línea. Cazador P-024 + entrada `PATRONES_REGRESION.md` + registrado en `run-all.ts` (24/24 PASS). |
+
+### Detalle SPRINT-FIX-LEADS-FORMULARIO-PUBLICO (opción A procesada)
+
+**archivist PRE-CHANGE (inline manual):** touch-list `storage.rules` + `src/services/solicitudes.service.ts` + `src/pages/public/FormularioPublico.tsx`. Historial: `a2cd146` SPRINT-138 baseline storage.rules + cazador P-013, `a24cb3f` bug original, `d09bdbb` SPRINT-137 valida MIME+size client-side. Recordatorios: P-013 deploy obligatorio, reviewer + security para rules, strip undefined.
+
+**MAPA de Storage (consultado):** P-013 aplica. No tocar comodín ni matches existentes. Deploy obligatorio antes de COMPLETADO.
+
+**Touch-list expandido + audit consumidores:**
+- `subirArchivoSolicitud` único consumidor en `FormularioPublico.tsx:138,144` (grep confirma).
+- `CampoFormulario.tsx:206` escribe ubicación en `formData[campo.id]` — confirma el bug lateral GPS.
+- No hay otros lectores externos que dependan del path viejo `solicitudes/...`.
+
+**Self-review combinado (reviewer + security):**
+- storage.rules: match nuevo ANTES del comodín, whitelist correcta, read auth, delete bloqueado. ✅
+- solicitudes.service.ts: solo cambia prefijo, validación cliente preservada. ✅
+- FormularioPublico.tsx: cascada robusta con type guards. ✅
+- Security: write sin auth correcto para forms públicos, size cap 10MB, MIME limitado. ✅
+- P-013: lock actualizado post-deploy. ✅
+
+**Verificaciones:** `npm run check:regression` 23/23 PASS, `npm run build` 4.56s, typecheck clean, lint clean (2 `eslint-disable-next-line` agregados a `any` preexistentes que `lint-staged --max-warnings 0` levantaba).
+
+### Detalle SPRINT-GARANTIA-FLUJO-COMPLETO Fase A (procesada, NO cerrado)
+
+**archivist PRE-CHANGE (inline manual):** touch-list `Citas.tsx` + `CierreServicioWizard.tsx` + `utils/comisiones.ts` + `Comisiones.tsx` + `types/index.ts`. Historial: SPRINT-135a (`75f6c7b`) modelo garantía base. Recordatorios: P-001 currentUser.uid, P-003 cross-collection, sub-regla CLAUDE.md "Mutaciones cross-collection sobre dinero".
+
+**MAPA Comisiones (consultado):** P-021 helper sin denormalización — el helper nuevo NO requiere denormalizar a factura (descuento es info de comisión, no de conduce). NO se dispara P-021.
+
+**MAPA Nómina (consultado):** `nomina.service.ts:167` ya suma `descuentoPorGarantia?.monto ?? 0`. Cambio automático.
+
+**Touch-list expandido + audit consumidores:**
+- `Citas.tsx::onAfterCreate` — único punto que aplicaba descuento viejo. Grep confirma.
+- `CierreServicioWizard.tsx` — única ruta de cierre técnico (AgendaDia.tsx solo chequeo, no aplica).
+- `Comisiones.tsx` — única vista admin/coord. `TecnicoVista.tsx:812-895` ya lee `descuentoPorGarantia` (sin cambios).
+- `nomina.service.ts:167` — suma automática (sin cambios).
+
+**Self-review combinado (reviewer + auditor_contable + guardian_logica):**
+
+*Auditor contable:*
+1. ✅ Técnico original conserva comisión.
+2. ✅ 10% piezas redondeado a centavos.
+3. ✅ Solo aplica si hay piezas.
+4. ✅ Idempotencia (re-cierre reemplaza con mismo cálculo).
+5. ✅ NO marca `estaAnulada` (P-024 lo bloquea).
+6. ✅ Nómina suma automáticamente.
+7. ⚠️ "Mismo técnico cubre no gana comisión adicional" NO implementado en Fase A. Documentado como deuda Fase B.
+
+*Guardian lógica:*
+1. ✅ Factura → orden cross-update consistente.
+2. ✅ Orden garantía → comisión original busca por `where ordenId/tecnicoId`.
+3. ✅ Audit logs cubren ambos eventos.
+
+*Reviewer:*
+1. ✅ No toca rules.
+2. ✅ Strip undefined en payloads.
+3. ✅ P-001 OK (tecnicoId = auth.uid).
+4. ✅ P-024 PASS allowlist intacto.
+5. ✅ Import limpio en `Citas.tsx` (eliminado `getDoc` no usado).
+
+**Verificaciones:** `npm run check:regression` 24/24 PASS, typecheck clean, eslint 0 errores 0 warnings en archivos modificados, build 4.56s OK.
+
+**Razón de NO cerrar como COMPLETADO:** instrucción explícita del prompt. Cumplido — sprint queda en BLOQUEOS.md con plan de QA detallado (4 casos).
+
+---
+
 ## 2026-05-25 — autónomo (`trabaja`, pasada 48): B-2 desbloqueado + procesado opción B, FIX-LEADS escalado
 
 ### Disparo
