@@ -10,7 +10,103 @@
 
 ---
 
-## SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2 — BLOQUEADO 2026-05-24 (coordinator pasada 47 — ambigüedad técnica sobre source-of-truth durante la migración)
+## SPRINT-FIX-LEADS-FORMULARIO-PUBLICO — BLOQUEADO 2026-05-25 (coordinator pasada 48 — el approach 1 autónomo NO es viable, approach 2 toca `storage.rules`)
+
+**Movido a `BLOQUEOS.md` el 2026-05-25 por coordinator autónomo (`trabaja`, pasada 48).** Razón: la auditoría real del approach 1 ("enrutar a una ruta de Storage que YA es pública") revela que **NO existe una ruta pública en `storage.rules` que cubra los campos `archivo` del formulario público (PDF/DOC/JPG/PNG)**. La única ruta pública actual es `fotos-equipos-publico/{citaId}/{fileName}` que está acotada por rule a `request.resource.contentType.matches('image/.*')` — rechazaría PDFs. El sprint admite explícitamente que ese caso → ESCALA (approach 2).
+
+### Auditoría read-only del estado actual (sin código modificado)
+
+**Bug confirmado:** el path `solicitudes/{solicitudId}/{campoId}/{ts}.{ext}` (`src/services/solicitudes.service.ts:137`) cae al comodín `match /{allPaths=**}` de `storage.rules` (líneas 62-64) que exige `request.auth != null`. El formulario público es sin login → `permission-denied` → `FormularioPublico.tsx` await falla → `toast.error('Error al enviar')` → la solicitud NUNCA se crea (el `crearSolicitud` viene DESPUÉS del upload, líneas 132-147 de `FormularioPublico.tsx`).
+
+**Catálogo de tipos de campo que requieren upload:**
+
+- `'foto'` — `accept="image/*"`, valida con `validarDocumento` (whitelist `MIME_WHITELIST_DOC` = `application/pdf` + `MIME_WHITELIST_FOTO`).
+- `'archivo'` — `accept=".pdf,.doc,.docx,.jpg,.png,.jpeg"`, valida con `validarDocumento` (mismo whitelist).
+- `'firma'` — canvas → PNG Blob, sube con `subirArchivoSolicitud` (la firma siempre es PNG).
+
+**Rutas públicas existentes en `storage.rules`:**
+
+- `fotos-equipos-publico/{citaId}/{fileName}` — `contentType.matches('image/.*')` + `size < 5MB`. **NO cubre PDFs.**
+- Resto: comodín auth-only o paths internos (fotos-ponche/uid/, whatsapp-media/wa_id/).
+
+**Conclusión:** approach 1 (enrutar a `fotos-equipos-publico`) solo funciona para tipos `foto` y `firma`. Tipo `archivo` (que es lo que más uso real podría tener — PDFs de cotizaciones de clientes, fotos de equipos rotos, etc.) **NO encaja semánticamente ni por content-type rule**. Mezclar fotos genuinas de equipos con archivos de solicitudes en el mismo path es contaminación de namespace que dificulta auditorías futuras.
+
+### Hallazgo lateral (descubierto durante la auditoría, NO se fixea acá)
+
+Hallazgo #7 del informe AUDITORIA_SOFTWARE_2026-05-24.md confirmado: en `FormularioPublico.tsx:170-172` el campo de ubicación GPS se lee con clave fija `formData['ubicacion']` en vez de iterar por `campo.id` cuando `campo.tipo === 'ubicacion'`. Si el formulario tiene un campo ubicación con id distinto de `'ubicacion'` (ej. id auto-generado UUID), el valor se pierde silenciosamente. Es trivial fix de 1 línea (cambiar a buscar por `campo.tipo === 'ubicacion'` y usar `campo.id`). **NO se incluye en el escalado** — el sprint actual está bloqueado por storage.rules; este lateral merece su propio sprint chico autónomo (`SPRINT-FIX-FORM-GPS-COORDS`) que el coordinator agrega a la cola en la próxima pasada o Cowork puede agregar antes.
+
+### Fix propuesto (approach 2 — toca storage.rules, ESPERA OK Jorge)
+
+Agregar un match dedicado en `storage.rules`, espejo del `fotos-equipos-publico` pero permitiendo PDFs:
+
+```diff
++    // Archivos subidos desde formularios dinámicos públicos `/f/:slug`
++    // (sin auth — el formulario público los necesita para que el lead llegue).
++    // Limitado por content-type (imágenes + PDF) + tamaño. Espejo de
++    // `fotos-equipos-publico` pero con whitelist amplio para tipo `archivo`
++    // (clientes mandan PDFs de cotizaciones competidoras, fotos de equipos,
++    // copias de garantías, etc.).
++    // Path: `solicitudes-publico/{solicitudId}/{campoId}/{archivo}`.
++    match /solicitudes-publico/{solicitudId}/{campoId}/{archivo} {
++      allow write: if (request.resource.contentType.matches('image/.*')
++                       || request.resource.contentType == 'application/pdf')
++                   && request.resource.size < 10 * 1024 * 1024;
++      allow read: if request.auth != null;
++      allow delete: if false;
++    }
+```
+
+**REGLA DE ORO** (espejo de la usada en SPRINT-138): NO endurecer ni tocar el comodín `{allPaths=**}` — solo AGREGAR el match nuevo. Los 10MB matchean el `MAX_FILE_BYTES` ya validado client-side en `src/utils/uploads.ts:14`. El `accept` HTML del input tipo `'archivo'` lista `.pdf,.doc,.docx,.jpg,.png,.jpeg` — la rule permite imagen + PDF; los .doc/.docx caerían (decisión: tipo `'archivo'` está pensado para PDFs y fotos, los .doc son legacy raros — si Jorge confirma que SÍ los necesita, ampliar a `application/msword` y `application/vnd.openxmlformats-officedocument.wordprocessingml.document`).
+
+**Cambio en código (parte autónoma una vez deployadas las rules):**
+
+- `src/services/solicitudes.service.ts:137` — cambiar path de `solicitudes/${...}` a `solicitudes-publico/${...}` (1 línea).
+- NO cambia el shape de retorno (sigue siendo `getDownloadURL`).
+- Validación cliente (`validarDocumento`) ya está y matchea la rule (PDF + imágenes).
+- Reviewer obligatorio (toca rules + flujo público de captura de leads). QA de Jorge: enviar un formulario público real con foto + firma + PDF (si hay campo archivo) y confirmar que llega como solicitud.
+
+### Consumidores read-only audit (verificado antes de proponer el fix)
+
+- `subirArchivoSolicitud` es llamado solo desde `src/pages/public/FormularioPublico.tsx:138,144` (foto + firma; archivo va por el mismo handler). Cambiar el path NO afecta a nadie más (grep confirmó 1 consumidor único).
+- `fotos-equipos-publico/**` se mantiene EXCLUSIVO para `FormularioAgendarPublico.tsx:266` (fotos del equipo en el form de "Agendar cita") — sin tocar.
+- Comodín `{allPaths=**}` se mantiene EXCLUSIVO para fotos de cierre + firmas del flujo interno (subida desde técnico autenticado) — sin tocar.
+
+### Tres opciones para destrabar (elegir UNA)
+
+**Opción A (RECOMENDADA — approach 2 limpio + REGLA DE ORO):** agregar el match nuevo `solicitudes-publico/**` arriba EXACTO + cambiar el path en `subirArchivoSolicitud` + deploy `npm run deploy:storage-rules`. Reviewer obligatorio. Incluir bug GPS lateral si el builder ya está en `FormularioPublico.tsx` y queda limpio (riesgo: 1 línea, mismo touch-list). Si no queda limpio, sprint propio.
+
+**Opción B (parche mientras tanto, NO ideal — solo si Jorge necesita YA):** reusar `fotos-equipos-publico/` para fotos+firmas (los 2 funcionarían inmediatamente sin tocar rules), y rechazar tipo `archivo` en el cliente con mensaje "subi una foto en su lugar". Cubre 80% de los casos sin tocar rules. Cierra el lead-loss para los formularios sin campo archivo. Pero contamina semánticamente el path. **Recomendado SOLO si Jorge confirma que NINGÚN formulario activo usa tipo `archivo` hoy** (verificable con consulta a `formularios` collection).
+
+**Opción C (ampliar Opción A a .doc/.docx):** igual que A pero con MIME whitelist `application/msword` y `application/vnd.openxmlformats-officedocument.wordprocessingml.document` adicionales en la rule. Solo si Jorge confirma que SÍ acepta documentos de Word.
+
+### Cómo desbloquear
+
+Editá este sprint y agregá UNA de las siguientes líneas al final:
+
+```
+OK: jorge YYYY-MM-DD HH:MM opcion=A deploy=auto incluir-gps=si
+OK: jorge YYYY-MM-DD HH:MM opcion=A deploy=auto incluir-gps=no
+OK: jorge YYYY-MM-DD HH:MM opcion=B sin-tocar-rules
+OK: jorge YYYY-MM-DD HH:MM opcion=C deploy=auto
+```
+
+Después pegá `procesa bloqueos` al coordinator.
+
+**Riesgo de no arreglar:** ALTO. Cualquier formulario público con foto/firma/archivo está perdiendo leads activamente. Si Jorge usa formularios solo de texto, el impacto es nulo. Verificar con Cowork qué formularios activos tienen estos tipos antes de priorizar.
+
+### Pendiente desde
+
+2026-05-25 pasada 48 (`trabaja`). Cowork agregó el sprint al tope marcado como CRÍTICO con prioridad 🔴 por hallazgo #1 de auditoría. El coordinator NO procesó autónomo porque approach 1 ("enrutar a ruta pública existente") NO cubre tipo `archivo` (PDFs) — solo cubriría parcialmente fotos+firmas. La spec misma admite ese caso → ESCALA.
+
+---
+
+## SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2 — DESBLOQUEADO 2026-05-25 01:04 (OK: jorge opcion=B migrar-si-menos-500)
+
+**Movido a `COLA_AUTONOMA.md` como EN_EJECUCION el 2026-05-25 por coordinator (`trabaja`, pasada 48). desbloqueadoPor: jorge 2026-05-25 01:04 vía `OK: jorge 2026-05-25 01:04 opcion=B migrar-si-menos-500`** (Cowork a pedido de Jorge — opción B conservadora: lectores prefieren array como source-of-truth, subcolección queda como espejo poblado para B-3, NO se tocan writers W2-W5). DRY-RUN del script de migración primero; si reporta >500 órdenes con pagos, re-escalar con conteo exacto. Reviewer obligatorio + auditor_contable. Conservado acá como stub para forensia — análisis completo (touch-list real, 3 opciones, ambigüedad) preservado debajo.
+
+---
+
+## SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2 — BLOQUEADO 2026-05-24 (coordinator pasada 47 — ambigüedad técnica sobre source-of-truth durante la migración) [HISTÓRICO — DESBLOQUEADO]
 
 **Movido a `BLOQUEOS.md` el 2026-05-24 por coordinator autónomo (`trabaja`, pasada 47).** Razón: la auditoría real del touch-list reveló una ambigüedad de scope que la spec de la cola no resuelve y que afecta directamente al flujo de dinero. Decisión técnica sin OK de Jorge violaría sub-regla CLAUDE.md "Mutaciones cross-collection sobre dinero requieren plan de deploy en fases aprobado por Jorge". Cumple la regla del prompt: *"Si algo no está claro o el alcance crece → re-escalar a BLOQUEOS.md con la pregunta concreta y CONTINUAR con el siguiente sprint de la cola."*
 
@@ -127,6 +223,9 @@ Después pegá `procesa bloqueos` al coordinator.
 ### Reviewer obligatorio cuando se procese
 
 Sub-regla CLAUDE.md: "Reviewer obligatorio cuando un sprint... toca dinero, transacciones, o el script de migración". Plan de reviewer focus: (a) que el helper común no rompa retrocompat con órdenes legacy sin subcolección; (b) que la migración sea idempotente y no duplique pagos; (c) que el gate del conduce siga bloqueando con `verificado===false` (cazador P-021 candidato para fase AGENTES-1).
+
+OK: jorge 2026-05-25 01:04 opcion=B migrar-si-menos-500
+(Puesto por Cowork a pedido de Jorge — confirmó la opción B, la conservadora recomendada por el coordinator: los lectores prefieren el array, la subcolección queda como espejo poblado para B-3, NO se tocan los writers W2-W5. Reviewer obligatorio + auditor_contable. Correr DRY-RUN primero; si hay >500 órdenes con pagos, re-escalar con conteo exacto.)
 
 ---
 

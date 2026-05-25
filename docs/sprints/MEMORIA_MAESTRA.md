@@ -6,7 +6,7 @@
 >
 > **Quién lo mantiene:** el agente **`memoria`** (`.claude/agents/memoria.md`). El coordinator lo actualiza al cerrar cada pasada; Cowork lo actualiza al cerrar cada conversación. Este archivo es un ÍNDICE corto — el detalle vive en los archivos enlazados abajo.
 
-**Última actualización:** 2026-05-24 por coordinator (pasada 47, `trabaja`).
+**Última actualización:** 2026-05-25 por coordinator (pasada 48, `trabaja`).
 
 ---
 
@@ -14,17 +14,16 @@
 
 ### En la cola autónoma (Jorge corre `trabaja` en Claude Code) — en orden
 
-1. **SPRINT-GARANTIA-FLUJO-COMPLETO** — completar el flujo de garantía (ya medio hecho en SPRINT-135a) con las reglas de Jorge. Toca dinero → reviewer + auditor_contable + guardian_logica + QA de Jorge. Es el siguiente sprint en la cola.
+1. **SPRINT-GARANTIA-FLUJO-COMPLETO** — completar el flujo de garantía (ya medio hecho en SPRINT-135a) con las reglas de Jorge. Toca dinero → reviewer + auditor_contable + guardian_logica + QA de Jorge **entre fase A y B** (regla explícita del sprint). DIFERIDO en pasada 48 — espera OK de Jorge sobre cómo proceder (fase A primero + QA, o todo de una). Es el próximo sprint pendiente cuando haya OK específico.
 2. **SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL** (follow-up nuevo, NO en cola formal aún) — migrar `Cotizaciones.tsx:314` de `generateNumeroCotizacion(count)` deprecated a `siguienteNumeroCotizacion()` atomic. Severidad ALTA, riesgo BAJO, autónomo. Documentado en `AUDITORIA_CONTABLE_2026-05-24.md`. Cowork puede agregarlo a la cola cuando quiera.
 
 ### En BLOQUEOS esperando OK de Jorge
 
-- **SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2** — ESCALADO 2026-05-24 pasada 47 por ambigüedad técnica (qué hacer con los 4 escritores del array `pagos[]` durante la migración). 3 opciones documentadas (A dual-write / B lectores prefieren array / C solo migración). Jorge elige opción + corre `procesa bloqueos`.
+- **SPRINT-FIX-LEADS-FORMULARIO-PUBLICO** — 🔴 CRÍTICO. ESCALADO 2026-05-25 pasada 48 por necesitar `storage.rules` (approach 1 NO viable — `fotos-equipos-publico` rechaza PDFs, el campo `archivo` del formulario admite PDF). 3 opciones documentadas (A approach 2 limpio agregando match dedicado `solicitudes-publico/**` con whitelist imagen+PDF + size<10MB / B sin tocar rules cubriendo solo fotos+firmas / C ampliar a .doc/.docx). Hallazgo lateral GPS (`FormularioPublico.tsx:170-172` clave fija "ubicacion") opcional incluir en opción A.
 
 ### Esperando acción manual de Jorge (Cowork NO puede hacerlas)
 
-### Esperando acción manual de Jorge (Cowork NO puede hacerlas)
-
+- **DRY-RUN del script de migración B-2:** `npx tsx scripts/migrar-pagos-array-a-subcoleccion.ts` — reporta conteo de órdenes con pagos. Si <500 → correr con `--apply` (autónomo). Si >500 → re-escalar con conteo exacto. Sin esto, la subcolección queda vacía y B-3 no puede arrancar.
 - **`npm run deploy:storage-rules`** (SPRINT-138) — sin esto las fotos del chat→orden no andan 100% en producción; el cazador P-013 queda en WARN (no bloquea).
 - **Smoke test en producción** — selector de número con números reales, trazabilidad (quién envió + nombre del agente), respuestas rápidas con "/", y el inbox (fotos, ficha cliente, form a la izquierda).
 - **Crear 2da/3ra WABA en Meta** + cargar `phone_number_id` + token en Vercel env + allowlist → desbloquea `SPRINT-WA-NUMERO-RESPALDO-MANUAL-FASE-2`.
@@ -33,12 +32,13 @@
 
 ## 🔧 EN CURSO
 
-Nada activo en construcción ahora mismo. La cola tiene B-2 esperando que Jorge corra `trabaja`.
+Nada activo en construcción ahora mismo. La cola tiene SPRINT-GARANTIA esperando OK específico de Jorge, y SPRINT-FIX-LEADS esperando OK A/B/C en BLOQUEOS.
 
 ---
 
 ## ✅ HECHO RECIENTE (últimos hitos)
 
+- **2026-05-25 (pasada 48, `trabaja`)** — `SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2` COMPLETADO commit `d4d6498` (opción B aprobada por Jorge `OK: jorge 2026-05-25 01:04`). Helper común `obtenerPagosDeOrden(orden)` en `ordenes.service.ts` + 4 lectores migrados (OrdenDetailModal x2, OrdenDetalle x3, RegistrarPagoModal pagosPrevios, ProcesarFacturacionModal pagosPrevios). Gate del conduce (P-023 NO-ALLOWLIST) intacto. 2 callsites raw data con tag `@safe-pagos-raw`. NUEVO `scripts/migrar-pagos-array-a-subcoleccion.ts` (dry-run default, idempotente, guard >500, audit log). Writers W2-W5 NO se tocaron. 23/23 cazadores PASS. `SPRINT-FIX-LEADS-FORMULARIO-PUBLICO` ESCALADO a BLOQUEOS (storage.rules necesario). `SPRINT-GARANTIA` DIFERIDO (requiere QA Jorge entre fases).
 - **2026-05-24 (pasada 47, `trabaja`)** — Bloque AGENTES procesado completo: (a) `SPRINT-AGENTES-1-AUDITORIA-CONTABLE` commit `d938135` — agente `auditor_contable` + 3 cazadores P-021/P-022/P-023 (subió de 20→23) + informe `AUDITORIA_CONTABLE_2026-05-24.md` con 1 hallazgo crítico (Cotizaciones.tsx número no-transaccional, sprint follow-up). (b) `SPRINT-AGENTES-2-MEMORIA-DIRIGE` commit `df68a42` — `MAPA_RIESGOS_MODULOS.md` (11 módulos) + modo MANTENER-MAPA en agente memoria + sub-regla CLAUDE.md. (c) `SPRINT-AGENTES-3-PARALELIZAR` commit `30abe53` — coordinator paraleliza verificación + auditorías de módulos disjuntos. SPRINT-PAGOS-FASE-B-2 escalado a BLOQUEOS por ambigüedad técnica (NO se tocó código de pagos).
 - **2026-05-24** — Auditoría de software completa (Cowork): informe en `docs/sprints/AUDITORIA_SOFTWARE_2026-05-24.md` (1 crítico, 6 altos, varios medios). Se creó el sistema de **memoria viva** (`MEMORIA_MAESTRA.md` + agente `memoria`, commit `dad8ca8`), el bloque **AGENTES** en la cola, el agente **`guardian_logica`**, y el sprint de **garantía**.
 - **2026-05-24** — `SPRINT-WA-SEGURIDAD-CONFIG-RULES` COMPLETADO (commit `e9aa3ef`). Se cerró un hueco de permisos: los 3 docs de config de WhatsApp (`whatsapp_envio`, `whatsapp_numeros`, `whatsapp_respuestas_rapidas`) ahora son escribibles SOLO por admin. Verificado con emulator (Java Temurin 25, 22 tests OK) + rules deployadas. 20 cazadores OK.

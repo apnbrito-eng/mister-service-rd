@@ -5,6 +5,74 @@
 
 ---
 
+## 2026-05-25 — autónomo (`trabaja`, pasada 48): B-2 desbloqueado + procesado opción B, FIX-LEADS escalado
+
+### Disparo
+
+Jorge pegó `trabaja` el 2026-05-25 después de pasada 47 (último commit `f624ddd` — sync de docs). Prompt explícito: procesar la cola, escalar lo que necesite OK de Jorge, reportar tabla compacta al final.
+
+### Estado inicial detectado
+
+- **MEMORIA_MAESTRA.md** — pendiente: SPRINT-GARANTIA-FLUJO-COMPLETO en cola + SPRINT-PAGOS-FASE-B-2 esperando opción + SPRINT-FIX-LEADS-FORMULARIO-PUBLICO 🔴 CRÍTICO recién agregado al tope.
+- **BLOQUEOS.md** — Cowork puso `OK: jorge 2026-05-25 01:04 opcion=B migrar-si-menos-500` en SPRINT-PAGOS-FASE-B-2 (opción B conservadora = lectores prefieren array, recomendada por coordinator en pasada 47).
+- **COLA_AUTONOMA.md** — SPRINT-FIX-LEADS al tope, SPRINT-GARANTIA-FLUJO-COMPLETO esperando.
+
+### Sprints procesados (pasada 48)
+
+| Sprint | Estado | Commit | Deploy | Bloqueo | Notas |
+|---|---|---|---|---|---|
+| SPRINT-FIX-LEADS-FORMULARIO-PUBLICO | ⊘ ESCALADO a BLOQUEOS | — | — | Sí (approach 1 NO viable, approach 2 toca `storage.rules`) | Auditoría read-only confirmó que NO hay ruta pública en storage.rules que cubra tipo `archivo` (PDFs) — la única ruta pública `fotos-equipos-publico` está acotada por rule a `image/.*`. Approach 1 solo cubriría fotos+firmas parcialmente. Approach 2 (agregar match `solicitudes-publico/{solicitudId}/{campoId}/{archivo}` con whitelist imagen+PDF + size<10MB) requiere `storage.rules` → ESCALA. Diff propuesto + REGLA DE ORO (no tocar comodín) + audit consumidores + 3 opciones (A approach 2 limpio / B sin tocar rules cubriendo solo fotos+firmas / C ampliar a .doc/.docx) en BLOQUEOS.md. Hallazgo lateral GPS confirmado (`FormularioPublico.tsx:170-172` clave fija "ubicacion") — documentado para sprint chico aparte o incluir en opción A si Jorge OK. NO se tocó código. |
+| SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2 | ✅ COMPLETADO | `d4d6498` | push OK (Vercel auto) | — | **Opción B aprobada por Jorge.** Helper común `obtenerPagosDeOrden(orden)` en `ordenes.service.ts` (síncrono, retorna `orden.pagos \|\| []`). 4 lectores migrados (OrdenDetailModal x2, OrdenDetalle x3, RegistrarPagoModal pagosPrevios, ProcesarFacturacionModal pagosPrevios). Gate del conduce (P-023 NO-ALLOWLIST) intacto. 2 callsites raw data NO migran (Sidebar badge + suscribirPagosPendientes loop) con tag `@safe-pagos-raw`. NUEVO script `scripts/migrar-pagos-array-a-subcoleccion.ts` (dry-run default, idempotente, guard >500, audit log). Writers W2-W5 NO se tocaron. 23/23 cazadores PASS, typecheck PASS, lint clean. |
+| SPRINT-GARANTIA-FLUJO-COMPLETO | ⊘ DIFERIDO | — | — | No — pero requiere QA Jorge entre fases (regla explícita del sprint) | NO procesado en esta pasada por scope (toca DINERO comisiones + nómina, fase A "lo más sensible", requiere auditor_contable + guardian_logica + reviewer + QA Jorge antes de cerrar fase A). Se queda PENDIENTE en la cola para próxima pasada con OK específico de Jorge sobre cómo proceder (fase A primero + QA, o todo de una). |
+
+### Detalle SPRINT-FIX-LEADS-FORMULARIO-PUBLICO (escalado)
+
+**archivist PRE-CHANGE (inline manual):** touch-list `src/services/solicitudes.service.ts:137` + `src/pages/public/FormularioPublico.tsx:138,144` + `src/components/public/CampoFormulario.tsx` + `storage.rules`. Historial: SPRINT-137 validación cliente (tamaño + MIME), SPRINT-138 commit `a2cd146` baseline storage.rules con REGLA DE ORO. Postmortems relevantes: nada específico de formularios públicos. Recordatorios: P-013 si toca storage.rules → `npm run deploy:storage-rules` antes de cerrar. Sub-regla CLAUDE.md "sprints que tocan storage.rules deben deployar antes de cerrar COMPLETADO".
+
+**MAPA de Storage (consultado):** comodín auth-only protege fotos cierre + firmas internas (NO endurecer en este sprint, ver SPRINT-138). Rutas públicas existentes: solo `fotos-equipos-publico/{citaId}/{fileName}` con `contentType.matches('image/.*')` + `size<5MB`. No cubre PDFs.
+
+**Auditoría real (read-only):**
+- `subirArchivoSolicitud` único consumidor en `src/pages/public/FormularioPublico.tsx:138,144` (foto + firma; archivo va por el mismo handler).
+- Tipos de campo que requieren upload: `foto` (image/*), `archivo` (.pdf,.doc,.docx,.jpg,.png,.jpeg), `firma` (canvas → PNG).
+- Validación cliente `validarDocumento` ya acepta PDF + imagen (whitelist `MIME_WHITELIST_DOC`).
+- Tipo `archivo` está pensado para PDFs y fotos — los .doc/.docx serían rechazados por la rule si se agrega match nuevo (decisión: ampliar a Word si Jorge lo necesita = opción C).
+
+**Decisión coordinator:** approach 1 NO es viable limpio (rule de `fotos-equipos-publico` rechazaría PDFs). El sprint mismo admite ese caso → ESCALA. Movido a BLOQUEOS con diff propuesto + 3 opciones de desbloqueo.
+
+### Detalle SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2 (procesado)
+
+**archivist PRE-CHANGE (inline manual):** touch-list `src/services/ordenes.service.ts` (helper nuevo) + 4 archivos lectores + NUEVO script. Historial: SPRINT-AGENTES-1 commit `d938135` (cazadores), PAGOS-B-1 commit `4fa8f08` (helpers `confirmarPagoOrden`/`suscribirPagosPendientes`). Postmortems: ninguno específico de pagos. Recordatorios: P-001 (currentUser.uid — no aplica, helper es read-only), P-003 (cross-collection runTransaction — no aplica, helper no muta), P-023 NO-ALLOWLIST (gate del conduce intacto), CLAUDE.md "Mutaciones cross-collection sobre dinero" (no aplica, no se tocan writers).
+
+**MAPA de Pagos (consultado):** todos los checklist "Antes de tocar" verificados — ProcesarFacturacionModal::handleGenerar no se tocó (gate intacto), writers W2-W5 no se tocan en B-2 (opción B), helper común no escribe pagos, reviewer self-confirmó retrocompat + P-023 intacto.
+
+**Touch-list expandido (auditoría real):** verificado con grep `\.pagos\b\|pagos:\s*\[` en src/ — 7 sitios lectores confirmados, 4 writers identificados, parser parseOrden (no se toca), Sidebar (raw data, no usa helper), suscribirPagosPendientes (raw data, no usa helper). 6 archivos modificados.
+
+**Self-review (rol reviewer + regression_guardian + auditor_contable):**
+1. P-023 (gate del conduce) — filtro `verificado===false` IDÉNTICO sobre resultado del helper. ✅
+2. P-001 — helper es READ-only. ✅
+3. P-003 — helper no muta. ✅
+4. P-009 — parseOrden no se tocó. ✅
+5. Backwards compat — `orden.pagos === undefined` → helper retorna `[]` → mismo comportamiento. ✅
+6. Retrocompat pagos legacy `verificado=undefined` — filtro `=== false` no los bloquea. ✅
+7. Script idempotente — `pago.id` doc id + `merge:true` + guard volumen + audit log. ✅
+
+**Pre-commit hook:** capturó 1 error de lint en script (`let stats` → `const stats`). Re-staged + re-commit OK. NO se bypaseo.
+
+**Pendiente operativo Jorge (NO autónomo):** correr `npx tsx scripts/migrar-pagos-array-a-subcoleccion.ts` para DRY-RUN. Si <500 órdenes con pagos, correr con `--apply`. Si >500, re-escalar con conteo exacto. La subcolección queda poblada como espejo histórico para B-3 (cut-over + endurecimiento rules, requiere QA Jorge).
+
+### Revisión de BLOQUEOS.md
+
+1 OK nuevo en pasada 48: `OK: jorge 2026-05-25 01:04 opcion=B migrar-si-menos-500` (B-2 desbloqueado, procesado). 0 OKs adicionales después de procesar.
+
+### Métricas pasada 48
+
+- Sprints procesados: 1 ✅ COMPLETADO, 1 ⊘ ESCALADO a BLOQUEOS, 1 ⊘ DIFERIDO.
+- Commits de código: 1 (`d4d6498`).
+- Cazadores: 23/23 PASS (sin cambio en cantidad).
+- Tiempo: ~25 min.
+
+---
+
 ## 2026-05-24 — autónomo (`trabaja`, pasada 47): bloque AGENTES procesado, B-2 escalado por ambigüedad
 
 ### Disparo
