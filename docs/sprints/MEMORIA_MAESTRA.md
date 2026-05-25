@@ -6,7 +6,7 @@
 >
 > **Quién lo mantiene:** el agente **`memoria`** (`.claude/agents/memoria.md`). El coordinator lo actualiza al cerrar cada pasada; Cowork lo actualiza al cerrar cada conversación. Este archivo es un ÍNDICE corto — el detalle vive en los archivos enlazados abajo.
 
-**Última actualización:** 2026-05-25 por coordinator (pasada 49, `trabaja`).
+**Última actualización:** 2026-05-25 por Cowork (agregó `SPRINT-WA-FIX-PLANTILLAS-PARAMS` a la cola + imágenes branded).
 
 ---
 
@@ -14,7 +14,8 @@
 
 ### En la cola autónoma (Jorge corre `trabaja` en Claude Code) — en orden
 
-1. **SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL** (follow-up nuevo, NO en cola formal aún) — migrar `Cotizaciones.tsx:314` de `generateNumeroCotizacion(count)` deprecated a `siguienteNumeroCotizacion()` atomic. Severidad ALTA, riesgo BAJO, autónomo. Documentado en `AUDITORIA_CONTABLE_2026-05-24.md`. Cowork puede agregarlo a la cola cuando quiera.
+1. **SPRINT-WA-FIX-PLANTILLAS-PARAMS** (🔴 ALTA, al tope) — arregla las plantillas de WhatsApp que fallan ⚠️ al enviarse desde el inbox. El catálogo `plantillasWhatsApp.ts` está desfasado de Meta (4/5 con variables mal → #132000). **Scope SOLO FRONTEND** (Cowork verificó que `send.ts` YA soporta header de imagen + botones → no toca endpoint/rules/migración). Las 4 imágenes branded ya están en `public/plantillas/`. Spec: `PLANTILLAS_META_SPEC_2026-05-25.md` (sección "⚠️ CORRECCIÓN IMPORTANTE"). QA de envío real la hace Jorge desde el inbox.
+2. **SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL** (follow-up nuevo, NO en cola formal aún) — migrar `Cotizaciones.tsx:314` de `generateNumeroCotizacion(count)` deprecated a `siguienteNumeroCotizacion()` atomic. Severidad ALTA, riesgo BAJO, autónomo. Documentado en `AUDITORIA_CONTABLE_2026-05-24.md`. Cowork puede agregarlo a la cola cuando quiera.
 
 ### En BLOQUEOS esperando QA o OK de Jorge
 
