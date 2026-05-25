@@ -134,7 +134,12 @@ export async function subirArchivoSolicitud(
 
   const timestamp = Date.now();
   const ext = file.name.split('.').pop() || 'bin';
-  const path = `solicitudes/${solicitudId}/${campoId}/${timestamp}.${ext}`;
+  // SPRINT-FIX-LEADS-FORMULARIO-PUBLICO (2026-05-25): path movido a
+  // `solicitudes-publico/...` para que la rule pública dedicada (storage.rules)
+  // permita el upload sin auth. Antes caía al comodín `{allPaths=**}` que
+  // exige `request.auth != null` y el formulario público es sin login →
+  // todo formulario con foto/firma/archivo perdía el lead silenciosamente.
+  const path = `solicitudes-publico/${solicitudId}/${campoId}/${timestamp}.${ext}`;
   const ref = storageRef(storage, path);
   await uploadBytes(ref, file);
   return await getDownloadURL(ref);

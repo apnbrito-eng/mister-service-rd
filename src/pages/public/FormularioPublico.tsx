@@ -13,6 +13,7 @@ export default function FormularioPublico() {
   const { slug } = useParams<{ slug: string }>();
   const { formulario, empresa, loading, error } = useFormularioPublico(slug || '');
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -147,6 +148,7 @@ export default function FormularioPublico() {
       }
 
       // Build datos (exclude File/Blob values, replace with marker)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const datos: Record<string, any> = {};
       for (const campo of allCampos) {
         const val = formData[campo.id];
@@ -167,8 +169,28 @@ export default function FormularioPublico() {
         estado: 'pendiente',
         notas: '',
       };
-      if (formData['ubicacion']) {
-        solicitudData.ubicacion = formData['ubicacion'] as any;
+      // SPRINT-FIX-LEADS-FORMULARIO-PUBLICO (2026-05-25, hallazgo lateral GPS):
+      // antes se leía con la clave fija `formData['ubicacion']`, pero
+      // `CampoFormulario.tsx` escribe el valor en `formData[campo.id]` con id
+      // dinámico (auto-generado al crear el campo en el editor). Si el campo
+      // tipo ubicación tenía id distinto de "ubicacion", el valor se perdía
+      // silenciosamente. Ahora iteramos campos y tomamos por `campo.id` si el
+      // tipo es 'ubicacion'. Conservamos fallback a la clave fija por compat
+      // con formularios viejos donde el id sí era literalmente "ubicacion".
+      const campoUbicacion = allCampos.find((c) => c.tipo === 'ubicacion');
+      const ubicacionVal = campoUbicacion
+        ? formData[campoUbicacion.id]
+        : formData['ubicacion'];
+      if (
+        ubicacionVal &&
+        typeof ubicacionVal === 'object' &&
+        'lat' in (ubicacionVal as Record<string, unknown>) &&
+        'lng' in (ubicacionVal as Record<string, unknown>)
+      ) {
+        const obj = ubicacionVal as { lat: unknown; lng: unknown };
+        if (typeof obj.lat === 'number' && typeof obj.lng === 'number') {
+          solicitudData.ubicacion = { lat: obj.lat, lng: obj.lng };
+        }
       }
       const solicitudId = await crearSolicitud(solicitudData);
 
