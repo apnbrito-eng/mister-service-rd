@@ -1153,3 +1153,145 @@ export async function eliminarComisionesDeFactura(args: {
 
   return { eliminadas, preservadas };
 }
+
+/**
+ * SPRINT-GARANTIA-FLUJO-COMPLETO Fase A (2026-05-25).
+ *
+ * Aplica el descuento por garantía al técnico ORIGINAL cuando se cierra una
+ * orden marcada como `esGarantia: true`. Las reglas de Jorge (entrevista
+ * 2026-05-24):
+ *
+ *  1. El descuento es el 10% del costo de PIEZAS de la re-reparación
+ *     (NO el 100% de la comisión, como hacía la lógica vieja en Citas.tsx).
+ *  2. El técnico ORIGINAL conserva su comisión original (NO se marca
+ *     `estaAnulada=true`).
+ *  3. Si no hay gasto en piezas (costoPiezas = 0), no se aplica descuento.
+ *  4. El descuento se aplica al original siempre que haya piezas, cubra él
+ *     mismo u otro técnico la garantía.
+ *
+ * Idempotente: si re-corremos el cierre (caso edge — wizard reabierto y vuelve
+ * a guardar), reemplaza el descuento previo con el nuevo cálculo. Audit log
+ * `descuento_garantia_tecnico` siempre se emite con el monto efectivo.
+ *
+ * Devuelve el monto efectivamente descontado (0 si no se aplicó). No tira
+ * excepciones — si la comisión original no existe (orden previa sin
+ * comisión registrada), retorna 0 silenciosamente y loggea. El caller debe
+ * llamarse desde un try/catch para que el cierre no se rompa por esto.
+ */
+export async function aplicarDescuentoGarantiaPorPiezas(args: {
+  ordenGarantiaId: string;
+  ordenOriginalId: string;
+  tecnicoOriginalUid: string;
+  costoPiezasReReparacion: number;
+  facturaIdReasignada?: string;
+  conduceNumeroOriginal?: string;
+  solicitanteUid?: string;
+  solicitanteNombre?: string;
+  motivoLabel?: string;
+}): Promise<{ aplicado: boolean; monto: number; comisionId: string | null; razon?: string }> {
+  const {
+    ordenGarantiaId,
+    ordenOriginalId,
+    tecnicoOriginalUid,
+    costoPiezasReReparacion,
+    facturaIdReasignada,
+    conduceNumeroOriginal,
+    solicitanteUid,
+    solicitanteNombre,
+    motivoLabel,
+  } = args;
+
+  // Guardrails.
+  if (!ordenOriginalId || !tecnicoOriginalUid) {
+    return { aplicado: false, monto: 0, comisionId: null, razon: 'faltan_referencias' };
+  }
+  if (!Number.isFinite(costoPiezasReReparacion) || costoPiezasReReparacion <= 0) {
+    return { aplicado: false, monto: 0, comisionId: null, razon: 'sin_piezas' };
+  }
+
+  const PORCENTAJE = 0.10; // 10% del costo de piezas — regla de Jorge.
+  const montoDescuento = -Math.round(costoPiezasReReparacion * PORCENTAJE * 100) / 100;
+
+  // Buscar la comisión original — por ordenId + tecnicoId. La indexación
+  // viene del flujo legacy (P-006: tecnicoId persiste auth.uid post-c4be345).
+  let comisionId: string | null = null;
+  try {
+    const snap = await getDocs(query(
+      collection(db, 'comisiones'),
+      where('ordenId', '==', ordenOriginalId),
+      where('tecnicoId', '==', tecnicoOriginalUid),
+    ));
+    if (snap.empty) {
+      console.warn(
+        `[garantia-fase-A] No se encontró comisión original para descontar (ordenOriginal=${ordenOriginalId}, tecnicoOriginal=${tecnicoOriginalUid}). Probablemente la orden previa no generó comisión.`,
+      );
+      return { aplicado: false, monto: 0, comisionId: null, razon: 'comision_original_no_existe' };
+    }
+    comisionId = snap.docs[0].id;
+  } catch (err) {
+    console.error(
+      `[garantia-fase-A] Error buscando comisión original (ordenOriginal=${ordenOriginalId}):`,
+      err,
+    );
+    return { aplicado: false, monto: 0, comisionId: null, razon: 'error_buscando_comision' };
+  }
+
+  const ahoraTs = Timestamp.now();
+  const descuentoPayload: Record<string, unknown> = {
+    monto: montoDescuento,
+    facturaIdReasignada: facturaIdReasignada || '',
+    conduceNumero: conduceNumeroOriginal || '',
+    ordenIdReasignada: ordenGarantiaId,
+    motivo: motivoLabel || 'Garantía — 10% de piezas',
+    aplicadoEn: ahoraTs,
+    aplicadoPor: solicitanteUid || '',
+    aplicadoPorNombre: solicitanteNombre || 'Sistema',
+  };
+  // Notas opcionales removidas — el motivo ya captura el contexto.
+  const descuentoLimpio = Object.fromEntries(
+    Object.entries(descuentoPayload).filter(([, v]) => v !== undefined),
+  );
+
+  try {
+    // SPRINT-GARANTIA Fase A: NO marcar `estaAnulada=true` — la comisión
+    // original se conserva, solo se aplica el descuento parcial del 10%.
+    await updateDoc(doc(db, 'comisiones', comisionId), {
+      descuentoPorGarantia: descuentoLimpio,
+      updatedAt: ahoraTs,
+    });
+  } catch (err) {
+    console.error(
+      `[garantia-fase-A] Error actualizando comisión ${comisionId}:`,
+      err,
+    );
+    return { aplicado: false, monto: 0, comisionId, razon: 'error_update_comision' };
+  }
+
+  // Audit log (no crítico — si falla, el descuento ya se aplicó).
+  try {
+    const auditPayload: Record<string, unknown> = {
+      accion: 'descuento_garantia_tecnico',
+      solicitanteUid: solicitanteUid || null,
+      solicitanteNombre: solicitanteNombre || null,
+      objetivoTipo: 'comision',
+      objetivoId: comisionId,
+      tecnicoAfectadoUid: tecnicoOriginalUid,
+      monto: montoDescuento,
+      costoPiezasReReparacion,
+      porcentajeAplicado: PORCENTAJE,
+      ordenIdOriginal: ordenOriginalId,
+      ordenIdReasignada: ordenGarantiaId,
+      conduceNumero: conduceNumeroOriginal || null,
+      motivo: motivoLabel || 'Garantía — 10% de piezas',
+      timestamp: ahoraTs,
+    };
+    await addDoc(
+      collection(db, 'auditoria_admin'),
+      Object.fromEntries(Object.entries(auditPayload).filter(([, v]) => v !== undefined)),
+    );
+  } catch (errAudit) {
+    console.warn('[garantia-fase-A] audit log descuento_garantia_tecnico falló:', errAudit);
+  }
+
+  return { aplicado: true, monto: montoDescuento, comisionId };
+}

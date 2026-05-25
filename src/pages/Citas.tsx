@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, Timestamp, getDoc, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, Timestamp, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 import { CitaPorConfirmar, OrdenServicio, GarantiaOrigen } from '../types';
@@ -226,88 +226,34 @@ export default function Citas() {
         tecnicoElegidoId !== selectedCita.tecnicoOriginalUid
       );
 
-      // ─── Garantía: aplicar descuento, actualizar factura y registrar auditoría ───
-      // Si CUALQUIER paso crítico (descuento de comisión o actualización de la
-      // factura) falla, NO borramos la cita: el usuario debe ver la orden
-      // creada y la cita aún pendiente para reintentar la garantía a mano.
-      // Las auditorías no son críticas: si fallan, lo logueamos y seguimos.
+      // ─── Garantía Fase A (2026-05-25 SPRINT-GARANTIA-FLUJO-COMPLETO): ───
+      // Cambio de modelo respecto a la lógica vieja (que aplicaba
+      // `-comisionMontoOriginal` + `estaAnulada=true` al confirmar la cita).
+      //
+      // Reglas de Jorge (entrevista 2026-05-24):
+      //   1. El técnico original CONSERVA su comisión original.
+      //   2. El descuento es 10% del costo de PIEZAS de la re-reparación,
+      //      NO el 100% de la comisión.
+      //   3. El descuento se aplica al cerrar la NUEVA orden de garantía
+      //      (donde se conoce `costoPiezasTotal`), no al confirmar la cita.
+      //   4. Lo cubra él mismo u otro técnico, el descuento va al ORIGINAL
+      //      siempre que haya gasto en piezas.
+      //   5. Si otro técnico cubre, ese gana su comisión normal por el
+      //      trabajo (flujo estándar de comisión cuando se factura).
+      //   6. Si el mismo técnico cubre, no gana comisión adicional (la
+      //      orden de garantía no genera comisión nueva en flujo estándar).
+      //
+      // Por eso este bloque ya NO toca la comisión original. Solo:
+      //   - Actualiza la factura original con snapshot tecnico_original y
+      //     marca `garantia.estado='reclamada'` + `ordenGarantiaId`.
+      //   - Registra audit log `garantia_reabierta` para forensia.
+      //
+      // El descuento real se aplica en `CierreServicioWizard.tsx` vía
+      // `aplicarDescuentoGarantiaPorPiezas` cuando el técnico cierra la
+      // orden de garantía con piezas.
       let garantiaProcesadaOk = true;
       if (selectedCita.esGarantia) {
-        let descuentoAplicado = false;
-        let descuentoMonto = 0;
-
-        // 1) Descuento a la comisión del técnico original (si cambió de técnico)
-        if (cambioTecnicoGarantia && comisionOriginalId && comisionMontoOriginal !== null && comisionMontoOriginal > 0) {
-          try {
-            const comisionRef = doc(db, 'comisiones', comisionOriginalId);
-            const comisionSnap = await getDoc(comisionRef);
-            if (!comisionSnap.exists()) {
-              toast.error('Comisión original no encontrada. No se aplicó descuento. Verifica manualmente.');
-              garantiaProcesadaOk = false;
-            } else if (comisionSnap.data()?.estaAnulada === true) {
-              toast('Comisión ya fue anulada en una reasignación previa. No se re-descontó.', {
-                duration: 5000,
-                style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
-              });
-              try {
-                const auditOmision: Record<string, unknown> = {
-                  accion: 'descuento_garantia_omitido_idempotencia',
-                  solicitanteUid: userProfile?.id || null,
-                  solicitanteNombre: userProfile?.nombre || null,
-                  objetivoTipo: 'comision',
-                  objetivoId: comisionOriginalId,
-                  ordenIdReasignada: nuevaOrdenId,
-                  facturaId: selectedCita.referenciaFacturaId || null,
-                  conduceNumero: selectedCita.referenciaConduce || null,
-                  motivo: 'Comisión ya anulada previamente',
-                  timestamp: ahoraTs,
-                };
-                await addDoc(collection(db, 'auditoria_admin'),
-                  Object.fromEntries(Object.entries(auditOmision).filter(([, v]) => v !== undefined)),
-                );
-              } catch (errAuditOmision) {
-                console.warn('Audit log descuento_garantia_omitido_idempotencia falló:', errAuditOmision);
-                // Auditoría no crítica: no marcamos garantiaProcesadaOk en false.
-              }
-            } else {
-              const descuentoPayload: Record<string, unknown> = {
-                monto: -comisionMontoOriginal,
-                facturaIdReasignada: selectedCita.referenciaFacturaId || '',
-                conduceNumero: selectedCita.referenciaConduce || '',
-                ordenIdReasignada: nuevaOrdenId,
-                motivo: garantiaMotivo,
-                aplicadoEn: ahoraTs,
-                aplicadoPor: userProfile?.id || '',
-                aplicadoPorNombre: userProfile?.nombre || 'Sistema',
-              };
-              if (garantiaNotas.trim()) descuentoPayload.notas = garantiaNotas.trim();
-              const descuentoLimpio = Object.fromEntries(
-                Object.entries(descuentoPayload).filter(([, v]) => v !== undefined),
-              );
-              await updateDoc(comisionRef, {
-                descuentoPorGarantia: descuentoLimpio,
-                estaAnulada: true,
-                updatedAt: ahoraTs,
-              });
-              descuentoAplicado = true;
-              descuentoMonto = comisionMontoOriginal;
-            }
-          } catch (errDesc) {
-            console.error('No se pudo aplicar el descuento por garantía:', errDesc);
-            toast.error('Error procesando garantía: no se pudo descontar comisión del técnico original.');
-            garantiaProcesadaOk = false;
-          }
-        } else if (cambioTecnicoGarantia && !comisionOriginalId) {
-          toast('No se encontró comisión del técnico original. Descuento no aplicado.', {
-            duration: 5000,
-            style: { borderLeft: '4px solid #f59e0b', background: '#fffbeb', color: '#92400e' },
-          });
-          // No comisión registrada — no hay nada que descontar. Esto es un
-          // estado válido (orden previa sin comisión), no un fallo: dejamos
-          // garantiaProcesadaOk en true para que la cita se borre normalmente.
-        }
-
-        // 2) Actualizar factura: snapshot del técnico original + ordenGarantiaId + estado reclamada
+        // 1) Actualizar factura: snapshot del técnico original + ordenGarantiaId + estado reclamada
         if (selectedCita.referenciaFacturaId) {
           try {
             const facturaUpdate: Record<string, unknown> = {
@@ -324,64 +270,38 @@ export default function Citas() {
           }
         }
 
-        // 3) Audit log: cambio_tecnico_garantia (no crítico)
-        if (cambioTecnicoGarantia) {
-          try {
-            const auditPayload: Record<string, unknown> = {
-              accion: 'cambio_tecnico_garantia',
-              solicitanteUid: userProfile?.id || null,
-              solicitanteNombre: userProfile?.nombre || null,
-              objetivoTipo: 'orden',
-              objetivoId: nuevaOrdenId,
-              ordenIdReasignada: nuevaOrdenId,
-              ordenIdOriginal: selectedCita.referenciaOrdenId || null,
-              facturaId: selectedCita.referenciaFacturaId || null,
-              conduceNumero: selectedCita.referenciaConduce || null,
-              tecnicoOriginalUid: selectedCita.tecnicoOriginalUid || null,
-              tecnicoOriginalNombre: selectedCita.tecnicoOriginalNombre || null,
-              tecnicoNuevoUid: tecnicoElegidoId,
-              tecnicoNuevoNombre: tecnicoElegidoNombre,
-              motivo: garantiaMotivo,
-              notas: garantiaNotas.trim() || null,
-              montoDescontado: descuentoAplicado ? descuentoMonto : 0,
-              descuentoAplicado,
-              comisionOriginalId: comisionOriginalId || null,
-              timestamp: ahoraTs,
-            };
-            await addDoc(collection(db, 'auditoria_admin'),
-              Object.fromEntries(Object.entries(auditPayload).filter(([, v]) => v !== undefined)),
-            );
-          } catch (errAudit) {
-            console.warn('Audit log cambio_tecnico_garantia falló:', errAudit);
-            // No crítico — no marcamos garantiaProcesadaOk en false.
-          }
-        }
-
-        // 4) Audit log adicional cuando el descuento sí se aplicó (no crítico)
-        if (descuentoAplicado) {
-          try {
-            const auditDesc: Record<string, unknown> = {
-              accion: 'descuento_garantia_tecnico',
-              solicitanteUid: userProfile?.id || null,
-              solicitanteNombre: userProfile?.nombre || null,
-              objetivoTipo: 'comision',
-              objetivoId: comisionOriginalId,
-              tecnicoAfectadoUid: selectedCita.tecnicoOriginalUid || null,
-              tecnicoAfectadoNombre: selectedCita.tecnicoOriginalNombre || null,
-              monto: -descuentoMonto,
-              ordenIdOriginal: selectedCita.referenciaOrdenId || null,
-              ordenIdReasignada: nuevaOrdenId,
-              conduceNumero: selectedCita.referenciaConduce || null,
-              motivo: garantiaMotivo,
-              timestamp: ahoraTs,
-            };
-            await addDoc(collection(db, 'auditoria_admin'),
-              Object.fromEntries(Object.entries(auditDesc).filter(([, v]) => v !== undefined)),
-            );
-          } catch (errAudit) {
-            console.warn('Audit log descuento_garantia_tecnico falló:', errAudit);
-            // No crítico.
-          }
+        // 2) Audit log: garantia_reabierta (no crítico — el descuento real
+        // se persiste en el audit `descuento_garantia_tecnico` cuando el
+        // técnico cierra la orden de garantía con piezas).
+        try {
+          const auditPayload: Record<string, unknown> = {
+            accion: 'garantia_reabierta',
+            solicitanteUid: userProfile?.id || null,
+            solicitanteNombre: userProfile?.nombre || null,
+            objetivoTipo: 'orden',
+            objetivoId: nuevaOrdenId,
+            ordenIdReasignada: nuevaOrdenId,
+            ordenIdOriginal: selectedCita.referenciaOrdenId || null,
+            facturaId: selectedCita.referenciaFacturaId || null,
+            conduceNumero: selectedCita.referenciaConduce || null,
+            tecnicoOriginalUid: selectedCita.tecnicoOriginalUid || null,
+            tecnicoOriginalNombre: selectedCita.tecnicoOriginalNombre || null,
+            tecnicoNuevoUid: tecnicoElegidoId,
+            tecnicoNuevoNombre: tecnicoElegidoNombre,
+            cambioTecnico: cambioTecnicoGarantia,
+            motivo: garantiaMotivo,
+            notas: garantiaNotas.trim() || null,
+            comisionOriginalId: comisionOriginalId || null,
+            // Descuento real se aplicará al cerrar la orden de garantía.
+            descuentoPendienteAlCierre: true,
+            timestamp: ahoraTs,
+          };
+          await addDoc(collection(db, 'auditoria_admin'),
+            Object.fromEntries(Object.entries(auditPayload).filter(([, v]) => v !== undefined)),
+          );
+        } catch (errAudit) {
+          console.warn('Audit log garantia_reabierta falló:', errAudit);
+          // No crítico — no marcamos garantiaProcesadaOk en false.
         }
       }
 
@@ -1070,15 +990,18 @@ export default function Citas() {
                 </div>
                 <div className="bg-white border border-red-200 rounded-lg p-3 text-xs text-red-900">
                   <p>
-                    Esto descontará el <span className="font-bold">100% de la comisión</span> que recibió{' '}
-                    <span className="font-semibold">{selectedCita?.tecnicoOriginalNombre || 'el técnico original'}</span> por el trabajo original:
+                    Al cerrar la orden de garantía, se descontará el{' '}
+                    <span className="font-bold">10% del costo de piezas</span> a{' '}
+                    <span className="font-semibold">{selectedCita?.tecnicoOriginalNombre || 'el técnico original'}</span>.
+                    Conserva su comisión original.
                   </p>
-                  <p className="text-base font-bold text-red-700 mt-1">
+                  <p className="text-xs text-red-700 mt-2">
+                    Comisión original (referencia, no se anula):{' '}
                     {cargandoComisionOriginal
-                      ? 'Cargando comisión...'
+                      ? 'Cargando...'
                       : comisionMontoOriginal !== null
-                        ? `-${formatMoneda(comisionMontoOriginal)}`
-                        : 'No se encontró comisión registrada (no se aplicará descuento)'}
+                        ? formatMoneda(comisionMontoOriginal)
+                        : 'No registrada'}
                   </p>
                 </div>
                 <div>

@@ -42,6 +42,27 @@ export default function Comisiones() {
       (snap) => {
         setComisiones(snap.docs.map(d => {
           const raw = d.data();
+          // SPRINT-GARANTIA Fase A: parsear `descuentoPorGarantia` para que
+          // la pantalla Comisiones muestre el descuento del 10% de piezas
+          // aplicado al técnico ORIGINAL. Antes el campo se persistía pero
+          // NO se renderizaba en la tabla / CSV — hallazgo #3 del informe
+          // AUDITORIA_SOFTWARE_2026-05-24.md.
+          let descuento: ComisionRegistro['descuentoPorGarantia'] | undefined;
+          const descRaw = raw.descuentoPorGarantia as Record<string, unknown> | undefined;
+          if (descRaw && typeof descRaw.monto === 'number') {
+            descuento = {
+              monto: descRaw.monto as number,
+              facturaIdReasignada: (descRaw.facturaIdReasignada as string) || '',
+              conduceNumero: (descRaw.conduceNumero as string) || '',
+              ordenIdReasignada: (descRaw.ordenIdReasignada as string) || '',
+              motivo: (descRaw.motivo as string) || '',
+              notas: descRaw.notas as string | undefined,
+              aplicadoEn:
+                (descRaw.aplicadoEn as { toDate?: () => Date })?.toDate?.() || new Date(),
+              aplicadoPor: (descRaw.aplicadoPor as string) || '',
+              aplicadoPorNombre: (descRaw.aplicadoPorNombre as string) || '',
+            };
+          }
           return {
             id: d.id,
             tecnicoId: raw.tecnicoId || '',
@@ -60,6 +81,7 @@ export default function Comisiones() {
             liquidadaEn: raw.liquidadaEn?.toDate?.() || undefined,
             liquidadaPor: raw.liquidadaPor,
             notas: raw.notas,
+            descuentoPorGarantia: descuento,
             createdAt: raw.createdAt?.toDate?.() || new Date(),
           } as ComisionRegistro;
         }));
@@ -97,20 +119,28 @@ export default function Comisiones() {
   }, [comisiones, modoFiltro, filtroQuincena, fechaDesde, fechaHasta, filtroTecnico, filtroEstado]);
 
   const exportarCSV = () => {
-    const encabezados = ['Fecha cobro', 'OS#', 'Cliente', 'Tecnico', 'Precio', 'Piezas', 'Base', '%', 'Comision', 'Estado', 'Quincena'];
-    const filas = comisionesFiltradas.map(c => [
-      c.fechaCobro.toISOString().slice(0, 10),
-      c.ordenNumero,
-      c.clienteNombre,
-      c.tecnicoNombre,
-      c.precioFinal,
-      c.costoPiezas,
-      c.basePendienteComision,
-      c.comisionPorcentaje,
-      c.comisionMonto,
-      c.estadoLiquidacion,
-      c.quincenaAsignada || '',
-    ]);
+    // SPRINT-GARANTIA Fase A: columna nueva "Descuento garantía" + "Neto"
+    // = comisionMonto + descuento (descuento es negativo).
+    const encabezados = ['Fecha cobro', 'OS#', 'Cliente', 'Tecnico', 'Precio', 'Piezas', 'Base', '%', 'Comision', 'Descuento garantia', 'Neto', 'Estado', 'Quincena'];
+    const filas = comisionesFiltradas.map(c => {
+      const descuento = c.descuentoPorGarantia?.monto || 0;
+      const neto = c.comisionMonto + descuento;
+      return [
+        c.fechaCobro.toISOString().slice(0, 10),
+        c.ordenNumero,
+        c.clienteNombre,
+        c.tecnicoNombre,
+        c.precioFinal,
+        c.costoPiezas,
+        c.basePendienteComision,
+        c.comisionPorcentaje,
+        c.comisionMonto,
+        descuento,
+        neto,
+        c.estadoLiquidacion,
+        c.quincenaAsignada || '',
+      ];
+    });
     const csv = [encabezados, ...filas]
       .map(row => row.map(v => {
         const s = String(v ?? '');
@@ -128,11 +158,18 @@ export default function Comisiones() {
   };
 
   const totales = useMemo(() => {
-    return comisionesFiltradas.reduce((acc, c) => ({
-      base: acc.base + c.basePendienteComision,
-      piezas: acc.piezas + c.costoPiezas,
-      comision: acc.comision + c.comisionMonto,
-    }), { base: 0, piezas: 0, comision: 0 });
+    // SPRINT-GARANTIA Fase A: sumar `descuentoPorGarantia.monto` (negativo)
+    // al total de comisión. `comisionBruta` se preserva como referencia visual.
+    return comisionesFiltradas.reduce((acc, c) => {
+      const descuento = c.descuentoPorGarantia?.monto || 0;
+      return {
+        base: acc.base + c.basePendienteComision,
+        piezas: acc.piezas + c.costoPiezas,
+        comisionBruta: acc.comisionBruta + c.comisionMonto,
+        descuentoGarantia: acc.descuentoGarantia + descuento,
+        comision: acc.comision + c.comisionMonto + descuento,
+      };
+    }, { base: 0, piezas: 0, comisionBruta: 0, descuentoGarantia: 0, comision: 0 });
   }, [comisionesFiltradas]);
 
   const porTecnico = useMemo(() => {
@@ -142,7 +179,9 @@ export default function Comisiones() {
         grupos[c.tecnicoId] = { tecnicoId: c.tecnicoId, tecnicoNombre: c.tecnicoNombre, comisiones: [], total: 0 };
       }
       grupos[c.tecnicoId].comisiones.push(c);
-      grupos[c.tecnicoId].total += c.comisionMonto;
+      // Neto: comisión + descuentoPorGarantia (negativo si aplica).
+      const descuento = c.descuentoPorGarantia?.monto || 0;
+      grupos[c.tecnicoId].total += c.comisionMonto + descuento;
     });
     return Object.values(grupos).sort((a, b) => b.total - a.total);
   }, [comisionesFiltradas]);
@@ -318,8 +357,13 @@ export default function Comisiones() {
           </div>
         )}
         <div className="bg-emerald-50 rounded-2xl shadow-sm border border-emerald-200 p-4">
-          <p className="text-xs font-medium text-emerald-700 uppercase">Total comisiones</p>
+          <p className="text-xs font-medium text-emerald-700 uppercase">Total comisiones (neto)</p>
           <p className="text-xl font-bold text-emerald-900 mt-1">{formatMoneda(totales.comision)}</p>
+          {totales.descuentoGarantia < 0 && (
+            <p className="text-[11px] text-emerald-700 mt-1">
+              Bruto: {formatMoneda(totales.comisionBruta)} · Desc. garantía: <span className="text-red-600">{formatMoneda(totales.descuentoGarantia)}</span>
+            </p>
+          )}
         </div>
       </div>
 
@@ -343,34 +387,46 @@ export default function Comisiones() {
                   )}
                   <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">%</th>
                   <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Comisión</th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase" title="10% del costo de piezas descontado al técnico original cuando la orden de garantía se cierra con piezas">Desc. garantía</th>
+                  <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Neto</th>
                   <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Estado</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {comisionesFiltradas.length === 0 ? (
-                  <tr><td colSpan={mostrarCosto ? 10 : 8} className="py-12 text-center text-gray-400">Sin comisiones para los filtros seleccionados</td></tr>
-                ) : comisionesFiltradas.map(c => (
-                  <tr key={c.id} className="hover:bg-gray-50">
-                    <td className="px-3 py-3 text-xs text-gray-600">{formatFecha(c.fechaCobro)}</td>
-                    <td className="px-3 py-3 font-mono text-xs font-bold text-[#0f3460]">{c.ordenNumero}</td>
-                    <td className="px-3 py-3 text-gray-700 hidden md:table-cell">{c.clienteNombre}</td>
-                    <td className="px-3 py-3 text-gray-700">{c.tecnicoNombre}</td>
-                    <td className="px-3 py-3 text-right text-gray-700">{formatMoneda(c.precioFinal)}</td>
-                    {mostrarCosto && (
-                      <>
-                        <td className="px-3 py-3 text-right text-gray-500 hidden md:table-cell">{formatMoneda(c.costoPiezas)}</td>
-                        <td className="px-3 py-3 text-right text-gray-700 hidden md:table-cell">{formatMoneda(c.basePendienteComision)}</td>
-                      </>
-                    )}
-                    <td className="px-3 py-3 text-right text-gray-700">{c.comisionPorcentaje}%</td>
-                    <td className="px-3 py-3 text-right font-semibold text-emerald-700">{formatMoneda(c.comisionMonto)}</td>
-                    <td className="px-3 py-3 text-center">
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${c.estadoLiquidacion === 'liquidada' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                        {c.estadoLiquidacion === 'liquidada' ? 'Liquidada' : 'Pendiente'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                  <tr><td colSpan={mostrarCosto ? 12 : 10} className="py-12 text-center text-gray-400">Sin comisiones para los filtros seleccionados</td></tr>
+                ) : comisionesFiltradas.map(c => {
+                  const descuento = c.descuentoPorGarantia?.monto || 0;
+                  const neto = c.comisionMonto + descuento;
+                  return (
+                    <tr key={c.id} className="hover:bg-gray-50">
+                      <td className="px-3 py-3 text-xs text-gray-600">{formatFecha(c.fechaCobro)}</td>
+                      <td className="px-3 py-3 font-mono text-xs font-bold text-[#0f3460]">{c.ordenNumero}</td>
+                      <td className="px-3 py-3 text-gray-700 hidden md:table-cell">{c.clienteNombre}</td>
+                      <td className="px-3 py-3 text-gray-700">{c.tecnicoNombre}</td>
+                      <td className="px-3 py-3 text-right text-gray-700">{formatMoneda(c.precioFinal)}</td>
+                      {mostrarCosto && (
+                        <>
+                          <td className="px-3 py-3 text-right text-gray-500 hidden md:table-cell">{formatMoneda(c.costoPiezas)}</td>
+                          <td className="px-3 py-3 text-right text-gray-700 hidden md:table-cell">{formatMoneda(c.basePendienteComision)}</td>
+                        </>
+                      )}
+                      <td className="px-3 py-3 text-right text-gray-700">{c.comisionPorcentaje}%</td>
+                      <td className="px-3 py-3 text-right font-semibold text-emerald-700">{formatMoneda(c.comisionMonto)}</td>
+                      <td className="px-3 py-3 text-right text-red-600" title={descuento < 0 ? `${c.descuentoPorGarantia?.motivo || 'Garantía'} — OS ${c.descuentoPorGarantia?.ordenIdReasignada || ''}` : ''}>
+                        {descuento < 0 ? formatMoneda(descuento) : '—'}
+                      </td>
+                      <td className={`px-3 py-3 text-right font-bold ${neto >= 0 ? 'text-emerald-800' : 'text-red-700'}`}>
+                        {formatMoneda(neto)}
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${c.estadoLiquidacion === 'liquidada' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {c.estadoLiquidacion === 'liquidada' ? 'Liquidada' : 'Pendiente'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

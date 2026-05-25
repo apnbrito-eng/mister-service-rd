@@ -40,6 +40,7 @@ import { check as checkHelpersLimpiezaRecursivaFirestore } from './check-helpers
 import { check as checkComisionSinDenormalizacion } from './check-comision-sin-denormalizacion.js';
 import { check as checkNumerosDocumentoClientSide } from './check-numeros-documento-client-side.js';
 import { check as checkGateConducePagoVerificado } from './check-gate-conduce-pago-verificado.js';
+import { check as checkComisionGarantiaAnulaCompleta } from './check-comision-garantia-anula-completa.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -74,6 +75,8 @@ async function main() {
     checkComisionSinDenormalizacion,
     checkNumerosDocumentoClientSide,
     checkGateConducePagoVerificado,
+    // SPRINT-GARANTIA-FLUJO-COMPLETO Fase A (2026-05-25) — anti-recurrencia.
+    checkComisionGarantiaAnulaCompleta,
   ];
 
   const t0 = Date.now();

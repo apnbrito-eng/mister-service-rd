@@ -6,6 +6,7 @@ import { crearNotificacion } from '../services/notificaciones.service';
 import { subirFirmaCierre, subirFotoCierre, distanciaMetros, obtenerUbicacionGPS, type GpsErrorInfo } from '../services/storage.service';
 import { calcularTotales, borrarFotoPieza } from '../services/piezas.service';
 import { crearRegistroAuditoria } from '../utils';
+import { aplicarDescuentoGarantiaPorPiezas } from '../utils/comisiones';
 import { calcularVencimiento, PERIODO_GARANTIA_DEFAULT_DIAS } from '../utils/garantia';
 import { iconoCondicion, iconoOrigen, etiquetaOrigen } from '../utils/piezas';
 import { razonCerrarServicioDisabled } from '../utils/tooltipsBotones';
@@ -458,6 +459,45 @@ export default function CierreServicioWizard({
 
       await updateDoc(doc(db, 'ordenes_servicio', orden.id), ordenUpdate);
       console.log('Cierre guardado OK');
+
+      // SPRINT-GARANTIA-FLUJO-COMPLETO Fase A (2026-05-25): si esta orden es
+      // de garantía y se usaron piezas en la re-reparación, descontar el 10%
+      // del costo de piezas al técnico ORIGINAL (regla de Jorge entrevista
+      // 2026-05-24). El técnico original CONSERVA su comisión original — el
+      // descuento NO la anula. Se aplica siempre que haya piezas, lo cubra
+      // él mismo u otro técnico. Try/catch defensivo: si el descuento falla
+      // (comisión original no existe, etc.), el cierre ya quedó persistido.
+      if (orden.esGarantia && hayPiezas && orden.tecnicoOriginalUid && orden.referenciaOrdenId) {
+        try {
+          const totales = calcularTotales(piezasUsadas);
+          const result = await aplicarDescuentoGarantiaPorPiezas({
+            ordenGarantiaId: orden.id,
+            ordenOriginalId: orden.referenciaOrdenId,
+            tecnicoOriginalUid: orden.tecnicoOriginalUid,
+            costoPiezasReReparacion: totales.costoTotal,
+            facturaIdReasignada: orden.referenciaFacturaId,
+            conduceNumeroOriginal: orden.referenciaConduce,
+            solicitanteUid: tecnicoId,
+            solicitanteNombre: tecnicoNombre,
+            motivoLabel: 'Garantía — 10% costo de piezas',
+          });
+          if (result.aplicado) {
+            console.log(
+              `[garantia-fase-A] descuento aplicado: monto=${result.monto} comisionId=${result.comisionId}`,
+            );
+          } else {
+            console.warn(
+              `[garantia-fase-A] descuento NO aplicado: razon=${result.razon}`,
+            );
+          }
+        } catch (errGarantia) {
+          console.error(
+            '[garantia-fase-A] Error inesperado aplicando descuento por garantía:',
+            errGarantia,
+          );
+          // No bloqueamos el cierre — el técnico ya cerró y se persistió.
+        }
+      }
 
       // SPRINT-174: emitir notif `cierre_completado` a la operaria del
       // técnico + admins/coords. Autoexclusión del propio técnico (es

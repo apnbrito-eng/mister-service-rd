@@ -772,10 +772,21 @@ export interface ComisionRegistro {
   liquidadaPor?: string;
   notas?: string;
   /**
-   * Descuento aplicado a esta comisión cuando el servicio entra en garantía y
-   * es reasignado a otro técnico. El monto es negativo (resta a la comisión
-   * original). Si está presente y `monto = -comisionMonto`, la comisión está
-   * efectivamente anulada (el campo `estaAnulada` es derivable).
+   * Descuento aplicado a esta comisión cuando la orden entra en garantía y
+   * se cierra con piezas. El monto es negativo (resta a la comisión
+   * original).
+   *
+   * SPRINT-GARANTIA-FLUJO-COMPLETO Fase A (2026-05-25, reglas Jorge):
+   *   - El descuento es el 10% del costo de PIEZAS de la re-reparación.
+   *   - El técnico ORIGINAL conserva su comisión original (NO se anula).
+   *   - Se aplica al cerrar la orden de garantía, no al confirmar la cita.
+   *
+   * Aplicado por `aplicarDescuentoGarantiaPorPiezas` en `utils/comisiones.ts`.
+   *
+   * (Pre-Fase A — DEPRECATED — la lógica vieja en `Citas.tsx::onAfterCreate`
+   * aplicaba `-comisionMonto` + `estaAnulada=true` cuando cambiaba el técnico.
+   * Esa lógica se reemplazó en commit del 2026-05-25 SPRINT-GARANTIA. Los
+   * registros legacy con `estaAnulada=true` mantienen su shape para forensia.)
    */
   descuentoPorGarantia?: {
     monto: number;

@@ -4,7 +4,13 @@
 
 ## SPRINT-FIX-LEADS-FORMULARIO-PUBLICO — Arreglar subida de foto/firma/archivo en formularios públicos (se pierde el lead)
 
+**Prioridad:** 🔴 CRÍTICA. **Estado:** ✅ COMPLETADO 2026-05-25 pasada 49 hash `01df699` (Jorge autorizó "OK FASE A"/opción A + deploy auto + incluir-gps=si vía prompt directo). Archivos: `storage.rules` (match nuevo `solicitudes-publico/{solicitudId}/{campoId}/{archivo}` con whitelist `image/*` + `application/pdf`, size < 10MB, read solo auth, delete bloqueado; comodín `{allPaths=**}` y matches existentes intactos — REGLA DE ORO SPRINT-138 preservada); `src/services/solicitudes.service.ts` (path cambia de `solicitudes/...` a `solicitudes-publico/...`); `src/pages/public/FormularioPublico.tsx` (fix GPS lateral hallazgo #7 auditoría — antes leía `formData['ubicacion']` clave fija, ahora busca por `campo.tipo === 'ubicacion'` con cascada a clave literal; type guard refinado sin `any`); `storage.rules.deployed.lock` (sha `accf5550e87d...` a las 2026-05-25T12:24:57Z post-deploy). **Deploy ejecutado**: `npm run deploy:storage-rules` exit 0, rules en producción. Cazadores 23/23 PASS (P-013 lock actualizado). Typecheck PASS. Build 4.56s PASS. Lint clean en archivos modificados.
+
+<details><summary>Spec original (proceso) preservada para forensia</summary>
+
 **Prioridad:** 🔴 CRÍTICA. **Estado:** ⊘ MOVIDO A BLOQUEOS 2026-05-25 pasada 48. Razón: la auditoría del approach 1 ("ruta pública existente") demostró que NO cubre tipo `archivo` (PDFs) — la única ruta pública actual (`fotos-equipos-publico`) tiene regla `contentType.matches('image/.*')` que rechaza PDFs. El sprint admite explícitamente que ese caso → ESCALA (approach 2 toca `storage.rules`). Diff propuesto + REGLA DE ORO + 3 opciones de desbloqueo (A approach 2 limpio / B sin tocar rules cubriendo solo fotos+firmas / C ampliar a .doc/.docx) en `BLOQUEOS.md`. Hallazgo lateral GPS (`FormularioPublico.tsx:170-172`, clave fija "ubicacion") documentado para sprint chico aparte `SPRINT-FIX-FORM-GPS-COORDS` o incluir en opción A si Jorge OK.
+
+</details>
 
 <details><summary>Spec original preservada para forensia</summary>
 
@@ -135,6 +141,10 @@ Consumidores del array `orden.pagos` a migrar al helper común (de la spec en BL
 
 ## SPRINT-GARANTIA-FLUJO-COMPLETO — Reabrir orden por garantía + 10% de piezas al técnico original
 
+**Prioridad:** ALTA (dinero + función pedida por Jorge). **Estado:** ⏸ FASE A APLICADA, awaiting QA Jorge antes de cerrar COMPLETADO (pasada 49, 2026-05-25, autorización "OK FASE A" explícita de Jorge). Archivos cambiados en Fase A: NUEVO helper `aplicarDescuentoGarantiaPorPiezas` en `src/utils/comisiones.ts` (calcula `-(costoPiezas × 0.10)`, busca comisión por `where ordenId/tecnicoId`, escribe `descuentoPorGarantia` SIN tocar `estaAnulada`, audit log con metadata); `src/components/CierreServicioWizard.tsx` invoca el helper post-`updateDoc` cuando orden `esGarantia=true` + hay piezas; `src/pages/Citas.tsx::onAfterCreate` REEMPLAZADO el bloque viejo de anulación completa (`monto: -comisionMontoOriginal` + `estaAnulada: true`) por solo snapshot factura + audit `garantia_reabierta` (descuento real se aplica al cerrar la orden de garantía); banner del modal "Cambio de técnico" actualizado para reflejar 10% de piezas en vez de 100% de comisión; `src/pages/Comisiones.tsx` UI muestra columnas nuevas "Desc. garantía" + "Neto" + CSV con 3 valores + panel totales con sub-línea bruto/descuento; `src/types/index.ts` doc comment actualizado; NUEVO cazador P-024 `scripts/invariantes/check-comision-garantia-anula-completa.ts` (caza reintroducción del patrón viejo) + registrado en `run-all.ts` (24/24 PASS) + entrada P-024 en `docs/PATRONES_REGRESION.md`. **NO COMPLETADO** hasta QA Jorge — instrucción explícita del prompt. Detalle de QA + casos edge + deuda fase B en `BLOQUEOS.md`.
+
+<details><summary>Spec original (Fase A + B + C) preservada para forensia</summary>
+
 **Prioridad:** ALTA (dinero + función pedida por Jorge). **Estado:** PENDIENTE. **Origen:** el "bug" del informe de auditoría (reagendar revive órdenes cerradas) es en realidad la **función de garantía**. Entrevista de proceso hecha por Cowork con Jorge el 2026-05-24. **Recomendado procesar DESPUÉS de `SPRINT-AGENTES-1`** para que `auditor_contable` + `guardian_logica` vigilen la lógica de dinero.
 
 **NO REINVENTAR — base existente (SPRINT-135a, 2026-05-11):**
@@ -174,6 +184,8 @@ Consumidores del array `orden.pagos` a migrar al helper común (de la spec en BL
 **Autonomía / guardas:** toca código de DINERO (comisiones/nómina) → **Reviewer obligatorio + invocar `auditor_contable` + `guardian_logica`**. NO toca `firestore.rules` (verificar; si "abrir garantía" necesitara una rule nueva → ESCALAR a `BLOQUEOS.md`). **QA de Jorge antes de cerrar FASE A** (es plata). El `guardian_logica` debe contrastar contra las "Decisiones de Jorge" en `MEMORIA_MAESTRA.md`.
 
 **Criterio:** el 10% de piezas se descuenta al técnico original; conserva su comisión; otro técnico que cubre gana comisión, el mismo no; oficina (no técnicos) puede abrir garantía dentro del período; se captura si el cliente paga; se notifica; `Comisiones.tsx` muestra el descuento. Cazadores + typecheck + lint PASS. Reviewer + auditor_contable + guardian_logica.
+
+</details>
 
 ---
 

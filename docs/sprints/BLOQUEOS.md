@@ -10,7 +10,90 @@
 
 ---
 
-## SPRINT-FIX-LEADS-FORMULARIO-PUBLICO — BLOQUEADO 2026-05-25 (coordinator pasada 48 — el approach 1 autónomo NO es viable, approach 2 toca `storage.rules`)
+## SPRINT-GARANTIA-FLUJO-COMPLETO — FASE A APLICADA 2026-05-25, awaiting QA Jorge antes de cerrar COMPLETADO (pasada 49)
+
+**Estado:** ⏸ código de Fase A commiteado + pusheado (hash a documentar tras push). **NO marcar COMPLETADO hasta QA Jorge** (sub-regla del sprint en cola). Fases B/C postergadas hasta después de QA.
+
+### Qué se aplicó en Fase A (autorización: Jorge 2026-05-25 — OK FASE A explícito)
+
+1. **`utils/comisiones.ts`** — nuevo helper `aplicarDescuentoGarantiaPorPiezas({ ordenGarantiaId, ordenOriginalId, tecnicoOriginalUid, costoPiezasReReparacion, ... })`. Calcula `-(costoPiezas × 0.10)`, busca la comisión original por `where('ordenId', '==', referenciaOrdenId) + where('tecnicoId', '==', tecnicoOriginalUid)`, escribe `descuentoPorGarantia` SIN tocar `estaAnulada`. Idempotente. Audit log `descuento_garantia_tecnico` con metadata completa (costoPiezasReReparacion, porcentajeAplicado, etc.).
+
+2. **`components/CierreServicioWizard.tsx`** — después del `updateDoc` del cierre (cuando ya se conoce `costoPiezasTotal`), si la orden es `esGarantia=true` y hay piezas y existe `tecnicoOriginalUid` + `referenciaOrdenId`, invoca el helper. Try/catch defensivo: si el descuento falla (comisión original no existe), el cierre ya quedó persistido.
+
+3. **`pages/Citas.tsx::onAfterCreate`** — REEMPLAZADO el bloque viejo de anulación completa (`monto: -comisionMontoOriginal` + `estaAnulada: true`). Ahora SOLO:
+   - Actualiza factura original: `garantia.estado='reclamada'` + `garantia.ordenGarantiaId` + snapshot tecnico_original.
+   - Audit log `garantia_reabierta` (con flag `descuentoPendienteAlCierre: true` para forensia).
+   - El descuento real se aplica al CERRAR la orden de garantía (no al confirmar la cita).
+   - Banner del modal "ADVERTENCIA: Cambio de técnico" actualizado: ya no dice "100% de la comisión", ahora explica "10% del costo de piezas al cerrar, conserva su comisión original".
+
+4. **`pages/Comisiones.tsx`** — UI muestra el descuento: columna nueva "Desc. garantía" + columna "Neto" (= comisión + descuento), CSV exporta los 3 valores (bruto + descuento + neto), panel de totales muestra `Total comisiones (neto)` con sub-línea "Bruto: X · Desc. garantía: Y" cuando hay descuento.
+
+5. **`types/index.ts`** — comentario doc de `descuentoPorGarantia` actualizado para reflejar las reglas nuevas + nota de forensia del patrón viejo.
+
+6. **Cazador P-024** — NUEVO `scripts/invariantes/check-comision-garantia-anula-completa.ts`. Caza patrones viejos (`monto: -comisionMonto*` + `estaAnulada: true` co-presente con `descuentoPorGarantia`). Allowlist: 3 archivos (helper, types, propio cazador). Registrado en `run-all.ts`. Entrada P-024 en `docs/PATRONES_REGRESION.md`.
+
+### QA que necesita Jorge (camino feliz + casos edge)
+
+**Setup:** orden previa cerrada con piezas + facturada + comisión registrada para el técnico A. Cliente reclama garantía vía endpoint público → genera `citas_por_confirmar` con `esGarantia=true`.
+
+**Caso 1 — Mismo técnico cubre la garantía:**
+1. Coordinadora/operaria confirma la cita asignando técnico A (mismo que el original).
+2. Verificar: factura original NO tocada en su `monto` original; solo `garantia.estado='reclamada'` + `garantia.ordenGarantiaId`.
+3. Verificar: comisión original del técnico A intacta (sin `descuentoPorGarantia`, sin `estaAnulada`).
+4. Técnico A cierra la nueva orden de garantía con piezas (ej. RD$3,000 en piezas).
+5. Verificar: en `comisiones/{idOriginal}` aparece `descuentoPorGarantia.monto = -300` (10% de 3000), `estaAnulada` ausente, motivo "Garantía — 10% costo de piezas".
+6. Verificar: `Comisiones.tsx` muestra Comisión: X, Desc. garantía: -300, Neto: X-300.
+7. Verificar: en la nómina del técnico A para esa quincena, el total se reduce por 300 (vía `descuentoPorGarantia?.monto ?? 0`).
+
+**Caso 2 — Otro técnico cubre la garantía:**
+1. Cita garantía confirmada asignando técnico B (diferente de A original). Captura motivo del cambio.
+2. Verificar: comisión original del técnico A intacta (sin descuento todavía).
+3. Técnico B cierra con piezas (ej. RD$2,500).
+4. Verificar: comisión original del técnico A ahora tiene `descuentoPorGarantia.monto = -250`.
+5. Cuando se factura la orden de garantía, el técnico B GANA su comisión normal (flujo estándar `registrarComisionPorFactura`).
+6. Verificar: en Comisiones.tsx, técnico A figura con su comisión original + descuento -250, técnico B con la nueva comisión.
+
+**Caso 3 — Garantía sin piezas (cierre solo mano de obra):**
+1. Cierre sin piezas (`usoPiezas='no'` o array vacío).
+2. Verificar: helper retorna `aplicado: false`, razón `sin_piezas`. No se modifica ninguna comisión. No hay descuento. Técnico A queda intacto.
+
+**Caso 4 — Orden previa sin comisión registrada (edge):**
+1. Garantía sobre una orden vieja que por algún motivo nunca generó comisión.
+2. Cierre con piezas.
+3. Verificar: helper retorna `aplicado: false`, razón `comision_original_no_existe`. Log warn, no se rompe el cierre.
+
+### Cosas FUERA de Fase A (deuda explícita para Fase B+)
+
+- **Botón "Abrir garantía" desde orden/ficha del cliente** (`OrdenDetalle.tsx`/`PanelCliente360.tsx`), gateado a secretaria/operaria/coordinadora/admin (NO técnico/ayudante), visible solo si `estaDentroDePeriodo(orden)`. Hoy solo el reclamo del cliente (vía endpoint público) dispara la garantía.
+- **Capturar al reabrir si el cliente paga** (`gratis` / `parcial` + monto). Persistir.
+- **Notificaciones al reabrir/reclamar** (`crearNotificacion` a oficina + técnico asignado).
+- **Si el MISMO técnico cubre la garantía, no debe ganar comisión por la garantía.** Hoy si se factura la orden de garantía con el mismo técnico, el flujo estándar `registrarComisionPorFactura` le paga una nueva comisión. Falta lógica que detecte `orden.esGarantia && orden.tecnicoId === orden.tecnicoOriginalUid` y skip la comisión nueva. Si Jorge prefiere documentarlo como "lo manejamos manual eliminando esa comisión", se puede dejar para fase B sin código.
+
+### Cómo cerrar este sprint como COMPLETADO
+
+Jorge:
+1. Ejecutar los 4 casos QA arriba en producción o staging.
+2. Si todos pasan, agregá al final de este bloque:
+   ```
+   QA: jorge YYYY-MM-DD HH:MM PASS — fase A aprobada
+   ```
+3. Coordinator (próxima pasada) mueve este sprint a "Sprints completados (histórico)" en `COLA_AUTONOMA.md` y registra entrada en `EJECUCION_AUTONOMA.md`.
+
+Si algún caso falla, agregá `QA: jorge YYYY-MM-DD ROTO — caso N: <síntoma>` y el coordinator vuelve a builder con fix.
+
+### Pendiente desde
+
+2026-05-25 pasada 49 (`trabaja`). Jorge autorizó explícitamente "OK FASE A" + indicó "NO cierres como COMPLETADO. Dejala estado 'awaiting QA Jorge' en MEMORIA_MAESTRA.md + nota en BLOQUEOS.md con plan de QA". Cazador P-024 activo bloqueando reintroducción del patrón viejo.
+
+---
+
+## SPRINT-FIX-LEADS-FORMULARIO-PUBLICO — DESBLOQUEADO 2026-05-25 (OK: jorge opcion=A deploy=auto incluir-gps=si) — COMPLETADO en pasada 49 hash `01df699`
+
+**Movido a COMPLETADO el 2026-05-25 por coordinator (`trabaja`, pasada 49). desbloqueadoPor: jorge 2026-05-25 vía prompt directo (`OK FASE A`/opción A + deploy auto + GPS sí).** El sprint cerró con: storage.rules nuevo match `solicitudes-publico/**` (whitelist `image/*` + `application/pdf`, < 10MB), `solicitudes.service.ts` reroute al nuevo path, `FormularioPublico.tsx` fix GPS lateral (búsqueda por `campo.tipo === 'ubicacion'` + fallback a clave literal). Deploy ejecutado `npm run deploy:storage-rules` con sha `accf5550...` a las 2026-05-25T12:24:57Z. P-013 lock actualizado, 23/23 cazadores PASS. Conservado acá como stub para forensia — análisis completo (3 opciones, REGLA DE ORO, audit consumidores) preservado debajo.
+
+---
+
+## SPRINT-FIX-LEADS-FORMULARIO-PUBLICO — BLOQUEADO 2026-05-25 (coordinator pasada 48 — el approach 1 autónomo NO es viable, approach 2 toca `storage.rules`) [HISTÓRICO — COMPLETADO]
 
 **Movido a `BLOQUEOS.md` el 2026-05-25 por coordinator autónomo (`trabaja`, pasada 48).** Razón: la auditoría real del approach 1 ("enrutar a una ruta de Storage que YA es pública") revela que **NO existe una ruta pública en `storage.rules` que cubra los campos `archivo` del formulario público (PDF/DOC/JPG/PNG)**. La única ruta pública actual es `fotos-equipos-publico/{citaId}/{fileName}` que está acotada por rule a `request.resource.contentType.matches('image/.*')` — rechazaría PDFs. El sprint admite explícitamente que ese caso → ESCALA (approach 2).
 

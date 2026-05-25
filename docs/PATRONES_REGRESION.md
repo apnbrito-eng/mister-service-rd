@@ -718,6 +718,28 @@ Casos legítimos comunes (todos requieren tag): fallback de display cuando `orde
 
 ---
 
+## P-024 — Garantía aplica anulación completa de comisión (patrón viejo) en lugar del 10% de piezas
+
+**Bug original (cambio de modelo de negocio, no postmortem de bug en producción):** SPRINT-GARANTIA-FLUJO-COMPLETO Fase A (2026-05-25). La lógica vieja en `Citas.tsx::onAfterCreate` aplicaba al técnico original `descuentoPorGarantia.monto = -comisionMontoOriginal` + `estaAnulada: true` cuando cambiaba el técnico (commit base SPRINT-135a, 2026-05-11). Eso anulaba el 100% de su comisión. Las reglas que Jorge confirmó en entrevista 2026-05-24 cambian el modelo: el técnico ORIGINAL conserva su comisión y solo se le descuenta el 10% del costo de piezas cuando la orden de garantía se cierra con piezas.
+
+**Síntoma de una regresión:** un refactor futuro reintroduce el patrón viejo (sea por "limpieza" sin contexto, merge mal resuelto, o copia accidental de la versión anterior). Resultado: la próxima orden de garantía vuelve a anular la comisión completa del técnico original, pierde plata real del técnico, y rompe la regla "el original conserva su comisión, otro técnico que cubre gana la suya".
+
+**Causa raíz prevenida:** el patrón viejo es relativamente compacto (`monto: -comisionMontoOriginal` + `estaAnulada: true`) y un refactor que NO lea la entrevista de Jorge ni este patrón fácilmente lo copia desde una versión anterior del repo (git blame).
+
+**Regla:** ningún archivo `.ts`/`.tsx` en `src/` o `api/` puede contener:
+1. `monto: -comisionMonto*` (con cualquier sufijo: Original, etc.) en una línea no-comentario.
+2. `estaAnulada: true` (o `=`) en un archivo que también mencione `descuentoPorGarantia`.
+
+**Patrón correcto:** llamar a `aplicarDescuentoGarantiaPorPiezas` en `src/utils/comisiones.ts` que calcula `-(costoPiezas * 0.10)` y NO marca la comisión como anulada.
+
+**Cazador:** `scripts/invariantes/check-comision-garantia-anula-completa.ts`. Allowlist: `src/utils/comisiones.ts` (define el helper correcto, menciona los nombres en JSDoc), `src/types/index.ts` (comentario doc de `descuentoPorGarantia` describe el patrón viejo para forensia), el propio archivo del cazador.
+
+**Allowlist:** 3 archivos descritos arriba. Si crece, refactorear.
+
+**Tag de excepción:** `// @safe-garantia-anulacion-legacy: <razón>` en la misma línea para casos legítimos (backfill de registros legacy con shape `estaAnulada=true`).
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:
