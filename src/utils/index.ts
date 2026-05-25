@@ -479,10 +479,26 @@ export function obtenerUltimaSugerenciaSoloChequeo(
   return ordenadas[0] ?? null;
 }
 
+/**
+ * @deprecated Helper NO transaccional — depende del `count` del state local
+ * del caller. Si 2 admins crean simultáneamente, ambos calculan el mismo
+ * número → duplicado. **USAR `siguienteNumeroOrden()` de
+ * `src/services/contadores.service.ts`** (atomic transaction). Detectado por
+ * cazador P-022 (auditor_contable AGENTES-1, 2026-05-24). Sprint follow-up:
+ * SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL.
+ */
+// @safe-numero-doc: legacy helper deprecated, único caller (Cotizaciones.tsx:314) será migrado en sprint follow-up
 export function generateNumeroOrden(count: number): string {
   return `OS-${String(count + 1).padStart(4, '0')}`;
 }
 
+/**
+ * @deprecated Helper NO transaccional. **USAR `siguienteNumeroCotizacion()`
+ * de `src/services/contadores.service.ts`**. Detectado por cazador P-022
+ * (auditor_contable AGENTES-1, 2026-05-24). Sprint follow-up:
+ * SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL.
+ */
+// @safe-numero-doc: legacy helper deprecated, único caller (Cotizaciones.tsx:314) será migrado en sprint follow-up
 export function generateNumeroCotizacion(count: number): string {
   return `QT-${String(count + 1).padStart(5, '0')}`;
 }

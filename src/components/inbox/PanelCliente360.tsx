@@ -393,6 +393,7 @@ function ItemOrden({
       >
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-mono font-medium text-gray-900 truncate">
+            {/* @safe-numero-doc: fallback display cuando la orden todavía no tiene número asignado; no persiste */}
             {orden.numero || `OS-${orden.id.slice(0, 6)}`}
           </span>
           <span
@@ -574,6 +575,7 @@ function HistorialTab({
             : 'Orden en curso'}
         </p>
         <p className="text-xs font-mono font-medium text-blue-900">
+          {/* @safe-numero-doc: fallback display cuando la orden todavía no tiene número asignado; no persiste */}
           {ordenParaTimeline.numero || `OS-${ordenParaTimeline.id.slice(0, 6)}`}
         </p>
         <p className="text-[10px] text-blue-600 mt-0.5">
@@ -651,6 +653,7 @@ function UltimoServicioCard({
       </div>
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-mono font-medium text-gray-900 truncate">
+          {/* @safe-numero-doc: fallback display cuando la orden todavía no tiene número asignado; no persiste */}
           {orden.numero || `OS-${orden.id.slice(0, 6)}`}
         </span>
         <span

@@ -663,6 +663,61 @@ Si el catch NO responde al cliente (sólo loggea, sólo persiste, sólo relanza)
 
 ---
 
+## P-021 — Helper de comisión sin denormalización a campos `comisionTecnicoMonto/Nombre/Id` en doc factura
+
+**Bug original (no histórico-postmortem):** gotcha documentado en CLAUDE.md ("Helpers que escriben Firestore + retornan datos no denormalizan automáticamente"), convertido a cazador en SPRINT-AGENTES-1-AUDITORIA-CONTABLE (2026-05-24).
+
+**Síntoma:** la tabla de Facturas (`src/pages/Facturas.tsx` ~L797) muestra `—` en la columna de comisión técnico aunque la comisión sí existe en la colección `comisiones` (registrada por el helper). El admin cree que no hay comisión registrada, vuelve a procesar manualmente, o desconfía del sistema.
+
+**Causa raíz:** los helpers `registrarComisionPorFactura` y `registrarComisionesPorItems` (en `src/utils/comisiones.ts`) **persisten en `comisiones` + `auditoria_admin` pero NO actualizan el doc factura**. El caller es responsable de denormalizar post-llamada con `updateDoc(doc(db, 'facturas', id), { comisionTecnicoMonto, comisionTecnicoNombre, comisionTecnicoId })`. Si el caller olvida ese paso, los datos están en Firestore pero invisibles para la UI.
+
+**Regla:** cualquier archivo `.ts`/`.tsx` que llame a `registrarComisionPorFactura(` o `registrarComisionesPorItems(` DEBE contener en alguna parte del mismo archivo AL MENOS UNA de las constantes: `comisionTecnicoMonto`, `comisionTecnicoNombre`, `comisionTecnicoId`. Si no, FAIL.
+
+**Cazador:** `scripts/invariantes/check-comision-sin-denormalizacion.ts`. Escanea `src/` y `api/`. Allowlist por archivo: `src/utils/comisiones.ts` (donde se DEFINEN los helpers). Allowlist por línea: tag `// @safe-comision-no-denorm: <razón>` en la línea del callsite.
+
+**Allowlist:** 1 archivo (definición del helper). Si crece >3, refactorear el cazador.
+
+---
+
+## P-022 — Número de documento (OS/QT/CG/FAC) generado client-side fuera de `contadores.service`
+
+**Bug original (anticipado):** SPRINT-AGENTES-1-AUDITORIA-CONTABLE (2026-05-24). El auditor descubrió que `src/utils/index.ts` exporta dos helpers legacy `generateNumeroOrden(count)` y `generateNumeroCotizacion(count)` que **NO son transaccionales** — calculan el número a partir del `count` que les pasa el caller (típicamente el `length` del state local). Si 2 admins crean cotizaciones simultáneamente, ambos calculan el mismo número y se genera duplicado. El caller activo hoy es `src/pages/Cotizaciones.tsx:314` (sprint follow-up para migrar a `siguienteNumeroCotizacion`).
+
+**Síntoma latente esperado:** dos cotizaciones (o futuras órdenes si alguien usa el helper de orden) con número `QT-NNNNN` duplicado. La búsqueda por número devuelve dos docs. Auditoría DGII downstream falla por duplicado.
+
+**Causa raíz:** generar el número fuera de `runTransaction(db, async (tx) => { ...lee contador, +1, escribe contador... })` rompe el invariante de atomicidad. Cualquier construcción inline del literal `OS-${...}` / `CG-${...}` / `QT-${...}` / `FAC-${...}` fuera del único origen legítimo (`src/services/contadores.service.ts`) es sospechosa.
+
+**Regla:** template literals que matchean `` `(OS|QT|CG|FAC)-${...}` `` están prohibidas fuera de `src/services/contadores.service.ts`, salvo allowlist por tag `// @safe-numero-doc: <razón>` (acepta el tag en la misma línea o hasta 3 líneas arriba, para cubrir patrones JSX `{/* @safe-numero-doc: ... */}` y comentarios sobre funciones deprecated).
+
+Casos legítimos comunes (todos requieren tag): fallback de display cuando `orden.numero` no existe (`OS-${orden.id.slice(0, 6)}`), interpolación de número ya validado en logs/notificaciones, definición de helper deprecated marcado para migración.
+
+**Cazador:** `scripts/invariantes/check-numeros-documento-client-side.ts`. Escanea `src/` y `api/`. Allowlist por archivo: `src/services/contadores.service.ts`. Tag de línea: `@safe-numero-doc:`.
+
+**Limitación conocida:** NO detecta concatenación con `+` (ej. `'OS-' + padStart(...)`). Si aparece en producción, extender heurística. NO detecta callers a helpers no-transaccionales (matchea solo construcción inline). El bug de `Cotizaciones.tsx:314` que el cazador descubrió en su primera corrida vía la **definición** del helper deprecated requiere reviewer humano para encontrar callers similares en el futuro.
+
+**Allowlist:** 1 archivo (definición de contadores). Si crece >2, refactorear.
+
+---
+
+## P-023 — Gate del conduce (ProcesarFacturacionModal) bloquea emisión con pago `verificado===false`
+
+**Bug original (anticipado):** SPRINT-AGENTES-1-AUDITORIA-CONTABLE (2026-05-24). Cazador preventivo blindado sobre el control de separación de funciones que SPRINT-PAGOS-CONFIRMA-MARIA fase A introdujo en `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx::handleGenerar` (~L398).
+
+**Síntoma de una regresión:** una operaria registra un pago (queda `verificado=false`), abre el modal "Emitir conduce" y el sistema le permite generar el conduce sin que María/admin haya confirmado el pago. Se rompe el control de dinero que Jorge le dio a María como responsabilidad explícita.
+
+**Causa raíz prevenida:** un refactor futuro del modal de facturación puede eliminar o desconectar el filtro `pagosPrevios.filter(p => p.verificado === false)` + el `toast.error('...sin confirmar...')` + el `return` early. Razones posibles: "limpieza" sin entender qué hace el código, merge mal resuelto, simplificación de spec, error tipo `if (false)`. Sin el cazador, el bug sólo se detecta cuando un cliente externo cobra mal o María descubre que las operarias están saltándose su validación.
+
+**Regla:** el archivo `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` DEBE contener TODAS estas señales presentes y cerca entre sí (≤50 líneas):
+1. `.verificado === false` o `.verificado===false` (el filtro).
+2. `pagosSinVerificar` (variable que materializa el filtro).
+3. `toast.error(...sin confirmar...)` (feedback al usuario que explica el bloqueo).
+
+**Cazador:** `scripts/invariantes/check-gate-conduce-pago-verificado.ts`. Target único: el archivo `ProcesarFacturacionModal.tsx`. NO tiene allowlist — el gate es no-negociable. Si el modal se renombra o se splittea, actualizar `TARGET_FILE` en el cazador, NO desactivarlo. La verificación adicional de "señales cercanas" cubre el escenario donde la variable existe pero ya no se usa para bloquear (refactor parcial).
+
+**Allowlist:** vacía por diseño. Si alguien necesita modificar el gate, el sprint requiere OK explícito de Jorge (sub-regla CLAUDE.md "Mutaciones cross-collection sobre dinero").
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:

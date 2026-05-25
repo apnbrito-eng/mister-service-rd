@@ -187,6 +187,7 @@ export default function CardCliente({ waId, onCrearOrden }: Props) {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-mono font-medium text-gray-900 truncate">
+                          {/* @safe-numero-doc: fallback display cuando la orden todavía no tiene número asignado; no persiste */}
                           {o.numero || `OS-${o.id.slice(0, 6)}`}
                         </span>
                         <span

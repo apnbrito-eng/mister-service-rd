@@ -37,6 +37,9 @@ import { check as checkWhatsappIdempotency } from './check-whatsapp-idempotency.
 import { check as checkWhatsappWindow24h } from './check-whatsapp-window-24h.js';
 import { check as checkBillingErroresNoSilenciados } from './check-billing-errors-no-silenciados.js';
 import { check as checkHelpersLimpiezaRecursivaFirestore } from './check-helpers-limpieza-recursiva-firestore.js';
+import { check as checkComisionSinDenormalizacion } from './check-comision-sin-denormalizacion.js';
+import { check as checkNumerosDocumentoClientSide } from './check-numeros-documento-client-side.js';
+import { check as checkGateConducePagoVerificado } from './check-gate-conduce-pago-verificado.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -67,6 +70,10 @@ async function main() {
     checkWhatsappWindow24h,
     checkBillingErroresNoSilenciados,
     checkHelpersLimpiezaRecursivaFirestore,
+    // SPRINT-AGENTES-1-AUDITORIA-CONTABLE (2026-05-24) — 3 cazadores de dinero.
+    checkComisionSinDenormalizacion,
+    checkNumerosDocumentoClientSide,
+    checkGateConducePagoVerificado,
   ];
 
   const t0 = Date.now();

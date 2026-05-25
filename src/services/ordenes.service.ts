@@ -1022,6 +1022,7 @@ export async function marcarVisitaFallida(
       // operativamente nadie recibe la notif. Loggeamos para que el admin
       // detecte el gap (típicamente alta de empleado sin onboarding completo).
       console.warn(
+        // @safe-numero-doc: interpola ordenNumero (parámetro pre-validado, viene del contador); es mensaje de log
         `[marcarVisitaFallida] 0 destinatarios para OS-${ordenNumero}: ` +
           'no hay staff oficina activo con uid Auth. Operaria debe revisar ' +
           'el listado de personal o el flujo de alta de empleado (P-004).',

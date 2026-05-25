@@ -135,6 +135,7 @@ export default function Standby() {
         destinatarioNombre: orden.tecnicoNombre,
         tipo: 'pieza_llego',
         titulo: 'Pieza lista — puedes proceder',
+        // @safe-numero-doc: interpola orden.numero (ya generado por contadores.service); es texto de notificación, no persiste número nuevo
         mensaje: `La pieza "${item.piezaFaltante}" para OS-${orden.numero} llegó al taller. Cliente: ${orden.clienteNombre}.`,
         ordenId: orden.id,
         ordenNumero: orden.numero,

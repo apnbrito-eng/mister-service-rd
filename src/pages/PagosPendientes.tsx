@@ -160,6 +160,7 @@ export default function PagosPendientes() {
                         className="font-semibold text-[#1a5fa8] hover:underline"
                         title="Abrir orden"
                       >
+                        {/* @safe-numero-doc: fallback display cuando la orden todavía no tiene número asignado; no persiste */}
                         {orden.numero || `OS-${orden.id.slice(-6)}`}
                       </button>
                       <span className="text-xs text-gray-400">·</span>
