@@ -18,7 +18,8 @@
 2. **Bloque AGENTES (ideas robadas de Ruflo, sin instalarlo):**
    - **SPRINT-AGENTES-1-AUDITORIA-CONTABLE** — agente `auditor_contable` + cazadores de invariantes de dinero + barrido de los módulos financieros (REPORTA, no arregla).
    - **SPRINT-AGENTES-2-MEMORIA-DIRIGE** — `MAPA_RIESGOS_MODULOS.md`: mapa de riesgo por módulo que todo agente lee antes de tocar (la memoria pasa a guía activa).
-   - **SPRINT-AGENTES-3-PARALELIZAR** — el coordinator corre verificación + auditorías de módulos disjuntos en paralelo (sin escrituras concurrentes).
+   - **SPRINT-AGENTES-3-PARALELIZAR** — el coordinator corre verificación + auditorías de módulos disjuntos en paralelo (sin escrituras concurrentes); engancha el agente `guardian_logica`.
+3. **SPRINT-GARANTIA-FLUJO-COMPLETO** — completar el flujo de garantía (ya medio hecho en SPRINT-135a) con las reglas de Jorge. Toca dinero → reviewer + auditor_contable + guardian_logica + QA de Jorge. Recomendado tras AGENTES-1.
 
 ### Esperando acción manual de Jorge (Cowork NO puede hacerlas)
 
@@ -36,6 +37,7 @@ Nada activo en construcción ahora mismo. La cola tiene B-2 esperando que Jorge 
 
 ## ✅ HECHO RECIENTE (últimos hitos)
 
+- **2026-05-24** — Auditoría de software completa (Cowork): informe en `docs/sprints/AUDITORIA_SOFTWARE_2026-05-24.md` (1 crítico, 6 altos, varios medios). Se creó el sistema de **memoria viva** (`MEMORIA_MAESTRA.md` + agente `memoria`, commit `dad8ca8`), el bloque **AGENTES** en la cola, el agente **`guardian_logica`**, y el sprint de **garantía**.
 - **2026-05-24** — `SPRINT-WA-SEGURIDAD-CONFIG-RULES` COMPLETADO (commit `e9aa3ef`). Se cerró un hueco de permisos: los 3 docs de config de WhatsApp (`whatsapp_envio`, `whatsapp_numeros`, `whatsapp_respuestas_rapidas`) ahora son escribibles SOLO por admin. Verificado con emulator (Java Temurin 25, 22 tests OK) + rules deployadas. 20 cazadores OK.
 - **2026-05-24** — **QA de PAGOS-FASE-B-1 aprobada** (Jorge + Cowork verificaron en producción): se confirmó el pago de prueba de OS-0059 → salió de pendientes → desbloquea la emisión del conduce. Por eso B-2 ya está en la cola.
 - **2026-05-23** — `SPRINT-WA-TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS` (commit `d7b320b`): trazabilidad de quién envía cada mensaje + nombre del agente al cliente + respuestas rápidas tipo WhatsApp Business.
@@ -48,6 +50,7 @@ Nada activo en construcción ahora mismo. La cola tiene B-2 esperando que Jorge 
 
 ## 📌 DECISIONES DE JORGE QUE NO SE OLVIDAN
 
+- **Garantía (reglas confirmadas en entrevista 2026-05-24):** cuando un trabajo falla y se cubre la garantía, se reabre la orden (hoy crea una orden ligada; base ya existe de SPRINT-135a). Reglas: (1) al **técnico original** se le descuenta el **10% del costo de las PIEZAS** de la re-reparación, siempre que haya gasto en piezas; (2) el original **conserva su comisión** (el 10% reemplaza el viejo "pierde toda la comisión"); (3) si **otro** técnico cubre la garantía de un compañero, ese **sí gana comisión**; si el **mismo** técnico la cubre, **no gana** comisión por la garantía; (4) el **cliente paga según el caso** (gratis o parcial, lo decide quien reabre); (5) **reabren: secretaria, operaria, coordinadora, admin — los técnicos NO**; (6) el plazo sale del **conduce de garantía** (60 días por defecto). Detalle técnico en `SPRINT-GARANTIA-FLUJO-COMPLETO` (cola) + informe `AUDITORIA_SOFTWARE_2026-05-24.md`.
 - **Buzón de seguimiento (nurture) — regla anti-bloqueo:** a un cliente que NO quiere agendar se le manda **UN solo recordatorio automático**, nada más automático. Después, todo es **manual por lotes** que selecciona el admin/coordinador (para no disparar bloqueos de Meta). WhatsApp Flows se ven más adelante.
 - **PAGOS por fases con QA entre cada una.** B-1 ya pasó QA → B-2 habilitada. B-3 (toca reglas) espera nueva QA de Jorge antes de procesarse.
 - **Cowork NO hace solo:** crear WABA / cuentas, pagos, OAuth, integraciones nuevas, migraciones >500 docs, ni tocar reglas de Firestore sin OK. Eso se escala a `BLOQUEOS.md`.
