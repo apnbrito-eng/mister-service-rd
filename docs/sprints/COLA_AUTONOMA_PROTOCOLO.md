@@ -117,6 +117,33 @@ Cuando Jorge pega `trabaja` o `procesa cola` al coordinator, este ejecuta:
 
 ---
 
+## Paralelización del coordinator (SPRINT-AGENTES-3, 2026-05-24)
+
+> Ideas robadas de Ruflo (swarm) SIN demonio ni costo desbocado. Detalle
+> completo en `.claude/agents/coordinator.md` sección "Paralelización".
+
+### Patrón aplicable
+
+**(a) Verificación post-builder:** invocar `reviewer` + `regression_guardian` + `security` (cuando aplica) EN UNA SOLA TANDA paralela. Las 3 son READ-ONLY → segura. Outputs se agregan; si CUALQUIERA dice CHANGES_NEEDED → loop al builder.
+
+**(b) Auditorías de módulos disjuntos:** invocar varios `auditor_*` sobre módulos NO superpuestos en paralelo (cada uno escribe su propio archivo `docs/sprints/AUDITORIA_<scope>_<fecha>.md`). Consolidación al `MAPA_RIESGOS_MODULOS.md` queda SECUENCIAL (vía `memoria` modo MANTENER-MAPA).
+
+### Regla dura de seguridad
+
+- Paralelismo SOLO en lectura/verificación o sobre módulos disjuntos.
+- **Nunca dos agentes escribiendo el mismo archivo a la vez.**
+- Concurrencia acotada: máx. ~3-4 agentes simultáneos.
+- Escritura (commits, edits, MAPA updates) sigue siendo secuencial.
+
+### Qué NO paralelizar
+
+- builder + tester (tester depende del diff del builder).
+- 2 builders sobre el mismo sprint (un sprint = un builder).
+- 2 escritores al mismo archivo (race condition).
+- Commits (solo el coordinator).
+
+---
+
 ## Daily summary (`docs/sprints/DIARIO_YYYY-MM-DD.md`)
 
 El coordinator lo escribe al final de cada sesión de procesamiento. Formato:

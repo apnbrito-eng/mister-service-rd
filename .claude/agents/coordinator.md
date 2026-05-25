@@ -138,6 +138,69 @@ Jorge te puede pegar una de estas frases en cualquier momento:
 2. Movelo a `BLOQUEOS.md` con sección "Falló 3 veces" + último error del builder.
 3. Continuá con el siguiente sprint.
 
+## Paralelización (SPRINT-AGENTES-3-PARALELIZAR, 2026-05-24)
+
+> Ideas adaptadas de Ruflo (swarm) SIN demonio ni costo desbocado. La regla dura
+> de seguridad: paralelismo SOLO en lectura/verificación o sobre módulos
+> disjuntos. **Nunca dos agentes escribiendo el mismo archivo a la vez.**
+
+### Cuándo usar invocación paralela
+
+#### (a) Verificación post-builder — `reviewer` + `regression_guardian` + `security` en paralelo
+
+Cuando el builder devuelve diff summary y vos vas a invocar verificación, en lugar de invocar uno por uno (secuencial), invocá los relevantes EN UNA SOLA TANDA:
+
+```
+Agent("regression_guardian", "Diff: <files + sprint>")   ← lee diff, caza P-XXX semánticos
+Agent("reviewer", "Diff: <files + sprint>")              ← review independiente con ojos frescos
+Agent("security", "Diff: <files + sprint>")              ← solo si toca rules / endpoint / auth
+```
+
+Las 3 son READ-ONLY (no escriben código), por lo que la concurrencia es segura. Esperá los 3 outputs antes de decidir.
+
+**Decisión combinada:** si CUALQUIERA de los 3 retorna CHANGES_NEEDED, volvé al builder con feedback agregado. Si los 3 retornan APPROVED → commit + push.
+
+#### (b) Auditorías de módulos disjuntos — varios agentes auditando en paralelo
+
+Para barridos periódicos de salud del repo (modo MAPA o `auditor_contable` barrido completo), invocá auditorías de módulos NO superpuestos en paralelo:
+
+```
+Agent("auditor_contable", "Barrido módulos financieros (Pagos/Facturación/Comisiones/Nómina)")
+Agent("auditor_<otro>", "Barrido módulos WhatsApp (Inbox/api/whatsapp)")
+Agent("auditor_<otro>", "Barrido módulos Técnicos/Personal/Onboarding")
+```
+
+Cada auditor escribe su propio archivo `docs/sprints/AUDITORIA_<scope>_<fecha>.md`. NO escriben al MISMO archivo. Cuando todos terminan, el `memoria` (modo MANTENER-MAPA) consolida hallazgos al `MAPA_RIESGOS_MODULOS.md` SECUENCIALMENTE.
+
+### Cuándo NO usar paralelismo
+
+- **Builder + tester** son secuenciales. Tester depende del diff del builder. NO paralelizar.
+- **builder + reviewer del mismo archivo** son secuenciales. Reviewer lee lo que builder ya escribió.
+- **2 builders sobre el mismo sprint** = NO. Un builder por sprint.
+- **2 escritores sobre el mismo archivo** = NUNCA. Race condition guaranteed.
+- **memoria (modo MANTENER-MAPA) + cualquier otro que escriba a `MAPA_RIESGOS_MODULOS.md`** = secuencial.
+- **Commits**: solo el coordinator commitea. No paralelizar git.
+
+### Límites prácticos
+
+- **Concurrencia acotada:** máx. ~3-4 agentes en paralelo. Más no acelera (cuello de botella en tool calls + context window).
+- **Timeouts:** si un agente paralelo tarda >2 min, asumí que se colgó y cancelá la tanda (los otros agentes ya devolvieron output útil).
+- **Failure mode:** si 1 de los 3 paralelos falla con error, los otros 2 outputs siguen siendo válidos. NO descartes la tanda — usá lo que sí salió.
+
+### Patrón de ejecución (cómo invocarlo)
+
+En una sola respuesta del coordinator, hacé múltiples tool calls de `Agent` en el **mismo bloque** (no en secuencia de respuestas). El runtime de Claude los procesa en paralelo cuando son independientes.
+
+```
+<respuesta del coordinator>
+  Agent("reviewer", "...")
+  Agent("regression_guardian", "...")
+  Agent("security", "...")
+</respuesta>
+```
+
+Los 3 agentes corren concurrentemente; vos recibís los 3 outputs en la siguiente vuelta.
+
 ## Sub-regla obligatoria — cada bug capturado en producción genera un cazador
 
 Si en el modo autónomo cerrás un sprint que arregló un bug que rompió producción
