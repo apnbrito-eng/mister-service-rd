@@ -6,7 +6,7 @@
 >
 > **Quién lo mantiene:** el agente **`memoria`** (`.claude/agents/memoria.md`). El coordinator lo actualiza al cerrar cada pasada; Cowork lo actualiza al cerrar cada conversación. Este archivo es un ÍNDICE corto — el detalle vive en los archivos enlazados abajo.
 
-**Última actualización:** 2026-05-25 por coordinator (pasada 50 `trabaja`: cerró `SPRINT-WA-FIX-PLANTILLAS-PARAMS` hash `0ab73c5`, deploy job `Yr0nTylm03jpzaalsPhd`).
+**Última actualización:** 2026-05-25 por Cowork — auditoría de FLUJO Y DEPENDENCIAS de todo el software (`docs/sprints/AUDITORIA_FLUJO_DEPENDENCIAS_2026-05-25.md`) + 9 sprints ordenados por dependencia encolados + 5 escalados a decisión de Jorge. (Anterior: coordinator pasada 50 cerró `SPRINT-WA-FIX-PLANTILLAS-PARAMS` hash `0ab73c5`.)
 
 ---
 
@@ -14,8 +14,20 @@
 
 ### En la cola autónoma (Jorge corre `trabaja` en Claude Code) — en orden
 
-1. **SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL** (follow-up, NO en cola formal aún) — migrar `Cotizaciones.tsx:314` de `generateNumeroCotizacion(count)` deprecated a `siguienteNumeroCotizacion()` atomic. Severidad ALTA, riesgo BAJO, autónomo. Documentado en `AUDITORIA_CONTABLE_2026-05-24.md`. Cowork puede agregarlo a la cola cuando quiera.
-2. **SPRINT-WA-AUTORESPUESTA-SIN-HEADER** (follow-up nuevo, NO en cola formal) — hallazgo lateral de SPRINT-WA-FIX-PLANTILLAS-PARAMS: `auto_respuesta_fuera_horario` no tiene encabezado en Meta pero `send.ts` SIEMPRE agrega header (fallback al logo). Si el webhook envía esa plantilla → header indebido. **ESCALA** — toca `api/whatsapp/webhook.ts` o `api/whatsapp/send.ts` para soportar "sin header". Cowork puede agregarlo.
+**⭐ BLOQUE FLUJO-DEPENDENCIAS (al tope, ordenado por dependencia).** Sale de `AUDITORIA_FLUJO_DEPENDENCIAS_2026-05-25.md`. Causa raíz del "bucle": una orden puede nacer sin cliente real (mantenimiento = `clienteId:''`). Orden de proceso:
+  1. **AGENDA-1-MANTENIMIENTO-ATA-CLIENTE** (dolor de Jorge: agendar mantenimiento exige cliente real + tecnicoId=uid). [NO CERRAR sin QA Jorge]
+  2. **AGENDA-2-CALENDARIO-MUESTRA-CITAS** (citas + mantenimientos visibles en calendario/agenda, solo lectura).
+  3. **AGENDA-3-HONRAR-TECNICO-ASIGNADO** (no descartar el técnico que el cliente eligió en la cita web).
+  4. **AGENDA-4-UNIFICAR-FORMS-PUBLICOS** (CitaPublica = esquema de FormularioAgendarPublico).
+  5. **AGENDA-5-PROXIMO-MANTENIMIENTO-AL-CERRAR** (depende de AGENDA-1).
+  6. **NUCLEO-CREAR-ORDEN-CENTRAL** (cimiento: `crearOrden()` que exige cliente; si es muy grande → ESCALAR). [NO CERRAR sin QA Jorge]
+  7. **DINERO-1-QT-ATOMICO** (número de cotización atómico — reemplaza el viejo follow-up SPRINT-PAGOS-FIX-COTIZACIONES).
+  8. **DINERO-2-MONTOPAGADO-RECALC** (recalcular monto/estado de pago al cobrar en conduce). [NO CERRAR sin QA Jorge]
+  9. **REPORTING-1-KPI-HELPERS** (centralizar KPIs dinero/nómina; restar anulaciones).
+
+  **FUERA de la cola (decisión de Jorge, en `BLOQUEOS.md`):** base de comisión (dos cálculos, ~18% dif), gate de aprobación + rule R4, descuento de stock al cerrar, standby→inventario, factura+pago→fase cerrado.
+
+  **Follow-up suelto:** SPRINT-WA-AUTORESPUESTA-SIN-HEADER (toca `api/` → ESCALA).
 
 ### En BLOQUEOS esperando QA o OK de Jorge
 
