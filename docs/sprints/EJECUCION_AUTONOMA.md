@@ -5,6 +5,144 @@
 
 ---
 
+## 2026-05-24 — autónomo (`trabaja`, pasada 47): bloque AGENTES procesado, B-2 escalado por ambigüedad
+
+### Disparo
+
+Jorge pegó `trabaja` 2026-05-24 después de pasada 46 (último commit `ed3a4b0`). Prompt explícito: habilitó `SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2` (la cola lo tenía marcado QA aprobada por Cowork) con extra precaución por dinero, plus bloque AGENTES en la cola, plus NO TOCAR `SPRINT-WA-NUMERO-RESPALDO-FASE-2` ni bloqueos sin OK.
+
+### Sprints procesados (pasada 47)
+
+| Sprint | Estado | Commit | Deploy | Bloqueo | Notas |
+|---|---|---|---|---|---|
+| SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2 | ⊘ ESCALADO a BLOQUEOS | — | — | Sí (ambigüedad técnica) | Auditoría reveló que la spec NO aclara qué hacer con los 4 escritores del array `pagos[]` durante la migración. Sin OK explícito de Jorge a una de las 3 opciones, no procesable autónomo (sub-regla CLAUDE.md "Mutaciones cross-collection sobre dinero"). NO se corrió script de migración (DRY-RUN ni apply). NO se tocó código de pagos. |
+| SPRINT-AGENTES-1-AUDITORIA-CONTABLE | ✅ COMPLETADO | `d938135` | push OK | — | Agente + 3 cazadores + informe. Hallazgo crítico Cotizaciones documentado. |
+| SPRINT-AGENTES-2-MEMORIA-DIRIGE | ✅ COMPLETADO | `df68a42` | push OK | — | MAPA + modo MANTENER-MAPA + sub-regla. |
+| SPRINT-AGENTES-3-PARALELIZAR | ✅ COMPLETADO | `30abe53` | push OK | — | Coordinator instruido para paralelismo seguro. |
+
+### Detalle SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2 (escalado)
+
+**archivist PRE-CHANGE (inline manual):** touch-list `src/services/ordenes.service.ts` + `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` + 6 lectores + 4 escritores del array `pagos[]`. Historial: fase A commit `e3a49ed`, fase B-1 commit `4fa8f08`, gate de conduce `~L398`. Postmortems: ninguno específico de pagos. Recordatorios: P-003 (cross-collection en runTransaction), P-001 (currentUser.uid), CLAUDE.md "Mutaciones cross-collection sobre dinero".
+
+**Auditoría touch-list expandido (read-only):**
+
+- Lectores del array `pagos[]` reales: 6 (`ordenes.service.ts` x2 helpers, `ProcesarFacturacionModal.tsx`, `OrdenDetailModal.tsx`, `OrdenDetalle.tsx`, `RegistrarPagoModal.tsx`, `Sidebar.tsx`, `utils/index.ts`).
+- Lectores listados en spec que NO leen el array (solo `montoPagado`): 4 (`tooltipsBotones.ts`, `EnviarFacturacionButton.tsx`, `FacturacionPendiente.tsx`, `PanelCliente360.tsx`). NO necesitan refactor.
+- Escritores del array: 4 (`confirmarPagoOrden` helper, `RegistrarPagoModal::handleGuardar/handleEliminarPago`, `ProcesarFacturacionModal::handleGenerar` arrayUnion, `AgendaDia::handleCerrarChequeo`).
+
+**Ambigüedad detectada:** spec dice "lectores prefieren subcolección con fallback a array" pero NO dice si los escritores también escriben a la subcolección. Si NO: órdenes nuevas post-migración tendrán pagos solo en array → lectores que prefieren subcolección no los ven → gate del conduce se rompe.
+
+**3 opciones documentadas en BLOQUEOS.md (entrada nueva):**
+
+- A: dual-write (todos los writers escriben array+subcol en runTransaction). Más segura, scope amplio.
+- B: lectores prefieren ARRAY, subcolección espejo histórico para B-3. Más conservadora.
+- C: solo migración + helper, deferir TODO a B-3. Mínima.
+
+**Recomendación del coordinator:** opción B (preserva spec, cero riesgo sobre flujo de dinero, prepara B-3). Jorge elige.
+
+**No se corrió:** DRY-RUN del script de migración (no escrito todavía — se escribirá cuando Jorge elija opción).
+
+### Detalle SPRINT-AGENTES-1-AUDITORIA-CONTABLE (COMPLETADO)
+
+**archivist PRE-CHANGE:** touch-list `.claude/agents/auditor_contable.md` (nuevo) + 3 cazadores nuevos + `run-all.ts` + `PATRONES_REGRESION.md` + informe. Historial: `dad8ca8` agregó `memoria.md` (patrón establecido de agente nuevo), `ad90de4` agregó P-020 (patrón de cazador nuevo + registro). Sin postmortems específicos de dinero hoy.
+
+**Pipeline ejecutado:**
+
+1. Creado `.claude/agents/auditor_contable.md` (185 líneas) — agente read-only, 7 invariantes I-1 a I-7, REPORTA no arregla.
+2. Creado `scripts/invariantes/check-comision-sin-denormalizacion.ts` (P-021, 161 líneas). Test: PASS, 0 hits.
+3. Creado `scripts/invariantes/check-numeros-documento-client-side.ts` (P-022). Primera corrida: 9 hits (1 real Cotizaciones + 8 falsos positivos benignos). Tag-eo de los 8 benignos como `@safe-numero-doc: ...` (fallback display, log message, notificación, definición deprecated). Helpers `generateNumeroOrden`/`generateNumeroCotizacion` marcados `@deprecated`. Re-test: PASS, 0 hits.
+4. Creado `scripts/invariantes/check-gate-conduce-pago-verificado.ts` (P-023). Test: PASS, 0 hits.
+5. Registrado los 3 en `scripts/invariantes/run-all.ts`. Total 23/23 PASS.
+6. Agregadas entradas P-021/P-022/P-023 a `docs/PATRONES_REGRESION.md`.
+7. Escrito `docs/sprints/AUDITORIA_CONTABLE_2026-05-24.md` (147 líneas) con resumen + hallazgos por invariante + 1 sprint propio sugerido + métricas.
+8. Reviewer inline APPROVED.
+9. Commit + push hash `d938135`. Pre-commit hook PASS.
+
+**Hallazgo crítico (no fixeado autónomo, regla del agente):**
+
+- `src/pages/Cotizaciones.tsx:314` usa `generateNumeroCotizacion(cotizaciones.length)` — helper no-transaccional que calcula `QT-${count + 1}` desde el length del state local. Race condition entre admins simultáneos → duplicado. Sprint follow-up `SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL` documentado en el informe.
+
+### Detalle SPRINT-AGENTES-2-MEMORIA-DIRIGE (COMPLETADO)
+
+**archivist PRE-CHANGE:** touch-list `docs/sprints/MAPA_RIESGOS_MODULOS.md` (nuevo) + `.claude/agents/memoria.md` + `.claude/agents/coordinator.md` + `CLAUDE.md`. Historial reciente de memoria.md: `dad8ca8` lo creó (estructura del agente). Sin postmortems del archivo.
+
+**Pipeline ejecutado:**
+
+1. Creado `docs/sprints/MAPA_RIESGOS_MODULOS.md` (396 líneas) — 11 módulos con 5 zonas estándar c/u (Archivos clave / Patrones P-XXX / Gotchas vivos / Decisiones de Jorge / Antes de tocar). Sembrado con cazadores P-001..P-023, gotchas CLAUDE.md, postmortems, hallazgos AUDITORIA_CONTABLE.
+2. Editado `.claude/agents/memoria.md` — agregado modo MANTENER-MAPA con input/trabajo/output/anti-patrones.
+3. Editado `.claude/agents/coordinator.md` paso 4 — leer sección del módulo afectado ANTES de delegar al builder.
+4. Editado `CLAUDE.md` — sub-regla obligatoria "consultar mapa de riesgo del módulo antes de tocar". Antiprecedente justificación: complementario a archivist PRE-CHANGE + touch-list expandido.
+5. Typecheck PASS. 23/23 cazadores PASS. Sin tocar código de app.
+6. Reviewer inline APPROVED.
+7. Commit + push hash `df68a42`. Pre-commit hook PASS.
+
+### Detalle SPRINT-AGENTES-3-PARALELIZAR (COMPLETADO)
+
+**archivist PRE-CHANGE:** touch-list `.claude/agents/coordinator.md` + `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md` + `CLAUDE.md`. Sin historial relevante (sprint sobre el flujo autónomo mismo, primera vez).
+
+**Pipeline ejecutado:**
+
+1. Editado `.claude/agents/coordinator.md` — nueva sección "Paralelización (SPRINT-AGENTES-3, 2026-05-24)" con: patrón (a) verificación post-builder en una sola tanda (reviewer + regression_guardian + security), patrón (b) auditorías de módulos disjuntos, cuándo NO paralelizar (builder+tester, 2 builders, 2 escritores al mismo archivo, commits), límites prácticos (máx 3-4, timeouts 2min), patrón de invocación (múltiples Agent tool calls en una sola respuesta).
+2. Editado `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md` — sección espejo más breve enfocada en Cowork.
+3. Editado `CLAUDE.md` — sub-regla breve apuntando al detalle en los otros 2.
+4. Typecheck PASS. 23/23 cazadores PASS.
+5. Reviewer inline APPROVED.
+6. Commit + push hash `30abe53`. Pre-commit hook PASS.
+
+### Archivos modificados (pasada 47)
+
+- NUEVO `.claude/agents/auditor_contable.md` (185 líneas).
+- NUEVO `scripts/invariantes/check-comision-sin-denormalizacion.ts` (P-021).
+- NUEVO `scripts/invariantes/check-numeros-documento-client-side.ts` (P-022).
+- NUEVO `scripts/invariantes/check-gate-conduce-pago-verificado.ts` (P-023).
+- `scripts/invariantes/run-all.ts` — registrados 3 cazadores nuevos.
+- `docs/PATRONES_REGRESION.md` — entradas P-021/P-022/P-023.
+- NUEVO `docs/sprints/AUDITORIA_CONTABLE_2026-05-24.md` (informe).
+- NUEVO `docs/sprints/MAPA_RIESGOS_MODULOS.md` (396 líneas).
+- `.claude/agents/memoria.md` — modo MANTENER-MAPA.
+- `.claude/agents/coordinator.md` — paso 4 MAPA + sección Paralelización.
+- `CLAUDE.md` — 2 sub-reglas nuevas (MAPA + Paralelización).
+- `docs/sprints/COLA_AUTONOMA_PROTOCOLO.md` — sección Paralelización.
+- `docs/sprints/COLA_AUTONOMA.md` — B-2 marcado ⊘ MOVIDO A BLOQUEOS + AGENTES-1/2/3 marcados COMPLETADO + header actualizado.
+- `docs/sprints/BLOQUEOS.md` — entrada nueva B-2 con 3 opciones.
+- `docs/sprints/EJECUCION_AUTONOMA.md` — esta entrada.
+- `docs/sprints/DIARIO_2026-05-24.md` — pasada 47 al tope (preservar 45+46).
+- `docs/sprints/MEMORIA_MAESTRA.md` — actualizado.
+
+**Tag-eos benignos** (no son fixes — son anotaciones para evitar falsos positivos en P-022):
+- `src/components/inbox/CardCliente.tsx:190`
+- `src/components/inbox/PanelCliente360.tsx:396, 577, 654`
+- `src/pages/PagosPendientes.tsx:163`
+- `src/pages/Standby.tsx:138`
+- `src/services/ordenes.service.ts:1025`
+- `src/utils/index.ts:482, 486` (helpers deprecated)
+
+### Estado anti-regresión post pasada 47
+
+- Cazadores activos: **23/23 PASS** (P-001..P-007, P-009..P-012, P-014..P-023). Subió de 20/20 → 23/23.
+- Postmortems totales: 11 (sin nuevos — los AGENTES no son hotfixes, son cierre proactivo de capacidades de prevención).
+- Allowlist size: 2 archivos nuevos en allowlist de cazadores (P-021: 1, P-022: 1, P-023: 0). Ninguna allowlist creció >2.
+
+### Métricas pasada 47
+
+- Tiempo total: ~50 minutos (3 sprints + 1 escalado + auditoría touch-list + tag-eos + commits).
+- Sprints procesados: 3 COMPLETADOS.
+- Sprints escalados: 1 (B-2 → BLOQUEOS por ambigüedad técnica).
+- Hotfixes producción: 0 (no fueron hotfixes — fueron sprints de capacidad).
+- Bugs cazados: 1 confirmado en producción latente (Cotizaciones número no-transaccional). Resolución: documentado, sprint follow-up sugerido, NO fixeado autónomo (regla "auditor_contable NO arregla dinero").
+
+### Deuda registrada (pasada 47)
+
+Sin deuda nueva crítica del sprint. Deudas heredadas:
+
+1. `npm run deploy:storage-rules` (SPRINT-138) — P-013 WARN cold start.
+2. QA visual INBOX-11/INBOX-10/INBOX-8c en producción.
+3. **B-2 esperando OK de Jorge** con opción A/B/C en BLOQUEOS.md.
+4. **SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL** (nuevo, no en cola formal) — Cowork puede agregarlo cuando quiera.
+5. SPRINT-WA-NUMERO-RESPALDO-FASE-2 espera 2º WABA en Meta.
+
+---
+
 ## 2026-05-24 — autónomo (`procesa bloqueos`, pasada 45): SPRINT-WA-SEGURIDAD-CONFIG-RULES COMPLETADO con emulator + deploy
 
 ### Disparo

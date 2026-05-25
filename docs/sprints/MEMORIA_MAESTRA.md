@@ -6,7 +6,7 @@
 >
 > **Quién lo mantiene:** el agente **`memoria`** (`.claude/agents/memoria.md`). El coordinator lo actualiza al cerrar cada pasada; Cowork lo actualiza al cerrar cada conversación. Este archivo es un ÍNDICE corto — el detalle vive en los archivos enlazados abajo.
 
-**Última actualización:** 2026-05-24 por Cowork.
+**Última actualización:** 2026-05-24 por coordinator (pasada 47, `trabaja`).
 
 ---
 
@@ -14,12 +14,14 @@
 
 ### En la cola autónoma (Jorge corre `trabaja` en Claude Code) — en orden
 
-1. **SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2** — migrar los pagos del array `orden.pagos` a una subcolección, con lectura de respaldo (las órdenes viejas y nuevas se ven igual) + script de migración idempotente (DRY-RUN primero; si <500 órdenes lo aplica solo, si >500 escala a BLOQUEOS). **No toca reglas** (eso es B-3). Plan de 3 fases ya aprobado por Jorge.
-2. **Bloque AGENTES (ideas robadas de Ruflo, sin instalarlo):**
-   - **SPRINT-AGENTES-1-AUDITORIA-CONTABLE** — agente `auditor_contable` + cazadores de invariantes de dinero + barrido de los módulos financieros (REPORTA, no arregla).
-   - **SPRINT-AGENTES-2-MEMORIA-DIRIGE** — `MAPA_RIESGOS_MODULOS.md`: mapa de riesgo por módulo que todo agente lee antes de tocar (la memoria pasa a guía activa).
-   - **SPRINT-AGENTES-3-PARALELIZAR** — el coordinator corre verificación + auditorías de módulos disjuntos en paralelo (sin escrituras concurrentes); engancha el agente `guardian_logica`.
-3. **SPRINT-GARANTIA-FLUJO-COMPLETO** — completar el flujo de garantía (ya medio hecho en SPRINT-135a) con las reglas de Jorge. Toca dinero → reviewer + auditor_contable + guardian_logica + QA de Jorge. Recomendado tras AGENTES-1.
+1. **SPRINT-GARANTIA-FLUJO-COMPLETO** — completar el flujo de garantía (ya medio hecho en SPRINT-135a) con las reglas de Jorge. Toca dinero → reviewer + auditor_contable + guardian_logica + QA de Jorge. Es el siguiente sprint en la cola.
+2. **SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL** (follow-up nuevo, NO en cola formal aún) — migrar `Cotizaciones.tsx:314` de `generateNumeroCotizacion(count)` deprecated a `siguienteNumeroCotizacion()` atomic. Severidad ALTA, riesgo BAJO, autónomo. Documentado en `AUDITORIA_CONTABLE_2026-05-24.md`. Cowork puede agregarlo a la cola cuando quiera.
+
+### En BLOQUEOS esperando OK de Jorge
+
+- **SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2** — ESCALADO 2026-05-24 pasada 47 por ambigüedad técnica (qué hacer con los 4 escritores del array `pagos[]` durante la migración). 3 opciones documentadas (A dual-write / B lectores prefieren array / C solo migración). Jorge elige opción + corre `procesa bloqueos`.
+
+### Esperando acción manual de Jorge (Cowork NO puede hacerlas)
 
 ### Esperando acción manual de Jorge (Cowork NO puede hacerlas)
 
@@ -37,6 +39,7 @@ Nada activo en construcción ahora mismo. La cola tiene B-2 esperando que Jorge 
 
 ## ✅ HECHO RECIENTE (últimos hitos)
 
+- **2026-05-24 (pasada 47, `trabaja`)** — Bloque AGENTES procesado completo: (a) `SPRINT-AGENTES-1-AUDITORIA-CONTABLE` commit `d938135` — agente `auditor_contable` + 3 cazadores P-021/P-022/P-023 (subió de 20→23) + informe `AUDITORIA_CONTABLE_2026-05-24.md` con 1 hallazgo crítico (Cotizaciones.tsx número no-transaccional, sprint follow-up). (b) `SPRINT-AGENTES-2-MEMORIA-DIRIGE` commit `df68a42` — `MAPA_RIESGOS_MODULOS.md` (11 módulos) + modo MANTENER-MAPA en agente memoria + sub-regla CLAUDE.md. (c) `SPRINT-AGENTES-3-PARALELIZAR` commit `30abe53` — coordinator paraleliza verificación + auditorías de módulos disjuntos. SPRINT-PAGOS-FASE-B-2 escalado a BLOQUEOS por ambigüedad técnica (NO se tocó código de pagos).
 - **2026-05-24** — Auditoría de software completa (Cowork): informe en `docs/sprints/AUDITORIA_SOFTWARE_2026-05-24.md` (1 crítico, 6 altos, varios medios). Se creó el sistema de **memoria viva** (`MEMORIA_MAESTRA.md` + agente `memoria`, commit `dad8ca8`), el bloque **AGENTES** en la cola, el agente **`guardian_logica`**, y el sprint de **garantía**.
 - **2026-05-24** — `SPRINT-WA-SEGURIDAD-CONFIG-RULES` COMPLETADO (commit `e9aa3ef`). Se cerró un hueco de permisos: los 3 docs de config de WhatsApp (`whatsapp_envio`, `whatsapp_numeros`, `whatsapp_respuestas_rapidas`) ahora son escribibles SOLO por admin. Verificado con emulator (Java Temurin 25, 22 tests OK) + rules deployadas. 20 cazadores OK.
 - **2026-05-24** — **QA de PAGOS-FASE-B-1 aprobada** (Jorge + Cowork verificaron en producción): se confirmó el pago de prueba de OS-0059 → salió de pendientes → desbloquea la emisión del conduce. Por eso B-2 ya está en la cola.

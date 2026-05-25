@@ -10,6 +10,126 @@
 
 ---
 
+## SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-2 — BLOQUEADO 2026-05-24 (coordinator pasada 47 — ambigüedad técnica sobre source-of-truth durante la migración)
+
+**Movido a `BLOQUEOS.md` el 2026-05-24 por coordinator autónomo (`trabaja`, pasada 47).** Razón: la auditoría real del touch-list reveló una ambigüedad de scope que la spec de la cola no resuelve y que afecta directamente al flujo de dinero. Decisión técnica sin OK de Jorge violaría sub-regla CLAUDE.md "Mutaciones cross-collection sobre dinero requieren plan de deploy en fases aprobado por Jorge". Cumple la regla del prompt: *"Si algo no está claro o el alcance crece → re-escalar a BLOQUEOS.md con la pregunta concreta y CONTINUAR con el siguiente sprint de la cola."*
+
+### Auditoría del touch-list real (read-only — sin código modificado)
+
+Grep `\.pagos|\bpagos:\s*\[|pagos\?\:` en `src/` reveló **el touch-list de la spec está parcialmente desactualizado y necesita corrección**:
+
+**Consumidores LECTORES del array `pagos[]` (reales — 6 sitios, no 7):**
+
+1. `src/services/ordenes.service.ts` L1280, L1373 (`confirmarPagoOrden` + `suscribirPagosPendientes` — ya son helpers).
+2. `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` L345 (`pagosPrevios = orden?.pagos`) y L398 (gate de conduce filtra `verificado===false`).
+3. `src/components/ordenes/OrdenDetailModal.tsx` L846, L911, L913 (render lista).
+4. `src/pages/OrdenDetalle.tsx` L1350, L1405, L1407 (render lista).
+5. `src/components/ordenes/RegistrarPagoModal.tsx` L66 (lee `pagosPrevios` para mostrar tabla; también escribe — ver writers).
+6. `src/components/Sidebar.tsx` L182 (badge count de pagos pendientes).
+7. `src/utils/index.ts` L867 (parser `parseOrden`).
+
+**Consumidores que SOLO leen `montoPagado` denormalizado (NO leen el array, NO necesitan refactor en B-2):**
+
+- `src/utils/tooltipsBotones.ts` L78, L86 — solo `Number(orden.montoPagado || 0) <= 0`.
+- `src/components/ordenes/EnviarFacturacionButton.tsx` L22-31 — solo `Number(orden.montoPagado || 0) > 0`. Pasa `montoPagado` por props, no `pagos`.
+- `src/pages/FacturacionPendiente.tsx` L212 — solo suma `o.montoPagado || 0`.
+- `src/components/inbox/PanelCliente360.tsx` — 0 matches, no lee pagos.
+
+La spec del sprint lista a los 4 anteriores como consumidores del array, pero la auditoría real demuestra que **solo leen el campo denormalizado `montoPagado`** y por lo tanto **NO necesitan tocarse en B-2**.
+
+**Escritores del array `pagos[]` (los 4 que importan):**
+
+W1. `src/services/ordenes.service.ts::confirmarPagoOrden` L1306 — `tx.update(ordenRef, { pagos: nuevosPagos })` dentro de runTransaction (B-1).
+W2. `src/components/ordenes/RegistrarPagoModal.tsx::handleGuardar` L213, L225 — `tx.update(ordenRef, { pagos: pagosNuevos, montoPagado, ... })` dentro de runTransaction. **Crea pagos nuevos** (camino principal de la operaria).
+W3. `src/components/ordenes/RegistrarPagoModal.tsx::handleEliminarPago` L358 — `tx.update(ordenRef, { pagos: pagosNuevos })` dentro de runTransaction. Elimina pagos.
+W4. `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx::handleGenerar` L824 — `ordenUpdate.pagos = arrayUnion(pagoNuevoFinal)` dentro de runTransaction al emitir conduce.
+W5. `src/pages/AgendaDia.tsx::handleCerrarChequeo` L144-173 — escribe `pagos: pagosTotal` directo (no en runTransaction, ya tiene P-003 OK porque no toca segunda colección con audit), al marcar orden como "solo chequeo".
+
+La spec menciona explícitamente a W1 (helpers B-1) pero **no aclara qué hacer con W2-W5**.
+
+### La ambigüedad de fondo (lo que NO está claro en la spec)
+
+La spec dice:
+
+> "1. Helper común de lectura de pagos con fallback array→subcolección. Crear un único punto que devuelva los pagos de una orden leyendo PRIMERO de la subcolección y, si está vacía, cayendo al array legacy."
+
+Y también:
+
+> "2. Adaptar los helpers de B.1 para escribir/leer la subcolección con el mismo fallback."
+
+Y simultáneamente:
+
+> "4. NO remover el path de lectura del array ni endurecer rules en B.2. Eso es B.3."
+
+**El problema:** si los lectores prefieren la subcolección y SOLO `confirmarPagoOrden` escribe a la subcolección (helpers B-1 adaptados), pero W2-W5 siguen escribiendo SOLO al array legacy, entonces tras correr el script de migración una orden con un pago nuevo registrado por la operaria (W2) tendría:
+
+- Subcolección: 0 pagos nuevos (el script ya pasó; W2 no escribe ahí).
+- Array: el pago nuevo (W2 lo escribió).
+- Helper común: prefiere subcolección → devuelve 0 pagos → la UI muestra 0 pagos.
+- `ProcesarFacturacionModal` filtra `verificado===false` sobre 0 pagos → **gate del conduce roto** (deja emitir aunque hay pago sin confirmar).
+
+Esto es un **bug latente que romperia el gate de dinero recién agregado en fase A**.
+
+### Tres opciones para destrabar (elegir UNA)
+
+**Opción A — dual-write (más segura, scope amplio):** TODOS los writers (W1-W5) escriben simultáneamente al array Y a la subcolección dentro de la misma `runTransaction` (P-003 preservado). El array sigue siendo source-of-truth; la subcolección queda perfectamente sincronizada. Lectores pueden preferir cualquiera de los dos sin riesgo. B-3 puede después quitar la doble-escritura sin riesgo de inconsistencia.
+
+- Pros: cero riesgo de inconsistencia. Helper común tiene sentido (sirve para ambas fuentes).
+- Contras: scope crece a 5 writers en lugar de 1. Más superficie de cambio en código de dinero. Costo de escritura por pago se duplica (1 doc array + 1 doc subcolección).
+- Touch-list adicional: W2 (RegistrarPagoModal handleGuardar + handleEliminarPago), W4 (ProcesarFacturacionModal handleGenerar), W5 (AgendaDia handleCerrarChequeo). Cada uno dentro de su `runTransaction` ya existente. `tx.set(doc(db, 'ordenes_servicio', id, 'pagos', pagoId), payload)` adicional.
+
+**Opción B — lectores prefieren ARRAY (más conservadora, scope mínimo):** el helper común prefiere el ARRAY (source-of-truth real); la subcolección queda como **espejo histórico** poblado por el script de migración, pero nadie la lee en B-2. La subcolección es preparación para B-3 (que ahí sí hará el switch + endurecimiento de rules + remoción del path de lectura del array).
+
+- Pros: cero riesgo. Lectura idéntica a hoy (array). Escritura sin cambios (W1-W5 siguen como están). Script de migración corre 1 vez y queda la subcolección poblada.
+- Contras: el helper común y la subcolección no agregan valor inmediato en B-2 (solo preparan B-3). El "fallback" descrito en la spec se invierte (array→subcolección en lugar de subcolección→array).
+- Touch-list: solo `ordenes.service.ts` (helper común que centraliza lectura) + adaptar lectores listados arriba para pasar por el helper + script de migración. NO se tocan W2-W5.
+
+**Opción C — solo migración + helper (mínima absoluta, no toca lectores):** script de migración corre y puebla la subcolección. NO se crea helper común. NO se tocan lectores. B-3 hace TODO el trabajo (helper común + lectores + remoción del array + rules). B-2 es básicamente solo "script de migración + dejarlo listo".
+
+- Pros: mínimo riesgo. Solo agrega datos (no cambia comportamiento).
+- Contras: rompe la spec original que pide helper común + fallback en B-2. Convierte B-2 en un sprint de "ejecutar script" prácticamente.
+- Touch-list: solo `scripts/migrar-pagos-array-a-subcoleccion.ts` (nuevo) + DRY-RUN + apply.
+
+### Recomendación del coordinator
+
+**Opción B** — preserva la spec ("helper común + fallback") pero invierte el orden del fallback (array primero) para preservar el source-of-truth real. Cero riesgo sobre el flujo de dinero, scope acotado a los 7 lectores listados arriba, y prepara terreno perfecto para B-3 (que ahí sí hará el switch + dual-write o cut-over de writers + endurecimiento de rules).
+
+La Opción A es técnicamente más limpia pero **amplía el scope de cambios sobre código de dinero**, que es exactamente el tipo de cosa que sub-regla CLAUDE.md "Mutaciones cross-collection sobre dinero" pide aprobar explícitamente.
+
+### Pre-requisito antes de procesar (cualquier opción)
+
+Correr el script de migración en **DRY-RUN** primero y reportar:
+- Total de órdenes en `ordenes_servicio`.
+- Órdenes con `pagos` array no vacío.
+- Total de pagos individuales que se migrarían.
+- Distribución `verificado=true / false / undefined`.
+
+Si el conteo de órdenes con pagos es **>500** → el coordinator escala **otra vez** a BLOQUEOS por sub-regla "migraciones de datos sobre >500 docs" (que es el caso, según la regla del propio sprint en el header del COLA).
+
+### Cómo desbloquear
+
+Editá este sprint y agregá UNA de las siguientes líneas al final:
+
+```
+OK: jorge YYYY-MM-DD HH:MM opcion=A migrar-si-menos-500
+OK: jorge YYYY-MM-DD HH:MM opcion=B migrar-si-menos-500
+OK: jorge YYYY-MM-DD HH:MM opcion=C migrar-si-menos-500
+```
+
+(El sufijo `migrar-si-menos-500` autoriza al coordinator a aplicar el script SI el DRY-RUN reporta <500 órdenes con pagos; si reporta más, se vuelve a escalar con conteo exacto.)
+
+Después pegá `procesa bloqueos` al coordinator.
+
+### Pendiente desde
+
+2026-05-24 pasada 47 (`trabaja`). El prompt habilitó explícitamente procesar B-2 con la nota "Cowork lo marcó como QA aprobada en la cola, eso refleja la aprobación de Jorge" + las advertencias de extra precaución por dinero. La auditoría reveló ambigüedad de scope dentro de la spec misma — no es duda sobre el OK de QA, es duda sobre qué quiere decir la spec técnicamente. Esa decisión debe tomarla Jorge (o Cowork con OK formal).
+
+### Reviewer obligatorio cuando se procese
+
+Sub-regla CLAUDE.md: "Reviewer obligatorio cuando un sprint... toca dinero, transacciones, o el script de migración". Plan de reviewer focus: (a) que el helper común no rompa retrocompat con órdenes legacy sin subcolección; (b) que la migración sea idempotente y no duplique pagos; (c) que el gate del conduce siga bloqueando con `verificado===false` (cazador P-021 candidato para fase AGENTES-1).
+
+---
+
 ## SPRINT-WA-SEGURIDAD-CONFIG-RULES — DESBLOQUEADO 2026-05-24 13:14 (OK: jorge opcion=A deploy=auto) — COMPLETADO en pasada 45
 
 **Movido a `COLA_AUTONOMA.md` como EN_EJECUCION el 2026-05-24 por coordinator (`procesa bloqueos`, pasada 45). desbloqueadoPor: jorge 2026-05-24 13:14 vía `OK: jorge 2026-05-24 13:14 opcion=A deploy=auto`. Jorge instaló Java (Temurin 25 verificado), emulator levantó limpio en 4s, 22/22 tests PASS en 4 bloques (admin SÍ × 3 docs / no-admin NO × 7 combinaciones / staff sin regresión × 10 docs / unauth denegado × 2), deploy `npm run deploy:rules` ejecutado, sprint COMPLETADO mismo día. Conservado acá como stub para forensia.** El historial original (diagnóstico, diff opción A, audit de consumidores, opciones B/C descartadas) se preserva debajo.
