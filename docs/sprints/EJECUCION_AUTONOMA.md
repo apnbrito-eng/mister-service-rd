@@ -5,6 +5,56 @@
 
 ---
 
+## 2026-05-25 — autónomo (`trabaja` nocturno, pasada 51): bloque FLUJO-DEPENDENCIAS completo
+
+**Disparada:** Jorge se va hasta mañana. Procesar TODO lo SEGURO del bloque FLUJO-DEPENDENCIAS en orden estricto, sprints [NO CERRAR sin QA Jorge] commit+push sin marcar COMPLETADO. NUCLEO escalable si grande.
+
+### Cazadores baseline: 24/24 PASS
+
+### Sprints procesados (orden estricto)
+
+| # | Sprint | Estado | Hash | Verif |
+|---|---|---|---|---|
+| 1 | SPRINT-AGENDA-1-MANTENIMIENTO-ATA-CLIENTE | ⏸ awaiting QA | `132d9b5` | 24/24 PASS + typecheck + lint + build 4.38s |
+| 2 | SPRINT-AGENDA-2-CALENDARIO-MUESTRA-CITAS | ✅ COMPLETADO | `e4f92bf` | 24/24 PASS + typecheck + lint |
+| 3 | SPRINT-AGENDA-3-HONRAR-TECNICO-ASIGNADO | ✅ COMPLETADO | `f9697b9` | 24/24 PASS + typecheck + lint |
+| 4 | SPRINT-AGENDA-4-UNIFICAR-FORMS-PUBLICOS | ✅ COMPLETADO | `fba51a4` | 24/24 PASS + typecheck + lint |
+| 5 | SPRINT-AGENDA-5-PROXIMO-MANTENIMIENTO-AL-CERRAR | ✅ COMPLETADO | `8f6a72b` | 24/24 PASS + typecheck + lint |
+| 6 | SPRINT-NUCLEO-CREAR-ORDEN-CENTRAL | ⊘ ESCALADO | — | Plan 3 fases + decisión A/B/C en BLOQUEOS.md |
+| 7 | SPRINT-DINERO-1-QT-ATOMICO | ✅ COMPLETADO | `bec87b3` | 24/24 PASS + typecheck + lint |
+| 8 | SPRINT-DINERO-2-MONTOPAGADO-RECALC | ⏸ awaiting QA | `b4fc23c` | 24/24 PASS (gate P-023 intacto) + typecheck + lint |
+| 9 | SPRINT-REPORTING-1-KPI-HELPERS | ⏸ awaiting QA | `a4e64db` | 24/24 PASS + typecheck + lint |
+
+### Touch-lists por sprint
+
+1. **AGENDA-1**: `src/pages/Mantenimiento.tsx` (refactor modal + handleSubmit + handleGenerarOrden), `src/types/index.ts` (extender `Mantenimiento` con denormalizados opcionales).
+2. **AGENDA-2**: `src/pages/Calendario.tsx` (2 listeners nuevos + tipo EventoCalendario + toggle), `src/pages/AgendaDia.tsx` (2 listeners + panel "Tentativos del día").
+3. **AGENDA-3**: `src/hooks/useOrdenCreateForm.ts` (effect preset extendido + effect secundario race condition).
+4. **AGENDA-4**: `src/pages/CitaPublica.tsx::handleSubmit` (escribir `equipoTipo`+`equipoMarca`+`telefonoNormalizado`).
+5. **AGENDA-5**: `src/components/CierreServicioWizard.tsx` (helper standalone `ofrecerProximoMantenimiento` + invocación post-cierre).
+6. **NUCLEO**: cero código tocado. Sin commit.
+7. **DINERO-1**: `src/pages/Cotizaciones.tsx:314` (migración a `siguienteNumeroCotizacion`), `src/utils/index.ts` (stub que lanza).
+8. **DINERO-2**: `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx::handleGenerar` (recalc dentro de runTransaction).
+9. **REPORTING-1**: nuevo `src/utils/kpis.ts`, `src/pages/Dashboard.tsx` (migrar a helpers).
+
+### Resultado
+
+- 8 commits + push, 1 escalación.
+- 4 COMPLETADOS autónomos (AGENDA-2/3/4/5 + DINERO-1).
+- 3 [NO CERRAR sin QA Jorge] en producción (AGENDA-1, DINERO-2, REPORTING-1).
+- 1 ESCALADO a BLOQUEOS con plan en fases (NUCLEO).
+- 0 cazadores rotos en ningún commit. 0 hits totales.
+- Tiempo total: ~80 min.
+
+### Reglas duras respetadas
+
+- NO se tocó `firestore.rules` ni `storage.rules`.
+- NO se tocó PAGOS B-3.
+- NO Meta/WABA, OAuth, integraciones nuevas, migraciones >500 docs.
+- NO se hizo ningún ítem FUERA DE LA COLA (base comisión, gate R4, descuento stock, standby, factura→cerrado) — todos documentados en BLOQUEOS.md.
+
+---
+
 ## 2026-05-25 — autónomo (`trabaja`, pasada 50): SPRINT-WA-FIX-PLANTILLAS-PARAMS
 
 ### Disparo

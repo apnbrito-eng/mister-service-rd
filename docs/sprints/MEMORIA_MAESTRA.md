@@ -6,7 +6,7 @@
 >
 > **Quién lo mantiene:** el agente **`memoria`** (`.claude/agents/memoria.md`). El coordinator lo actualiza al cerrar cada pasada; Cowork lo actualiza al cerrar cada conversación. Este archivo es un ÍNDICE corto — el detalle vive en los archivos enlazados abajo.
 
-**Última actualización:** 2026-05-25 por Cowork — auditoría de FLUJO Y DEPENDENCIAS de todo el software (`docs/sprints/AUDITORIA_FLUJO_DEPENDENCIAS_2026-05-25.md`) + 9 sprints ordenados por dependencia encolados + 5 escalados a decisión de Jorge. (Anterior: coordinator pasada 50 cerró `SPRINT-WA-FIX-PLANTILLAS-PARAMS` hash `0ab73c5`.)
+**Última actualización:** 2026-05-25 por coordinator (`trabaja` pasada 51, nocturno). Bloque FLUJO-DEPENDENCIAS procesado: **8 sprints commiteados + pusheados**, 1 escalado. 4 completados autónomo (AGENDA-2/3/4/5 + DINERO-1), 4 [NO CERRAR sin QA Jorge] (AGENDA-1, DINERO-2, REPORTING-1) en producción esperando QA, 1 ESCALADO (NUCLEO con plan 3 fases + decisión A/B/C). (Anterior: Cowork — auditoría de FLUJO Y DEPENDENCIAS.)
 
 ---
 
@@ -14,16 +14,17 @@
 
 ### En la cola autónoma (Jorge corre `trabaja` en Claude Code) — en orden
 
-**⭐ BLOQUE FLUJO-DEPENDENCIAS (al tope, ordenado por dependencia).** Sale de `AUDITORIA_FLUJO_DEPENDENCIAS_2026-05-25.md`. Causa raíz del "bucle": una orden puede nacer sin cliente real (mantenimiento = `clienteId:''`). Orden de proceso:
-  1. **AGENDA-1-MANTENIMIENTO-ATA-CLIENTE** (dolor de Jorge: agendar mantenimiento exige cliente real + tecnicoId=uid). [NO CERRAR sin QA Jorge]
-  2. **AGENDA-2-CALENDARIO-MUESTRA-CITAS** (citas + mantenimientos visibles en calendario/agenda, solo lectura).
-  3. **AGENDA-3-HONRAR-TECNICO-ASIGNADO** (no descartar el técnico que el cliente eligió en la cita web).
-  4. **AGENDA-4-UNIFICAR-FORMS-PUBLICOS** (CitaPublica = esquema de FormularioAgendarPublico).
-  5. **AGENDA-5-PROXIMO-MANTENIMIENTO-AL-CERRAR** (depende de AGENDA-1).
-  6. **NUCLEO-CREAR-ORDEN-CENTRAL** (cimiento: `crearOrden()` que exige cliente; si es muy grande → ESCALAR). [NO CERRAR sin QA Jorge]
-  7. **DINERO-1-QT-ATOMICO** (número de cotización atómico — reemplaza el viejo follow-up SPRINT-PAGOS-FIX-COTIZACIONES).
-  8. **DINERO-2-MONTOPAGADO-RECALC** (recalcular monto/estado de pago al cobrar en conduce). [NO CERRAR sin QA Jorge]
-  9. **REPORTING-1-KPI-HELPERS** (centralizar KPIs dinero/nómina; restar anulaciones).
+**⭐ BLOQUE FLUJO-DEPENDENCIAS — estado post pasada 51 (2026-05-25 nocturno).** De la auditoría `AUDITORIA_FLUJO_DEPENDENCIAS_2026-05-25.md`. Causa raíz: una orden podía nacer sin cliente real. **Estado actual:**
+
+  1. **AGENDA-1-MANTENIMIENTO-ATA-CLIENTE** ⏸ hash `132d9b5`, **awaiting QA Jorge** (plan en BLOQUEOS).
+  2. **AGENDA-2-CALENDARIO-MUESTRA-CITAS** ✅ COMPLETADO hash `e4f92bf`.
+  3. **AGENDA-3-HONRAR-TECNICO-ASIGNADO** ✅ COMPLETADO hash `f9697b9`.
+  4. **AGENDA-4-UNIFICAR-FORMS-PUBLICOS** ✅ COMPLETADO hash `fba51a4`.
+  5. **AGENDA-5-PROXIMO-MANTENIMIENTO-AL-CERRAR** ✅ COMPLETADO hash `8f6a72b`.
+  6. **NUCLEO-CREAR-ORDEN-CENTRAL** ⊘ ESCALADO a BLOQUEOS (cimiento sensible + [NO CERRAR sin QA]; plan 3 fases + decisión A/B/C en BLOQUEOS.md).
+  7. **DINERO-1-QT-ATOMICO** ✅ COMPLETADO hash `bec87b3`.
+  8. **DINERO-2-MONTOPAGADO-RECALC** ⏸ hash `b4fc23c`, **awaiting QA Jorge**.
+  9. **REPORTING-1-KPI-HELPERS** ⏸ hash `a4e64db`, **awaiting QA Jorge** (cambia monto KPI conduces).
 
   **FUERA de la cola (decisión de Jorge, en `BLOQUEOS.md`):** base de comisión (dos cálculos, ~18% dif), gate de aprobación + rule R4, descuento de stock al cerrar, standby→inventario, factura+pago→fase cerrado.
 
@@ -31,6 +32,11 @@
 
 ### En BLOQUEOS esperando QA o OK de Jorge
 
+- **Pasada 51 nocturno (3 sprints awaiting QA):**
+  - **SPRINT-AGENDA-1** hash `132d9b5` — QA: programar mantenimiento de un cliente existente, verificar que la orden generada aparece en la ficha del cliente (no huérfana). Plan completo en `BLOQUEOS.md`.
+  - **SPRINT-DINERO-2** hash `b4fc23c` — QA: emitir conduce cobrando saldo dentro del wizard, verificar que la orden muestra "Pagado" en agenda/listado (no "Pendiente"+monto viejo). Plan en `BLOQUEOS.md`.
+  - **SPRINT-REPORTING-1** hash `a4e64db` — QA: comparar KPI "Conduces emitidos del mes" en Dashboard antes/después si hay anuladas en el mes. Debe bajar por el monto de las anuladas. Plan en `BLOQUEOS.md`.
+- **SPRINT-NUCLEO-CREAR-ORDEN-CENTRAL** — ⊘ ESCALADO 2026-05-25 pasada 51. Plan 3 fases (helper crearOrden + migrar solicitudes.service + opcional migrar useOrdenCreateForm + cazador anti-bypass) + decisión A/B/C en `BLOQUEOS.md`. Para desbloquear: agregar `OK: jorge YYYY-MM-DD opcion=A|B|C`.
 - **SPRINT-WA-FIX-PLANTILLAS-PARAMS** — código commiteado + pusheado (hash `0ab73c5` 2026-05-25 pasada 50). Frontend-only; deploy automático (job Vercel `Yr0nTylm03jpzaalsPhd`). **QA Jorge:** desde el inbox, mandar cada una de las 4 plantillas a un número de prueba y confirmar ✓✓ (entregado) + banner branded correcto (no ⚠️). Hallazgo lateral documentado como follow-up: `SPRINT-WA-AUTORESPUESTA-SIN-HEADER`.
 - **SPRINT-GARANTIA-FLUJO-COMPLETO** — ⏸ código FASE A commiteado + pusheado (hash `59c5fb0` 2026-05-25 pasada 49). Aplica las reglas de Jorge: técnico original conserva su comisión, descuento del 10% sobre piezas al cerrar la orden de garantía (no al confirmar cita), cazador P-024 anti-reintroducción del patrón viejo. **NO marcado COMPLETADO** — Jorge debe correr 4 casos QA (mismo técnico cubre / otro técnico cubre / sin piezas / sin comisión original). Plan QA + deuda fase B en `BLOQUEOS.md`. Deuda fase B: botón "Abrir garantía" desde orden/ficha, gate "solo oficina no técnicos", capturar si el cliente paga, notifs al reabrir, regla "mismo técnico que cubre no gana comisión adicional".
 
@@ -46,12 +52,24 @@
 
 ## 🔧 EN CURSO
 
-Nada activo en construcción ahora mismo. SPRINT-GARANTIA Fase A está commiteada + pusheada esperando QA Jorge para cerrar COMPLETADO.
+Nada activo en construcción ahora mismo. Pasada 51 cerrada (nocturna). 3 sprints del bloque FLUJO-DEPENDENCIAS + SPRINT-GARANTIA Fase A + SPRINT-WA-FIX-PLANTILLAS commiteados/pusheados esperando QA Jorge.
 
 ---
 
 ## ✅ HECHO RECIENTE (últimos hitos)
 
+- **2026-05-25 (pasada 51, `trabaja` nocturno)** — Bloque FLUJO-DEPENDENCIAS procesado: **8 sprints commiteados + pusheados**, 1 ESCALADO. **4 COMPLETADOS autónomos:**
+  - `SPRINT-AGENDA-2` hash `e4f92bf` — calendario + AgendaDia muestran citas por confirmar + mantenimientos como capa tentativa (ámbar/púrpura, borde punteado), toggle "Mostrar tentativos".
+  - `SPRINT-AGENDA-3` hash `f9697b9` — useOrdenCreateForm honra `asignadoId` del calendario público (precarga técnico al confirmar cita web).
+  - `SPRINT-AGENDA-4` hash `fba51a4` — CitaPublica.tsx escribe `equipoTipo` + `equipoMarca` + `telefonoNormalizado` (alineado con FormularioAgendarPublico, anti-duplicado aplica a ambos paths).
+  - `SPRINT-AGENDA-5` hash `8f6a72b` — CierreServicioWizard ofrece programar próximo mantenimiento al cerrar (toast con acción "Sí, programar"+3m).
+  - `SPRINT-DINERO-1` hash `bec87b3` — Cotizaciones.tsx migrado a `siguienteNumeroCotizacion()` (transaccional), helper deprecated lanza en runtime. Cierra follow-up SPRINT-PAGOS-FIX-COTIZACIONES.
+  - **3 [NO CERRAR sin QA Jorge]** en producción esperando QA:
+    - `SPRINT-AGENDA-1` hash `132d9b5` — mantenimiento atado a cliente real (typeahead + buscarOCrearCliente + tecnicoId=uid + emite orden_asignada). Modal con mantenimientos pre-sprint bloquea botón Generar Orden.
+    - `SPRINT-DINERO-2` hash `b4fc23c` — ProcesarFacturacionModal recalcula `montoPagado`/`estadoPago` al cobrar saldo dentro de la runTransaction existente. Idempotente. Gate P-023 intacto.
+    - `SPRINT-REPORTING-1` hash `a4e64db` — `src/utils/kpis.ts` con 3 helpers compartidos (`ingresosFacturasPagadas`, `conducesEmitidosMonto`, `conducesEmitidosCount`). Dashboard migrado. `conducesEmitidosMonto` EXCLUYE `anulada` (cambio funcional).
+  - **1 ESCALADO:** `SPRINT-NUCLEO-CREAR-ORDEN-CENTRAL` movido a BLOQUEOS con plan de 3 fases + decisión A/B/C (refactor de cimiento, [NO CERRAR sin QA], inseguro de noche).
+  - **Cazadores 24/24 PASS en cada commit. Typecheck PASS. Lint clean.** 0 hits.
 - **2026-05-25 (pasada 50, `trabaja`)** — 1 sprint COMPLETADO:
   - `SPRINT-WA-FIX-PLANTILLAS-PARAMS` COMPLETADO hash `0ab73c5`. Arregla las 4 plantillas WhatsApp desfasadas del rediseño Meta ~15 may 2026 (error #132000 en `recordatorio` + variables/slots equivocados en las otras 3 + faltaba header IMAGE). Solo FRONTEND — `send.ts` ya soportaba `headerImageUrl` desde SPRINT-WA-2-HEADER-IMAGE. Archivos: `src/config/plantillasWhatsApp.ts` (tipo `PlantillaCatalogo` con `imagenEncabezadoUrl?`, union `AutopopularDe` +4 fuentes nuevas, 2 helpers nuevos `formatearFechaCitaDia`/`formatearFechaCitaHora`, las 4 plantillas reescritas según `PLANTILLAS_META_SPEC_2026-05-25.md`), `src/services/whatsapp.service.ts` (`PlantillaArgs` con `headerImageUrl?`, `enviarPlantilla` acepta nuevo param posicional, patrón strip-undefined), `src/components/inbox/SelectorPlantillas.tsx` (reenvía URL). 24/24 cazadores PASS. Build 4.36s. Pre-commit hook PASS. Push `ae1a6a6..0ab73c5`. Deploy job `Yr0nTylm03jpzaalsPhd` PENDING. QA Jorge envío real pendiente. Hallazgo lateral documentado follow-up `SPRINT-WA-AUTORESPUESTA-SIN-HEADER`.
 - **2026-05-25 (pasada 49, `trabaja` autorizaciones explícitas Jorge)** — 2 sprints procesados:

@@ -10,6 +10,112 @@
 
 ---
 
+## SPRINTS pasada 51 [NO CERRAR sin QA Jorge] — código en producción, esperando QA
+
+**Origen:** `trabaja` pasada 51 (2026-05-25 nocturno). 4 sprints del bloque FLUJO-DEPENDENCIAS quedaron con código commiteado + pusheado pero NO marcados COMPLETADO porque la spec exigía QA de Jorge antes de cerrar. Resumen para QA:
+
+### SPRINT-AGENDA-1-MANTENIMIENTO-ATA-CLIENTE — hash `132d9b5`
+
+**Qué cambió:** el modal de mantenimiento ahora exige cliente real (typeahead + búsqueda por teléfono); la orden generada hereda `clienteId` + denormalizados + `tecnicoId=uid` + sincroniza fase/estado/estadoSimple + emite notif `orden_asignada`. Mantenimientos viejos con `clienteId=''` bloquean botón "Generar Orden" con toast claro.
+
+**QA Jorge (5 min):**
+1. Ir a `/admin/mantenimiento` → "Programar".
+2. Buscar un cliente EXISTENTE por nombre o teléfono → seleccionarlo → completar equipo + fecha + técnico → guardar.
+3. Verificar en el card: el badge verde "[amarrado: ...]" debe aparecer.
+4. Click "Generar Orden" → ver que la orden creada aparece en la **ficha del cliente** (Clientes → ese cliente → historial). Antes la orden quedaba huérfana.
+5. Programar otro mantenimiento con CLIENTE NUEVO (nombre que no existe) → el sistema crea el cliente al guardar → la orden queda amarrada igual.
+
+**Si pasa todo:** agregar al final `QA: jorge YYYY-MM-DD HH:MM AGENDA-1 PASS`. Coordinator próxima pasada lo mueve a COMPLETADO.
+
+### SPRINT-NUCLEO-CREAR-ORDEN-CENTRAL — ESCALADO (no en producción)
+
+Ver entrada dedicada abajo. No requiere QA porque NO se ejecutó.
+
+### SPRINT-DINERO-2-MONTOPAGADO-RECALC — hash `b4fc23c`
+
+**Qué cambió:** al cobrar saldo dentro del modal de emitir conduce (ProcesarFacturacionModal), ahora se recalculan `montoPagado` + `estadoPago` en la orden dentro de la misma `runTransaction` (antes solo se hacía `arrayUnion` sin recalc). El gate P-023 del conduce (pagosSinVerificar) sigue intacto.
+
+**QA Jorge (5 min):**
+1. Tomar una orden con cotización aprobada y precio definido pero sin pagos previos. Anotar el monto total (ej. RD$5,000).
+2. Ir a `/admin/facturacion-pendiente` → click "Emitir conduce" → en el paso 2 (Pago nuevo), cobrar el monto completo (efectivo, sin necesidad de verificación por María).
+3. Confirmar emisión del conduce.
+4. Verificar en `/admin/ordenes` → la orden debe mostrar **"Pagado"** (no "Pendiente") + `montoPagado = 5000`. Antes mostraba el monto viejo / estado stale.
+5. Verificar también en agenda del día — mismo monto pagado.
+
+**Si pasa todo:** agregar `QA: jorge YYYY-MM-DD HH:MM DINERO-2 PASS`. Si la orden sigue mostrando "Pendiente", agregar `QA: jorge YYYY-MM-DD ROTO DINERO-2: <síntoma>` para que el coordinator vuelva al builder.
+
+### SPRINT-REPORTING-1-KPI-HELPERS — hash `a4e64db`
+
+**Qué cambió:** helpers compartidos en `src/utils/kpis.ts` para "Ingresos del mes" y "Conduces emitidos del mes". Dashboard migra a usarlos. **Cambio funcional:** "Conduces emitidos del mes" ahora EXCLUYE facturas en estado `anulada` (antes sumaba el total bruto sin chequear anulación).
+
+**QA Jorge (5 min):**
+1. Buscar en `/admin/facturas` filtrando por estado "anulada" si hay facturas anuladas históricas en el mes en curso.
+2. Anotar el monto total de las anuladas.
+3. Ir a `/admin/dashboard` y mirar el KPI "Conduces emitidos del mes".
+4. Si HAY anuladas en el mes: el KPI debe haber **bajado** por el monto de las anuladas (que antes incluía). Si NO hay anuladas en el mes en curso, el KPI debe quedar idéntico → este caso no requiere acción.
+
+**Si pasa todo:** `QA: jorge YYYY-MM-DD HH:MM REPORTING-1 PASS`. Si el KPI no cambió pero tenés anuladas en el mes y deberían haberse restado, `QA: jorge YYYY-MM-DD ROTO REPORTING-1: <síntoma>`.
+
+### Pendiente desde
+
+2026-05-25 pasada 51 (`trabaja` autónomo nocturno). Jorge volverá mañana — estos 3 QA son los principales a correr al volver.
+
+---
+
+## SPRINT-NUCLEO-CREAR-ORDEN-CENTRAL — ESCALADO 2026-05-25 pasada 51 (sensibilidad cimiento + [NO CERRAR sin QA])
+
+**Movido a `BLOQUEOS.md` el 2026-05-25 por coordinator autónomo (`trabaja`, pasada 51).** Razón: el sprint es el **cimiento del sistema** (toca creación de órdenes desde 3 caminos divergentes), está marcado **[NO CERRAR sin QA Jorge]**, y la pasada 51 corrió de noche sin QA disponible. La sub-regla CLAUDE.md "Touch-list expandido + auditoría de consumidores antes de redactar el sprint" + la sub-regla "QA manual de sprints con rules de inmutabilidad" se aplican espiritualmente: el refactor cambia la forma en que NACE una orden, y un fallo silencioso (ej. el helper crea órdenes con shape ligeramente distinto en algún caso) puede llevar horas en detectarse y arrastrar a TODOS los módulos aguas abajo (histórico cliente, comisiones, facturación, dashboard, reportes).
+
+### Estado actual (parte del trabajo ya hecho en pasada 51)
+
+**SPRINT-AGENDA-1** (hash `132d9b5`) ya tapó el path más peligroso: `Mantenimiento.tsx::handleSubmit` y `handleGenerarOrden` ya no crean órdenes huérfanas. La orden generada hereda `clienteId` real + denormalizados + `tecnicoId=uid` + sincroniza `fase/estado/estadoSimple` + emite `orden_asignada`.
+
+`useOrdenCreateForm.ts` (hook canónico) ya hace todo correctamente (es el path de referencia).
+
+**El path pendiente:** `src/services/solicitudes.service.ts::convertirAOrden` (~L91-121). Recibe `ordenData: Record<string, unknown>` del caller (`src/pages/Solicitudes.tsx:142`) que pasa `clienteNombre` + `clienteTelefono` SIN `clienteId`. La función NO resuelve cliente vía `buscarOCrearCliente` → la orden creada nace con `clienteId` ausente (no `''`, no existe el campo). `parseOrden` lo lee como `''` (gotcha CLAUDE.md). Mismo síntoma que el Mantenimiento pre-AGENDA-1.
+
+### Plan de implementación en 3 fases (recomendado)
+
+**Fase 1 — Helper `crearOrden()` central, no destructivo:**
+- Crear `src/services/ordenes.service.ts::crearOrden(args)` que:
+  - Recibe `{ clienteId? | clienteTelefono, clienteNombre, equipoTipo, descripcionFalla, fase?, tecnicoId?, ... }`.
+  - Si `clienteId` viene, asume válido. Si no, exige `clienteTelefono` válido y resuelve vía `buscarOCrearCliente` (igual que useOrdenCreateForm L863).
+  - Escribe SIEMPRE el quinteto: `{ fase, estado, estadoSimple, historialFases, telefonoNormalizado }`. Default `fase: 'nuevo_lead'` cuando no se especifica.
+  - Usa `siguienteNumeroOrden()` internamente (P-022). Genera `tokenPortalCliente` (igual que useOrdenCreateForm L908).
+  - Retorna `{ ordenId, numero }`.
+- NO migrar callers todavía. Sólo agregar y testear el helper (typecheck + cazadores).
+- Riesgo: bajo. Solo añade código.
+
+**Fase 2 — Migrar `solicitudes.service.ts::convertirAOrden` a usar `crearOrden()`:**
+- Reescribir `convertirAOrden` para que invoque el helper.
+- Caller `Solicitudes.tsx:142` ya pasa `clienteTelefono` → el helper resuelve `clienteId` automáticamente.
+- QA Jorge: convertir una solicitud real del formulario público en una orden y verificar que aparece en el histórico del cliente (no huérfana).
+- Riesgo: medio (cambia comportamiento de un flujo público).
+
+**Fase 3 — Migrar `useOrdenCreateForm.ts::handleSubmit` (opcional, refactor):**
+- El hook ya hace todo "manual" (`addDoc` directo con la misma forma). Migrarlo a `crearOrden()` reduce duplicación, pero requiere preservar EXACTAMENTE el shape actual (orden_asignada, audit, fallback campaña marketing, descuento chequeo, etc.). Es un refactor puro.
+- QA Jorge intenso: crear orden por (a) flujo normal con cliente nuevo, (b) flujo normal con cliente existente, (c) confirmar cita pública, (d) confirmar cita garantía, (e) fallback marketing. TODOS los flujos deben tener idéntico comportamiento post-refactor.
+- Riesgo: alto (es el path más usado, ~80% de las órdenes).
+
+**Fase 4 — Cazador anti-bypass:**
+- Cazador nuevo en `scripts/invariantes/check-crearorden-bypass.ts` que detecte `addDoc(collection(db, 'ordenes_servicio'),...)` fuera de `crearOrden()` + `ordenes.service.ts` + `seedData.ts` (allowlist explícita). Garantiza que futuros caminos no vuelvan a bypassear.
+
+### Decisión que necesita Jorge
+
+Elegir:
+
+- **Opción A — Fase 1 + 2 solamente** (mantiene `useOrdenCreateForm` como está, lo que ya funciona; tapa el único path roto restante). **Recomendado para pasada nocturna desbloqueada.** Estimación: 1 pasada con QA Jorge de "convertir solicitud → orden".
+- **Opción B — Fase 1 + 2 + 3 + 4** (refactor completo + cazador). Estimación: 2-3 pasadas con QA intenso de Jorge. Reduce duplicación y previene regresiones.
+- **Opción C — Documentar y diferir** (mantener el statu quo: solicitudes públicas con campos `archivo/foto/firma` siguen creando órdenes sin `clienteId`). NO recomendado — es la deuda que motivó este sprint.
+
+Para desbloquear: agregá al final `OK: jorge YYYY-MM-DD HH:MM opcion=A|B|C [QA-plan: <breve>]`.
+
+### Pendiente desde
+
+2026-05-25 pasada 51 (`trabaja`).
+
+---
+
 ## SPRINT-GARANTIA-FLUJO-COMPLETO — FASE A APLICADA 2026-05-25, awaiting QA Jorge antes de cerrar COMPLETADO (pasada 49)
 
 **Estado:** ⏸ código de Fase A commiteado + pusheado (hash a documentar tras push). **NO marcar COMPLETADO hasta QA Jorge** (sub-regla del sprint en cola). Fases B/C postergadas hasta después de QA.

@@ -17,7 +17,7 @@
 
 ## SPRINT-AGENDA-1-MANTENIMIENTO-ATA-CLIENTE — Atar el agendamiento de mantenimiento a un cliente real
 
-**Prioridad:** 🔴 ALTA (dolor literal de Jorge). **Estado:** PENDIENTE. **Autónomo (frontend), [NO CERRAR sin QA Jorge].** Origen: `AUDITORIA_FLUJO_DEPENDENCIAS_2026-05-25.md` §3.1.
+**Prioridad:** 🔴 ALTA (dolor literal de Jorge). **Estado:** ⏸ código en producción hash `132d9b5` (pasada 51 nocturno 2026-05-25), **awaiting QA Jorge** antes de marcar COMPLETADO (plan QA en `BLOQUEOS.md`). **Autónomo (frontend), [NO CERRAR sin QA Jorge].** Origen: `AUDITORIA_FLUJO_DEPENDENCIAS_2026-05-25.md` §3.1.
 
 **Problema:** `src/pages/Mantenimiento.tsx:60` guarda `clienteId: ''` hardcodeado; el modal (`:190-193`) solo pide `clienteNombre` como texto libre, sin teléfono ni buscador. La orden que genera (`:96`) hereda el cliente vacío → orden huérfana (no aparece en histórico del cliente, no dispara descuento de chequeo previo, sin dirección/GPS, no emite notificación `orden_asignada`). Además usa `tecnicoId = personal.id` en vez de `uid` (`:225`) → no matchea la agenda del técnico (P-006).
 
@@ -31,7 +31,7 @@
 
 ## SPRINT-AGENDA-2-CALENDARIO-MUESTRA-CITAS — Que el calendario y la agenda muestren citas y mantenimientos
 
-**Prioridad:** ALTA. **Estado:** PENDIENTE. **Autónomo (frontend, solo lectura).** Origen: §3.1.
+**Prioridad:** ALTA. **Estado:** ✅ COMPLETADO 2026-05-25 pasada 51 hash `e4f92bf`. Calendario.tsx + AgendaDia.tsx ahora leen `citas_por_confirmar` + `mantenimiento` y los muestran como capa "tentativa" (ámbar + púrpura, borde punteado). Toggle "Mostrar tentativos" default ON. Click navega a la página de origen. Sort/filter client-side (P-015). Cazadores 24/24 PASS. **Autónomo, NO require QA Jorge formal.** Origen: §3.1.
 
 **Problema:** `src/pages/AgendaDia.tsx:81` y `src/pages/Calendario.tsx:24` solo leen `ordenes_servicio`. Las citas por confirmar (`citas_por_confirmar`) y los mantenimientos programados (`mantenimiento`) son invisibles en la vista temporal — viven en bandejas aparte. El técnico/oficina no ve lo solicitado hasta que alguien lo confirma a mano.
 
@@ -45,7 +45,7 @@
 
 ## SPRINT-AGENDA-3-HONRAR-TECNICO-ASIGNADO — No descartar el técnico que el cliente eligió en la cita web
 
-**Prioridad:** MEDIA. **Estado:** PENDIENTE. **Autónomo (frontend).** Origen: §3.1.
+**Prioridad:** MEDIA. **Estado:** ✅ COMPLETADO 2026-05-25 pasada 51 hash `f9697b9`. `useOrdenCreateForm` ahora honra `citaPreset.asignadoId`: si el técnico está en `personal` y activo, precarga `form.tecnicoId` (uid) + `tecnicoNombre`. Effect secundario maneja race condition cuando personal carga después del preset. La oficina puede cambiarlo, pero el flujo arranca con el técnico elegido por el cliente. Cazadores 24/24 PASS. **Autónomo, NO requiere QA Jorge formal.** Origen: §3.1.
 
 **Problema:** el calendario público (`/cita/:calendarId`, `CitaPublica.tsx:252-253`) guarda `asignadoId`/`asignadoNombre` ("Agendando con María"), pero al confirmar la cita `useOrdenCreateForm` ignora ese campo → la orden no pre-asigna ese técnico. Promesa rota.
 
@@ -59,7 +59,7 @@
 
 ## SPRINT-AGENDA-4-UNIFICAR-FORMS-PUBLICOS — Un solo esquema para los dos formularios públicos de cita
 
-**Prioridad:** MEDIA. **Estado:** PENDIENTE. **Autónomo (frontend público, con cuidado).** Origen: §3.1.
+**Prioridad:** MEDIA. **Estado:** ✅ COMPLETADO 2026-05-25 pasada 51 hash `fba51a4`. `CitaPublica.tsx::handleSubmit` ahora persiste `equipoTipo`, `equipoMarca`, `telefonoNormalizado` (validado 10 dígitos RD) si vienen — alineado con el shape que escribe `FormularioAgendarPublico` (/agendar). El anti-duplicado por teléfono normalizado de `formularioAgendar.service.ts:339` ahora aplica a ambos paths. Cazadores 24/24 PASS. **Autónomo (frontend público).** Origen: §3.1.
 
 **Problema:** dos formularios públicos escriben a `citas_por_confirmar` con esquemas distintos. `CitaPublica.tsx` (`/cita/:calendarId`, `:238-257`) NO escribe `equipoTipo` ni `telefonoNormalizado`; `FormularioAgendarPublico` (`/agendar`) sí. Resultado: citas degradadas que caen al fallback `servicio` (`Citas.tsx:100/661`) y el anti-duplicado por `telefonoNormalizado` (`formularioAgendar.service.ts:339`) no aplica a la vía calendario.
 
@@ -73,7 +73,7 @@
 
 ## SPRINT-AGENDA-5-PROXIMO-MANTENIMIENTO-AL-CERRAR — Alimentar mantenimientos desde el cierre de órdenes
 
-**Prioridad:** BAJA-MEDIA. **Estado:** PENDIENTE. **Autónomo (frontend).** Origen: §3.1.
+**Prioridad:** BAJA-MEDIA. **Estado:** ✅ COMPLETADO 2026-05-25 pasada 51 hash `8f6a72b`. `CierreServicioWizard` tras `toast.success('Servicio cerrado')` dispara un toast custom "¿Programar próximo mantenimiento de <cliente>?" con acciones "Sí, programar" (crea doc en `mantenimiento` con frecuencia trimestral default + fecha +3m + cliente real heredado + denormalizados + tecnicoId=uid) y "Ahora no". Solo si la orden tiene `clienteId` real + `equipoTipo` y NO es solo_chequeo. Best-effort: errores loguean + toast informativo, NO bloquean el cierre. Depende de SPRINT-AGENDA-1 para clienteId real. Cazadores 24/24 PASS. **Autónomo (frontend).** Origen: §3.1.
 
 **Problema:** no existe ningún path que cree un registro de mantenimiento al cerrar una orden; la lista de mantenimientos se llena 100% a mano. Cliente recurrente = oportunidad perdida.
 
@@ -87,7 +87,7 @@
 
 ## SPRINT-NUCLEO-CREAR-ORDEN-CENTRAL — Un solo punto de creación de orden que EXIGE cliente
 
-**Prioridad:** ALTA (cimiento). **Estado:** PENDIENTE. **Sensible (toca creación de órdenes), NO toca rules/pagos. [NO CERRAR sin QA Jorge].** Origen: §3.2 + §4. **Si el coordinator juzga el refactor demasiado grande/riesgoso para una pasada nocturna → ESCALAR a `BLOQUEOS.md` con plan en fases y CONTINUAR.**
+**Prioridad:** ALTA (cimiento). **Estado:** ⊘ ESCALADO A BLOQUEOS 2026-05-25 pasada 51 (sensibilidad cimiento + [NO CERRAR sin QA]). El coordinator decidió que el refactor de los 3 caminos de creación de órdenes es demasiado riesgoso para pasada nocturna sin QA disponible. AGENDA-1 ya tapó el path más peligroso (Mantenimiento). El path pendiente (`solicitudes.service.ts::convertirAOrden`) + plan de 3 fases + decisión A/B/C documentados en `BLOQUEOS.md`. **Sensible, NO toca rules/pagos. [NO CERRAR sin QA Jorge].** Origen: §3.2 + §4.
 
 **Problema:** hay 3 caminos que crean órdenes con integridad distinta — `useOrdenCreateForm` (bien), `Mantenimiento.tsx:94` (cliente vacío + omite `estadoSimple`), `solicitudes.service.ts:91` (depende del caller). `parseOrden` (`utils/index.ts:711`) enmascara el `clienteId` vacío leyéndolo como `''` sin warning.
 
@@ -101,7 +101,7 @@
 
 ## SPRINT-DINERO-1-QT-ATOMICO — Número de cotización atómico (anti-duplicados)
 
-**Prioridad:** ALTA. **Estado:** PENDIENTE. **Autónomo (chico, seguro).** Origen: §3.3 + `AUDITORIA_CONTABLE_2026-05-24.md`. (Es el follow-up `SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL` ya documentado.)
+**Prioridad:** ALTA. **Estado:** ✅ COMPLETADO 2026-05-25 pasada 51 hash `bec87b3`. `Cotizaciones.tsx:314` migrado de `generateNumeroCotizacion(cotizaciones.length)` (en memoria) a `siguienteNumeroCotizacion()` (runTransaction sobre `config/contadores.ultimaCotizacion`). El helper deprecated en `utils/index.ts:502` convertido en stub que LANZA al invocarse para prevenir reuso. Cierra el follow-up `SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL` catalogado por auditor_contable AGENTES-1. Cazadores 24/24 PASS. **Autónomo (chico, seguro).** Origen: §3.3 + `AUDITORIA_CONTABLE_2026-05-24.md`.
 
 **Problema:** `src/pages/Cotizaciones.tsx:314` usa `generateNumeroCotizacion(cotizaciones.length)` (`utils/index.ts:502`) — deriva el número de `length+1` en memoria, NO transaccional. Dos operarias creando cotización a la vez → QT duplicados. (OS/FAC/CG ya son atómicos.)
 
@@ -115,7 +115,7 @@
 
 ## SPRINT-DINERO-2-MONTOPAGADO-RECALC — Recalcular monto/estado de pago al cobrar en el conduce
 
-**Prioridad:** ALTA. **Estado:** PENDIENTE. **Toca dinero (sin rules), reviewer + auditor_contable. [NO CERRAR sin QA Jorge].** Origen: §3.3.
+**Prioridad:** ALTA. **Estado:** ⏸ código en producción hash `b4fc23c` (pasada 51 nocturno 2026-05-25), **awaiting QA Jorge** antes de marcar COMPLETADO (plan QA en `BLOQUEOS.md`). Dentro de la runTransaction existente, si hay `pagoNuevoFinal` se recalcula `montoPagado = suma(pagos)` + `estadoPago` ('completo'/'parcial'/'pendiente') reusando el criterio de RegistrarPagoModal. Reemplaza `arrayUnion` por lista completa (idempotencia preservada por guard `pago.id`). Cazadores 24/24 PASS. **Toca dinero (sin rules), [NO CERRAR sin QA Jorge].** Origen: §3.3.
 
 **Problema:** `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx:827` agrega el pago con `arrayUnion` pero NUNCA recalcula `montoPagado` ni `estadoPago` en la orden (a diferencia de `RegistrarPagoModal.tsx:214-217`). Síntoma: tras cobrar el saldo al emitir el conduce, la orden sigue mostrando "Pendiente" con monto viejo aunque la factura salió pagada.
 
@@ -129,7 +129,7 @@
 
 ## SPRINT-REPORTING-1-KPI-HELPERS — Centralizar definiciones de KPI dinero/nómina (que no diverjan)
 
-**Prioridad:** MEDIA. **Estado:** PENDIENTE. **Autónomo (refactor de solo cálculo). [NO CERRAR sin QA Jorge si cambia montos visibles].** Origen: §3.4.
+**Prioridad:** MEDIA. **Estado:** ⏸ código en producción hash `a4e64db` (pasada 51 nocturno 2026-05-25), **awaiting QA Jorge** porque cambia el monto visible de "Conduces emitidos del mes" en Dashboard (ahora excluye `anulada`). Nuevo `src/utils/kpis.ts` con 3 helpers (`ingresosFacturasPagadas`, `conducesEmitidosMonto`, `conducesEmitidosCount`). Dashboard migra. EstadoResultado ya excluía anuladas con su propio filtro — no se tocó. Bonos de nómina (proyeccionNomina) NO se tocó: depende de decisión de Jorge sobre base de comisión (en BLOQUEOS). Cazadores 24/24 PASS. **Autónomo (refactor de cálculo). [NO CERRAR sin QA Jorge si cambia montos visibles].** Origen: §3.4.
 
 **Problema:** el Dashboard duplica reglas de negocio: `proyeccionNomina` (`Dashboard.tsx:453-485`) reimplementa los bonos que viven en `Nomina.tsx`/`MetricasMensuales.tsx`; "Ingresos del mes" (`Dashboard.tsx:363-370`) no resta anulaciones/notas de crédito. Si una regla cambia en un lado, la otra miente.
 
