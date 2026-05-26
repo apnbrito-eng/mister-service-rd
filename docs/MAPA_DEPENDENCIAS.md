@@ -1,5 +1,7 @@
 # Mapa de dependencias entre módulos
 
+> **⚠️ Fuente única del mapa estructural:** `docs/mapa/MAPA_MENTAL.yaml` (mantenido por el agente `cartografo`, regenerable con `npm run mapa`). Este doc dejó de ser la fuente de "qué módulo depende de cuál" — ahora es **lector** del YAML y conserva las **notas humanas sobre patrones de consumo cross-archivo** (quién importa qué helper, qué tabla hace qué query, etc.) que el YAML no captura. Si encontrás contradicción entre este doc y el YAML, **gana el YAML** y se reporta al `cartografo`.
+>
 > **Propósito:** prevenir que una modificación rompa silenciosamente otro módulo. Antes de tocar un campo, función o componente compartido, identificar quién lo consume.
 >
 > **Cuándo consultar este doc:**

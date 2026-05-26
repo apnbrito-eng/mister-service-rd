@@ -1,5 +1,7 @@
 # Mapa de riesgos por módulo
 
+> **⚠️ Convivencia con el mapa vivo:** la lista de módulos que existen vive en `docs/mapa/MAPA_MENTAL.yaml` (mantenido por el agente `cartografo`). Este doc agrega, encima de cada módulo, su **capa de riesgo conocido**: qué cazadores P-XXX aplican, qué gotchas vivos hay, qué decisiones de Jorge no se rompen, checklist "antes de tocar". Mantenido por el agente `memoria` (modo MANTENER-MAPA). Si aparece un módulo en este doc que NO está en el YAML (o viceversa), se reporta al `cartografo` para sincronizar.
+>
 > Índice de zonas de riesgo conocidas — qué cuidar antes de tocar cada módulo.
 >
 > **Sub-regla obligatoria (CLAUDE.md):** todo agente (builder, coordinator,

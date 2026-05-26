@@ -16,6 +16,7 @@
     "audit:notis-legacy": "tsx scripts/invariantes/check-notis-legacy-data-shape.ts",
     "audit:schema-drift": "tsx scripts/auditoria/schema-drift.ts",
     "metricas": "tsx scripts/metricas-mejora-continua.ts",
+    "mapa": "node scripts/generar_mapa.js && node scripts/generar_svg.js",
     "prepare": "husky"
   },
   "dependencies": {
@@ -26,6 +27,7 @@
     "date-fns": "^2.30.0",
     "firebase": "^10.7.0",
     "firebase-admin": "^12.7.0",
+    "js-yaml": "^4.1.1",
     "leaflet": "^1.9.4",
     "leaflet.heat": "^0.2.0",
     "leaflet.markercluster": "^1.5.3",

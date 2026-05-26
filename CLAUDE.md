@@ -204,9 +204,29 @@ Complementaria al archivist PRE-CHANGE (histórico de bugs), no lo reemplaza. PR
 
 **Convivencia:** `memoria` ve el AHORA (qué falta, qué se hizo); `archivist` ve el TIEMPO (incidentes, postmortems, métricas). No se solapan ni se duplican: la memoria APUNTA a la cola/diarios, no los copia.
 
+## Mapa mental vivo (agente `cartografo` + `docs/mapa/MAPA_MENTAL.yaml`)
+
+> **Objetivo:** que Jorge (no-técnico) y los demás agentes tengan **un mapa mental único y editable** del software (módulos, áreas, dependencias, colecciones, integraciones, criticidad), regenerable a SVG visual + HTML interactivo + prompt de contexto para los agentes. Es lo que rompe el bucle "tapo una falla y sale otra" — antes de tocar algo, todos consultan el mismo mapa.
+
+`docs/mapa/MAPA_MENTAL.yaml` es la **fuente única de verdad**, editable a mano por Jorge en español. El agente `cartografo` (`.claude/agents/cartografo.md`) la mantiene viva y regenera 4 salidas con `npm run mapa`:
+
+- `docs/mapa/mapa.svg` — imagen visual (mandable por WhatsApp).
+- `docs/mapa/mapa.mmd` — diagrama Mermaid (renderizable en mermaid.live o vía mermaid-cli).
+- `docs/mapa/explorador.html` — visor interactivo (abrir con doble clic, filtra por área).
+- `docs/mapa/PROMPT_SISTEMA.md` — contexto en lenguaje natural que los demás agentes leen al arrancar. Incluye matriz inversa "si tocás X, revisá Y".
+
+Cada regeneración guarda copia versionada en `docs/mapa/historico/MAPA_MENTAL.YYYY-MM-DD-HHMM.yaml` (no destructivo). Si las validaciones fallan (módulo apunta a otro inexistente, dependencia circular, integración no declarada, etc.), NO regenera y reporta — las salidas anteriores quedan intactas.
+
+**Sub-regla obligatoria — invocar `cartografo` al cerrar sprints estructurales.** El coordinator invoca al `cartografo` (modo ACTUALIZAR) al cerrar cualquier sprint que: (a) agregó/quitó un módulo, (b) cambió una dependencia (módulo A ahora depende de B), (c) agregó/quitó una colección Firestore, (d) agregó/cambió una integración externa, (e) cambió la criticidad de un módulo. El `cartografo` SOLO escribe dentro de `docs/mapa/` — nunca toca código de producción ni rules. Si detecta una colección declarada en el YAML que no existe en el grep de `src/`/`api/`, lo reporta al `coordinator` (y a `data_integrity` cuando exista) en vez de regenerar con datos inconsistentes.
+
+**Consolidación con docs previos del mapa:** los 4 docs estáticos del mapa quedaron como **lectores del YAML, no fuentes paralelas** — sus marcadores apuntan al YAML como fuente: `docs/MAPA_DEPENDENCIAS.md` (notas humanas de patrones de consumo cross-archivo), `docs/CAMPOS_CROSS_COLLECTION.md` (reglas estrictas de id por campo apuntador), `docs/sprints/MAPA_RIESGOS_MODULOS.md` (capa de riesgo sobre cada módulo, mantenido por `memoria`), `docs/sprints/AUDITORIA_FLUJO_DEPENDENCIAS_2026-05-25.md` (snapshot forense histórico, no se actualiza).
+
+**Convivencia con los otros mantenedores:** `cartografo` ve la ESTRUCTURA (qué módulos, cómo se conectan); `memoria` ve el AHORA (qué falta, qué se hizo); `archivist` ve el TIEMPO (incidentes, postmortems, métricas). Los tres complementan, no se solapan.
+
 ## Related docs in repo
 
 - `docs/sprints/MEMORIA_MAESTRA.md` — **memoria viva**: foto siempre-actual del estado (pendiente / en curso / hecho reciente / decisiones de Jorge / índice). Leer PRIMERO al abrir cualquier sesión; actualizar al cerrar. Mantenida por el agente `memoria`.
+- `docs/mapa/MAPA_MENTAL.yaml` — **mapa mental vivo** (fuente única de la estructura del software: áreas, módulos, dependencias, colecciones, integraciones, criticidad). Editable a mano por Jorge. Regenera 4 salidas con `npm run mapa`: `mapa.svg` (imagen), `mapa.mmd` (Mermaid), `explorador.html` (visor interactivo), `PROMPT_SISTEMA.md` (contexto para agentes). Mantenido por el agente `cartografo`.
 - `README.md` — setup and module list.
 - `CONTEXTO_PROYECTO.md` — deeper architecture reference (some sections predate recent refactors; treat as historical context, verify against current code).
 - `CONTEXTO_PAGINA_WEB.md` — public-website requirements and Firestore-permission matrix for public pages.
@@ -229,8 +249,9 @@ Este repo tiene un equipo de 5 agentes especializados que trabajan en conjunto:
 | `reviewer` | Code review independiente con ojos frescos. |
 | `devops` | Monitorea Vercel + GitHub, dispara Deploy Hook si el webhook se atora. |
 | `memoria` | Mantiene `docs/sprints/MEMORIA_MAESTRA.md` al día — el estado vivo de todo. El coordinator lo invoca al cerrar cada pasada. |
+| `cartografo` | Mantiene `docs/mapa/MAPA_MENTAL.yaml` y regenera el mapa visual + HTML + prompt de contexto. El coordinator lo invoca al cerrar sprints estructurales (módulo nuevo, dependencia nueva, colección nueva, integración nueva). Solo escribe dentro de `docs/mapa/`. |
 
-(El repo tiene además agentes de apoyo: `architect`, `tech_lead`, `qa`, `security`, `docs`, `archivist`, `regression_guardian`, `mejora_continua`, `user_advocate`.)
+(El repo tiene además agentes de apoyo: `architect`, `tech_lead`, `qa`, `security`, `docs`, `archivist`, `regression_guardian`, `mejora_continua`, `user_advocate`, `auditor_contable`, `guardian_logica`.)
 
 **Uso:** desde Claude Code, escribe `/equipo` para activar al coordinator. El coordinator delega al resto automáticamente.
 

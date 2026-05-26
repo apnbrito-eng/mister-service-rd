@@ -1,5 +1,7 @@
 # Campos cross-collection — reglas de los identificadores que conectan colecciones
 
+> **⚠️ Convivencia con el mapa vivo:** `docs/mapa/MAPA_MENTAL.yaml` (mantenido por el agente `cartografo`) declara QUÉ módulo escribe/lee cada campo apuntador. Este doc complementa con la **regla estricta** de cada campo (qué tipo de id guarda — `auth.uid` vs doc id, formato esperado, sprint origen). Es la capa de "comportamiento", no de "estructura". No duplica.
+>
 > **Propósito:** evitar el patrón de bugs P-006 (escribir doc id donde la rule espera auth.uid, o viceversa). Cada campo de un doc Firestore que apunta a otro doc tiene una regla estricta sobre qué tipo de id guarda. **Antes de escribir o leer cualquiera de estos campos, consultar esta tabla.**
 >
 > **Origen:** SPRINT-147 (2026-05-12) post-auditoría SPRINT-145.

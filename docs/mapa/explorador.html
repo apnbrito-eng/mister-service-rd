@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mapa Mental — Mister Service RD</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <style>
+    :root { --bg: #fafafa; --card: #fff; --text: #0f172a; --muted: #64748b; --border: #e2e8f0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 2rem; max-width: 1300px; margin: auto; background: var(--bg); color: var(--text); }
+    h1 { margin-bottom: 0; }
+    .fecha { color: var(--muted); font-size: 0.85em; margin-top: 0.25rem; }
+    .mermaid { background: var(--card); padding: 1.5rem; border-radius: 10px; border: 1px solid var(--border); margin: 1.5rem 0; }
+    h2 { margin-top: 2.5rem; }
+    .filtros { margin: 1rem 0; }
+    .filtros button { margin-right: 0.5rem; padding: 0.3rem 0.8rem; border: 1px solid var(--border); background: var(--card); border-radius: 6px; cursor: pointer; font-size: 0.85em; }
+    .filtros button.activo { background: #0f172a; color: #fff; }
+    .modulo { background: var(--card); border: 1px solid var(--border); padding: 1rem; margin: 0.5rem 0; border-radius: 8px; }
+    .modulo.alta { border-left: 4px solid #dc2626; }
+    .modulo.media { border-left: 4px solid #f59e0b; }
+    .modulo.baja { border-left: 4px solid #10b981; }
+    .modulo.hidden { display: none; }
+    .nombre { font-weight: 700; font-size: 1.05em; }
+    .nombre .area { font-weight: 400; color: var(--muted); font-size: 0.85em; }
+    .desc { color: #475569; margin: 0.4rem 0; font-size: 0.95em; }
+    .meta { font-size: 0.85em; color: #555; line-height: 1.7; }
+    .notas { margin-top: 0.5rem; color: var(--muted); }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--muted); font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <h1>Mapa Mental — Mister Service RD</h1>
+  <div class="fecha">Última actualización: 2026-05-26 · 29 módulos · 10 áreas</div>
+
+  <h2>Diagrama</h2>
+  <div class="mermaid">
+graph LR
+  %% Mapa generado automáticamente desde docs/mapa/MAPA_MENTAL.yaml
+  %% NO editar a mano. Editá el YAML y corré `npm run mapa`.
+
+  subgraph ordenes["ORDENES"]
+    ordenes_servicio["ordenes_servicio"]:::critico
+    avances["avances"]
+  end
+
+  subgraph agendamiento["AGENDAMIENTO"]
+    calendarios["calendarios"]
+    citas_por_confirmar["citas_por_confirmar"]:::critico
+    mantenimiento["mantenimiento"]
+  end
+
+  subgraph clientes["CLIENTES"]
+    clientes["clientes"]:::critico
+    garantias["garantias"]
+  end
+
+  subgraph dinero["DINERO"]
+    cotizaciones["cotizaciones"]:::critico
+    facturas["facturas"]:::critico
+    pagos["pagos"]:::critico
+    comisiones["comisiones"]:::critico
+    nomina["nomina"]
+    gastos["gastos"]
+  end
+
+  subgraph inventario["INVENTARIO"]
+    productos["productos"]
+    standby_piezas["standby_piezas"]
+    equipos_taller["equipos_taller"]
+  end
+
+  subgraph personal_rrhh["PERSONAL_RRHH"]
+    personal["personal"]:::critico
+    ponches["ponches"]
+    cierres_dia["cierres_dia"]
+  end
+
+  subgraph whatsapp_crm["WHATSAPP_CRM"]
+    whatsapp_inbox["whatsapp_inbox"]:::critico
+    plantillas_whatsapp["plantillas_whatsapp"]:::critico
+    conversaciones_ia["conversaciones_ia"]
+  end
+
+  subgraph formularios_publicos["FORMULARIOS_PUBLICOS"]
+    formularios["formularios"]
+    solicitudes["solicitudes"]:::critico
+  end
+
+  subgraph reporting["REPORTING"]
+    reportes["reportes"]
+  end
+
+  subgraph sistema["SISTEMA"]
+    notificaciones["notificaciones"]
+    auditoria["auditoria"]
+    rate_limits["rate_limits"]
+    configuracion["configuracion"]:::critico
+  end
+
+  ordenes_servicio --> clientes
+  ordenes_servicio --> personal
+  ordenes_servicio --> calendarios
+  avances --> ordenes_servicio
+  calendarios --> personal
+  citas_por_confirmar --> clientes
+  citas_por_confirmar --> personal
+  citas_por_confirmar --> calendarios
+  mantenimiento --> clientes
+  mantenimiento --> personal
+  garantias --> ordenes_servicio
+  garantias --> facturas
+  garantias --> clientes
+  cotizaciones --> clientes
+  cotizaciones --> ordenes_servicio
+  cotizaciones --> productos
+  facturas --> cotizaciones
+  facturas --> ordenes_servicio
+  facturas --> clientes
+  pagos --> ordenes_servicio
+  comisiones --> ordenes_servicio
+  comisiones --> facturas
+  comisiones --> personal
+  nomina --> comisiones
+  nomina --> personal
+  standby_piezas --> ordenes_servicio
+  equipos_taller --> ordenes_servicio
+  ponches --> personal
+  cierres_dia --> personal
+  cierres_dia --> ponches
+  whatsapp_inbox --> clientes
+  whatsapp_inbox --> personal
+  whatsapp_inbox --> plantillas_whatsapp
+  conversaciones_ia --> whatsapp_inbox
+  solicitudes --> formularios
+  solicitudes --> clientes
+  reportes --> ordenes_servicio
+  reportes --> facturas
+  reportes --> pagos
+  reportes --> comisiones
+  reportes --> personal
+  reportes --> productos
+  reportes --> gastos
+  notificaciones --> personal
+
+  classDef critico stroke:#dc2626,stroke-width:3px
+
+  </div>
+
+  <h2>Módulos</h2>
+  <div class="filtros">
+    <button data-filtro="todos" class="activo">Todos</button>
+    <button data-filtro="ordenes">ordenes</button><button data-filtro="agendamiento">agendamiento</button><button data-filtro="clientes">clientes</button><button data-filtro="dinero">dinero</button><button data-filtro="inventario">inventario</button><button data-filtro="personal_rrhh">personal_rrhh</button><button data-filtro="whatsapp_crm">whatsapp_crm</button><button data-filtro="formularios_publicos">formularios_publicos</button><button data-filtro="reporting">reporting</button><button data-filtro="sistema">sistema</button>
+  </div>
+  <div id="lista">
+      <div class="modulo alta" data-area="ordenes">
+        <div class="nombre">ordenes_servicio <span class="area">[ordenes]</span></div>
+        <div class="desc">Orden de servicio: crea, asigna, transiciona fases (nuevo_lead → cerrado), cierra con wizard. Spine del sistema.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> clientes, personal, calendarios</div>
+          <div><strong>Expone a:</strong> cotizaciones, facturas, pagos, comisiones, garantias, citas_por_confirmar, mantenimiento, avances, standby_piezas, equipos_taller</div>
+          <div><strong>Colecciones:</strong> ordenes_servicio</div>
+          
+          <div class="notas"><em>parseOrden() en utils/index.ts es la lectura común. Hoy 3 caminos de creación (useOrdenCreateForm, Mantenimiento, solicitudes); sprint NUCLEO-CREAR-ORDEN-CENTRAL unifica.</em></div>
+        </div>
+      </div>
+      <div class="modulo media" data-area="ordenes">
+        <div class="nombre">avances <span class="area">[ordenes]</span></div>
+        <div class="desc">Registro de avances/piezas usadas durante la reparación</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> ordenes_servicio</div>
+          
+          <div><strong>Colecciones:</strong> avances, movimientos_piezas</div>
+          
+          
+        </div>
+      </div>
+      <div class="modulo media" data-area="agendamiento">
+        <div class="nombre">calendarios <span class="area">[agendamiento]</span></div>
+        <div class="desc">Calendarios públicos por técnico (slots configurables, URL pública /cita/:calendarId)</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> personal</div>
+          <div><strong>Expone a:</strong> citas_por_confirmar</div>
+          <div><strong>Colecciones:</strong> calendarios</div>
+          
+          
+        </div>
+      </div>
+      <div class="modulo alta" data-area="agendamiento">
+        <div class="nombre">citas_por_confirmar <span class="area">[agendamiento]</span></div>
+        <div class="desc">Citas solicitadas (web pública o admin) pendientes de confirmar y volverse orden</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> clientes, personal, calendarios</div>
+          <div><strong>Expone a:</strong> ordenes_servicio</div>
+          <div><strong>Colecciones:</strong> citas_por_confirmar</div>
+          
+          <div class="notas"><em>Tras AGENDA-2 (e4f92bf) visibles en calendario/agenda con estilo tentativo. Tras AGENDA-3 (f9697b9) se honra el asignadoId al confirmar.</em></div>
+        </div>
+      </div>
+      <div class="modulo media" data-area="agendamiento">
+        <div class="nombre">mantenimiento <span class="area">[agendamiento]</span></div>
+        <div class="desc">Mantenimientos preventivos programados para clientes recurrentes</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> clientes, personal</div>
+          <div><strong>Expone a:</strong> ordenes_servicio</div>
+          <div><strong>Colecciones:</strong> mantenimiento</div>
+          
+          <div class="notas"><em>Tras AGENDA-1 (132d9b5) atado a cliente real (typeahead + telefono normalizado, tecnicoId=uid). Tras AGENDA-5 (8f6a72b) se ofrece programar al cerrar orden.</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="clientes">
+        <div class="nombre">clientes <span class="area">[clientes]</span></div>
+        <div class="desc">CRM del cliente final. Teléfono normalizado (RD: 10 dígitos sin código país).</div>
+        <div class="meta">
+          
+          <div><strong>Expone a:</strong> ordenes_servicio, citas_por_confirmar, mantenimiento, cotizaciones, facturas, garantias, whatsapp_inbox, solicitudes</div>
+          <div><strong>Colecciones:</strong> clientes</div>
+          
+          <div class="notas"><em>Helpers canónicos: buscarClientePorTelefono, buscarOCrearCliente. Anti-duplicado por telefonoNormalizado.</em></div>
+        </div>
+      </div>
+      <div class="modulo media" data-area="clientes">
+        <div class="nombre">garantias <span class="area">[clientes]</span></div>
+        <div class="desc">Garantías de servicio. Reapertura aplica descuento 10% sobre piezas al técnico original.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> ordenes_servicio, facturas, clientes</div>
+          <div><strong>Expone a:</strong> comisiones</div>
+          <div><strong>Colecciones:</strong> facturas</div>
+          
+          <div class="notas"><em>Fase A (59c5fb0) awaiting QA Jorge. Cazador P-024 protege regla nueva (no reintroducir anulación 100%).</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="dinero">
+        <div class="nombre">cotizaciones <span class="area">[dinero]</span></div>
+        <div class="desc">Cotizaciones (QT-####) previas a la aprobación; al aprobar pueden generar factura.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> clientes, ordenes_servicio, productos</div>
+          <div><strong>Expone a:</strong> facturas</div>
+          <div><strong>Colecciones:</strong> cotizaciones, precios_servicios</div>
+          
+          <div class="notas"><em>Tras DINERO-1 (bec87b3) el número QT es atómico via contadores.service.ts.</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="dinero">
+        <div class="nombre">facturas <span class="area">[dinero]</span></div>
+        <div class="desc">Facturas y conduces (FAC-####, CG-####). Emisión bloqueada si hay pago sin verificar.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> cotizaciones, ordenes_servicio, clientes</div>
+          <div><strong>Expone a:</strong> pagos, comisiones, garantias</div>
+          <div><strong>Colecciones:</strong> facturas</div>
+          
+          <div class="notas"><em>ProcesarFacturacionModal: gate del conduce vs pago verificado (cazador P-023). Tras DINERO-2 (b4fc23c) recalcula montoPagado/estadoPago al cobrar.</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="dinero">
+        <div class="nombre">pagos <span class="area">[dinero]</span></div>
+        <div class="desc">Pagos del cliente. Hoy viven en array orden.pagos; subcolección /pagos espejo post B-2.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> ordenes_servicio</div>
+          <div><strong>Expone a:</strong> facturas, comisiones</div>
+          <div><strong>Colecciones:</strong> ordenes_servicio</div>
+          
+          <div class="notas"><em>B-2 (d4d6498) migró 16 órdenes a subcolección espejo. B-3 (cut-over + endurecer rules) espera QA Jorge. Helper: obtenerPagosDeOrden(orden).</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="dinero">
+        <div class="nombre">comisiones <span class="area">[dinero]</span></div>
+        <div class="desc">Comisión del técnico por orden cerrada. Garantía aplica descuento 10% sobre piezas.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> ordenes_servicio, facturas, personal</div>
+          <div><strong>Expone a:</strong> nomina</div>
+          <div><strong>Colecciones:</strong> comisiones</div>
+          
+          <div class="notas"><em>Dos bases de cálculo divergentes (~18% diferencia) pendientes decisión Jorge. P-021 obliga denormalización a factura.</em></div>
+        </div>
+      </div>
+      <div class="modulo media" data-area="dinero">
+        <div class="nombre">nomina <span class="area">[dinero]</span></div>
+        <div class="desc">Liquidación mensual de nómina con bonos por tier (operaria, secretaria) y descuentos de préstamos.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> comisiones, personal</div>
+          
+          <div><strong>Colecciones:</strong> liquidaciones_nomina</div>
+          
+          <div class="notas"><em>Reglas de bonos duplicadas hoy entre Nomina.tsx y Dashboard.tsx (REPORTING-1 las centralizó en utils/kpis.ts).</em></div>
+        </div>
+      </div>
+      <div class="modulo baja" data-area="dinero">
+        <div class="nombre">gastos <span class="area">[dinero]</span></div>
+        <div class="desc">Gastos operativos del taller (no piezas).</div>
+        <div class="meta">
+          
+          <div><strong>Expone a:</strong> reportes</div>
+          <div><strong>Colecciones:</strong> gastos</div>
+          
+          
+        </div>
+      </div>
+      <div class="modulo media" data-area="inventario">
+        <div class="nombre">productos <span class="area">[inventario]</span></div>
+        <div class="desc">Catálogo de productos/piezas con stock y costo. Dos colecciones (productos + piezas_inventario) — deuda histórica a consolidar.</div>
+        <div class="meta">
+          
+          <div><strong>Expone a:</strong> cotizaciones</div>
+          <div><strong>Colecciones:</strong> productos, piezas_inventario, movimientos_inventario</div>
+          
+          <div class="notas"><em>Solo la conversión cotización→factura descuenta stock. PiezaFormModal del cierre NO descuenta — decisión Jorge pendiente.</em></div>
+        </div>
+      </div>
+      <div class="modulo media" data-area="inventario">
+        <div class="nombre">standby_piezas <span class="area">[inventario]</span></div>
+        <div class="desc">Piezas en espera de llegada para una orden</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> ordenes_servicio</div>
+          
+          <div><strong>Colecciones:</strong> standby_piezas</div>
+          
+          <div class="notas"><em>No reconcilia con inventario al llegar — decisión Jorge pendiente.</em></div>
+        </div>
+      </div>
+      <div class="modulo baja" data-area="inventario">
+        <div class="nombre">equipos_taller <span class="area">[inventario]</span></div>
+        <div class="desc">Equipos físicamente en el taller (en reparación o en espera)</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> ordenes_servicio</div>
+          
+          <div><strong>Colecciones:</strong> equipos_taller</div>
+          
+          
+        </div>
+      </div>
+      <div class="modulo alta" data-area="personal_rrhh">
+        <div class="nombre">personal <span class="area">[personal_rrhh]</span></div>
+        <div class="desc">Empleados del taller: técnicos, secretarias, coordinadoras, operarias, administradores</div>
+        <div class="meta">
+          
+          <div><strong>Expone a:</strong> ordenes_servicio, comisiones, nomina, calendarios, mantenimiento, ponches, cierres_dia, whatsapp_inbox</div>
+          <div><strong>Colecciones:</strong> personal, usuarios</div>
+          <div><strong>Integraciones:</strong> firebase_auth</div>
+          <div class="notas"><em>Alta crea AMBOS docs (personal/{autoId} + usuarios/{uid}) — invariante P-004. Los dropdowns guardan uid, no doc id — invariante P-006.</em></div>
+        </div>
+      </div>
+      <div class="modulo baja" data-area="personal_rrhh">
+        <div class="nombre">ponches <span class="area">[personal_rrhh]</span></div>
+        <div class="desc">Registro de entrada/salida del personal (control de asistencia)</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> personal</div>
+          <div><strong>Expone a:</strong> nomina, cierres_dia</div>
+          <div><strong>Colecciones:</strong> ponches</div>
+          
+          
+        </div>
+      </div>
+      <div class="modulo baja" data-area="personal_rrhh">
+        <div class="nombre">cierres_dia <span class="area">[personal_rrhh]</span></div>
+        <div class="desc">Cierre diario operativo del taller</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> personal, ponches</div>
+          <div><strong>Expone a:</strong> reportes</div>
+          <div><strong>Colecciones:</strong> cierres_dia</div>
+          
+          
+        </div>
+      </div>
+      <div class="modulo alta" data-area="whatsapp_crm">
+        <div class="nombre">whatsapp_inbox <span class="area">[whatsapp_crm]</span></div>
+        <div class="desc">Inbox de conversaciones de WhatsApp con clientes. Webhook entrante + send saliente + outbox idempotente.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> clientes, personal, plantillas_whatsapp</div>
+          <div><strong>Expone a:</strong> ordenes_servicio</div>
+          <div><strong>Colecciones:</strong> whatsapp_conversaciones, whatsapp_mensajes_inbox, whatsapp_mensajes_outbox, whatsapp_config, whatsapp_errores_meta</div>
+          <div><strong>Integraciones:</strong> meta_whatsapp</div>
+          <div class="notas"><em>Ventana 24h, idempotency por tempId (P-017), HMAC SHA-256 en webhook (P-016). Tras WA-FIX-PLANTILLAS (0ab73c5) catálogo alineado con Meta.</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="whatsapp_crm">
+        <div class="nombre">plantillas_whatsapp <span class="area">[whatsapp_crm]</span></div>
+        <div class="desc">Catálogo de plantillas HSM aprobadas en Meta (4 con imagen branded). Vive en código, no en Firestore.</div>
+        <div class="meta">
+          
+          <div><strong>Expone a:</strong> whatsapp_inbox</div>
+          
+          <div><strong>Integraciones:</strong> meta_whatsapp</div>
+          <div class="notas"><em>src/config/plantillasWhatsApp.ts. Imágenes en public/plantillas/. Spec autoritativa en docs/sprints/PLANTILLAS_META_SPEC_2026-05-25.md.</em></div>
+        </div>
+      </div>
+      <div class="modulo media" data-area="whatsapp_crm">
+        <div class="nombre">conversaciones_ia <span class="area">[whatsapp_crm]</span></div>
+        <div class="desc">Conversaciones del agente IA con clientes (opt-in por conversación)</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> whatsapp_inbox</div>
+          
+          <div><strong>Colecciones:</strong> conversaciones_ia</div>
+          <div><strong>Integraciones:</strong> anthropic_api</div>
+          
+        </div>
+      </div>
+      <div class="modulo media" data-area="formularios_publicos">
+        <div class="nombre">formularios <span class="area">[formularios_publicos]</span></div>
+        <div class="desc">Definiciones de formularios dinámicos (admin construye, público los llena en /f/:slug)</div>
+        <div class="meta">
+          
+          <div><strong>Expone a:</strong> solicitudes</div>
+          <div><strong>Colecciones:</strong> formularios</div>
+          
+          
+        </div>
+      </div>
+      <div class="modulo alta" data-area="formularios_publicos">
+        <div class="nombre">solicitudes <span class="area">[formularios_publicos]</span></div>
+        <div class="desc">Submissions de formularios públicos. Generan lead/cliente/orden.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> formularios, clientes</div>
+          <div><strong>Expone a:</strong> ordenes_servicio</div>
+          <div><strong>Colecciones:</strong> solicitudes_servicio</div>
+          <div><strong>Integraciones:</strong> firebase_storage</div>
+          <div class="notas"><em>Tras FIX-LEADS (01df699) subidas (foto/firma/PDF) van a Storage solicitudes-publico/** con whitelist contentType y size &lt;10MB.</em></div>
+        </div>
+      </div>
+      <div class="modulo media" data-area="reporting">
+        <div class="nombre">reportes <span class="area">[reporting]</span></div>
+        <div class="desc">Dashboards y métricas: ingresos, conduces emitidos, rendimiento técnicos, proyección de nómina.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> ordenes_servicio, facturas, pagos, comisiones, personal, productos, gastos</div>
+          
+          <div><strong>Colecciones:</strong> recordatorios_diarios</div>
+          
+          <div class="notas"><em>Tras REPORTING-1 (a4e64db) los KPIs viven en src/utils/kpis.ts (helpers compartidos). Resta anulaciones de la base de ingresos.</em></div>
+        </div>
+      </div>
+      <div class="modulo media" data-area="sistema">
+        <div class="nombre">notificaciones <span class="area">[sistema]</span></div>
+        <div class="desc">Notificaciones internas a empleados (orden asignada, pieza llegó, etc.)</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> personal</div>
+          
+          <div><strong>Colecciones:</strong> notificaciones</div>
+          
+          <div class="notas"><em>Rule gatea por userId == auth.uid. Cazador P-007.</em></div>
+        </div>
+      </div>
+      <div class="modulo media" data-area="sistema">
+        <div class="nombre">auditoria <span class="area">[sistema]</span></div>
+        <div class="desc">Audit log de acciones administrativas sensibles (WhatsApp send, alta de usuarios, etc.)</div>
+        <div class="meta">
+          
+          
+          <div><strong>Colecciones:</strong> auditoria_admin, app_check_audit, whatsapp_errores_meta_dedupe</div>
+          
+          
+        </div>
+      </div>
+      <div class="modulo baja" data-area="sistema">
+        <div class="nombre">rate_limits <span class="area">[sistema]</span></div>
+        <div class="desc">Contadores diarios por usuario para limitar abuso (WhatsApp send, AI chat, etc.)</div>
+        <div class="meta">
+          
+          
+          <div><strong>Colecciones:</strong> rate_limits</div>
+          
+          
+        </div>
+      </div>
+      <div class="modulo alta" data-area="sistema">
+        <div class="nombre">configuracion <span class="area">[sistema]</span></div>
+        <div class="desc">Documentos de configuración global (GPS, WhatsApp envío, rate limits, contadores)</div>
+        <div class="meta">
+          
+          <div><strong>Expone a:</strong> whatsapp_inbox, cotizaciones, facturas</div>
+          <div><strong>Colecciones:</strong> config</div>
+          
+          <div class="notas"><em>Contadores OS/QT/CG/FAC viven acá. Cazador P-022.</em></div>
+        </div>
+      </div></div>
+
+  <footer>
+    Generado desde <code>docs/mapa/MAPA_MENTAL.yaml</code>. NO editar este HTML a mano — editá el YAML y corré <code>npm run mapa</code>.
+  </footer>
+
+  <script>
+    mermaid.initialize({ startOnLoad: true });
+    document.querySelectorAll('.filtros button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filtros button').forEach((b) => b.classList.remove('activo'));
+        btn.classList.add('activo');
+        const f = btn.dataset.filtro;
+        document.querySelectorAll('.modulo').forEach((m) => {
+          m.classList.toggle('hidden', f !== 'todos' && m.dataset.area !== f);
+        });
+      });
+    });
+  </script>
+</body>
+</html>

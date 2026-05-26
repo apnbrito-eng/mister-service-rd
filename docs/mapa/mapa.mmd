@@ -1,0 +1,109 @@
+graph LR
+  %% Mapa generado automáticamente desde docs/mapa/MAPA_MENTAL.yaml
+  %% NO editar a mano. Editá el YAML y corré `npm run mapa`.
+
+  subgraph ordenes["ORDENES"]
+    ordenes_servicio["ordenes_servicio"]:::critico
+    avances["avances"]
+  end
+
+  subgraph agendamiento["AGENDAMIENTO"]
+    calendarios["calendarios"]
+    citas_por_confirmar["citas_por_confirmar"]:::critico
+    mantenimiento["mantenimiento"]
+  end
+
+  subgraph clientes["CLIENTES"]
+    clientes["clientes"]:::critico
+    garantias["garantias"]
+  end
+
+  subgraph dinero["DINERO"]
+    cotizaciones["cotizaciones"]:::critico
+    facturas["facturas"]:::critico
+    pagos["pagos"]:::critico
+    comisiones["comisiones"]:::critico
+    nomina["nomina"]
+    gastos["gastos"]
+  end
+
+  subgraph inventario["INVENTARIO"]
+    productos["productos"]
+    standby_piezas["standby_piezas"]
+    equipos_taller["equipos_taller"]
+  end
+
+  subgraph personal_rrhh["PERSONAL_RRHH"]
+    personal["personal"]:::critico
+    ponches["ponches"]
+    cierres_dia["cierres_dia"]
+  end
+
+  subgraph whatsapp_crm["WHATSAPP_CRM"]
+    whatsapp_inbox["whatsapp_inbox"]:::critico
+    plantillas_whatsapp["plantillas_whatsapp"]:::critico
+    conversaciones_ia["conversaciones_ia"]
+  end
+
+  subgraph formularios_publicos["FORMULARIOS_PUBLICOS"]
+    formularios["formularios"]
+    solicitudes["solicitudes"]:::critico
+  end
+
+  subgraph reporting["REPORTING"]
+    reportes["reportes"]
+  end
+
+  subgraph sistema["SISTEMA"]
+    notificaciones["notificaciones"]
+    auditoria["auditoria"]
+    rate_limits["rate_limits"]
+    configuracion["configuracion"]:::critico
+  end
+
+  ordenes_servicio --> clientes
+  ordenes_servicio --> personal
+  ordenes_servicio --> calendarios
+  avances --> ordenes_servicio
+  calendarios --> personal
+  citas_por_confirmar --> clientes
+  citas_por_confirmar --> personal
+  citas_por_confirmar --> calendarios
+  mantenimiento --> clientes
+  mantenimiento --> personal
+  garantias --> ordenes_servicio
+  garantias --> facturas
+  garantias --> clientes
+  cotizaciones --> clientes
+  cotizaciones --> ordenes_servicio
+  cotizaciones --> productos
+  facturas --> cotizaciones
+  facturas --> ordenes_servicio
+  facturas --> clientes
+  pagos --> ordenes_servicio
+  comisiones --> ordenes_servicio
+  comisiones --> facturas
+  comisiones --> personal
+  nomina --> comisiones
+  nomina --> personal
+  standby_piezas --> ordenes_servicio
+  equipos_taller --> ordenes_servicio
+  ponches --> personal
+  cierres_dia --> personal
+  cierres_dia --> ponches
+  whatsapp_inbox --> clientes
+  whatsapp_inbox --> personal
+  whatsapp_inbox --> plantillas_whatsapp
+  conversaciones_ia --> whatsapp_inbox
+  solicitudes --> formularios
+  solicitudes --> clientes
+  reportes --> ordenes_servicio
+  reportes --> facturas
+  reportes --> pagos
+  reportes --> comisiones
+  reportes --> personal
+  reportes --> productos
+  reportes --> gastos
+  notificaciones --> personal
+
+  classDef critico stroke:#dc2626,stroke-width:3px

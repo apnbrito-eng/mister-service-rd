@@ -1,5 +1,7 @@
 # 🧭 AUDITORÍA DE FLUJO Y DEPENDENCIAS — Mister Service RD
 
+> **📸 Snapshot histórico (no se actualiza).** Esta auditoría es una foto del 2026-05-25 que motivó el bloque FLUJO-DEPENDENCIAS de sprints. NO sigue siendo fuente — el mapa actual del sistema vive en `docs/mapa/MAPA_MENTAL.yaml` (regenerable con `npm run mapa`). Las próximas auditorías leerán el YAML actual y producirán su propio snapshot fechado. Esto queda como referencia forense del problema que se cortó.
+>
 > **2026-05-25 · Cowork.** Esta auditoría es DISTINTA a las anteriores. Las pasadas previas cazaban fallas sueltas (whack-a-mole). Esta mira el software **como un sistema completo**: qué módulo depende de cuál, qué debería estar conectado y no lo está, y en qué ORDEN hay que arreglarlo para que no quede un bucle de "tapo un hueco, sale otro".
 >
 > **Método:** 4 agentes en paralelo leyeron el código (solo lectura) por cluster: Agendamiento · Órdenes+Clientes · Dinero · Inventario/Personal/Dashboard. Esto es la síntesis.

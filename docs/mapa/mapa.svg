@@ -1,0 +1,215 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2190 590" font-family="-apple-system, system-ui, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <rect width="2190" height="590" fill="#fafafa"/>
+  <text x="1095" y="36" text-anchor="middle" font-size="20" font-weight="700" fill="#0f172a">Mister Service RD</text>
+  <text x="1095" y="58" text-anchor="middle" font-size="11" fill="#64748b">Mapa mental · última actualización: 2026-05-26 · 29 módulos</text>
+  <text x="150" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#312e81">ORDENES</text>
+  <text x="360" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#1e3a8a">AGENDAMIENTO</text>
+  <text x="570" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#78350f">CLIENTES</text>
+  <text x="780" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#064e3b">DINERO</text>
+  <text x="990" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#4c1d95">INVENTARIO</text>
+  <text x="1200" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#7c2d12">PERSONAL_RRHH</text>
+  <text x="1410" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#134e4a">WHATSAPP_CRM</text>
+  <text x="1620" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#831843">FORMULARIOS_PUBLICOS</text>
+  <text x="1830" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">REPORTING</text>
+  <text x="2040" y="82" text-anchor="middle" font-size="11" font-weight="700" fill="#1c1917">SISTEMA</text>
+  <line x1="150" y1="117" x2="570" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="150" y1="117" x2="1200" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="150" y1="117" x2="360" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="150" y1="187" x2="150" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="360" y1="117" x2="1200" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="360" y1="187" x2="570" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="360" y1="187" x2="1200" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="360" y1="187" x2="360" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="360" y1="257" x2="570" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="360" y1="257" x2="1200" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="570" y1="187" x2="150" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="570" y1="187" x2="780" y2="187" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="570" y1="187" x2="570" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="117" x2="570" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="117" x2="150" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="117" x2="990" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="187" x2="780" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="187" x2="150" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="187" x2="570" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="257" x2="150" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="327" x2="150" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="327" x2="780" y2="187" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="327" x2="1200" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="397" x2="780" y2="327" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="780" y1="397" x2="1200" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="990" y1="187" x2="150" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="990" y1="257" x2="150" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1200" y1="187" x2="1200" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1200" y1="257" x2="1200" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1200" y1="257" x2="1200" y2="187" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1410" y1="117" x2="570" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1410" y1="117" x2="1200" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1410" y1="117" x2="1410" y2="187" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1410" y1="257" x2="1410" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1620" y1="187" x2="1620" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1620" y1="187" x2="570" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1830" y1="117" x2="150" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1830" y1="117" x2="780" y2="187" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1830" y1="117" x2="780" y2="257" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1830" y1="117" x2="780" y2="327" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1830" y1="117" x2="1200" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1830" y1="117" x2="990" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="1830" y1="117" x2="780" y2="467" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <line x1="2040" y1="117" x2="1200" y2="117" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+  <g>
+    <rect x="60" y="90" width="180" height="54" rx="8" fill="#e0e7ff" stroke="#6366f1" stroke-width="2.5"/>
+    <text x="150" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#312e81">ordenes_servicio</text>
+    <text x="150" y="130" text-anchor="middle" font-size="9" fill="#312e81" opacity="0.7">ordenes_servicio</text>
+  </g>
+  <g>
+    <rect x="60" y="160" width="180" height="54" rx="8" fill="#e0e7ff" stroke="#6366f1" stroke-width="1.2"/>
+    <text x="150" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#312e81">avances</text>
+    <text x="150" y="200" text-anchor="middle" font-size="9" fill="#312e81" opacity="0.7">avances, movimientos_piezas</text>
+  </g>
+  <g>
+    <rect x="270" y="90" width="180" height="54" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/>
+    <text x="360" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">calendarios</text>
+    <text x="360" y="130" text-anchor="middle" font-size="9" fill="#1e3a8a" opacity="0.7">calendarios</text>
+  </g>
+  <g>
+    <rect x="270" y="160" width="180" height="54" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="2.5"/>
+    <text x="360" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">citas_por_confirmar</text>
+    <text x="360" y="200" text-anchor="middle" font-size="9" fill="#1e3a8a" opacity="0.7">citas_por_confirmar</text>
+  </g>
+  <g>
+    <rect x="270" y="230" width="180" height="54" rx="8" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.2"/>
+    <text x="360" y="252" text-anchor="middle" font-size="13" font-weight="700" fill="#1e3a8a">mantenimiento</text>
+    <text x="360" y="270" text-anchor="middle" font-size="9" fill="#1e3a8a" opacity="0.7">mantenimiento</text>
+  </g>
+  <g>
+    <rect x="480" y="90" width="180" height="54" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="2.5"/>
+    <text x="570" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#78350f">clientes</text>
+    <text x="570" y="130" text-anchor="middle" font-size="9" fill="#78350f" opacity="0.7">clientes</text>
+  </g>
+  <g>
+    <rect x="480" y="160" width="180" height="54" rx="8" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.2"/>
+    <text x="570" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#78350f">garantias</text>
+    <text x="570" y="200" text-anchor="middle" font-size="9" fill="#78350f" opacity="0.7">facturas</text>
+  </g>
+  <g>
+    <rect x="690" y="90" width="180" height="54" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="2.5"/>
+    <text x="780" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#064e3b">cotizaciones</text>
+    <text x="780" y="130" text-anchor="middle" font-size="9" fill="#064e3b" opacity="0.7">cotizaciones, precios_servicios</text>
+  </g>
+  <g>
+    <rect x="690" y="160" width="180" height="54" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="2.5"/>
+    <text x="780" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#064e3b">facturas</text>
+    <text x="780" y="200" text-anchor="middle" font-size="9" fill="#064e3b" opacity="0.7">facturas</text>
+  </g>
+  <g>
+    <rect x="690" y="230" width="180" height="54" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="2.5"/>
+    <text x="780" y="252" text-anchor="middle" font-size="13" font-weight="700" fill="#064e3b">pagos</text>
+    <text x="780" y="270" text-anchor="middle" font-size="9" fill="#064e3b" opacity="0.7">ordenes_servicio</text>
+  </g>
+  <g>
+    <rect x="690" y="300" width="180" height="54" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="2.5"/>
+    <text x="780" y="322" text-anchor="middle" font-size="13" font-weight="700" fill="#064e3b">comisiones</text>
+    <text x="780" y="340" text-anchor="middle" font-size="9" fill="#064e3b" opacity="0.7">comisiones</text>
+  </g>
+  <g>
+    <rect x="690" y="370" width="180" height="54" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="1.2"/>
+    <text x="780" y="392" text-anchor="middle" font-size="13" font-weight="700" fill="#064e3b">nomina</text>
+    <text x="780" y="410" text-anchor="middle" font-size="9" fill="#064e3b" opacity="0.7">liquidaciones_nomina</text>
+  </g>
+  <g>
+    <rect x="690" y="440" width="180" height="54" rx="8" fill="#d1fae5" stroke="#10b981" stroke-width="1.2"/>
+    <text x="780" y="462" text-anchor="middle" font-size="13" font-weight="700" fill="#064e3b">gastos</text>
+    <text x="780" y="480" text-anchor="middle" font-size="9" fill="#064e3b" opacity="0.7">gastos</text>
+  </g>
+  <g>
+    <rect x="900" y="90" width="180" height="54" rx="8" fill="#ede9fe" stroke="#a855f7" stroke-width="1.2"/>
+    <text x="990" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#4c1d95">productos</text>
+    <text x="990" y="130" text-anchor="middle" font-size="9" fill="#4c1d95" opacity="0.7">productos, piezas_inventario</text>
+  </g>
+  <g>
+    <rect x="900" y="160" width="180" height="54" rx="8" fill="#ede9fe" stroke="#a855f7" stroke-width="1.2"/>
+    <text x="990" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#4c1d95">standby_piezas</text>
+    <text x="990" y="200" text-anchor="middle" font-size="9" fill="#4c1d95" opacity="0.7">standby_piezas</text>
+  </g>
+  <g>
+    <rect x="900" y="230" width="180" height="54" rx="8" fill="#ede9fe" stroke="#a855f7" stroke-width="1.2"/>
+    <text x="990" y="252" text-anchor="middle" font-size="13" font-weight="700" fill="#4c1d95">equipos_taller</text>
+    <text x="990" y="270" text-anchor="middle" font-size="9" fill="#4c1d95" opacity="0.7">equipos_taller</text>
+  </g>
+  <g>
+    <rect x="1110" y="90" width="180" height="54" rx="8" fill="#ffedd5" stroke="#f97316" stroke-width="2.5"/>
+    <text x="1200" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#7c2d12">personal</text>
+    <text x="1200" y="130" text-anchor="middle" font-size="9" fill="#7c2d12" opacity="0.7">personal, usuarios</text>
+  </g>
+  <g>
+    <rect x="1110" y="160" width="180" height="54" rx="8" fill="#ffedd5" stroke="#f97316" stroke-width="1.2"/>
+    <text x="1200" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#7c2d12">ponches</text>
+    <text x="1200" y="200" text-anchor="middle" font-size="9" fill="#7c2d12" opacity="0.7">ponches</text>
+  </g>
+  <g>
+    <rect x="1110" y="230" width="180" height="54" rx="8" fill="#ffedd5" stroke="#f97316" stroke-width="1.2"/>
+    <text x="1200" y="252" text-anchor="middle" font-size="13" font-weight="700" fill="#7c2d12">cierres_dia</text>
+    <text x="1200" y="270" text-anchor="middle" font-size="9" fill="#7c2d12" opacity="0.7">cierres_dia</text>
+  </g>
+  <g>
+    <rect x="1320" y="90" width="180" height="54" rx="8" fill="#ccfbf1" stroke="#14b8a6" stroke-width="2.5"/>
+    <text x="1410" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#134e4a">whatsapp_inbox</text>
+    <text x="1410" y="130" text-anchor="middle" font-size="9" fill="#134e4a" opacity="0.7">whatsapp_conversaciones, whatsapp_mensajes_inbox</text>
+  </g>
+  <g>
+    <rect x="1320" y="160" width="180" height="54" rx="8" fill="#ccfbf1" stroke="#14b8a6" stroke-width="2.5"/>
+    <text x="1410" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#134e4a">plantillas_whatsapp</text>
+  </g>
+  <g>
+    <rect x="1320" y="230" width="180" height="54" rx="8" fill="#ccfbf1" stroke="#14b8a6" stroke-width="1.2"/>
+    <text x="1410" y="252" text-anchor="middle" font-size="13" font-weight="700" fill="#134e4a">conversaciones_ia</text>
+    <text x="1410" y="270" text-anchor="middle" font-size="9" fill="#134e4a" opacity="0.7">conversaciones_ia</text>
+  </g>
+  <g>
+    <rect x="1530" y="90" width="180" height="54" rx="8" fill="#fce7f3" stroke="#ec4899" stroke-width="1.2"/>
+    <text x="1620" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#831843">formularios</text>
+    <text x="1620" y="130" text-anchor="middle" font-size="9" fill="#831843" opacity="0.7">formularios</text>
+  </g>
+  <g>
+    <rect x="1530" y="160" width="180" height="54" rx="8" fill="#fce7f3" stroke="#ec4899" stroke-width="2.5"/>
+    <text x="1620" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#831843">solicitudes</text>
+    <text x="1620" y="200" text-anchor="middle" font-size="9" fill="#831843" opacity="0.7">solicitudes_servicio</text>
+  </g>
+  <g>
+    <rect x="1740" y="90" width="180" height="54" rx="8" fill="#f1f5f9" stroke="#64748b" stroke-width="1.2"/>
+    <text x="1830" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#0f172a">reportes</text>
+    <text x="1830" y="130" text-anchor="middle" font-size="9" fill="#0f172a" opacity="0.7">recordatorios_diarios</text>
+  </g>
+  <g>
+    <rect x="1950" y="90" width="180" height="54" rx="8" fill="#f5f5f4" stroke="#78716c" stroke-width="1.2"/>
+    <text x="2040" y="112" text-anchor="middle" font-size="13" font-weight="700" fill="#1c1917">notificaciones</text>
+    <text x="2040" y="130" text-anchor="middle" font-size="9" fill="#1c1917" opacity="0.7">notificaciones</text>
+  </g>
+  <g>
+    <rect x="1950" y="160" width="180" height="54" rx="8" fill="#f5f5f4" stroke="#78716c" stroke-width="1.2"/>
+    <text x="2040" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#1c1917">auditoria</text>
+    <text x="2040" y="200" text-anchor="middle" font-size="9" fill="#1c1917" opacity="0.7">auditoria_admin, app_check_audit</text>
+  </g>
+  <g>
+    <rect x="1950" y="230" width="180" height="54" rx="8" fill="#f5f5f4" stroke="#78716c" stroke-width="1.2"/>
+    <text x="2040" y="252" text-anchor="middle" font-size="13" font-weight="700" fill="#1c1917">rate_limits</text>
+    <text x="2040" y="270" text-anchor="middle" font-size="9" fill="#1c1917" opacity="0.7">rate_limits</text>
+  </g>
+  <g>
+    <rect x="1950" y="300" width="180" height="54" rx="8" fill="#f5f5f4" stroke="#78716c" stroke-width="2.5"/>
+    <text x="2040" y="322" text-anchor="middle" font-size="13" font-weight="700" fill="#1c1917">configuracion</text>
+    <text x="2040" y="340" text-anchor="middle" font-size="9" fill="#1c1917" opacity="0.7">config</text>
+  </g>
+  <g transform="translate(60, 540)">
+    <text font-size="11" font-weight="600" fill="#475569">Leyenda:</text>
+    <line x1="0" y1="20" x2="38" y2="20" stroke="#cbd5e1" stroke-width="1.1" marker-end="url(#arrow)" stroke-dasharray="4,3"/>
+    <text x="46" y="24" font-size="11" fill="#475569">depende de</text>
+    <rect x="160" y="12" width="16" height="16" rx="3" fill="#fff" stroke="#dc2626" stroke-width="2.5"/>
+    <text x="182" y="24" font-size="11" fill="#475569">criticidad alta (borde grueso)</text>
+  </g>
+</svg>
