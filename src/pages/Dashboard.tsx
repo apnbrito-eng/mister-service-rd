@@ -22,6 +22,8 @@ import {
   parseOrden, getTecnicoColor,
   FASES_ORDENADAS, parsePiezaInventario
 } from '../utils';
+// SPRINT-REPORTING-1 (2026-05-25): helpers compartidos de KPI.
+import { ingresosFacturasPagadas, conducesEmitidosMonto, conducesEmitidosCount } from '../utils/kpis';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Badge from '../components/Badge';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
@@ -350,23 +352,34 @@ export default function Dashboard() {
   // verificar pago en el modal Emitir; filtrar por estado='emitida' daba 0.
   // Ahora cuenta TODAS las facturas creadas en el mes en curso (emitidas + pagadas).
   // El KPI "Ingresos del Mes" (abajo) sigue contando solo pagadas — semántica distinta.
+  //
+  // SPRINT-REPORTING-1 (2026-05-25): ambos KPIs ahora consumen helpers
+  // compartidos de `utils/kpis.ts` que excluyen explícitamente facturas
+  // `anulada` (defense in depth). Antes Dashboard.tsx sumaba `f.total`
+  // sin chequear el estado de anulación más allá del filtro de pagadas.
   const facturasEmitidasMes = useMemo(
-    () => facturas.filter(f => f.fechaEmision && f.fechaEmision >= inicioMes),
+    () => facturas.filter(f => f.fechaEmision && f.fechaEmision >= inicioMes && f.estado !== 'anulada'),
     [facturas, inicioMes]
   );
   const totalFacturasEmitidasMes = useMemo(
-    () => facturasEmitidasMes.reduce((s, f) => s + (f.total || 0), 0),
-    [facturasEmitidasMes]
+    () => conducesEmitidosMonto(facturas, inicioMes),
+    [facturas, inicioMes]
   );
+  // Útil para tarjetas que muestran conteo (no monto).
+  const cantFacturasEmitidasMes = useMemo(
+    () => conducesEmitidosCount(facturas, inicioMes),
+    [facturas, inicioMes]
+  );
+  void cantFacturasEmitidasMes; // disponible para refactor futuro UI
 
-  // KPI 4 - Ingresos mes
+  // KPI 4 - Ingresos mes — excluye anuladas vía helper compartido.
   const facturasPagadasMes = useMemo(
     () => facturas.filter(f => f.estado === 'pagada' && f.fechaPago && f.fechaPago >= inicioMes),
     [facturas, inicioMes]
   );
   const ingresosMes = useMemo(
-    () => facturasPagadasMes.reduce((s, f) => s + (f.total || 0), 0),
-    [facturasPagadasMes]
+    () => ingresosFacturasPagadas(facturas, inicioMes),
+    [facturas, inicioMes]
   );
 
   // Ordenes atrasadas (>24h SLA)
