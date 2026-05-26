@@ -1653,12 +1653,32 @@ export interface Gasto {
 
 export interface Mantenimiento {
   id: string;
+  /**
+   * SPRINT-AGENDA-1 (2026-05-25): mantenimientos nuevos exigen
+   * `clienteId` real (vía `buscarOCrearCliente` en el alta).
+   * Mantenimientos viejos (pre-sprint) pueden tener `''` — el botón
+   * "Generar Orden" los bloquea hasta que se editen.
+   */
   clienteId: string;
   clienteNombre: string;
+  /** SPRINT-AGENDA-1: denormalizados para que la orden generada herede. */
+  clienteTelefono?: string;
+  /** Teléfono normalizado RD (10 dígitos). SPRINT-AGENDA-1. */
+  telefonoNormalizado?: string;
+  clienteEmail?: string;
+  clienteDireccion?: string;
+  clienteLat?: number;
+  clienteLng?: number;
   equipoTipo: string;
   frecuencia: 'mensual' | 'trimestral' | 'semestral' | 'anual';
   frecuenciaMeses?: number;
   proximaFecha: Date;
+  /**
+   * SPRINT-AGENDA-1 (P-006): guarda `auth.uid` del técnico (NO
+   * `personal.id`). Mantenimientos pre-sprint pueden tener `personal.id`;
+   * el dropdown nuevo filtra por `personal.uid` y emite la notificación
+   * `orden_asignada` solo si hay uid resuelto.
+   */
   tecnicoId?: string;
   activo: boolean;
 }
