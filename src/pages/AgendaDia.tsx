@@ -43,6 +43,17 @@ export default function AgendaDia() {
   const [loading, setLoading] = useState(true);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
+  // SPRINT-AGENDA-2 (2026-05-25): citas por confirmar + mantenimientos
+  // del día (capa tentativa, solo lectura). Antes invisibles en la
+  // agenda — vivían en `/admin/citas` y `/admin/mantenimiento`.
+  const [citasTentativas, setCitasTentativas] = useState<Array<{
+    id: string; clienteNombre: string; equipoTipo?: string; servicio?: string;
+    telefono?: string; fechaSolicitada?: Date | null; horaSolicitada?: string;
+  }>>([]);
+  const [mantenimientosDelDia, setMantenimientosDelDia] = useState<Array<{
+    id: string; clienteNombre: string; equipoTipo?: string; tecnicoNombre?: string;
+    proximaFecha: Date | null; activo: boolean;
+  }>>([]);
   const [fechaStr, setFechaStr] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [filtroTecnico, setFiltroTecnico] = useState('');
   const [filtroOperaria, setFiltroOperaria] = useState('');
@@ -86,8 +97,36 @@ export default function AgendaDia() {
       setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
       checkLoaded();
     });
+    // SPRINT-AGENDA-2: capa tentativa. Sort/filter client-side (P-015).
+    const unsubCitas = onSnapshot(collection(db, 'citas_por_confirmar'), (snap) => {
+      setCitasTentativas(snap.docs.map(d => {
+        const raw = d.data();
+        return {
+          id: d.id,
+          clienteNombre: raw.clienteNombre || 'Sin nombre',
+          equipoTipo: raw.equipoTipo,
+          servicio: raw.servicio,
+          telefono: raw.telefono,
+          fechaSolicitada: raw.fechaSolicitada?.toDate?.() || null,
+          horaSolicitada: raw.horaSolicitada || '',
+        };
+      }));
+    });
+    const unsubMant = onSnapshot(collection(db, 'mantenimiento'), (snap) => {
+      setMantenimientosDelDia(snap.docs.map(d => {
+        const raw = d.data();
+        return {
+          id: d.id,
+          clienteNombre: raw.clienteNombre || 'Sin nombre',
+          equipoTipo: raw.equipoTipo,
+          tecnicoNombre: raw.tecnicoNombre,
+          proximaFecha: raw.proximaFecha?.toDate?.() || null,
+          activo: raw.activo !== false,
+        };
+      }));
+    });
     const unsubEmpresa = suscribirConfigEmpresa(cfg => setEmpresaConfig(cfg));
-    return () => { unsubOrd(); unsubPers(); unsubEmpresa(); };
+    return () => { unsubOrd(); unsubPers(); unsubCitas(); unsubMant(); unsubEmpresa(); };
   }, []);
 
   const abrirChequeo = (orden: OrdenServicio) => {
@@ -493,6 +532,19 @@ export default function AgendaDia() {
     [fechaSeleccionada],
   );
 
+  // SPRINT-AGENDA-2: tentativos del día (citas + mantenimientos). Sort
+  // client-side por hora; los sin hora van al final.
+  const citasTentativasDelDia = useMemo(() => {
+    return citasTentativas
+      .filter(c => c.fechaSolicitada && isSameDay(c.fechaSolicitada, fechaSeleccionada))
+      .sort((a, b) => (a.horaSolicitada || 'zz').localeCompare(b.horaSolicitada || 'zz'));
+  }, [citasTentativas, fechaSeleccionada]);
+  const mantenimientosDelDiaFiltered = useMemo(() => {
+    return mantenimientosDelDia
+      .filter(m => m.activo && m.proximaFecha && isSameDay(m.proximaFecha, fechaSeleccionada))
+      .filter(m => !filtroTecnico || m.tecnicoNombre === filtroTecnico);
+  }, [mantenimientosDelDia, fechaSeleccionada, filtroTecnico]);
+
   if (loading) return <LoadingSpinner fullPage text="Cargando agenda..." />;
 
   return (
@@ -684,6 +736,76 @@ export default function AgendaDia() {
           </div>
         </div>
       </Modal>
+
+      {/* SPRINT-AGENDA-2 (2026-05-25): panel "Tentativos del día" — citas
+          por confirmar + mantenimientos programados que caen en la fecha.
+          Antes invisibles desde la agenda. Solo lectura — los CTAs llevan
+          a las páginas correspondientes (`/admin/citas` y
+          `/admin/mantenimiento`) para la acción. Oculto en vista técnico. */}
+      {!esTecnico && (citasTentativasDelDia.length > 0 || mantenimientosDelDiaFiltered.length > 0) && (
+        <div className="bg-white rounded-2xl shadow-sm border border-amber-200 border-dashed">
+          <div className="px-4 py-3 border-b border-amber-100 bg-amber-50/50 rounded-t-2xl flex items-center justify-between flex-wrap gap-2">
+            <h3 className="text-sm font-semibold text-amber-900 inline-flex items-center gap-2">
+              <Clock size={14} /> Tentativos del día — por confirmar
+            </h3>
+            <span className="text-[11px] text-amber-700">No están confirmados en la agenda todavía</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {citasTentativasDelDia.length > 0 && (
+              <div className="p-3">
+                <p className="text-[11px] uppercase font-medium text-gray-500 mb-2">Citas por confirmar ({citasTentativasDelDia.length})</p>
+                <div className="space-y-1.5">
+                  {citasTentativasDelDia.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => navigate('/admin/citas')}
+                      className="w-full flex items-center gap-3 text-left bg-amber-50/30 hover:bg-amber-100/50 border border-amber-100 rounded-lg px-3 py-2 transition-colors"
+                    >
+                      <span className="inline-flex items-center justify-center min-w-[44px] h-8 rounded bg-amber-500 text-white text-xs font-semibold">
+                        {c.horaSolicitada || '—'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{c.clienteNombre}</p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {c.equipoTipo || c.servicio || 'Sin detalle'}{c.telefono ? ` · ${c.telefono}` : ''}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-amber-700 font-medium">Tap para confirmar →</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {mantenimientosDelDiaFiltered.length > 0 && (
+              <div className="p-3">
+                <p className="text-[11px] uppercase font-medium text-gray-500 mb-2">Mantenimientos programados ({mantenimientosDelDiaFiltered.length})</p>
+                <div className="space-y-1.5">
+                  {mantenimientosDelDiaFiltered.map(m => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => navigate('/admin/mantenimiento')}
+                      className="w-full flex items-center gap-3 text-left bg-purple-50/30 hover:bg-purple-100/50 border border-purple-100 rounded-lg px-3 py-2 transition-colors"
+                    >
+                      <span className="inline-flex items-center justify-center min-w-[44px] h-8 rounded bg-purple-500 text-white text-xs font-semibold">
+                        Mant.
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">{m.clienteNombre}</p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {m.equipoTipo || '—'}{m.tecnicoNombre ? ` · ${m.tecnicoNombre}` : ''}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-purple-700 font-medium">Tap para generar orden →</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Sección colapsable: técnicos sin citas */}
       {tecnicosSinOrdenes.length > 0 && !esTecnico && (
