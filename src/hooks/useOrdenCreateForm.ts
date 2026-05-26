@@ -233,6 +233,35 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       if (citaPreset.equipoTipoMotor === 'torre') equipoModeloPreset = 'Torre';
       else if (citaPreset.equipoTipoMotor === 'individual') equipoModeloPreset = 'Individual';
     }
+    // SPRINT-AGENDA-3 (2026-05-25): si la cita pública vino de un
+    // calendario con técnico asignado (`/cita/:calendarId` muestra
+    // "Agendando con María"), el doc `citas_por_confirmar` trae
+    // `asignadoId` (que post-c4be345 es `auth.uid`) + `asignadoNombre`.
+    // Antes lo descartábamos: la promesa al cliente quedaba rota. Ahora
+    // pre-cargamos `tecnicoId`/`tecnicoNombre` cuando el técnico está en
+    // la lista de personal cargada — la oficina puede cambiarlo, pero
+    // arranca con el técnico elegido por el cliente. Si `personal`
+    // todavía no terminó de cargar, el lookup retorna undefined y el
+    // pre-llenado lo hace el effect secundario (más abajo) cuando los
+    // datos lleguen.
+    const citaConAsignado = citaPreset as typeof citaPreset & {
+      asignadoId?: string;
+      asignadoNombre?: string;
+    };
+    let tecnicoPrecargadoId = '';
+    let tecnicoPrecargadoNombre = '';
+    if (citaConAsignado.asignadoId) {
+      const tecRes = personal.find(p => (p.uid || p.id) === citaConAsignado.asignadoId);
+      if (tecRes && tecRes.activo) {
+        tecnicoPrecargadoId = tecRes.uid || tecRes.id;
+        tecnicoPrecargadoNombre = tecRes.nombre;
+      } else if (citaConAsignado.asignadoNombre) {
+        // Fallback: si el lookup falla (personal aún no cargado o
+        // asignadoId obsoleto), conservamos el nombre como hint visual.
+        // El uid sigue vacío para que la rule no falle silenciosamente.
+        tecnicoPrecargadoNombre = citaConAsignado.asignadoNombre;
+      }
+    }
     setForm({
       clienteId: '',
       clienteNombre: citaPreset.clienteNombre || '',
@@ -250,8 +279,9 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       // cita pública — la coord puede agregarlo manualmente en el modal.
       equipoModeloFabricante: '',
       descripcionFalla: citaPreset.descripcionProblema || citaPreset.falla || citaPreset.servicio || '',
-      tecnicoId: '',
-      tecnicoNombre: '',
+      // SPRINT-AGENDA-3: honra el técnico del calendario público si existe.
+      tecnicoId: tecnicoPrecargadoId,
+      tecnicoNombre: tecnicoPrecargadoNombre,
       duracionMin: 60,
       fechaCita: fechaStr,
       horaInicio: citaPreset.horaSolicitada || '',
@@ -293,7 +323,34 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
         console.warn('Error buscando cliente por teléfono al aplicar cita:', err);
       }).finally(() => setBuscandoTelefono(false));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [citaPreset]);
+
+  // SPRINT-AGENDA-3: race condition — el effect de preset puede correr
+  // antes de que `personal` termine de cargar. Cuando `personal` se
+  // resuelve después, este effect re-intenta resolver `asignadoId` a
+  // `tecnicoId`/`tecnicoNombre`. Solo aplica si la cita trae asignadoId
+  // Y el form todavía no tiene tecnicoId (no pisa una edición manual de
+  // la oficina). Si el lookup ya tuvo éxito en el effect principal,
+  // este es no-op.
+  useEffect(() => {
+    if (!citaPreset || presetAplicadoIdRef.current !== citaPreset.id) return;
+    const citaConAsignado = citaPreset as typeof citaPreset & {
+      asignadoId?: string;
+      asignadoNombre?: string;
+    };
+    if (!citaConAsignado.asignadoId) return;
+    if (form.tecnicoId) return; // ya está resuelto o la coord lo eligió
+    if (personal.length === 0) return; // aún cargando
+    const tecRes = personal.find(p => (p.uid || p.id) === citaConAsignado.asignadoId);
+    if (tecRes && tecRes.activo) {
+      setForm(f => ({
+        ...f,
+        tecnicoId: tecRes.uid || tecRes.id,
+        tecnicoNombre: tecRes.nombre,
+      }));
+    }
+  }, [personal, citaPreset, form.tecnicoId]);
 
   // Mantener `ordenesActivasCliente` sincronizado cuando cambia el cliente
   // seleccionado o la lista de órdenes (por listener externo del padre).
