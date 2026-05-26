@@ -842,14 +842,59 @@ export default function ProcesarFacturacionModal({
           if (ordenSnap.data()?.facturada === true) {
             throw new Error('CONDUCE_YA_EMITIDO');
           }
+          // SPRINT-DINERO-2 (2026-05-25): si se está cobrando un pago al
+          // emitir el conduce, recalcular `montoPagado` + `estadoPago`
+          // dentro de la misma transacción. Antes solo se hacía
+          // `arrayUnion(pagoNuevoFinal)` y la orden seguía mostrando el
+          // monto/estado VIEJO (pre-pago) aunque la factura saliera
+          // pagada. Síntoma: orden con "Pendiente" en agenda/listado
+          // pese a que el saldo se cobró. Reusa el mismo cálculo de
+          // RegistrarPagoModal.tsx (función calcularEstadoFromTotal).
+          let updateFinal = ordenUpdateLimpio;
+          if (pagoNuevoFinal) {
+            const data = ordenSnap.data() as Record<string, unknown>;
+            const pagosActuales: Array<Record<string, unknown>> = Array.isArray(data.pagos)
+              ? (data.pagos as Array<Record<string, unknown>>)
+              : [];
+            // Idempotencia: si el pago ya está en el array (ej. transacción
+            // reintentada por Firestore o doble submit), NO duplicar.
+            const yaExiste = pagosActuales.some(
+              p => p && (p as { id?: unknown }).id === (pagoNuevoFinal as { id?: unknown }).id,
+            );
+            const pagosNuevos = yaExiste
+              ? pagosActuales
+              : [...pagosActuales, pagoNuevoFinal as unknown as Record<string, unknown>];
+            const totalOrdenActual = Number(
+              data.precioFinal ?? data.precioAprobado ?? data.precioSugerido ?? 0,
+            );
+            const nuevoMontoPagado = pagosNuevos.reduce(
+              (acc, p) => acc + (Number((p as { monto?: unknown }).monto) || 0),
+              0,
+            );
+            const nuevoEstadoPago: 'completo' | 'parcial' | 'pendiente' =
+              totalOrdenActual > 0 && nuevoMontoPagado >= totalOrdenActual
+                ? 'completo'
+                : nuevoMontoPagado > 0
+                  ? 'parcial'
+                  : 'pendiente';
+            // Reemplazamos arrayUnion por la lista completa recalculada —
+            // misma idempotencia (yaExiste guard) + recalc síncrono.
+            updateFinal = {
+              ...ordenUpdateLimpio,
+              pagos: pagosNuevos,
+              montoPagado: nuevoMontoPagado,
+              estadoPago: nuevoEstadoPago,
+            };
+          }
           // 1. Crear factura con id pre-generado.
           tx.set(facturaRef, facturaLimpia);
           // 2. Denormalización de comisiones (si helpers PRE-tx generaron payload).
           if (denormParaTx) {
             tx.update(facturaRef, denormParaTx);
           }
-          // 3. Update orden con arrayUnion(pagos) + auditoria.
-          tx.update(ordenRef, ordenUpdateLimpio);
+          // 3. Update orden con la lista de pagos completa (no arrayUnion) +
+          //    montoPagado/estadoPago recalculados + auditoria.
+          tx.update(ordenRef, updateFinal);
         });
       } catch (txErr) {
         const msg = (txErr as Error)?.message || '';
