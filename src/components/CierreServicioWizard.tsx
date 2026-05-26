@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { collection, doc, getDocs, query, updateDoc, where, Timestamp, arrayUnion } from 'firebase/firestore';
+import { collection, doc, getDocs, query, updateDoc, where, Timestamp, arrayUnion, addDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, Personal, PiezaUsada } from '../types';
 import { crearNotificacion } from '../services/notificaciones.service';
@@ -16,6 +16,92 @@ import {
   Camera, Check, X, Loader2, CheckCircle, AlertCircle, Plus, Pencil, Trash2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { addMonths } from 'date-fns';
+
+/**
+ * SPRINT-AGENDA-5 (2026-05-25): tras cerrar una orden de servicio
+ * (no solo-chequeo), ofrece programar el próximo mantenimiento
+ * preventivo del mismo cliente/equipo. Muestra un toast con acciones
+ * "Sí, programar" (default +3 meses, trimestral) y "Ahora no".
+ * Best-effort — NO bloquea el cierre si falla la creación. Reusa la
+ * convención del alta de mantenimiento de SPRINT-AGENDA-1 (clienteId
+ * real + denormalizados + tecnicoId = uid).
+ */
+function ofrecerProximoMantenimiento(args: {
+  clienteId: string;
+  clienteNombre: string;
+  clienteTelefono: string;
+  telefonoNormalizado: string;
+  clienteEmail: string;
+  clienteDireccion: string;
+  clienteLat?: number;
+  clienteLng?: number;
+  equipoTipo: string;
+  tecnicoId: string;
+}): void {
+  const programar = async () => {
+    try {
+      const ahora = Timestamp.now();
+      const proxima = addMonths(new Date(), 3); // default trimestral
+      const payload: Record<string, unknown> = {
+        clienteId: args.clienteId,
+        clienteNombre: args.clienteNombre,
+        clienteTelefono: args.clienteTelefono,
+        equipoTipo: args.equipoTipo,
+        frecuencia: 'trimestral',
+        proximaFecha: Timestamp.fromDate(proxima),
+        tecnicoId: args.tecnicoId || '',
+        activo: true,
+        createdAt: ahora,
+        updatedAt: ahora,
+      };
+      if (args.telefonoNormalizado) payload.telefonoNormalizado = args.telefonoNormalizado;
+      if (args.clienteEmail) payload.clienteEmail = args.clienteEmail;
+      if (args.clienteDireccion) payload.clienteDireccion = args.clienteDireccion;
+      if (typeof args.clienteLat === 'number') payload.clienteLat = args.clienteLat;
+      if (typeof args.clienteLng === 'number') payload.clienteLng = args.clienteLng;
+      const payloadLimpio = Object.fromEntries(
+        Object.entries(payload).filter(([, v]) => v !== undefined),
+      );
+      await addDoc(collection(db, 'mantenimiento'), payloadLimpio);
+      toast.success(`Próximo mantenimiento programado para ${proxima.toLocaleDateString('es-DO')}`);
+    } catch (err) {
+      console.error('[SPRINT-AGENDA-5] No se pudo programar mantenimiento:', err);
+      toast.error('No se pudo programar el mantenimiento');
+    }
+  };
+  // Toast custom con acciones — el usuario decide. Tiempo amplio para
+  // que alcance a leer y decidir (10s).
+  toast(
+    (t) => (
+      <div className="flex flex-col gap-2 text-sm">
+        <p className="font-medium text-gray-900">
+          ¿Programar próximo mantenimiento de {args.clienteNombre}?
+        </p>
+        <p className="text-xs text-gray-600">
+          Sugerido: trimestral · +3 meses · {args.equipoTipo}
+        </p>
+        <div className="flex gap-2 mt-1">
+          <button
+            type="button"
+            onClick={() => { void programar(); toast.dismiss(t.id); }}
+            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium"
+          >
+            Sí, programar
+          </button>
+          <button
+            type="button"
+            onClick={() => toast.dismiss(t.id)}
+            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-xs"
+          >
+            Ahora no
+          </button>
+        </div>
+      </div>
+    ),
+    { duration: 10000 },
+  );
+}
 
 function logCierre(msg: string, extra?: unknown): void {
   const t = new Date().toISOString().substring(11, 23);
@@ -563,6 +649,29 @@ export default function CierreServicioWizard({
       }
 
       toast.success('✅ Servicio cerrado exitosamente');
+
+      // SPRINT-AGENDA-5 (2026-05-25): si la orden tiene cliente real
+      // amarrado + equipoTipo, ofrecer programar próximo mantenimiento
+      // preventivo. Toast custom con acción — el usuario decide. Default
+      // +3 meses (trimestral, el más común en RD para electrodomésticos).
+      // Solo aparece cuando hay clienteId real (post-SPRINT-AGENDA-1) y
+      // se NO es solo chequeo (que NO es servicio real). Best-effort: si
+      // falla la creación, log + toast informativo, NO bloquea el cierre.
+      if (orden.clienteId && orden.equipoTipo && orden.soloChequeo !== true) {
+        ofrecerProximoMantenimiento({
+          clienteId: orden.clienteId,
+          clienteNombre: orden.clienteNombre,
+          clienteTelefono: orden.clienteTelefono || '',
+          telefonoNormalizado: (orden as OrdenServicio & { telefonoNormalizado?: string }).telefonoNormalizado || '',
+          clienteEmail: (orden as OrdenServicio & { clienteEmail?: string }).clienteEmail || '',
+          clienteDireccion: orden.clienteDireccion || '',
+          clienteLat: orden.clienteLat,
+          clienteLng: orden.clienteLng,
+          equipoTipo: orden.equipoTipo,
+          tecnicoId,
+        });
+      }
+
       onClosed();
       handleClose();
     } catch (err: unknown) {
