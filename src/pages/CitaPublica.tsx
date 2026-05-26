@@ -235,6 +235,16 @@ export default function CitaPublica() {
         }
       }
 
+      // SPRINT-AGENDA-4 (2026-05-25): unificar shape con
+      // `formularioAgendar.service.ts`. Antes el doc creado por esta vía
+      // NO traía `equipoTipo` ni `telefonoNormalizado` → las citas caían
+      // al fallback `servicio` (Citas.tsx:100/661) y el anti-duplicado
+      // por `telefonoNormalizado` (formularioAgendar.service.ts:339) no
+      // aplicaba al flujo /cita/:calendarId. Resultado: citas degradadas.
+      // Ahora ambos vías escriben el mismo conjunto base de campos.
+      const telNorm = normalizarTelefono(form.telefono);
+      const equipoTipoTrim = form.equipoTipo.trim();
+      const equipoMarcaTrim = form.equipoMarca.trim();
       const docData: Record<string, unknown> = {
         clienteNombre: form.nombre.trim(),
         telefono: form.telefono,
@@ -242,7 +252,7 @@ export default function CitaPublica() {
         clienteDireccion: form.direccion,
         clienteLat: form.lat || null,
         clienteLng: form.lng || null,
-        servicio: `${form.equipoTipo}${form.equipoMarca ? ` ${form.equipoMarca}` : ''}`,
+        servicio: `${equipoTipoTrim}${equipoMarcaTrim ? ` ${equipoMarcaTrim}` : ''}`,
         falla: form.falla,
         horarioSolicitado: horario,
         fechaSolicitada: Timestamp.fromDate(selectedDate),
@@ -255,6 +265,10 @@ export default function CitaPublica() {
         estado: 'pendiente',
         createdAt: Timestamp.now(),
       };
+      // SPRINT-AGENDA-4: nuevos campos que faltaban en este vía.
+      if (equipoTipoTrim) docData.equipoTipo = equipoTipoTrim;
+      if (equipoMarcaTrim) docData.equipoMarca = equipoMarcaTrim;
+      if (telNorm.length === 10) docData.telefonoNormalizado = telNorm;
       if (fotoEquipoUrl) docData.fotoEquipoUrl = fotoEquipoUrl;
 
       await addDoc(collection(db, 'citas_por_confirmar'), docData);
