@@ -498,9 +498,18 @@ export function generateNumeroOrden(count: number): string {
  * (auditor_contable AGENTES-1, 2026-05-24). Sprint follow-up:
  * SPRINT-PAGOS-FIX-COTIZACIONES-NUMERO-TRANSACCIONAL.
  */
-// @safe-numero-doc: legacy helper deprecated, único caller (Cotizaciones.tsx:314) será migrado en sprint follow-up
-export function generateNumeroCotizacion(count: number): string {
-  return `QT-${String(count + 1).padStart(5, '0')}`;
+/**
+ * @deprecated SPRINT-DINERO-1 (2026-05-25): MIGRADO. Cotizaciones.tsx
+ * ahora usa `siguienteNumeroCotizacion()` de `contadores.service` que
+ * es transaccional. Este helper queda como stub que LANZA al invocarse
+ * para evitar uso accidental futuro. Cuando se confirme que no hay
+ * imports vivos en otro lado, eliminar la export.
+ */
+// @safe-numero-doc: stub que lanza — no genera número real, solo evita reintroducción del bug
+export function generateNumeroCotizacion(_count: number): string {
+  throw new Error(
+    '[generateNumeroCotizacion] deprecated SPRINT-DINERO-1. Usa siguienteNumeroCotizacion() de contadores.service.ts (transaccional).'
+  );
 }
 
 /**

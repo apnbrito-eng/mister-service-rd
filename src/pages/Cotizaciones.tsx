@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, Timestamp, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cotizacion, ItemCotizacion, EstadoCotizacion, OrdenServicio } from '../types';
-import { formatMoneda, formatFechaCorta, generateNumeroCotizacion, parseOrden } from '../utils';
+import { formatMoneda, formatFechaCorta, parseOrden } from '../utils';
+import { siguienteNumeroCotizacion } from '../services/contadores.service';
 import { siguienteNumeroFactura } from '../services/contadores.service';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
@@ -311,7 +312,12 @@ export default function Cotizaciones() {
         await updateDoc(doc(db, 'cotizaciones', editingId), upd);
         toast.success('Cotización actualizada');
       } else {
-        const numero = generateNumeroCotizacion(cotizaciones.length);
+        // SPRINT-DINERO-1 (2026-05-25, P-022): siempre vía contador atómico.
+        // Antes usaba `generateNumeroCotizacion(cotizaciones.length)` que
+        // derivaba el número de `length+1` en memoria → dos operarias
+        // creando cotización en simultáneo generaban QT duplicados.
+        // El contador `ultimaCotizacion` en `config/contadores` ya existía.
+        const numero = await siguienteNumeroCotizacion();
         const data: Record<string, unknown> = {
           numero,
           clienteNombre: form.clienteNombre,
