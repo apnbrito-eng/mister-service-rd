@@ -41,6 +41,7 @@ import { check as checkComisionSinDenormalizacion } from './check-comision-sin-d
 import { check as checkNumerosDocumentoClientSide } from './check-numeros-documento-client-side.js';
 import { check as checkGateConducePagoVerificado } from './check-gate-conduce-pago-verificado.js';
 import { check as checkComisionGarantiaAnulaCompleta } from './check-comision-garantia-anula-completa.js';
+import { check as checkMantenimientoClienteidVacio } from './check-mantenimiento-clienteid-vacio.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -77,6 +78,9 @@ async function main() {
     checkGateConducePagoVerificado,
     // SPRINT-GARANTIA-FLUJO-COMPLETO Fase A (2026-05-25) — anti-recurrencia.
     checkComisionGarantiaAnulaCompleta,
+    // SPRINT-AGENDA-1 anti-regresión (2026-05-29) — mantenimientos/órdenes
+    // huérfanos con clienteId vacío.
+    checkMantenimientoClienteidVacio,
   ];
 
   const t0 = Date.now();

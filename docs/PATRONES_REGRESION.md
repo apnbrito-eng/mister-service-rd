@@ -740,6 +740,33 @@ Casos legítimos comunes (todos requieren tag): fallback de display cuando `orde
 
 ---
 
+## P-025 — Write a Firestore (`mantenimiento` o `ordenes_servicio`) con `clienteId: ''` literal
+
+**Bug original (auditoría retroactiva de SPRINT-AGENDA-1, 2026-05-25):** El modal de `/admin/mantenimiento` antes guardaba el nombre del cliente como texto libre y persistía `clienteId: ''` en el doc `mantenimiento`. Cuando `handleGenerarOrden` corría sobre ese mantenimiento, la orden generada heredaba `clienteId: ''` también. Documentado como causa raíz #1 del bucle de bugs en `docs/sprints/AUDITORIA_FLUJO_DEPENDENCIAS_2026-05-25.md`. SPRINT-AGENDA-1 cerró el bug pero no creó cazador determinístico — esta entrada P-025 cierra el ciclo "cada bug capturado se convierte en cazador ejecutable" (sub-regla CLAUDE.md) de forma retroactiva durante QA estático de Mantenimiento (2026-05-29).
+
+**Síntoma:** la orden creada NO aparece en el histórico del cliente (query `where('clienteId', '==', selectedCliente.id)` en `Clientes.tsx:174` nunca matchea), no dispara el descuento de chequeo previo (gate de servicios previos por `clienteId`), no figura en el mapa de clientes ni en analytics segmentados por cliente. Visual: la ficha del cliente muestra "Sin órdenes" aunque el cliente físicamente tiene un mantenimiento programado/orden generada.
+
+**Causa raíz:** el modal de alta de mantenimiento no enforzaba selección de cliente real vía typeahead. El payload del `addDoc(collection(db, 'mantenimiento'))` traía `clienteId: ''` como string vacío (no `undefined` — el field SÍ se persistía con valor vacío), y el shape se propagaba a `ordenes_servicio` en `handleGenerarOrden`.
+
+**Regla:** ningún archivo `.ts`/`.tsx` en `src/` o `api/` puede tener `clienteId: ''` (o `clienteId: ""`) DENTRO de un payload que se va a escribir a Firestore (contexto de `addDoc`, `setDoc`, `batch.set`, `updateDoc`, `transaction.set`, `transaction.update`, `tx.set`, `tx.update`).
+
+**Patrón correcto:**
+1. Para alta de mantenimiento: typeahead obligatorio + `buscarOCrearCliente(telefono, {...})` antes del `addDoc`. Ver `src/pages/Mantenimiento.tsx:217-249` (SPRINT-AGENDA-1).
+2. Para generar orden desde mantenimiento: defense-in-depth `if (!item.clienteId) return toast.error(...)`. Ver `src/pages/Mantenimiento.tsx:279-282`.
+3. Para cualquier nuevo lugar donde se cree mantenimiento/orden: usar `useOrdenCreateForm` (que ya tiene el typeahead) o replicar el patrón.
+
+**Excluidos del cazador (no son writes):**
+- `useState`/`setForm`/`setState` con `clienteId: ''` como estado inicial de UI (auto-detectado por marcadores `useState`, `setForm`, `setState`, `_INICIAL`, `defaultProps`, `interface`/`type`, `resetForm`).
+- Líneas-comentario (`//`, `*` JSDoc) que mencionan el patrón para forensia.
+
+**Cazador:** `scripts/invariantes/check-mantenimiento-clienteid-vacio.ts`. Detección: regex `\bclienteId\s*:\s*(['"])\1` con (a) skip comentarios, (b) skip contexto state-init, (c) require contexto write (markers en 30 líneas arriba).
+
+**Allowlist (files):** 2 archivos — el cazador mismo (menciona el patrón en JSDoc) y `src/services/clientes.service.ts` (defensivo, no usa el patrón pero define `buscarOCrearCliente`).
+
+**Tag de excepción:** `// @safe-clienteid-vacio: <razón>` en la misma línea o hasta 5 arriba. Casos legítimos esperados: migraciones one-shot de mantenimientos legacy, scripts de seed de QA, tests que ejercitan el guard defense-in-depth.
+
+---
+
 ## Plantilla para agregar nuevo patrón
 
 Cuando un sprint cierra un bug que rompió producción, agregar acá:
