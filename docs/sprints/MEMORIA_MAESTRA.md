@@ -47,6 +47,7 @@
 - **QA SPRINT-FIX-LEADS-FORMULARIO-PUBLICO** — enviar un formulario público real con foto + firma + PDF y verificar que llega como solicitud. Hash `01df699`. Storage rules ya deployadas.
 - **Smoke test en producción** — selector de número con números reales, trazabilidad (quién envió + nombre del agente), respuestas rápidas con "/", y el inbox (fotos, ficha cliente, form a la izquierda).
 - **Crear 2da/3ra WABA en Meta** + cargar `phone_number_id` + token en Vercel env + allowlist → desbloquea `SPRINT-WA-NUMERO-RESPALDO-MANUAL-FASE-2`.
+- **Bug `/careful` de gstack (FASE A paquete integrado, 2026-05-29).** El hook PreToolUse:Bash busca `/bin/check-careful.sh` (ruta absoluta de sistema) que no existe → el hook falla con "non-blocking status" y `rm -rf` se ejecuta sin pedir confirmación. Verificado con prueba en `~/Desktop/prueba-gstack`. `/careful` se activa correctamente y Claude conoce los patrones, pero la red de seguridad automática del hook está rota. Opciones a evaluar: (a) `/gstack-upgrade` cuando salga versión nueva, (b) reportar al GitHub `garrytan/gstack` con el detalle del path, (c) saltear los cinturones y pasar directo a FASE B (`/qa` con navegador). Plan integrado: `docs/PLAN_INTEGRADO_GSTACK_2026-05-28.md`.
 
 ---
 
@@ -94,7 +95,7 @@ Nada activo en construcción ahora mismo. Pasada 51 cerrada (nocturna). 3 sprint
 - **Buzón de seguimiento (nurture) — regla anti-bloqueo:** a un cliente que NO quiere agendar se le manda **UN solo recordatorio automático**, nada más automático. Después, todo es **manual por lotes** que selecciona el admin/coordinador (para no disparar bloqueos de Meta). WhatsApp Flows se ven más adelante.
 - **PAGOS por fases con QA entre cada una.** B-1 ya pasó QA → B-2 habilitada. B-3 (toca reglas) espera nueva QA de Jorge antes de procesarse.
 - **Cowork NO hace solo:** crear WABA / cuentas, pagos, OAuth, integraciones nuevas, migraciones >500 docs, ni tocar reglas de Firestore sin OK. Eso se escala a `BLOQUEOS.md`.
-- **Comunicación:** español latino/dominicano, breve, sin jerga. Decir siempre si un comando va en la **Terminal de la Mac** o en **Claude Code**.
+- **Comunicación (REGLA DURA, Jorge la repitió 2026-05-28: "anota eso siempre"):** **palabras simples SIEMPRE, sin jerga técnica.** Español latino/dominicano. Breve. Si tenés que usar un término técnico, traducilo entre paréntesis (ej: "Firestore rules (los permisos de la base de datos)"). Decir siempre si un comando va en la **Terminal de la Mac** o en **Claude Code**. Aplica a Cowork, al coordinator, y a CUALQUIER agente que le hable a Jorge directo. Si vas a explicar qué hace un agente o herramienta, hacelo como si fueras una persona del equipo diciéndole qué hace ("Sentate, contame qué problema querés resolver" en vez de "ejecuta una rutina de interrogación de requerimientos").
 - **Números WhatsApp:** `1226992440486630` = +1 829-471-6265 (Principal) · `1151997541323577` = +1 849-564-6767 (Respaldo).
 
 ---
