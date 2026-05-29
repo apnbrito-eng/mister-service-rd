@@ -37,23 +37,23 @@ graph LR
   %% Mapa generado automáticamente desde docs/mapa/MAPA_MENTAL.yaml
   %% NO editar a mano. Editá el YAML y corré `npm run mapa`.
 
-  subgraph ordenes["ORDENES"]
+  subgraph area_ordenes["ORDENES"]
     ordenes_servicio["ordenes_servicio"]:::critico
     avances["avances"]
   end
 
-  subgraph agendamiento["AGENDAMIENTO"]
+  subgraph area_agendamiento["AGENDAMIENTO"]
     calendarios["calendarios"]
     citas_por_confirmar["citas_por_confirmar"]:::critico
     mantenimiento["mantenimiento"]
   end
 
-  subgraph clientes["CLIENTES"]
+  subgraph area_clientes["CLIENTES"]
     clientes["clientes"]:::critico
     garantias["garantias"]
   end
 
-  subgraph dinero["DINERO"]
+  subgraph area_dinero["DINERO"]
     cotizaciones["cotizaciones"]:::critico
     facturas["facturas"]:::critico
     pagos["pagos"]:::critico
@@ -62,34 +62,34 @@ graph LR
     gastos["gastos"]
   end
 
-  subgraph inventario["INVENTARIO"]
+  subgraph area_inventario["INVENTARIO"]
     productos["productos"]
     standby_piezas["standby_piezas"]
     equipos_taller["equipos_taller"]
   end
 
-  subgraph personal_rrhh["PERSONAL_RRHH"]
+  subgraph area_personal_rrhh["PERSONAL_RRHH"]
     personal["personal"]:::critico
     ponches["ponches"]
     cierres_dia["cierres_dia"]
   end
 
-  subgraph whatsapp_crm["WHATSAPP_CRM"]
+  subgraph area_whatsapp_crm["WHATSAPP_CRM"]
     whatsapp_inbox["whatsapp_inbox"]:::critico
     plantillas_whatsapp["plantillas_whatsapp"]:::critico
     conversaciones_ia["conversaciones_ia"]
   end
 
-  subgraph formularios_publicos["FORMULARIOS_PUBLICOS"]
+  subgraph area_formularios_publicos["FORMULARIOS_PUBLICOS"]
     formularios["formularios"]
     solicitudes["solicitudes"]:::critico
   end
 
-  subgraph reporting["REPORTING"]
+  subgraph area_reporting["REPORTING"]
     reportes["reportes"]
   end
 
-  subgraph sistema["SISTEMA"]
+  subgraph area_sistema["SISTEMA"]
     notificaciones["notificaciones"]
     auditoria["auditoria"]
     rate_limits["rate_limits"]

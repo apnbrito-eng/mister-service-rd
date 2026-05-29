@@ -136,7 +136,10 @@ function generarMermaid(mapa) {
   for (const [areaNombre] of Object.entries(mapa.areas)) {
     const modulosDeArea = Object.entries(mapa.modulos).filter(([, m]) => m.area === areaNombre);
     if (modulosDeArea.length === 0) continue;
-    out += `  subgraph ${areaNombre}["${areaNombre.toUpperCase()}"]\n`;
+    // Prefijo `area_` para que el id del subgraph nunca colisione con el id
+    // de un módulo (caso: área "clientes" + módulo "clientes" → Mermaid 11.x
+    // tira "Syntax error in text"). El label visible no lleva el prefijo.
+    out += `  subgraph area_${areaNombre}["${areaNombre.toUpperCase()}"]\n`;
     for (const [nombre, mod] of modulosDeArea) {
       const clase = mod.criticidad === 'alta' ? ':::critico' : '';
       out += `    ${nombre}["${nombre}"]${clase}\n`;
