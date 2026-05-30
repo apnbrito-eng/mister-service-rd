@@ -786,7 +786,7 @@ export default function TecnicoVista() {
               <p className="text-sm font-semibold text-white truncate leading-tight">
                 {nombreCorto}
               </p>
-              <p className="text-[10px] text-white/70 leading-tight">
+              <p className="text-xs text-white/70 leading-tight">
                 {citasFiltradas.length} cita{citasFiltradas.length !== 1 ? 's' : ''} hoy
               </p>
             </div>
@@ -795,7 +795,7 @@ export default function TecnicoVista() {
             {compartiendoGPS && (
               <div className="flex items-center gap-1 bg-green-500/20 px-2 py-1 rounded-full" title="Compartiendo ubicación">
                 <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                <span className="text-[10px] text-green-200 hidden sm:inline">🛰️ Ubicación activa</span>
+                <span className="text-xs text-green-200 hidden sm:inline">🛰️ Ubicación activa</span>
               </div>
             )}
             {nuevaCitaBadge && permisos.recibeNotificacionNuevaCita && (
@@ -838,7 +838,7 @@ export default function TecnicoVista() {
               <Navigation size={14} />
               {showMap ? 'Ocultar mapa' : (marcadoresMapa.length > 0 ? 'Ver Ruta del Día' : 'Ver Mapa')}
               {marcadoresMapa.length > 0 && (
-                <span className="bg-white/20 px-1.5 py-0.5 rounded-full text-[10px]">{marcadoresMapa.length}</span>
+                <span className="bg-white/20 px-1.5 py-0.5 rounded-full text-xs">{marcadoresMapa.length}</span>
               )}
             </button>
           )}
@@ -920,18 +920,18 @@ export default function TecnicoVista() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-gray-800 truncate">{m.clienteNombre}</p>
-                          <p className="text-[10px] text-gray-500">{formatHora(m.fechaCita)} · {m.equipoTipo}</p>
+                          <p className="text-xs text-gray-500">{formatHora(m.fechaCita)} · {m.equipoTipo}</p>
                         </div>
                       </div>
                     ))}
                   </div>
                   {citasFiltradas.length > marcadoresMapa.length && (
                     <div className="mt-2 pt-2 border-t border-gray-100">
-                      <p className="text-[10px] text-orange-600 mb-1">⚠️ Citas sin GPS (no aparecen en el mapa):</p>
+                      <p className="text-xs text-orange-600 mb-1">⚠️ Citas sin GPS (no aparecen en el mapa):</p>
                       {citasFiltradas
                         .filter(o => !getClienteUbicacion(o))
                         .map(o => (
-                          <div key={o.id} className="text-[10px] text-gray-600 truncate">
+                          <div key={o.id} className="text-xs text-gray-600 truncate">
                             • {o.clienteNombre} — {formatHora(o.fechaCita)}
                           </div>
                         ))}
@@ -965,7 +965,7 @@ export default function TecnicoVista() {
               return (
                 <div key={orden.id}>
                 {esProxima && (
-                  <p className="text-[10px] uppercase tracking-wide font-bold text-primary mb-1 px-1">
+                  <p className="text-xs uppercase tracking-wide font-bold text-primary mb-1 px-1">
                     Próxima cita
                   </p>
                 )}
@@ -1120,12 +1120,12 @@ export default function TecnicoVista() {
                           <button
                             onClick={() => handleReactivarOrden(orden)}
                             disabled={reactivandoId === orden.id}
-                            className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-60"
+                            className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-medium disabled:opacity-60"
                           >
                             <Play size={12} /> {reactivandoId === orden.id ? 'Reactivando...' : '▶ Reactivar'}
                           </button>
                           <button onClick={() => setSelectedOrden(orden)}
-                            className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-medium ml-auto">
+                            className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg text-sm font-medium ml-auto">
                             <Eye size={12} /> Ver detalle
                           </button>
                         </div>
@@ -1174,7 +1174,7 @@ export default function TecnicoVista() {
                           }
                           return (
                             <button onClick={() => openCompletar(orden)}
-                              className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium">
+                              className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-medium">
                               <CheckCircle size={12} /> Marcar Realizado
                             </button>
                           );
@@ -1187,7 +1187,7 @@ export default function TecnicoVista() {
                           ['en_diagnostico', 'en_cotizacion', 'aprobado'].includes(orden.fase) && (
                           <button
                             onClick={() => abrirSugerirChequeo(orden)}
-                            className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white px-3 py-2 rounded-lg text-xs font-medium"
+                            className="flex items-center gap-1 bg-amber-500 hover:bg-amber-600 text-white px-4 py-3 rounded-lg text-sm font-medium"
                             title={`Sugerir solo chequeo (default RD$${precioChequeoSugerido.toLocaleString('es-DO')}) — requiere aprobación de oficina`}
                           >
                             <ClipboardCheck size={12} /> Sugerir solo chequeo
@@ -1199,7 +1199,7 @@ export default function TecnicoVista() {
                           ['en_diagnostico', 'en_cotizacion', 'aprobado'].includes(orden.fase) && (
                           <button
                             onClick={() => abrirStandby(orden)}
-                            className="flex items-center gap-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-2 rounded-lg text-xs font-medium"
+                            className="flex items-center gap-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-4 py-3 rounded-lg text-sm font-medium"
                             title="Marcar pendiente de piezas"
                           >
                             <Pause size={12} /> Pendiente de piezas
@@ -1213,7 +1213,7 @@ export default function TecnicoVista() {
                           <button
                             type="button"
                             onClick={() => setOrdenAvisar(orden)}
-                            className="flex items-center gap-1 bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-2 rounded-lg text-xs font-medium border border-amber-300"
+                            className="flex items-center gap-1 bg-amber-100 hover:bg-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm font-medium border border-amber-300"
                             title="No pude completar la visita — avisar a oficina"
                             data-testid="btn-avisar-oficina"
                           >
@@ -1228,13 +1228,13 @@ export default function TecnicoVista() {
                         )}
                         {permisos.puedeAgregarNotas && (
                           <button onClick={() => openNota(orden)}
-                            className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-lg text-xs font-medium">
+                            className="flex items-center gap-1 bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg text-sm font-medium">
                             <StickyNote size={12} /> Agregar Nota
                           </button>
                         )}
                         {permisos.verUbicacionGPS && ubi && (
                           <a href={googleMapsLink(ubi.lat, ubi.lng)} target="_blank" rel="noreferrer"
-                            className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-medium">
+                            className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg text-sm font-medium">
                             <Navigation size={12} /> Ver en Maps
                           </a>
                         )}
@@ -1242,7 +1242,7 @@ export default function TecnicoVista() {
                           <button
                             onClick={() => handleCapturarGpsOrden(orden)}
                             disabled={capturandoGpsOrdenId === orden.id}
-                            className="flex items-center gap-1 bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-2 rounded-lg text-xs font-medium disabled:opacity-60"
+                            className="flex items-center gap-1 bg-amber-100 hover:bg-amber-200 text-amber-800 px-4 py-3 rounded-lg text-sm font-medium disabled:opacity-60"
                           >
                             <MapPin size={12} />
                             {capturandoGpsOrdenId === orden.id ? 'Capturando...' : 'Capturar GPS'}
@@ -1251,12 +1251,12 @@ export default function TecnicoVista() {
                         {permisos.puedeContactarCliente && orden.clienteTelefono && (
                           <a href={whatsappUrl(orden.clienteTelefono, mensajesWhatsApp.recordatorioCita(orden.clienteNombre, format(orden.fechaCita || new Date(), "dd/MM/yyyy"), formatHora(orden.fechaCita)))}
                             target="_blank" rel="noreferrer"
-                            className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium">
+                            className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-medium">
                             <WhatsAppIcon filled={false} className="text-white" size={12} /> WhatsApp
                           </a>
                         )}
                         <button onClick={() => setSelectedOrden(orden)}
-                          className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-xs font-medium ml-auto">
+                          className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg text-sm font-medium ml-auto">
                           <Eye size={12} /> Ver detalle
                         </button>
                       </div>
@@ -1297,11 +1297,11 @@ export default function TecnicoVista() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide opacity-90 inline-flex items-center gap-1">
+                    <p className="text-xs uppercase tracking-wide text-white/90 inline-flex items-center gap-1">
                       <DollarSign size={11} /> Mis ganancias · Quincena actual
                     </p>
                     <p className="text-2xl font-bold mt-1">{formatMoneda(total)}</p>
-                    <p className="text-[11px] opacity-90 mt-0.5">
+                    <p className="text-xs text-white/90 mt-0.5">
                       {rangoTxt}
                     </p>
                   </div>
@@ -1309,13 +1309,13 @@ export default function TecnicoVista() {
                     <div className="bg-white/20 rounded-lg px-2 py-1 font-semibold">
                       Pago día {diaPago}
                     </div>
-                    <div className="mt-1 opacity-90">
+                    <div className="mt-1 text-white/90">
                       {nOrdenes} orden{nOrdenes !== 1 ? 'es' : ''}
                     </div>
                   </div>
                 </div>
                 {nOrdenes > 0 && (
-                  <div className="flex items-center justify-center gap-1 mt-2 text-[11px] opacity-75">
+                  <div className="flex items-center justify-center gap-1 mt-2 text-xs text-white/75">
                     <span>{mostrarDetalleGanancias ? 'Ocultar detalle' : 'Ver detalle por orden'}</span>
                     <span className={`transition-transform ${mostrarDetalleGanancias ? 'rotate-180' : ''}`}>▼</span>
                   </div>
@@ -1333,7 +1333,7 @@ export default function TecnicoVista() {
                             <div className="font-medium truncate">
                               {c.ordenNumero} · {c.clienteNombre}
                             </div>
-                            <div className="opacity-75 text-[10px]">
+                            <div className="text-white/75 text-xs">
                               {format(c.fechaCobro, "dd MMM", { locale: es })}
                             </div>
                           </div>
@@ -1346,7 +1346,7 @@ export default function TecnicoVista() {
                 </div>
               )}
               {nOrdenes === 0 && (
-                <div className="px-4 pb-4 text-[11px] opacity-75">
+                <div className="px-4 pb-4 text-xs text-white/75">
                   Aún no tienes comisiones en esta quincena. Cada vez que una orden tuya pase a facturada, acumulas ganancia aquí.
                 </div>
               )}
@@ -1370,10 +1370,10 @@ export default function TecnicoVista() {
                               <div className="font-medium text-red-50 truncate">
                                 Conduce {d.conduceNumero || '—'} · Orden {c.ordenNumero}
                               </div>
-                              <div className="opacity-80 text-[10px] text-red-100">
+                              <div className="text-white/80 text-xs text-red-100">
                                 {format(fechaApl, "dd MMM yyyy", { locale: es })}
                               </div>
-                              <div className="text-[10px] text-red-100/90 mt-0.5">
+                              <div className="text-xs text-red-100/90 mt-0.5">
                                 Motivo: {d.motivo || '—'}
                               </div>
                             </div>
@@ -1428,12 +1428,12 @@ export default function TecnicoVista() {
               <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 max-w-md mx-auto space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Desde</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-0.5">Desde</label>
                     <input type="date" value={rangoDesde} onChange={e => setRangoDesde(e.target.value)}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Hasta</label>
+                    <label className="block text-xs font-medium text-gray-500 mb-0.5">Hasta</label>
                     <input type="date" value={rangoHasta} onChange={e => setRangoHasta(e.target.value)}
                       className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                   </div>
@@ -1443,7 +1443,7 @@ export default function TecnicoVista() {
                   Buscar
                 </button>
                 {rangoAplicado && (
-                  <p className="text-[10px] text-center text-gray-500">
+                  <p className="text-xs text-center text-gray-500">
                     Mostrando: {rangoAplicado.desde} → {rangoAplicado.hasta}
                   </p>
                 )}
@@ -1494,7 +1494,7 @@ export default function TecnicoVista() {
               placeholder="Ej: 3500"
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
-            <p className="text-[11px] text-gray-400 mt-1">Precio que sugieres para este trabajo (opcional)</p>
+            <p className="text-xs text-gray-400 mt-1">Precio que sugieres para este trabajo (opcional)</p>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowNotaModal(false)}
@@ -1663,7 +1663,7 @@ export default function TecnicoVista() {
               onChange={e => setStandbyForm(f => ({ ...f, hasta: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
-            <p className="text-[11px] text-gray-400 mt-1">Opcional. Útil para recordar cuándo retomar la orden.</p>
+            <p className="text-xs text-gray-400 mt-1">Opcional. Útil para recordar cuándo retomar la orden.</p>
           </div>
 
           <div>
@@ -1730,7 +1730,7 @@ export default function TecnicoVista() {
               autoFocus
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
             />
-            <p className="text-[11px] text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 mt-1">
               {detalleVisita.length}/500 — mínimo 10 caracteres
             </p>
           </div>
