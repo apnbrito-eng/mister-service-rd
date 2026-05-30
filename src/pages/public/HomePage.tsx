@@ -11,18 +11,21 @@ import HeroConGradient from '../../components/public/HeroConGradient';
 
 // Mapa de tipo de equipo → icono Lucide para usar como fallback cuando un
 // servicio no tiene `imagenCard` configurada.
+// SPRINT-DISENO-A.5 (2026-05-31): unificado a un solo color brand
+// (bg-brand-50 text-primary) — antes había 6 colores random (azul/cyan/
+// indigo/naranja/púrpura/amarillo) que se sentían playful sin justificación.
 const ICONO_POR_TIPO: { [tipo: string]: { icon: React.ElementType; color: string } } = {
-  'Lavadora': { icon: Waves, color: 'bg-blue-50 text-blue-600' },
-  'Nevera': { icon: Thermometer, color: 'bg-cyan-50 text-cyan-600' },
-  'Aire Acondicionado': { icon: Wind, color: 'bg-indigo-50 text-indigo-600' },
-  'Estufa': { icon: Flame, color: 'bg-orange-50 text-orange-600' },
-  'Secadora': { icon: Refrigerator, color: 'bg-purple-50 text-purple-600' },
-  'Microondas': { icon: Wrench, color: 'bg-yellow-50 text-yellow-600' },
-  'Otro': { icon: Wrench, color: 'bg-yellow-50 text-yellow-600' },
+  'Lavadora': { icon: Waves, color: 'bg-brand-50 text-primary' },
+  'Nevera': { icon: Thermometer, color: 'bg-brand-50 text-primary' },
+  'Aire Acondicionado': { icon: Wind, color: 'bg-brand-50 text-primary' },
+  'Estufa': { icon: Flame, color: 'bg-brand-50 text-primary' },
+  'Secadora': { icon: Refrigerator, color: 'bg-brand-50 text-primary' },
+  'Microondas': { icon: Wrench, color: 'bg-brand-50 text-primary' },
+  'Otro': { icon: Wrench, color: 'bg-brand-50 text-primary' },
 };
 
 function iconoParaTipo(tipo: string): { icon: React.ElementType; color: string } {
-  return ICONO_POR_TIPO[tipo] || { icon: Wrench, color: 'bg-gray-100 text-gray-600' };
+  return ICONO_POR_TIPO[tipo] || { icon: Wrench, color: 'bg-brand-50 text-primary' };
 }
 
 const PASOS_SERVICIO = [

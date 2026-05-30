@@ -680,12 +680,15 @@ export default function Dashboard() {
 
       {/* ======== 1. KPI CARDS ======== */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* SPRINT-DISENO-A.5 (2026-05-31): 4 KPIs neutros unificados a
+            color brand. Solo "Ingresos del Mes" preserva verde por
+            semántica positiva (dinero entrando = bien). */}
         <KpiCard
           title="Cotizaciones Pendientes"
           value={formatMoneda(totalCotizacionesPendientes)}
           subtitle={`${cotizacionesPendientes.length} pendiente${cotizacionesPendientes.length !== 1 ? 's' : ''}`}
           icon={<FileText size={22} />}
-          color="bg-orange-500"
+          color="bg-brand-500"
           onClick={() => navigate('/admin/cotizaciones')}
         />
         <KpiCard
@@ -701,7 +704,7 @@ export default function Dashboard() {
           value={formatMoneda(totalFacturasEmitidasMes)}
           subtitle={`${facturasEmitidasMes.length} conduce${facturasEmitidasMes.length !== 1 ? 's' : ''}`}
           icon={<Receipt size={22} />}
-          color="bg-purple-500"
+          color="bg-brand-500"
           onClick={() => navigate('/admin/facturas')}
         />
         <KpiCard
