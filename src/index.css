@@ -5,6 +5,30 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================
+   SPRINT-DISENO-A.3 (2026-05-31) — Escala tipográfica global.
+   Clases globales reutilizables. NO se migran componentes en
+   este sprint — solo se establece la escala disponible para
+   FASES B/C/D y sprints futuros.
+   ============================================================ */
+@layer components {
+  .text-h1 {
+    @apply text-3xl font-bold text-primary;
+  }
+  .text-h2 {
+    @apply text-xl font-semibold text-primary;
+  }
+  .text-body {
+    @apply text-base font-normal text-gray-800;
+  }
+  .text-caption {
+    @apply text-sm text-gray-600;
+  }
+  .text-micro {
+    @apply text-xs text-gray-500;
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
