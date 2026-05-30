@@ -63,8 +63,8 @@ export default function AsistenteIA() {
     <div className="p-6 space-y-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
-            <Sparkles size={22} className="text-[#1a5fa8]" />
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
+            <Sparkles size={22} className="text-primary-medium" />
             Asistente IA · BETA
           </h1>
           <p className="text-gray-500 text-sm">Página de prueba — UI definitiva en próxima fase</p>
@@ -73,7 +73,7 @@ export default function AsistenteIA() {
           <button
             type="button"
             onClick={handleNuevaConversacion}
-            className="flex items-center gap-1 px-3 py-2 bg-white hover:bg-gray-50 text-[#0f3460] border border-gray-200 rounded-xl text-sm font-medium transition-colors"
+            className="flex items-center gap-1 px-3 py-2 bg-white hover:bg-gray-50 text-primary border border-gray-200 rounded-xl text-sm font-medium transition-colors"
           >
             <Plus size={14} />
             Nueva conversación
@@ -104,7 +104,7 @@ export default function AsistenteIA() {
               <div
                 className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap ${
                   m.role === 'user'
-                    ? 'bg-[#0f3460] text-white'
+                    ? 'bg-primary text-white'
                     : 'bg-gray-100 text-gray-800'
                 }`}
               >
@@ -132,13 +132,13 @@ export default function AsistenteIA() {
               placeholder="Escribe tu mensaje... (Enter para enviar, Shift+Enter para salto de línea)"
               rows={2}
               disabled={pensando}
-              className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] resize-none disabled:bg-gray-50"
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium resize-none disabled:bg-gray-50"
             />
             <button
               type="button"
               onClick={handleEnviar}
               disabled={pensando || !input.trim()}
-              className="flex items-center gap-1 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-xl text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-1 px-4 py-2 bg-primary hover:bg-primary-medium text-white rounded-xl text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send size={14} />
               Enviar

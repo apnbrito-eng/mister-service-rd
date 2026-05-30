@@ -647,41 +647,41 @@ export default function Configuracion() {
 
   return (
     <div className="p-6 space-y-6 max-w-3xl">
-      <h1 className="text-2xl font-bold text-[#0f3460]">Configuración</h1>
+      <h1 className="text-2xl font-bold text-primary">Configuración</h1>
 
       {/* Datos empresa */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-4">
-          <Building size={20} className="text-[#1a5fa8]" />
+          <Building size={20} className="text-primary-medium" />
           <h2 className="text-lg font-semibold text-gray-900">Datos de la Empresa</h2>
         </div>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
             <input type="text" value={empresa.nombre} onChange={e => setEmpresa(f => ({ ...f, nombre: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">RNC</label>
               <input type="text" value={empresa.rnc} onChange={e => setEmpresa(f => ({ ...f, rnc: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
               <input type="tel" value={empresa.telefono} onChange={e => setEmpresa(f => ({ ...f, telefono: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
             <input type="text" value={empresa.direccion} onChange={e => setEmpresa(f => ({ ...f, direccion: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
             <input type="email" value={empresa.email} onChange={e => setEmpresa(f => ({ ...f, email: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -702,7 +702,7 @@ export default function Configuracion() {
                 }));
               }}
               placeholder="2000"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
             <p className="text-[11px] text-gray-400 mt-1">
               Monto sugerido al cerrar una orden como "solo chequeo" cuando el cliente no procede con la reparación.
@@ -712,7 +712,7 @@ export default function Configuracion() {
             <button
               onClick={handleSaveEmpresa}
               disabled={empresaSaving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
             >
               {empresaSaving ? 'Guardando...' : 'Guardar Cambios'}
             </button>
@@ -729,7 +729,7 @@ export default function Configuracion() {
       {/* Configuración Fiscal (ITBIS, RNC, Razón Social) */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-4">
-          <FileText size={20} className="text-[#1a5fa8]" />
+          <FileText size={20} className="text-primary-medium" />
           <h2 className="text-lg font-semibold text-gray-900">Configuración Fiscal</h2>
         </div>
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-900 mb-4">
@@ -749,7 +749,7 @@ export default function Configuracion() {
                 value={configFiscal.itbisPorcentaje}
                 onChange={e => setConfigFiscalState(f => ({ ...f, itbisPorcentaje: Number(e.target.value) }))}
                 disabled={!puedeModificar}
-                className="w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                className="w-32 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
               />
               <span className="text-sm text-gray-500">%</span>
               <span className="text-xs text-gray-400 ml-2">Estándar RD: 18%</span>
@@ -765,7 +765,7 @@ export default function Configuracion() {
                 onChange={e => setConfigFiscalState(f => ({ ...f, razonSocial: e.target.value }))}
                 disabled={!puedeModificar}
                 placeholder="Fixman SRL"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
               />
             </div>
             <div>
@@ -776,7 +776,7 @@ export default function Configuracion() {
                 onChange={e => setConfigFiscalState(f => ({ ...f, rncEmpresa: e.target.value }))}
                 disabled={!puedeModificar}
                 placeholder="133-118191"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
               />
             </div>
           </div>
@@ -789,7 +789,7 @@ export default function Configuracion() {
               onChange={e => setConfigFiscalState(f => ({ ...f, direccionFiscal: e.target.value }))}
               disabled={!puedeModificar}
               placeholder="Dirección que aparecerá en las facturas"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
             />
           </div>
 
@@ -813,7 +813,7 @@ export default function Configuracion() {
                   </div>
                   <div className="bg-white rounded p-2">
                     <div className="text-[10px] text-gray-500">Total</div>
-                    <div className="font-semibold text-[#0f3460]">RD${total.toFixed(2)}</div>
+                    <div className="font-semibold text-primary">RD${total.toFixed(2)}</div>
                   </div>
                 </div>
               );
@@ -824,7 +824,7 @@ export default function Configuracion() {
             <button
               onClick={handleSaveFiscal}
               disabled={fiscalSaving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
             >
               {fiscalSaving ? 'Guardando...' : 'Guardar Configuración Fiscal'}
             </button>
@@ -843,7 +843,7 @@ export default function Configuracion() {
       {esSoloAdministrador && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-2">
-            <MessageCircle size={20} className="text-[#1a5fa8]" />
+            <MessageCircle size={20} className="text-primary-medium" />
             <h2 className="text-lg font-semibold text-gray-900">Número de envío de WhatsApp</h2>
           </div>
           <p className="text-xs text-gray-500 mb-4">
@@ -861,7 +861,7 @@ export default function Configuracion() {
                 value={waEnvioSeleccion}
                 onChange={(e) => setWaEnvioSeleccion(e.target.value)}
                 disabled={waEnvioSaving}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]/30"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium/30"
               >
                 <option value="">Automático (sticky por conversación)</option>
                 {/* SPRINT-WA-INBOX-UX-QUICKWINS (2026-05-23) — mostrar el
@@ -886,7 +886,7 @@ export default function Configuracion() {
                   waEnvioSaving ||
                   waEnvioSeleccion === (configWaEnvio.phoneNumberIdForzado ?? '')
                 }
-                className="bg-[#1a5fa8] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#144a87] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-primary-medium text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#144a87] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {waEnvioSaving ? 'Guardando…' : 'Guardar'}
               </button>
@@ -933,7 +933,7 @@ export default function Configuracion() {
               {editandoNumeros === null ? (
                 <button
                   onClick={() => setEditandoNumeros(configWaNumeros.numeros.map((n) => ({ ...n })))}
-                  className="text-xs text-[#1a5fa8] hover:underline"
+                  className="text-xs text-primary-medium hover:underline"
                 >
                   Editar
                 </button>
@@ -949,7 +949,7 @@ export default function Configuracion() {
                   <button
                     onClick={handleSaveWaNumeros}
                     disabled={waNumerosSaving}
-                    className="text-xs bg-[#1a5fa8] text-white px-3 py-1 rounded hover:bg-[#144a87] disabled:opacity-50"
+                    className="text-xs bg-primary-medium text-white px-3 py-1 rounded hover:bg-[#144a87] disabled:opacity-50"
                   >
                     {waNumerosSaving ? 'Guardando…' : 'Guardar números'}
                   </button>
@@ -1061,7 +1061,7 @@ export default function Configuracion() {
               {editandoRespuestas === null ? (
                 <button
                   onClick={() => setEditandoRespuestas(respuestasRapidas.map((r) => ({ ...r })))}
-                  className="text-xs text-[#1a5fa8] hover:underline shrink-0"
+                  className="text-xs text-primary-medium hover:underline shrink-0"
                 >
                   Editar
                 </button>
@@ -1077,7 +1077,7 @@ export default function Configuracion() {
                   <button
                     onClick={handleSaveRespuestas}
                     disabled={respuestasSaving}
-                    className="text-xs bg-[#1a5fa8] text-white px-3 py-1 rounded hover:bg-[#144a87] disabled:opacity-50"
+                    className="text-xs bg-primary-medium text-white px-3 py-1 rounded hover:bg-[#144a87] disabled:opacity-50"
                   >
                     {respuestasSaving ? 'Guardando…' : 'Guardar respuestas'}
                   </button>
@@ -1096,7 +1096,7 @@ export default function Configuracion() {
                       key={r.id}
                       className="flex items-start gap-3 text-xs bg-gray-50 rounded-md px-3 py-2"
                     >
-                      <span className="font-mono text-[#1a5fa8] font-medium shrink-0">
+                      <span className="font-mono text-primary-medium font-medium shrink-0">
                         /{r.atajo}
                       </span>
                       <span className="text-gray-700 whitespace-pre-wrap break-words">
@@ -1159,7 +1159,7 @@ export default function Configuracion() {
                       { id: nuevoId, atajo: '', texto: '' },
                     ]);
                   }}
-                  className="inline-flex items-center gap-1 text-xs text-[#1a5fa8] hover:underline"
+                  className="inline-flex items-center gap-1 text-xs text-primary-medium hover:underline"
                 >
                   <Plus size={12} />
                   Agregar respuesta
@@ -1176,7 +1176,7 @@ export default function Configuracion() {
       {/* Tipos equipo */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-2">
-          <Wrench size={20} className="text-[#1a5fa8]" />
+          <Wrench size={20} className="text-primary-medium" />
           <h2 className="text-lg font-semibold text-gray-900">Tipos de Equipo</h2>
         </div>
         <p className="text-xs text-gray-500 mb-4">
@@ -1210,7 +1210,7 @@ export default function Configuracion() {
                       type="button"
                       onClick={() => handleMoverTipo(idx, -1)}
                       disabled={idx === 0 || savingTipos}
-                      className="p-1 text-gray-400 hover:text-[#1a5fa8] disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="p-1 text-gray-400 hover:text-primary-medium disabled:opacity-30 disabled:cursor-not-allowed"
                       title="Subir"
                     >
                       <ChevronUp size={14} />
@@ -1219,7 +1219,7 @@ export default function Configuracion() {
                       type="button"
                       onClick={() => handleMoverTipo(idx, 1)}
                       disabled={idx === tiposEquipo.length - 1 || savingTipos}
-                      className="p-1 text-gray-400 hover:text-[#1a5fa8] disabled:opacity-30 disabled:cursor-not-allowed"
+                      className="p-1 text-gray-400 hover:text-primary-medium disabled:opacity-30 disabled:cursor-not-allowed"
                       title="Bajar"
                     >
                       <ChevronDown size={14} />
@@ -1255,13 +1255,13 @@ export default function Configuracion() {
               }}
               maxLength={50}
               disabled={savingTipos}
-              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
             />
             <button
               type="button"
               onClick={handleAddTipo}
               disabled={savingTipos}
-              className="px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="px-4 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium transition-colors inline-flex items-center gap-1 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Plus size={14} /> Agregar tipo
             </button>
@@ -1272,7 +1272,7 @@ export default function Configuracion() {
       {/* Catálogo de modelos por tipo de equipo */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-2">
-          <ListPlus size={20} className="text-[#1a5fa8]" />
+          <ListPlus size={20} className="text-primary-medium" />
           <h2 className="text-lg font-semibold text-gray-900">Catálogo de modelos por tipo</h2>
         </div>
         <p className="text-xs text-gray-500 mb-4">
@@ -1292,7 +1292,7 @@ export default function Configuracion() {
             return (
               <div key={tipo} className="border border-gray-200 rounded-xl p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <span className="text-sm font-semibold text-[#0f3460]">{tipo}</span>
+                  <span className="text-sm font-semibold text-primary">{tipo}</span>
                   <span className="text-[11px] text-gray-400">
                     {modelos.length === 0 ? 'sin modelos · texto libre' : `${modelos.length} modelo(s)`}
                   </span>
@@ -1312,7 +1312,7 @@ export default function Configuracion() {
                               type="button"
                               onClick={() => handleMoverModelo(tipo, idx, -1)}
                               disabled={idx === 0}
-                              className="p-1 text-gray-400 hover:text-[#1a5fa8] disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="p-1 text-gray-400 hover:text-primary-medium disabled:opacity-30 disabled:cursor-not-allowed"
                               title="Subir"
                             >
                               <ChevronUp size={14} />
@@ -1321,7 +1321,7 @@ export default function Configuracion() {
                               type="button"
                               onClick={() => handleMoverModelo(tipo, idx, 1)}
                               disabled={idx === modelos.length - 1}
-                              className="p-1 text-gray-400 hover:text-[#1a5fa8] disabled:opacity-30 disabled:cursor-not-allowed"
+                              className="p-1 text-gray-400 hover:text-primary-medium disabled:opacity-30 disabled:cursor-not-allowed"
                               title="Bajar"
                             >
                               <ChevronDown size={14} />
@@ -1360,7 +1360,7 @@ export default function Configuracion() {
                         }
                       }}
                       placeholder="Nuevo modelo..."
-                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                     />
                     <button
                       type="button"
@@ -1388,7 +1388,7 @@ export default function Configuracion() {
               type="button"
               onClick={handleGuardarModelos}
               disabled={!modelosDirty || modelosSaving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {modelosSaving ? 'Guardando...' : modelosDirty ? 'Guardar cambios' : 'Sin cambios'}
             </button>
@@ -1402,7 +1402,7 @@ export default function Configuracion() {
       {/* GPS Vehicular */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-4">
-          <Satellite size={20} className="text-[#1a5fa8]" />
+          <Satellite size={20} className="text-primary-medium" />
           <h2 className="text-lg font-semibold text-gray-900">🛰️ GPS Vehicular</h2>
         </div>
 
@@ -1412,7 +1412,7 @@ export default function Configuracion() {
             <select
               value={gpsConfig.proveedor}
               onChange={e => setGpsConfig({ ...gpsConfig, proveedor: e.target.value as ProveedorGPS })}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
               <option value="Dispositivo del técnico">Dispositivo del técnico (fallback)</option>
               <option value="Wialon">Wialon</option>
               <option value="Samsara">Samsara</option>
@@ -1432,14 +1432,14 @@ export default function Configuracion() {
                 <input type="text" value={gpsConfig.apiUrl}
                   onChange={e => setGpsConfig({ ...gpsConfig, apiUrl: e.target.value })}
                   placeholder="https://api.tuproveedor.com/v1"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">API Key / Token *</label>
                 <div className="relative">
                   <input type={mostrarApiKey ? 'text' : 'password'} value={gpsConfig.apiKey}
                     onChange={e => setGpsConfig({ ...gpsConfig, apiKey: e.target.value })}
-                    className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                    className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                   <button type="button" onClick={() => setMostrarApiKey(!mostrarApiKey)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400">
                     {mostrarApiKey ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -1472,14 +1472,14 @@ export default function Configuracion() {
               <input type="text" value={nuevoVehiculo.id}
                 onChange={e => setNuevoVehiculo({ ...nuevoVehiculo, id: e.target.value })}
                 placeholder="ID del vehículo"
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
               <input type="text" value={nuevoVehiculo.nombre}
                 onChange={e => setNuevoVehiculo({ ...nuevoVehiculo, nombre: e.target.value })}
                 placeholder="Nombre (Unidad 1)"
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
               <select value={nuevoVehiculo.tecnicoId}
                 onChange={e => setNuevoVehiculo({ ...nuevoVehiculo, tecnicoId: e.target.value })}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                 <option value="">Técnico</option>
                 {/* @safe-tecnicoid-id: ubicaciones_vehiculos.tecnicoId es descriptor que matchea
                     con personal.id (joins UI), NO gateado por rule auth.uid (firestore.rules:259-262
@@ -1490,7 +1490,7 @@ export default function Configuracion() {
                 ))}
               </select>
               <button onClick={handleAddVehiculo}
-                className="flex items-center justify-center gap-1 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-3 py-2 rounded-lg text-sm">
+                className="flex items-center justify-center gap-1 bg-primary hover:bg-primary-medium text-white px-3 py-2 rounded-lg text-sm">
                 <Plus size={14} /> Agregar
               </button>
             </div>
@@ -1500,7 +1500,7 @@ export default function Configuracion() {
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={gpsConfig.activo}
                 onChange={e => setGpsConfig({ ...gpsConfig, activo: e.target.checked })}
-                className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium" />
               Activar integración GPS
             </label>
           </div>
@@ -1514,7 +1514,7 @@ export default function Configuracion() {
             )}
             {puedeModificar && (
               <button onClick={handleSaveGPS}
-                className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium">
+                className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium">
                 Guardar
               </button>
             )}
@@ -1526,7 +1526,7 @@ export default function Configuracion() {
       {esAdmin && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-4">
-            <MapPin size={20} className="text-[#1a5fa8]" />
+            <MapPin size={20} className="text-primary-medium" />
             <h2 className="text-lg font-semibold text-gray-900">Mantenimiento de datos</h2>
           </div>
           <div className="space-y-4">
@@ -1538,7 +1538,7 @@ export default function Configuracion() {
               </p>
               {geocodingRunning ? (
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-[#1a5fa8]">
+                  <div className="flex items-center gap-2 text-sm text-primary-medium">
                     <Loader2 size={16} className="animate-spin" />
                     <span>
                       Procesando {geocodingProgress.done} de {geocodingProgress.total} órdenes...
@@ -1546,7 +1546,7 @@ export default function Configuracion() {
                   </div>
                   <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
                     <div
-                      className="h-full bg-[#1a5fa8] transition-all"
+                      className="h-full bg-primary-medium transition-all"
                       style={{ width: `${geocodingProgress.total > 0 ? (geocodingProgress.done / geocodingProgress.total) * 100 : 0}%` }}
                     />
                   </div>
@@ -1566,7 +1566,7 @@ export default function Configuracion() {
                 <button
                   type="button"
                   onClick={handleGeocodingBatch}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium transition-colors"
                 >
                   <MapPin size={14} /> Geocodificar órdenes sin GPS
                 </button>
@@ -1584,7 +1584,7 @@ export default function Configuracion() {
       {/* Info sistema */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-4">
-          <Shield size={20} className="text-[#1a5fa8]" />
+          <Shield size={20} className="text-primary-medium" />
           <h2 className="text-lg font-semibold text-gray-900">Información del Sistema</h2>
         </div>
         <div className="space-y-2 text-sm text-gray-600">

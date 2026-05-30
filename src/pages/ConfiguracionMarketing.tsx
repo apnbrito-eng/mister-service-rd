@@ -205,7 +205,7 @@ export default function ConfiguracionMarketing() {
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
             <Sparkles size={20} /> Configuración de Marketing
           </h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -242,13 +242,13 @@ export default function ConfiguracionMarketing() {
           placeholder="Nombre de la nueva plantilla"
           value={nuevoNombre}
           onChange={(e) => setNuevoNombre(e.target.value)}
-          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
         />
         <button
           type="button"
           onClick={handleCrear}
           disabled={guardando || !nuevoNombre.trim()}
-          className="flex items-center gap-1.5 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+          className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
         >
           <Plus size={14} /> Crear
         </button>
@@ -304,7 +304,7 @@ export default function ConfiguracionMarketing() {
                       onChange={(e) =>
                         setEditando((prev) => ({ ...prev, [p.id]: { ...draft, nombre: e.target.value } }))
                       }
-                      className="w-full px-2 py-1 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      className="w-full px-2 py-1 border border-gray-200 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary-medium"
                     />
                   ) : (
                     <h3 className="text-sm font-semibold text-gray-900">{p.nombre}</h3>
@@ -318,7 +318,7 @@ export default function ConfiguracionMarketing() {
                       checked={p.activa}
                       onChange={() => handleToggleActiva(p.id)}
                       disabled={guardando}
-                      className="accent-[#0f3460]"
+                      className="accent-primary"
                     />
                     {p.activa ? 'Activa' : 'Inactiva'}
                   </label>
@@ -336,7 +336,7 @@ export default function ConfiguracionMarketing() {
                         type="button"
                         onClick={() => handleSaveEdit(p.id)}
                         disabled={guardando}
-                        className="flex items-center gap-1 text-xs px-2 py-1 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg transition-colors disabled:opacity-60"
+                        className="flex items-center gap-1 text-xs px-2 py-1 bg-primary hover:bg-primary-medium text-white rounded-lg transition-colors disabled:opacity-60"
                       >
                         <Save size={11} /> Guardar
                       </button>
@@ -371,7 +371,7 @@ export default function ConfiguracionMarketing() {
                         setEditando((prev) => ({ ...prev, [p.id]: { ...draft, mensaje: e.target.value } }))
                       }
                       rows={6}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-medium"
                     />
                   ) : (
                     <pre className="text-xs bg-gray-50 border border-gray-100 rounded-lg p-3 whitespace-pre-wrap font-mono">
@@ -406,8 +406,8 @@ export default function ConfiguracionMarketing() {
       {/* ─── Campañas históricas (ROI tracking) ─────────────────────── */}
       <div className="space-y-3 pt-4">
         <div className="flex items-center gap-2">
-          <TrendingUp size={18} className="text-[#0f3460]" />
-          <h2 className="text-lg font-bold text-[#0f3460]">Campañas históricas</h2>
+          <TrendingUp size={18} className="text-primary" />
+          <h2 className="text-lg font-bold text-primary">Campañas históricas</h2>
         </div>
         <p className="text-xs text-gray-500">
           Registro de campañas creadas desde el tab Reactivación. La tasa de reactivación se calcula

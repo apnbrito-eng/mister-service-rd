@@ -111,7 +111,7 @@ export default function Notificaciones() {
     <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#0f3460] rounded-lg">
+          <div className="p-2 bg-primary rounded-lg">
             <Bell size={20} className="text-white" />
           </div>
           <div>
@@ -128,7 +128,7 @@ export default function Notificaciones() {
           <button
             type="button"
             onClick={handleMarcarTodas}
-            className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-[#0f3460] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-primary bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
           >
             <CheckCheck size={16} /> Marcar todas como leídas
           </button>
@@ -146,7 +146,7 @@ export default function Notificaciones() {
             id="bandejaSelect"
             value={verBandejaDe || (currentUser?.uid ?? '')}
             onChange={(e) => setVerBandejaDe(e.target.value === (currentUser?.uid ?? '') ? '' : e.target.value)}
-            className="text-xs px-2 py-1 border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="text-xs px-2 py-1 border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
           >
             <option value={currentUser?.uid ?? ''}>Yo ({userProfile?.nombre || 'mi sesión'})</option>
             {opcionesBandeja
@@ -172,7 +172,7 @@ export default function Notificaciones() {
             type="button"
             onClick={() => setFiltro('todas')}
             className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-              filtro === 'todas' ? 'bg-white text-[#0f3460] shadow-sm' : 'text-gray-600 hover:text-gray-800'
+              filtro === 'todas' ? 'bg-white text-primary shadow-sm' : 'text-gray-600 hover:text-gray-800'
             }`}
           >
             Todas
@@ -181,7 +181,7 @@ export default function Notificaciones() {
             type="button"
             onClick={() => setFiltro('no_leidas')}
             className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-              filtro === 'no_leidas' ? 'bg-white text-[#0f3460] shadow-sm' : 'text-gray-600 hover:text-gray-800'
+              filtro === 'no_leidas' ? 'bg-white text-primary shadow-sm' : 'text-gray-600 hover:text-gray-800'
             }`}
           >
             No leídas {noLeidas > 0 && <span className="ml-1 text-red-600">({noLeidas})</span>}
@@ -210,7 +210,7 @@ export default function Notificaciones() {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
-                    <p className={`text-sm font-semibold truncate ${n.leida ? 'text-gray-700' : 'text-[#0f3460]'}`}>
+                    <p className={`text-sm font-semibold truncate ${n.leida ? 'text-gray-700' : 'text-primary'}`}>
                       {n.titulo}
                     </p>
                     {n.ordenNumero && (

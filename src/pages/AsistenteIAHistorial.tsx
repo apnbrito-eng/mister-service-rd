@@ -163,8 +163,8 @@ export default function AsistenteIAHistorial() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
-          <Sparkles size={22} className="text-[#1a5fa8]" />
+        <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
+          <Sparkles size={22} className="text-primary-medium" />
           Historial del Asistente IA
         </h1>
         <p className="text-gray-500 text-sm mt-1">
@@ -180,7 +180,7 @@ export default function AsistenteIAHistorial() {
             <select
               value={filtroUsuario}
               onChange={e => setFiltroUsuario(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="">Todos</option>
               {usuariosDistinct.map(u => (
@@ -196,7 +196,7 @@ export default function AsistenteIAHistorial() {
               type="date"
               value={filtroDesde}
               onChange={e => setFiltroDesde(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
           <div>
@@ -205,7 +205,7 @@ export default function AsistenteIAHistorial() {
               type="date"
               value={filtroHasta}
               onChange={e => setFiltroHasta(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
           <div>
@@ -217,7 +217,7 @@ export default function AsistenteIAHistorial() {
                 value={busqueda}
                 onChange={e => setBusqueda(e.target.value)}
                 placeholder="Nombre, email o texto..."
-                className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
           </div>
@@ -233,7 +233,7 @@ export default function AsistenteIAHistorial() {
                 setFiltroHasta('');
                 setBusqueda('');
               }}
-              className="ml-3 text-[#1a5fa8] hover:underline"
+              className="ml-3 text-primary-medium hover:underline"
             >
               Limpiar filtros
             </button>
@@ -305,7 +305,7 @@ export default function AsistenteIAHistorial() {
                                     <div
                                       className={
                                         m.role === 'user'
-                                          ? 'bg-[#0f3460] text-white rounded-2xl px-4 py-2 max-w-[75%] text-sm whitespace-pre-wrap'
+                                          ? 'bg-primary text-white rounded-2xl px-4 py-2 max-w-[75%] text-sm whitespace-pre-wrap'
                                           : 'bg-white border border-gray-200 text-gray-900 rounded-2xl px-4 py-2 max-w-[75%] text-sm whitespace-pre-wrap'
                                       }
                                     >

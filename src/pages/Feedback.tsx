@@ -207,7 +207,7 @@ export default function Feedback() {
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] capitalize">
+          <h1 className="text-2xl font-bold text-primary capitalize">
             Feedback NPS — {mesLabel}
           </h1>
           <p className="text-gray-500 text-sm">
@@ -218,7 +218,7 @@ export default function Feedback() {
           type="month"
           value={mesStr}
           onChange={(e) => setMesStr(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
         />
       </div>
 
@@ -443,7 +443,7 @@ function KpiCard({
   tone?: 'default' | 'primary' | 'success' | 'danger';
 }) {
   const cardBg =
-    tone === 'primary' ? 'bg-[#0f3460] text-white'
+    tone === 'primary' ? 'bg-primary text-white'
       : tone === 'success' ? 'bg-emerald-50 text-emerald-900'
         : tone === 'danger' ? 'bg-red-50 text-red-900'
           : 'bg-white text-gray-900';
