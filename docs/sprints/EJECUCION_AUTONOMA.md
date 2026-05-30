@@ -5,6 +5,70 @@
 
 ---
 
+## 2026-05-30 — autónomo (`trabaja`, pasada 53): NO-OP, 1 ESCALADO
+
+**Disparada:** Jorge dijo `trabaja` por segunda vez en la misma sesión (pasada 52 cerró minutos antes). Prompt explícito: NO reprocesar `a02a047` (WIZARD-FASES-FREEZE) ni `4c21dc9` (DISENO-TECNICO-FASE-1) — ambos en producción awaiting QA Jorge.
+
+### Cazadores baseline: 25/25 PASS (no se corrieron — sin commits de código)
+
+### Sprints procesados (orden de la cola)
+
+| # | Sprint | Estado | Hash | Verif |
+|---|---|---|---|---|
+| 1 | SPRINT-DISENO-CIERRE-COMPLETO | ⊘ ESCALADO BLOQUEOS | n/a | n/a |
+
+### Análisis pre-builder (sub-regla CLAUDE.md "Touch-list expandido + auditoría de consumidores")
+
+El sprint declaraba en su spec:
+> "Tailwind ya define `brand-800: #0f3460` en `tailwind.config.js`, semánticamente idéntico" → reemplazar `#0f3460` → `brand-800`.
+
+**Verificación con `cat tailwind.config.js`:**
+- `primary.DEFAULT = #0f3460` (azul saturado actual de la marca).
+- `primary.medium = #1a5fa8` (azul medio saturado).
+- `brand-800 = #283B5A` (azul más desaturado, más grisáceo — sale de los overoles del logo).
+- `brand-500 = #4A6FA5` (azul medio claro).
+
+**Conclusión:** `#0f3460 ≠ brand-800`. La spec contiene un error técnico load-bearing.
+
+**Counts del impacto:**
+- `grep -rln "#0f3460\|#1a5fa8" src/ | wc -l` → 101 archivos.
+- `grep -rln "bg-primary\|text-primary\|border-primary" src/ | wc -l` → 5 archivos (los pocos que ya migraron a la paleta correcta).
+- Archivos afectados: header, Sidebar, TecnicoVista, Dashboard, HomePage, Layout, Login, 50+ modales y componentes.
+
+**Si ejecutáramos la FASE A literalmente:**
+- 101 archivos cambiarían su azul actual (`#0f3460` saturado) por `brand-800` (`#283B5A` desaturado y grisáceo).
+- Es un rebranding visual real, no un refactor cosmético.
+- Incompatible con el criterio de éxito declarado del sprint: "visualmente NADA cambia".
+
+### Decisión: ESCALAR a BLOQUEOS
+
+Sub-reglas CLAUDE.md aplicadas:
+- "Touch-list expandido — actualizar el sprint antes de procesarlo si la auditoría revela inconsistencias."
+- "Sprints que tocan páginas críticas (`Dashboard.tsx`, `TecnicoVista.tsx`, `HomePage.tsx`) requieren decisión de Jorge si afectan apariencia."
+- Sprint marcado `[NO CERRAR sin QA Jorge — afecta apariencia visible del software]` → cambio visual real necesita autorización explícita.
+
+### 3 opciones documentadas en `BLOQUEOS.md`
+
+**A** — Migrar a paleta `brand-*` (rebranding visual real). Reemplazar `#0f3460` → `primary` primero (sin cambio visual), después en sprint posterior `primary` → `brand-800`. 2 sprints separables, QA-able por separado.
+
+**B** — Solo unificar tokens, sin cambio visual. Reemplazar `#0f3460` → `primary` y `#1a5fa8` → `primary-medium`. Cambio visual 0. Resto de la FASE A queda igual (emojis, escala tipográfica, gradientes, íconos). FASES B/C/D normales. **Recomendación del coordinator** — cumple el criterio "visualmente NADA cambia".
+
+**C** — Saltear FASE A, procesar B/C/D. Ganamos 3/4 del sprint sin riesgo. FASE A queda colgada para decisión.
+
+### Para desbloquear
+
+`OK: jorge YYYY-MM-DD HH:MM opcion=A|B|C` al final de la entrada en `BLOQUEOS.md` + `procesa bloqueos`.
+
+### Cola resultante
+
+Sin más sprints procesables (resto ya COMPLETADO o awaiting QA Jorge previa: WIZARD-FASES-FREEZE, DISENO-TECNICO-FASE-1, DINERO-2, REPORTING-1, GARANTIA Fase A, WA-FIX-PLANTILLAS, AGENDA-1).
+
+### Sin commits de código en pasada 53
+
+Solo edits a docs: `COLA_AUTONOMA.md`, `BLOQUEOS.md`, `MEMORIA_MAESTRA.md`, `EJECUCION_AUTONOMA.md`, `DIARIO_2026-05-30.md`. Sin push (los docs se commitean al final junto con la entrada de pasada). Cazadores no se corrieron (sin código tocado); baseline 25/25 PASS desde commit `4c21dc9` (pasada 52).
+
+---
+
 ## 2026-05-30 — autónomo (`trabaja`, pasada 52): WIZARD-FASES-FREEZE + DISENO-TECNICO-FASE-1
 
 **Disparada:** Cowork reportó el 2026-05-30 que el clic "En Cotización" desde el wizard del modal de orden congela el navegador (cazado en QA visual de DINERO-2 con Playwright MCP). Encoló SPRINT-WIZARD-FASES-FREEZE al tope (🔴 CRÍTICO, autónomo, no toca rules). El sprint anterior SPRINT-DISENO-TECNICO-FASE-1 también seguía PENDIENTE.

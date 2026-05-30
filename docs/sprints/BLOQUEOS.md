@@ -10,6 +10,63 @@
 
 ---
 
+## SPRINT-DISENO-CIERRE-COMPLETO — ⊘ ESCALADO 2026-05-30 pasada 53 (decisión de paleta)
+
+**Origen:** `trabaja` pasada 53 (2026-05-30). El sprint estaba al TOPE de la cola como PENDIENTE pero la auditoría touch-list expandido (sub-regla CLAUDE.md) detectó que la **premisa técnica de la FASE A es incorrecta** y el sprint cambiaría visualmente toda la marca sin que Jorge lo haya autorizado.
+
+**Discrepancia técnica detectada (load-bearing):**
+
+El sprint afirma:
+> "Tailwind ya define `brand-800: #0f3460` en `tailwind.config.js`, semánticamente idéntico" → reemplazar `#0f3460` → `brand-800`.
+
+**Pero en realidad** (`tailwind.config.js` línea 12-29):
+- `primary.DEFAULT = #0f3460` (azul oscuro saturado — el azul actual de la marca)
+- `primary.medium = #1a5fa8` (azul medio saturado)
+- `brand-800 = #283B5A` (azul más claro, más grisáceo/desaturado)
+- `brand-500 = #4A6FA5` (azul medio claro)
+
+Es decir: `#0f3460 ≠ brand-800`. La paleta "brand" es **diferente** a la paleta "primary" — `brand-*` viene del logo (overoles azul-grisáceo) y `primary.*` es el azul digital saturado actual del software.
+
+**Si ejecutáramos la FASE A literalmente:**
+- Toda la app pasaría visualmente de su azul saturado actual (#0f3460) a un azul desaturado y grisáceo (#283B5A).
+- 101 archivos cambiarían el azul al mismo tiempo (header, Sidebar, TecnicoVista, Dashboard, HomePage, Layout, Login, todos los botones primarios).
+- Es un **rebranding visual real**, NO un find&replace cosmético.
+
+**Por qué no procedo autónomo:**
+- Sub-regla CLAUDE.md "Touch-list expandido + auditoría de consumidores": "Si la auditoría revela archivos no contemplados en el touch-list original, ACTUALIZAR el sprint antes de procesarlo — nunca procesar parcialmente."
+- 101 archivos visuales atravesando pantallas críticas (Dashboard, TecnicoVista, OrdenDetalle) requieren decisión de Jorge sobre la dirección visual.
+- El sprint declara "visualmente NADA cambia" como criterio de éxito — pero con el reemplazo literal sí cambiaría → criterio incumplible.
+
+**3 opciones para desbloquear:**
+
+### Opción A — Migrar a la paleta `brand` (rebranding visual real)
+- Reemplazar `#0f3460` → `primary` PRIMERO (alias semánticamente idéntico, sin cambio visual).
+- En sprint POSTERIOR, decidir si migrar `primary` → `brand-800` (cambia el azul de toda la app a uno más desaturado).
+- Ventaja: separar el refactor del rediseño visual; cada paso es revertible y QA-able por separado.
+- Desventaja: 2 sprints en lugar de 1.
+
+### Opción B — Solo unificar tokens, sin cambio visual
+- Reemplazar `#0f3460` → `primary` (alias correcto, semánticamente idéntico, cambio visual 0).
+- Reemplazar `#1a5fa8` → `primary-medium` (idem).
+- El resto de la FASE A queda igual (emojis, escala tipográfica, gradientes, íconos sin color random).
+- FASES B/C/D se procesan como están.
+- **Ventaja:** alinea con el criterio de éxito original ("visualmente NADA cambia"). Cero riesgo visual.
+- **Desventaja:** Jorge no migra a la paleta `brand` del logo; queda para sprint futuro si lo decide.
+
+### Opción C — Procesar el resto del sprint (FASE B/C/D), saltear FASE A
+- FASE B (botones 48px, sin text-[10px] en `/tecnico`).
+- FASE C (Dashboard 3 bloques + skeletons + microcopy).
+- FASE D (HomePage testimonios + CTA dominicano + empty states).
+- FASE A queda pendiente para decisión.
+- **Ventaja:** ganamos 3/4 del sprint sin riesgo de paleta.
+- **Desventaja:** la FASE A queda colgada y la "marca aplicada en código" sigue siendo deuda.
+
+**Mi recomendación (coordinator):** **Opción B**. Es la que cumple literalmente el criterio de éxito del sprint ("visualmente NADA cambia"). Si Jorge después quiere migrar de `primary` a `brand-*`, es un sprint chico aparte con QA visual dedicado.
+
+**Para desbloquear:** agregar `OK: jorge YYYY-MM-DD HH:MM opcion=A|B|C` al final de esta entrada.
+
+---
+
 ## SPRINTS pasada 51 [NO CERRAR sin QA Jorge] — código en producción, esperando QA
 
 **Origen:** `trabaja` pasada 51 (2026-05-25 nocturno). 4 sprints del bloque FLUJO-DEPENDENCIAS quedaron con código commiteado + pusheado pero NO marcados COMPLETADO porque la spec exigía QA de Jorge antes de cerrar. Resumen para QA:
