@@ -65,6 +65,8 @@ Es decir: `#0f3460 ≠ brand-800`. La paleta "brand" es **diferente** a la palet
 
 **Para desbloquear:** agregar `OK: jorge YYYY-MM-DD HH:MM opcion=A|B|C` al final de esta entrada.
 
+**OK: jorge 2026-05-30 opcion=B** — Jorge eligió (vía Cowork) la opción **B (limpieza invisible)**: unificar `#0f3460` → `primary` y `#1a5fa8` → `primary-medium` en los ~100 archivos hardcoded. Cero cambio visual (los hex son semánticamente idénticos a los tokens `primary`/`primary-medium`). Resto de FASE A intacta: emojis decorativos → íconos lucide, escala tipográfica en `index.css`, gradientes saturados → color sólido, íconos sin color random en HomePage/Dashboard. **FASES B/C/D del sprint igual** (técnico botones 48px, Dashboard reducido + skeletons, HomePage testimonios + CTA dominicano). El rebranding a paleta `brand-*` queda como sprint propio futuro con preview visual antes/después. 1 solo QA Jorge al final del sprint completo (~10 min, 6 pantallas). Origen de la corrección: error en spec original de Cowork (decía `brand-800` cuando debía decir `primary`) cazado por coordinator en pasada 53.
+
 ---
 
 ## SPRINTS pasada 51 [NO CERRAR sin QA Jorge] — código en producción, esperando QA

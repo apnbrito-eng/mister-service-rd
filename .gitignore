@@ -52,3 +52,4 @@ cors.json
 .env*.local
 service-account.json
 data-imports/
+.gstack/
