@@ -30,7 +30,7 @@ import TimelineUnificadoOrden from '../components/ordenes/TimelineUnificadoOrden
 import ReagendarModal from '../components/ordenes/ReagendarModal';
 import RegistrarPagoModal from '../components/ordenes/RegistrarPagoModal';
 import EnviarFacturacionButton from '../components/ordenes/EnviarFacturacionButton';
-import { XCircle, Banknote, ArrowRightLeft, CreditCard, Plus } from 'lucide-react';
+import { XCircle, Banknote, ArrowRightLeft, CreditCard, Plus, DollarSign, Camera } from 'lucide-react';
 import { generarTrackingToken } from '../services/gps.service';
 import { whatsappUrl } from '../utils/whatsapp';
 import { coordsFromLatLng, googleMapsViewUrl } from '../utils/maps';
@@ -721,8 +721,8 @@ export default function OrdenDetalle() {
         <div className="bg-yellow-50 border-2 border-yellow-300 rounded-2xl p-4 flex items-start gap-3">
           <Pause size={20} className="text-yellow-700 mt-0.5 shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-semibold text-yellow-900">
-              ⏸ Orden Pendiente de piezas
+            <p className="text-sm font-semibold text-yellow-900 inline-flex items-center gap-1.5">
+              <Pause size={14} /> Orden Pendiente de piezas
               {orden.standbyHasta && (() => {
                 const fechaHasta = orden.standbyHasta instanceof Date
                   ? orden.standbyHasta
@@ -883,14 +883,14 @@ export default function OrdenDetalle() {
                 {/* Foto */}
                 {orden.cierreServicio.fotoCierre && (
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">📸 Foto de confirmación</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2 inline-flex items-center gap-1"><Camera size={12} /> Foto de confirmación</p>
                     <img src={orden.cierreServicio.fotoCierre.url} alt="Foto de cierre"
                       className="w-full max-w-md rounded-xl border border-gray-200" />
                     <div className="mt-2 text-xs text-gray-600 space-y-0.5">
                       {orden.cierreServicio.fotoCierre.gpsVerificado ? (
-                        <p>📍 {orden.cierreServicio.fotoCierre.lat.toFixed(4)}°N, {Math.abs(orden.cierreServicio.fotoCierre.lng).toFixed(4)}°W</p>
+                        <p className="inline-flex items-center gap-1"><MapPin size={11} /> {orden.cierreServicio.fotoCierre.lat.toFixed(4)}°N, {Math.abs(orden.cierreServicio.fotoCierre.lng).toFixed(4)}°W</p>
                       ) : (
-                        <p className="text-orange-600">⚠️ GPS no verificado</p>
+                        <p className="text-orange-600 inline-flex items-center gap-1"><AlertTriangle size={11} /> GPS no verificado</p>
                       )}
                       {orden.cierreServicio.fotoCierre.distanciaCliente !== undefined && orden.cierreServicio.fotoCierre.distanciaCliente !== null && (
                         <p className={orden.cierreServicio.fotoCierre.distanciaCliente > 500 ? 'text-orange-600' : 'text-green-600'}>
@@ -960,7 +960,7 @@ export default function OrdenDetalle() {
                 {/* Piezas (legacy) */}
                 {((orden.cierreServicio.piezasRetiradas?.length || 0) > 0 || (orden.cierreServicio.piezasInstaladas?.length || 0) > 0) && (
                   <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2">🔧 Piezas</p>
+                    <p className="text-xs font-semibold text-gray-500 uppercase mb-2 inline-flex items-center gap-1"><Wrench size={11} /> Piezas</p>
                     {(orden.cierreServicio.piezasRetiradas?.length || 0) > 0 && (
                       <div className="mb-3">
                         <p className="text-xs font-medium text-red-700">Retiradas:</p>
@@ -999,7 +999,7 @@ export default function OrdenDetalle() {
                   return (
                     <div>
                       <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                        <p className="text-xs font-semibold text-gray-500 uppercase">📦 Piezas utilizadas</p>
+                        <p className="text-xs font-semibold text-gray-500 uppercase inline-flex items-center gap-1"><Package size={11} /> Piezas utilizadas</p>
                         <div className="text-[11px] flex items-center gap-2 flex-wrap">
                           <span className="text-gray-600">
                             {piezas.length} pieza{piezas.length === 1 ? '' : 's'} · {cantidadTotal} unidad{cantidadTotal === 1 ? '' : 'es'} · Costo {formatMoneda(costoTotal)}
@@ -1017,13 +1017,14 @@ export default function OrdenDetalle() {
                       </div>
                       <div className="space-y-2">
                         {piezas.map(p => {
+                          // @safe-emoji: labels semánticos de origen (taller/vehículo/externa) y condición (nueva/usada) — claridad visual rápida en lista densa
                           const origenLabel = p.origen === 'inventario_taller' ? '🏭 Taller' : p.origen === 'inventario_vehiculo' ? '🚗 Vehículo' : '🛒 Externa';
                           const condicionLabel = p.condicion === 'nueva' ? '✨ Nueva' : '♻️ Usada';
                           const registrada = p.registradaEn instanceof Date ? p.registradaEn : ('toDate' in (p.registradaEn as object) ? (p.registradaEn as unknown as { toDate: () => Date }).toDate() : null);
                           const editada = p.editadaEn ? (p.editadaEn instanceof Date ? p.editadaEn : ('toDate' in (p.editadaEn as object) ? (p.editadaEn as unknown as { toDate: () => Date }).toDate() : null)) : null;
                           return (
                             <div key={p.id} className="border border-gray-200 rounded-lg p-3 bg-white">
-                              <div className="font-semibold text-sm text-gray-900">📦 {p.nombre}</div>
+                              <div className="font-semibold text-sm text-gray-900 inline-flex items-center gap-1"><Package size={12} /> {p.nombre}</div>
                               <div className="text-xs text-gray-700 mt-0.5">
                                 {p.marca && <>Marca: {p.marca} · </>}
                                 {p.modelo && <>Modelo: {p.modelo} · </>}
@@ -1161,7 +1162,7 @@ export default function OrdenDetalle() {
 
           {orden.notasTecnico && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">🔧 Notas del Técnico</h3>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3 inline-flex items-center gap-1"><Wrench size={12} /> Notas del Técnico</h3>
               <div className="bg-blue-50 rounded-lg p-3 border border-blue-100">
                 <p className="text-sm text-blue-800 whitespace-pre-line">{orden.notasTecnico}</p>
               </div>
@@ -1170,7 +1171,7 @@ export default function OrdenDetalle() {
 
           {orden.precioSugerido !== undefined && orden.precioSugerido !== null && (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3">💰 Precio Sugerido por el Técnico</h3>
+              <h3 className="text-sm font-semibold text-gray-500 uppercase mb-3 inline-flex items-center gap-1"><DollarSign size={12} /> Precio Sugerido por el Técnico</h3>
               <p className="text-2xl font-bold text-green-700">
                 RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
               </p>
@@ -1319,8 +1320,8 @@ export default function OrdenDetalle() {
                   </a>
                 )}
                 <div className="flex-1 text-sm">
-                  <p className="font-semibold text-green-900">
-                    📸 Chequeo iniciado por {orden.inicioChequeo.tecnicoNombre}
+                  <p className="font-semibold text-green-900 inline-flex items-center gap-1">
+                    <Camera size={12} /> Chequeo iniciado por {orden.inicioChequeo.tecnicoNombre}
                   </p>
                   <p className="text-xs text-green-800 mt-0.5">
                     {formatFecha(orden.inicioChequeo.fechaInicio)}
@@ -1675,7 +1676,7 @@ export default function OrdenDetalle() {
                 }}
                 className="w-full flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"
               >
-                <Pause size={14} /> ⏸ Marcar pendiente de piezas
+                <Pause size={14} /> Marcar pendiente de piezas
               </button>
             </div>
           )}
@@ -1735,6 +1736,7 @@ export default function OrdenDetalle() {
                     <Copy size={12} /> Copiar
                   </button>
                   {orden.clienteTelefono && (
+                    // @safe-emoji: mensaje a cliente vía WhatsApp — los emojis dan calidez en el canal del cliente
                     <a href={whatsappUrl(orden.clienteTelefono, `Hola ${orden.clienteNombre} 👋\nSu técnico ${orden.tecnicoNombre || ''} está en camino.\nPuede seguir su ubicación en tiempo real aquí:\n📍 ${orden.trackingGPS.enlace}\n- Mister Service RD`)}
                       target="_blank" rel="noreferrer"
                       className="flex-1 flex items-center justify-center gap-1 bg-green-500 hover:bg-green-600 text-white px-2 py-2 rounded-lg text-xs font-medium">
@@ -1928,7 +1930,7 @@ export default function OrdenDetalle() {
               disabled={savingStandby}
               className="px-5 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
             >
-              {savingStandby ? 'Guardando...' : '⏸ Marcar pendiente'}
+              {savingStandby ? 'Guardando...' : 'Marcar pendiente'}
             </button>
           </div>
         </div>

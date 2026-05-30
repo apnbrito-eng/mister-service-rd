@@ -14,7 +14,7 @@ import Modal from '../components/Modal';
 import OrdenEditForm from '../components/ordenes/OrdenEditForm';
 import type { EditFormState } from '../components/ordenes/OrdenEditForm';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
-import { MapPin, Navigation, Route, Clock, Phone, Satellite, Truck, WifiOff, Edit2, AlertTriangle } from 'lucide-react';
+import { MapPin, Navigation, Route, Clock, Phone, Satellite, Truck, WifiOff, Edit2, AlertTriangle, Pause } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import { suscribirTodasUbicaciones } from '../services/gps.service';
 import { UbicacionVehiculo } from '../types';
@@ -907,9 +907,9 @@ export default function MapaRutas() {
                                 <WifiOff size={10} /> Sin señal ({minutosSinSeñal} min)
                               </span>
                             ) : u.enMovimiento ? (
-                              <span className="text-green-600">🟢 En movimiento · {Math.round(u.velocidad)} km/h</span>
+                              <span className="text-green-600 inline-flex items-center gap-1"><Navigation size={10} /> En movimiento · {Math.round(u.velocidad)} km/h</span>
                             ) : (
-                              <span className="text-gray-600">⏸ Detenido</span>
+                              <span className="text-gray-600 inline-flex items-center gap-1"><Pause size={10} /> Detenido</span>
                             )}
                           </p>
                         </div>

@@ -9,7 +9,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Logo from '../components/Logo';
 import FeedbackNPS, { FeedbackYaEnviado } from '../components/public/FeedbackNPS';
 import { useConfigWeb } from '../hooks/useConfigWeb';
-import { AlertCircle, Clock, User, Wrench, Wifi, WifiOff, CheckCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, Clock, User, Wrench, Wifi, WifiOff, CheckCircle, RefreshCw, MapPin, Navigation, Pause } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
@@ -186,7 +186,7 @@ export default function TrackingCliente() {
   useEffect(() => {
     if (!orden || orden.clienteLat) return;
     // Try to fetch client location
-    const clienteId = orden.clienteNombre; // fallback
+    // const _clienteId = orden.clienteNombre; // fallback — placeholder removed for lint
     // Could also query by clienteNombre — skip for simplicity
   }, [orden]);
 
@@ -323,7 +323,7 @@ export default function TrackingCliente() {
         {sinUbicacion ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
             <AlertCircle size={48} className="mx-auto text-yellow-400 mb-3" />
-            <p className="text-sm text-gray-700 font-medium mb-1">⚠️ No pudimos obtener la ubicación del técnico en este momento.</p>
+            <p className="text-sm text-gray-700 font-medium mb-1">No pudimos obtener la ubicación del técnico en este momento.</p>
             <p className="text-xs text-gray-500 mb-4">El técnico está en camino a su cita. Intente nuevamente en unos minutos.</p>
             <button onClick={() => window.location.reload()}
               className="inline-flex items-center gap-1 px-4 py-2 bg-[#0f3460] text-white rounded-lg text-xs font-medium">
@@ -345,7 +345,7 @@ export default function TrackingCliente() {
                 <Marker position={[latVehiculo, lngVehiculo]} icon={crearIconoVehiculo()}>
                   <Popup>
                     <div className="text-sm">
-                      <p className="font-semibold">🚐 Técnico en movimiento</p>
+                      <p className="font-semibold inline-flex items-center gap-1"><Navigation size={12} /> Técnico en movimiento</p>
                       {ubicacion && <p>Velocidad: {ubicacion.velocidad} km/h</p>}
                     </div>
                   </Popup>
@@ -355,7 +355,7 @@ export default function TrackingCliente() {
                 <Marker position={[latCliente, lngCliente]} icon={crearIconoCliente()}>
                   <Popup>
                     <div className="text-sm">
-                      <p className="font-semibold">📍 Su domicilio</p>
+                      <p className="font-semibold inline-flex items-center gap-1"><MapPin size={12} /> Su domicilio</p>
                       {orden.clienteDireccion && <p className="text-xs">{orden.clienteDireccion}</p>}
                     </div>
                   </Popup>
@@ -376,19 +376,19 @@ export default function TrackingCliente() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
             <div className="grid grid-cols-3 gap-3 text-center">
               <div>
-                <div className="text-xs text-gray-500 mb-1">📍 Distancia</div>
+                <div className="text-xs text-gray-500 mb-1 inline-flex items-center gap-1"><MapPin size={11} /> Distancia</div>
                 <div className="text-lg font-bold text-[#0f3460]">
                   {eta ? `${eta.distanciaKm.toFixed(1)} km` : '—'}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-gray-500 mb-1">🕐 Tiempo est.</div>
+                <div className="text-xs text-gray-500 mb-1 inline-flex items-center gap-1"><Clock size={11} /> Tiempo est.</div>
                 <div className="text-lg font-bold text-[#0f3460]">
                   {eta ? `~${eta.minutosEstimados} min` : '—'}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-gray-500 mb-1">🚐 Velocidad</div>
+                <div className="text-xs text-gray-500 mb-1 inline-flex items-center gap-1"><Navigation size={11} /> Velocidad</div>
                 <div className="text-lg font-bold text-[#0f3460]">
                   {Math.round(ubicacion.velocidad)} km/h
                 </div>
@@ -413,17 +413,17 @@ export default function TrackingCliente() {
 
             <div className="mt-2 text-center text-xs">
               {ubicacion.velocidad > 0 ? (
-                <span className="text-green-600">🚗 En movimiento</span>
+                <span className="text-green-600 inline-flex items-center gap-1"><Navigation size={11} /> En movimiento</span>
               ) : (
-                <span className="text-yellow-600">⏸ Detenido momentáneamente</span>
+                <span className="text-yellow-600 inline-flex items-center gap-1"><Pause size={11} /> Detenido momentáneamente</span>
               )}
             </div>
           </div>
         )}
       </div>
 
-      <div className="text-center text-xs text-gray-400 py-3">
-        🔧 Mister Service RD
+      <div className="text-center text-xs text-gray-400 py-3 inline-flex items-center justify-center gap-1 w-full">
+        <Wrench size={11} /> Mister Service RD
       </div>
     </div>
   );

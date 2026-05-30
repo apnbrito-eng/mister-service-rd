@@ -27,7 +27,7 @@ import { guardarUbicacionVehiculo } from '../services/gps.service';
 import {
   MapPin, Clock, Phone, CheckCircle, LogOut, Navigation,
   User, Bell, StickyNote, Eye, History,
-  ClipboardCheck, Pause, Play
+  ClipboardCheck, Pause, Play, Calendar, Wrench, DollarSign
 } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
@@ -827,8 +827,8 @@ export default function TecnicoVista() {
             "Buenos días, {nombre}" se movió al header. Acá quedan solo la
             fecha y el botón "Ver Ruta del Día". */}
         <div className="text-center">
-          <p className="text-xs text-gray-500 capitalize">
-            📅 {format(hoy, "EEEE, dd 'de' MMMM yyyy", { locale: es })}
+          <p className="text-xs text-gray-500 capitalize inline-flex items-center gap-1.5">
+            <Calendar size={12} /> {format(hoy, "EEEE, dd 'de' MMMM yyyy", { locale: es })}
           </p>
           {permisos.verUbicacionGPS && (
             <button
@@ -836,7 +836,7 @@ export default function TecnicoVista() {
               className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-primary hover:bg-primary-medium text-white rounded-xl text-xs font-medium transition-colors"
             >
               <Navigation size={14} />
-              {showMap ? 'Ocultar mapa' : (marcadoresMapa.length > 0 ? '🗺️ Ver Ruta del Día' : '🗺️ Ver Mapa')}
+              {showMap ? 'Ocultar mapa' : (marcadoresMapa.length > 0 ? 'Ver Ruta del Día' : 'Ver Mapa')}
               {marcadoresMapa.length > 0 && (
                 <span className="bg-white/20 px-1.5 py-0.5 rounded-full text-[10px]">{marcadoresMapa.length}</span>
               )}
@@ -865,11 +865,11 @@ export default function TecnicoVista() {
                       <Popup>
                         <div className="text-sm min-w-[180px]">
                           <p className="font-semibold text-primary">{m.orden}. {m.clienteNombre}</p>
-                          <p className="mt-0.5">🕐 {formatHora(m.fechaCita)}</p>
-                          <p className="text-xs text-gray-700 mt-0.5">
-                            🔧 {m.equipoTipo}{m.equipoMarca ? ` · ${m.equipoMarca}` : ''}
+                          <p className="mt-0.5 inline-flex items-center gap-1"><Clock size={11} /> {formatHora(m.fechaCita)}</p>
+                          <p className="text-xs text-gray-700 mt-0.5 inline-flex items-center gap-1">
+                            <Wrench size={11} /> {m.equipoTipo}{m.equipoMarca ? ` · ${m.equipoMarca}` : ''}
                           </p>
-                          <p className="text-xs text-gray-600 mt-0.5">📍 {m.direccion}</p>
+                          <p className="text-xs text-gray-600 mt-0.5 inline-flex items-center gap-1"><MapPin size={11} /> {m.direccion}</p>
                           <div className="flex gap-1 mt-2">
                             <button
                               type="button"
@@ -1060,7 +1060,7 @@ export default function TecnicoVista() {
                     {/* Notas técnico previas */}
                     {orden.notasTecnico && (
                       <div className="mt-2 bg-blue-50 rounded-lg p-2 text-xs text-blue-800 border border-blue-100">
-                        <span className="font-medium">🔧 Mis notas:</span>
+                        <span className="font-medium inline-flex items-center gap-1"><Wrench size={11} /> Mis notas:</span>
                         <span className="ml-1 whitespace-pre-line">
                           {orden.notasTecnico.length > 100 ? orden.notasTecnico.substring(0, 100) + '...' : orden.notasTecnico}
                         </span>
@@ -1068,7 +1068,7 @@ export default function TecnicoVista() {
                     )}
                     {orden.precioSugerido !== undefined && orden.precioSugerido !== null && (
                       <div className="mt-1 bg-green-50 rounded-lg p-2 text-xs text-green-800 border border-green-100">
-                        <span className="font-medium">💰 Mi precio:</span>
+                        <span className="font-medium inline-flex items-center gap-1"><DollarSign size={11} /> Mi precio:</span>
                         <span className="ml-1 font-bold">RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
                       </div>
                     )}
@@ -1100,8 +1100,8 @@ export default function TecnicoVista() {
                         <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-3 flex items-start gap-2">
                           <Pause size={16} className="text-yellow-700 mt-0.5 shrink-0" />
                           <div className="flex-1 text-xs text-yellow-900">
-                            <p className="font-semibold">
-                              ⏸ Pendiente de piezas
+                            <p className="font-semibold inline-flex items-center gap-1">
+                              <Pause size={12} /> Pendiente de piezas
                               {orden.standbyHasta && (
                                 <span className="ml-1 font-normal">
                                   · hasta {format(orden.standbyHasta instanceof Date ? orden.standbyHasta : new Date(), 'dd/MM/yyyy', { locale: es })}
@@ -1202,7 +1202,7 @@ export default function TecnicoVista() {
                             className="flex items-center gap-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-3 py-2 rounded-lg text-xs font-medium"
                             title="Marcar pendiente de piezas"
                           >
-                            <Pause size={12} /> ⏸ Pendiente de piezas
+                            <Pause size={12} /> Pendiente de piezas
                           </button>
                         )}
                         {/* SPRINT-177: "Avisar a oficina" — el técnico llega
@@ -1297,8 +1297,8 @@ export default function TecnicoVista() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-[11px] uppercase tracking-wide opacity-90">
-                      💰 Mis ganancias · Quincena actual
+                    <p className="text-[11px] uppercase tracking-wide opacity-90 inline-flex items-center gap-1">
+                      <DollarSign size={11} /> Mis ganancias · Quincena actual
                     </p>
                     <p className="text-2xl font-bold mt-1">{formatMoneda(total)}</p>
                     <p className="text-[11px] opacity-90 mt-0.5">
@@ -1419,8 +1419,8 @@ export default function TecnicoVista() {
                 </button>
               )}
               <button onClick={() => setVista('rango')}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'rango' ? 'bg-primary text-white' : 'text-gray-600'}`}>
-                📅 Rango
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors inline-flex items-center justify-center gap-1 ${vista === 'rango' ? 'bg-primary text-white' : 'text-gray-600'}`}>
+                <Calendar size={11} /> Rango
               </button>
             </div>
 
@@ -1557,7 +1557,7 @@ export default function TecnicoVista() {
             {selectedOrden.notasTecnico && (
               <div className="pt-2 border-t border-gray-100">
                 <p className="text-xs font-semibold text-gray-500 uppercase mb-2 flex items-center gap-1">
-                  🔧 Mis Notas
+                  <Wrench size={11} /> Mis Notas
                 </p>
                 <div className="bg-blue-50 rounded-lg p-2 border border-blue-100">
                   <p className="text-xs text-blue-800 whitespace-pre-line">{selectedOrden.notasTecnico}</p>
@@ -1567,7 +1567,7 @@ export default function TecnicoVista() {
 
             {selectedOrden.precioSugerido !== undefined && selectedOrden.precioSugerido !== null && (
               <div className="pt-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">💰 Mi Precio Sugerido</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-1 inline-flex items-center gap-1"><DollarSign size={11} /> Mi Precio Sugerido</p>
                 <p className="text-sm font-bold text-green-700 bg-green-50 rounded-lg p-2 border border-green-200">
                   RD$ {Number(selectedOrden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
                 </p>
@@ -1692,7 +1692,7 @@ export default function TecnicoVista() {
               disabled={savingStandby}
               className="px-5 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg text-sm font-medium disabled:opacity-60"
             >
-              {savingStandby ? 'Guardando...' : '⏸ Poner en stand-by'}
+              {savingStandby ? 'Guardando...' : 'Poner en stand-by'}
             </button>
           </div>
         </div>

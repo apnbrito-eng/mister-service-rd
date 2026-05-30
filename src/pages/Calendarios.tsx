@@ -4,7 +4,7 @@ import { db } from '../firebase/config';
 import { Calendario, Personal, DiaSemana } from '../types';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Plus, Calendar as CalendarIcon, Edit, Trash2, Share2, Power, Check, X } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Edit, Trash2, Share2, Power, Check, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const COLORES = [
@@ -246,8 +246,8 @@ export default function Calendarios() {
                 </div>
                 <p className="text-xs text-gray-500">Asignado a: {cal.asignadoNombre || 'Sin asignar'}</p>
                 <div className="flex gap-3 mt-1 text-xs text-gray-600">
-                  <span>📅 {describirDias(cal.dias)}</span>
-                  <span>🕐 {describirHoras(cal.horas)}</span>
+                  <span className="inline-flex items-center gap-1"><CalendarIcon size={11} /> {describirDias(cal.dias)}</span>
+                  <span className="inline-flex items-center gap-1"><Clock size={11} /> {describirHoras(cal.horas)}</span>
                 </div>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">

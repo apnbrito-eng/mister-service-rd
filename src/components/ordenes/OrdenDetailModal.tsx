@@ -328,7 +328,7 @@ export default function OrdenDetailModal({
         <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-3 flex items-start gap-3">
           <Package size={18} className="text-yellow-700 mt-0.5 shrink-0" />
           <div className="flex-1">
-            <p className="font-semibold text-yellow-900 text-sm">⏸ Pendiente de piezas</p>
+            <p className="font-semibold text-yellow-900 text-sm">Pendiente de piezas</p>
             {orden.standbyMotivo && (
               <p className="text-xs text-yellow-800 mt-0.5">Motivo: {orden.standbyMotivo}</p>
             )}

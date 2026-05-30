@@ -14,7 +14,7 @@ import { registrarComisionPorOrden } from '../../utils/comisiones';
 import { crearNotificacion } from '../../services/notificaciones.service';
 import Modal from '../Modal';
 import {
-  Calendar, Clock, Wrench, User, Package, GripVertical,
+  Calendar, Clock, Wrench, User, Package, GripVertical, Pause,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -363,7 +363,7 @@ export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Prop
                           )}
                           {o.enStandby && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium bg-yellow-100 text-yellow-800">
-                              ⏸ Pendiente de piezas
+                              <Pause size={9} /> Pendiente de piezas
                             </span>
                           )}
                           {conStandby && (

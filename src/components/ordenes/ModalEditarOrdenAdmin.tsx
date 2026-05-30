@@ -8,7 +8,7 @@ import {
   updateDoc,
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2, MapPin, Wrench, Calendar, DollarSign } from 'lucide-react';
 import { db } from '../../firebase/config';
 import { useApp } from '../../context/AppContext';
 import { crearRegistroAuditoria } from '../../utils';
@@ -509,7 +509,7 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
           {/* ─── Dirección ─── */}
           <section>
             <h3 className="text-sm font-semibold text-gray-900 mb-2 inline-flex items-center gap-2">
-              <span>📍 Dirección</span>
+              <span className="inline-flex items-center gap-1"><MapPin size={13} /> Dirección</span>
               <span className="inline-flex items-center gap-1 text-[11px] font-normal text-amber-700">
                 <AlertTriangle size={11} /> Datos del cliente
               </span>
@@ -543,7 +543,7 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
           {/* ─── Equipo ─── */}
           <section>
             <h3 className="text-sm font-semibold text-gray-900 mb-2 inline-flex items-center gap-2">
-              <span>🔧 Equipo</span>
+              <span className="inline-flex items-center gap-1"><Wrench size={13} /> Equipo</span>
               <span className="inline-flex items-center gap-1 text-[11px] font-normal text-amber-700">
                 <AlertTriangle size={11} /> Datos del cliente
               </span>
@@ -614,8 +614,8 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
 
           {/* ─── Agendamiento ─── */}
           <section>
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">
-              📅 Agendamiento
+            <h3 className="text-sm font-semibold text-gray-900 mb-2 inline-flex items-center gap-1">
+              <Calendar size={13} /> Agendamiento
               <span className="ml-2 text-[11px] font-normal text-gray-500">
                 admin puede editar libre
               </span>
@@ -661,7 +661,7 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
 
           {/* ─── Precios ─── */}
           <section>
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">💰 Precios y cobro</h3>
+            <h3 className="text-sm font-semibold text-gray-900 mb-2 inline-flex items-center gap-1"><DollarSign size={13} /> Precios y cobro</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Precio aprobado (RD$)</label>

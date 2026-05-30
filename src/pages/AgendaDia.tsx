@@ -29,7 +29,7 @@ import toast from 'react-hot-toast';
 import {
   ClipboardList, Calendar, CheckCircle, Clock, DollarSign,
   ChevronDown, ChevronUp, User, Wrench, UserCheck,
-  ClipboardCheck, DollarSign as DollarIcon, RotateCcw,
+  ClipboardCheck, DollarSign as DollarIcon, RotateCcw, Pause,
 } from 'lucide-react';
 
 export default function AgendaDia() {
@@ -979,7 +979,7 @@ function TecnicoColumn({
                   <span className="font-mono text-[11px] font-bold text-primary">{o.numero || '#--'}</span>
                   {o.enStandby && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-[10px] font-medium">
-                      ⏸ Stand-by
+                      <Pause size={9} /> Stand-by
                     </span>
                   )}
                   {o.soloChequeo && (

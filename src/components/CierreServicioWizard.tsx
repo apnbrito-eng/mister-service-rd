@@ -13,7 +13,7 @@ import { razonCerrarServicioDisabled } from '../utils/tooltipsBotones';
 import Modal from './Modal';
 import PiezaFormModal from './cierre/PiezaFormModal';
 import {
-  Camera, Check, X, Loader2, CheckCircle, AlertCircle, Plus, Pencil, Trash2,
+  Camera, Check, X, Loader2, CheckCircle, AlertCircle, Plus, Pencil, Trash2, Wrench,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { addMonths } from 'date-fns';
@@ -814,7 +814,7 @@ export default function CierreServicioWizard({
 
           {/* SECCIÓN 3: PIEZAS UTILIZADAS (Fase A1) */}
           <div className="border-t border-gray-200 pt-4">
-            <p className="text-sm font-semibold text-gray-900 mb-2">🔧 Piezas utilizadas</p>
+            <p className="text-sm font-semibold text-gray-900 mb-2 inline-flex items-center gap-1"><Wrench size={13} /> Piezas utilizadas</p>
             <p className="text-xs text-gray-500 mb-3">¿Usaste alguna pieza en este servicio?</p>
 
             <div className="grid grid-cols-2 gap-3 mb-3">

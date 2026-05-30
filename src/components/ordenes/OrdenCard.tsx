@@ -99,7 +99,7 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
               </span>
             )}
             {orden.enStandby && (
-              <Badge label="⏸ Pendiente de piezas" color="bg-yellow-100 text-yellow-800" />
+              <Badge label="Pendiente de piezas" color="bg-yellow-100 text-yellow-800" />
             )}
             {orden.enStandby && puedeReactivar && (
               <button

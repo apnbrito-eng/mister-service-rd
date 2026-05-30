@@ -184,6 +184,7 @@ export default function PiezaFormModal({
                   : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-primary'
               }`}
             >
+              {/* @safe-emoji: toggle nueva/usada — claridad visual rápida en wizard de cierre */}
               ✨ Nueva
             </button>
             <button
