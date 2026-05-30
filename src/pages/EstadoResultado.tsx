@@ -237,10 +237,10 @@ export default function EstadoResultado() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-            <TrendingUp size={20} className="text-[#0f3460]" />
+            <TrendingUp size={20} className="text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-[#0f3460]">Estado de Resultado</h1>
+            <h1 className="text-2xl font-bold text-primary">Estado de Resultado</h1>
             <p className="text-gray-500 text-sm">P&L mensual — ingresos, costos, gastos y utilidad</p>
           </div>
         </div>
@@ -248,14 +248,14 @@ export default function EstadoResultado() {
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Año</label>
             <select value={year} onChange={e => setYear(Number(e.target.value))}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
               {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Mes</label>
             <select value={month} onChange={e => setMonth(Number(e.target.value))}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
               {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
             </select>
           </div>
@@ -314,7 +314,7 @@ export default function EstadoResultado() {
           {/* P&L tabla */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="px-5 py-3 bg-gray-50 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-[#0f3460]">Desglose · {etiquetaPeriodo}</h2>
+              <h2 className="text-sm font-semibold text-primary">Desglose · {etiquetaPeriodo}</h2>
             </div>
             <table className="w-full text-sm">
               <tbody>
@@ -383,10 +383,10 @@ function Row({
   const positivo = value >= 0;
   return (
     <tr className={`border-b border-gray-50 ${highlighted ? 'bg-blue-50/40' : ''}`}>
-      <td className={`px-5 py-2 text-sm ${bold ? 'font-bold text-[#0f3460]' : 'text-gray-700'}`}>
+      <td className={`px-5 py-2 text-sm ${bold ? 'font-bold text-primary' : 'text-gray-700'}`}>
         {label}
       </td>
-      <td className={`px-5 py-2 text-sm text-right tabular-nums ${bold ? 'font-bold' : ''} ${positivo ? (bold ? 'text-[#0f3460]' : 'text-gray-900') : 'text-red-600'}`}>
+      <td className={`px-5 py-2 text-sm text-right tabular-nums ${bold ? 'font-bold' : ''} ${positivo ? (bold ? 'text-primary' : 'text-gray-900') : 'text-red-600'}`}>
         {positivo ? '' : '−'}{formatMoneda(Math.abs(value))}
       </td>
       <td className="px-5 py-2 text-right text-xs">

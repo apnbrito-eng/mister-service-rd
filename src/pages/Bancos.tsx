@@ -153,10 +153,10 @@ export default function Bancos() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-            <Building2 size={20} className="text-[#0f3460]" />
+            <Building2 size={20} className="text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-[#0f3460]">Bancos</h1>
+            <h1 className="text-2xl font-bold text-primary">Bancos</h1>
             <p className="text-gray-500 text-sm">
               Cuentas para que los clientes hagan transferencias. Las operarias las verán al registrar un pago.
             </p>
@@ -165,7 +165,7 @@ export default function Bancos() {
         {puedeGestionar && (
           <button
             onClick={abrirNuevo}
-            className="flex items-center gap-2 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium"
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium"
           >
             <Plus size={16} /> Nuevo banco
           </button>
@@ -274,7 +274,7 @@ export default function Bancos() {
                 value={form.nombre}
                 onChange={e => setF('nombre', e.target.value)}
                 placeholder="Ej: BHD"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 autoFocus
               />
             </div>
@@ -286,7 +286,7 @@ export default function Bancos() {
                 value={form.numeroCuenta}
                 onChange={e => setF('numeroCuenta', e.target.value)}
                 placeholder="27792170018"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
 
@@ -295,7 +295,7 @@ export default function Bancos() {
               <select
                 value={form.tipoCuenta}
                 onChange={e => setF('tipoCuenta', e.target.value as 'ahorro' | 'corriente')}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
               >
                 <option value="ahorro">Ahorro</option>
                 <option value="corriente">Corriente</option>
@@ -309,7 +309,7 @@ export default function Bancos() {
                 value={form.titular}
                 onChange={e => setF('titular', e.target.value)}
                 placeholder="Jorge L. Brito  /  Fixman SRL"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
 
@@ -322,7 +322,7 @@ export default function Bancos() {
                 value={form.rnc}
                 onChange={e => setF('rnc', e.target.value)}
                 placeholder="133-118191"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
 
@@ -335,7 +335,7 @@ export default function Bancos() {
                 value={form.cedula}
                 onChange={e => setF('cedula', e.target.value)}
                 placeholder="229-0015616-1"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
 
@@ -348,7 +348,7 @@ export default function Bancos() {
                 value={form.emailComprobante}
                 onChange={e => setF('emailComprobante', e.target.value)}
                 placeholder="misterservicerd@gmail.com"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
 
@@ -361,7 +361,7 @@ export default function Bancos() {
                 value={form.orden}
                 onChange={e => setF('orden', e.target.value === '' ? '' : Number(e.target.value))}
                 placeholder="1, 2, 3..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
           </div>
@@ -377,7 +377,7 @@ export default function Bancos() {
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
             >
               {saving ? 'Guardando...' : editing ? 'Actualizar' : 'Crear banco'}
             </button>

@@ -133,7 +133,7 @@ export default function Rendimiento() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-[#0f3460]">Rendimiento / KPIs</h1>
+      <h1 className="text-2xl font-bold text-primary">Rendimiento / KPIs</h1>
 
       {/* Filters */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-wrap gap-3 items-center">
@@ -143,12 +143,12 @@ export default function Rendimiento() {
         </div>
         {(['hoy', 'semana', 'mes'] as const).map(f => (
           <button key={f} onClick={() => setFiltroFecha(f)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroFecha === f ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroFecha === f ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
             {f === 'hoy' ? 'Hoy' : f === 'semana' ? 'Semana' : 'Mes'}
           </button>
         ))}
         <button onClick={() => setFiltroFecha('rango')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroFecha === 'rango' ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroFecha === 'rango' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
           Rango
         </button>
         {filtroFecha === 'rango' && (
@@ -182,10 +182,10 @@ export default function Rendimiento() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold text-gray-900">Tasa de Confirmación Global</h2>
-          <span className="text-2xl font-bold text-[#0f3460]">{kpis.tasaConfirmacion.toFixed(1)}%</span>
+          <span className="text-2xl font-bold text-primary">{kpis.tasaConfirmacion.toFixed(1)}%</span>
         </div>
         <div className="bg-gray-200 rounded-full h-4">
-          <div className="bg-gradient-to-r from-[#0f3460] to-[#1a5fa8] h-4 rounded-full transition-all"
+          <div className="bg-gradient-to-r from-primary to-primary-medium h-4 rounded-full transition-all"
             style={{ width: `${Math.min(kpis.tasaConfirmacion, 100)}%` }} />
         </div>
         <div className="flex justify-between mt-2 text-xs text-gray-500">
@@ -197,7 +197,7 @@ export default function Rendimiento() {
       {/* Rendimiento por Coordinador */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-4">
-          <Users size={20} className="text-[#1a5fa8]" />
+          <Users size={20} className="text-primary-medium" />
           <h2 className="text-lg font-semibold text-gray-900">Rendimiento por Coordinador</h2>
         </div>
         <div className="space-y-4">
@@ -230,9 +230,9 @@ export default function Rendimiento() {
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-500 min-w-[100px]">Tasa confirmación</span>
                   <div className="flex-1 bg-gray-200 rounded-full h-2.5">
-                    <div className="bg-[#1a5fa8] h-2.5 rounded-full" style={{ width: `${Math.min(tasa, 100)}%` }} />
+                    <div className="bg-primary-medium h-2.5 rounded-full" style={{ width: `${Math.min(tasa, 100)}%` }} />
                   </div>
-                  <span className="text-sm font-bold text-[#0f3460] min-w-[50px] text-right">{tasa.toFixed(0)}%</span>
+                  <span className="text-sm font-bold text-primary min-w-[50px] text-right">{tasa.toFixed(0)}%</span>
                 </div>
               </div>
             );
@@ -246,7 +246,7 @@ export default function Rendimiento() {
       {/* Rendimiento por Técnico */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-4">
-          <TrendingUp size={20} className="text-[#1a5fa8]" />
+          <TrendingUp size={20} className="text-primary-medium" />
           <h2 className="text-lg font-semibold text-gray-900">Rendimiento por Técnico</h2>
         </div>
         <div className="space-y-4">
@@ -256,7 +256,7 @@ export default function Rendimiento() {
               <div key={t.nombre} className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-semibold text-gray-900">{t.nombre}</span>
-                  <span className="text-sm font-medium text-[#0f3460]">{formatMoneda(t.montoFacturado)}</span>
+                  <span className="text-sm font-medium text-primary">{formatMoneda(t.montoFacturado)}</span>
                 </div>
                 <div className="flex gap-3 mb-2 text-xs">
                   <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Pendientes: {t.pendientes}</span>
@@ -318,11 +318,11 @@ function DesempenoOperariasSection({ ordenes, personal }: { ordenes: OrdenServic
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2">
-          <Award size={20} className="text-[#1a5fa8]" />
+          <Award size={20} className="text-primary-medium" />
           <h2 className="text-lg font-semibold text-gray-900">Desempeño de Operarias</h2>
         </div>
         <select value={quincena} onChange={e => setQuincena(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
           {quincenas.map(q => <option key={q} value={q}>{q}</option>)}
         </select>
       </div>

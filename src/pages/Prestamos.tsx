@@ -132,7 +132,7 @@ export default function Prestamos() {
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
             <Wallet size={24} /> Préstamos a empleados
           </h1>
           <p className="text-gray-500 text-sm">
@@ -145,7 +145,7 @@ export default function Prestamos() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <p className="text-[11px] uppercase tracking-wide text-gray-500">Préstamos activos</p>
-          <p className="text-2xl font-bold text-[#0f3460]">{totales.cantidadActivos}</p>
+          <p className="text-2xl font-bold text-primary">{totales.cantidadActivos}</p>
         </div>
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <p className="text-[11px] uppercase tracking-wide text-gray-500">Saldo total pendiente</p>
@@ -163,7 +163,7 @@ export default function Prestamos() {
         <select
           value={filtroEstado}
           onChange={e => setFiltroEstado(e.target.value as FiltroEstado)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
         >
           <option value="activos">Activos</option>
           <option value="pagados">Pagados</option>
@@ -173,7 +173,7 @@ export default function Prestamos() {
         <select
           value={filtroPersonal}
           onChange={e => setFiltroPersonal(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
         >
           <option value="">Todos los empleados</option>
           {empleadosOpts.map(p => (
@@ -266,7 +266,7 @@ export default function Prestamos() {
                   <button
                     type="button"
                     onClick={() => toggleExpand(p.id)}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 hover:text-[#1a5fa8]"
+                    className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 hover:text-primary-medium"
                   >
                     {expandido_ ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     Ver historial ({p.cuotasHistorial.length} cuota{p.cuotasHistorial.length !== 1 ? 's' : ''})
@@ -291,7 +291,7 @@ export default function Prestamos() {
                         {p.cuotasHistorial.map(c => (
                           <div key={`${c.numero}-${c.liquidacionId}`} className="flex items-center justify-between text-xs px-3 py-1.5 bg-gray-50 rounded">
                             <div className="flex items-center gap-3">
-                              <span className="font-mono font-semibold text-[#0f3460]">Cuota {c.numero}</span>
+                              <span className="font-mono font-semibold text-primary">Cuota {c.numero}</span>
                               <span className="text-gray-700">{c.quincena}</span>
                               <span className="text-gray-400">{formatFecha(c.fechaAplicacion instanceof Date ? c.fechaAplicacion : new Date())}</span>
                             </div>
@@ -347,7 +347,7 @@ export default function Prestamos() {
                 value={motivoCancelar}
                 onChange={e => setMotivoCancelar(e.target.value)}
                 placeholder="Ej: empleado salió de la empresa, condonación, error administrativo..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
             <div className="flex justify-end gap-3 pt-2">

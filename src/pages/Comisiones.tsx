@@ -208,7 +208,7 @@ export default function Comisiones() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
             <DollarSign size={24} /> Comisiones
           </h1>
           <p className="text-gray-500 text-sm">
@@ -235,14 +235,14 @@ export default function Comisiones() {
             <button
               type="button"
               onClick={() => setModoFiltro('quincena')}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${modoFiltro === 'quincena' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}
+              className={`px-3 py-1 rounded text-xs font-medium transition-colors ${modoFiltro === 'quincena' ? 'bg-white shadow-sm text-primary' : 'text-gray-600'}`}
             >
               Quincena
             </button>
             <button
               type="button"
               onClick={() => setModoFiltro('rango')}
-              className={`px-3 py-1 rounded text-xs font-medium transition-colors inline-flex items-center gap-1 ${modoFiltro === 'rango' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}
+              className={`px-3 py-1 rounded text-xs font-medium transition-colors inline-flex items-center gap-1 ${modoFiltro === 'rango' ? 'bg-white shadow-sm text-primary' : 'text-gray-600'}`}
             >
               <Calendar size={11} /> Rango libre
             </button>
@@ -254,7 +254,7 @@ export default function Comisiones() {
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Quincena</label>
               <select value={filtroQuincena} onChange={e => setFiltroQuincena(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                 {quincenasDisponibles.map(q => <option key={q} value={q}>{q}</option>)}
               </select>
             </div>
@@ -263,12 +263,12 @@ export default function Comisiones() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Desde</label>
                 <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Hasta</label>
                 <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium" />
               </div>
             </>
           )}
@@ -276,7 +276,7 @@ export default function Comisiones() {
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Técnico</label>
             <select value={filtroTecnico} onChange={e => setFiltroTecnico(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
               <option value="">Todos los técnicos</option>
               {/* @safe-tecnicoid-id: filtroTecnico es estado local de UI (filtro de tabla),
                   NO se persiste a Firestore. El valor se compara contra c.tecnicoId
@@ -287,7 +287,7 @@ export default function Comisiones() {
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Estado</label>
             <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value as 'pendiente' | 'liquidada' | 'todas')}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
               <option value="pendiente">Pendientes</option>
               <option value="liquidada">Liquidadas</option>
               <option value="todas">Todas</option>
@@ -298,11 +298,11 @@ export default function Comisiones() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Vista</label>
               <div className="flex bg-gray-100 rounded-lg p-1">
                 <button type="button" onClick={() => setVista('detallado')}
-                  className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${vista === 'detallado' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}>
+                  className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${vista === 'detallado' ? 'bg-white shadow-sm text-primary' : 'text-gray-600'}`}>
                   Detallado
                 </button>
                 <button type="button" onClick={() => setVista('por_tecnico')}
-                  className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${vista === 'por_tecnico' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}>
+                  className={`flex-1 py-1.5 rounded text-xs font-medium transition-colors ${vista === 'por_tecnico' ? 'bg-white shadow-sm text-primary' : 'text-gray-600'}`}>
                   Por técnico
                 </button>
               </div>
@@ -317,18 +317,18 @@ export default function Comisiones() {
               type="checkbox"
               checked={mostrarCosto}
               onChange={e => setMostrarCosto(e.target.checked)}
-              className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+              className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium"
             />
             Mostrar costo de piezas y base
           </label>
           {modoFiltro === 'rango' && (
             <div className="flex bg-gray-100 rounded-lg p-1 ml-auto">
               <button type="button" onClick={() => setVista('detallado')}
-                className={`py-1 px-3 rounded text-xs font-medium transition-colors ${vista === 'detallado' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}>
+                className={`py-1 px-3 rounded text-xs font-medium transition-colors ${vista === 'detallado' ? 'bg-white shadow-sm text-primary' : 'text-gray-600'}`}>
                 Detallado
               </button>
               <button type="button" onClick={() => setVista('por_tecnico')}
-                className={`py-1 px-3 rounded text-xs font-medium transition-colors ${vista === 'por_tecnico' ? 'bg-white shadow-sm text-[#0f3460]' : 'text-gray-600'}`}>
+                className={`py-1 px-3 rounded text-xs font-medium transition-colors ${vista === 'por_tecnico' ? 'bg-white shadow-sm text-primary' : 'text-gray-600'}`}>
                 Por técnico
               </button>
             </div>
@@ -342,18 +342,18 @@ export default function Comisiones() {
           <>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
               <p className="text-xs font-medium text-gray-500 uppercase">Total base (sin piezas)</p>
-              <p className="text-xl font-bold text-[#0f3460] mt-1">{formatMoneda(totales.base)}</p>
+              <p className="text-xl font-bold text-primary mt-1">{formatMoneda(totales.base)}</p>
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
               <p className="text-xs font-medium text-gray-500 uppercase">Total piezas</p>
-              <p className="text-xl font-bold text-[#0f3460] mt-1">{formatMoneda(totales.piezas)}</p>
+              <p className="text-xl font-bold text-primary mt-1">{formatMoneda(totales.piezas)}</p>
             </div>
           </>
         )}
         {!mostrarCosto && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
             <p className="text-xs font-medium text-gray-500 uppercase">Total órdenes</p>
-            <p className="text-xl font-bold text-[#0f3460] mt-1">{comisionesFiltradas.length}</p>
+            <p className="text-xl font-bold text-primary mt-1">{comisionesFiltradas.length}</p>
           </div>
         )}
         <div className="bg-emerald-50 rounded-2xl shadow-sm border border-emerald-200 p-4">
@@ -401,7 +401,7 @@ export default function Comisiones() {
                   return (
                     <tr key={c.id} className="hover:bg-gray-50">
                       <td className="px-3 py-3 text-xs text-gray-600">{formatFecha(c.fechaCobro)}</td>
-                      <td className="px-3 py-3 font-mono text-xs font-bold text-[#0f3460]">{c.ordenNumero}</td>
+                      <td className="px-3 py-3 font-mono text-xs font-bold text-primary">{c.ordenNumero}</td>
                       <td className="px-3 py-3 text-gray-700 hidden md:table-cell">{c.clienteNombre}</td>
                       <td className="px-3 py-3 text-gray-700">{c.tecnicoNombre}</td>
                       <td className="px-3 py-3 text-right text-gray-700">{formatMoneda(c.precioFinal)}</td>
@@ -466,7 +466,7 @@ export default function Comisiones() {
                     {g.comisiones.map(c => (
                       <div key={c.id} className="flex items-center justify-between px-5 py-3 border-b border-gray-100 last:border-0 text-xs">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <span className="font-mono font-semibold text-[#0f3460]">{c.ordenNumero}</span>
+                          <span className="font-mono font-semibold text-primary">{c.ordenNumero}</span>
                           <span className="text-gray-700 truncate">{c.clienteNombre}</span>
                           <span className="text-gray-400">{formatFecha(c.fechaCobro)}</span>
                         </div>

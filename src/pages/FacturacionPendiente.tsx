@@ -172,15 +172,15 @@ export default function FacturacionPendiente() {
     <div className="p-6 space-y-6">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-          <Inbox size={20} className="text-[#0f3460]" />
+          <Inbox size={20} className="text-primary" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Conduces Pendientes</h1>
+          <h1 className="text-2xl font-bold text-primary">Conduces Pendientes</h1>
           <p className="text-gray-500 text-sm">
             Órdenes enviadas por las operarias listas para emitir conduce de garantía.
           </p>
         </div>
-        <span className="ml-auto inline-flex items-center gap-1.5 bg-blue-50 text-[#0f3460] px-3 py-1 rounded-full text-sm font-semibold">
+        <span className="ml-auto inline-flex items-center gap-1.5 bg-blue-50 text-primary px-3 py-1 rounded-full text-sm font-semibold">
           {ordenesFiltradas.length === ordenes.length
             ? `${ordenes.length} pendientes`
             : `${ordenesFiltradas.length} de ${ordenes.length} pendientes`}
@@ -220,7 +220,7 @@ export default function FacturacionPendiente() {
               <div key={o.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between gap-3 mb-2">
                   <div className="flex-1 min-w-0">
-                    <span className="font-mono text-sm font-bold text-[#0f3460]">
+                    <span className="font-mono text-sm font-bold text-primary">
                       {o.numero || '#--'}
                     </span>
                     <p className="text-sm font-medium text-gray-900 mt-0.5">{o.clienteNombre}</p>
@@ -229,7 +229,7 @@ export default function FacturacionPendiente() {
                   <div className="flex flex-col gap-1.5 items-end">
                     <button
                       onClick={() => setProcesando(o)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-xs font-semibold"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-medium text-white rounded-lg text-xs font-semibold"
                     >
                       Procesar <ArrowRight size={12} />
                     </button>

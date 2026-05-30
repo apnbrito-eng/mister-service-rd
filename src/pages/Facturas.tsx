@@ -461,7 +461,7 @@ export default function Facturas() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Conduces de Garantía</h1>
+          <h1 className="text-2xl font-bold text-primary">Conduces de Garantía</h1>
           <p className="text-gray-500 text-sm">
             {facturasFiltradas.length === facturas.length
               ? `${facturas.length} facturas`
@@ -471,7 +471,7 @@ export default function Facturas() {
         {puedeCrear && (
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+          className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
         >
           <Plus size={18} /> Nuevo Conduce de Garantía
         </button>
@@ -485,7 +485,7 @@ export default function Facturas() {
           type="button"
           onClick={() => filtroRef.current?.aplicarPreset('cobradoAnual')}
           title="Click para filtrar por pagadas del año seleccionado"
-          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-[#1a5fa8] hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-primary-medium hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-medium"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -498,14 +498,14 @@ export default function Facturas() {
               value={yearSelected}
               onChange={e => setYearSelected(Number(e.target.value))}
               onClick={e => e.stopPropagation()}
-              className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-[#1a5fa8]"
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1 text-gray-600 focus:outline-none focus:ring-1 focus:ring-primary-medium"
             >
               {yearOptions.map(y => (
                 <option key={y} value={y}>{y}</option>
               ))}
             </select>
           </div>
-          <p className="text-xl font-bold text-[#0f3460]">{formatMoneda(stats.totalCobradoAnual)}</p>
+          <p className="text-xl font-bold text-primary">{formatMoneda(stats.totalCobradoAnual)}</p>
         </button>
 
         {/* Emitidas hoy */}
@@ -513,7 +513,7 @@ export default function Facturas() {
           type="button"
           onClick={() => filtroRef.current?.aplicarPreset('emitidasHoy')}
           title="Click para filtrar emitidas hoy"
-          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-[#1a5fa8] hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-primary-medium hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-medium"
         >
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-blue-50 rounded-lg">
@@ -521,7 +521,7 @@ export default function Facturas() {
             </div>
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Emitidas Hoy</span>
           </div>
-          <p className="text-xl font-bold text-[#0f3460]">{stats.emitidasHoy}</p>
+          <p className="text-xl font-bold text-primary">{stats.emitidasHoy}</p>
         </button>
 
         {/* Emitidas mes */}
@@ -529,7 +529,7 @@ export default function Facturas() {
           type="button"
           onClick={() => filtroRef.current?.aplicarPreset('emitidasMes')}
           title="Click para filtrar emitidas del mes"
-          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-[#1a5fa8] hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-primary-medium hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-medium"
         >
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-purple-50 rounded-lg">
@@ -537,7 +537,7 @@ export default function Facturas() {
             </div>
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Emitidas Mes</span>
           </div>
-          <p className="text-xl font-bold text-[#0f3460]">{stats.emitidasMes}</p>
+          <p className="text-xl font-bold text-primary">{stats.emitidasMes}</p>
         </button>
 
         {/* Pagadas mes */}
@@ -545,7 +545,7 @@ export default function Facturas() {
           type="button"
           onClick={() => filtroRef.current?.aplicarPreset('pagadasMes')}
           title="Click para filtrar pagadas del mes"
-          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-[#1a5fa8] hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-primary-medium hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-medium"
         >
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-emerald-50 rounded-lg">
@@ -553,7 +553,7 @@ export default function Facturas() {
             </div>
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pagadas Mes</span>
           </div>
-          <p className="text-xl font-bold text-[#0f3460]">{stats.pagadasMesCount}</p>
+          <p className="text-xl font-bold text-primary">{stats.pagadasMesCount}</p>
           <p className="text-xs text-gray-500 mt-0.5">{formatMoneda(stats.totalPagadasMes)}</p>
         </button>
       </div>
@@ -607,7 +607,7 @@ export default function Facturas() {
                     className={`border-b border-gray-50 transition-colors cursor-pointer ${expandedId === factura.id ? 'bg-blue-50/50' : 'hover:bg-gray-50/50'}`}
                   >
                     <td className="px-5 py-3.5">
-                      <span className="font-mono text-sm font-bold text-[#0f3460]">{factura.numero}</span>
+                      <span className="font-mono text-sm font-bold text-primary">{factura.numero}</span>
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex flex-col gap-0.5">
@@ -824,7 +824,7 @@ export default function Facturas() {
                               <div className="mt-3 bg-white rounded-xl p-3 border border-gray-100">
                                 <div className="flex items-center justify-between flex-wrap gap-2">
                                   <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-full bg-[#0f3460] text-white flex items-center justify-center text-xs font-bold">
+                                    <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-xs font-bold">
                                       {(factura.comisionTecnicoNombre || 'T').split(' ').map(s => s[0]).join('').slice(0, 2)}
                                     </div>
                                     <div>
@@ -953,7 +953,7 @@ export default function Facturas() {
                 onChange={e => setGarantiaManualRazon(e.target.value)}
                 rows={4}
                 placeholder="Describe el motivo por el cual se inicia esta garantía manualmente..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
               <p className="text-[10px] text-gray-400 mt-1">
                 {garantiaManualRazon.trim().length}/10 mínimo

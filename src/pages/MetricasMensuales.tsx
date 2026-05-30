@@ -218,11 +218,11 @@ export default function MetricasMensuales() {
           <button
             type="button"
             onClick={() => navigate('/admin/dashboard')}
-            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-[#1a5fa8] mb-1"
+            className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-primary-medium mb-1"
           >
             <ArrowLeft size={12} /> Dashboard
           </button>
-          <h1 className="text-2xl font-bold text-[#0f3460] capitalize">
+          <h1 className="text-2xl font-bold text-primary capitalize">
             Métricas del Mes — {mesLabel}
           </h1>
           <p className="text-gray-500 text-sm">
@@ -233,7 +233,7 @@ export default function MetricasMensuales() {
           type="month"
           value={mesStr}
           onChange={e => setMesStr(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
         />
       </div>
 
@@ -247,7 +247,7 @@ export default function MetricasMensuales() {
           <MiniKpi label="Sueldos mensuales" value={formatMoneda(totales.sueldosMensuales)} />
           <MiniKpi label="Comisiones técnicos" value={formatMoneda(totales.comisionesTotal)} />
           <MiniKpi label="Bonos proyectados" value={formatMoneda(totales.bonos)} subtitle={`Op: ${formatMoneda(totales.bonosOperarias)} · Sec: ${formatMoneda(totales.bonosSecretarias)}`} />
-          <div className="bg-[#0f3460] rounded-xl p-3 text-white">
+          <div className="bg-primary rounded-xl p-3 text-white">
             <p className="text-[10px] uppercase tracking-wide opacity-80">Gran total</p>
             <p className="text-xl font-bold">{formatMoneda(totales.total)}</p>
             {totalMesAnterior > 0 && (
@@ -447,7 +447,7 @@ function MiniKpi({ label, value, subtitle }: { label: string; value: string; sub
   return (
     <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
       <p className="text-[10px] uppercase tracking-wide text-gray-500">{label}</p>
-      <p className="text-lg font-bold text-[#0f3460]">{value}</p>
+      <p className="text-lg font-bold text-primary">{value}</p>
       {subtitle && <p className="text-[10px] text-gray-500 mt-0.5 truncate">{subtitle}</p>}
     </div>
   );

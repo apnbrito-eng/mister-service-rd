@@ -157,7 +157,7 @@ export default function PagosPendientes() {
                       <button
                         type="button"
                         onClick={() => navigate(`/admin/ordenes?id=${orden.id}`)}
-                        className="font-semibold text-[#1a5fa8] hover:underline"
+                        className="font-semibold text-primary-medium hover:underline"
                         title="Abrir orden"
                       >
                         {/* @safe-numero-doc: fallback display cuando la orden todavía no tiene número asignado; no persiste */}

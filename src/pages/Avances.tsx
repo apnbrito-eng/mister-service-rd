@@ -166,10 +166,10 @@ export default function Avances() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-            <Wallet size={20} className="text-[#0f3460]" />
+            <Wallet size={20} className="text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-[#0f3460]">Avances a Empleados</h1>
+            <h1 className="text-2xl font-bold text-primary">Avances a Empleados</h1>
             <p className="text-gray-500 text-sm">
               Préstamos/adelantos que se descuentan automáticamente de la nómina.
             </p>
@@ -177,7 +177,7 @@ export default function Avances() {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium"
+          className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium"
         >
           <Plus size={16} /> Registrar avance
         </button>
@@ -197,7 +197,7 @@ export default function Avances() {
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
           <p className="text-xs font-medium text-gray-500 uppercase">Filtro actual</p>
-          <p className="text-xl font-bold text-[#0f3460] mt-1">{formatMoneda(totales.totalFiltro)}</p>
+          <p className="text-xl font-bold text-primary mt-1">{formatMoneda(totales.totalFiltro)}</p>
           <p className="text-[11px] text-gray-500 mt-0.5">{totales.cantidad} avance(s)</p>
         </div>
       </div>
@@ -232,7 +232,7 @@ export default function Avances() {
           <select
             value={filtroQuincena}
             onChange={e => setFiltroQuincena(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
           >
             <option value="">Todas las quincenas</option>
             {quincenasDisponibles.map(q => <option key={q} value={q}>{q}</option>)}
@@ -243,7 +243,7 @@ export default function Avances() {
           <select
             value={filtroPersonal}
             onChange={e => setFiltroPersonal(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
           >
             <option value="">Todos</option>
             {empleados.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
@@ -254,7 +254,7 @@ export default function Avances() {
           <select
             value={filtroEstado}
             onChange={e => setFiltroEstado(e.target.value as 'pendientes' | 'descontados' | 'todos')}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
           >
             <option value="pendientes">Pendientes</option>
             <option value="descontados">Ya descontados</option>
@@ -332,7 +332,7 @@ export default function Avances() {
             <select
               value={form.personalId}
               onChange={e => setForm(f => ({ ...f, personalId: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="">— Selecciona empleado —</option>
               {empleados.map(e => (
@@ -353,7 +353,7 @@ export default function Avances() {
                   value={form.monto}
                   onChange={e => setForm(f => ({ ...f, monto: e.target.value }))}
                   placeholder="0"
-                  className="w-full pl-12 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full pl-12 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
             </div>
@@ -362,7 +362,7 @@ export default function Avances() {
               <select
                 value={form.metodoPago}
                 onChange={e => setForm(f => ({ ...f, metodoPago: e.target.value as 'efectivo' | 'transferencia' | 'tarjeta' }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
               >
                 <option value="efectivo">Efectivo</option>
                 <option value="transferencia">Transferencia</option>
@@ -378,7 +378,7 @@ export default function Avances() {
               value={form.motivo}
               onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
               placeholder="Ej: adelanto para piezas, emergencia médica, etc."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
 
@@ -389,7 +389,7 @@ export default function Avances() {
             <select
               value={form.quincenaAsignada}
               onChange={e => setForm(f => ({ ...f, quincenaAsignada: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               {quincenasDisponibles.map(q => <option key={q} value={q}>{q}</option>)}
             </select>
@@ -406,7 +406,7 @@ export default function Avances() {
               rows={2}
               value={form.notas}
               onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
 
@@ -416,7 +416,7 @@ export default function Avances() {
               Cancelar
             </button>
             <button type="submit" disabled={saving}
-              className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
               {saving ? 'Guardando...' : 'Registrar avance'}
             </button>
           </div>

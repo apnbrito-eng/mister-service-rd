@@ -245,14 +245,14 @@ export default function Nomina() {
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
             <Wallet size={24} /> Nómina Quincenal
           </h1>
           <p className="text-gray-500 text-sm">Quincena {filtroQuincena}</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <select value={filtroQuincena} onChange={e => setFiltroQuincena(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
             {quincenasDisponibles.map(q => <option key={q} value={q}>{q}</option>)}
           </select>
           {liqActual ? (
@@ -270,7 +270,7 @@ export default function Nomina() {
             </>
           ) : (
             <button type="button" onClick={handleGenerar} disabled={generando}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-[#0f3460] hover:bg-[#1a5fa8] rounded-xl disabled:opacity-60">
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary hover:bg-primary-medium rounded-xl disabled:opacity-60">
               <Plus size={14} /> {generando ? 'Generando...' : 'Generar liquidación'}
             </button>
           )}
@@ -301,7 +301,7 @@ export default function Nomina() {
                 <p className="text-xl font-bold text-blue-600">{formatMoneda(netoTotal)}</p>
               </div>
             ) : (
-              <p className="ml-auto text-xl font-bold text-[#0f3460]">{formatMoneda(liqActual.totalNomina)}</p>
+              <p className="ml-auto text-xl font-bold text-primary">{formatMoneda(liqActual.totalNomina)}</p>
             )}
           </div>
 
@@ -347,7 +347,7 @@ export default function Nomina() {
                           <td className="px-3 py-3">
                             <div className="flex items-center gap-2">
                               <button type="button" onClick={() => toggleEmpleado(emp.personalId)}
-                                className="flex items-center gap-2 text-left hover:text-[#1a5fa8]">
+                                className="flex items-center gap-2 text-left hover:text-primary-medium">
                                 {tieneDetalleExpandible
                                   ? (expand ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />)
                                   : <span className="w-[14px]" />}
@@ -487,7 +487,7 @@ export default function Nomina() {
                             {(emp.totalDescuentos ?? emp.totalAvances ?? 0) > 0 ? (
                               <span className="font-bold text-blue-600">{formatMoneda(montoNeto)}</span>
                             ) : (
-                              <span className="font-bold text-[#0f3460]">{formatMoneda(emp.totalDevengado)}</span>
+                              <span className="font-bold text-primary">{formatMoneda(emp.totalDevengado)}</span>
                             )}
                           </td>
                           <td className="px-3 py-3 text-center">
@@ -521,7 +521,7 @@ export default function Nomina() {
                                     .map(c => (
                                       <div key={c.id} className="flex items-center justify-between text-xs px-3 py-1.5 bg-white rounded border border-gray-100">
                                         <div className="flex items-center gap-3">
-                                          <span className="font-mono font-semibold text-[#0f3460]">{c.ordenNumero}</span>
+                                          <span className="font-mono font-semibold text-primary">{c.ordenNumero}</span>
                                           <span className="text-gray-700">{c.clienteNombre}</span>
                                           <span className="text-gray-400">{formatFecha(c.fechaCobro)}</span>
                                         </div>
@@ -671,7 +671,7 @@ export default function Nomina() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Método de pago *</label>
               <select value={pagoForm.metodo}
                 onChange={e => setPagoForm(f => ({ ...f, metodo: e.target.value as 'efectivo' | 'transferencia' | 'cheque' }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                 <option value="transferencia">Transferencia</option>
                 <option value="efectivo">Efectivo</option>
                 <option value="cheque">Cheque</option>
@@ -683,14 +683,14 @@ export default function Nomina() {
                 <input type="text" value={pagoForm.banco}
                   onChange={e => setPagoForm(f => ({ ...f, banco: e.target.value }))}
                   placeholder="Banreservas, Popular, BHD..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
               </div>
             )}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Notas (opcional)</label>
               <textarea rows={2} value={pagoForm.notas}
                 onChange={e => setPagoForm(f => ({ ...f, notas: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" onClick={cerrarPago} disabled={pagoSaving}
