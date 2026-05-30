@@ -1289,7 +1289,7 @@ export default function TecnicoVista() {
           const rangoTxt = `${format(inicio, "d 'de' MMMM", { locale: es })} — ${format(fin, "d 'de' MMMM", { locale: es })}`;
           const nOrdenes = comisionesQuincena.length;
           return (
-            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl shadow-sm overflow-hidden text-white">
+            <div className="bg-emerald-600 rounded-2xl shadow-sm overflow-hidden text-white">
               <button
                 type="button"
                 onClick={() => setMostrarDetalleGanancias(v => !v)}

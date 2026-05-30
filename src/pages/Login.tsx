@@ -22,7 +22,7 @@ export default function Login() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       navigate('/admin/dashboard');
-    } catch (error: any) {
+    } catch (error: unknown) {
       const messages: Record<string, string> = {
         'auth/user-not-found': 'Usuario no encontrado',
         'auth/wrong-password': 'Contraseña incorrecta',
@@ -30,14 +30,16 @@ export default function Login() {
         'auth/invalid-email': 'Email inválido',
         'auth/too-many-requests': 'Demasiados intentos. Intenta más tarde',
       };
-      console.error('Firebase Auth Error:', error.code, error.message);
-      toast.error(messages[error.code] || `Error: ${error.code || error.message}`);
+      const err = error as { code?: string; message?: string };
+      console.error('Firebase Auth Error:', err.code, err.message);
+      toast.error((err.code && messages[err.code]) || `Error: ${err.code || err.message || 'desconocido'}`);
     } finally {
       setLoading(false);
     }
   };
 
   return (
+    // @safe-gradient: pantalla de login splash full-screen sutil — branding entrada al sistema
     <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         {/* Card */}

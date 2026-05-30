@@ -123,6 +123,7 @@ export default function AsistenteIAFlotante() {
         onClick={abrirPanel}
         title="Asistente IA"
         aria-label="Abrir Asistente IA"
+        // @safe-gradient: botón flotante Asistente IA — identidad visual del producto IA
         className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-medium text-white shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center"
       >
         <Sparkles className="w-6 h-6 text-white" />
@@ -149,6 +150,7 @@ export default function AsistenteIAFlotante() {
       ].join(' ')}
     >
       {/* Header */}
+      {/* @safe-gradient: header del panel Asistente IA — identidad visual del producto IA */}
       <div className="bg-gradient-to-r from-primary to-primary-medium text-white p-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <Sparkles size={18} className="flex-shrink-0" />

@@ -45,6 +45,7 @@ export default function FormularioPublico() {
   // --- Success state ---
   if (submitted) {
     return (
+      // @safe-gradient: pantalla "formulario enviado" del cliente público — branding éxito
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-400 to-green-600 px-4">
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
           <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />

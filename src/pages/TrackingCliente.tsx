@@ -239,6 +239,7 @@ export default function TrackingCliente() {
     // Numero del coordinador para detractores: primer numero activo del config
     const numeroCoord = configWeb?.whatsapp?.numeros?.find((n) => n.activo)?.numero;
     return (
+      // @safe-gradient: pantalla NPS público del cliente — branding "servicio completado"
       <div className="min-h-screen bg-gradient-to-br from-green-500 to-green-700 flex items-start justify-center p-4 py-8">
         <div className="w-full max-w-md space-y-4">
           <div className="bg-white rounded-3xl shadow-2xl p-8 text-center">

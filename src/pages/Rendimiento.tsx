@@ -185,7 +185,7 @@ export default function Rendimiento() {
           <span className="text-2xl font-bold text-primary">{kpis.tasaConfirmacion.toFixed(1)}%</span>
         </div>
         <div className="bg-gray-200 rounded-full h-4">
-          <div className="bg-gradient-to-r from-primary to-primary-medium h-4 rounded-full transition-all"
+          <div className="bg-primary h-4 rounded-full transition-all"
             style={{ width: `${Math.min(kpis.tasaConfirmacion, 100)}%` }} />
         </div>
         <div className="flex justify-between mt-2 text-xs text-gray-500">

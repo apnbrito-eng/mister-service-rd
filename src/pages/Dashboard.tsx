@@ -937,7 +937,7 @@ export default function Dashboard() {
               </div>
               <div className="w-full bg-gray-100 rounded-full h-8 overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-green-400 to-green-500 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                  className="h-full bg-green-500 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
                   style={{ width: `${Math.max((ingresosPeriodo / maxVentasGastos) * 100, 2)}%` }}
                 >
                   {ingresosPeriodo > 0 && (
@@ -957,7 +957,7 @@ export default function Dashboard() {
               </div>
               <div className="w-full bg-gray-100 rounded-full h-8 overflow-hidden">
                 <div
-                  className="h-full bg-gradient-to-r from-red-400 to-red-500 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                  className="h-full bg-red-500 rounded-full transition-all duration-500 flex items-center justify-end pr-2"
                   style={{ width: `${Math.max((gastosPeriodo / maxVentasGastos) * 100, 2)}%` }}
                 >
                   {gastosPeriodo > 0 && (
@@ -1261,7 +1261,7 @@ export default function Dashboard() {
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-primary to-primary-medium rounded-full transition-all duration-500"
+                        className="h-full bg-primary rounded-full transition-all duration-500"
                         style={{ width: `${(count / maxReparaciones) * 100}%` }}
                       />
                     </div>

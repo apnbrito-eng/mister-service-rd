@@ -108,6 +108,7 @@ function PerfilNoEncontrado({ mensaje }: { mensaje: string }) {
     window.location.href = '/login';
   };
   return (
+    // @safe-gradient: splash full-screen sutil brand-50 → brand-100, pantalla de error/perfil no encontrado
     <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
         <div className="bg-red-600 px-8 py-6 text-white">

@@ -205,6 +205,7 @@ export default function ServicioDetalle() {
   return (
     <div>
       {/* ══════════ HERO ══════════ */}
+      {/* @safe-gradient: hero marketing detalle de servicio — branding */}
       <section className="relative bg-gradient-to-br from-primary via-primary to-primary-medium overflow-hidden">
         {tieneHero && (
           <>
@@ -390,7 +391,7 @@ export default function ServicioDetalle() {
       {/* ══════════ GARANTÍA ══════════ */}
       <section className="py-12 bg-white">
         <div className="max-w-3xl mx-auto px-4">
-          <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-2xl p-6 md:p-8 border border-emerald-200">
+          <div className="bg-emerald-50 rounded-2xl p-6 md:p-8 border border-emerald-200">
             <div className="flex flex-col md:flex-row items-start gap-5">
               <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shrink-0">
                 <Shield size={28} className="text-emerald-600" />
@@ -412,6 +413,7 @@ export default function ServicioDetalle() {
       </section>
 
       {/* ══════════ CTA GRANDE ══════════ */}
+      {/* @safe-gradient: sección CTA marketing público — branding */}
       <section className="py-14 md:py-16 bg-gradient-to-r from-primary to-primary-medium">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-2xl md:text-4xl font-extrabold text-white mb-4">

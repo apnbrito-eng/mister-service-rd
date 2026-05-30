@@ -312,6 +312,7 @@ export default function Ponche() {
 
   // --- Render ---
   return (
+    // @safe-gradient: pantalla de ponche full-screen sutil — branding kioscoide
     <div className="min-h-screen bg-gradient-to-br from-brand-50 to-brand-100">
       {/* Header simple (no sidebar) */}
       <header className="bg-brand-800 text-white px-4 py-3 flex items-center justify-between shadow-md">

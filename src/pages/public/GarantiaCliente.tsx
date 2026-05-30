@@ -114,7 +114,7 @@ export default function GarantiaCliente() {
 
   if (cargando) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-blue-50 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-50 flex items-center justify-center">
         <LoadingSpinner text="Cargando garantía..." />
       </div>
     );
@@ -122,7 +122,7 @@ export default function GarantiaCliente() {
 
   if (error && !info) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-blue-50 px-4 py-8 flex items-center justify-center">
+      <div className="min-h-screen bg-blue-50 px-4 py-8 flex items-center justify-center">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
           <div className="w-14 h-14 mx-auto rounded-full bg-red-100 flex items-center justify-center mb-3">
             <AlertCircle size={28} className="text-red-600" />
@@ -145,7 +145,7 @@ export default function GarantiaCliente() {
   if (!info) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-blue-50">
+    <div className="min-h-screen bg-blue-50">
       <header className="px-4 pt-6 pb-2 flex justify-center">
         <Logo size="md" />
       </header>

@@ -584,6 +584,7 @@ export default function PortalCliente() {
 
         {/* Cierre — fase === 'cerrado' */}
         {esCerrado && (
+          // @safe-gradient: card "Servicio completado" en portal del cliente — branding éxito
           <section className="bg-gradient-to-br from-green-500 to-green-700 rounded-2xl shadow-md p-5 text-white space-y-3">
             <div className="flex items-center gap-2">
               <CheckCircle size={24} />

@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   Waves, Thermometer, Wind, Flame, Refrigerator, Zap,
-  CheckCircle, Calendar, Phone, ArrowRight,
+  CheckCircle, Calendar, ArrowRight,
   Home, Building, Repeat, Wrench, Shield, Clock
 } from 'lucide-react';
 import WhatsAppIcon from '../../components/icons/WhatsAppIcon';
@@ -152,6 +152,7 @@ export default function ServiciosPage() {
   return (
     <div>
       {/* ══════════ HERO ══════════ */}
+      {/* @safe-gradient: hero marketing público — branding */}
       <section className="bg-gradient-to-br from-primary to-primary-medium py-16 md:py-20">
         <div className="max-w-6xl mx-auto px-4 text-center">
           <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
@@ -303,6 +304,7 @@ export default function ServiciosPage() {
       </section>
 
       {/* ══════════ CTA ══════════ */}
+      {/* @safe-gradient: sección CTA marketing público — branding */}
       <section className="py-16 bg-gradient-to-r from-primary to-primary-medium">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-3xl font-extrabold text-white mb-4">

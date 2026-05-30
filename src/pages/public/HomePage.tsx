@@ -135,6 +135,7 @@ export default function HomePage() {
   return (
     <div>
       {/* ══════════ HERO ══════════ */}
+      {/* @safe-gradient: hero marketing público HomePage — branding principal del sitio */}
       {heroTieneFondo ? (
         <section className="relative bg-gradient-to-br from-primary via-primary to-primary-medium overflow-hidden">
           {/* Capa de imagen / carrusel (debajo del overlay) */}
@@ -306,6 +307,7 @@ export default function HomePage() {
       </section>
 
       {/* ══════════ CTA FINAL ══════════ */}
+      {/* @safe-gradient: sección CTA marketing público — branding */}
       <section className="py-16 bg-gradient-to-r from-primary to-primary-medium">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
