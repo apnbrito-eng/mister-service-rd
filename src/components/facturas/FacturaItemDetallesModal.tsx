@@ -243,7 +243,7 @@ export default function FacturaItemDetallesModal({
             onClick={() => { setTipoActivo('servicio'); setSeleccionId(''); }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               tipoActivo === 'servicio'
-                ? 'bg-[#0f3460] text-white'
+                ? 'bg-primary text-white'
                 : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
             }`}
           >
@@ -254,7 +254,7 @@ export default function FacturaItemDetallesModal({
             onClick={() => { setTipoActivo('pieza'); setSeleccionId(''); }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               tipoActivo === 'pieza'
-                ? 'bg-[#0f3460] text-white'
+                ? 'bg-primary text-white'
                 : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
             }`}
           >
@@ -270,7 +270,7 @@ export default function FacturaItemDetallesModal({
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
             placeholder={tipoActivo === 'servicio' ? 'Buscar servicio (nombre, marca, equipo)...' : 'Buscar pieza (nombre, código)...'}
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
         </div>
 
@@ -363,7 +363,7 @@ export default function FacturaItemDetallesModal({
                     title={!puedeOverrideModalidad ? 'Solo admin/coord puede cambiar' : undefined}
                     className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                       modalidad === 'mayoreo'
-                        ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                        ? 'bg-primary text-white border-primary'
                         : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                     }`}
                   >
@@ -376,7 +376,7 @@ export default function FacturaItemDetallesModal({
                     title={!puedeOverrideModalidad ? 'Solo admin/coord puede cambiar' : undefined}
                     className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium border transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                       modalidad === 'detalle'
-                        ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                        ? 'bg-primary text-white border-primary'
                         : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                     }`}
                   >
@@ -404,7 +404,7 @@ export default function FacturaItemDetallesModal({
                   min={1}
                   value={cantidad}
                   onChange={e => setCantidad(parseInt(e.target.value) || 1)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
               <div>
@@ -421,7 +421,7 @@ export default function FacturaItemDetallesModal({
               <select
                 value={tecnicoId}
                 onChange={e => setTecnicoId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
               >
                 {/* "Sin técnico (mostrador)" como PRIMERA opción (decisión 40). */}
                 <option value="">Sin técnico (mostrador)</option>
@@ -461,7 +461,7 @@ export default function FacturaItemDetallesModal({
 
         {/* Subtotal */}
         {!sinSeleccion && (
-          <div className="text-right text-sm font-semibold text-[#0f3460]">
+          <div className="text-right text-sm font-semibold text-primary">
             Subtotal: {formatMoneda(precioRedondeadoSugerido * (cantidad > 0 ? cantidad : 1))}
           </div>
         )}
@@ -479,7 +479,7 @@ export default function FacturaItemDetallesModal({
             type="button"
             onClick={handleGuardar}
             disabled={sinSeleccion}
-            className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60 transition-colors"
+            className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60 transition-colors"
           >
             Guardar item
           </button>

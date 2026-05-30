@@ -237,7 +237,7 @@ export default function ClienteNuevoDrawer({
               placeholder="Nombre del cliente"
               required
               disabled={saving}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
             />
           </div>
 
@@ -262,7 +262,7 @@ export default function ClienteNuevoDrawer({
               placeholder="809-555-1234"
               required
               disabled={saving}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
             />
             {verificandoDuplicado && (
               <p className="text-[10px] text-gray-400 mt-1">Verificando duplicados...</p>
@@ -279,7 +279,7 @@ export default function ClienteNuevoDrawer({
                 disabled={saving}
                 className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
                   tipo === 'particular'
-                    ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                    ? 'bg-primary text-white border-primary'
                     : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                 }`}
               >
@@ -292,7 +292,7 @@ export default function ClienteNuevoDrawer({
                 disabled={saving}
                 className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium border transition-colors ${
                   tipo === 'b2b'
-                    ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                    ? 'bg-primary text-white border-primary'
                     : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                 }`}
               >
@@ -319,7 +319,7 @@ export default function ClienteNuevoDrawer({
                   onChange={e => setRnc(e.target.value)}
                   placeholder="Ej: 130123456 (opcional)"
                   disabled={saving}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
                 />
               </div>
               <div>
@@ -330,7 +330,7 @@ export default function ClienteNuevoDrawer({
                   onChange={e => setRazonSocial(e.target.value)}
                   placeholder="Nombre legal de la empresa (opcional)"
                   disabled={saving}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
                 />
               </div>
             </div>
@@ -345,7 +345,7 @@ export default function ClienteNuevoDrawer({
               onChange={e => setEmail(e.target.value)}
               placeholder="cliente@email.com (opcional)"
               disabled={saving}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
             />
           </div>
 
@@ -358,7 +358,7 @@ export default function ClienteNuevoDrawer({
               onChange={e => setDireccion(e.target.value)}
               placeholder="Calle, número, sector (opcional)"
               disabled={saving}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
             />
           </div>
 
@@ -371,7 +371,7 @@ export default function ClienteNuevoDrawer({
               onChange={e => setReferencia(e.target.value)}
               placeholder="Ej: portón verde, al lado del colmado (opcional)"
               disabled={saving}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
             />
           </div>
         </form>
@@ -389,7 +389,7 @@ export default function ClienteNuevoDrawer({
             type="button"
             onClick={handleSubmit}
             disabled={saving || !!duplicado}
-            className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60 transition-colors"
+            className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60 transition-colors"
           >
             {saving ? 'Guardando...' : 'Crear cliente'}
           </button>

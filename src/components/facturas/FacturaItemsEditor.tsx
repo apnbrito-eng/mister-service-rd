@@ -150,7 +150,7 @@ export default function FacturaItemsEditor({
             type="button"
             onClick={() => setAgregarMenuAbierto(o => !o)}
             disabled={disabled}
-            className="flex items-center gap-1 text-xs text-[#1a5fa8] hover:underline font-medium disabled:opacity-60"
+            className="flex items-center gap-1 text-xs text-primary-medium hover:underline font-medium disabled:opacity-60"
           >
             <Plus size={12} /> Agregar <ChevronDown size={12} />
           </button>
@@ -212,7 +212,7 @@ export default function FacturaItemsEditor({
                   onChange={e => updateItem(i, 'descripcion', e.target.value)}
                   placeholder={esInventario ? 'Sin seleccionar' : 'Descripción del item manual'}
                   disabled={disabled}
-                  className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                  className="flex-1 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
                 />
 
                 {/* Cantidad — siempre editable inline */}
@@ -222,7 +222,7 @@ export default function FacturaItemsEditor({
                   onChange={e => updateItem(i, 'cantidad', parseInt(e.target.value) || 0)}
                   min={1}
                   disabled={disabled}
-                  className="w-14 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                  className="w-14 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
                 />
 
                 {/* Precio — siempre editable inline */}
@@ -232,7 +232,7 @@ export default function FacturaItemsEditor({
                   onChange={e => updateItem(i, 'precio', parseFloat(e.target.value) || 0)}
                   placeholder="RD$"
                   disabled={disabled}
-                  className="w-24 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                  className="w-24 px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
                 />
 
                 {/* Botón editar (solo Inventario) */}

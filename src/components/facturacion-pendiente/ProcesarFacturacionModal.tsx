@@ -1205,8 +1205,8 @@ export default function ProcesarFacturacionModal({
               />
             </div>
             <div className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded-lg p-3">
-              <span className="text-sm font-medium text-[#0f3460]">Total conduce</span>
-              <span className="text-lg font-bold text-[#0f3460]">{formatMonedaPrecisa(totalItems)}</span>
+              <span className="text-sm font-medium text-primary">Total conduce</span>
+              <span className="text-lg font-bold text-primary">{formatMonedaPrecisa(totalItems)}</span>
             </div>
             {/* SPRINT-151: nota libre para el conduce (max 500 chars). */}
             <div>
@@ -1225,7 +1225,7 @@ export default function ProcesarFacturacionModal({
                 disabled={generando}
                 rows={2}
                 placeholder="Ej: Cliente solicita pasar factura legal aparte."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50 resize-none"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50 resize-none"
               />
               <p className="text-[11px] text-gray-500 mt-1">
                 Aparece impresa en el conduce de garantía. No se muestra al cliente en el link público.
@@ -1243,7 +1243,7 @@ export default function ProcesarFacturacionModal({
                 type="button"
                 onClick={() => setPaso(2)}
                 disabled={items.length === 0}
-                className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
               >
                 Siguiente: Confirmar pagos
               </button>
@@ -1306,7 +1306,7 @@ export default function ProcesarFacturacionModal({
               </div>
               <div>
                 <div className="text-[11px] text-blue-700 uppercase">Total conduce</div>
-                <div className="text-base font-semibold text-[#0f3460]">{formatMonedaPrecisa(totalItems)}</div>
+                <div className="text-base font-semibold text-primary">{formatMonedaPrecisa(totalItems)}</div>
               </div>
             </div>
 
@@ -1325,7 +1325,7 @@ export default function ProcesarFacturacionModal({
                     value={pagoMetodo}
                     onChange={e => setPagoMetodo(e.target.value as typeof pagoMetodo)}
                     disabled={generando}
-                    className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                    className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
                   >
                     <option value="efectivo">Efectivo</option>
                     <option value="transferencia">Transferencia</option>
@@ -1341,7 +1341,7 @@ export default function ProcesarFacturacionModal({
                     value={pagoMonto}
                     onChange={e => setPagoMonto(parseFloat(e.target.value) || 0)}
                     disabled={generando}
-                    className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                    className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
                   />
                 </div>
                 {pagoMetodo === 'efectivo' ? (
@@ -1353,7 +1353,7 @@ export default function ProcesarFacturacionModal({
                       onChange={e => setPagoRecibidoPor(e.target.value)}
                       disabled={generando}
                       placeholder="Nombre de quien recibió el efectivo"
-                      className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                      className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
                     />
                   </div>
                 ) : (
@@ -1365,7 +1365,7 @@ export default function ProcesarFacturacionModal({
                       onChange={e => setPagoBanco(e.target.value)}
                       disabled={generando}
                       placeholder="BHD, Popular, Scotiabank..."
-                      className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                      className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
                     />
                   </div>
                 )}
@@ -1377,7 +1377,7 @@ export default function ProcesarFacturacionModal({
                     onChange={e => setPagoReferencia(e.target.value)}
                     disabled={generando}
                     placeholder="Opcional"
-                    className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+                    className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
                   />
                 </div>
               </div>
@@ -1513,13 +1513,13 @@ function StepDot({ active, done, num, label }: { active: boolean; done: boolean;
           done
             ? 'bg-green-500 text-white'
             : active
-              ? 'bg-[#0f3460] text-white'
+              ? 'bg-primary text-white'
               : 'bg-gray-200 text-gray-500'
         }`}
       >
         {done ? <Check size={14} /> : num}
       </div>
-      <span className={`text-xs font-medium ${active ? 'text-[#0f3460]' : 'text-gray-500'}`}>{label}</span>
+      <span className={`text-xs font-medium ${active ? 'text-primary' : 'text-gray-500'}`}>{label}</span>
     </div>
   );
 }

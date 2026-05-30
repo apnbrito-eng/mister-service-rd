@@ -141,7 +141,7 @@ export default function PiezaFormModal({
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
             placeholder="Ej: Bomba de agua"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#0f3460]"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary"
           />
         </div>
 
@@ -154,7 +154,7 @@ export default function PiezaFormModal({
               value={marca}
               onChange={(e) => setMarca(e.target.value)}
               placeholder="Opcional"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#0f3460]"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-primary"
             />
           </div>
           <div>
@@ -164,7 +164,7 @@ export default function PiezaFormModal({
               value={modelo}
               onChange={(e) => setModelo(e.target.value)}
               placeholder="Opcional"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#0f3460]"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-primary"
             />
           </div>
         </div>
@@ -180,8 +180,8 @@ export default function PiezaFormModal({
               onClick={() => setCondicion('nueva')}
               className={`py-3 rounded-xl font-bold text-sm transition-all ${
                 condicion === 'nueva'
-                  ? 'bg-[#0f3460] text-white shadow-md'
-                  : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-[#0f3460]'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-primary'
               }`}
             >
               ✨ Nueva
@@ -191,8 +191,8 @@ export default function PiezaFormModal({
               onClick={() => setCondicion('usada')}
               className={`py-3 rounded-xl font-bold text-sm transition-all ${
                 condicion === 'usada'
-                  ? 'bg-[#0f3460] text-white shadow-md'
-                  : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-[#0f3460]'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-primary'
               }`}
             >
               ♻️ Usada
@@ -211,8 +211,8 @@ export default function PiezaFormModal({
               onClick={() => setOrigen('inventario_taller')}
               className={`py-3 px-2 rounded-xl font-semibold text-xs transition-all ${
                 origen === 'inventario_taller'
-                  ? 'bg-[#0f3460] text-white shadow-md'
-                  : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-[#0f3460]'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-primary'
               }`}
             >
               🏭 Taller
@@ -222,8 +222,8 @@ export default function PiezaFormModal({
               onClick={() => setOrigen('inventario_vehiculo')}
               className={`py-3 px-2 rounded-xl font-semibold text-xs transition-all ${
                 origen === 'inventario_vehiculo'
-                  ? 'bg-[#0f3460] text-white shadow-md'
-                  : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-[#0f3460]'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-primary'
               }`}
             >
               🚗 Vehículo
@@ -233,8 +233,8 @@ export default function PiezaFormModal({
               onClick={() => setOrigen('comprada_externamente')}
               className={`py-3 px-2 rounded-xl font-semibold text-xs transition-all ${
                 origen === 'comprada_externamente'
-                  ? 'bg-[#0f3460] text-white shadow-md'
-                  : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-[#0f3460]'
+                  ? 'bg-primary text-white shadow-md'
+                  : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-primary'
               }`}
             >
               🛒 Externa
@@ -254,7 +254,7 @@ export default function PiezaFormModal({
               step={1}
               value={cantidad}
               onChange={(e) => setCantidad(Math.max(1, Math.floor(Number(e.target.value) || 1)))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#0f3460]"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary"
             />
           </div>
           <div>
@@ -267,7 +267,7 @@ export default function PiezaFormModal({
               step="0.01"
               value={costoUnitario}
               onChange={(e) => setCostoUnitario(Math.max(0, Number(e.target.value) || 0))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-[#0f3460]"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-primary"
             />
           </div>
         </div>
@@ -287,7 +287,7 @@ export default function PiezaFormModal({
               value={proveedor}
               onChange={(e) => setProveedor(e.target.value)}
               placeholder="Ej: Ferretería del barrio"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#0f3460]"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-primary"
             />
           </div>
         )}
@@ -333,7 +333,7 @@ export default function PiezaFormModal({
             onChange={(e) => setNotas(e.target.value)}
             placeholder="Opcional"
             rows={2}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#0f3460] resize-none"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-primary resize-none"
           />
         </div>
 
@@ -351,7 +351,7 @@ export default function PiezaFormModal({
             type="button"
             onClick={handleGuardar}
             disabled={!puedeGuardar}
-            className="py-3 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-xl font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="py-3 bg-primary hover:bg-primary-medium text-white rounded-xl font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {subiendoFoto ? (
               <><Loader2 size={16} className="animate-spin" /> Subiendo foto...</>

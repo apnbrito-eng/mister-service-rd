@@ -460,7 +460,7 @@ export default function FacturaCrearModal({
                       setTimeout(() => setAutocompleteOpen(false), 150);
                     }}
                     placeholder="Buscar cliente por nombre o teléfono..."
-                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                   />
                 </div>
                 <button
@@ -516,7 +516,7 @@ export default function FacturaCrearModal({
                 value={form.ordenNumero}
                 onChange={e => setForm(f => ({ ...f, ordenNumero: e.target.value }))}
                 placeholder="Ej: OS-0001 (opcional)"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
           </div>
@@ -534,7 +534,7 @@ export default function FacturaCrearModal({
               disabled={saving}
             />
             <div className="text-right mt-3 pt-3 border-t border-gray-100">
-              <span className="text-lg font-bold text-[#0f3460]">Total: {formatMoneda(total)}</span>
+              <span className="text-lg font-bold text-primary">Total: {formatMoneda(total)}</span>
             </div>
           </div>
 
@@ -545,7 +545,7 @@ export default function FacturaCrearModal({
               <select
                 value={form.metodoPago}
                 onChange={e => setForm(f => ({ ...f, metodoPago: e.target.value as MetodoPago | '' }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
               >
                 <option value="">Sin especificar</option>
                 {(Object.keys(METODO_PAGO_LABELS) as MetodoPago[]).map(m => (
@@ -561,7 +561,7 @@ export default function FacturaCrearModal({
                   value={form.bancoDestino}
                   onChange={e => setForm(f => ({ ...f, bancoDestino: e.target.value }))}
                   placeholder="Ej: Banreservas, BHD, Popular..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
             )}
@@ -575,7 +575,7 @@ export default function FacturaCrearModal({
               onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
               rows={2}
               placeholder="Observaciones adicionales (opcional)"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
 
@@ -591,7 +591,7 @@ export default function FacturaCrearModal({
             <button
               type="submit"
               disabled={saving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60 transition-colors"
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60 transition-colors"
             >
               {saving ? 'Guardando...' : 'Crear Conduce'}
             </button>

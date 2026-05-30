@@ -150,7 +150,7 @@ export default function ModalSugerirSoloChequeo({ isOpen, onClose, orden, onSubm
             value={monto}
             onChange={(e) => setMonto(e.target.value)}
             disabled={saving}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
           <p className="text-[11px] text-gray-400 mt-1">
             Default: RD${montoDefault.toLocaleString('es-DO')}
@@ -167,7 +167,7 @@ export default function ModalSugerirSoloChequeo({ isOpen, onClose, orden, onSubm
             onChange={(e) => setMotivo(e.target.value)}
             disabled={saving}
             placeholder="Ej: Cliente no quiere reparar, ya pagó el diagnóstico"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
           {!motivoValido && motivoTrim.length > 0 && (
             <p className="text-[11px] text-amber-700 mt-1">
