@@ -118,7 +118,7 @@ export default function OrdenEditForm({
 
       {/* ─────────── SECCIÓN CLIENTE ─────────── */}
       <div>
-        <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3 flex items-center gap-2">
           <User size={16} /> Cliente
         </h3>
         <div className="space-y-3">
@@ -129,7 +129,7 @@ export default function OrdenEditForm({
                 type="text"
                 value={editForm.clienteNombre}
                 onChange={e => setEditForm(f => ({ ...f, clienteNombre: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
             <div>
@@ -139,7 +139,7 @@ export default function OrdenEditForm({
                 value={editForm.clienteTelefono}
                 onChange={e => setEditForm(f => ({ ...f, clienteTelefono: e.target.value }))}
                 placeholder="Ej: 8095551234"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
           </div>
@@ -149,7 +149,7 @@ export default function OrdenEditForm({
               type="email"
               value={editForm.clienteEmail}
               onChange={e => setEditForm(f => ({ ...f, clienteEmail: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
           <div>
@@ -161,7 +161,7 @@ export default function OrdenEditForm({
                 value={editForm.clienteDireccion}
                 onChange={e => handleEditDireccionChange(e.target.value)}
                 placeholder="Escribe o pega dirección, URL de Maps, o coordenadas..."
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 autoComplete="off"
               />
               <button
@@ -188,7 +188,7 @@ export default function OrdenEditForm({
               value={editForm.clienteReferencia}
               onChange={e => setEditForm(f => ({ ...f, clienteReferencia: e.target.value }))}
               placeholder="Al lado del colmado, frente al parque..."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
         </div>
@@ -196,7 +196,7 @@ export default function OrdenEditForm({
 
       {/* ─────────── SECCIÓN EQUIPO ─────────── */}
       <div>
-        <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3 flex items-center gap-2">
           <Wrench size={16} /> Equipo
         </h3>
         <div className="space-y-3">
@@ -209,7 +209,7 @@ export default function OrdenEditForm({
                 value={editForm.equipoTipo}
                 onChange={e => setEditForm(f => ({ ...f, equipoTipo: e.target.value }))}
                 placeholder="Lavadora, Nevera..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
               <datalist id="edit-tipos-equipo">
                 {tiposEquipo.map(t => <option key={t} value={t} />)}
@@ -223,7 +223,7 @@ export default function OrdenEditForm({
                 value={editForm.equipoMarca}
                 onChange={e => setEditForm(f => ({ ...f, equipoMarca: e.target.value }))}
                 placeholder="LG, Samsung, Mabe..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
               <datalist id="edit-marcas">
                 {MARCAS_SUGERIDAS.map(m => <option key={m} value={m} />)}
@@ -240,7 +240,7 @@ export default function OrdenEditForm({
                 value={editForm.equipoModelo}
                 onChange={e => setEditForm(f => ({ ...f, equipoModelo: e.target.value }))}
                 placeholder="Torre, Individual, French door..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
           </div>
@@ -251,7 +251,7 @@ export default function OrdenEditForm({
               value={editForm.equipoModeloFabricante}
               onChange={e => setEditForm(f => ({ ...f, equipoModeloFabricante: e.target.value }))}
               placeholder="ej: WF45R6100AW (modelo del fabricante, opcional)"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
           <div>
@@ -260,7 +260,7 @@ export default function OrdenEditForm({
               value={editForm.descripcionFalla}
               onChange={e => setEditForm(f => ({ ...f, descripcionFalla: e.target.value }))}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
           <div>
@@ -317,7 +317,7 @@ export default function OrdenEditForm({
 
       {/* ─────────── SECCIÓN PROGRAMACIÓN ─────────── */}
       <div>
-        <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3 flex items-center gap-2">
           <Calendar size={16} /> Programación
         </h3>
         <div className="space-y-4">
@@ -332,7 +332,7 @@ export default function OrdenEditForm({
                 const t = tecnicos.find(x => (x.uid || x.id) === e.target.value);
                 setEditForm(f => ({ ...f, tecnicoId: e.target.value, tecnicoNombre: t?.nombre || '' }));
               }}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="">Sin asignar</option>
               {tecnicos.filter(t => t.uid).map(t => (
@@ -373,7 +373,7 @@ export default function OrdenEditForm({
                   onClick={() => setEditForm(f => ({ ...f, duracionMin: d }))}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                     editForm.duracionMin === d
-                      ? 'bg-[#1a5fa8] text-white'
+                      ? 'bg-primary-medium text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
@@ -390,7 +390,7 @@ export default function OrdenEditForm({
                 type="date"
                 value={editForm.fechaCita}
                 onChange={e => setEditForm(f => ({ ...f, fechaCita: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
             <div>
@@ -408,8 +408,8 @@ export default function OrdenEditForm({
                         ocupado
                           ? 'bg-red-50 text-red-400 border-red-200 cursor-not-allowed line-through'
                           : editForm.horaInicio === h
-                            ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
+                            ? 'bg-primary-medium text-white border-primary-medium'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-primary-medium'
                       }`}
                       title={ocupado ? 'Horario ocupado' : ''}
                     >
@@ -433,7 +433,7 @@ export default function OrdenEditForm({
           value={editForm.notas}
           onChange={e => setEditForm(f => ({ ...f, notas: e.target.value }))}
           rows={3}
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
         />
       </div>
 
@@ -451,7 +451,7 @@ export default function OrdenEditForm({
           type="button"
           onClick={onSave}
           disabled={savingEdit}
-          className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+          className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
         >
           {savingEdit ? 'Guardando...' : 'Guardar cambios'}
         </button>

@@ -136,8 +136,8 @@ export default function ReagendarModal({ isOpen, onClose, orden, onSuccess }: Pr
                 onClick={() => setHora(h)}
                 className={`px-2 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${
                   hora === h
-                    ? 'bg-[#0f3460] text-white border-[#0f3460]'
-                    : 'bg-white text-gray-700 border-gray-200 hover:border-[#1a5fa8]'
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-white text-gray-700 border-gray-200 hover:border-primary-medium'
                 }`}
               >
                 {HORARIOS_LABEL[h] || h}
@@ -170,7 +170,7 @@ export default function ReagendarModal({ isOpen, onClose, orden, onSuccess }: Pr
             type="button"
             onClick={handleConfirmar}
             disabled={saving || !fecha || !hora}
-            className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+            className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
           >
             {saving ? 'Guardando...' : 'Confirmar reagendamiento'}
           </button>

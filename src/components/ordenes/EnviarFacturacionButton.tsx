@@ -131,7 +131,7 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
           montoPagado: orden.montoPagado,
         }) || 'Enviar a conduce de garantía.'
       }
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#0f3460] hover:bg-[#1a5fa8] text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-primary hover:bg-primary-medium text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
     >
       <Receipt size={12} />
       {saving ? 'Enviando...' : 'Enviar a conduce'}

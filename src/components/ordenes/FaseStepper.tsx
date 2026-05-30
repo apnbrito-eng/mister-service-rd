@@ -231,7 +231,7 @@ export default function FaseStepper({
       return `${base} bg-gray-100 text-gray-400 border-gray-200`;
     }
     if (isCurrent) {
-      return `${base} bg-[#0f3460] text-white border-[#0f3460] shadow-md ring-4 ring-blue-200`;
+      return `${base} bg-primary text-white border-primary shadow-md ring-4 ring-blue-200`;
     }
     if (isPast) {
       return `${base} bg-green-50 text-green-800 border-green-200`;
@@ -242,7 +242,7 @@ export default function FaseStepper({
   const numeroCircle = (idx: number, isCurrent: boolean, isPast: boolean) => {
     if (!mostrarNumeros) return null;
     const bg = isCurrent
-      ? 'bg-white text-[#0f3460]'
+      ? 'bg-white text-primary'
       : isPast
         ? 'bg-green-200 text-green-900'
         : 'bg-gray-200 text-gray-500';
@@ -357,7 +357,7 @@ export default function FaseStepper({
                 type="button"
                 onClick={handleConfirmarAvance}
                 disabled={saving}
-                className="px-5 py-2 bg-[#0f3460] hover:brightness-110 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                className="px-5 py-2 bg-primary hover:brightness-110 text-white rounded-lg text-sm font-medium disabled:opacity-60"
               >
                 {saving ? 'Guardando...' : 'Confirmar'}
               </button>

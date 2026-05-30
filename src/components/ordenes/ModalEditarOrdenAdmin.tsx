@@ -439,7 +439,7 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
       : 'w-full px-3 py-2 border border-amber-300 rounded-lg text-sm focus:outline-none focus:border-amber-500';
 
   const inputCls =
-    'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#0f3460]';
+    'w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-primary';
 
   const labelSensibleBase = (texto: string) => (
     <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-700">
@@ -594,7 +594,7 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
                   type="text"
                   value={form.equipoModeloFabricante}
                   onChange={e => actualizar('equipoModeloFabricante', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                   placeholder="ej: WF45R6100AW"
                 />
               </div>
@@ -772,7 +772,7 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
               type="button"
               onClick={handleGuardarClick}
               disabled={guardando || !hayCambios}
-              className="inline-flex items-center gap-2 px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-semibold disabled:opacity-50"
             >
               {guardando ? <><Loader2 size={14} className="animate-spin" /> Guardando...</> : 'Guardar cambios'}
             </button>
@@ -813,7 +813,7 @@ export default function ModalEditarOrdenAdmin({ orden, onGuardado, onCerrar }: P
               <textarea
                 value={razonCambio}
                 onChange={e => setRazonCambio(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#0f3460]"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-primary"
                 rows={3}
                 placeholder="Ej: El cliente corrigió el número de teléfono al emitir el conduce."
               />

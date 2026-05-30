@@ -341,7 +341,7 @@ export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Prop
                         style={{ borderLeftColor: color }}
                       >
                         <div className="flex items-start justify-between gap-1 mb-1">
-                          <span className="font-mono text-[11px] font-bold text-[#0f3460]">
+                          <span className="font-mono text-[11px] font-bold text-primary">
                             {o.numero || '#--'}
                           </span>
                           <GripVertical

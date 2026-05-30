@@ -409,7 +409,7 @@ export default function OrdenDetailModal({
         {puedeModificar && !orden.eliminada && (
           <button
             onClick={onEdit}
-            className="flex items-center gap-2 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium transition-colors"
           >
             <Edit2 size={14} />
             Editar
@@ -881,7 +881,7 @@ export default function OrdenDetailModal({
               <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 grid grid-cols-4 gap-3 text-sm mb-2">
                 <div>
                   <div className="text-[11px] text-blue-700 uppercase tracking-wide">Total</div>
-                  <div className="text-base font-semibold text-[#0f3460]">
+                  <div className="text-base font-semibold text-primary">
                     RD$ {total.toLocaleString('es-DO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                   </div>
                 </div>
@@ -1133,7 +1133,7 @@ export default function OrdenDetailModal({
               </div>
               <Link
                 to={`/admin/ordenes/${orden.id}`}
-                className="text-xs font-semibold text-[#1a5fa8] hover:underline"
+                className="text-xs font-semibold text-primary-medium hover:underline"
               >
                 Ver detalle →
               </Link>
@@ -1233,7 +1233,7 @@ export default function OrdenDetailModal({
             <div className="absolute left-2 top-1 bottom-1 w-0.5 bg-gray-200" />
             {orden.historialFases.map((h, i) => (
               <div key={i} className="relative">
-                <div className={`absolute -left-4 top-1 w-3 h-3 rounded-full border-2 border-white ${i === orden.historialFases.length - 1 ? 'bg-[#1a5fa8]' : 'bg-gray-300'}`} />
+                <div className={`absolute -left-4 top-1 w-3 h-3 rounded-full border-2 border-white ${i === orden.historialFases.length - 1 ? 'bg-primary-medium' : 'bg-gray-300'}`} />
                 <div>
                   <Badge fase={h.fase} />
                   <p className="text-xs text-gray-500 mt-1">

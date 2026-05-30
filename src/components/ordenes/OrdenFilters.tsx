@@ -33,7 +33,7 @@ export default function OrdenFilters({
           type="month"
           value={filtroMes}
           onChange={e => setFiltroMes(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white"
         />
       </div>
       <div className="relative flex-1 min-w-48">
@@ -43,13 +43,13 @@ export default function OrdenFilters({
           placeholder="Buscar nombre, #OS..."
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
-          className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
         />
       </div>
       <select
         value={filtroTecnico}
         onChange={e => setFiltroTecnico(e.target.value)}
-        className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
+        className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white"
       >
         <option value="">Todos los tecnicos</option>
         {tecnicos.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
@@ -57,7 +57,7 @@ export default function OrdenFilters({
       <select
         value={filtroEstado}
         onChange={e => setFiltroEstado(e.target.value)}
-        className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
+        className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white"
       >
         <option value="">Todos los estados</option>
         <option value="pendiente">Pendiente</option>

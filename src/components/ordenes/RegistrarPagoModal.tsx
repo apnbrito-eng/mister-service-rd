@@ -395,7 +395,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
           <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-4 grid grid-cols-3 gap-3 text-sm">
             <div>
               <div className="text-[11px] text-blue-700 uppercase tracking-wide">Total orden</div>
-              <div className="text-base font-semibold text-[#0f3460]">{formatearMonto(total)}</div>
+              <div className="text-base font-semibold text-primary">{formatearMonto(total)}</div>
             </div>
             <div>
               <div className="text-[11px] text-blue-700 uppercase tracking-wide">Pagado</div>
@@ -466,7 +466,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
                   onClick={() => setMetodo(op.v)}
                   className={`flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
                     metodo === op.v
-                      ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                      ? 'bg-primary text-white border-primary'
                       : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                   }`}
                 >
@@ -488,7 +488,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
                   value={monto}
                   onChange={e => setMonto(e.target.value)}
                   placeholder="0"
-                  className="w-full pl-12 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full pl-12 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
               {total > 0 && Number(monto) > pendiente && pendiente > 0 && (
@@ -515,7 +515,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
                     <select
                       value={bancoId}
                       onChange={e => setBancoId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
                     >
                       <option value="">— Selecciona un banco —</option>
                       {bancos.map(b => (
@@ -550,7 +550,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
                       };
                       return (
                         <div className="mt-2 bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-gray-800 space-y-1">
-                          <div className="font-semibold text-[#0f3460]">
+                          <div className="font-semibold text-primary">
                             {banco.nombre}{banco.tipoCuenta ? ` — ${banco.tipoCuenta}` : ''}
                           </div>
                           <div className="font-mono text-sm">{banco.numeroCuenta}</div>
@@ -604,7 +604,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
                   value={referencia}
                   onChange={e => setReferencia(e.target.value)}
                   placeholder="Ej: 123456789"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
             )}
@@ -619,7 +619,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
                 value={notas}
                 onChange={e => setNotas(e.target.value)}
                 placeholder="Ej: pagó parcial, resto lunes"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
           </div>
@@ -638,7 +638,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
               type="button"
               onClick={handleGuardar}
               disabled={saving || !monto || Number(monto) <= 0 || (metodo === 'transferencia' && !bancoId)}
-              className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
             >
               {saving ? 'Guardando...' : 'Guardar pago'}
             </button>

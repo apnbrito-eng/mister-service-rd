@@ -79,7 +79,7 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
           onClick={() => onSelect(orden)}
         >
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className="font-mono text-sm font-bold text-[#0f3460]">
+            <span className="font-mono text-sm font-bold text-primary">
               {orden.numero || '#--'}
             </span>
             {orden.reagendada && (

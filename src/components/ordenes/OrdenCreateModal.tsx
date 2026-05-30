@@ -139,7 +139,7 @@ export default function OrdenCreateModal({
 }: OrdenCreateModalProps) {
   const esClienteExistente = !!form.clienteId && !isNewCliente;
   const readonlyInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-blue-50/50 text-gray-700 cursor-not-allowed';
-  const editableInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]';
+  const editableInputClass = 'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium';
 
   const clienteSeleccionado = useMemo<Cliente | undefined>(
     () => (form.clienteId ? clientes.find(c => c.id === form.clienteId) : undefined),
@@ -285,7 +285,7 @@ export default function OrdenCreateModal({
 
         {/* Section: Cliente */}
         <div>
-          <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3 flex items-center gap-2">
             <User size={16} />
             Cliente
           </h3>
@@ -305,7 +305,7 @@ export default function OrdenCreateModal({
                     setForm(f => ({ ...f, clienteNombre: e.target.value }));
                   }
                 }}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
               {showClienteDropdown && clienteBusqueda && clientesFiltrados.length > 0 && (
                 <div className="absolute z-10 w-full border border-gray-200 rounded-lg mt-1 max-h-40 overflow-y-auto bg-white shadow-lg">
@@ -337,7 +337,7 @@ export default function OrdenCreateModal({
                   setForm(f => ({ ...f, clienteNombre: clienteBusqueda || '' }));
                   setShowClienteDropdown(false);
                 }}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-[#1a5fa8] text-[#1a5fa8] hover:bg-[#1a5fa8]/5 rounded-lg text-sm font-medium transition-colors"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border-2 border-dashed border-primary-medium text-primary-medium hover:bg-primary-medium/5 rounded-lg text-sm font-medium transition-colors"
               >
                 <Plus size={16} />
                 Crear nuevo cliente
@@ -347,7 +347,7 @@ export default function OrdenCreateModal({
             {(isNewCliente || form.clienteId) && (
               <div className={`rounded-xl p-4 space-y-3 ${esClienteExistente ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'}`}>
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <p className="text-xs font-semibold text-[#1a5fa8] flex items-center gap-2">
+                  <p className="text-xs font-semibold text-primary-medium flex items-center gap-2">
                     {esClienteExistente ? (
                       <>
                         <CheckCircle size={14} className="text-green-600" />
@@ -362,7 +362,7 @@ export default function OrdenCreateModal({
                       <button
                         type="button"
                         onClick={() => setShowEditarCliente(true)}
-                        className="inline-flex items-center gap-1 text-xs text-[#1a5fa8] hover:text-[#0f3460] font-medium"
+                        className="inline-flex items-center gap-1 text-xs text-primary-medium hover:text-primary font-medium"
                       >
                         <Edit2 size={11} /> Editar datos del cliente
                       </button>
@@ -539,8 +539,8 @@ export default function OrdenCreateModal({
                           className="w-full flex items-center justify-between gap-2 px-3 py-2 bg-white border border-blue-300 rounded-lg text-sm hover:bg-blue-50"
                         >
                           <span className="flex items-center gap-2 min-w-0">
-                            <Home size={14} className="text-[#0f3460] shrink-0" />
-                            <span className="font-semibold text-[#0f3460]">
+                            <Home size={14} className="text-primary shrink-0" />
+                            <span className="font-semibold text-primary">
                               {direccionSeleccionada?.etiqueta}:
                             </span>
                             <span className="text-gray-700 truncate">
@@ -556,7 +556,7 @@ export default function OrdenCreateModal({
                               onClick={() => aplicarDireccion({ principal: true, cliente: clienteSeleccionado })}
                               className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100"
                             >
-                              <div className="font-semibold text-[#0f3460]">Principal</div>
+                              <div className="font-semibold text-primary">Principal</div>
                               <div className="text-xs text-gray-600 truncate">{clienteSeleccionado.direccion || '(sin dirección)'}</div>
                             </button>
                             {direccionesAlternativas.map(d => (
@@ -566,7 +566,7 @@ export default function OrdenCreateModal({
                                 onClick={() => aplicarDireccion(d)}
                                 className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0"
                               >
-                                <div className="font-semibold text-[#0f3460]">{d.etiqueta}</div>
+                                <div className="font-semibold text-primary">{d.etiqueta}</div>
                                 <div className="text-xs text-gray-600 truncate">{d.direccion}</div>
                               </button>
                             ))}
@@ -576,7 +576,7 @@ export default function OrdenCreateModal({
                                 setShowSelectorDir(false);
                                 setShowEditarCliente(true);
                               }}
-                              className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-blue-50 text-sm flex items-center gap-1 text-[#1a5fa8] font-medium border-t border-gray-200"
+                              className="w-full text-left px-3 py-2 bg-gray-50 hover:bg-blue-50 text-sm flex items-center gap-1 text-primary-medium font-medium border-t border-gray-200"
                             >
                               <Plus size={12} /> Agregar / editar direcciones
                             </button>
@@ -589,7 +589,7 @@ export default function OrdenCreateModal({
                       <button
                         type="button"
                         onClick={() => setShowEditarCliente(true)}
-                        className="mb-2 inline-flex items-center gap-1 text-xs text-[#1a5fa8] hover:text-[#0f3460] font-medium"
+                        className="mb-2 inline-flex items-center gap-1 text-xs text-primary-medium hover:text-primary font-medium"
                       >
                         <Plus size={11} /> Agregar otra dirección (mamá, oficina, etc.)
                       </button>
@@ -634,7 +634,7 @@ export default function OrdenCreateModal({
 
         {/* Section: Servicio */}
         <div>
-          <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3 flex items-center gap-2">
             <Wrench size={16} />
             Servicio
           </h3>
@@ -648,7 +648,7 @@ export default function OrdenCreateModal({
                   value={form.equipoTipo}
                   onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
                   placeholder="Ej: Lavadora, Nevera..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
                 <datalist id="tipos-equipo-list">
                   {tiposEquipo.map(t => <option key={t} value={t} />)}
@@ -661,7 +661,7 @@ export default function OrdenCreateModal({
                   value={form.equipoMarca}
                   onChange={e => setForm(f => ({ ...f, equipoMarca: e.target.value }))}
                   placeholder="LG, Samsung, Mabe..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
               {/*
@@ -682,7 +682,7 @@ export default function OrdenCreateModal({
                   <select
                     value={form.equipoModelo}
                     onChange={e => setForm(f => ({ ...f, equipoModelo: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white"
                   >
                     <option value="">Selecciona configuración (opcional)</option>
                     {modelosDisponibles.map(m => (
@@ -699,7 +699,7 @@ export default function OrdenCreateModal({
                 value={form.equipoModeloFabricante}
                 onChange={e => setForm(f => ({ ...f, equipoModeloFabricante: e.target.value }))}
                 placeholder="ej: WF45R6100AW (modelo del fabricante, opcional)"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
             <div>
@@ -709,7 +709,7 @@ export default function OrdenCreateModal({
                 onChange={e => setForm(f => ({ ...f, descripcionFalla: e.target.value }))}
                 rows={3}
                 placeholder="Describe detalladamente el problema del equipo..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
 
@@ -782,7 +782,7 @@ export default function OrdenCreateModal({
 
         {/* Section: Programacion */}
         <div>
-          <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3 flex items-center gap-2">
             <Calendar size={16} />
             Programacion
           </h3>
@@ -800,7 +800,7 @@ export default function OrdenCreateModal({
                   const t = tecnicos.find(p => (p.uid || p.id) === e.target.value);
                   setForm(f => ({ ...f, tecnicoId: e.target.value, tecnicoNombre: t?.nombre || '' }));
                 }}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white"
               >
                 <option value="">Sin asignar</option>
                 {tecnicos.filter(t => t.uid).map(t => (
@@ -838,7 +838,7 @@ export default function OrdenCreateModal({
                     onClick={() => setForm(f => ({ ...f, duracionMin: d }))}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                       form.duracionMin === d
-                        ? 'bg-[#1a5fa8] text-white'
+                        ? 'bg-primary-medium text-white'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
@@ -855,7 +855,7 @@ export default function OrdenCreateModal({
                   type="date"
                   value={form.fechaCita}
                   onChange={e => setForm(f => ({ ...f, fechaCita: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
               <div>
@@ -873,8 +873,8 @@ export default function OrdenCreateModal({
                         ocupado
                           ? 'bg-red-50 text-red-400 border-red-200 cursor-not-allowed line-through'
                           : form.horaInicio === h
-                            ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                            : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
+                            ? 'bg-primary-medium text-white border-primary-medium'
+                            : 'bg-white text-gray-600 border-gray-200 hover:border-primary-medium'
                       }`}
                       title={ocupado ? 'Horario ocupado' : ''}
                     >
@@ -938,7 +938,7 @@ export default function OrdenCreateModal({
             type="submit"
             disabled={saving || operariaFaltante}
             title={operariaFaltante ? 'Asigna una operaria al técnico antes de continuar' : ''}
-            className="px-6 py-2.5 bg-[#1a5fa8] hover:bg-[#0f3460] text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-6 py-2.5 bg-primary-medium hover:bg-primary text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {saving ? (
               <>
