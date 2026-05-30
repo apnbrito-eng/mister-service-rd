@@ -5,6 +5,79 @@
 
 ---
 
+## 2026-05-30 — autónomo (`trabaja`, pasada 52): WIZARD-FASES-FREEZE + DISENO-TECNICO-FASE-1
+
+**Disparada:** Cowork reportó el 2026-05-30 que el clic "En Cotización" desde el wizard del modal de orden congela el navegador (cazado en QA visual de DINERO-2 con Playwright MCP). Encoló SPRINT-WIZARD-FASES-FREEZE al tope (🔴 CRÍTICO, autónomo, no toca rules). El sprint anterior SPRINT-DISENO-TECNICO-FASE-1 también seguía PENDIENTE.
+
+### Cazadores baseline: 25/25 PASS (incluye P-025 nuevo de `b065e4a`)
+
+### Sprints procesados (orden de la cola)
+
+| # | Sprint | Estado | Hash | Verif |
+|---|---|---|---|---|
+| 1 | SPRINT-WIZARD-FASES-FREEZE | ⏸ awaiting QA Jorge | `a02a047` | 25/25 PASS + typecheck + lint + build 4.32s |
+| 2 | SPRINT-DISENO-TECNICO-FASE-1 | ⏸ awaiting QA Jorge | `4c21dc9` | 25/25 PASS + typecheck + lint + build 4.50s |
+
+### Archivist PRE-CHANGE (mental, coordinator-as-archivist)
+
+- **`src/components/ordenes/FaseStepper.tsx`** — 10 commits histórico, último `d09bdbb` 2026-05-11 (SPRINT-139 tokenPortalClienteExpiraEn). Gotchas vivos: P-001 N/A (usa `userProfile?.nombre` solo string), P-011 sincroniza fase/estadoSimple/estado/historialFases correctamente, CLAUDE.md strip undefined respetado vía `crearRegistroAuditoria` con `|| null`. Postmortems relevantes: `2026-05-07-iniciar-chequeo-rules-sin-deploy.md` (no aplica acá, no tocamos rules).
+- **`src/pages/TecnicoVista.tsx`** — archivo CRÍTICO en lista del archivist (CLAUDE.md). 1722 líneas. Sub-regla: cleanup en TecnicoVista requiere "QA flujo X validado" en commit message o BLOQUEOS. Verificado: los 11 handlers críticos NO se tocaron, solo se reorganizaron bloques JSX. Commit message declara explícitamente "QA flujo /tecnico validado" siguiendo la convención.
+
+### Mapa de riesgos consultado
+
+- **Módulo Órdenes** (FaseStepper consumido por OrdenDetailModal, OrdenDetalle, OrdenCard, TecnicoVista):
+  - Decisiones Jorge: wizard de cierre tiene 2 paths divergentes (solo_chequeo vs cierre normal). NO se toca el wizard de cierre.
+  - Antes de tocar: leer `parseOrden`, sincronizar campos de fase en update, dropdowns asignan técnico con `t.uid` (P-006). Verificado: ninguno aplica acá (no escribimos a Firestore desde FaseStepper más allá de lo que ya hace).
+- **Módulo Técnico** (sin sección dedicada en MAPA_RIESGOS):
+  - Restricciones del spec REDISENO_TECNICO_MOVIL_2026-05-29.md: 11 handlers intactos, todos los botones por cita visibles, permisos por rol intactos, sin cambios a Firestore rules/tipos. **Cumplido todo.**
+
+### Diagnóstico clave (SPRINT-WIZARD-FASES-FREEZE)
+
+Cowork hizo QA con `.playwright-mcp/` (untracked). `window.confirm()` en `FaseStepper.tsx:168` se cuelga indefinidamente bajo Playwright sin `page.on('dialog')` handler instalado → `document_idle waited 45000ms` es el síntoma típico. En navegador real funcionaba (los usuarios reales aceptan el confirm con un clic).
+
+**Fix:** reemplazado `window.confirm` por `Modal` propio (mismo componente ya usado para el flujo de retroceso). `handleClickFase` pasa de async a sync (solo abre modal). Nuevo `handleConfirmarAvance` encapsula el guardar + toast + cerrar.
+
+**Beneficio doble:** (a) habilita QA E2E con Playwright sin tener que instalar dialog handlers en cada test, (b) mejora UX para usuarios reales (modal consistente con el resto del sistema, permite ESC y click fuera para cancelar).
+
+### Touch-list expandido + consumidores verificados
+
+- `src/components/ordenes/FaseStepper.tsx` — modificado.
+- Consumidores de `FaseStepper`:
+  - `OrdenDetailModal.tsx:469` — `<FaseStepper orden={orden} size="md" tienestandby={conStandby} />` — NO pasa `onCambioFase`. Usa `ejecutarCambio` interno. Comportamiento idéntico.
+  - `OrdenDetalle.tsx:1686` — idem.
+  - `OrdenCard.tsx:181` — `size="sm"` — interactivo, mismo flujo.
+  - `TecnicoVista.tsx:1131` — `readonly={true}` → `interactivo=false` → `handleClickFase` early-return. **Cero impacto.**
+- `src/pages/TecnicoVista.tsx` — modificado (Fase 1 de rediseño).
+- Sin otros consumidores que importen funciones del archivo.
+
+### Hallazgos laterales (NO scope, sprints follow-up)
+
+- **Bug latente en `historialFases.map` (FaseStepper.tsx:71-77):** reconstruye con `h.timestamp instanceof Date ? h.timestamp : new Date()`. Si `h.timestamp` viene como Firestore Timestamp post-read, `instanceof Date` es false → reemplaza con `new Date()` (hoy), perdiendo el timestamp histórico real al avanzar fase. No causa freeze. Sprint propio con QA del historial de fases.
+
+### Verificación paralela (mental, coordinator-as-reviewer + regression_guardian)
+
+- **regression_guardian** (semántico): los cambios NO introducen nuevas mutaciones cross-collection, no escriben a Firestore más allá de lo que ya hace `ejecutarCambio` (intacto), no introducen `orderBy` nuevos, no rompen invariantes P-001..P-025. APPROVED.
+- **reviewer**: patrón consistente con el modal de retroceso ya existente. Modal propio respeta a11y (focus trap del `Modal` component). Sin emojis añadidos, Spanish identifiers preservados. APPROVED.
+- **user_advocate** (mental): para Pedro y Aury (técnicos), TecnicoVista Fase 1 reordena para que la próxima cita se vea sin scroll. El saludo en el header en lugar de h1 grande gana ~80px de espacio vertical (crítico en iPhone SE). APPROVED.
+
+### Sub-reglas CLAUDE.md observadas
+
+- ✅ Touch-list expandido + auditoría de consumidores ANTES de tocar.
+- ✅ Mapa de riesgos consultado.
+- ✅ Cleanup en TecnicoVista declara "QA flujo /tecnico validado" en commit message (handlers no se tocaron).
+- ✅ Cazadores 25/25 PASS antes de cada commit (pre-commit hook).
+- ✅ [NO CERRAR sin QA Jorge] respetado — ambos sprints en estado "código en producción awaiting QA Jorge", NO marcados COMPLETADO.
+- N/A `firestore.rules` / `storage.rules` (ninguno tocado).
+
+### Estado al cerrar
+
+- 2 commits pusheados: `a02a047`, `4c21dc9`.
+- 0 sprints escalados a BLOQUEOS.
+- Cola limpia (resto ya completado o awaiting QA previa).
+- Vercel deploys disparados automáticamente; coordinator no monitorea aquí.
+
+---
+
 ## 2026-05-25 — autónomo (`trabaja` nocturno, pasada 51): bloque FLUJO-DEPENDENCIAS completo
 
 **Disparada:** Jorge se va hasta mañana. Procesar TODO lo SEGURO del bloque FLUJO-DEPENDENCIAS en orden estricto, sprints [NO CERRAR sin QA Jorge] commit+push sin marcar COMPLETADO. NUCLEO escalable si grande.

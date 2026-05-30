@@ -6,7 +6,7 @@
 >
 > **Quién lo mantiene:** el agente **`memoria`** (`.claude/agents/memoria.md`). El coordinator lo actualiza al cerrar cada pasada; Cowork lo actualiza al cerrar cada conversación. Este archivo es un ÍNDICE corto — el detalle vive en los archivos enlazados abajo.
 
-**Última actualización:** 2026-05-25 por coordinator (`trabaja` pasada 51, nocturno). Bloque FLUJO-DEPENDENCIAS procesado: **8 sprints commiteados + pusheados**, 1 escalado. 4 completados autónomo (AGENDA-2/3/4/5 + DINERO-1), 4 [NO CERRAR sin QA Jorge] (AGENDA-1, DINERO-2, REPORTING-1) en producción esperando QA, 1 ESCALADO (NUCLEO con plan 3 fases + decisión A/B/C). (Anterior: Cowork — auditoría de FLUJO Y DEPENDENCIAS.)
+**Última actualización:** 2026-05-30 por coordinator autónomo (`trabaja`, pasada 52). **2 sprints procesados, ambos en producción awaiting QA Jorge.** (1) **SPRINT-WIZARD-FASES-FREEZE** hash `a02a047` — diagnóstico del coordinator: el `window.confirm()` del handler de avance de fase en `FaseStepper.tsx` se cuelga indefinidamente bajo Playwright sin `page.on('dialog')` handler (artefacto del QA automatizado de Cowork con `.playwright-mcp/`). Fix: reemplazado por Modal propio consistente con el modal de retroceso ya existente. 4 consumidores verificados sin regresión. Cuando Jorge confirme en navegador real → DINERO-2 puede retomar QA visual. (2) **SPRINT-DISENO-TECNICO-FASE-1** hash `4c21dc9` — reordena JSX en `TecnicoVista.tsx`: saludo al header, ganancias abajo del listado, etiqueta "PRÓXIMA CITA", tabs al final, mapa colapsado. 11 handlers intactos. Sub-regla "cleanup en TecnicoVista requiere QA flujo X validado" cumplida (los handlers no se tocaron). Cazadores 25/25 PASS, build 4.50s. Cola limpia tras estos 2 — sin más procesables. Anterior: 2026-05-30 Cowork — intentó QA visual DINERO-2 directo desde Chrome, cazó bug del wizard, encoló SPRINT-WIZARD-FASES-FREEZE.
 
 ---
 
@@ -14,17 +14,22 @@
 
 ### En la cola autónoma (Jorge corre `trabaja` en Claude Code) — en orden
 
+**🟡 EN PRODUCCIÓN AWAITING QA JORGE (pasada 52, 2026-05-30):**
+
+- **`SPRINT-WIZARD-FASES-FREEZE`** hash `a02a047` — fix aplicado: `window.confirm` → Modal propio. Causa raíz: Playwright sin handler de dialog (no era bug del producto para usuarios reales). QA Jorge: avanzar fase desde modal de orden → debe abrir modal de confirmación rápido sin congelar.
+- **`SPRINT-DISENO-TECNICO-FASE-1`** hash `4c21dc9` — jerarquía visual de `/tecnico` reordenada: saludo al header, ganancias abajo, "PRÓXIMA CITA" antes de primera cita activa, tabs al final, mapa colapsado. 11 handlers intactos. QA Jorge: abrir `/tecnico` desde celular, recorrer checklist sección 6 del spec `docs/specs/REDISENO_TECNICO_MOVIL_2026-05-29.md`.
+
 **⭐ BLOQUE FLUJO-DEPENDENCIAS — estado post pasada 51 (2026-05-25 nocturno).** De la auditoría `AUDITORIA_FLUJO_DEPENDENCIAS_2026-05-25.md`. Causa raíz: una orden podía nacer sin cliente real. **Estado actual:**
 
-  1. **AGENDA-1-MANTENIMIENTO-ATA-CLIENTE** ⏸ hash `132d9b5`, **awaiting QA Jorge** (plan en BLOQUEOS).
+  1. ~~**AGENDA-1-MANTENIMIENTO-ATA-CLIENTE**~~ ✅ **VERIFICADO 2026-05-29** por `/qa` de gstack (QA estático de código): typeahead exige cliente real (Mantenimiento.tsx:459-507 + :217-223 `buscarOCrearCliente`), orden hereda `clienteId` (:310-315 + guard :276-282), ficha cliente la lista (Clientes.tsx:172-186). **+ NUEVO cazador P-025** (hash `b065e4a`) bloquea reintroducción de `clienteId: ''` en writes de `mantenimiento`/`ordenes_servicio`. 24/24 cazadores PASS.
   2. **AGENDA-2-CALENDARIO-MUESTRA-CITAS** ✅ COMPLETADO hash `e4f92bf`.
   3. **AGENDA-3-HONRAR-TECNICO-ASIGNADO** ✅ COMPLETADO hash `f9697b9`.
   4. **AGENDA-4-UNIFICAR-FORMS-PUBLICOS** ✅ COMPLETADO hash `fba51a4`.
   5. **AGENDA-5-PROXIMO-MANTENIMIENTO-AL-CERRAR** ✅ COMPLETADO hash `8f6a72b`.
   6. **NUCLEO-CREAR-ORDEN-CENTRAL** ⊘ ESCALADO a BLOQUEOS (cimiento sensible + [NO CERRAR sin QA]; plan 3 fases + decisión A/B/C en BLOQUEOS.md).
   7. **DINERO-1-QT-ATOMICO** ✅ COMPLETADO hash `bec87b3`.
-  8. **DINERO-2-MONTOPAGADO-RECALC** ⏸ hash `b4fc23c`, **awaiting QA Jorge**.
-  9. **REPORTING-1-KPI-HELPERS** ⏸ hash `a4e64db`, **awaiting QA Jorge** (cambia monto KPI conduces).
+  8. **DINERO-2-MONTOPAGADO-RECALC** 🟡 hash `b4fc23c` — **QA estático ✅ por `/qa-only` 2026-05-29** (recalc dentro de runTransaction, guard idempotencia por `pago.id`, suma con cascada precioFinal/Aprobado/Sugerido, estado mismo helper que RegistrarPagoModal, gate P-023 intacto). **QA visual ⏸ BLOQUEADO 2026-05-30 por bug del wizard** (clic "En Cotización" congela navegador — ver SPRINT-WIZARD-FASES-FREEZE al tope). Cuando el wizard funcione, Cowork retoma: avanzar OS-0057 → cotizar RD$1500 → registrar pago parcial RD$500 → emitir conduce cobrando saldo RD$1000 → verificar orden pasa a "Pagado". Observación menor (deuda): `calcularEstadoPago` está duplicado en RegistrarPagoModal y ProcesarFacturacionModal; extraer a `utils/pagos.ts` cuando aparezca 3er caller.
+  9. **REPORTING-1-KPI-HELPERS** 🟡 hash `a4e64db` — **QA estático ✅ por `/qa-only` 2026-05-29** (3 helpers en `src/utils/kpis.ts`: `ingresosFacturasPagadas` filtra `estado==='pagada'`, `conducesEmitidosMonto/Count` filtran `estado!=='anulada'` defense-in-depth, Dashboard usa los 3 + filter inline "Conduces hoy" también excluye anuladas, rangos `>=desde, <=hasta`). **Falta validación visual Jorge:** comparar KPI "Conduces emitidos del mes" antes/después si hay anuladas históricas en el mes.
 
   **FUERA de la cola (decisión de Jorge, en `BLOQUEOS.md`):** base de comisión (dos cálculos, ~18% dif), gate de aprobación + rule R4, descuento de stock al cerrar, standby→inventario, factura+pago→fase cerrado.
 
@@ -33,9 +38,9 @@
 ### En BLOQUEOS esperando QA o OK de Jorge
 
 - **Pasada 51 nocturno (3 sprints awaiting QA):**
-  - **SPRINT-AGENDA-1** hash `132d9b5` — QA: programar mantenimiento de un cliente existente, verificar que la orden generada aparece en la ficha del cliente (no huérfana). Plan completo en `BLOQUEOS.md`.
-  - **SPRINT-DINERO-2** hash `b4fc23c` — QA: emitir conduce cobrando saldo dentro del wizard, verificar que la orden muestra "Pagado" en agenda/listado (no "Pendiente"+monto viejo). Plan en `BLOQUEOS.md`.
-  - **SPRINT-REPORTING-1** hash `a4e64db` — QA: comparar KPI "Conduces emitidos del mes" en Dashboard antes/después si hay anuladas en el mes. Debe bajar por el monto de las anuladas. Plan en `BLOQUEOS.md`.
+  - ~~**SPRINT-AGENDA-1**~~ ✅ **CERRADO 2026-05-29** por `/qa` de gstack (auditoría estática) + cazador P-025 vivo. NO necesita QA manual.
+  - **SPRINT-DINERO-2** hash `b4fc23c` — **QA estático ✅ 2026-05-29.** Falta validación visual Jorge: emitir conduce cobrando saldo dentro del wizard, verificar que la orden muestra "Pagado" en agenda/listado (no "Pendiente"+monto viejo). Plan en `BLOQUEOS.md`.
+  - **SPRINT-REPORTING-1** hash `a4e64db` — **QA estático ✅ 2026-05-29.** Falta validación visual Jorge: comparar KPI "Conduces emitidos del mes" en Dashboard antes/después si hay anuladas en el mes. Debe bajar por el monto de las anuladas. Plan en `BLOQUEOS.md`.
 - **SPRINT-NUCLEO-CREAR-ORDEN-CENTRAL** — ⊘ ESCALADO 2026-05-25 pasada 51. Plan 3 fases (helper crearOrden + migrar solicitudes.service + opcional migrar useOrdenCreateForm + cazador anti-bypass) + decisión A/B/C en `BLOQUEOS.md`. Para desbloquear: agregar `OK: jorge YYYY-MM-DD opcion=A|B|C`.
 - **SPRINT-WA-FIX-PLANTILLAS-PARAMS** — código commiteado + pusheado (hash `0ab73c5` 2026-05-25 pasada 50). Frontend-only; deploy automático (job Vercel `Yr0nTylm03jpzaalsPhd`). **QA Jorge:** desde el inbox, mandar cada una de las 4 plantillas a un número de prueba y confirmar ✓✓ (entregado) + banner branded correcto (no ⚠️). Hallazgo lateral documentado como follow-up: `SPRINT-WA-AUTORESPUESTA-SIN-HEADER`.
 - **SPRINT-GARANTIA-FLUJO-COMPLETO** — ⏸ código FASE A commiteado + pusheado (hash `59c5fb0` 2026-05-25 pasada 49). Aplica las reglas de Jorge: técnico original conserva su comisión, descuento del 10% sobre piezas al cerrar la orden de garantía (no al confirmar cita), cazador P-024 anti-reintroducción del patrón viejo. **NO marcado COMPLETADO** — Jorge debe correr 4 casos QA (mismo técnico cubre / otro técnico cubre / sin piezas / sin comisión original). Plan QA + deuda fase B en `BLOQUEOS.md`. Deuda fase B: botón "Abrir garantía" desde orden/ficha, gate "solo oficina no técnicos", capturar si el cliente paga, notifs al reabrir, regla "mismo técnico que cubre no gana comisión adicional".
@@ -44,7 +49,7 @@
 
 - ~~**DRY-RUN del script de migración B-2**~~ **[HECHO 2026-05-25 por Jorge]** — corrió DRY-RUN (16 órdenes, 18 pagos) + `--apply`: subcolección poblada (16 órdenes migradas, 18 pagos escritos, arrays `orden.pagos` intactos = source-of-truth). <500 → aplicado autónomo según spec. **B-3 (cut-over + endurecer rules) sigue esperando QA de Jorge.**
 - **QA SPRINT-GARANTIA Fase A** en producción/staging — 4 casos detallados en `BLOQUEOS.md`. Hash `59c5fb0`.
-- **QA SPRINT-FIX-LEADS-FORMULARIO-PUBLICO** — enviar un formulario público real con foto + firma + PDF y verificar que llega como solicitud. Hash `01df699`. Storage rules ya deployadas.
+- ~~**QA SPRINT-FIX-LEADS-FORMULARIO-PUBLICO**~~ ✅ **CERRADO 2026-05-29** por `/qa-only` (storage.rules con whitelist `image/*` + `application/pdf` < 10MB intacta, REGLA DE ORO cumplida, `solicitudes.service.ts` migrada al path `solicitudes-publico/`, FormularioPublico.tsx GPS leído por `campo.tipo==='ubicacion'` con type guard refinado, deploy verificado por P-013 lock match sha `accf5550e87...`). NO necesita QA visual adicional.
 - **Smoke test en producción** — selector de número con números reales, trazabilidad (quién envió + nombre del agente), respuestas rápidas con "/", y el inbox (fotos, ficha cliente, form a la izquierda).
 - **Crear 2da/3ra WABA en Meta** + cargar `phone_number_id` + token en Vercel env + allowlist → desbloquea `SPRINT-WA-NUMERO-RESPALDO-MANUAL-FASE-2`.
 - **Bug `/careful` de gstack (FASE A paquete integrado, 2026-05-29).** El hook PreToolUse:Bash busca `/bin/check-careful.sh` (ruta absoluta de sistema) que no existe → el hook falla con "non-blocking status" y `rm -rf` se ejecuta sin pedir confirmación. Verificado con prueba en `~/Desktop/prueba-gstack`. `/careful` se activa correctamente y Claude conoce los patrones, pero la red de seguridad automática del hook está rota. Opciones a evaluar: (a) `/gstack-upgrade` cuando salga versión nueva, (b) reportar al GitHub `garrytan/gstack` con el detalle del path, (c) saltear los cinturones y pasar directo a FASE B (`/qa` con navegador). Plan integrado: `docs/PLAN_INTEGRADO_GSTACK_2026-05-28.md`.
@@ -59,6 +64,20 @@ Nada activo en construcción ahora mismo. Pasada 51 cerrada (nocturna). 3 sprint
 
 ## ✅ HECHO RECIENTE (últimos hitos)
 
+- **2026-05-30 (pasada 52, `trabaja`)** — 2 sprints procesados, ambos commiteados + pusheados, awaiting QA Jorge:
+  - `SPRINT-WIZARD-FASES-FREEZE` hash `a02a047` — diagnóstico: el `window.confirm()` del handler `handleClickFase` en `FaseStepper.tsx` se cuelga indefinidamente bajo Playwright sin `page.on('dialog')` handler instalado (Cowork hizo QA visual de DINERO-2 con `.playwright-mcp/` el 2026-05-30 → `document_idle waited 45000ms` = síntoma típico). En navegador real funcionaba. Fix: reemplazado `window.confirm` por Modal propio consistente con el modal de retroceso ya existente en el mismo componente. 4 consumidores verificados (OrdenDetailModal, OrdenDetalle, OrdenCard, TecnicoVista) — ninguno pasa `onCambioFase` → comportamiento idéntico para usuarios reales. Deuda follow-up identificada (NO scope): bug latente en `historialFases.map` reemplazando timestamps con `new Date()` cuando llegan como Firestore Timestamp.
+  - `SPRINT-DISENO-TECNICO-FASE-1` hash `4c21dc9` — reordena JSX en `TecnicoVista.tsx`: saludo al header (1 línea con logo), card ganancias movida ABAJO del listado, etiqueta "PRÓXIMA CITA" antes de primera cita NO completada, tabs Hoy/Semana/Mes/Rango al final como filtro auxiliar, mapa colapsado (ya cumplía). 11 handlers críticos intactos (verificado por grep). Emojis preservados (Fase 4). Sub-regla CLAUDE.md "cleanup en TecnicoVista requiere QA flujo X validado" cumplida — handlers no se tocaron, solo se reorganizaron bloques JSX.
+  - **25/25 cazadores PASS** en cada commit. Typecheck PASS. Lint clean. Build 4.32s + 4.50s. Pre-commit hooks PASS.
+  - 0 sprints más procesables en la cola; resto ya está COMPLETADO o awaiting QA previa (DINERO-2, REPORTING-1, AGENDA-1, GARANTIA Fase A, WA-FIX-PLANTILLAS).
+  - **Sub-regla CLAUDE.md observada:** ambos sprints marcados [NO CERRAR sin QA Jorge] → el coordinator NO marca COMPLETADO, los deja en estado "código en producción awaiting QA Jorge" con plan de QA explícito en COLA_AUTONOMA.md.
+- **2026-05-29 (sesión Claude Code con gstack instalado)** — Cuatro sprints verificados por QA estático + 1 cazador nuevo:
+  - **`/qa` AGENDA-1** (hash `132d9b5`, prod URL): 3/3 ✅ del flujo Mantenimiento → Orden → Ficha cliente. Detectó deuda anti-regresión → creó **cazador P-025** (`check-mantenimiento-clienteid-vacio.ts`, 204 líneas) detecta `clienteId: ''` en writes a `mantenimiento`/`ordenes_servicio`. Verificado: 0 falsos positivos en 238 archivos. Commits: `1c1717e` (fix mapa Mermaid `area_*` prefijo) + `b065e4a` (cazador + entrada PATRONES_REGRESION.md).
+  - **`/qa-only` DINERO-2** (hash `b4fc23c`): ✅ recalc dentro de `runTransaction`, guard idempotencia por `pago.id`, suma con cascada `precioFinal/Aprobado/Sugerido`, estado igual a `RegistrarPagoModal`, gate P-023 intacto. Deuda menor: extraer `calcularEstadoPago` cuando aparezca 3er caller. **Mantiene flag [NO CERRAR sin QA Jorge]** — falta validación visual emitiendo conduce cobrando saldo.
+  - **`/qa-only` REPORTING-1** (hash `a4e64db`): ✅ 3 helpers en `src/utils/kpis.ts` excluyen anuladas defense-in-depth, Dashboard los usa + filter inline "Conduces hoy" también. Sin observaciones. **Mantiene flag [NO CERRAR sin QA Jorge]** — falta comparar KPI Dashboard antes/después si hay anuladas históricas en el mes.
+  - **`/qa-only` FIX-LEADS** (hash `01df699`): ✅ storage.rules con whitelist `image/*` + `application/pdf` < 10MB, REGLA DE ORO cumplida, path migrado a `solicitudes-publico/`, GPS leído por `campo.tipo==='ubicacion'` con type guard refinado, deploy verificado por P-013 lock match. Sin observaciones. **CERRADO definitivo** — no necesita QA visual adicional.
+  - **24/24 cazadores PASS** (P-025 nuevo, sube de 23).
+  - **Bug del hook de `/careful` SIGUE roto** (`PreToolUse:Bash hook error: /bin/check-careful.sh: No such file or directory`). No bloquea — Claude obedece patrones al nivel del modelo. Esperar `/gstack-upgrade` o reportar al repo.
+  - Deuda no commiteada: `.gitignore` modificado por gstack (agregó `.gstack/`), untracked de screenshots/docs pasada 51.
 - **2026-05-25 (pasada 51, `trabaja` nocturno)** — Bloque FLUJO-DEPENDENCIAS procesado: **8 sprints commiteados + pusheados**, 1 ESCALADO. **4 COMPLETADOS autónomos:**
   - `SPRINT-AGENDA-2` hash `e4f92bf` — calendario + AgendaDia muestran citas por confirmar + mantenimientos como capa tentativa (ámbar/púrpura, borde punteado), toggle "Mostrar tentativos".
   - `SPRINT-AGENDA-3` hash `f9697b9` — useOrdenCreateForm honra `asignadoId` del calendario público (precarga técnico al confirmar cita web).
