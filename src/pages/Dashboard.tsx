@@ -628,12 +628,12 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Dashboard</h1>
+          <h1 className="text-2xl font-bold text-primary">Dashboard</h1>
           <p className="text-gray-500 text-sm">
             {now.toLocaleDateString('es-DO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
           {esOperaria && (
-            <p className="text-xs text-[#1a5fa8] mt-1">
+            <p className="text-xs text-primary-medium mt-1">
               {filtroOperariaActivo
                 ? `Viendo solo tu grupo · ${tecnicos.length} técnico${tecnicos.length !== 1 ? 's' : ''}`
                 : 'Viendo todas las operarias (modo apoyo)'}
@@ -644,7 +644,7 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={() => setVerTodasOperarias(v => !v)}
-            className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-[#1a5fa8] bg-white border border-[#1a5fa8]/30 rounded-lg hover:bg-[#1a5fa8]/5 transition-colors"
+            className="inline-flex items-center gap-2 px-3 py-2 text-xs font-medium text-primary-medium bg-white border border-primary-medium/30 rounded-lg hover:bg-primary-medium/5 transition-colors"
           >
             <Eye size={14} />
             {filtroOperariaActivo ? 'Ver todas las operarias' : 'Ver solo mi grupo'}
@@ -654,7 +654,7 @@ export default function Dashboard() {
           <select
             value={filtroOperariaCoord}
             onChange={e => setFiltroOperariaCoord(e.target.value)}
-            className="px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="px-3 py-2 text-xs font-medium border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-medium"
           >
             <option value="">Ver todas las operarias</option>
             <option value="__sin_asignar__">Sin operaria asignada</option>
@@ -801,7 +801,7 @@ export default function Dashboard() {
                     onClick={() => navigate(`/admin/ordenes/${orden.id}`)}
                     className="border-b border-gray-50 hover:bg-red-50 cursor-pointer transition-colors"
                   >
-                    <td className="py-2.5 pr-4 font-mono font-medium text-[#0f3460]">
+                    <td className="py-2.5 pr-4 font-mono font-medium text-primary">
                       #{orden.numero}
                     </td>
                     <td className="py-2.5 pr-4 text-gray-900">{orden.clienteNombre}</td>
@@ -908,7 +908,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <BarChart3 size={20} className="text-[#1a5fa8]" />
+              <BarChart3 size={20} className="text-primary-medium" />
               <h2 className="text-lg font-semibold text-gray-900">Ingresos vs Gastos</h2>
             </div>
             <div className="flex gap-1">
@@ -918,7 +918,7 @@ export default function Dashboard() {
                   onClick={() => setPeriodoVentas(p)}
                   className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
                     periodoVentas === p
-                      ? 'bg-[#0f3460] text-white'
+                      ? 'bg-primary text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
@@ -985,7 +985,7 @@ export default function Dashboard() {
         {/* 6. Balance pendiente */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-4">
-            <DollarSign size={20} className="text-[#1a5fa8]" />
+            <DollarSign size={20} className="text-primary-medium" />
             <h2 className="text-lg font-semibold text-gray-900">Balance Pendiente</h2>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -1006,7 +1006,7 @@ export default function Dashboard() {
           </div>
           <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center">
             <span className="text-sm text-gray-500">Total pendiente</span>
-            <span className="text-lg font-bold text-[#0f3460]">
+            <span className="text-lg font-bold text-primary">
               {formatMoneda(facturasPendientes.reduce((s, f) => s + (f.total || 0), 0))}
             </span>
           </div>
@@ -1015,7 +1015,7 @@ export default function Dashboard() {
         {/* 7. Estado de casos por tecnico */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-4">
-            <Users size={20} className="text-[#1a5fa8]" />
+            <Users size={20} className="text-primary-medium" />
             <h2 className="text-lg font-semibold text-gray-900">Estado de Casos por Técnico</h2>
           </div>
           {casosPorTecnico.length === 0 ? (
@@ -1059,7 +1059,7 @@ export default function Dashboard() {
         {/* 8. Rendimiento por tecnico */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-4">
-            <TrendingUp size={20} className="text-[#1a5fa8]" />
+            <TrendingUp size={20} className="text-primary-medium" />
             <h2 className="text-lg font-semibold text-gray-900">Rendimiento por Técnico</h2>
           </div>
           {rendimientoTecnicos.length === 0 ? (
@@ -1082,7 +1082,7 @@ export default function Dashboard() {
                       <span className="text-sm font-medium text-gray-900">{tecnico.nombre}</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-sm font-bold text-[#0f3460]">{pct}%</span>
+                      <span className="text-sm font-bold text-primary">{pct}%</span>
                       <span className="text-xs text-gray-400 ml-1">({completadas}/{total})</span>
                     </div>
                   </div>
@@ -1112,7 +1112,7 @@ export default function Dashboard() {
                 <Boxes size={20} className="text-amber-600" />
                 <h2 className="text-lg font-semibold text-gray-900">Alertas de Inventario</h2>
               </div>
-              <Link to="/admin/inventario" className="text-xs text-[#1a5fa8] hover:underline font-medium">
+              <Link to="/admin/inventario" className="text-xs text-primary-medium hover:underline font-medium">
                 Ver inventario completo →
               </Link>
             </div>
@@ -1146,7 +1146,7 @@ export default function Dashboard() {
                 <XCircle size={20} className="text-red-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Órdenes anuladas esta semana</h2>
               </div>
-              <Link to="/admin/historial-anuladas" className="text-xs text-[#1a5fa8] hover:underline font-medium">
+              <Link to="/admin/historial-anuladas" className="text-xs text-primary-medium hover:underline font-medium">
                 Ver historial completo →
               </Link>
             </div>
@@ -1172,10 +1172,10 @@ export default function Dashboard() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <Wallet size={20} className="text-[#1a5fa8]" />
+                <Wallet size={20} className="text-primary-medium" />
                 <h2 className="text-lg font-semibold text-gray-900">Próxima nómina</h2>
               </div>
-              <Link to="/admin/nomina" className="text-xs text-[#1a5fa8] hover:underline font-medium">
+              <Link to="/admin/nomina" className="text-xs text-primary-medium hover:underline font-medium">
                 Ver nómina completa →
               </Link>
             </div>
@@ -1205,20 +1205,20 @@ export default function Dashboard() {
           <button
             type="button"
             onClick={() => navigate('/admin/metricas-mensuales')}
-            className="w-full text-left bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md hover:border-[#1a5fa8]/30 transition-all group"
+            className="w-full text-left bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md hover:border-primary-medium/30 transition-all group"
           >
             <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <Wallet size={20} className="text-[#0f3460]" />
-                <h2 className="text-lg font-semibold text-gray-900 group-hover:text-[#1a5fa8] transition-colors">
+                <Wallet size={20} className="text-primary" />
+                <h2 className="text-lg font-semibold text-gray-900 group-hover:text-primary-medium transition-colors">
                   Nómina proyectada del mes
                 </h2>
               </div>
-              <span className="text-xs text-[#1a5fa8] group-hover:underline font-medium">
+              <span className="text-xs text-primary-medium group-hover:underline font-medium">
                 Ver detalle →
               </span>
             </div>
-            <p className="text-2xl font-bold text-[#0f3460]">
+            <p className="text-2xl font-bold text-primary">
               {formatMoneda(proyeccionNomina.total)}
             </p>
             <div className="grid grid-cols-3 gap-2 mt-3 text-[11px] text-gray-600">
@@ -1241,7 +1241,7 @@ export default function Dashboard() {
         {/* 9. Reparaciones por tipo de equipo */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-4">
-            <Wrench size={20} className="text-[#1a5fa8]" />
+            <Wrench size={20} className="text-primary-medium" />
             <h2 className="text-lg font-semibold text-gray-900">Reparaciones por Tipo de Equipo</h2>
           </div>
           {reparacionesPorTipo.length === 0 ? (
@@ -1257,11 +1257,11 @@ export default function Dashboard() {
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-center mb-1">
                       <span className="text-sm font-medium text-gray-900 truncate">{tipo}</span>
-                      <span className="text-sm font-bold text-[#0f3460] ml-2">{count}</span>
+                      <span className="text-sm font-bold text-primary ml-2">{count}</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-[#0f3460] to-[#1a5fa8] rounded-full transition-all duration-500"
+                        className="h-full bg-gradient-to-r from-primary to-primary-medium rounded-full transition-all duration-500"
                         style={{ width: `${(count / maxReparaciones) * 100}%` }}
                       />
                     </div>
@@ -1281,14 +1281,14 @@ export default function Dashboard() {
           className="w-full flex items-center gap-2 mb-4 group cursor-pointer"
           title="Ver agenda completa por técnico"
         >
-          <Calendar size={20} className="text-[#1a5fa8]" />
-          <h2 className="text-lg font-semibold text-gray-900 group-hover:text-[#1a5fa8] transition-colors">
+          <Calendar size={20} className="text-primary-medium" />
+          <h2 className="text-lg font-semibold text-gray-900 group-hover:text-primary-medium transition-colors">
             Agenda del Día
           </h2>
           <span className="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full">
             {agendaHoy.length}
           </span>
-          <ChevronRight size={16} className="ml-auto text-gray-400 group-hover:text-[#1a5fa8] transition-colors" />
+          <ChevronRight size={16} className="ml-auto text-gray-400 group-hover:text-primary-medium transition-colors" />
         </button>
 
         {agendaHoy.length === 0 ? (
@@ -1304,8 +1304,8 @@ export default function Dashboard() {
                 onClick={() => navigate(`/admin/ordenes/${orden.id}`)}
                 className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 cursor-pointer border border-gray-100 transition-colors"
               >
-                <div className="text-center bg-[#0f3460]/10 rounded-lg px-2.5 py-1.5 min-w-[56px]">
-                  <span className="text-sm font-bold text-[#0f3460]">
+                <div className="text-center bg-primary/10 rounded-lg px-2.5 py-1.5 min-w-[56px]">
+                  <span className="text-sm font-bold text-primary">
                     {formatHora(orden.fechaCita)}
                   </span>
                 </div>

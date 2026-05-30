@@ -876,12 +876,12 @@ export default function Ordenes() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Ordenes de Servicio</h1>
+          <h1 className="text-2xl font-bold text-primary">Ordenes de Servicio</h1>
           <p className="text-gray-500 text-sm">
             {ordenesVisibles.length} ordenes {filtroOperariaActivo ? 'en tu grupo' : 'en total'}
           </p>
           {esOperaria && (
-            <p className="text-xs text-[#1a5fa8] mt-0.5">
+            <p className="text-xs text-primary-medium mt-0.5">
               {filtroOperariaActivo ? 'Viendo solo tu grupo' : 'Viendo todas las operarias (modo apoyo)'}
             </p>
           )}
@@ -891,7 +891,7 @@ export default function Ordenes() {
             <button
               type="button"
               onClick={() => setVerTodasOperarias(v => !v)}
-              className="inline-flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-[#1a5fa8] bg-white border border-[#1a5fa8]/30 rounded-xl hover:bg-[#1a5fa8]/5 transition-colors"
+              className="inline-flex items-center gap-2 px-3 py-2.5 text-xs font-medium text-primary-medium bg-white border border-primary-medium/30 rounded-xl hover:bg-primary-medium/5 transition-colors"
             >
               <Eye size={14} />
               {filtroOperariaActivo ? 'Ver todas las operarias' : 'Ver solo mi grupo'}
@@ -915,7 +915,7 @@ export default function Ordenes() {
             <select
               value={filtroOperariaCoord}
               onChange={e => setFiltroOperariaCoord(e.target.value)}
-              className="px-3 py-2.5 text-xs font-medium border border-gray-200 rounded-xl bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="px-3 py-2.5 text-xs font-medium border border-gray-200 rounded-xl bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="">Ver todas las operarias</option>
               <option value="__sin_asignar__">Sin operaria asignada</option>
@@ -935,7 +935,7 @@ export default function Ordenes() {
           {puede(userProfile, 'ordenesCrear') && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 bg-[#1a5fa8] hover:bg-[#0f3460] text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors"
+              className="flex items-center gap-2 bg-primary-medium hover:bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors"
             >
               <Plus size={18} />
               Crear Orden de Servicio
@@ -947,8 +947,8 @@ export default function Ordenes() {
       {/* Agenda de Hoy */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <CalendarDays size={20} className="text-[#1a5fa8]" />
-          <h2 className="text-lg font-semibold text-[#0f3460]">Agenda de Hoy</h2>
+          <CalendarDays size={20} className="text-primary-medium" />
+          <h2 className="text-lg font-semibold text-primary">Agenda de Hoy</h2>
         </div>
         <p className="text-sm text-gray-500">{fechaHoyCapitalizada}</p>
         {ordenesHoy.length === 0 ? (
@@ -965,7 +965,7 @@ export default function Ordenes() {
                 className={`bg-white rounded-2xl shadow-sm border border-gray-100 p-4 cursor-pointer hover:shadow-md transition-shadow border-l-4 ${estadoSimpleBorder(orden.estadoSimple)}`}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-[#0f3460]">
+                  <span className="text-sm font-semibold text-primary">
                     {orden.fechaCita ? formatHora(orden.fechaCita) : '--:--'}
                   </span>
                   <Badge fase={orden.fase} />
@@ -1008,8 +1008,8 @@ export default function Ordenes() {
               onClick={() => setVista('lista')}
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
                 vista === 'lista'
-                  ? 'bg-[#0f3460] text-white'
-                  : 'text-gray-600 hover:text-[#0f3460]'
+                  ? 'bg-primary text-white'
+                  : 'text-gray-600 hover:text-primary'
               }`}
             >
               <List size={13} /> Lista
@@ -1019,8 +1019,8 @@ export default function Ordenes() {
               onClick={() => setVista('tablero')}
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
                 vista === 'tablero'
-                  ? 'bg-[#0f3460] text-white'
-                  : 'text-gray-600 hover:text-[#0f3460]'
+                  ? 'bg-primary text-white'
+                  : 'text-gray-600 hover:text-primary'
               }`}
             >
               <LayoutGrid size={13} /> Tablero

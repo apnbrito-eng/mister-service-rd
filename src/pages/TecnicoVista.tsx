@@ -774,7 +774,7 @@ export default function TecnicoVista() {
   return (
     <div className="min-h-screen bg-[#f0f4f8]">
       {/* Header */}
-      <div className="bg-[#0f3460] px-4 py-3 sticky top-0 z-20 shadow-md">
+      <div className="bg-primary px-4 py-3 sticky top-0 z-20 shadow-md">
         <div className="flex items-center justify-between gap-3 max-w-4xl mx-auto">
           {/* SPRINT-DISENO-TECNICO-FASE-1 (2026-05-30): saludo compactado en
               el header en una sola línea junto al logo. Antes vivía como
@@ -833,7 +833,7 @@ export default function TecnicoVista() {
           {permisos.verUbicacionGPS && (
             <button
               onClick={() => setShowMap(!showMap)}
-              className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-xl text-xs font-medium transition-colors"
+              className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-primary hover:bg-primary-medium text-white rounded-xl text-xs font-medium transition-colors"
             >
               <Navigation size={14} />
               {showMap ? 'Ocultar mapa' : (marcadoresMapa.length > 0 ? '🗺️ Ver Ruta del Día' : '🗺️ Ver Mapa')}
@@ -864,7 +864,7 @@ export default function TecnicoVista() {
                     <Marker key={m.id} position={[m.lat, m.lng]} icon={crearPinNumerado(m.orden)}>
                       <Popup>
                         <div className="text-sm min-w-[180px]">
-                          <p className="font-semibold text-[#0f3460]">{m.orden}. {m.clienteNombre}</p>
+                          <p className="font-semibold text-primary">{m.orden}. {m.clienteNombre}</p>
                           <p className="mt-0.5">🕐 {formatHora(m.fechaCita)}</p>
                           <p className="text-xs text-gray-700 mt-0.5">
                             🔧 {m.equipoTipo}{m.equipoMarca ? ` · ${m.equipoMarca}` : ''}
@@ -874,7 +874,7 @@ export default function TecnicoVista() {
                             <button
                               type="button"
                               onClick={() => setSelectedOrden(m)}
-                              className="flex-1 px-2 py-1 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded text-xs font-medium"
+                              className="flex-1 px-2 py-1 bg-primary hover:bg-primary-medium text-white rounded text-xs font-medium"
                             >
                               Ver detalle
                             </button>
@@ -915,7 +915,7 @@ export default function TecnicoVista() {
                   <div className="space-y-1 max-h-40 overflow-y-auto">
                     {marcadoresMapa.map(m => (
                       <div key={m.id} className="flex items-center gap-2 text-xs">
-                        <div className="w-6 h-6 rounded-full bg-[#1a5fa8] text-white flex items-center justify-center font-bold flex-shrink-0">
+                        <div className="w-6 h-6 rounded-full bg-primary-medium text-white flex items-center justify-center font-bold flex-shrink-0">
                           {m.orden}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -965,7 +965,7 @@ export default function TecnicoVista() {
               return (
                 <div key={orden.id}>
                 {esProxima && (
-                  <p className="text-[10px] uppercase tracking-wide font-bold text-[#0f3460] mb-1 px-1">
+                  <p className="text-[10px] uppercase tracking-wide font-bold text-primary mb-1 px-1">
                     Próxima cita
                   </p>
                 )}
@@ -1010,7 +1010,7 @@ export default function TecnicoVista() {
                     {/* Dirección (siempre visible) */}
                     {(orden.clienteDireccion || ubi) && (
                       <div className="mt-3 flex items-start gap-2">
-                        <MapPin size={14} className="text-[#1a5fa8] mt-0.5 flex-shrink-0" />
+                        <MapPin size={14} className="text-primary-medium mt-0.5 flex-shrink-0" />
                         <p className="text-xs text-gray-700 flex-1">{orden.clienteDireccion || ubi?.direccion}</p>
                       </div>
                     )}
@@ -1403,23 +1403,23 @@ export default function TecnicoVista() {
           <div className="space-y-3">
             <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100 max-w-md mx-auto">
               <button onClick={() => setVista('hoy')}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'hoy' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'hoy' ? 'bg-primary text-white' : 'text-gray-600'}`}>
                 Hoy
               </button>
               {(permisos.vistaAgenda === 'semana' || permisos.vistaAgenda === 'mes') && (
                 <button onClick={() => setVista('semana')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'semana' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'semana' ? 'bg-primary text-white' : 'text-gray-600'}`}>
                   Esta Semana
                 </button>
               )}
               {permisos.vistaAgenda === 'mes' && (
                 <button onClick={() => setVista('mes')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'mes' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'mes' ? 'bg-primary text-white' : 'text-gray-600'}`}>
                   Este Mes
                 </button>
               )}
               <button onClick={() => setVista('rango')}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'rango' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'rango' ? 'bg-primary text-white' : 'text-gray-600'}`}>
                 📅 Rango
               </button>
             </div>
@@ -1430,16 +1430,16 @@ export default function TecnicoVista() {
                   <div>
                     <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Desde</label>
                     <input type="date" value={rangoDesde} onChange={e => setRangoDesde(e.target.value)}
-                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Hasta</label>
                     <input type="date" value={rangoHasta} onChange={e => setRangoHasta(e.target.value)}
-                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                   </div>
                 </div>
                 <button onClick={handleAplicarRango}
-                  className="w-full py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-xs font-medium transition-colors">
+                  className="w-full py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-xs font-medium transition-colors">
                   Buscar
                 </button>
                 {rangoAplicado && (
@@ -1483,7 +1483,7 @@ export default function TecnicoVista() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Nota técnica *</label>
             <textarea value={notaNueva} onChange={e => setNotaNueva(e.target.value)}
               rows={4} placeholder="Escribe tu nota técnica..."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Precio sugerido (RD$)</label>
@@ -1492,7 +1492,7 @@ export default function TecnicoVista() {
               value={precioSugerido}
               onChange={e => setPrecioSugerido(e.target.value)}
               placeholder="Ej: 3500"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
             <p className="text-[11px] text-gray-400 mt-1">Precio que sugieres para este trabajo (opcional)</p>
           </div>
@@ -1500,7 +1500,7 @@ export default function TecnicoVista() {
             <button type="button" onClick={() => setShowNotaModal(false)}
               className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
             <button onClick={handleAgregarNota} disabled={saving}
-              className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
               {saving ? 'Guardando...' : 'Guardar Nota'}
             </button>
           </div>
@@ -1547,7 +1547,7 @@ export default function TecnicoVista() {
                 {getClienteUbicacion(selectedOrden) && (
                   <a href={googleMapsLink(getClienteUbicacion(selectedOrden)!.lat, getClienteUbicacion(selectedOrden)!.lng)}
                     target="_blank" rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-[#1a5fa8] mt-1">
+                    className="inline-flex items-center gap-1 text-xs text-primary-medium mt-1">
                     <Navigation size={10} /> Abrir en Google Maps
                   </a>
                 )}
@@ -1645,7 +1645,7 @@ export default function TecnicoVista() {
             <select
               value={standbyForm.motivo}
               onChange={e => setStandbyForm(f => ({ ...f, motivo: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="Esperando pieza">Esperando pieza</option>
               <option value="Cliente no disponible">Cliente no disponible</option>
@@ -1661,7 +1661,7 @@ export default function TecnicoVista() {
               type="date"
               value={standbyForm.hasta}
               onChange={e => setStandbyForm(f => ({ ...f, hasta: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
             <p className="text-[11px] text-gray-400 mt-1">Opcional. Útil para recordar cuándo retomar la orden.</p>
           </div>
@@ -1673,7 +1673,7 @@ export default function TecnicoVista() {
               value={standbyForm.notas}
               onChange={e => setStandbyForm(f => ({ ...f, notas: e.target.value }))}
               placeholder="Detalle del motivo, pieza esperada, contacto..."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
 

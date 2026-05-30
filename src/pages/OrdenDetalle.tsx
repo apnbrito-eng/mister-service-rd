@@ -585,7 +585,7 @@ export default function OrdenDetalle() {
   if (!orden) return (
     <div className="p-6 text-center">
       <p className="text-gray-500">Orden no encontrada</p>
-      <button onClick={() => navigate('/admin/ordenes')} className="text-[#1a5fa8] mt-2 text-sm">Volver a órdenes</button>
+      <button onClick={() => navigate('/admin/ordenes')} className="text-primary-medium mt-2 text-sm">Volver a órdenes</button>
     </div>
   );
 
@@ -597,7 +597,7 @@ export default function OrdenDetalle() {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-[#0f3460]">{orden.numero || 'Orden'}</h1>
+            <h1 className="text-2xl font-bold text-primary">{orden.numero || 'Orden'}</h1>
             <Badge fase={orden.fase} />
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${estadoSimpleColor(orden.estadoSimple)}`}>
               {estadoSimpleLabel(orden.estadoSimple)}
@@ -1051,7 +1051,7 @@ export default function OrdenDetalle() {
                                   href={p.fotoUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-block mt-1 text-xs text-[#1a5fa8] hover:underline"
+                                  className="inline-block mt-1 text-xs text-primary-medium hover:underline"
                                 >
                                   Ver foto
                                 </a>
@@ -1068,7 +1068,7 @@ export default function OrdenDetalle() {
                           <button
                             type="button"
                             onClick={() => setModalPiezasAbierto(true)}
-                            className="text-xs font-semibold text-[#1a5fa8] hover:underline"
+                            className="text-xs font-semibold text-primary-medium hover:underline"
                           >
                             Validar ahora →
                           </button>
@@ -1382,7 +1382,7 @@ export default function OrdenDetalle() {
                   <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 grid grid-cols-4 gap-3 text-sm mb-3">
                     <div>
                       <div className="text-[11px] text-blue-700 uppercase tracking-wide">Total</div>
-                      <div className="text-base font-semibold text-[#0f3460]">{formatMoneda(total)}</div>
+                      <div className="text-base font-semibold text-primary">{formatMoneda(total)}</div>
                     </div>
                     <div>
                       <div className="text-[11px] text-blue-700 uppercase tracking-wide">Pagado</div>
@@ -1712,7 +1712,7 @@ export default function OrdenDetalle() {
           {/* GPS Tracking */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center gap-2 mb-3">
-              <Satellite size={16} className="text-[#1a5fa8]" />
+              <Satellite size={16} className="text-primary-medium" />
               <h3 className="text-sm font-semibold text-gray-700">Tracking GPS del técnico</h3>
             </div>
             {orden.trackingGPS?.habilitado ? (
@@ -1756,7 +1756,7 @@ export default function OrdenDetalle() {
                   Al activar, el cliente podrá ver en tiempo real dónde está el técnico SOLO cuando está en camino.
                 </p>
                 <button onClick={handleActivarGPS} disabled={gpsSaving}
-                  className="w-full flex items-center justify-center gap-1 bg-[#0f3460] hover:bg-[#1a5fa8] text-white py-2 rounded-lg text-xs font-medium disabled:opacity-60">
+                  className="w-full flex items-center justify-center gap-1 bg-primary hover:bg-primary-medium text-white py-2 rounded-lg text-xs font-medium disabled:opacity-60">
                   <Satellite size={12} /> {gpsSaving ? 'Activando...' : 'Activar GPS Tracking'}
                 </button>
               </div>
@@ -1792,7 +1792,7 @@ export default function OrdenDetalle() {
               step={50}
               value={chequeoForm.precio}
               onChange={e => setChequeoForm(f => ({ ...f, precio: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
 
@@ -1802,7 +1802,7 @@ export default function OrdenDetalle() {
               <select
                 value={chequeoForm.metodoPago}
                 onChange={e => setChequeoForm(f => ({ ...f, metodoPago: e.target.value as MetodoPago | '' }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
               >
                 <option value="">Sin especificar</option>
                 {(Object.keys(METODO_PAGO_LABELS) as MetodoPago[]).map(m => (
@@ -1818,7 +1818,7 @@ export default function OrdenDetalle() {
                   value={chequeoForm.bancoDestino}
                   onChange={e => setChequeoForm(f => ({ ...f, bancoDestino: e.target.value }))}
                   placeholder="Ej: Banreservas, BHD..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
             )}
@@ -1831,7 +1831,7 @@ export default function OrdenDetalle() {
               value={chequeoForm.motivo}
               onChange={e => setChequeoForm(f => ({ ...f, motivo: e.target.value }))}
               placeholder="Ej: El cliente consideró muy costosa la reparación..."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
 
@@ -1881,7 +1881,7 @@ export default function OrdenDetalle() {
             <select
               value={standbyForm.motivo}
               onChange={e => setStandbyForm(f => ({ ...f, motivo: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="Esperando pieza">Esperando pieza</option>
               <option value="Cliente no disponible">Cliente no disponible</option>
@@ -1897,7 +1897,7 @@ export default function OrdenDetalle() {
               type="date"
               value={standbyForm.hasta}
               onChange={e => setStandbyForm(f => ({ ...f, hasta: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
             <p className="text-[11px] text-gray-400 mt-1">Opcional. Útil para recordar cuándo retomar.</p>
           </div>
@@ -1909,7 +1909,7 @@ export default function OrdenDetalle() {
               value={standbyForm.notas}
               onChange={e => setStandbyForm(f => ({ ...f, notas: e.target.value }))}
               placeholder="Detalle del motivo, pieza esperada, contacto..."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
 
