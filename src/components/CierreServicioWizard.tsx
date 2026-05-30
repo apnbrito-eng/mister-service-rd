@@ -768,7 +768,7 @@ export default function CierreServicioWizard({
                 <button
                   type="button"
                   onClick={() => fotoInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-2 py-4 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-xl font-semibold text-base transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-4 bg-primary hover:bg-primary-medium text-white rounded-xl font-semibold text-base transition-colors"
                 >
                   <Camera size={22} /> Tomar Foto
                 </button>
@@ -834,8 +834,8 @@ export default function CierreServicioWizard({
                 onClick={() => setUsoPiezas('si')}
                 className={`py-3 rounded-xl font-bold text-sm transition-all ${
                   usoPiezas === 'si'
-                    ? 'bg-[#0f3460] text-white shadow-md'
-                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-[#0f3460]'
+                    ? 'bg-primary text-white shadow-md'
+                    : 'bg-white border-2 border-gray-200 text-gray-700 hover:border-primary'
                 }`}
               >
                 Sí usé piezas
@@ -864,7 +864,7 @@ export default function CierreServicioWizard({
                         <button
                           type="button"
                           onClick={() => abrirModalEditarPieza(idx)}
-                          className="p-2 text-gray-500 hover:text-[#0f3460] hover:bg-white rounded-lg"
+                          className="p-2 text-gray-500 hover:text-primary hover:bg-white rounded-lg"
                           aria-label="Editar pieza"
                         >
                           <Pencil size={14} />
@@ -885,7 +885,7 @@ export default function CierreServicioWizard({
                 <button
                   type="button"
                   onClick={abrirModalAgregarPieza}
-                  className="w-full flex items-center justify-center gap-2 py-3 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-xl font-semibold text-sm transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-primary hover:bg-primary-medium text-white rounded-xl font-semibold text-sm transition-colors"
                 >
                   <Plus size={18} /> Agregar pieza
                 </button>
@@ -922,7 +922,7 @@ export default function CierreServicioWizard({
                 const v = parseInt(e.target.value, 10);
                 setPeriodoGarantiaDias(isNaN(v) ? 0 : v);
               }}
-              className={`w-full px-3 py-2.5 border-2 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#0f3460] ${
+              className={`w-full px-3 py-2.5 border-2 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary ${
                 periodoValido ? 'border-gray-200' : 'border-amber-400 bg-amber-50'
               }`}
             />

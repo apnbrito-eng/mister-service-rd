@@ -52,7 +52,7 @@ export default function FotoEquipoDisplay({
       <button
         type="button"
         onClick={() => setAbierto(true)}
-        className={`block overflow-hidden border border-gray-200 hover:border-[#1a5fa8] transition-colors ${SIZE_CLASSES[size]} ${className}`}
+        className={`block overflow-hidden border border-gray-200 hover:border-primary-medium transition-colors ${SIZE_CLASSES[size]} ${className}`}
         title="Ver foto del equipo"
       >
         <img

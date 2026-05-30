@@ -526,7 +526,7 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
               onClick={() => handleEstado(e.value)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 aplicado.estado === e.value
-                  ? 'bg-[#0f3460] text-white'
+                  ? 'bg-primary text-white'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -545,7 +545,7 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
             value={aplicado.busqueda}
             onChange={(e) => handleBusqueda(e.target.value)}
             placeholder="Cliente, # orden, # conduce, teléfono, equipo..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
           {aplicado.busqueda && (
             <button
@@ -561,7 +561,7 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
         <select
           value={aplicado.tipoEquipo}
           onChange={(e) => handleTipoEquipo(e.target.value)}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="text-sm border border-gray-200 rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
           aria-label="Tipo de equipo"
         >
           {opcionesTipo.map((t) => (
@@ -579,7 +579,7 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
           <select
             value={campoFechaLocal}
             onChange={(e) => setCampoFechaLocal(e.target.value as CampoFecha)}
-            className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             aria-label="Campo de fecha"
           >
             <option value="emision">Por emisión</option>
@@ -591,7 +591,7 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
           value={fechaDesdeLocal}
           onChange={(e) => setFechaDesdeLocal(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') aplicar(); }}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
           aria-label="Fecha desde"
         />
         <span className="text-sm text-gray-500">→</span>
@@ -600,7 +600,7 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
           value={fechaHastaLocal}
           onChange={(e) => setFechaHastaLocal(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') aplicar(); }}
-          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
           aria-label="Fecha hasta"
         />
 
@@ -621,7 +621,7 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
           <button
             type="button"
             onClick={aplicar}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-xs font-semibold"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-medium text-white rounded-lg text-xs font-semibold"
           >
             <Calendar size={12} /> Aplicar
           </button>

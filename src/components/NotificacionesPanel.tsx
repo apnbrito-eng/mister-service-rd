@@ -84,7 +84,7 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
         <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 max-h-[70vh] flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <Bell size={16} className="text-[#0f3460]" />
+              <Bell size={16} className="text-primary" />
               <h3 className="font-semibold text-sm text-gray-800">Notificaciones</h3>
               {noLeidas > 0 && (
                 <span className="bg-red-100 text-red-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
@@ -120,7 +120,7 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-semibold truncate ${n.leida ? 'text-gray-700' : 'text-[#0f3460]'}`}>
+                      <p className={`text-sm font-semibold truncate ${n.leida ? 'text-gray-700' : 'text-primary'}`}>
                         {n.titulo}
                       </p>
                       <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
@@ -144,7 +144,7 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
               <button
                 type="button"
                 onClick={handleMarcarTodas}
-                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-[#0f3460] hover:bg-blue-50 rounded-lg transition-colors"
+                className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium text-primary hover:bg-blue-50 rounded-lg transition-colors"
               >
                 <CheckCheck size={14} /> Marcar todas como leídas
               </button>

@@ -29,12 +29,12 @@ import {
 import { comprimirImagen } from '../../utils/imagen';
 
 const inputClass =
-  'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] focus:border-transparent transition';
+  'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium focus:border-transparent transition';
 const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
 const cardClass =
   'bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-5';
 const saveBtnClass =
-  'inline-flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium px-5 py-2.5 transition disabled:opacity-50';
+  'inline-flex items-center gap-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium px-5 py-2.5 transition disabled:opacity-50';
 
 interface Props {
   config: ConfigWeb;
@@ -412,7 +412,7 @@ function ServicioEditorModal({
               <button
                 type="button"
                 onClick={agregarFAQ}
-                className="inline-flex items-center gap-1 text-xs text-[#1a5fa8] hover:text-[#0f3460] font-medium"
+                className="inline-flex items-center gap-1 text-xs text-primary-medium hover:text-primary font-medium"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Agregar FAQ
@@ -447,7 +447,7 @@ function ServicioEditorModal({
                       type="button"
                       onClick={() => moverFAQ(idx, -1)}
                       disabled={idx === 0}
-                      className="p-1.5 text-gray-500 hover:text-[#0f3460] hover:bg-white rounded disabled:opacity-30"
+                      className="p-1.5 text-gray-500 hover:text-primary hover:bg-white rounded disabled:opacity-30"
                       title="Mover arriba"
                     >
                       <ArrowUp className="w-4 h-4" />
@@ -456,7 +456,7 @@ function ServicioEditorModal({
                       type="button"
                       onClick={() => moverFAQ(idx, 1)}
                       disabled={idx === draft.faqs.length - 1}
-                      className="p-1.5 text-gray-500 hover:text-[#0f3460] hover:bg-white rounded disabled:opacity-30"
+                      className="p-1.5 text-gray-500 hover:text-primary hover:bg-white rounded disabled:opacity-30"
                       title="Mover abajo"
                     >
                       <ArrowDown className="w-4 h-4" />
@@ -600,7 +600,7 @@ function ListaEditable({
               type="button"
               onClick={() => onMover(idx, -1)}
               disabled={idx === 0}
-              className="p-1.5 text-gray-500 hover:text-[#0f3460] hover:bg-white rounded disabled:opacity-30"
+              className="p-1.5 text-gray-500 hover:text-primary hover:bg-white rounded disabled:opacity-30"
               title="Mover arriba"
             >
               <ArrowUp className="w-4 h-4" />
@@ -609,7 +609,7 @@ function ListaEditable({
               type="button"
               onClick={() => onMover(idx, 1)}
               disabled={idx === items.length - 1}
-              className="p-1.5 text-gray-500 hover:text-[#0f3460] hover:bg-white rounded disabled:opacity-30"
+              className="p-1.5 text-gray-500 hover:text-primary hover:bg-white rounded disabled:opacity-30"
               title="Mover abajo"
             >
               <ArrowDown className="w-4 h-4" />
@@ -842,7 +842,7 @@ export default function ConfigServiciosSection({ config, setConfig }: Props) {
     <div className={cardClass}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Wrench className="w-5 h-5 text-[#0f3460]" />
+          <Wrench className="w-5 h-5 text-primary" />
           <h2 className="text-lg font-semibold text-gray-900">Servicios</h2>
           <span className="text-xs text-gray-400 ml-2">
             ({ordenados.length})
@@ -931,7 +931,7 @@ export default function ConfigServiciosSection({ config, setConfig }: Props) {
                     type="button"
                     onClick={() => moverServicio(s.slug, -1)}
                     disabled={idx === 0}
-                    className="p-2 text-gray-500 hover:text-[#0f3460] hover:bg-gray-50 rounded-lg disabled:opacity-30"
+                    className="p-2 text-gray-500 hover:text-primary hover:bg-gray-50 rounded-lg disabled:opacity-30"
                     title="Mover arriba"
                   >
                     <ArrowUp className="w-4 h-4" />
@@ -940,7 +940,7 @@ export default function ConfigServiciosSection({ config, setConfig }: Props) {
                     type="button"
                     onClick={() => moverServicio(s.slug, 1)}
                     disabled={idx === ordenados.length - 1}
-                    className="p-2 text-gray-500 hover:text-[#0f3460] hover:bg-gray-50 rounded-lg disabled:opacity-30"
+                    className="p-2 text-gray-500 hover:text-primary hover:bg-gray-50 rounded-lg disabled:opacity-30"
                     title="Mover abajo"
                   >
                     <ArrowDown className="w-4 h-4" />
@@ -948,7 +948,7 @@ export default function ConfigServiciosSection({ config, setConfig }: Props) {
                   <button
                     type="button"
                     onClick={() => abrirEditor(s.slug)}
-                    className="p-2 text-[#1a5fa8] hover:bg-[#1a5fa8]/10 rounded-lg"
+                    className="p-2 text-primary-medium hover:bg-primary-medium/10 rounded-lg"
                     title="Editar"
                   >
                     <Edit3 className="w-4 h-4" />

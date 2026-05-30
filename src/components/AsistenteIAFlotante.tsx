@@ -123,7 +123,7 @@ export default function AsistenteIAFlotante() {
         onClick={abrirPanel}
         title="Asistente IA"
         aria-label="Abrir Asistente IA"
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-[#0f3460] to-[#1a5fa8] text-white shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center"
+        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-medium text-white shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center"
       >
         <Sparkles className="w-6 h-6 text-white" />
         {hayNoLeido && (
@@ -143,13 +143,13 @@ export default function AsistenteIAFlotante() {
       className={[
         'fixed z-40 bg-white flex flex-col overflow-hidden',
         'inset-0 w-screen h-screen rounded-none',
-        'sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[400px] sm:h-[600px] sm:max-h-[80vh] sm:rounded-2xl sm:shadow-2xl sm:border sm:border-[#0f3460]/20',
+        'sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[400px] sm:h-[600px] sm:max-h-[80vh] sm:rounded-2xl sm:shadow-2xl sm:border sm:border-primary/20',
         'transition-all duration-200 ease-out',
         montado ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4',
       ].join(' ')}
     >
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#0f3460] to-[#1a5fa8] text-white p-3 flex items-center justify-between flex-shrink-0">
+      <div className="bg-gradient-to-r from-primary to-primary-medium text-white p-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <Sparkles size={18} className="flex-shrink-0" />
           <span className="font-semibold text-sm truncate">Asistente IA · BETA</span>
@@ -199,7 +199,7 @@ export default function AsistenteIAFlotante() {
             <div
               className={
                 m.role === 'user'
-                  ? 'self-end bg-[#0f3460] text-white rounded-2xl px-4 py-2 max-w-[85%] text-sm whitespace-pre-wrap'
+                  ? 'self-end bg-primary text-white rounded-2xl px-4 py-2 max-w-[85%] text-sm whitespace-pre-wrap'
                   : 'self-start bg-gray-100 text-gray-900 rounded-2xl px-4 py-2 max-w-[85%] text-sm whitespace-pre-wrap'
               }
             >
@@ -239,14 +239,14 @@ export default function AsistenteIAFlotante() {
             placeholder="Escribe tu mensaje..."
             rows={1}
             disabled={pensando}
-            className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] resize-none disabled:bg-gray-50 leading-6"
+            className="flex-1 px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium resize-none disabled:bg-gray-50 leading-6"
           />
           <button
             type="button"
             onClick={handleEnviar}
             disabled={pensando || !input.trim()}
             aria-label="Enviar mensaje"
-            className="flex items-center justify-center p-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center justify-center p-2 bg-primary hover:bg-primary-medium text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send size={16} />
           </button>

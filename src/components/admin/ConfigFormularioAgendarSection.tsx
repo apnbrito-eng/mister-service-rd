@@ -22,12 +22,12 @@ import {
 import { useApp } from '../../context/AppContext';
 
 const inputClass =
-  'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] focus:border-transparent transition';
+  'w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium focus:border-transparent transition';
 const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
 const cardClass =
   'bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-5';
 const saveBtnClass =
-  'inline-flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium px-5 py-2.5 transition disabled:opacity-50';
+  'inline-flex items-center gap-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium px-5 py-2.5 transition disabled:opacity-50';
 
 function generarIdCampo(): string {
   return `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -196,7 +196,7 @@ export default function ConfigFormularioAgendarSection() {
     return (
       <div className={cardClass}>
         <div className="flex items-center gap-2">
-          <ClipboardList className="w-5 h-5 text-[#1a5fa8]" />
+          <ClipboardList className="w-5 h-5 text-primary-medium" />
           <h2 className="text-lg font-semibold text-gray-900">
             Formulario de Agendamiento
           </h2>
@@ -215,7 +215,7 @@ export default function ConfigFormularioAgendarSection() {
   return (
     <div className={cardClass}>
       <div className="flex items-center gap-2">
-        <ClipboardList className="w-5 h-5 text-[#1a5fa8]" />
+        <ClipboardList className="w-5 h-5 text-primary-medium" />
         <h2 className="text-lg font-semibold text-gray-900">
           Formulario de Agendamiento
         </h2>
@@ -308,7 +308,7 @@ export default function ConfigFormularioAgendarSection() {
             type="checkbox"
             checked={mostrarSector}
             onChange={e => update({ mostrarCampoSector: e.target.checked })}
-            className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+            className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium"
           />
           Mostrar campo &quot;Sector&quot;
         </label>
@@ -435,7 +435,7 @@ export default function ConfigFormularioAgendarSection() {
                       : actuales.filter(r => r !== rol);
                     update({ notificarA: nuevo });
                   }}
-                  className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+                  className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium"
                 />
                 {rol}
               </label>
@@ -453,7 +453,7 @@ export default function ConfigFormularioAgendarSection() {
           <button
             type="button"
             onClick={agregarCampo}
-            className="inline-flex items-center gap-1.5 text-sm text-[#1a5fa8] hover:text-[#0f3460] font-medium transition"
+            className="inline-flex items-center gap-1.5 text-sm text-primary-medium hover:text-primary font-medium transition"
           >
             <Plus className="w-4 h-4" />
             Agregar campo
@@ -605,7 +605,7 @@ function CampoPersonalizadoEditor({
           type="checkbox"
           checked={!!campo.requerido}
           onChange={e => onActualizar({ requerido: e.target.checked })}
-          className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+          className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium"
         />
         Requerido
       </label>

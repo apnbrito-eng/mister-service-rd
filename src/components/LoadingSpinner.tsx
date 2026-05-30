@@ -9,7 +9,7 @@ export default function LoadingSpinner({ size = 'md', text, fullPage }: LoadingS
 
   const spinner = (
     <div className="flex flex-col items-center gap-3">
-      <div className={`${sizes[size]} border-4 border-[#1a5fa8]/20 border-t-[#1a5fa8] rounded-full animate-spin`} />
+      <div className={`${sizes[size]} border-4 border-primary-medium/20 border-t-primary-medium rounded-full animate-spin`} />
       {text && <p className="text-gray-500 text-sm">{text}</p>}
     </div>
   );

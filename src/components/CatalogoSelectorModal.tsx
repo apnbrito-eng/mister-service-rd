@@ -123,7 +123,7 @@ export default function CatalogoSelectorModal({
             type="button"
             onClick={() => setTab('servicios')}
             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === 'servicios' ? 'bg-white text-[#0f3460] shadow-sm' : 'text-gray-600'
+              tab === 'servicios' ? 'bg-white text-primary shadow-sm' : 'text-gray-600'
             }`}
           >
             <Tag size={14} /> Servicios ({servicios.filter(s => s.activo).length})
@@ -132,7 +132,7 @@ export default function CatalogoSelectorModal({
             type="button"
             onClick={() => setTab('piezas')}
             className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === 'piezas' ? 'bg-white text-[#0f3460] shadow-sm' : 'text-gray-600'
+              tab === 'piezas' ? 'bg-white text-primary shadow-sm' : 'text-gray-600'
             }`}
           >
             <Boxes size={14} /> Piezas inventario ({piezas.filter(p => p.activo).length})
@@ -148,18 +148,18 @@ export default function CatalogoSelectorModal({
               value={busqueda}
               onChange={e => setBusqueda(e.target.value)}
               placeholder={tab === 'servicios' ? 'Buscar servicio, marca, equipo...' : 'Buscar pieza por nombre o código...'}
-              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
           {tab === 'servicios' && (
             <>
               <select value={filtroMarca} onChange={e => setFiltroMarca(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                 <option value="">Todas las marcas</option>
                 {marcas.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
               <select value={filtroEquipo} onChange={e => setFiltroEquipo(e.target.value)}
-                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] md:col-span-2">
+                className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium md:col-span-2">
                 <option value="">Todos los equipos</option>
                 {equipos.map(eq => <option key={eq} value={eq}>{eq}</option>)}
               </select>
@@ -193,16 +193,16 @@ export default function CatalogoSelectorModal({
                         <div className="text-right flex flex-col items-end gap-0.5">
                           {esPreMigracion ? (
                             <>
-                              <span className="text-sm font-bold text-[#0f3460]">{formatMoneda(s.precio)}</span>
+                              <span className="text-sm font-bold text-primary">{formatMoneda(s.precio)}</span>
                               <span className="text-[9px] uppercase tracking-wide text-gray-400 font-medium">Precio único</span>
                             </>
                           ) : (
                             <>
                               <span className="text-[10px] text-gray-500">
-                                Det. <span className="font-semibold text-[#0f3460]">{formatMoneda(s.precioDetalle ?? s.precio)}</span>
+                                Det. <span className="font-semibold text-primary">{formatMoneda(s.precioDetalle ?? s.precio)}</span>
                               </span>
                               <span className="text-[10px] text-gray-500">
-                                May. <span className="font-semibold text-[#0f3460]">{formatMoneda(s.precioMayoreo ?? s.precio)}</span>
+                                May. <span className="font-semibold text-primary">{formatMoneda(s.precioMayoreo ?? s.precio)}</span>
                               </span>
                             </>
                           )}
@@ -240,16 +240,16 @@ export default function CatalogoSelectorModal({
                         <div className="text-right">
                           {esPreMigracion ? (
                             <>
-                              <p className="text-sm font-bold text-[#0f3460]">{formatMoneda(p.precioVenta)}</p>
+                              <p className="text-sm font-bold text-primary">{formatMoneda(p.precioVenta)}</p>
                               <p className="text-[9px] uppercase tracking-wide text-gray-400 font-medium">Precio único</p>
                             </>
                           ) : (
                             <>
                               <p className="text-[10px] text-gray-500">
-                                Det. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioDetalle ?? p.precioVenta)}</span>
+                                Det. <span className="font-semibold text-primary">{formatMoneda(p.precioDetalle ?? p.precioVenta)}</span>
                               </p>
                               <p className="text-[10px] text-gray-500">
-                                May. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioMayoreo ?? p.precioVenta)}</span>
+                                May. <span className="font-semibold text-primary">{formatMoneda(p.precioMayoreo ?? p.precioVenta)}</span>
                               </p>
                             </>
                           )}
