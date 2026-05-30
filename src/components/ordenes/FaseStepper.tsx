@@ -57,6 +57,14 @@ export default function FaseStepper({
   const [showRetrocesoModal, setShowRetrocesoModal] = useState(false);
   const [faseDestinoRetro, setFaseDestinoRetro] = useState<FaseOrden | null>(null);
   const [motivoRetro, setMotivoRetro] = useState('');
+  // SPRINT-WIZARD-FASES-FREEZE (2026-05-30): reemplazo de `window.confirm`
+  // por modal propio. El `confirm` nativo se queda colgado indefinidamente
+  // bajo entornos automatizados de QA (Playwright sin `page.on('dialog')`),
+  // bloqueando la verificación E2E. En navegador real funcionaba, pero el
+  // modal propio además mejora UX (consistente con el modal de retroceso de
+  // este mismo componente). Sin cambios funcionales para usuarios reales.
+  const [showAvanceModal, setShowAvanceModal] = useState(false);
+  const [faseDestinoAvance, setFaseDestinoAvance] = useState<FaseOrden | null>(null);
   const [saving, setSaving] = useState(false);
 
   const faseActualIdx = FASES_STEPPER.indexOf(orden.fase);
@@ -148,7 +156,7 @@ export default function FaseStepper({
     }
   };
 
-  const handleClickFase = async (fase: FaseOrden, e: React.MouseEvent) => {
+  const handleClickFase = (fase: FaseOrden, e: React.MouseEvent) => {
     if (!interactivo) return;
     e.stopPropagation();
     e.preventDefault();
@@ -165,11 +173,20 @@ export default function FaseStepper({
       setShowRetrocesoModal(true);
       return;
     }
-    if (!window.confirm(`¿Avanzar la orden a "${faseLabel(fase)}"?`)) return;
+    // SPRINT-WIZARD-FASES-FREEZE (2026-05-30): abrir modal propio en vez de
+    // `window.confirm` para evitar el cuelgue bajo Playwright/QA automatizado.
+    setFaseDestinoAvance(fase);
+    setShowAvanceModal(true);
+  };
+
+  const handleConfirmarAvance = async () => {
+    if (!faseDestinoAvance) return;
     setSaving(true);
     try {
-      await ejecutarCambio(fase);
-      toast.success(`Fase: ${faseLabel(fase)}`);
+      await ejecutarCambio(faseDestinoAvance);
+      toast.success(`Fase: ${faseLabel(faseDestinoAvance)}`);
+      setShowAvanceModal(false);
+      setFaseDestinoAvance(null);
     } catch (err) {
       console.error(err);
       toast.error('Error al cambiar fase');
@@ -316,6 +333,38 @@ export default function FaseStepper({
           );
         })}
       </div>
+
+      <Modal
+        isOpen={showAvanceModal}
+        onClose={() => { if (!saving) { setShowAvanceModal(false); setFaseDestinoAvance(null); } }}
+        title={faseDestinoAvance ? `Avanzar a "${faseLabel(faseDestinoAvance)}"` : 'Avanzar fase'}
+      >
+        {faseDestinoAvance && (
+          <div className="space-y-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-900">
+              ¿Avanzar la orden de <span className="font-semibold">{faseLabel(orden.fase)}</span> a <span className="font-semibold">{faseLabel(faseDestinoAvance)}</span>?
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => { setShowAvanceModal(false); setFaseDestinoAvance(null); }}
+                disabled={saving}
+                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmarAvance}
+                disabled={saving}
+                className="px-5 py-2 bg-[#0f3460] hover:brightness-110 text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              >
+                {saving ? 'Guardando...' : 'Confirmar'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         isOpen={showRetrocesoModal}
