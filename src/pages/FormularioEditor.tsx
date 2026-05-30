@@ -366,7 +366,7 @@ export default function FormularioEditor() {
             <button
               onClick={() => setShowPreview(!showPreview)}
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                showPreview ? 'bg-[#1a5fa8] text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                showPreview ? 'bg-primary-medium text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               <Eye size={16} />
@@ -384,7 +384,7 @@ export default function FormularioEditor() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-[#1a5fa8] text-white hover:bg-[#164d8a] disabled:opacity-50 transition-colors"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-primary-medium text-white hover:bg-[#164d8a] disabled:opacity-50 transition-colors"
             >
               <Save size={16} />
               {saving ? 'Guardando...' : 'Guardar'}
@@ -412,7 +412,7 @@ export default function FormularioEditor() {
                     value={nombre}
                     onChange={e => setNombre(e.target.value)}
                     placeholder="Ej: Reparacion de Lavadoras"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#1a5fa8]/20 focus:border-[#1a5fa8] outline-none"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-medium/20 focus:border-primary-medium outline-none"
                   />
                 </div>
 
@@ -425,7 +425,7 @@ export default function FormularioEditor() {
                     value={empresaId}
                     onChange={e => handleEmpresaChange(e.target.value)}
                     disabled={loadingEmpresas}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#1a5fa8]/20 focus:border-[#1a5fa8] outline-none"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-medium/20 focus:border-primary-medium outline-none"
                   >
                     <option value="">Seleccionar empresa...</option>
                     {empresas.map(emp => (
@@ -440,7 +440,7 @@ export default function FormularioEditor() {
                   <select
                     value={tipoServicio}
                     onChange={e => setTipoServicio(e.target.value as FormularioServicio['tipoServicio'])}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#1a5fa8]/20 focus:border-[#1a5fa8] outline-none"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-medium/20 focus:border-primary-medium outline-none"
                   >
                     {TIPOS_SERVICIO.map(t => (
                       <option key={t.value} value={t.value}>{t.label}</option>
@@ -456,7 +456,7 @@ export default function FormularioEditor() {
                     onChange={e => setDescripcion(e.target.value)}
                     placeholder="Breve descripcion del servicio..."
                     rows={2}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#1a5fa8]/20 focus:border-[#1a5fa8] outline-none resize-none"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-medium/20 focus:border-primary-medium outline-none resize-none"
                   />
                 </div>
 
@@ -468,11 +468,11 @@ export default function FormularioEditor() {
                     value={slug}
                     onChange={e => setSlug(e.target.value)}
                     placeholder="se-genera-automaticamente"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#1a5fa8]/20 focus:border-[#1a5fa8] outline-none font-mono"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-medium/20 focus:border-primary-medium outline-none font-mono"
                   />
                   {slug && (
                     <p className="mt-1 text-xs text-gray-500">
-                      Link: <span className="font-medium text-[#1a5fa8]">misterservicerd.com/f/{slug}</span>
+                      Link: <span className="font-medium text-primary-medium">misterservicerd.com/f/{slug}</span>
                     </p>
                   )}
                 </div>
@@ -563,7 +563,7 @@ export default function FormularioEditor() {
                             onClick={() => openEditCampo(campo)}
                             className="p-1 hover:bg-blue-100 rounded transition-colors"
                           >
-                            <Edit size={14} className="text-[#1a5fa8]" />
+                            <Edit size={14} className="text-primary-medium" />
                           </button>
                           <button
                             onClick={() => setConfirmDelete(campo.id)}
@@ -579,7 +579,7 @@ export default function FormularioEditor() {
               )}
               <button
                 onClick={openNewCampo}
-                className="flex items-center gap-2 w-full justify-center py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-500 hover:border-[#1a5fa8] hover:text-[#1a5fa8] transition-colors"
+                className="flex items-center gap-2 w-full justify-center py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-500 hover:border-primary-medium hover:text-primary-medium transition-colors"
               >
                 <Plus size={16} />
                 Agregar Campo
@@ -607,7 +607,7 @@ export default function FormularioEditor() {
                 {todosCampos.length > 0 && (
                   <button
                     disabled
-                    className="w-full mt-6 py-2.5 bg-[#1a5fa8] text-white rounded-lg text-sm font-medium opacity-60"
+                    className="w-full mt-6 py-2.5 bg-primary-medium text-white rounded-lg text-sm font-medium opacity-60"
                   >
                     Enviar Solicitud
                   </button>
@@ -632,7 +632,7 @@ export default function FormularioEditor() {
             <select
               value={campoForm.tipo}
               onChange={e => setCampoForm({ ...campoForm, tipo: e.target.value as TipoCampo, opciones: [] })}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#1a5fa8]/20 focus:border-[#1a5fa8] outline-none"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-medium/20 focus:border-primary-medium outline-none"
             >
               {TODOS_TIPOS.map(t => (
                 <option key={t} value={t}>{TIPO_LABEL[t]}</option>
@@ -650,7 +650,7 @@ export default function FormularioEditor() {
               value={campoForm.etiqueta}
               onChange={e => setCampoForm({ ...campoForm, etiqueta: e.target.value })}
               placeholder="Ej: Modelo del equipo"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#1a5fa8]/20 focus:border-[#1a5fa8] outline-none"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-medium/20 focus:border-primary-medium outline-none"
             />
           </div>
 
@@ -662,7 +662,7 @@ export default function FormularioEditor() {
               value={campoForm.placeholder}
               onChange={e => setCampoForm({ ...campoForm, placeholder: e.target.value })}
               placeholder="Texto de ejemplo dentro del campo"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#1a5fa8]/20 focus:border-[#1a5fa8] outline-none"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-medium/20 focus:border-primary-medium outline-none"
             />
           </div>
 
@@ -675,7 +675,7 @@ export default function FormularioEditor() {
                 onChange={e => setCampoForm({ ...campoForm, requerido: e.target.checked })}
                 className="sr-only peer"
               />
-              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1a5fa8]/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#1a5fa8]"></div>
+              <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-medium/20 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-medium"></div>
             </label>
             <span className="text-sm text-gray-700">Campo requerido</span>
           </div>
@@ -696,7 +696,7 @@ export default function FormularioEditor() {
                         setCampoForm({ ...campoForm, opciones: updated });
                       }}
                       placeholder={`Opcion ${i + 1}`}
-                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-[#1a5fa8]/20 focus:border-[#1a5fa8] outline-none"
+                      className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-medium/20 focus:border-primary-medium outline-none"
                     />
                     <button
                       onClick={() => {
@@ -712,7 +712,7 @@ export default function FormularioEditor() {
               </div>
               <button
                 onClick={() => setCampoForm({ ...campoForm, opciones: [...campoForm.opciones, ''] })}
-                className="mt-2 flex items-center gap-1 text-sm text-[#1a5fa8] hover:text-[#164d8a] font-medium transition-colors"
+                className="mt-2 flex items-center gap-1 text-sm text-primary-medium hover:text-[#164d8a] font-medium transition-colors"
               >
                 <Plus size={14} />
                 Agregar opcion
@@ -730,7 +730,7 @@ export default function FormularioEditor() {
             </button>
             <button
               onClick={saveCampo}
-              className="px-4 py-2 text-sm font-medium text-white bg-[#1a5fa8] rounded-lg hover:bg-[#164d8a] transition-colors"
+              className="px-4 py-2 text-sm font-medium text-white bg-primary-medium rounded-lg hover:bg-[#164d8a] transition-colors"
             >
               {editingCampo ? 'Guardar Cambios' : 'Agregar Campo'}
             </button>

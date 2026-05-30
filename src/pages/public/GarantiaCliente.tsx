@@ -331,7 +331,7 @@ function CardDatos({ info }: { info: GarantiaApiInfo }) {
         <div className="text-[11px] uppercase tracking-wide text-gray-500 font-semibold">
           Conduce
         </div>
-        <div className="text-sm font-mono font-bold text-[#0f3460]">
+        <div className="text-sm font-mono font-bold text-primary">
           {info.conduceNumero || '—'}
         </div>
       </div>

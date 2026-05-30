@@ -58,7 +58,7 @@ export default function Formularios() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#0f3460] rounded-xl">
+          <div className="p-2 bg-primary rounded-xl">
             <FileText size={24} className="text-white" />
           </div>
           <div>
@@ -70,7 +70,7 @@ export default function Formularios() {
         </div>
         <button
           onClick={() => navigate('/admin/formularios/nuevo')}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#0f3460] text-white rounded-xl hover:bg-[#0d2d56] transition-colors font-medium text-sm"
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl hover:bg-[#0d2d56] transition-colors font-medium text-sm"
         >
           <Plus size={18} />
           Nuevo Formulario
@@ -84,7 +84,7 @@ export default function Formularios() {
           <select
             value={filtroEmpresa ?? ''}
             onChange={(e) => setFiltroEmpresa(e.target.value || undefined)}
-            className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-[#0f3460]/20 focus:border-[#0f3460] outline-none transition-all text-sm text-gray-700"
+            className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm text-gray-700"
           >
             <option value="">Todas las empresas</option>
             {empresas.map((emp) => (

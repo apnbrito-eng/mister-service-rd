@@ -158,7 +158,7 @@ function StepperFasesPortal({ faseActual }: { faseActual: string }) {
           const base =
             'inline-flex items-center gap-1 rounded-full border whitespace-nowrap px-2.5 py-1 text-[10.5px] font-medium shrink-0';
           const cls = isCurrent
-            ? `${base} bg-[#0f3460] text-white border-[#0f3460]`
+            ? `${base} bg-primary text-white border-primary`
             : isPast
               ? `${base} bg-green-50 text-green-800 border-green-200`
               : `${base} bg-gray-50 text-gray-400 border-gray-200`;
@@ -341,7 +341,7 @@ export default function PortalCliente() {
                 reintentoRef.current = 0;
                 setEstado({ tipo: 'loading' });
               }}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium"
             >
               Reintentar
             </button>
@@ -404,7 +404,7 @@ export default function PortalCliente() {
             <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
               Orden
             </p>
-            <p className="text-sm font-bold text-[#0f3460]">{data.numero || 'Sin número'}</p>
+            <p className="text-sm font-bold text-primary">{data.numero || 'Sin número'}</p>
           </div>
         </div>
       </div>
@@ -448,7 +448,7 @@ export default function PortalCliente() {
                 <button
                   type="button"
                   onClick={() => setDescripcionExpandida(v => !v)}
-                  className="text-xs text-[#1a5fa8] hover:underline mt-1 font-medium"
+                  className="text-xs text-primary-medium hover:underline mt-1 font-medium"
                 >
                   {descripcionExpandida ? 'Ver menos' : 'Ver más'}
                 </button>
@@ -494,7 +494,7 @@ export default function PortalCliente() {
               href={`/tracking/${data.tracking.token}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full inline-flex items-center justify-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium py-2.5 transition-colors"
+              className="w-full inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium py-2.5 transition-colors"
             >
               <MapPin size={14} /> Ver técnico en mapa
             </a>
@@ -528,7 +528,7 @@ export default function PortalCliente() {
               <button
                 type="button"
                 onClick={() => setModalPosponerAbierto(true)}
-                className="w-full inline-flex items-center justify-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium py-2.5 transition-colors"
+                className="w-full inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium py-2.5 transition-colors"
               >
                 <Calendar size={14} /> Pedir posponer mi cita
               </button>
