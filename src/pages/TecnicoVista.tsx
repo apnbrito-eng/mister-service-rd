@@ -775,8 +775,22 @@ export default function TecnicoVista() {
     <div className="min-h-screen bg-[#f0f4f8]">
       {/* Header */}
       <div className="bg-[#0f3460] px-4 py-3 sticky top-0 z-20 shadow-md">
-        <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <Logo size="sm" white />
+        <div className="flex items-center justify-between gap-3 max-w-4xl mx-auto">
+          {/* SPRINT-DISENO-TECNICO-FASE-1 (2026-05-30): saludo compactado en
+              el header en una sola línea junto al logo. Antes vivía como
+              greeting grande arriba del listado. La fecha + botón "Ver Ruta
+              del Día" quedan abajo (greeting reducido). */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Logo size="sm" white />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white truncate leading-tight">
+                {nombreCorto}
+              </p>
+              <p className="text-[10px] text-white/70 leading-tight">
+                {citasFiltradas.length} cita{citasFiltradas.length !== 1 ? 's' : ''} hoy
+              </p>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             {compartiendoGPS && (
               <div className="flex items-center gap-1 bg-green-500/20 px-2 py-1 rounded-full" title="Compartiendo ubicación">
@@ -805,137 +819,17 @@ export default function TecnicoVista() {
       </div>
 
       <div className="max-w-4xl mx-auto p-4 space-y-4">
-        {/* Comisión acumulada de la quincena (Fase 5) */}
-        {(() => {
-          const totalBruto = comisionesQuincena.reduce((s, c) => s + c.comisionMonto, 0);
-          const totalDescuentos = comisionesQuincena.reduce(
-            (s, c) => s + (c.descuentoPorGarantia?.monto ?? 0),
-            0,
-          );
-          const total = totalBruto + totalDescuentos;
-          const comisionesConDescuento = comisionesQuincena.filter(c => c.descuentoPorGarantia);
-          const quincena = calcularQuincenaActual(new Date());
-          const { inicio, fin } = rangoQuincena(quincena);
-          const esQ1 = quincena.endsWith('Q1');
-          const diaPago = esQ1 ? 15 : 30;
-          const rangoTxt = `${format(inicio, "d 'de' MMMM", { locale: es })} — ${format(fin, "d 'de' MMMM", { locale: es })}`;
-          const nOrdenes = comisionesQuincena.length;
-          return (
-            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl shadow-sm overflow-hidden text-white">
-              <button
-                type="button"
-                onClick={() => setMostrarDetalleGanancias(v => !v)}
-                className="w-full p-4 text-left hover:bg-white/5 transition-colors"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide opacity-90">
-                      💰 Mis ganancias · Quincena actual
-                    </p>
-                    <p className="text-2xl font-bold mt-1">{formatMoneda(total)}</p>
-                    <p className="text-[11px] opacity-90 mt-0.5">
-                      {rangoTxt}
-                    </p>
-                  </div>
-                  <div className="text-right text-xs">
-                    <div className="bg-white/20 rounded-lg px-2 py-1 font-semibold">
-                      Pago día {diaPago}
-                    </div>
-                    <div className="mt-1 opacity-90">
-                      {nOrdenes} orden{nOrdenes !== 1 ? 'es' : ''}
-                    </div>
-                  </div>
-                </div>
-                {nOrdenes > 0 && (
-                  <div className="flex items-center justify-center gap-1 mt-2 text-[11px] opacity-75">
-                    <span>{mostrarDetalleGanancias ? 'Ocultar detalle' : 'Ver detalle por orden'}</span>
-                    <span className={`transition-transform ${mostrarDetalleGanancias ? 'rotate-180' : ''}`}>▼</span>
-                  </div>
-                )}
-              </button>
-              {mostrarDetalleGanancias && nOrdenes > 0 && (
-                <div className="bg-emerald-700/40 border-t border-white/10 max-h-64 overflow-y-auto">
-                  {comisionesQuincena
-                    .slice()
-                    .sort((a, b) => b.fechaCobro.getTime() - a.fechaCobro.getTime())
-                    .map(c => (
-                      <div key={c.id} className="px-4 py-2 border-b border-white/10 text-xs">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="font-medium truncate">
-                              {c.ordenNumero} · {c.clienteNombre}
-                            </div>
-                            <div className="opacity-75 text-[10px]">
-                              {format(c.fechaCobro, "dd MMM", { locale: es })}
-                            </div>
-                          </div>
-                          <div className="font-bold text-right">
-                            {formatMoneda(c.comisionMonto)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              )}
-              {nOrdenes === 0 && (
-                <div className="px-4 pb-4 text-[11px] opacity-75">
-                  Aún no tienes comisiones en esta quincena. Cada vez que una orden tuya pase a facturada, acumulas ganancia aquí.
-                </div>
-              )}
+        {/* SPRINT-DISENO-TECNICO-FASE-1 (2026-05-30): la card de ganancias
+            quincenales se movió ABAJO del listado de citas. Lo primero que
+            ve el técnico al abrir es el saludo + lista de citas. */}
 
-              {/* Descuentos por garantía */}
-              {comisionesConDescuento.length > 0 && (
-                <div className="bg-red-900/30 border-t-2 border-red-300/40 px-4 py-3 text-xs">
-                  <div className="flex items-center gap-1.5 font-semibold mb-2 text-red-100">
-                    <span>⚠️</span>
-                    <span>Comisiones descontadas por garantía</span>
-                  </div>
-                  <div className="space-y-2">
-                    {comisionesConDescuento.map(c => {
-                      const d = c.descuentoPorGarantia!;
-                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                      const fechaApl = d.aplicadoEn instanceof Date ? d.aplicadoEn : (d.aplicadoEn as any)?.toDate?.() || new Date();
-                      return (
-                        <div key={`desc-${c.id}`} className="bg-red-900/40 rounded-lg px-3 py-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="font-medium text-red-50 truncate">
-                                Conduce {d.conduceNumero || '—'} · Orden {c.ordenNumero}
-                              </div>
-                              <div className="opacity-80 text-[10px] text-red-100">
-                                {format(fechaApl, "dd MMM yyyy", { locale: es })}
-                              </div>
-                              <div className="text-[10px] text-red-100/90 mt-0.5">
-                                Motivo: {d.motivo || '—'}
-                              </div>
-                            </div>
-                            <div className="font-bold text-right text-red-100">
-                              {formatMoneda(d.monto)}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-2 pt-2 border-t border-red-300/30 flex items-center justify-between text-red-100">
-                    <span className="font-semibold">Total descontado en este período:</span>
-                    <span className="font-bold">{formatMoneda(totalDescuentos)}</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Greeting */}
+        {/* Greeting reducido (SPRINT-DISENO-TECNICO-FASE-1 2026-05-30):
+            "Buenos días, {nombre}" se movió al header. Acá quedan solo la
+            fecha y el botón "Ver Ruta del Día". */}
         <div className="text-center">
           <p className="text-xs text-gray-500 capitalize">
             📅 {format(hoy, "EEEE, dd 'de' MMMM yyyy", { locale: es })}
           </p>
-          <h1 className="text-lg font-bold text-[#0f3460] mt-1">
-            Buenos días, {nombreCorto} 👋
-          </h1>
-          <p className="text-xs text-gray-400 mt-0.5">{citasFiltradas.length} citas</p>
           {permisos.verUbicacionGPS && (
             <button
               onClick={() => setShowMap(!showMap)}
@@ -949,60 +843,6 @@ export default function TecnicoVista() {
             </button>
           )}
         </div>
-
-        {/* Tabs selector */}
-        {permisos.vistaAgenda !== 'dia' && (
-          <div className="space-y-3">
-            <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100 max-w-md mx-auto">
-              <button onClick={() => setVista('hoy')}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'hoy' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
-                Hoy
-              </button>
-              {(permisos.vistaAgenda === 'semana' || permisos.vistaAgenda === 'mes') && (
-                <button onClick={() => setVista('semana')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'semana' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
-                  Esta Semana
-                </button>
-              )}
-              {permisos.vistaAgenda === 'mes' && (
-                <button onClick={() => setVista('mes')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'mes' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
-                  Este Mes
-                </button>
-              )}
-              <button onClick={() => setVista('rango')}
-                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'rango' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
-                📅 Rango
-              </button>
-            </div>
-
-            {vista === 'rango' && (
-              <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 max-w-md mx-auto space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Desde</label>
-                    <input type="date" value={rangoDesde} onChange={e => setRangoDesde(e.target.value)}
-                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Hasta</label>
-                    <input type="date" value={rangoHasta} onChange={e => setRangoHasta(e.target.value)}
-                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
-                  </div>
-                </div>
-                <button onClick={handleAplicarRango}
-                  className="w-full py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-xs font-medium transition-colors">
-                  Buscar
-                </button>
-                {rangoAplicado && (
-                  <p className="text-[10px] text-center text-gray-500">
-                    Mostrando: {rangoAplicado.desde} → {rangoAplicado.hasta}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Mapa de Ruta del Día */}
         {showMap && permisos.verUbicacionGPS && (() => {
@@ -1111,11 +951,25 @@ export default function TecnicoVista() {
           </div>
         ) : (
           <div className="space-y-3">
-            {citasFiltradas.map(orden => {
+            {citasFiltradas.map((orden, idx) => {
               const ubi = getClienteUbicacion(orden);
               const completado = orden.fase === 'trabajo_realizado' || orden.fase === 'cerrado';
+              // SPRINT-DISENO-TECNICO-FASE-1 (2026-05-30): etiqueta "PRÓXIMA
+              // CITA" sólo sobre la primera cita NO completada del listado.
+              // Buscamos el primer índice no completado para evitar etiquetar
+              // una orden ya cerrada cuando la primera del listado lo está.
+              const idxProxima = citasFiltradas.findIndex(
+                o => o.fase !== 'trabajo_realizado' && o.fase !== 'cerrado'
+              );
+              const esProxima = idx === idxProxima;
               return (
-                <div key={orden.id}
+                <div key={orden.id}>
+                {esProxima && (
+                  <p className="text-[10px] uppercase tracking-wide font-bold text-[#0f3460] mb-1 px-1">
+                    Próxima cita
+                  </p>
+                )}
+                <div
                   className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${completado ? 'opacity-60' : ''}`}>
                   <div className="p-4">
                     {/* Hora */}
@@ -1409,8 +1263,192 @@ export default function TecnicoVista() {
                     )}
                   </div>
                 </div>
+                </div>
               );
             })}
+          </div>
+        )}
+
+        {/* SPRINT-DISENO-TECNICO-FASE-1 (2026-05-30): card de ganancias
+            quincenales movida ABAJO del listado de citas. Lo principal es la
+            próxima cita; las ganancias quedan accesibles pero no compitiendo
+            por la atención al abrir. Lógica idéntica a la original — solo
+            cambió la posición visual. */}
+        {(() => {
+          const totalBruto = comisionesQuincena.reduce((s, c) => s + c.comisionMonto, 0);
+          const totalDescuentos = comisionesQuincena.reduce(
+            (s, c) => s + (c.descuentoPorGarantia?.monto ?? 0),
+            0,
+          );
+          const total = totalBruto + totalDescuentos;
+          const comisionesConDescuento = comisionesQuincena.filter(c => c.descuentoPorGarantia);
+          const quincena = calcularQuincenaActual(new Date());
+          const { inicio, fin } = rangoQuincena(quincena);
+          const esQ1 = quincena.endsWith('Q1');
+          const diaPago = esQ1 ? 15 : 30;
+          const rangoTxt = `${format(inicio, "d 'de' MMMM", { locale: es })} — ${format(fin, "d 'de' MMMM", { locale: es })}`;
+          const nOrdenes = comisionesQuincena.length;
+          return (
+            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-2xl shadow-sm overflow-hidden text-white">
+              <button
+                type="button"
+                onClick={() => setMostrarDetalleGanancias(v => !v)}
+                className="w-full p-4 text-left hover:bg-white/5 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-wide opacity-90">
+                      💰 Mis ganancias · Quincena actual
+                    </p>
+                    <p className="text-2xl font-bold mt-1">{formatMoneda(total)}</p>
+                    <p className="text-[11px] opacity-90 mt-0.5">
+                      {rangoTxt}
+                    </p>
+                  </div>
+                  <div className="text-right text-xs">
+                    <div className="bg-white/20 rounded-lg px-2 py-1 font-semibold">
+                      Pago día {diaPago}
+                    </div>
+                    <div className="mt-1 opacity-90">
+                      {nOrdenes} orden{nOrdenes !== 1 ? 'es' : ''}
+                    </div>
+                  </div>
+                </div>
+                {nOrdenes > 0 && (
+                  <div className="flex items-center justify-center gap-1 mt-2 text-[11px] opacity-75">
+                    <span>{mostrarDetalleGanancias ? 'Ocultar detalle' : 'Ver detalle por orden'}</span>
+                    <span className={`transition-transform ${mostrarDetalleGanancias ? 'rotate-180' : ''}`}>▼</span>
+                  </div>
+                )}
+              </button>
+              {mostrarDetalleGanancias && nOrdenes > 0 && (
+                <div className="bg-emerald-700/40 border-t border-white/10 max-h-64 overflow-y-auto">
+                  {comisionesQuincena
+                    .slice()
+                    .sort((a, b) => b.fechaCobro.getTime() - a.fechaCobro.getTime())
+                    .map(c => (
+                      <div key={c.id} className="px-4 py-2 border-b border-white/10 text-xs">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">
+                              {c.ordenNumero} · {c.clienteNombre}
+                            </div>
+                            <div className="opacity-75 text-[10px]">
+                              {format(c.fechaCobro, "dd MMM", { locale: es })}
+                            </div>
+                          </div>
+                          <div className="font-bold text-right">
+                            {formatMoneda(c.comisionMonto)}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+              {nOrdenes === 0 && (
+                <div className="px-4 pb-4 text-[11px] opacity-75">
+                  Aún no tienes comisiones en esta quincena. Cada vez que una orden tuya pase a facturada, acumulas ganancia aquí.
+                </div>
+              )}
+
+              {/* Descuentos por garantía */}
+              {comisionesConDescuento.length > 0 && (
+                <div className="bg-red-900/30 border-t-2 border-red-300/40 px-4 py-3 text-xs">
+                  <div className="flex items-center gap-1.5 font-semibold mb-2 text-red-100">
+                    <span>⚠️</span>
+                    <span>Comisiones descontadas por garantía</span>
+                  </div>
+                  <div className="space-y-2">
+                    {comisionesConDescuento.map(c => {
+                      const d = c.descuentoPorGarantia!;
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      const fechaApl = d.aplicadoEn instanceof Date ? d.aplicadoEn : (d.aplicadoEn as any)?.toDate?.() || new Date();
+                      return (
+                        <div key={`desc-${c.id}`} className="bg-red-900/40 rounded-lg px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="font-medium text-red-50 truncate">
+                                Conduce {d.conduceNumero || '—'} · Orden {c.ordenNumero}
+                              </div>
+                              <div className="opacity-80 text-[10px] text-red-100">
+                                {format(fechaApl, "dd MMM yyyy", { locale: es })}
+                              </div>
+                              <div className="text-[10px] text-red-100/90 mt-0.5">
+                                Motivo: {d.motivo || '—'}
+                              </div>
+                            </div>
+                            <div className="font-bold text-right text-red-100">
+                              {formatMoneda(d.monto)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-red-300/30 flex items-center justify-between text-red-100">
+                    <span className="font-semibold">Total descontado en este período:</span>
+                    <span className="font-bold">{formatMoneda(totalDescuentos)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* SPRINT-DISENO-TECNICO-FASE-1 (2026-05-30): filtro de período
+            (Hoy/Semana/Mes/Rango) movido AL FINAL como filtro auxiliar. El
+            default sigue siendo "Hoy" para que la pantalla abra mostrando
+            la agenda del día. */}
+        {permisos.vistaAgenda !== 'dia' && (
+          <div className="space-y-3">
+            <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100 max-w-md mx-auto">
+              <button onClick={() => setVista('hoy')}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'hoy' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+                Hoy
+              </button>
+              {(permisos.vistaAgenda === 'semana' || permisos.vistaAgenda === 'mes') && (
+                <button onClick={() => setVista('semana')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'semana' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+                  Esta Semana
+                </button>
+              )}
+              {permisos.vistaAgenda === 'mes' && (
+                <button onClick={() => setVista('mes')}
+                  className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'mes' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+                  Este Mes
+                </button>
+              )}
+              <button onClick={() => setVista('rango')}
+                className={`flex-1 py-2 rounded-lg text-xs font-medium transition-colors ${vista === 'rango' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+                📅 Rango
+              </button>
+            </div>
+
+            {vista === 'rango' && (
+              <div className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 max-w-md mx-auto space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Desde</label>
+                    <input type="date" value={rangoDesde} onChange={e => setRangoDesde(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Hasta</label>
+                    <input type="date" value={rangoHasta} onChange={e => setRangoHasta(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                  </div>
+                </div>
+                <button onClick={handleAplicarRango}
+                  className="w-full py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-xs font-medium transition-colors">
+                  Buscar
+                </button>
+                {rangoAplicado && (
+                  <p className="text-[10px] text-center text-gray-500">
+                    Mostrando: {rangoAplicado.desde} → {rangoAplicado.hasta}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
