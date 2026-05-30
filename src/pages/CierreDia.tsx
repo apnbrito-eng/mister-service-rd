@@ -229,7 +229,7 @@ export default function CierreDia() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
             <ClipboardCheck size={24} /> Cierre del Día
           </h1>
           <p className="text-gray-500 text-sm capitalize">{fechaTextoLargo}</p>
@@ -239,7 +239,7 @@ export default function CierreDia() {
             type="date"
             value={fechaSel}
             onChange={e => setFechaSel(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
           {cierreExistente ? (
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-300 rounded-xl text-sm text-green-800">
@@ -250,7 +250,7 @@ export default function CierreDia() {
             <button
               type="button"
               onClick={() => setShowConfirmar(true)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-xl text-sm font-medium transition-colors"
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-medium text-white rounded-xl text-sm font-medium transition-colors"
             >
               <ClipboardCheck size={14} /> Cerrar día
             </button>
@@ -265,38 +265,38 @@ export default function CierreDia() {
             <div className="p-2 bg-blue-50 rounded-lg"><FileText size={18} className="text-blue-600" /></div>
             <span className="text-xs font-medium text-gray-500 uppercase">Órdenes cerradas</span>
           </div>
-          <p className="text-2xl font-bold text-[#0f3460]">{ordenesCerradasHoy.length}</p>
+          <p className="text-2xl font-bold text-primary">{ordenesCerradasHoy.length}</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-yellow-50 rounded-lg"><AlertTriangle size={18} className="text-yellow-600" /></div>
             <span className="text-xs font-medium text-gray-500 uppercase">Solo chequeo</span>
           </div>
-          <p className="text-2xl font-bold text-[#0f3460]">{ordenesChequeoHoy.length}</p>
+          <p className="text-2xl font-bold text-primary">{ordenesChequeoHoy.length}</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-green-50 rounded-lg"><DollarSign size={18} className="text-green-600" /></div>
             <span className="text-xs font-medium text-gray-500 uppercase">Ingresos cobrados</span>
           </div>
-          <p className="text-2xl font-bold text-[#0f3460]">{formatMoneda(totalIngresos)}</p>
+          <p className="text-2xl font-bold text-primary">{formatMoneda(totalIngresos)}</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-purple-50 rounded-lg"><FileText size={18} className="text-purple-600" /></div>
             <span className="text-xs font-medium text-gray-500 uppercase">Facturas emitidas</span>
           </div>
-          <p className="text-2xl font-bold text-[#0f3460]">{facturasHoy.length}</p>
+          <p className="text-2xl font-bold text-primary">{facturasHoy.length}</p>
         </div>
       </div>
 
       {/* Efectivo por técnico */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-primary uppercase tracking-wide flex items-center gap-2">
             <Truck size={16} /> Efectivo a entregar a oficina
           </h2>
-          <span className="text-sm font-bold text-[#0f3460]">Total: {formatMoneda(efectivoTotal)}</span>
+          <span className="text-sm font-bold text-primary">Total: {formatMoneda(efectivoTotal)}</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -354,8 +354,8 @@ export default function CierreDia() {
       {/* Transferencias por banco */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide">Transferencias recibidas</h2>
-          <span className="text-sm font-bold text-[#0f3460]">Total: {formatMoneda(transferenciasTotal)}</span>
+          <h2 className="text-sm font-semibold text-primary uppercase tracking-wide">Transferencias recibidas</h2>
+          <span className="text-sm font-bold text-primary">Total: {formatMoneda(transferenciasTotal)}</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -385,7 +385,7 @@ export default function CierreDia() {
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-3">
           <AlertTriangle size={16} className="text-orange-500" />
-          <h2 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide">
+          <h2 className="text-sm font-semibold text-primary uppercase tracking-wide">
             Órdenes aún activas ({ordenesActivasHoy.length})
           </h2>
         </div>
@@ -400,7 +400,7 @@ export default function CierreDia() {
           <div className="space-y-1.5 max-h-64 overflow-y-auto">
             {ordenesActivasHoy.slice(0, 50).map(o => (
               <div key={o.id} className="flex items-center justify-between text-xs p-2 bg-gray-50 rounded-lg">
-                <span className="font-mono font-semibold text-[#0f3460]">{o.numero}</span>
+                <span className="font-mono font-semibold text-primary">{o.numero}</span>
                 <span className="flex-1 mx-3 truncate text-gray-700">{o.clienteNombre} · {o.equipoTipo}</span>
                 <span className="text-gray-500">{o.tecnicoNombre || 'Sin asignar'}</span>
               </div>
@@ -417,7 +417,7 @@ export default function CierreDia() {
       {/* Alertas */}
       {alertas.length > 0 && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h2 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3">
+          <h2 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">
             Alertas sin resolver ({alertas.length})
           </h2>
           <div className="space-y-1.5 max-h-48 overflow-y-auto">
@@ -455,7 +455,7 @@ export default function CierreDia() {
               Cancelar
             </button>
             <button type="button" onClick={handleConfirmarCierre} disabled={cerrando}
-              className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60 inline-flex items-center gap-2">
+              className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60 inline-flex items-center gap-2">
               <ClipboardCheck size={14} />
               {cerrando ? 'Cerrando...' : 'Confirmar cierre'}
             </button>

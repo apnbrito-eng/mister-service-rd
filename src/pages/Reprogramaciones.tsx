@@ -286,7 +286,7 @@ export default function Reprogramaciones() {
     <div className="p-4 md:p-6 space-y-5 max-w-5xl mx-auto">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
             <RefreshCw size={22} /> Reprogramaciones de citas
           </h1>
           <p className="text-gray-500 text-sm">
@@ -325,7 +325,7 @@ export default function Reprogramaciones() {
                 {/* Header con número + cliente */}
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div>
-                    <p className="font-mono text-xs text-[#0f3460] font-semibold">
+                    <p className="font-mono text-xs text-primary font-semibold">
                       {item.orden.numero || item.orden.id}
                     </p>
                     <p className="text-base font-semibold text-gray-900 mt-0.5">
@@ -361,7 +361,7 @@ export default function Reprogramaciones() {
                       <span className="text-gray-500 italic">Sin agendar previamente</span>
                     )}
                     <ArrowRight size={12} className="text-gray-400" />
-                    <span className="font-semibold text-[#0f3460]">
+                    <span className="font-semibold text-primary">
                       {fechaNueva ? formatFechaDiaCompleto(fechaNueva) : 'Sin fecha'}
                     </span>
                   </div>
@@ -517,7 +517,7 @@ export default function Reprogramaciones() {
               onChange={(e) => setNotaRechazo(e.target.value)}
               disabled={!!trabajando}
               placeholder="Ej: El técnico no está disponible ese día."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
             <p className="text-[11px] text-gray-400 mt-1">
               Mínimo {MIN_NOTA_RECHAZO} caracteres.
@@ -581,7 +581,7 @@ export default function Reprogramaciones() {
               max={toIsoDateLocal(maxDate)}
               onChange={(e) => setContraFecha(e.target.value)}
               disabled={!!trabajando}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
             <p className="text-[10px] text-gray-400 mt-1">
               Mínimo mañana, máximo 60 días. No domingos.
@@ -609,7 +609,7 @@ export default function Reprogramaciones() {
                     className={
                       'px-3 py-2 rounded-lg text-sm font-medium border transition-colors ' +
                       (seleccionado
-                        ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                        ? 'bg-primary text-white border-primary'
                         : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400')
                     }
                   >
@@ -631,7 +631,7 @@ export default function Reprogramaciones() {
               onChange={(e) => setContraNota(e.target.value)}
               disabled={!!trabajando}
               placeholder="Ej: El técnico está disponible este día."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] resize-none"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium resize-none"
             />
           </div>
 

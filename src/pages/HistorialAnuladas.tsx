@@ -199,7 +199,7 @@ export default function HistorialAnuladas() {
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
             <XCircle size={24} /> Historial de órdenes anuladas
           </h1>
           <p className="text-gray-500 text-sm">
@@ -222,7 +222,7 @@ export default function HistorialAnuladas() {
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Tipo</label>
           <select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value as TipoAnulacion)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
             <option value="todas">Todas</option>
             <option value="eliminadas">Solo eliminadas</option>
             <option value="canceladas">Solo canceladas</option>
@@ -231,17 +231,17 @@ export default function HistorialAnuladas() {
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Desde</label>
           <input type="date" value={fechaDesde} onChange={e => setFechaDesde(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Hasta</label>
           <input type="date" value={fechaHasta} onChange={e => setFechaHasta(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Técnico</label>
           <select value={filtroTecnico} onChange={e => setFiltroTecnico(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
             <option value="">Todos</option>
             {tecnicosDisponibles.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
@@ -249,7 +249,7 @@ export default function HistorialAnuladas() {
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1">Anulada por</label>
           <select value={filtroResponsable} onChange={e => setFiltroResponsable(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
             <option value="">Todos</option>
             {responsablesAnulacion.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
@@ -260,7 +260,7 @@ export default function HistorialAnuladas() {
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input type="text" value={busqueda} onChange={e => setBusqueda(e.target.value)}
               placeholder="Cliente, número de orden, motivo..."
-              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
         </div>
       </div>
@@ -292,7 +292,7 @@ export default function HistorialAnuladas() {
                 return (
                   <tr key={o.id} onClick={() => setDetalle(o)}
                     className="hover:bg-gray-50 cursor-pointer">
-                    <td className="px-3 py-3 font-mono text-xs font-bold text-[#0f3460]">{o.numero}</td>
+                    <td className="px-3 py-3 font-mono text-xs font-bold text-primary">{o.numero}</td>
                     <td className="px-3 py-3 text-gray-700">{o.clienteNombre}</td>
                     <td className="px-3 py-3 text-gray-500 hidden md:table-cell">{o.equipoTipo}{o.equipoMarca ? ` · ${o.equipoMarca}` : ''}</td>
                     <td className="px-3 py-3 text-gray-500 hidden md:table-cell">{o.tecnicoNombre || '—'}</td>

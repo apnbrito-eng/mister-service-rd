@@ -310,7 +310,7 @@ export default function CitaPublica() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0f3460] to-[#1a5fa8] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-primary to-primary-medium flex items-center justify-center p-4">
         <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md text-center">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Check size={32} className="text-green-600" />
@@ -347,7 +347,7 @@ export default function CitaPublica() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* SECCIÓN 1: Sus Datos */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 pb-2 border-b border-gray-100">
+            <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3 pb-2 border-b border-gray-100">
               Sus Datos
             </h3>
             <div className="space-y-3">
@@ -357,7 +357,7 @@ export default function CitaPublica() {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                   <input type="text" value={form.nombre}
                     onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
-                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                 </div>
               </div>
 
@@ -369,7 +369,7 @@ export default function CitaPublica() {
                     <input type="tel" value={form.telefono}
                       onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))}
                       placeholder="Ej: 8091234567"
-                      className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                      className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                   </div>
                 </div>
                 <div>
@@ -378,7 +378,7 @@ export default function CitaPublica() {
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                     <input type="email" value={form.email}
                       onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                      className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                      className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                   </div>
                 </div>
               </div>
@@ -398,7 +398,7 @@ export default function CitaPublica() {
                     onChange={e => setForm(f => ({ ...f, direccion: e.target.value }))}
                     placeholder="Escribe un lugar, dirección o usa GPS"
                     autoComplete="off"
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                   <button type="button" onClick={handleUbicacion} disabled={geocoding}
                     className="flex items-center gap-1 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs transition-colors disabled:opacity-60">
                     <MapPin size={14} /> {geocoding ? '...' : 'Mi ubicación'}
@@ -416,7 +416,7 @@ export default function CitaPublica() {
 
           {/* SECCIÓN 2: Detalles del Servicio */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 pb-2 border-b border-gray-100">
+            <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3 pb-2 border-b border-gray-100">
               Detalles del Servicio
             </h3>
             <div className="space-y-3">
@@ -427,7 +427,7 @@ export default function CitaPublica() {
                     <Wrench className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
                     <select value={form.equipoTipo}
                       onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
-                      className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                      className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                       <option value="">Seleccionar...</option>
                       {TIPOS_EQUIPO.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
@@ -438,7 +438,7 @@ export default function CitaPublica() {
                   <input type="text" value={form.equipoMarca}
                     onChange={e => setForm(f => ({ ...f, equipoMarca: e.target.value }))}
                     placeholder="LG, Samsung, Mabe..."
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                 </div>
               </div>
               <div>
@@ -447,7 +447,7 @@ export default function CitaPublica() {
                   onChange={e => setForm(f => ({ ...f, falla: e.target.value }))}
                   rows={3}
                   placeholder="Ej: La lavadora no centrifuga al finalizar el ciclo..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
               </div>
 
               <div>
@@ -477,7 +477,7 @@ export default function CitaPublica() {
 
           {/* SECCIÓN 3: Fecha y Hora */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 pb-2 border-b border-gray-100">
+            <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3 pb-2 border-b border-gray-100">
               Fecha y Hora Deseada
             </h3>
 
@@ -516,9 +516,9 @@ export default function CitaPublica() {
                         onClick={() => { setSelectedDate(d); setSelectedHora(''); }}
                         className={`aspect-square rounded-lg text-xs font-medium transition-colors ${
                           isSelected
-                            ? 'bg-[#0f3460] text-white'
+                            ? 'bg-primary text-white'
                             : disponible
-                              ? 'bg-white hover:bg-[#1a5fa8] hover:text-white text-gray-900'
+                              ? 'bg-white hover:bg-primary-medium hover:text-white text-gray-900'
                               : 'text-gray-300 cursor-not-allowed'
                         } ${!isCurrentMonth ? 'opacity-40' : ''}`}
                       >
@@ -547,7 +547,7 @@ export default function CitaPublica() {
                         onClick={() => setSelectedHora(h)}
                         className={`py-2 rounded-lg text-xs font-medium transition-colors ${
                           selected
-                            ? 'bg-[#0f3460] text-white'
+                            ? 'bg-primary text-white'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                       >
@@ -562,7 +562,7 @@ export default function CitaPublica() {
 
           {/* Submit */}
           <button type="submit" disabled={submitting}
-            className="w-full bg-[#0f3460] hover:bg-[#1a5fa8] text-white py-3 rounded-xl font-semibold text-sm transition-colors disabled:opacity-60">
+            className="w-full bg-primary hover:bg-primary-medium text-white py-3 rounded-xl font-semibold text-sm transition-colors disabled:opacity-60">
             {submitting ? 'Enviando...' : 'Solicitar Cita'}
           </button>
 

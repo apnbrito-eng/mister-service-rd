@@ -454,7 +454,7 @@ export default function Cotizaciones() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Cotizaciones</h1>
+          <h1 className="text-2xl font-bold text-primary">Cotizaciones</h1>
           <p className="text-gray-500 text-sm">
             {cotizacionesFiltradas.length === cotizaciones.length
               ? `${cotizaciones.length} cotizaciones`
@@ -463,7 +463,7 @@ export default function Cotizaciones() {
         </div>
         {puedeCrear && (
           <button onClick={() => { resetForm(); setEditingId(null); setShowModal(true); }}
-            className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <Plus size={18} /> Nueva Cotización
           </button>
         )}
@@ -491,7 +491,7 @@ export default function Cotizaciones() {
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="font-mono text-sm font-bold text-[#0f3460]">{cot.numero}</span>
+                    <span className="font-mono text-sm font-bold text-primary">{cot.numero}</span>
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ESTADO_COLORS[cot.estado]}`}>
                       {ESTADO_LABELS[cot.estado]}
                     </span>
@@ -500,7 +500,7 @@ export default function Cotizaciones() {
                   <p className="text-xs text-gray-500">{cot.items.length} items · {formatFechaCorta(cot.createdAt)}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold text-[#0f3460]">{formatMoneda(cot.total)}</p>
+                  <p className="text-lg font-bold text-primary">{formatMoneda(cot.total)}</p>
                 </div>
               </div>
               {/* Items preview */}
@@ -577,12 +577,12 @@ export default function Cotizaciones() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Cliente *</label>
               <input type="text" value={form.clienteNombre} onChange={e => setForm(f => ({ ...f, clienteNombre: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Técnico</label>
               <input type="text" value={form.tecnicoNombre} onChange={e => setForm(f => ({ ...f, tecnicoNombre: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
           </div>
 
@@ -602,7 +602,7 @@ export default function Cotizaciones() {
                   <Boxes size={12} /> Agregar pieza
                 </button>
                 <button type="button" onClick={addItem}
-                  className="inline-flex items-center gap-1 text-xs text-[#1a5fa8] hover:underline">
+                  className="inline-flex items-center gap-1 text-xs text-primary-medium hover:underline">
                   <Plus size={12} /> Item manual
                 </button>
               </div>
@@ -628,11 +628,11 @@ export default function Cotizaciones() {
                         <IconBadge size={10} /> {labelTipo}
                       </span>
                       <input type="text" value={item.descripcion} onChange={e => updateItem(i, 'descripcion', e.target.value)}
-                        placeholder="Descripción" className="flex-1 min-w-[180px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                        placeholder="Descripción" className="flex-1 min-w-[180px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                       <input type="number" value={item.cantidad} onChange={e => updateItem(i, 'cantidad', parseInt(e.target.value) || 0)} min={1}
-                        className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                        className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                       <input type="number" value={item.precio} onChange={e => updateItem(i, 'precio', parseFloat(e.target.value) || 0)}
-                        placeholder="RD$" className="w-28 px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                        placeholder="RD$" className="w-28 px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                       <button type="button" onClick={() => removeItem(i)} className="p-2 hover:bg-red-50 rounded-lg text-red-500">
                         <X size={14} />
                       </button>
@@ -642,21 +642,21 @@ export default function Cotizaciones() {
               </div>
             )}
             <div className="text-right mt-3">
-              <span className="text-lg font-bold text-[#0f3460]">Total: {formatMoneda(total)}</span>
+              <span className="text-lg font-bold text-primary">Total: {formatMoneda(total)}</span>
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
             <textarea value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} rows={2}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => { setShowModal(false); setEditingId(null); resetForm(); }}
               className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
             <button type="submit" disabled={saving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
               {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear Cotización'}
             </button>
           </div>

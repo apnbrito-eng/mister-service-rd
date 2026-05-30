@@ -552,7 +552,7 @@ export default function AgendaDia() {
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Agenda del Día</h1>
+          <h1 className="text-2xl font-bold text-primary">Agenda del Día</h1>
           <p className="text-gray-500 text-sm capitalize">{diaLabel}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -560,13 +560,13 @@ export default function AgendaDia() {
             type="date"
             value={fechaStr}
             onChange={e => setFechaStr(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
           {!esTecnico && (
             <select
               value={filtroTecnico}
               onChange={e => setFiltroTecnico(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="">Todos los técnicos</option>
               {/* P-006: filtra por uid (auth.uid) para alinear con ordenes_servicio.tecnicoId */}
@@ -579,7 +579,7 @@ export default function AgendaDia() {
             <select
               value={filtroOperaria}
               onChange={e => setFiltroOperaria(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="">Todas las operarias</option>
               {operarias.map(o => (
@@ -595,7 +595,7 @@ export default function AgendaDia() {
               onClick={() => setSoloMiGrupo(v => !v)}
               className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
                 soloMiGrupo
-                  ? 'bg-[#0f3460] text-white'
+                  ? 'bg-primary text-white'
                   : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -682,7 +682,7 @@ export default function AgendaDia() {
               step={50}
               value={chequeoForm.precio}
               onChange={e => setChequeoForm(f => ({ ...f, precio: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
             <p className="text-[11px] text-gray-400 mt-1">
               Sugerido: RD${precioChequeoSugerido.toLocaleString('es-DO')}
@@ -694,7 +694,7 @@ export default function AgendaDia() {
             <select
               value={chequeoForm.metodoPago}
               onChange={e => setChequeoForm(f => ({ ...f, metodoPago: e.target.value as MetodoPago | '' }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="">Sin especificar</option>
               <option value="efectivo">Efectivo</option>
@@ -712,7 +712,7 @@ export default function AgendaDia() {
               value={chequeoForm.motivo}
               onChange={e => setChequeoForm(f => ({ ...f, motivo: e.target.value }))}
               placeholder="Ej: El cliente consideró muy costosa la reparación..."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
 
@@ -852,7 +852,7 @@ function KpiCard({ label, value, icon, color }: {
         <div className={`p-2 rounded-lg ${color}`}>{icon}</div>
         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide truncate">{label}</span>
       </div>
-      <p className="text-xl font-bold text-[#0f3460] truncate">{value}</p>
+      <p className="text-xl font-bold text-primary truncate">{value}</p>
     </div>
   );
 }
@@ -976,7 +976,7 @@ function TecnicoColumn({
             >
               <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-mono text-[11px] font-bold text-[#0f3460]">{o.numero || '#--'}</span>
+                  <span className="font-mono text-[11px] font-bold text-primary">{o.numero || '#--'}</span>
                   {o.enStandby && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-[10px] font-medium">
                       ⏸ Stand-by

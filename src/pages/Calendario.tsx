@@ -212,10 +212,10 @@ export default function Calendario() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-[#0f3460]">Calendario Técnico</h1>
+        <h1 className="text-2xl font-bold text-primary">Calendario Técnico</h1>
         <div className="flex items-center gap-3 flex-wrap">
           <select value={filtroTecnico} onChange={e => setFiltroTecnico(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
             <option value="">Todos los técnicos</option>
             {tecnicos.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
           </select>
@@ -234,7 +234,7 @@ export default function Calendario() {
             {(['mes', 'semana', 'dia'] as Vista[]).map(v => (
               <button key={v} onClick={() => setVista(v)}
                 className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors capitalize ${
-                  vista === v ? 'bg-white shadow text-[#0f3460]' : 'text-gray-500 hover:text-gray-700'
+                  vista === v ? 'bg-white shadow text-primary' : 'text-gray-500 hover:text-gray-700'
                 }`}>
                 {v === 'dia' ? 'Día' : v === 'mes' ? 'Mes' : 'Semana'}
               </button>
@@ -280,7 +280,7 @@ export default function Calendario() {
                     }`}
                   >
                     <span className={`text-xs font-medium inline-flex items-center justify-center w-6 h-6 rounded-full ${
-                      isToday ? 'bg-[#0f3460] text-white' : isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
+                      isToday ? 'bg-primary text-white' : isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
                     }`}>
                       {format(d, 'd')}
                     </span>
@@ -319,7 +319,7 @@ export default function Calendario() {
               const isToday = isSameDay(d, new Date());
               return (
                 <div key={i} className="min-h-[300px]">
-                  <div className={`text-center py-3 border-b border-gray-100 ${isToday ? 'bg-[#0f3460] text-white' : 'bg-gray-50'}`}>
+                  <div className={`text-center py-3 border-b border-gray-100 ${isToday ? 'bg-primary text-white' : 'bg-gray-50'}`}>
                     <div className="text-xs font-medium capitalize">{format(d, 'EEE', { locale: es })}</div>
                     <div className="text-lg font-bold">{format(d, 'd')}</div>
                   </div>
@@ -368,7 +368,7 @@ export default function Calendario() {
                     style={{ borderColor: colorDeEvento(e) }}
                   >
                     <div className="text-center min-w-[50px]">
-                      <div className="text-lg font-bold text-[#0f3460]">{e.hora || '—'}</div>
+                      <div className="text-lg font-bold text-primary">{e.hora || '—'}</div>
                     </div>
                     <div className="h-10 w-1 rounded-full" style={{ backgroundColor: colorDeEvento(e) }} />
                     <div className="flex-1">

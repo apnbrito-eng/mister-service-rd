@@ -129,21 +129,21 @@ export default function EquiposTaller() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Equipos en Taller</h1>
+          <h1 className="text-2xl font-bold text-primary">Equipos en Taller</h1>
           <p className="text-gray-500 text-sm">{enTaller} en taller</p>
         </div>
         <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+          className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
           <Plus size={18} /> Recibir Equipo
         </button>
       </div>
 
       <div className="flex gap-2 flex-wrap">
         <button onClick={() => setFiltroEstado('')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${!filtroEstado ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Todos</button>
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${!filtroEstado ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Todos</button>
         {(Object.keys(ESTADO_LABELS) as EstadoEquipo[]).map(e => (
           <button key={e} onClick={() => setFiltroEstado(e)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroEstado === e ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{ESTADO_LABELS[e]}</button>
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroEstado === e ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{ESTADO_LABELS[e]}</button>
         ))}
       </div>
 
@@ -226,20 +226,20 @@ export default function EquiposTaller() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Cliente *</label>
               <input type="text" value={form.clienteNombre} onChange={e => setForm(f => ({ ...f, clienteNombre: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono cliente</label>
               <input type="tel" value={form.clienteTelefono} onChange={e => setForm(f => ({ ...f, clienteTelefono: e.target.value }))}
                 placeholder="8095551234"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tipo equipo *</label>
               <select value={form.equipoTipo} onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                 <option value="">Seleccionar...</option>
                 {tiposEquipo.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -247,41 +247,41 @@ export default function EquiposTaller() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
               <input type="text" value={form.equipoMarca} onChange={e => setForm(f => ({ ...f, equipoMarca: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Número de serie *</label>
             <input type="text" value={form.numeroSerie} onChange={e => setForm(f => ({ ...f, numeroSerie: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Falla reportada</label>
             <textarea value={form.fallaReportada} onChange={e => setForm(f => ({ ...f, fallaReportada: e.target.value }))} rows={2}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Técnico</label>
               <input type="text" value={form.tecnicoNombre} onChange={e => setForm(f => ({ ...f, tecnicoNombre: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Fecha prometida</label>
               <input type="date" value={form.fechaPrometida} onChange={e => setForm(f => ({ ...f, fechaPrometida: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Costo est. (RD$)</label>
               <input type="number" value={form.costoReparacion} onChange={e => setForm(f => ({ ...f, costoReparacion: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowModal(false)}
               className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
             <button type="submit" disabled={saving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
               {saving ? 'Guardando...' : 'Registrar Equipo'}
             </button>
           </div>

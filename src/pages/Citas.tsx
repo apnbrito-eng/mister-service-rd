@@ -587,12 +587,12 @@ export default function Citas() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Citas por Confirmar</h1>
+          <h1 className="text-2xl font-bold text-primary">Citas por Confirmar</h1>
           <p className="text-gray-500 text-sm">{citas.length} citas pendientes</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+          className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
         >
           <Plus size={18} />
           Registrar Cita
@@ -703,7 +703,7 @@ export default function Citas() {
                         setSelectedCita(cita);
                         setShowAgendarModal(true);
                       }}
-                      className="flex items-center gap-1 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"
+                      className="flex items-center gap-1 bg-primary hover:bg-primary-medium text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"
                     >
                       <Check size={14} /> Confirmar
                     </button>
@@ -731,21 +731,21 @@ export default function Citas() {
         <form onSubmit={handleRegistrar} className="space-y-6">
           {/* Sección A — Cliente */}
           <div>
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3">Cliente</h3>
+            <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">Cliente</h3>
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>
                   <input type="text" value={form.clienteNombre}
                     onChange={e => setForm(f => ({ ...f, clienteNombre: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Teléfono *</label>
                   <input type="tel" value={form.telefono}
                     onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))}
                     placeholder="8091234567"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -753,13 +753,13 @@ export default function Citas() {
                   <label className="block text-xs font-medium text-gray-600 mb-1">Email (opcional)</label>
                   <input type="email" value={form.clienteEmail}
                     onChange={e => setForm(f => ({ ...f, clienteEmail: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Origen</label>
                   <select value={form.origen}
                     onChange={e => setForm(f => ({ ...f, origen: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                     <option value="WhatsApp">WhatsApp</option>
                     <option value="Llamada">Llamada</option>
                     <option value="Instagram">Instagram</option>
@@ -783,7 +783,7 @@ export default function Citas() {
                     onChange={e => setForm(f => ({ ...f, clienteDireccion: e.target.value }))}
                     placeholder="Escribe un lugar, dirección o usa GPS"
                     autoComplete="off"
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                   />
                   <button type="button" onClick={handleMiUbicacion} disabled={geoLoading}
                     className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 shrink-0 disabled:opacity-50">
@@ -804,14 +804,14 @@ export default function Citas() {
                 <input type="text" value={form.clienteReferencia}
                   onChange={e => setForm(f => ({ ...f, clienteReferencia: e.target.value }))}
                   placeholder="Al lado del colmado, frente al parque..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
               </div>
             </div>
           </div>
 
           {/* Sección B — Equipo */}
           <div>
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3">Equipo</h3>
+            <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">Equipo</h3>
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
@@ -819,7 +819,7 @@ export default function Citas() {
                   <input type="text" list="cita-tipos-equipo" value={form.equipoTipo}
                     onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
                     placeholder="Lavadora, Nevera..."
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                   <datalist id="cita-tipos-equipo">
                     {tiposEquipo.map(t => <option key={t} value={t} />)}
                   </datalist>
@@ -829,7 +829,7 @@ export default function Citas() {
                   <input type="text" list="cita-marcas" value={form.equipoMarca}
                     onChange={e => setForm(f => ({ ...f, equipoMarca: e.target.value }))}
                     placeholder="LG, Samsung, Mabe..."
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                   <datalist id="cita-marcas">
                     {MARCAS_SUGERIDAS.map(m => <option key={m} value={m} />)}
                   </datalist>
@@ -839,7 +839,7 @@ export default function Citas() {
                   <input type="text" value={form.equipoModelo}
                     onChange={e => setForm(f => ({ ...f, equipoModelo: e.target.value }))}
                     placeholder="Modelo"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                 </div>
               </div>
               <div>
@@ -847,7 +847,7 @@ export default function Citas() {
                 <textarea rows={3} value={form.falla}
                   onChange={e => setForm(f => ({ ...f, falla: e.target.value }))}
                   placeholder="Ej: La lavadora no centrifuga al finalizar el ciclo..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Foto del equipo (opcional)</label>
@@ -874,7 +874,7 @@ export default function Citas() {
 
           {/* Sección C — Fecha y hora solicitada */}
           <div>
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3">Fecha y hora solicitada</h3>
+            <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">Fecha y hora solicitada</h3>
             <div className="space-y-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Fecha solicitada</label>
@@ -891,7 +891,7 @@ export default function Citas() {
                     }
                     setForm(f => ({ ...f, fechaSolicitada: valor }));
                   }}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                 <p className="text-[10px] text-gray-400 mt-1">Lunes a sábado (los domingos no atendemos).</p>
               </div>
               <div>
@@ -904,8 +904,8 @@ export default function Citas() {
                       onClick={() => setForm(f => ({ ...f, horaSolicitada: h }))}
                       className={`px-2 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                         form.horaSolicitada === h
-                          ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                          : 'bg-white text-gray-600 border-gray-200 hover:border-[#1a5fa8]'
+                          ? 'bg-primary-medium text-white border-primary-medium'
+                          : 'bg-white text-gray-600 border-gray-200 hover:border-primary-medium'
                       }`}
                     >
                       {HORARIOS_LABEL[h]}
@@ -921,13 +921,13 @@ export default function Citas() {
               Antes la secretaria tenía que abrir la orden después y agregar
               las notas. Persiste a `citas_por_confirmar.observaciones`. */}
           <div>
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3">Observaciones (opcional)</h3>
+            <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3">Observaciones (opcional)</h3>
             <textarea
               rows={2}
               value={form.observaciones}
               onChange={e => setForm(f => ({ ...f, observaciones: e.target.value.slice(0, 500) }))}
               placeholder="Notas internas: contexto del cliente, urgencia, preferencias, etc."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] resize-none"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium resize-none"
             />
             <p className="text-[10px] text-gray-400 mt-1 text-right">{form.observaciones.length}/500</p>
           </div>
@@ -938,7 +938,7 @@ export default function Citas() {
               Cancelar
             </button>
             <button type="submit" disabled={saving}
-              className="px-6 py-2.5 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              className="px-6 py-2.5 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
               {saving ? 'Guardando...' : 'Registrar cita'}
             </button>
           </div>
