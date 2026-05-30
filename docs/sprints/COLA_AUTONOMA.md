@@ -7889,7 +7889,7 @@ Entregar 2 scripts ejecutables que (a) re-migren 44 notificaciones Caso A apunta
 
 ## SPRINT-DISENO-A.2-EMOJIS — Quitar emojis decorativos del JSX
 
-**Prioridad:** 🟡 MEDIA. **Estado:** PENDIENTE (encolado pasada 54 tras cerrar A.1). **Autónomo (no toca rules/pagos/endpoints).**
+**Prioridad:** 🟡 MEDIA. **Estado:** ⏸ código en producción pasada 55 (2026-05-31) hash `c52f273`, **awaiting QA Jorge**. 12 archivos tocados (TecnicoVista, OrdenDetalle, TrackingCliente, Calendarios, MapaRutas, AgendaDia, ModalEditarOrdenAdmin, OrdenesTablero, OrdenDetailModal, OrdenCard, PiezaFormModal, CierreServicioWizard). 70 insertions / 67 deletions. **QA Jorge:** hard-refresh las pantallas tocadas — los emojis decorativos del admin desaparecen, reemplazados por iconos lucide. Preservados: toasts (línea TecnicoVista:145 + 2 en AgregarDireccionModal + 2 en EditarClienteModal), plantillas WhatsApp, mensaje WhatsApp al cliente con texto, toggles `✨ Nueva / ♻️ Usada` y origen piezas tagged @safe-emoji. Si OK → `QA: jorge YYYY-MM-DD HH:MM DISENO-A.2 PASS`.
 
 **Objetivo:** reemplazar emojis decorativos del JSX por íconos lucide-react (o eliminar si la línea queda mejor sin nada).
 
@@ -7912,7 +7912,7 @@ Grep en `src/**/*.tsx` por `💰|👋|📅|⏸|🗺️|🔧|📍|🚨|⚡|✨|�
 
 ## SPRINT-DISENO-A.3-ESCALA-TIPOGRAFICA — Definir clases globales tipográficas en index.css
 
-**Prioridad:** 🟡 MEDIA. **Estado:** PENDIENTE (encolado pasada 54). **Autónomo.**
+**Prioridad:** 🟡 MEDIA. **Estado:** ⏸ código en producción pasada 55 (2026-05-31) hash `cbd6910`, **awaiting QA Jorge**. 5 clases globales agregadas en `src/index.css` con `@apply`: `.text-h1/h2/body/caption/micro`. NO migra componentes. **QA Jorge:** verificar que build sigue OK y el sitio se ve exactamente igual (las clases existen pero ningún componente las usa). Si OK → `QA: jorge YYYY-MM-DD HH:MM DISENO-A.3 PASS`.
 
 **Objetivo:** crear escala tipográfica reutilizable en `src/index.css` con `@apply`. NO migrar el resto del código a estas clases (eso es trabajo de FASE B/C/D); solo establecer la escala disponible.
 
@@ -7933,7 +7933,7 @@ Grep en `src/**/*.tsx` por `💰|👋|📅|⏸|🗺️|🔧|📍|🚨|⚡|✨|�
 
 ## SPRINT-DISENO-A.4-GRADIENTES-SATURADOS — Bajar saturación de gradientes decorativos
 
-**Prioridad:** 🟡 MEDIA. **Estado:** PENDIENTE (encolado pasada 54). **Autónomo.**
+**Prioridad:** 🟡 MEDIA. **Estado:** ⏸ código en producción pasada 55 (2026-05-31) hash `7256ee2`, **awaiting QA Jorge**. 16 archivos tocados. Convertidos a sólido: Dashboard 3 barras progreso (Ingresos/Gastos/Pipeline), TecnicoVista card ganancias, Rendimiento barra confirmación, GarantiaCliente 3 pantallas, ServicioDetalle card garantía. Preservados con @safe-gradient: 16 gradientes (heros marketing públicos, splash full-screen, pantallas full-screen cliente final, AsistenteIA flotante). **QA Jorge:** verificar que el admin se siente menos "Bootstrap 2018" y los heros públicos siguen iguales. Si OK → `QA: jorge YYYY-MM-DD HH:MM DISENO-A.4 PASS`.
 
 **Objetivo:** reemplazar gradientes decorativos saturados por colores sólidos equivalentes. Mantener gradientes solo en heros justificados.
 
@@ -7951,9 +7951,15 @@ Candidatos típicos a tocar: `from-emerald-500 to-emerald-600`, `from-green-400 
 
 ---
 
+## SPRINT-DISENO-A.5-COLORES-ICONOS — Sin colores random de íconos en HomePage + Dashboard
+
+**Prioridad:** 🟡 MEDIA. **Estado:** ⏸ código en producción pasada 55 (2026-05-31) hash `099a2de`, **awaiting QA Jorge**. HomePage: 7 colores random de tipos de equipo (azul/cyan/indigo/naranja/púrpura/amarillo) → todos `bg-brand-50 text-primary` unificado. Dashboard: 4 KPIs neutros (Cotizaciones/Órdenes/Conduces/Ingresos) → 3 unificados a `bg-brand-500`; "Ingresos del Mes" preserva `bg-green-500` por semántica positiva intencional. **QA Jorge:** verificar que HomePage muestra iconos azul brand uniformes y Dashboard 3 KPIs azul + 1 verde. Si OK → `QA: jorge YYYY-MM-DD HH:MM DISENO-A.5 PASS`.
+
+---
+
 ## SPRINT-DISENO-A.5-LINT-LIMPIEZA — Cerrar deuda lateral A.1 + warnings preexistentes
 
-**Prioridad:** 🟢 BAJA. **Estado:** PENDIENTE (encolado pasada 54). **Autónomo.**
+**Prioridad:** 🟢 BAJA. **Estado:** PENDIENTE (encolado pasada 54). **Autónomo.** **Nota pasada 55:** ya cerrados warnings en Calendarios.tsx (X unused), TrackingCliente.tsx (clienteId unused), Login.tsx (catch any), ServiciosPage.tsx (Phone unused) durante A.2/A.4. Quedan: ModalEditarPiezasOrden, Gastos, ConfiguracionWeb, Solicitudes.
 
 **Objetivo:** cerrar la deuda lateral capturada en A.1 (7 archivos no tocados por warnings preexistentes ESLint) y completar el find&replace de tokens para esos archivos.
 
@@ -7982,7 +7988,7 @@ Candidatos típicos a tocar: `from-emerald-500 to-emerald-600`, `from-green-400 
 
 ## SPRINT-DISENO-B-TECNICO-ACCESIBILIDAD — Vista del técnico fase 2 (botones 48px + WCAG)
 
-**Prioridad:** 🟠 ALTA (afecta vida diaria de técnicos). **Estado:** PENDIENTE (encolado pasada 54). **Autónomo. [NO CERRAR sin QA Jorge en celular real].**
+**Prioridad:** 🟠 ALTA (afecta vida diaria de técnicos). **Estado:** ⏸ código en producción pasada 55 (2026-05-31) hash `debaff6`, **awaiting QA Jorge en celular real**. 1 archivo (TecnicoVista.tsx), 32 insertions / 32 deletions. Eliminados todos los `text-[10px]` (17) y `text-[11px]` (4) → `text-xs`. Botones de acción `px-3 py-2 text-xs` → `px-4 py-3 text-sm` (~48px alto). `opacity-75/80/90` → `text-white/75/80/90` explícito (mejor screen readers). 11 handlers críticos intactos verificados por grep. **QA Jorge:** abrir `/tecnico` desde celular real (no PC), verificar que los botones son fáciles de tocar con prisa + el texto se lee bien al sol. Si OK → `QA: jorge YYYY-MM-DD HH:MM DISENO-B PASS`.
 
 **Objetivo:** que `/tecnico` cumpla WCAG AA mínimo (tap targets 48px, sin `text-[10px]`/`text-[11px]`). Fase 1 (reordenó JSX) ya cerrada en hash `4c21dc9`.
 
@@ -8004,69 +8010,7 @@ Candidatos típicos a tocar: `from-emerald-500 to-emerald-600`, `from-green-400 
 
 ---
 
-## SPRINT-DISENO-C-DASHBOARD-REDUCIDO — Dashboard 3 secciones + skeletons + microcopy dominicano
+<!-- SPRINT-DISENO-C-DASHBOARD-REDUCIDO ESCALADO a BLOQUEOS pasada 55 (2026-05-31) por decisión de KPI hero. Ver BLOQUEOS.md -->
 
-**Prioridad:** 🟠 ALTA. **Estado:** PENDIENTE (encolado pasada 54). **Autónomo. [NO CERRAR sin QA Jorge].**
-
-**Objetivo:** Dashboard pasa de "11 secciones apiladas" a "3 secciones con jerarquía clara".
-
-**Touch-list:**
-
-1. **`src/pages/Dashboard.tsx`:** Reagrupar las secciones existentes en 3 bloques visuales con headers claros:
-   - **Bloque 1 — "Lo de hoy"** (arriba, dominante): 1 KPI hero gigante (ingresos del día O citas pendientes — el coordinator elige el que más impacto tenga visualmente) + botón "Ver atrasadas" si hay órdenes atrasadas.
-   - **Bloque 2 — "Pipeline"** (izquierda): embudo de fases + atrasadas + alertas (lo que ya hay, agrupado).
-   - **Bloque 3 — "Plata"** (derecha): ingresos vs gastos + balance pendiente + nómina (lo que ya hay, agrupado).
-   - NO eliminar secciones, solo reagrupar visualmente. Si alguna no encaja, dejarla en "Otros" colapsable.
-
-2. **Reemplazar `<LoadingSpinner />` por skeletons** en `Dashboard.tsx`, `Ordenes.tsx`, `Inbox.tsx`. Crear `src/components/ui/Skeleton.tsx` (rectángulos grises con `animate-pulse`) si no existe.
-
-3. **Microcopy dominicano en `Dashboard.tsx`:**
-   - "SLA >24h" → "Atrasadas más de 1 día".
-   - "Esperando aprobación del precio por operaciones" → "La oficina está revisando el precio".
-   - "Enviado a facturación" → "Mandado a facturar".
-
-4. **Sacar colores random de KpiCard del Dashboard** (4 KPIs arriba con purple/green/amber/blue): todos íconos `text-primary`. Solo cambia color si el KPI representa estado (rojo=atrasadas, verde=al día).
-
-**Restricciones duras:**
-- NO eliminar funcionalidad — solo reagrupar.
-- Sin cambios a queries Firestore (Dashboard ya tiene 6 listeners — no agregar más).
-
-**Criterio de éxito:**
-- Dashboard tiene 3 bloques visuales claros con headers.
-- Hay al menos 1 KPI hero arriba que destaca.
-- "SLA" no aparece en ningún texto visible.
-- Los spinners principales son skeletons.
-
----
-
-## SPRINT-DISENO-D-PUBLICAS-DOMINICANO — HomePage + AgendarPage + Empty states
-
-**Prioridad:** 🟡 MEDIA (cara del negocio para el cliente). **Estado:** PENDIENTE (encolado pasada 54). **Autónomo. [NO CERRAR sin QA Jorge].**
-
-**Objetivo:** HomePage pasa de 7/10 a 8.5/10. Más dominicano, menos plantilla AI.
-
-**Touch-list:**
-
-1. **`src/pages/public/HomePage.tsx`:**
-   - Las 4 cards "Stats" (16 años · 5,000+ servicios · 98% satisfacción · 24h respuesta) → reducir a 2 cards reales + 1 sección "Lo que dicen nuestros clientes" con 3 testimonios placeholder (`// TODO: Jorge cargar testimonios reales con foto del cliente`).
-   - CTA final → "¿Algo dejó de funcionar? Mandanos foto por WhatsApp y te decimos cuánto cuesta arreglarlo."
-   - `font-extrabold` → `font-bold` en los 3 hits.
-   - Quitar `hover:-translate-y-1` de las cards de servicios (efecto Bootstrap 2018).
-
-2. **Empty states con ilustración + acción.** En `src/components/EmptyState.tsx` (crear si no existe): 3 mensajes contextuales en lugar de "Sin datos":
-   - Sin citas hoy → "Sin citas hoy — aprovechá para llamar a clientes que dejaste en seguimiento."
-   - Sin órdenes en una fase → "Nada en esta fase — buena señal o nada en marcha."
-   - Sin facturas pendientes → "Todo cobrado — ¡bien!"
-
-3. **`src/pages/public/AgendarPage.tsx`:** dar más respiro vertical entre hero y formulario (`pt-12` → `pt-20`). Sin cambios funcionales.
-
-**Restricciones duras:**
-- NO romper el flujo de agendar cita pública.
-- NO eliminar stats reales si Jorge las tiene confirmadas — solo si son inventadas. Si dudás, dejar stats Y agregar testimonios.
-- Sin cambios a `FormularioPublico.tsx`.
-
-**Criterio de éxito:**
-- HomePage tiene sección de testimonios estructurada (aunque Jorge llene contenido después).
-- CTA final más dominicano.
-- AgendarPage respira más.
+<!-- SPRINT-DISENO-D-PUBLICAS-DOMINICANO ESCALADO a BLOQUEOS pasada 55 (2026-05-31) por decisión de CTA + contenido testimonios. Ver BLOQUEOS.md -->
 

@@ -10,6 +10,46 @@
 
 ---
 
+## SPRINT-DISENO-C-DASHBOARD-REDUCIDO — ⊘ ESCALADO 2026-05-31 pasada 55 (decisión KPI hero)
+
+**Origen:** `trabaja noche larga` pasada 55 (2026-05-31). El sprint estaba PENDIENTE en cola; el coordinator detectó que el touch-list expandido requiere **decisión de Jorge sobre cuál KPI va como hero** — afecta apariencia visible y semántica del primer impacto del Dashboard, decisión de producto. Resto del sprint (skeletons + microcopy + colores random) es procesable autónomo y puede dividirse en sub-sprints.
+
+**Plan Fase C (encolado tras OK):**
+
+1. **KPI HERO arriba** (gigante, dominante) → opción que Jorge elija:
+   - **Opción A — "Ingresos del día"** (más relevante para María/Jorge financiero, ROI inmediato del día).
+   - **Opción B — "Citas pendientes"** (más relevante para coordinadora operativa, qué tengo que hacer hoy).
+   - **Opción C — "Órdenes atrasadas"** (más relevante para gestión proactiva, dónde está el incendio).
+2. Reagrupar las 11 secciones del Dashboard en 3 bloques claros (Hoy / Pipeline / Plata) con headers visuales.
+3. Reemplazar `<LoadingSpinner />` por skeletons en Dashboard, Ordenes, Inbox.
+4. Microcopy dominicano: "SLA >24h" → "Atrasadas más de 1 día"; "Esperando aprobación del precio por operaciones" → "La oficina está revisando el precio"; "Enviado a facturación" → "Mandado a facturar".
+
+**Para desbloquear:** agregá `OK: jorge YYYY-MM-DD HH:MM opcion=A|B|C` al final de esta entrada.
+
+---
+
+## SPRINT-DISENO-D-PUBLICAS-DOMINICANO — ⊘ ESCALADO 2026-05-31 pasada 55 (decisión CTA + contenido testimonios)
+
+**Origen:** `trabaja noche larga` pasada 55 (2026-05-31). El sprint estaba PENDIENTE en cola; el coordinator detectó que requiere **contenido humano de Jorge**:
+
+1. **Testimonios placeholder** — el coordinator puede dejar la estructura HTML lista con 3 placeholder slots `[NOMBRE CLIENTE]`, `[BARRIO]`, `[ELECTRODOMÉSTICO]`, pero el contenido real (nombre + barrio + electrodoméstico + foto opcional) tiene que cargarlo Jorge. NO inventar testimonios — sub-regla CLAUDE.md "no inventar contenido de cliente".
+2. **CTA final** — 3 opciones para que Jorge elija:
+   - **Opción A — "Repara tu electrodoméstico, no lo cambies"** (sustentable, eco-conciencia).
+   - **Opción B — "Servicio técnico que llega antes que el peajero"** (rápido + dominicano, juega con cultura local).
+   - **Opción C — "Tu lavadora vuelve a casa el mismo día"** (mismo día = confianza, claridad de expectativa).
+   - **Opción D — Jorge sugiere otro CTA** (escribirlo directo en el OK).
+
+**Resto del sprint (autónomo tras OK):**
+- HomePage.tsx: reducir 4 stats inventadas a 2 stats reales + sección "Lo que dicen nuestros clientes" con 3 placeholders.
+- Empty states con `<EmptyState>` (crear si no existe): 3 mensajes contextuales en Inbox/Citas/FacturacionPendiente.
+- AgendarPage.tsx: respiro vertical (`pt-12` → `pt-20`).
+- `font-extrabold` → `font-bold` (3 hits).
+- Quitar `hover:-translate-y-1` de cards de servicios.
+
+**Para desbloquear:** agregá `OK: jorge YYYY-MM-DD HH:MM cta=A|B|C|"texto custom"` al final.
+
+---
+
 ## SPRINT-DISENO-CIERRE-COMPLETO — ⊘ ESCALADO 2026-05-30 pasada 53 (decisión de paleta)
 
 **Origen:** `trabaja` pasada 53 (2026-05-30). El sprint estaba al TOPE de la cola como PENDIENTE pero la auditoría touch-list expandido (sub-regla CLAUDE.md) detectó que la **premisa técnica de la FASE A es incorrecta** y el sprint cambiaría visualmente toda la marca sin que Jorge lo haya autorizado.
