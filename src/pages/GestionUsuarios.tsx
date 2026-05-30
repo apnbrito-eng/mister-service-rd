@@ -561,7 +561,7 @@ export default function GestionUsuarios() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Gestión de Accesos</h1>
+          <h1 className="text-2xl font-bold text-primary">Gestión de Accesos</h1>
           <p className="text-gray-500 text-sm">Contraseñas, activación y permisos granulares</p>
         </div>
       </div>
@@ -593,11 +593,11 @@ export default function GestionUsuarios() {
             <tbody className="divide-y divide-gray-100">
               {agruparPorRol(usuarios).map(grupo => (
                 <Fragment key={grupo.rol}>
-                  <tr className="bg-[#0f3460]/5 border-t border-b border-[#0f3460]/10">
+                  <tr className="bg-primary/5 border-t border-b border-primary/10">
                     <td colSpan={6} className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{grupo.icono}</span>
-                        <h3 className="text-sm font-semibold text-[#0f3460]">
+                        <h3 className="text-sm font-semibold text-primary">
                           {grupo.label}
                         </h3>
                         <span className="ml-auto text-xs text-gray-600 bg-white border border-gray-200 px-2 py-0.5 rounded-full">
@@ -678,14 +678,14 @@ export default function GestionUsuarios() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* SECCIÓN 1: Datos Básicos */}
           <div>
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-3 pb-2 border-b border-gray-100 flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-3 pb-2 border-b border-gray-100 flex items-center gap-2">
               <User size={16} /> 1. Datos Básicos
             </h3>
             <div className="space-y-3">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nombre completo *</label>
                 <input type="text" value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -731,7 +731,7 @@ export default function GestionUsuarios() {
                           onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
                           disabled={!emailEditable}
                           title={tooltipExisting}
-                          className={`w-full px-3 py-2 border ${borderClass} rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50`}
+                          className={`w-full px-3 py-2 border ${borderClass} rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50`}
                         />
                         {emailModificado && (
                           <p className="text-[11px] text-amber-700 mt-1">
@@ -746,7 +746,7 @@ export default function GestionUsuarios() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
                   <input type="tel" value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))}
                     placeholder="8091234567"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                 </div>
               </div>
 
@@ -756,7 +756,7 @@ export default function GestionUsuarios() {
                   <div className="relative">
                     <input type={showPassword ? 'text' : 'password'} value={form.password}
                       onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                      className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                      className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600">
                       {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -781,7 +781,7 @@ export default function GestionUsuarios() {
                         <select
                           value={form.rol}
                           onChange={e => handleRolChange(e.target.value as Rol)}
-                          className={`w-full px-3 py-2 border ${rolBorderClass} rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]`}
+                          className={`w-full px-3 py-2 border ${rolBorderClass} rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium`}
                         >
                           {ROL_OPCIONES_SISTEMA.map((r) => (
                             <option key={r} value={r}>
@@ -804,7 +804,7 @@ export default function GestionUsuarios() {
                     <div className="flex gap-1.5 pt-1">
                       {COLORES_TECNICO.map(c => (
                         <button key={c} type="button" onClick={() => setForm(f => ({ ...f, color: c }))}
-                          className={`w-7 h-7 rounded-full transition-transform ${form.color === c ? 'ring-2 ring-offset-1 ring-[#0f3460] scale-110' : 'hover:scale-105'}`}
+                          className={`w-7 h-7 rounded-full transition-transform ${form.color === c ? 'ring-2 ring-offset-1 ring-primary scale-110' : 'hover:scale-105'}`}
                           style={{ backgroundColor: c }}>
                           {form.color === c && <Check size={12} className="text-white mx-auto" />}
                         </button>
@@ -819,7 +819,7 @@ export default function GestionUsuarios() {
           {/* SECCIÓN 2: Permisos (solo si rol = técnico) */}
           {form.rol === 'tecnico' && (
             <div>
-              <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-1 pb-2 border-b border-gray-100 flex items-center gap-2">
+              <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-1 pb-2 border-b border-gray-100 flex items-center gap-2">
                 <Shield size={16} /> 2. Permisos del Técnico
               </h3>
               <p className="text-sm text-gray-600 mb-4">Configurar qué puede ver y hacer este técnico</p>
@@ -837,7 +837,7 @@ export default function GestionUsuarios() {
                     <label key={op.v} className="flex items-center gap-2 text-sm cursor-pointer">
                       <input type="radio" checked={form.permisos.vistaAgenda === op.v}
                         onChange={() => setVistaAgenda(op.v)}
-                        className="text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                        className="text-primary-medium focus:ring-primary-medium" />
                       <span>{op.l}</span>
                     </label>
                   ))}
@@ -852,13 +852,13 @@ export default function GestionUsuarios() {
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="radio" checked={form.permisos.soloPropiasCitas}
                       onChange={() => setSoloPropiasCitas(true)}
-                      className="text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                      className="text-primary-medium focus:ring-primary-medium" />
                     <span>Solo las citas asignadas a él</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="radio" checked={!form.permisos.soloPropiasCitas}
                       onChange={() => setSoloPropiasCitas(false)}
-                      className="text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                      className="text-primary-medium focus:ring-primary-medium" />
                     <span>Todas las citas del sistema</span>
                   </label>
                 </div>
@@ -871,25 +871,25 @@ export default function GestionUsuarios() {
                 <div className="space-y-2">
                   <label className="flex items-center gap-2 text-sm cursor-not-allowed opacity-75">
                     <input type="checkbox" checked disabled
-                      className="rounded border-gray-300 text-[#1a5fa8]" />
+                      className="rounded border-gray-300 text-primary-medium" />
                     <span>Dirección y ubicación GPS <span className="text-xs text-gray-400">(siempre activo)</span></span>
                   </label>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={form.permisos.verTelefonoCliente}
                       onChange={() => togglePermiso('verTelefonoCliente')}
-                      className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                      className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium" />
                     <span>Número de teléfono del cliente</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={form.permisos.verEmailCliente}
                       onChange={() => togglePermiso('verEmailCliente')}
-                      className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                      className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium" />
                     <span>Email del cliente</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={form.permisos.puedeContactarCliente}
                       onChange={() => togglePermiso('puedeContactarCliente')}
-                      className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                      className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium" />
                     <span>Botón de WhatsApp directo al cliente</span>
                   </label>
                 </div>
@@ -903,25 +903,25 @@ export default function GestionUsuarios() {
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={form.permisos.puedeMarcarCompletado}
                       onChange={() => togglePermiso('puedeMarcarCompletado')}
-                      className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                      className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium" />
                     <span>Marcar trabajo como realizado</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={form.permisos.puedeAgregarNotas}
                       onChange={() => togglePermiso('puedeAgregarNotas')}
-                      className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                      className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium" />
                     <span>Agregar notas técnicas</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={form.permisos.puedeVerHistorial}
                       onChange={() => togglePermiso('puedeVerHistorial')}
-                      className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                      className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium" />
                     <span>Ver historial completo de la orden</span>
                   </label>
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={form.permisos.puedeVerCotizaciones}
                       onChange={() => togglePermiso('puedeVerCotizaciones')}
-                      className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                      className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium" />
                     <span>Ver cotizaciones asociadas</span>
                   </label>
                 </div>
@@ -933,7 +933,7 @@ export default function GestionUsuarios() {
                 <label className="flex items-center gap-2 text-sm cursor-pointer">
                   <input type="checkbox" checked={form.permisos.recibeNotificacionNuevaCita}
                     onChange={() => togglePermiso('recibeNotificacionNuevaCita')}
-                    className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+                    className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium" />
                   <span>Recibir notificación cuando se le asigna una cita nueva</span>
                 </label>
               </div>
@@ -954,7 +954,7 @@ export default function GestionUsuarios() {
                       permisosPersonalizados: !f.permisosPersonalizados,
                       permisosSistema: !f.permisosPersonalizados ? f.permisosSistema : permisosDefaultDeRol(f.rol),
                     }))}
-                    className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+                    className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium"
                   />
                   Personalizar (sobrescribir defaults del rol)
                 </label>
@@ -1001,7 +1001,7 @@ export default function GestionUsuarios() {
                             type="checkbox"
                             checked={!!form.permisosSistema[k as keyof PermisosSistema]}
                             onChange={() => togglePermisoSistema(k as keyof PermisosSistema)}
-                            className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+                            className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium"
                           />
                           <span className="text-gray-700">{k}</span>
                         </label>
@@ -1018,7 +1018,7 @@ export default function GestionUsuarios() {
             const iaBloqueada = form.rol === 'tecnico' || form.rol === 'ayudante';
             return (
               <div>
-                <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-2 pb-2 border-b border-gray-100">
+                <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-2 pb-2 border-b border-gray-100">
                   Acceso al Asistente IA
                 </h3>
                 <label
@@ -1030,7 +1030,7 @@ export default function GestionUsuarios() {
                     checked={form.iaHabilitada === true}
                     disabled={iaBloqueada}
                     onChange={e => setForm(f => ({ ...f, iaHabilitada: e.target.checked }))}
-                    className="mt-1 rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+                    className="mt-1 rounded border-gray-300 text-primary-medium focus:ring-primary-medium"
                   />
                   <span className="text-sm text-gray-800">Habilitar acceso al Asistente IA</span>
                 </label>
@@ -1046,7 +1046,7 @@ export default function GestionUsuarios() {
             <button type="button" onClick={() => { setShowModal(false); resetForm(); }}
               className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
             <button type="submit" disabled={saving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
               {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear Usuario'}
             </button>
           </div>
@@ -1100,7 +1100,7 @@ export default function GestionUsuarios() {
                 value={motivoEmail}
                 onChange={e => setMotivoEmail(e.target.value)}
                 rows={3}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 placeholder="Ej: el usuario cambió de correo corporativo."
               />
               {motivoEmail.length > 0 && motivoEmail.trim().length < 5 && (
@@ -1126,7 +1126,7 @@ export default function GestionUsuarios() {
                 type="button"
                 onClick={confirmarCambioEmail}
                 disabled={cambiandoEmail || motivoEmail.trim().length < 5}
-                className="flex items-center gap-1 px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                className="flex items-center gap-1 px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
               >
                 {cambiandoEmail ? 'Cambiando...' : 'Sí, cambiar email'}
               </button>
@@ -1179,7 +1179,7 @@ export default function GestionUsuarios() {
                     onClick={() => setAccessMode('directa')}
                     className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
                       accessMode === 'directa'
-                        ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                        ? 'bg-primary text-white border-primary'
                         : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                     }`}
                   >
@@ -1190,7 +1190,7 @@ export default function GestionUsuarios() {
                     onClick={() => setAccessMode('email')}
                     className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
                       accessMode === 'email'
-                        ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                        ? 'bg-primary text-white border-primary'
                         : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
                     }`}
                   >
@@ -1215,7 +1215,7 @@ export default function GestionUsuarios() {
                           value={accessPassword}
                           onChange={e => setAccessPassword(e.target.value)}
                           placeholder="••••••••"
-                          className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                          className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                           autoComplete="new-password"
                         />
                         <button
@@ -1243,7 +1243,7 @@ export default function GestionUsuarios() {
                         type="button"
                         onClick={handleCambiarPasswordDirecto}
                         disabled={accessSaving || accessPassword.length < 8}
-                        className="flex items-center gap-1 px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                        className="flex items-center gap-1 px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
                       >
                         <Key size={14} />
                         {accessSaving ? 'Guardando...' : 'Cambiar contraseña'}
@@ -1270,7 +1270,7 @@ export default function GestionUsuarios() {
                         type="button"
                         onClick={handleEnviarResetPassword}
                         disabled={accessSaving}
-                        className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                        className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
                       >
                         {accessSaving ? 'Enviando...' : 'Enviar email'}
                       </button>
@@ -1295,7 +1295,7 @@ export default function GestionUsuarios() {
                       value={accessPassword}
                       onChange={e => setAccessPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                       autoComplete="new-password"
                     />
                     <button
@@ -1323,7 +1323,7 @@ export default function GestionUsuarios() {
                     type="button"
                     onClick={handleCrearAcceso}
                     disabled={accessSaving || accessPassword.length < 8}
-                    className="flex items-center gap-1 px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                    className="flex items-center gap-1 px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
                   >
                     <KeyRound size={14} />
                     {accessSaving ? 'Creando...' : 'Crear acceso'}

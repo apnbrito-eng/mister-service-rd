@@ -329,14 +329,14 @@ export default function Inventario() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
             <Boxes size={24} /> Inventario de Piezas
           </h1>
           <p className="text-gray-500 text-sm">{piezasFiltradas.length} de {piezas.length} piezas</p>
         </div>
         {puedeCrear && (
           <button onClick={openCreate}
-            className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <Plus size={18} /> Agregar pieza
           </button>
         )}
@@ -349,10 +349,10 @@ export default function Inventario() {
           <input type="text" value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre o código..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
         </div>
         <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
           <option value="">Todas las categorías</option>
           {CATEGORIAS_PIEZA.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -402,13 +402,13 @@ export default function Inventario() {
                     <td className="px-4 py-3 text-right">
                       {piezasPreMigracion.has(p.id) ? (
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioVenta)}</span>
+                          <span className="font-semibold text-primary">{formatMoneda(p.precioVenta)}</span>
                           <span className="text-[9px] uppercase tracking-wide text-gray-400 font-medium">Precio único</span>
                         </div>
                       ) : (
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-[10px] text-gray-500">Det. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioDetalle ?? p.precioVenta)}</span></span>
-                          <span className="text-[10px] text-gray-500">May. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioMayoreo ?? p.precioVenta)}</span></span>
+                          <span className="text-[10px] text-gray-500">Det. <span className="font-semibold text-primary">{formatMoneda(p.precioDetalle ?? p.precioVenta)}</span></span>
+                          <span className="text-[10px] text-gray-500">May. <span className="font-semibold text-primary">{formatMoneda(p.precioMayoreo ?? p.precioVenta)}</span></span>
                         </div>
                       )}
                     </td>
@@ -459,13 +459,13 @@ export default function Inventario() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>
               <input type="text" value={form.nombre}
                 onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Código (opcional)</label>
               <input type="text" value={form.codigo}
                 onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -473,7 +473,7 @@ export default function Inventario() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Categoría</label>
               <select value={form.categoria}
                 onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                 {CATEGORIAS_PIEZA.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
@@ -481,7 +481,7 @@ export default function Inventario() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Precio compra (RD$)</label>
               <input type="number" min={0} step={50} value={form.precioCompra}
                 onChange={e => setForm(f => ({ ...f, precioCompra: Number(e.target.value) }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -512,7 +512,7 @@ export default function Inventario() {
                     };
                   });
                 }}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
               <p className="text-[10px] text-gray-400 mt-0.5">Cliente final que compra la pieza suelta.</p>
             </div>
@@ -530,7 +530,7 @@ export default function Inventario() {
                 step={50}
                 value={form.precioMayoreo}
                 onChange={e => setForm(f => ({ ...f, precioMayoreo: Number(e.target.value) }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
               <p className="text-[10px] text-gray-400 mt-0.5">Distribuidores u otros talleres en volumen.</p>
             </div>
@@ -559,38 +559,38 @@ export default function Inventario() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Stock actual</label>
               <input type="number" min={0} value={form.stockActual}
                 onChange={e => setForm(f => ({ ...f, stockActual: Number(e.target.value) }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Stock mínimo (alerta)</label>
               <input type="number" min={0} value={form.stockMinimo}
                 onChange={e => setForm(f => ({ ...f, stockMinimo: Number(e.target.value) }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Proveedor sugerido</label>
               <input type="text" value={form.proveedorSugerido}
                 onChange={e => setForm(f => ({ ...f, proveedorSugerido: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Descripción</label>
             <textarea rows={2} value={form.descripcion}
               onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input type="checkbox" checked={form.activo}
               onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))}
-              className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+              className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium" />
             Pieza activa
           </label>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => { setShowModal(false); resetForm(); }}
               className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
             <button type="submit" disabled={saving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
               {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear'}
             </button>
           </div>
@@ -658,8 +658,8 @@ export default function Inventario() {
                     onClick={() => setAjusteForm(f => ({ ...f, tipo: t }))}
                     className={`px-3 py-2 rounded-lg text-xs font-medium border capitalize transition-colors ${
                       ajusteForm.tipo === t
-                        ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                        : 'bg-white text-gray-700 border-gray-200 hover:border-[#1a5fa8]'
+                        ? 'bg-primary-medium text-white border-primary-medium'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-primary-medium'
                     }`}>
                     {t}
                   </button>
@@ -675,26 +675,26 @@ export default function Inventario() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Cantidad *</label>
               <input type="number" min={1} value={ajusteForm.cantidad}
                 onChange={e => setAjusteForm(f => ({ ...f, cantidad: Number(e.target.value) }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Motivo *</label>
               <input type="text" value={ajusteForm.motivo}
                 onChange={e => setAjusteForm(f => ({ ...f, motivo: e.target.value }))}
                 placeholder="compra, devolución, conteo físico..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Notas (opcional)</label>
               <textarea rows={2} value={ajusteForm.notas}
                 onChange={e => setAjusteForm(f => ({ ...f, notas: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" onClick={cerrarAjuste} disabled={savingAjuste}
                 className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-60">Cancelar</button>
               <button type="button" onClick={handleConfirmarAjuste} disabled={savingAjuste}
-                className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+                className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
                 {savingAjuste ? 'Guardando...' : 'Confirmar ajuste'}
               </button>
             </div>

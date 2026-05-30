@@ -399,9 +399,9 @@ export default function Mantenimiento() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#0f3460]">Mantenimiento Programado</h1>
+        <h1 className="text-2xl font-bold text-primary">Mantenimiento Programado</h1>
         <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+          className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
           <Plus size={18} /> Programar
         </button>
       </div>
@@ -473,7 +473,7 @@ export default function Mantenimiento() {
                 }}
                 onFocus={() => setShowClienteDropdown(true)}
                 onBlur={() => setTimeout(() => setShowClienteDropdown(false), 200)}
-                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
             {showClienteDropdown && clientesFiltrados.length > 0 && (
@@ -518,7 +518,7 @@ export default function Mantenimiento() {
                     type="text"
                     value={form.clienteNombre}
                     onChange={e => setForm(f => ({ ...f, clienteNombre: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                   />
                 </div>
                 <div>
@@ -530,7 +530,7 @@ export default function Mantenimiento() {
                     value={form.clienteTelefono}
                     placeholder="809-555-1234"
                     onChange={e => handleClienteTelefonoChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                   />
                 </div>
               </div>
@@ -541,7 +541,7 @@ export default function Mantenimiento() {
                     type="email"
                     value={form.clienteEmail}
                     onChange={e => setForm(f => ({ ...f, clienteEmail: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                   />
                 </div>
                 <div>
@@ -550,7 +550,7 @@ export default function Mantenimiento() {
                     type="text"
                     value={form.clienteDireccion}
                     onChange={e => setForm(f => ({ ...f, clienteDireccion: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                   />
                 </div>
               </div>
@@ -567,7 +567,7 @@ export default function Mantenimiento() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tipo equipo</label>
               <select value={form.equipoTipo} onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                 <option value="">Seleccionar...</option>
                 {tiposEquipo.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
@@ -575,7 +575,7 @@ export default function Mantenimiento() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Frecuencia</label>
               <select value={form.frecuencia} onChange={e => setForm(f => ({ ...f, frecuencia: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                 {Object.entries(FRECUENCIA_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
@@ -584,12 +584,12 @@ export default function Mantenimiento() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Próxima fecha *</label>
               <input type="date" value={form.proximaFecha} onChange={e => setForm(f => ({ ...f, proximaFecha: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Técnico</label>
               <select value={form.tecnicoId} onChange={e => setForm(f => ({ ...f, tecnicoId: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                 <option value="">Sin asignar</option>
                 {/* SPRINT-AGENDA-1 (2026-05-25, P-006): dropdown usa `t.uid`
                     para que `tecnicoId` guarde `auth.uid` y la cadena
@@ -604,7 +604,7 @@ export default function Mantenimiento() {
             <button type="button" onClick={() => { setShowModal(false); resetForm(); }}
               className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
             <button type="submit" disabled={saving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
               {saving ? 'Guardando...' : 'Programar'}
             </button>
           </div>
@@ -622,8 +622,8 @@ function MantenimientoCard({ item, onGenerar, onToggle, isVencido }: {
     <div className={`bg-white rounded-xl shadow-sm border p-4 flex items-center gap-4 ${
       isVencido ? 'border-red-200 bg-red-50/50' : !item.activo ? 'opacity-50 border-gray-100' : 'border-gray-100'
     }`}>
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isVencido ? 'bg-red-100' : 'bg-[#0f3460]/10'}`}>
-        <Calendar size={18} className={isVencido ? 'text-red-600' : 'text-[#0f3460]'} />
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isVencido ? 'bg-red-100' : 'bg-primary/10'}`}>
+        <Calendar size={18} className={isVencido ? 'text-red-600' : 'text-primary'} />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-gray-900">{item.clienteNombre}</p>
@@ -634,7 +634,7 @@ function MantenimientoCard({ item, onGenerar, onToggle, isVencido }: {
       <div className="flex items-center gap-2 flex-shrink-0">
         {item.activo && (
           <button onClick={() => onGenerar(item)}
-            className="flex items-center gap-1 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
+            className="flex items-center gap-1 bg-primary hover:bg-primary-medium text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
             <RefreshCw size={12} /> Generar Orden
           </button>
         )}

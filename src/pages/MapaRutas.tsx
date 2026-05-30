@@ -762,27 +762,27 @@ export default function MapaRutas() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-[#0f3460]">Mapa de Rutas</h1>
+        <h1 className="text-2xl font-bold text-primary">Mapa de Rutas</h1>
         <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100">
           <button onClick={() => setTab('rutas')}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tab === 'rutas' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tab === 'rutas' ? 'bg-primary text-white' : 'text-gray-600'}`}>
             <Route size={12} /> Rutas del Día
           </button>
           <button onClick={() => setTab('gps_vivo')}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tab === 'gps_vivo' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${tab === 'gps_vivo' ? 'bg-primary text-white' : 'text-gray-600'}`}>
             <Satellite size={12} /> 🛰️ GPS en Vivo
           </button>
         </div>
         <div className={`flex items-center gap-3 flex-wrap ${tab === 'gps_vivo' ? 'hidden' : ''}`}>
           <div className="flex items-center gap-1">
             <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             <span className="text-gray-400 text-sm">→</span>
             <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <select value={filtroTecnico} onChange={e => setFiltroTecnico(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
             <option value="">Todos los técnicos</option>
             {/* P-006: filtra por uid (auth.uid) para alinear con ordenes_servicio.tecnicoId */}
             {tecnicos.filter(t => t.uid).map(t => (
@@ -790,13 +790,13 @@ export default function MapaRutas() {
             ))}
           </select>
           <select value={filtroZona} onChange={e => setFiltroZona(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+            className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
             <option value="">Todas las zonas</option>
             {ZONAS_RD.map(z => <option key={z} value={z}>{z}</option>)}
           </select>
           <button onClick={() => setRutaOptimizada(!rutaOptimizada)}
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              rutaOptimizada ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600'
+              rutaOptimizada ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'
             }`}>
             <Route size={14} /> {rutaOptimizada ? 'Ruta Optimizada' : 'Orden Cronológico'}
           </button>
@@ -884,7 +884,7 @@ export default function MapaRutas() {
           <div className="lg:w-80 space-y-4">
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-center gap-2 mb-3">
-                <Satellite size={16} className="text-[#1a5fa8]" />
+                <Satellite size={16} className="text-primary-medium" />
                 <span className="text-sm font-semibold">Técnicos activos ({ubicacionesLive.length})</span>
               </div>
               <div className="space-y-2">
@@ -1002,7 +1002,7 @@ export default function MapaRutas() {
                         <button
                           type="button"
                           onClick={() => abrirEditarDesdePin(m.id)}
-                          className="mt-3 w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-[#1a5fa8] hover:bg-[#0f3460] text-white rounded-lg text-xs font-medium transition-colors"
+                          className="mt-3 w-full inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-primary-medium hover:bg-primary text-white rounded-lg text-xs font-medium transition-colors"
                         >
                           <Edit2 size={11} /> Editar orden
                         </button>
@@ -1037,7 +1037,7 @@ export default function MapaRutas() {
         <div className="lg:w-80 space-y-4">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
             <div className="flex items-center gap-2 mb-3">
-              <Navigation size={16} className="text-[#1a5fa8]" />
+              <Navigation size={16} className="text-primary-medium" />
               <span className="text-sm font-semibold text-gray-900">
                 {ordenesFiltradas.length} órdenes · {marcadores.length} en mapa
               </span>
@@ -1071,7 +1071,7 @@ export default function MapaRutas() {
                     <button
                       onClick={() => abrirEditarDesdePin(m.id)}
                       title="Editar orden"
-                      className="p-1.5 hover:bg-blue-50 rounded-lg text-[#1a5fa8] transition-colors shrink-0"
+                      className="p-1.5 hover:bg-blue-50 rounded-lg text-primary-medium transition-colors shrink-0"
                     >
                       <Edit2 size={13} />
                     </button>
@@ -1089,7 +1089,7 @@ export default function MapaRutas() {
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-semibold text-gray-500 uppercase">Técnicos</p>
               {draggingOrdenId && (
-                <span className="text-[10px] font-medium text-[#1a5fa8] animate-pulse">
+                <span className="text-[10px] font-medium text-primary-medium animate-pulse">
                   Suelta sobre un técnico
                 </span>
               )}
@@ -1118,7 +1118,7 @@ export default function MapaRutas() {
                       <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: t.color || getTecnicoColor(t.nombre) }} />
                       <span className="truncate">{t.nombre}{t.zona ? ` · ${t.zona}` : ''}</span>
                     </div>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${count > 0 ? 'bg-[#1a5fa8]/10 text-[#1a5fa8]' : 'bg-gray-100 text-gray-400'}`}>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${count > 0 ? 'bg-primary-medium/10 text-primary-medium' : 'bg-gray-100 text-gray-400'}`}>
                       {count}
                     </span>
                   </div>
@@ -1135,7 +1135,7 @@ export default function MapaRutas() {
                 <button
                   type="button"
                   onClick={() => setFiltroZona('')}
-                  className="text-[10px] text-[#1a5fa8] hover:underline"
+                  className="text-[10px] text-primary-medium hover:underline"
                 >
                   Limpiar filtro
                 </button>
@@ -1151,11 +1151,11 @@ export default function MapaRutas() {
                     type="button"
                     onClick={() => setFiltroZona(activa ? '' : z)}
                     className={`w-full flex items-center justify-between gap-2 text-xs px-2 py-1 rounded-lg transition-colors ${
-                      activa ? 'bg-[#1a5fa8]/10 text-[#1a5fa8]' : 'text-gray-600 hover:bg-gray-50'
+                      activa ? 'bg-primary-medium/10 text-primary-medium' : 'text-gray-600 hover:bg-gray-50'
                     }`}
                   >
                     <span className={`truncate ${activa ? 'font-semibold' : zonaColor(z)}`}>{z}</span>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${count > 0 ? 'bg-[#1a5fa8]/10 text-[#1a5fa8]' : 'bg-gray-100 text-gray-400'}`}>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full shrink-0 ${count > 0 ? 'bg-primary-medium/10 text-primary-medium' : 'bg-gray-100 text-gray-400'}`}>
                       {count}
                     </span>
                   </button>
@@ -1253,7 +1253,7 @@ export default function MapaRutas() {
                   value={motivoReasignar}
                   onChange={e => setMotivoReasignar(e.target.value)}
                   placeholder="Ej: balanceo de carga, zona del nuevo técnico, etc."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
 
@@ -1270,7 +1270,7 @@ export default function MapaRutas() {
                   type="button"
                   onClick={handleConfirmarReasignar}
                   disabled={savingReasignar}
-                  className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                  className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
                 >
                   {savingReasignar ? 'Guardando...' : 'Confirmar reasignación'}
                 </button>
@@ -1282,7 +1282,7 @@ export default function MapaRutas() {
 
       {/* Overlay informativo mientras se arrastra */}
       {draggingOrdenId && (
-        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[9999] bg-[#0f3460] text-white px-4 py-2 rounded-full shadow-lg text-xs font-medium pointer-events-none">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-[9999] bg-primary text-white px-4 py-2 rounded-full shadow-lg text-xs font-medium pointer-events-none">
           Arrastra el pin sobre un técnico para reasignar
         </div>
       )}

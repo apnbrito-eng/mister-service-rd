@@ -203,14 +203,14 @@ export default function Standby() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460]">Pendiente de piezas</h1>
+          <h1 className="text-2xl font-bold text-primary">Pendiente de piezas</h1>
           <p className="text-gray-500 text-sm">
             {items.filter(i => i.estado !== 'llego').length} piezas activas · {ordenesStandby.length} órdenes pendientes
           </p>
         </div>
         {tab === 'piezas' && (
           <button onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <Plus size={18} /> Registrar Pieza
           </button>
         )}
@@ -219,15 +219,15 @@ export default function Standby() {
       {/* Tabs */}
       <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100 w-fit flex-wrap">
         <button onClick={() => setTab('piezas')}
-          className={`flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${tab === 'piezas' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+          className={`flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${tab === 'piezas' ? 'bg-primary text-white' : 'text-gray-600'}`}>
           <Package size={14} /> Piezas ({items.filter(i => i.estado !== 'llego').length})
         </button>
         <button onClick={() => setTab('ordenes')}
-          className={`flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${tab === 'ordenes' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+          className={`flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${tab === 'ordenes' ? 'bg-primary text-white' : 'text-gray-600'}`}>
           <Pause size={14} /> Órdenes ({ordenesStandby.length})
         </button>
         <button onClick={() => setTab('historial')}
-          className={`flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${tab === 'historial' ? 'bg-[#0f3460] text-white' : 'text-gray-600'}`}>
+          className={`flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${tab === 'historial' ? 'bg-primary text-white' : 'text-gray-600'}`}>
           <History size={14} /> Historial de Piezas
         </button>
       </div>
@@ -237,7 +237,7 @@ export default function Standby() {
           <div className="flex gap-2 flex-wrap" data-tab="historial">
             {(['todos', 'retirada', 'instalada'] as const).map(t => (
               <button key={t} onClick={() => setFiltroTipo(t)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroTipo === t ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroTipo === t ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
                 {t === 'todos' ? 'Todos' : t === 'retirada' ? 'Retiradas' : 'Instaladas'}
               </button>
             ))}
@@ -324,7 +324,7 @@ export default function Standby() {
                   >
                     <div className="flex items-start justify-between mb-3 gap-2">
                       <div className="min-w-0">
-                        <span className="font-mono text-xs font-bold text-[#0f3460]">{o.numero || '#--'}</span>
+                        <span className="font-mono text-xs font-bold text-primary">{o.numero || '#--'}</span>
                         <h3 className="font-semibold text-gray-900 truncate">{o.clienteNombre}</h3>
                         <p className="text-sm text-gray-600 truncate">
                           <Wrench size={11} className="inline mr-1" />
@@ -391,7 +391,7 @@ export default function Standby() {
         {['activas', 'buscando', 'importada', 'dificil', 'llego'].map(e => (
           <button key={e} onClick={() => setFiltroEstado(e)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              filtroEstado === e ? 'bg-[#0f3460] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              filtroEstado === e ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}>
             {e === 'activas' ? 'Activas' : ESTADO_LABELS[e as EstadoStandby] || e}
           </button>
@@ -467,40 +467,40 @@ export default function Standby() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Cliente *</label>
             <input type="text" value={form.clienteNombre} onChange={e => setForm(f => ({ ...f, clienteNombre: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Tipo equipo</label>
               <input type="text" value={form.equipoTipo} onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
               <input type="text" value={form.equipoMarca} onChange={e => setForm(f => ({ ...f, equipoMarca: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Pieza faltante *</label>
             <input type="text" value={form.piezaFaltante} onChange={e => setForm(f => ({ ...f, piezaFaltante: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Técnico</label>
             <input type="text" value={form.tecnicoNombre} onChange={e => setForm(f => ({ ...f, tecnicoNombre: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
             <textarea value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} rows={2}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowModal(false)}
               className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
             <button type="submit" disabled={saving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
               {saving ? 'Guardando...' : 'Registrar'}
             </button>
           </div>

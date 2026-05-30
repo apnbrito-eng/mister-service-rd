@@ -834,10 +834,10 @@ export default function PersonalPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#0f3460]">Personal</h1>
+        <h1 className="text-2xl font-bold text-primary">Personal</h1>
         {puedeCrearPersonal && (
           <button onClick={() => { resetForm(); setEditingId(null); setShowModal(true); }}
-            className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <Plus size={18} /> Agregar
           </button>
         )}
@@ -1109,7 +1109,7 @@ export default function PersonalPage() {
               onChange={e => setVincularEmail(e.target.value)}
               placeholder="usuario@misterservicerd.com"
               disabled={!!vincularPending}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] disabled:bg-gray-50"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
             />
           </div>
           <div>
@@ -1119,7 +1119,7 @@ export default function PersonalPage() {
               value={vincularPassword}
               onChange={e => setVincularPassword(e.target.value)}
               placeholder="Contraseña que ya tiene la cuenta"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
             <p className="text-[11px] text-gray-400 mt-1">
               Si no la sabes, ve a Gestión de Accesos y envía un email de restablecimiento al dueño.

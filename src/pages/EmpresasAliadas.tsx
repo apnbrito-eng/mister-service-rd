@@ -144,7 +144,7 @@ export default function EmpresasAliadas() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#0f3460] rounded-xl">
+          <div className="p-2 bg-primary rounded-xl">
             <Building2 size={24} className="text-white" />
           </div>
           <div>
@@ -154,7 +154,7 @@ export default function EmpresasAliadas() {
         </div>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#0f3460] text-white rounded-xl hover:bg-[#0d2d56] transition-colors font-medium text-sm"
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary text-white rounded-xl hover:bg-[#0d2d56] transition-colors font-medium text-sm"
         >
           <Plus size={18} />
           Nueva Empresa
@@ -267,7 +267,7 @@ export default function EmpresasAliadas() {
               value={form.nombre}
               onChange={(e) => setForm({ ...form, nombre: e.target.value })}
               placeholder="Nombre de la empresa"
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0f3460]/20 focus:border-[#0f3460] outline-none transition-all text-sm"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
             />
           </div>
 
@@ -307,7 +307,7 @@ export default function EmpresasAliadas() {
               value={form.contactoNombre}
               onChange={(e) => setForm({ ...form, contactoNombre: e.target.value })}
               placeholder="Persona de contacto"
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0f3460]/20 focus:border-[#0f3460] outline-none transition-all text-sm"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
             />
           </div>
 
@@ -319,7 +319,7 @@ export default function EmpresasAliadas() {
               value={form.contactoTelefono}
               onChange={(e) => setForm({ ...form, contactoTelefono: e.target.value })}
               placeholder="829-555-1234"
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0f3460]/20 focus:border-[#0f3460] outline-none transition-all text-sm"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
             />
           </div>
 
@@ -331,7 +331,7 @@ export default function EmpresasAliadas() {
               value={form.contactoEmail}
               onChange={(e) => setForm({ ...form, contactoEmail: e.target.value })}
               placeholder="correo@empresa.com"
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0f3460]/20 focus:border-[#0f3460] outline-none transition-all text-sm"
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
             />
           </div>
 
@@ -340,7 +340,7 @@ export default function EmpresasAliadas() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="w-full py-2.5 bg-[#0f3460] text-white rounded-xl hover:bg-[#0d2d56] transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-2.5 bg-primary text-white rounded-xl hover:bg-[#0d2d56] transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? 'Guardando...' : editingEmpresa ? 'Guardar Cambios' : 'Crear Empresa'}
             </button>

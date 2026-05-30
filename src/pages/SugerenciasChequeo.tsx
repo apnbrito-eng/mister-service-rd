@@ -176,7 +176,7 @@ export default function SugerenciasChequeo() {
     <div className="p-4 md:p-6 space-y-5 max-w-5xl mx-auto">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
             <ClipboardCheck size={22} /> Sugerencias de solo chequeo
           </h1>
           <p className="text-gray-500 text-sm">
@@ -211,7 +211,7 @@ export default function SugerenciasChequeo() {
                 {/* Header con número + cliente */}
                 <div className="flex items-start justify-between gap-3 flex-wrap">
                   <div>
-                    <p className="font-mono text-xs text-[#0f3460] font-semibold">
+                    <p className="font-mono text-xs text-primary font-semibold">
                       {item.orden.numero || item.orden.id}
                     </p>
                     <p className="text-base font-semibold text-gray-900 mt-0.5">
@@ -328,7 +328,7 @@ export default function SugerenciasChequeo() {
               onChange={(e) => setNotaRechazo(e.target.value)}
               disabled={!!trabajando}
               placeholder="Ej: El cliente sí tiene presupuesto — coordiná con él de nuevo antes de cerrar."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
             <p className="text-[11px] text-gray-400 mt-1">
               Mínimo {MIN_NOTA_CHARS} caracteres.

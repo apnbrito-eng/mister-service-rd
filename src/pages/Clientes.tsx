@@ -423,14 +423,14 @@ export default function Clientes() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold text-[#0f3460]">Clientes</h1>
+          <h1 className="text-2xl font-bold text-primary">Clientes</h1>
           {/* Tabs Lista / Mapa — Mapa oculto para técnicos y operarias */}
           <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100">
             <button
               type="button"
               onClick={() => setTab('lista')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                tab === 'lista' ? 'bg-[#0f3460] text-white' : 'text-gray-600 hover:bg-gray-50'
+                tab === 'lista' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
               <List size={12} /> Lista
@@ -440,7 +440,7 @@ export default function Clientes() {
                 type="button"
                 onClick={() => setTab('mapa')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  tab === 'mapa' ? 'bg-[#0f3460] text-white' : 'text-gray-600 hover:bg-gray-50'
+                  tab === 'mapa' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 <MapIcon size={12} /> Mapa
@@ -451,7 +451,7 @@ export default function Clientes() {
                 type="button"
                 onClick={() => setTab('reactivacion')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  tab === 'reactivacion' ? 'bg-[#0f3460] text-white' : 'text-gray-600 hover:bg-gray-50'
+                  tab === 'reactivacion' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'
                 }`}
               >
                 <Sparkles size={12} /> Reactivación
@@ -475,7 +475,7 @@ export default function Clientes() {
           </button>
           {puedeCrear && (
             <button onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+              className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
               <Plus size={18} /> Nuevo Cliente
             </button>
           )}
@@ -522,7 +522,7 @@ export default function Clientes() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input type="text" placeholder="Buscar por nombre o teléfono..."
               value={busqueda} onChange={e => setBusqueda(e.target.value)}
-              className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] bg-white" />
+              className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white" />
           </div>
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-h-[70vh] overflow-y-auto">
             {filteredClientes.map(c => {
@@ -531,7 +531,7 @@ export default function Clientes() {
                 <div
                   key={c.id}
                   className={`w-full border-b border-gray-100 hover:bg-gray-50 transition-colors flex items-center gap-2 ${
-                    selectedCliente?.id === c.id ? 'bg-blue-50 border-l-4 border-l-[#1a5fa8]' : ''
+                    selectedCliente?.id === c.id ? 'bg-blue-50 border-l-4 border-l-primary-medium' : ''
                   }`}
                 >
                   <button
@@ -539,8 +539,8 @@ export default function Clientes() {
                     onClick={() => setSelectedCliente(c)}
                     className="flex-1 min-w-0 text-left px-4 py-3 flex items-center gap-3"
                   >
-                    <div className="w-8 h-8 bg-[#0f3460]/10 rounded-full flex items-center justify-center flex-shrink-0">
-                      <User size={14} className="text-[#0f3460]" />
+                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                      <User size={14} className="text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">{c.nombre}</p>
@@ -608,7 +608,7 @@ export default function Clientes() {
                       <button
                         type="button"
                         onClick={() => setShowEditModal(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0f3460] hover:bg-[#1a5fa8] text-white"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary hover:bg-primary-medium text-white"
                       >
                         <Edit2 size={13} /> Editar cliente
                       </button>
@@ -702,7 +702,7 @@ export default function Clientes() {
                           <select
                             value={selectedCliente.zona || '__auto__'}
                             onChange={e => handleCambiarZonaCliente(selectedCliente, e.target.value)}
-                            className="ml-auto px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                            className="ml-auto px-2 py-1 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
                           >
                             <option value="__auto__">Detectar automáticamente</option>
                             {ZONAS_RD.map(z => (
@@ -795,7 +795,7 @@ export default function Clientes() {
               {/* Historial */}
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <History size={16} className="text-[#1a5fa8]" />
+                  <History size={16} className="text-primary-medium" />
                   <h3 className="font-semibold text-gray-900">Historial de Servicios</h3>
                   <span className="text-xs text-gray-500">({historialOrdenes.length})</span>
                 </div>
@@ -807,12 +807,12 @@ export default function Clientes() {
                       <button
                         key={o.id}
                         onClick={() => navigate(`/admin/ordenes/${o.id}`)}
-                        className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 hover:border-[#1a5fa8] border border-transparent rounded-lg transition-all group"
+                        className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 hover:border-primary-medium border border-transparent rounded-lg transition-all group"
                       >
                         <div className="flex items-center justify-between gap-3 flex-wrap">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-mono text-sm font-semibold text-[#0f3460] group-hover:text-[#1a5fa8]">
+                              <span className="font-mono text-sm font-semibold text-primary group-hover:text-primary-medium">
                                 {o.numero}
                               </span>
                               <span className="text-sm text-gray-700">·</span>
@@ -839,7 +839,7 @@ export default function Clientes() {
                           <div className="flex items-center gap-2">
                             <Badge fase={o.fase} />
                             <EliminarOrdenButton orden={o} variant="icon" size="sm" />
-                            <ChevronRight size={14} className="text-gray-300 group-hover:text-[#1a5fa8] transition-colors" />
+                            <ChevronRight size={14} className="text-gray-300 group-hover:text-primary-medium transition-colors" />
                           </div>
                         </div>
                       </button>
@@ -864,18 +864,18 @@ export default function Clientes() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
             <input type="text" value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono *</label>
               <input type="tel" value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
             </div>
           </div>
           <div>
@@ -883,7 +883,7 @@ export default function Clientes() {
             <select
               value={form.tipo}
               onChange={e => setForm(f => ({ ...f, tipo: e.target.value as 'particular' | 'b2b' }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="particular">Particular</option>
               <option value="b2b">B2B (empresa o taller aliado)</option>
@@ -907,7 +907,7 @@ export default function Clientes() {
                 onChange={e => setForm(f => ({ ...f, direccion: e.target.value }))}
                 placeholder="Escribe un lugar, dirección o usa GPS"
                 autoComplete="off"
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
               <button type="button" onClick={handleUsarMiUbicacion} disabled={geocoding}
                 className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors flex items-center gap-1 disabled:opacity-50">
@@ -926,7 +926,7 @@ export default function Clientes() {
             <select
               value={form.zona}
               onChange={e => setForm(f => ({ ...f, zona: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="__auto__">Detectar automáticamente</option>
               {ZONAS_RD.map(z => (
@@ -943,7 +943,7 @@ export default function Clientes() {
             <button type="button" onClick={() => setShowModal(false)}
               className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
             <button type="submit" disabled={saving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
               {saving ? 'Guardando...' : 'Crear Cliente'}
             </button>
           </div>

@@ -185,14 +185,14 @@ export default function PreciosServicios() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-[#0f3460] flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
             <Tag size={24} /> Precios de Servicios
           </h1>
           <p className="text-gray-500 text-sm">{preciosFiltrados.length} servicios mostrados de {precios.length} totales</p>
         </div>
         {puedeEditar && (
           <button onClick={openCreate}
-            className="flex items-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <Plus size={18} /> Agregar servicio
           </button>
         )}
@@ -207,21 +207,21 @@ export default function PreciosServicios() {
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre, marca o equipo..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
         </div>
         <select value={filtroMarca} onChange={e => setFiltroMarca(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
           <option value="">Todas las marcas</option>
           {marcasDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
         <select value={filtroEquipo} onChange={e => setFiltroEquipo(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
           <option value="">Todos los equipos</option>
           {equiposDisponibles.map(e => <option key={e} value={e}>{e}</option>)}
         </select>
         <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
           <option value="">Todas las categorías</option>
           {categoriasDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
@@ -230,7 +230,7 @@ export default function PreciosServicios() {
             type="checkbox"
             checked={verInactivos}
             onChange={() => setVerInactivos(v => !v)}
-            className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+            className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium"
           />
           Mostrar también servicios inactivos
         </label>
@@ -263,13 +263,13 @@ export default function PreciosServicios() {
                   <td className="px-4 py-3 text-right">
                     {preciosPreMigracion.has(p.id) ? (
                       <div className="flex flex-col items-end gap-0.5">
-                        <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precio)}</span>
+                        <span className="font-semibold text-primary">{formatMoneda(p.precio)}</span>
                         <span className="text-[9px] uppercase tracking-wide text-gray-400 font-medium">Precio único</span>
                       </div>
                     ) : (
                       <div className="flex flex-col items-end gap-0.5">
-                        <span className="text-[10px] text-gray-500">Det. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioDetalle ?? p.precio)}</span></span>
-                        <span className="text-[10px] text-gray-500">May. <span className="font-semibold text-[#0f3460]">{formatMoneda(p.precioMayoreo ?? p.precio)}</span></span>
+                        <span className="text-[10px] text-gray-500">Det. <span className="font-semibold text-primary">{formatMoneda(p.precioDetalle ?? p.precio)}</span></span>
+                        <span className="text-[10px] text-gray-500">May. <span className="font-semibold text-primary">{formatMoneda(p.precioMayoreo ?? p.precio)}</span></span>
                       </div>
                     )}
                   </td>
@@ -313,7 +313,7 @@ export default function PreciosServicios() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Marca *</label>
               <input type="text" list="precios-marcas" value={form.marca}
                 onChange={e => setForm(f => ({ ...f, marca: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
               <datalist id="precios-marcas">
                 {MARCAS_SUGERIDAS.map(m => <option key={m} value={m} />)}
               </datalist>
@@ -322,7 +322,7 @@ export default function PreciosServicios() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Categoría</label>
               <select value={form.categoria}
                 onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
                 {CATEGORIAS_SUGERIDAS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
@@ -331,7 +331,7 @@ export default function PreciosServicios() {
             <label className="block text-xs font-medium text-gray-600 mb-1">Equipo</label>
             <select value={form.equipoTipo}
               onChange={e => setForm(f => ({ ...f, equipoTipo: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
               {EQUIPOS_SUGERIDOS.map(eq => <option key={eq} value={eq}>{eq}</option>)}
             </select>
           </div>
@@ -364,7 +364,7 @@ export default function PreciosServicios() {
                     };
                   });
                 }}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
               <p className="text-[10px] text-gray-400 mt-0.5">Cliente final / mostrador / domicilio.</p>
             </div>
@@ -382,7 +382,7 @@ export default function PreciosServicios() {
                 step={50}
                 value={form.precioMayoreo ?? 0}
                 onChange={e => setForm(f => ({ ...f, precioMayoreo: Number(e.target.value) }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
               <p className="text-[10px] text-gray-400 mt-0.5">B2B / talleres aliados / distribuidores.</p>
             </div>
@@ -411,25 +411,25 @@ export default function PreciosServicios() {
             <label className="block text-xs font-medium text-gray-600 mb-1">Nombre del servicio *</label>
             <input type="text" value={form.nombre}
               onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Notas internas (opcional)</label>
             <textarea rows={2} value={form.notas || ''}
               onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]" />
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700">
             <input type="checkbox" checked={form.activo}
               onChange={e => setForm(f => ({ ...f, activo: e.target.checked }))}
-              className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]" />
+              className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium" />
             Servicio activo (visible para cotizar)
           </label>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => { setShowModal(false); resetForm(); }}
               className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">Cancelar</button>
             <button type="submit" disabled={saving}
-              className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60">
+              className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
               {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear'}
             </button>
           </div>
