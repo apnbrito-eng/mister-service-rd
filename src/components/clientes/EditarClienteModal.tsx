@@ -313,7 +313,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                   type="text"
                   value={nombre}
                   onChange={e => setNombre(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
               <div>
@@ -333,7 +333,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                   type="email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
               <div>
@@ -348,7 +348,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                   inputMode="numeric"
                   className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
                     rncValido
-                      ? 'border-gray-200 focus:ring-[#1a5fa8]'
+                      ? 'border-gray-200 focus:ring-primary-medium'
                       : 'border-red-300 focus:ring-red-400'
                   }`}
                 />
@@ -368,7 +368,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                   onChange={e => setCedula(e.target.value)}
                   placeholder="000-0000000-0"
                   inputMode="numeric"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
               <div className="col-span-2">
@@ -376,7 +376,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                 <select
                   value={tipo}
                   onChange={e => setTipo(e.target.value as 'particular' | 'b2b')}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 >
                   <option value="particular">Particular</option>
                   <option value="b2b">B2B (empresa o taller aliado)</option>
@@ -395,7 +395,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                     value={razonSocial}
                     onChange={e => setRazonSocial(e.target.value)}
                     placeholder="Nombre legal de la empresa"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                   />
                 </div>
               )}
@@ -413,7 +413,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                     value={direccion}
                     onChange={e => handleDireccionChange(e.target.value)}
                     placeholder="Escribe un lugar, dirección o pega URL de Google Maps"
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                     autoComplete="off"
                   />
                   <button
@@ -449,7 +449,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
                   type="text"
                   value={referenciaDireccion}
                   onChange={e => setReferenciaDireccion(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                 />
               </div>
             </div>
@@ -457,7 +457,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
               <button
                 type="submit"
                 disabled={saving || !rncValido}
-                className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+                className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
               >
                 {saving ? 'Guardando...' : 'Guardar cambios'}
               </button>
@@ -487,7 +487,7 @@ export default function EditarClienteModal({ isOpen, onClose, clienteId, onUpdat
               <div className="space-y-2">
                 {cliente.direcciones.map(d => (
                   <div key={d.id} className="flex items-start gap-2 bg-gray-50 rounded-lg p-3 text-sm">
-                    <Home size={14} className="text-[#0f3460] mt-0.5 shrink-0" />
+                    <Home size={14} className="text-primary mt-0.5 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-gray-900">{d.etiqueta}</div>
                       <div className="text-xs text-gray-600 truncate">{d.direccion}</div>

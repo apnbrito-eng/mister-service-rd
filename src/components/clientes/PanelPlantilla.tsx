@@ -42,7 +42,7 @@ export default function PanelPlantilla({
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
       <div className="flex items-center gap-2">
-        <FileText size={14} className="text-[#0f3460]" />
+        <FileText size={14} className="text-primary" />
         <h3 className="text-sm font-semibold text-gray-900">Plantilla</h3>
       </div>
 
@@ -55,7 +55,7 @@ export default function PanelPlantilla({
         <select
           value={plantillaSeleccionadaId || ''}
           onChange={(e) => onChangePlantilla(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
         >
           {plantillas.map((p) => (
             <option key={p.id} value={p.id}>{p.nombre}</option>

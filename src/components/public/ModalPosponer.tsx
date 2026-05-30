@@ -177,7 +177,7 @@ export default function ModalPosponer({ token, onClose, onSubmitted }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h2 className="text-base font-semibold text-gray-900 flex items-center gap-2">
-            <Calendar size={18} className="text-[#0f3460]" />
+            <Calendar size={18} className="text-primary" />
             Pedir posponer mi cita
           </h2>
           <button
@@ -210,7 +210,7 @@ export default function ModalPosponer({ token, onClose, onSubmitted }: Props) {
               max={toIsoDate(maxDate)}
               onChange={e => handleFechaChange(e.target.value)}
               disabled={enviando}
-              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0f3460] focus:border-transparent disabled:bg-gray-50"
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-gray-50"
             />
             <p className="text-[10px] text-gray-400 mt-1">
               Mínimo mañana, máximo 60 días. No atendemos domingos.
@@ -239,7 +239,7 @@ export default function ModalPosponer({ token, onClose, onSubmitted }: Props) {
                     className={
                       'px-3 py-2 rounded-lg text-sm font-medium border transition-colors ' +
                       (seleccionado
-                        ? 'bg-[#0f3460] text-white border-[#0f3460]'
+                        ? 'bg-primary text-white border-primary'
                         : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400')
                     }
                   >
@@ -262,7 +262,7 @@ export default function ModalPosponer({ token, onClose, onSubmitted }: Props) {
               onChange={e => setMotivo(e.target.value)}
               disabled={enviando}
               placeholder="Ej: Tengo una emergencia ese día y no podré recibirlos."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0f3460] focus:border-transparent resize-none disabled:bg-gray-50"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none disabled:bg-gray-50"
             />
             <p className="text-[10px] text-gray-400 mt-1 text-right">
               {motivo.length}/500
@@ -292,7 +292,7 @@ export default function ModalPosponer({ token, onClose, onSubmitted }: Props) {
             type="button"
             onClick={handleSubmit}
             disabled={enviando || !formularioListo}
-            className="flex-1 px-4 py-2.5 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+            className="flex-1 px-4 py-2.5 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
           >
             {enviando && <Loader2 size={14} className="animate-spin" />}
             {enviando ? 'Enviando...' : 'Enviar propuesta'}

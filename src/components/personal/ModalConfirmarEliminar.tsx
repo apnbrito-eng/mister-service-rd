@@ -122,7 +122,7 @@ export default function ModalConfirmarEliminar({
                       <select
                         value={transferDestinoId}
                         onChange={e => setTransferDestinoId(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
                       >
                         <option value="">Seleccionar técnico...</option>
                         {destinos.map(d => (
@@ -181,7 +181,7 @@ export default function ModalConfirmarEliminar({
                       <select
                         value={transferDestinoId}
                         onChange={e => setTransferDestinoId(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
                       >
                         <option value="">Seleccionar operaria...</option>
                         {destinos.map(d => (

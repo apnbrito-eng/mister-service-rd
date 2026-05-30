@@ -83,7 +83,7 @@ export default function FormAltaEditarEmpleado({
           type="text"
           value={form.nombre}
           onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value }))}
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
         />
       </div>
 
@@ -92,7 +92,7 @@ export default function FormAltaEditarEmpleado({
         <select
           value={form.rol}
           onChange={(e) => onRolChange(e.target.value as Rol)}
-          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
         >
           {ROL_SELECT_ORDEN.map((r) => (
             <option key={r} value={r}>
@@ -111,8 +111,8 @@ export default function FormAltaEditarEmpleado({
       {ROLES_CON_ACCESO.includes(form.rol) && (
         <div className="bg-blue-50/40 border border-blue-100 rounded-lg p-3 space-y-3">
           <div className="flex items-center gap-2">
-            <Key size={14} className="text-[#1a5fa8]" />
-            <h3 className="text-xs font-semibold text-[#0f3460] uppercase tracking-wide">Acceso al sistema</h3>
+            <Key size={14} className="text-primary-medium" />
+            <h3 className="text-xs font-semibold text-primary uppercase tracking-wide">Acceso al sistema</h3>
           </div>
           {(() => {
             const personalActual = editingId ? personal.find((p) => p.id === editingId) : null;
@@ -172,7 +172,7 @@ export default function FormAltaEditarEmpleado({
                     value={emailAcceso}
                     onChange={(e) => setEmailAcceso(e.target.value)}
                     placeholder="usuario@misterservicerd.com"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                   />
                   <p className="text-[11px] text-gray-400 mt-1">Este email es distinto al email de contacto. Se usará para iniciar sesión.</p>
                 </div>
@@ -185,7 +185,7 @@ export default function FormAltaEditarEmpleado({
                       onChange={(e) => setPasswordAcceso(e.target.value)}
                       placeholder="Mínimo 8 caracteres"
                       minLength={8}
-                      className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                      className="w-full px-3 py-2 pr-10 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                     />
                     <button
                       type="button"
@@ -217,7 +217,7 @@ export default function FormAltaEditarEmpleado({
                 operariaNombre: op?.nombre || '',
               }));
             }}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
           >
             <option value="">Sin asignar</option>
             {operariasDisponibles.map((op) => (
@@ -241,7 +241,7 @@ export default function FormAltaEditarEmpleado({
             <select
               value={form.nivel || 'senior'}
               onChange={(e) => onNivelChange(e.target.value as 'junior' | 'senior')}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
               <option value="senior">Senior</option>
               <option value="junior">Junior</option>
@@ -261,7 +261,7 @@ export default function FormAltaEditarEmpleado({
                 setForm((f) => ({ ...f, comisionPorcentaje: val }));
               }}
               placeholder="10"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
           <div>
@@ -276,7 +276,7 @@ export default function FormAltaEditarEmpleado({
                 setForm((f) => ({ ...f, sueldoBase: val }));
               }}
               placeholder="50000"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
             <p className="text-[10px] text-gray-500 mt-1">
               Sueldo mensual completo. El sistema lo divide automáticamente en 2 para cada quincena.
@@ -292,7 +292,7 @@ export default function FormAltaEditarEmpleado({
             type="tel"
             value={form.telefono}
             onChange={(e) => setForm((f) => ({ ...f, telefono: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
         </div>
         <div>
@@ -301,7 +301,7 @@ export default function FormAltaEditarEmpleado({
             type="email"
             value={form.email}
             onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
         </div>
       </div>
@@ -314,7 +314,7 @@ export default function FormAltaEditarEmpleado({
             value={form.especialidad}
             onChange={(e) => setForm((f) => ({ ...f, especialidad: e.target.value }))}
             placeholder="Ej: Refrigeración, Lavadoras..."
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
         </div>
         <div>
@@ -324,7 +324,7 @@ export default function FormAltaEditarEmpleado({
             value={form.zona}
             onChange={(e) => setForm((f) => ({ ...f, zona: e.target.value }))}
             placeholder="Ej: Santo Domingo, DN..."
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
         </div>
       </div>
@@ -337,7 +337,7 @@ export default function FormAltaEditarEmpleado({
             value={form.horario}
             onChange={(e) => setForm((f) => ({ ...f, horario: e.target.value }))}
             placeholder="Ej: 8:00 AM - 5:00 PM"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
         </div>
         <div>
@@ -357,7 +357,7 @@ export default function FormAltaEditarEmpleado({
             type="checkbox"
             checked={form.disponibilidad}
             onChange={(e) => setForm((f) => ({ ...f, disponibilidad: e.target.checked }))}
-            className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+            className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium"
           />
           Disponible
         </label>
@@ -366,7 +366,7 @@ export default function FormAltaEditarEmpleado({
             type="checkbox"
             checked={form.activo}
             onChange={(e) => setForm((f) => ({ ...f, activo: e.target.checked }))}
-            className="rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+            className="rounded border-gray-300 text-primary-medium focus:ring-primary-medium"
           />
           Activo
         </label>
@@ -377,7 +377,7 @@ export default function FormAltaEditarEmpleado({
         const iaBloqueada = form.rol === 'tecnico' || form.rol === 'ayudante';
         return (
           <div className="mt-2 pt-4 border-t border-gray-100">
-            <h3 className="text-sm font-semibold text-[#0f3460] uppercase tracking-wide mb-2">Acceso al Asistente IA</h3>
+            <h3 className="text-sm font-semibold text-primary uppercase tracking-wide mb-2">Acceso al Asistente IA</h3>
             <label
               className={`flex items-start gap-2 ${iaBloqueada ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
               title={iaBloqueada ? 'Disponible en una fase futura del proyecto' : undefined}
@@ -387,7 +387,7 @@ export default function FormAltaEditarEmpleado({
                 checked={form.iaHabilitada === true}
                 disabled={iaBloqueada}
                 onChange={(e) => setForm((f) => ({ ...f, iaHabilitada: e.target.checked }))}
-                className="mt-1 rounded border-gray-300 text-[#1a5fa8] focus:ring-[#1a5fa8]"
+                className="mt-1 rounded border-gray-300 text-primary-medium focus:ring-primary-medium"
               />
               <span className="text-sm text-gray-800">Habilitar acceso al Asistente IA</span>
             </label>
@@ -409,7 +409,7 @@ export default function FormAltaEditarEmpleado({
         <button
           type="submit"
           disabled={saving}
-          className="px-6 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+          className="px-6 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
         >
           {saving ? 'Guardando...' : editingId ? 'Actualizar' : 'Crear'}
         </button>

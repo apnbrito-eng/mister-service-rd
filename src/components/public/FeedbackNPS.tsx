@@ -262,14 +262,14 @@ export default function FeedbackNPS({
                 rows={3}
                 maxLength={500}
                 placeholder="Cuéntanos qué pasó..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   type="button"
                   onClick={() => enviarFeedback()}
                   disabled={enviando}
-                  className="flex-1 bg-[#0f3460] hover:bg-[#1a5fa8] disabled:opacity-60 text-white text-sm font-semibold rounded-lg px-4 py-2.5"
+                  className="flex-1 bg-primary hover:bg-primary-medium disabled:opacity-60 text-white text-sm font-semibold rounded-lg px-4 py-2.5"
                 >
                   {enviando ? 'Enviando...' : 'Enviar feedback'}
                 </button>
@@ -303,13 +303,13 @@ export default function FeedbackNPS({
                 rows={3}
                 maxLength={500}
                 placeholder="Comentario opcional..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
               <button
                 type="button"
                 onClick={() => enviarFeedback()}
                 disabled={enviando}
-                className="w-full bg-[#0f3460] hover:bg-[#1a5fa8] disabled:opacity-60 text-white text-sm font-semibold rounded-lg px-4 py-2.5"
+                className="w-full bg-primary hover:bg-primary-medium disabled:opacity-60 text-white text-sm font-semibold rounded-lg px-4 py-2.5"
               >
                 {enviando ? 'Enviando...' : 'Enviar'}
               </button>

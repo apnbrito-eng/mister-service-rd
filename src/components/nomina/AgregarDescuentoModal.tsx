@@ -188,7 +188,7 @@ export default function AgregarDescuentoModal({
           onClick={() => setTab('adhoc')}
           className={`flex-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             tab === 'adhoc'
-              ? 'border-[#1a5fa8] text-[#0f3460]'
+              ? 'border-primary-medium text-primary'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
@@ -199,7 +199,7 @@ export default function AgregarDescuentoModal({
           onClick={() => setTab('prestamo')}
           className={`flex-1 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
             tab === 'prestamo'
-              ? 'border-[#1a5fa8] text-[#0f3460]'
+              ? 'border-primary-medium text-primary'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
@@ -223,7 +223,7 @@ export default function AgregarDescuentoModal({
               onChange={e => setAdhocMonto(e.target.value)}
               placeholder="0.00"
               autoFocus
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
           <div>
@@ -233,7 +233,7 @@ export default function AgregarDescuentoModal({
               value={adhocMotivo}
               onChange={e => setAdhocMotivo(e.target.value)}
               placeholder="Ej: anticipo del día, ajuste manual, descuento por equipo perdido..."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
           <div className="flex justify-end gap-3 pt-2">
@@ -248,7 +248,7 @@ export default function AgregarDescuentoModal({
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
             >
               {saving ? 'Guardando...' : 'Agregar descuento'}
             </button>
@@ -271,7 +271,7 @@ export default function AgregarDescuentoModal({
                 value={prestamoMontoTotal}
                 onChange={e => setPrestamoMontoTotal(e.target.value)}
                 placeholder="0.00"
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
             <div>
@@ -282,7 +282,7 @@ export default function AgregarDescuentoModal({
                 step="1"
                 value={prestamoCuotas}
                 onChange={e => setPrestamoCuotas(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               />
             </div>
           </div>
@@ -300,7 +300,7 @@ export default function AgregarDescuentoModal({
               type="date"
               value={prestamoFechaInicio}
               onChange={e => setPrestamoFechaInicio(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
             <p className="text-[11px] text-gray-400 mt-1">
               La primera cuota se descontará en la quincena que contenga esta fecha.
@@ -313,7 +313,7 @@ export default function AgregarDescuentoModal({
               value={prestamoMotivo}
               onChange={e => setPrestamoMotivo(e.target.value)}
               placeholder="Ej: préstamo para reparación de carro, adelanto de salario..."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             />
           </div>
           <div className="flex justify-end gap-3 pt-2">
@@ -328,7 +328,7 @@ export default function AgregarDescuentoModal({
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+              className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
             >
               {saving ? 'Creando...' : 'Crear préstamo'}
             </button>

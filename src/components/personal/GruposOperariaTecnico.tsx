@@ -45,8 +45,8 @@ export default function GruposOperariaTecnico({ personal }: GruposOperariaTecnic
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2">
-        <Users size={18} className="text-[#1a5fa8]" />
-        <h2 className="text-lg font-semibold text-[#0f3460]">Grupos operaria-técnico</h2>
+        <Users size={18} className="text-primary-medium" />
+        <h2 className="text-lg font-semibold text-primary">Grupos operaria-técnico</h2>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
         {operariasConTecnicos.map(({ operaria, tecnicos: tecs }) => (

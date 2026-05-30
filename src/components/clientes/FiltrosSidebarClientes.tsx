@@ -82,7 +82,7 @@ export default function FiltrosSidebarClientes({
         <div>
           <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">Filtros</p>
           <p className="text-sm text-gray-900 mt-0.5">
-            <span className="font-bold text-[#0f3460]">{totalCoincidentes.toLocaleString('es-DO')}</span>{' '}
+            <span className="font-bold text-primary">{totalCoincidentes.toLocaleString('es-DO')}</span>{' '}
             cliente{totalCoincidentes === 1 ? '' : 's'} coincide{totalCoincidentes === 1 ? '' : 'n'}
           </p>
           {totalSinCoords > 0 && (
@@ -94,7 +94,7 @@ export default function FiltrosSidebarClientes({
         <button
           type="button"
           onClick={onLimpiar}
-          className="flex items-center gap-1 text-xs text-gray-600 hover:text-[#0f3460] hover:bg-gray-50 rounded-lg px-2 py-1 transition-colors"
+          className="flex items-center gap-1 text-xs text-gray-600 hover:text-primary hover:bg-gray-50 rounded-lg px-2 py-1 transition-colors"
           title="Restablecer filtros"
         >
           <Eraser size={12} /> Limpiar
@@ -117,8 +117,8 @@ export default function FiltrosSidebarClientes({
                   onClick={() => toggleZona(z)}
                   className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${
                     activa
-                      ? 'bg-[#0f3460] text-white border-[#0f3460]'
-                      : 'bg-white text-gray-700 border-gray-200 hover:border-[#1a5fa8]'
+                      ? 'bg-primary text-white border-primary'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-primary-medium'
                   }`}
                 >
                   {z}
@@ -140,7 +140,7 @@ export default function FiltrosSidebarClientes({
                 name="ultimoServicio"
                 checked={filtros.ultimoServicio === op.value}
                 onChange={() => onChange({ ...filtros, ultimoServicio: op.value })}
-                className="accent-[#0f3460]"
+                className="accent-primary"
               />
               {op.label}
             </label>
@@ -159,7 +159,7 @@ export default function FiltrosSidebarClientes({
                 name="tipoCliente"
                 checked={filtros.tipo === op.value}
                 onChange={() => onChange({ ...filtros, tipo: op.value })}
-                className="accent-[#0f3460]"
+                className="accent-primary"
               />
               {op.label}
             </label>
@@ -178,7 +178,7 @@ export default function FiltrosSidebarClientes({
                 name="totalServicios"
                 checked={filtros.totalServicios === op.value}
                 onChange={() => onChange({ ...filtros, totalServicios: op.value })}
-                className="accent-[#0f3460]"
+                className="accent-primary"
               />
               {op.label}
             </label>
@@ -202,8 +202,8 @@ export default function FiltrosSidebarClientes({
                   onClick={() => toggleEquipo(e)}
                   className={`text-[11px] px-2 py-1 rounded-full border transition-colors ${
                     activo
-                      ? 'bg-[#1a5fa8] text-white border-[#1a5fa8]'
-                      : 'bg-white text-gray-700 border-gray-200 hover:border-[#1a5fa8]'
+                      ? 'bg-primary-medium text-white border-primary-medium'
+                      : 'bg-white text-gray-700 border-gray-200 hover:border-primary-medium'
                   }`}
                 >
                   {e}
@@ -225,7 +225,7 @@ export default function FiltrosSidebarClientes({
                 name="whatsapp"
                 checked={filtros.whatsapp === op.value}
                 onChange={() => onChange({ ...filtros, whatsapp: op.value })}
-                className="accent-[#0f3460]"
+                className="accent-primary"
               />
               {op.label}
             </label>
@@ -252,7 +252,7 @@ export default function FiltrosSidebarClientes({
           <div className="absolute right-0 top-0 bottom-0 w-[85%] max-w-sm bg-white shadow-2xl overflow-y-auto p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Filter size={16} className="text-[#0f3460]" />
+                <Filter size={16} className="text-primary" />
                 <h3 className="text-sm font-semibold text-gray-900">Filtros</h3>
               </div>
               <button
@@ -269,7 +269,7 @@ export default function FiltrosSidebarClientes({
               <button
                 type="button"
                 onClick={onCloseDrawer}
-                className="w-full py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-xl text-sm font-medium transition-colors"
+                className="w-full py-2 bg-primary hover:bg-primary-medium text-white rounded-xl text-sm font-medium transition-colors"
               >
                 Aplicar y cerrar
               </button>

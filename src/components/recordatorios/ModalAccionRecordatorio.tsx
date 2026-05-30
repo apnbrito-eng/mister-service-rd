@@ -131,7 +131,7 @@ export default function ModalAccionRecordatorio({
           <button
             onClick={handleRecordar}
             disabled={saving}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
           >
             <WhatsAppIcon filled={true} size={16} />
             Recordar a la operaria
@@ -166,7 +166,7 @@ export default function ModalAccionRecordatorio({
             maxLength={80}
             rows={3}
             placeholder="Ej: ya organizó la ruta por teléfono"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] resize-none"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium resize-none"
             autoFocus
           />
           <div className="flex justify-between items-center text-[11px] text-gray-500">

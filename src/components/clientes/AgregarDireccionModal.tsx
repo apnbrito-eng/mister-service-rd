@@ -187,7 +187,7 @@ export default function AgregarDireccionModal({
             value={etiqueta}
             onChange={e => setEtiqueta(e.target.value)}
             placeholder='Ej: "Mamá", "Oficina", "Casa hermana en Naco"'
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
             autoFocus
           />
           <p className="text-[11px] text-gray-500 mt-1">Así distingues esta dirección de las demás.</p>
@@ -207,7 +207,7 @@ export default function AgregarDireccionModal({
               value={direccion}
               onChange={e => handleDireccionChange(e.target.value)}
               placeholder="Escribe un lugar, dirección o pega URL de Google Maps"
-              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
               autoComplete="off"
             />
             <button
@@ -247,7 +247,7 @@ export default function AgregarDireccionModal({
             value={referencia}
             onChange={e => setReferencia(e.target.value)}
             placeholder="Al lado del colmado, casa amarilla..."
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
         </div>
 
@@ -263,7 +263,7 @@ export default function AgregarDireccionModal({
           <button
             type="submit"
             disabled={saving}
-            className="px-5 py-2 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-sm font-medium disabled:opacity-60"
+            className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
           >
             {saving ? 'Guardando...' : 'Guardar dirección'}
           </button>

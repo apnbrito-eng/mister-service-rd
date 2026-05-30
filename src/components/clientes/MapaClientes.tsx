@@ -228,7 +228,7 @@ export default function MapaClientes({
           type="button"
           onClick={() => setVista('cluster')}
           className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-            vista === 'cluster' ? 'bg-[#0f3460] text-white' : 'text-gray-600 hover:bg-gray-50'
+            vista === 'cluster' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'
           }`}
         >
           <Layers size={12} /> Cluster
@@ -237,7 +237,7 @@ export default function MapaClientes({
           type="button"
           onClick={() => setVista('heatmap')}
           className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-            vista === 'heatmap' ? 'bg-[#0f3460] text-white' : 'text-gray-600 hover:bg-gray-50'
+            vista === 'heatmap' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'
           }`}
         >
           <Flame size={12} /> Heatmap
@@ -246,7 +246,7 @@ export default function MapaClientes({
           type="button"
           onClick={() => setVista('zonas')}
           className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-            vista === 'zonas' ? 'bg-[#0f3460] text-white' : 'text-gray-600 hover:bg-gray-50'
+            vista === 'zonas' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'
           }`}
         >
           <MapPinIcon size={12} /> Zonas
@@ -255,7 +255,7 @@ export default function MapaClientes({
 
       {/* Contador esquina sup. derecha */}
       <div className="absolute top-3 right-3 z-[450] bg-white/95 backdrop-blur rounded-full shadow-md px-3 py-1.5 text-xs text-gray-700 border border-gray-100">
-        <span className="font-semibold text-[#0f3460]">{clientes.length.toLocaleString('es-DO')}</span> en mapa
+        <span className="font-semibold text-primary">{clientes.length.toLocaleString('es-DO')}</span> en mapa
       </div>
 
       {/* Leyenda inferior izquierda según vista */}

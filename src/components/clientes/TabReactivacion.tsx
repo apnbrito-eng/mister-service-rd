@@ -272,7 +272,7 @@ export default function TabReactivacion({
               type="checkbox"
               checked={overrideCooldown}
               onChange={(e) => setOverrideCooldown(e.target.checked)}
-              className="accent-[#0f3460]"
+              className="accent-primary"
             />
             <span className="flex-1">
               Saltar cooldown e incluir los {clientesEnCooldown.length} clientes igual
@@ -314,7 +314,7 @@ export default function TabReactivacion({
                 clientesSeleccionadosDeCampana.length === 0 ||
                 !adminOCoord
               }
-              className="w-full mt-3 flex items-center justify-center gap-2 bg-[#0f3460] hover:bg-[#1a5fa8] disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+              className="w-full mt-3 flex items-center justify-center gap-2 bg-primary hover:bg-primary-medium disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
             >
               <Send size={14} />
               {creando

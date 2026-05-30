@@ -877,7 +877,7 @@ export default function FormularioAgendarPublico() {
               type="button"
               onClick={() => fotoInputRef.current?.click()}
               disabled={fotoSubiendo}
-              className="inline-flex items-center gap-2 px-4 py-3 min-h-[44px] bg-blue-50 hover:bg-blue-100 text-[#1a5fa8] rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-4 py-3 min-h-[44px] bg-blue-50 hover:bg-blue-100 text-primary-medium rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
             >
               <Camera size={16} />
               {fotoSubiendo ? 'Subiendo...' : 'Tomar/Subir foto del equipo'}
@@ -903,7 +903,7 @@ export default function FormularioAgendarPublico() {
                   type="button"
                   onClick={() => fotoInputRef.current?.click()}
                   disabled={fotoSubiendo}
-                  className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] text-xs font-medium text-[#1a5fa8] bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-60"
+                  className="inline-flex items-center gap-1 px-3 py-2 min-h-[40px] text-xs font-medium text-primary-medium bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-60"
                 >
                   <Camera size={12} />
                   {fotoSubiendo ? 'Subiendo...' : 'Cambiar'}

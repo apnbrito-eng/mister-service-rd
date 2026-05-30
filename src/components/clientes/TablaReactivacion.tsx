@@ -122,8 +122,8 @@ export default function TablaReactivacion({
   const renderSortIcon = (col: ColumnaSort) => {
     if (col !== colSort) return <ArrowUpDown size={11} className="text-gray-300" />;
     return dirSort === 'asc'
-      ? <ArrowUp size={11} className="text-[#0f3460]" />
-      : <ArrowDown size={11} className="text-[#0f3460]" />;
+      ? <ArrowUp size={11} className="text-primary" />
+      : <ArrowDown size={11} className="text-primary" />;
   };
 
   const todosVisiblesSeleccionados = slice.length > 0 && slice.every((c) => seleccionados.has(c.id));
@@ -155,7 +155,7 @@ export default function TablaReactivacion({
           <button
             type="button"
             onClick={onSeleccionarTodos}
-            className="text-xs px-2 py-1 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg transition-colors"
+            className="text-xs px-2 py-1 bg-primary hover:bg-primary-medium text-white rounded-lg transition-colors"
           >
             Seleccionar todos ({ordenados.length})
           </button>
@@ -180,27 +180,27 @@ export default function TablaReactivacion({
                   type="checkbox"
                   checked={todosVisiblesSeleccionados}
                   onChange={handleToggleTodosVisibles}
-                  className="accent-[#0f3460]"
+                  className="accent-primary"
                   aria-label="Seleccionar todos los visibles"
                 />
               </th>
               <th className="px-3 py-2 text-left">
-                <button type="button" onClick={() => handleSort('nombre')} className="flex items-center gap-1 hover:text-[#0f3460]">
+                <button type="button" onClick={() => handleSort('nombre')} className="flex items-center gap-1 hover:text-primary">
                   Nombre {renderSortIcon('nombre')}
                 </button>
               </th>
               <th className="px-3 py-2 text-left">
-                <button type="button" onClick={() => handleSort('telefono')} className="flex items-center gap-1 hover:text-[#0f3460]">
+                <button type="button" onClick={() => handleSort('telefono')} className="flex items-center gap-1 hover:text-primary">
                   Teléfono {renderSortIcon('telefono')}
                 </button>
               </th>
               <th className="px-3 py-2 text-left">
-                <button type="button" onClick={() => handleSort('zona')} className="flex items-center gap-1 hover:text-[#0f3460]">
+                <button type="button" onClick={() => handleSort('zona')} className="flex items-center gap-1 hover:text-primary">
                   Zona {renderSortIcon('zona')}
                 </button>
               </th>
               <th className="px-3 py-2 text-left">
-                <button type="button" onClick={() => handleSort('ultimoServicio')} className="flex items-center gap-1 hover:text-[#0f3460]">
+                <button type="button" onClick={() => handleSort('ultimoServicio')} className="flex items-center gap-1 hover:text-primary">
                   Último servicio {renderSortIcon('ultimoServicio')}
                 </button>
               </th>
@@ -208,12 +208,12 @@ export default function TablaReactivacion({
                 Equipos
               </th>
               <th className="px-3 py-2 text-left">
-                <button type="button" onClick={() => handleSort('totalServicios')} className="flex items-center gap-1 hover:text-[#0f3460]">
+                <button type="button" onClick={() => handleSort('totalServicios')} className="flex items-center gap-1 hover:text-primary">
                   Total {renderSortIcon('totalServicios')}
                 </button>
               </th>
               <th className="px-3 py-2 text-left">
-                <button type="button" onClick={() => handleSort('ultimaCampana')} className="flex items-center gap-1 hover:text-[#0f3460]">
+                <button type="button" onClick={() => handleSort('ultimaCampana')} className="flex items-center gap-1 hover:text-primary">
                   Última campaña {renderSortIcon('ultimaCampana')}
                 </button>
               </th>
@@ -237,7 +237,7 @@ export default function TablaReactivacion({
                       type="checkbox"
                       checked={checked}
                       onChange={() => onToggleCliente(c.id)}
-                      className="accent-[#0f3460]"
+                      className="accent-primary"
                       aria-label={`Seleccionar ${c.nombre}`}
                     />
                   </td>

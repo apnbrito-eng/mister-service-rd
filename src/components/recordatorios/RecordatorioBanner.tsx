@@ -256,7 +256,7 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
           {tipo === 'ruta_manana' && (
             <button
               onClick={() => navigate(`/admin/mapa?fecha=${format(diaManana, 'yyyy-MM-dd')}`)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg text-xs font-semibold transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-medium text-white rounded-lg text-xs font-semibold transition-colors"
             >
               <MapPin size={13} /> Ver mapa
             </button>

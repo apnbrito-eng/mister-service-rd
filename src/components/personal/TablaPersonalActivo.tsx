@@ -60,11 +60,11 @@ export default function TablaPersonalActivo({
           <tbody className="divide-y divide-gray-100">
             {agruparPorRol(personal.filter(p => p.activo)).map(grupo => (
               <Fragment key={grupo.rol}>
-                <tr className="bg-[#0f3460]/5 border-t border-b border-[#0f3460]/10">
+                <tr className="bg-primary/5 border-t border-b border-primary/10">
                   <td colSpan={8} className="px-4 py-2">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{grupo.icono}</span>
-                      <h3 className="text-sm font-semibold text-[#0f3460]">
+                      <h3 className="text-sm font-semibold text-primary">
                         {grupo.label}
                       </h3>
                       <span className="ml-auto text-xs text-gray-600 bg-white border border-gray-200 px-2 py-0.5 rounded-full">

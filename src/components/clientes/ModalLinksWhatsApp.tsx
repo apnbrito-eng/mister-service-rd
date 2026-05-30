@@ -193,7 +193,7 @@ export default function ModalLinksWhatsApp({
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg transition-colors ${
                     f.enviado
                       ? 'bg-emerald-100 text-emerald-700 cursor-default'
-                      : 'bg-[#0f3460] hover:bg-[#1a5fa8] text-white disabled:bg-gray-300'
+                      : 'bg-primary hover:bg-primary-medium text-white disabled:bg-gray-300'
                   }`}
                 >
                   {f.enviado ? (
@@ -218,7 +218,7 @@ export default function ModalLinksWhatsApp({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-sm bg-[#0f3460] hover:bg-[#1a5fa8] text-white rounded-lg transition-colors"
+            className="px-4 py-2 text-sm bg-primary hover:bg-primary-medium text-white rounded-lg transition-colors"
           >
             Cerrar
           </button>
