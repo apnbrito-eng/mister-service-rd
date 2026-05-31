@@ -10,7 +10,13 @@
 
 ---
 
-## SPRINT-DISENO-C-DASHBOARD-REDUCIDO — ⊘ ESCALADO 2026-05-31 pasada 55 (decisión KPI hero)
+## SPRINT-DISENO-C-DASHBOARD-REDUCIDO — ✅ DESBLOQUEADO Y PROCESADO 2026-05-31 pasada 56 (hash `68a203f`)
+
+**Estado:** desbloqueado por Jorge con `OK: jorge 2026-05-31 opcion=C` y procesado autónomo en pasada 56 del coordinator. Código en producción awaiting QA Jorge. Hash: `68a203f`. Stub histórico preservado abajo para forensia.
+
+---
+
+## SPRINT-DISENO-C-DASHBOARD-REDUCIDO — stub histórico ⊘ ESCALADO 2026-05-31 pasada 55 (decisión KPI hero)
 
 **Origen:** `trabaja noche larga` pasada 55 (2026-05-31). El sprint estaba PENDIENTE en cola; el coordinator detectó que el touch-list expandido requiere **decisión de Jorge sobre cuál KPI va como hero** — afecta apariencia visible y semántica del primer impacto del Dashboard, decisión de producto. Resto del sprint (skeletons + microcopy + colores random) es procesable autónomo y puede dividirse en sub-sprints.
 
@@ -26,9 +32,17 @@
 
 **Para desbloquear:** agregá `OK: jorge YYYY-MM-DD HH:MM opcion=A|B|C` al final de esta entrada.
 
+**OK: jorge 2026-05-31 opcion=C** — Jorge eligió **opción C "Órdenes atrasadas"** como KPI hero del Dashboard (vía Cowork). Razón: es el indicador más actionable para un negocio de servicio donde el problema #1 es no perder leads ni dejar clientes esperando. Si está en 0, todo bajo control; si crece, hay incendio que atacar. Resto del sprint (reagrupar 11 secciones en 3 bloques Hoy/Pipeline/Plata, skeletons, microcopy dominicano) procesable autónomo.
+
 ---
 
-## SPRINT-DISENO-D-PUBLICAS-DOMINICANO — ⊘ ESCALADO 2026-05-31 pasada 55 (decisión CTA + contenido testimonios)
+## SPRINT-DISENO-D-PUBLICAS-DOMINICANO — ✅ DESBLOQUEADO Y PROCESADO 2026-05-31 pasada 56 (hash `4347149`)
+
+**Estado:** desbloqueado por Jorge con `OK COMPLETO: jorge 2026-05-31 cta="Lo arreglamos en tu casa, el mismo día" testimonios=placeholder-oculto-en-prod` y procesado autónomo en pasada 56. Código en producción awaiting QA Jorge. Hash: `4347149`. CTA aplicado + componente `<SeccionTestimonios>` con flag activo:false (oculto en prod, visible en DEV). Stub histórico preservado abajo para forensia.
+
+---
+
+## SPRINT-DISENO-D-PUBLICAS-DOMINICANO — stub histórico ⊘ ESCALADO 2026-05-31 pasada 55 (decisión CTA + contenido testimonios)
 
 **Origen:** `trabaja noche larga` pasada 55 (2026-05-31). El sprint estaba PENDIENTE en cola; el coordinator detectó que requiere **contenido humano de Jorge**:
 
@@ -47,6 +61,26 @@
 - Quitar `hover:-translate-y-1` de cards de servicios.
 
 **Para desbloquear:** agregá `OK: jorge YYYY-MM-DD HH:MM cta=A|B|C|"texto custom"` al final.
+
+**OK COMPLETO: jorge 2026-05-31 cta="Lo arreglamos en tu casa, el mismo día" testimonios=placeholder-oculto-en-prod** — Jorge eligió CTA custom (vía Cowork). Razón: las 3 opciones originales (A/B/C) tenían un error semántico — el coordinator escribió "Tu lavadora vuelve a casa el mismo día" sin notar que **el técnico trabaja en la casa del cliente, NO retira el equipo al taller**. Decir "vuelve a casa" hubiera implicado servicio de retiro+devolución, creando confusión sobre el modelo de negocio real. CTA correcto: **"Lo arreglamos en tu casa, el mismo día"** — corto, dominicano natural, comunica las 2 promesas reales (a domicilio + rápido). Aplica a todos los electrodomésticos (lavadora/nevera/aire/estufa/secadora) sin cambiar la frase.
+
+**APPROACH TESTIMONIOS — placeholders ocultos en producción:** El software de Jorge todavía NO está en uso en operación real (solo en pruebas pre-launch). NO tiene sentido pedir testimonios reales a clientes ahora cuando la empresa todavía está en fase de pulido. En su lugar, el sprint procesa:
+
+1. Crear componente `<SeccionTestimonios>` en `src/components/public/` con 3 slots configurables.
+2. Cada slot acepta props: `nombre`, `barrio`, `equipo`, `frase`, `fotoUrl?`.
+3. Default en producción: **sección oculta** (no renderiza nada).
+4. Para activarla cuando Jorge tenga los 3 testimonios reales: editar `src/config/testimoniosHomePage.ts` (archivo nuevo) cambiando flag `activo: false` → `activo: true` + completando los 3 objetos del array. Cuando los 3 estén completos y `activo: true`, la sección aparece en producción.
+5. Placeholder visible SOLO en `import.meta.env.DEV` (modo desarrollo local) para que Jorge pueda previsualizar el diseño sin lanzar nada falso a producción.
+6. Comentario JSDoc claro en el archivo de config explicando el flujo de activación cuando llegue el momento del lanzamiento.
+
+**Resto del sprint procesable autónomo:**
+- HomePage.tsx: reducir 4 stats inventadas a 2 stats reales **confirmadas por Jorge 2026-05-31**: **"16 años de experiencia"** + **"20,000+ servicios realizados"**. Quitar "98% satisfacción" (no se mide) y "24h respuesta" (no confirmado). Si en el futuro Jorge mide NPS o tiempo de respuesta real, sprint follow-up.
+- Empty states con `<EmptyState>` (crear si no existe): 3 mensajes contextuales en Inbox/Citas/FacturacionPendiente.
+- AgendarPage.tsx: respiro vertical (`pt-12` → `pt-20`).
+- `font-extrabold` → `font-bold` (3 hits).
+- Quitar `hover:-translate-y-1` de cards de servicios.
+
+**Procesable AUTÓNOMO COMPLETO con este OK** — no requiere más input de Jorge para arrancar D.
 
 ---
 
