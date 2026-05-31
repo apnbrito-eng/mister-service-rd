@@ -6,6 +6,7 @@ import { CitaPorConfirmar, OrdenServicio, GarantiaOrigen } from '../types';
 import { tiempoTranscurrido, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, formatMoneda, labelTipoMotor } from '../utils';
 import { useTiposEquipo } from '../hooks/useTiposEquipo';
 import LoadingSpinner from '../components/LoadingSpinner';
+import EmptyState from '../components/EmptyState';
 import Modal from '../components/Modal';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
 import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
@@ -600,9 +601,13 @@ export default function Citas() {
       </div>
 
       {citas.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-          <Check size={48} className="mx-auto text-green-400 mb-3" />
-          <p className="text-gray-500">Sin citas pendientes de confirmación</p>
+        // SPRINT-DISENO-D (2026-05-31): EmptyState reusable.
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+          <EmptyState
+            icon={<Check size={48} className="text-green-400" />}
+            titulo="Todo al día"
+            descripcion="No hay citas pendientes de confirmación por ahora. Cuando un cliente agende desde la web, vas a verla acá."
+          />
         </div>
       ) : (
         <div className="space-y-3">

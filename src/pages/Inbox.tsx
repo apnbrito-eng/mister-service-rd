@@ -15,6 +15,7 @@ import type { WhatsAppConversacion } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { SkeletonConversacionRow } from '../components/Skeleton';
+import EmptyState from '../components/EmptyState';
 
 /**
  * Página `/admin/inbox` — bandeja global de conversaciones WhatsApp.
@@ -196,13 +197,22 @@ export default function Inbox() {
           ))}
         </ul>
       ) : conversacionesFiltradas.length === 0 ? (
-        <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
-          <MessageSquare size={32} className="mx-auto mb-2 opacity-40" />
-          <p className="text-sm">
-            {filtro === 'todas' && busqueda.length === 0
-              ? 'Aún no hay conversaciones'
-              : 'Sin resultados para el filtro actual'}
-          </p>
+        // SPRINT-DISENO-D (2026-05-31): EmptyState reusable con copy
+        // dominicano. Cambia de mensaje según haya filtro/búsqueda activos.
+        <div className="bg-gray-50 rounded-lg border border-dashed border-gray-200">
+          {filtro === 'todas' && busqueda.length === 0 ? (
+            <EmptyState
+              icon={<InboxIcon size={40} />}
+              titulo="Todavía no hay conversaciones"
+              descripcion="Cuando un cliente te escriba por WhatsApp, vas a verlo acá."
+            />
+          ) : (
+            <EmptyState
+              icon={<Search size={40} />}
+              titulo="Sin resultados"
+              descripcion="Probá con otro filtro o limpiá la búsqueda."
+            />
+          )}
         </div>
       ) : (
         <ul className="space-y-2">

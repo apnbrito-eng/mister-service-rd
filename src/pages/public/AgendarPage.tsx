@@ -44,7 +44,11 @@ export default function AgendarPage() {
         </div>
       </section>
 
-      <section className="py-12 md:py-16 bg-gray-bg">
+      {/* SPRINT-DISENO-D (2026-05-31): respiro vertical extra antes/después
+          del formulario. El spec original decía pt-12 → pt-20, pero la
+          página no tenía pt-12; se interpretó como dar más aire general
+          a la sección del form. */}
+      <section className="py-16 md:py-24 bg-gray-bg">
         <div className="max-w-3xl mx-auto px-4">
           <FormularioAgendarPublico />
         </div>

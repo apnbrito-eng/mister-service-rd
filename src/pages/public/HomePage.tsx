@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import {
-  Wrench, Shield, Clock, Phone, Star, ChevronRight,
+  Wrench, Shield, Clock, Phone, ChevronRight,
   Thermometer, Waves, Wind, Flame, Refrigerator,
   CheckCircle, ArrowRight, Users, MapPin, Calendar
 } from 'lucide-react';
@@ -8,6 +8,7 @@ import WhatsAppIcon from '../../components/icons/WhatsAppIcon';
 import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
 import HeroCarrusel from '../../components/public/HeroCarrusel';
 import HeroConGradient from '../../components/public/HeroConGradient';
+import SeccionTestimonios from '../../components/public/SeccionTestimonios';
 
 // Mapa de tipo de equipo → icono Lucide para usar como fallback cuando un
 // servicio no tiene `imagenCard` configurada.
@@ -102,32 +103,30 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Stats card */}
+        {/* Stats card —
+            SPRINT-DISENO-D (2026-05-31): reducidas a 2 stats REALES
+            confirmadas por Jorge: 16 años de experiencia + 20,000+
+            servicios. Las anteriores "98% satisfacción" y "24h
+            respuesta" no se medían/confirmaban → se quitaron para no
+            inventar contenido (sub-regla CLAUDE.md). Si en el futuro
+            Jorge mide NPS o tiempo de respuesta real, sprint follow-up.
+            Mantenemos `config.estadisticas.experiencia/servicios` como
+            fuente para que admins puedan ajustar el número desde
+            `/admin/configuracion-web` si crece. Los valores que ven al
+            cliente final son los que están seteados en Firestore.
+            La línea de estrellas también se quita: sin "rating" real
+            tampoco hay número de estrellas legítimo para mostrar. */}
         <div className="hidden md:block">
           <div className="bg-white/10 backdrop-blur-md rounded-3xl p-8 border border-white/20">
             <div className="grid grid-cols-2 gap-6">
               <div className="text-center">
-                <div className="text-4xl font-extrabold text-white">{config.estadisticas.experiencia.valor}</div>
+                <div className="text-4xl font-bold text-white">{config.estadisticas.experiencia.valor}</div>
                 <div className="text-blue-200 text-sm mt-1">{config.estadisticas.experiencia.etiqueta}</div>
               </div>
               <div className="text-center">
-                <div className="text-4xl font-extrabold text-white">{config.estadisticas.servicios.valor}</div>
+                <div className="text-4xl font-bold text-white">{config.estadisticas.servicios.valor}</div>
                 <div className="text-blue-200 text-sm mt-1">{config.estadisticas.servicios.etiqueta}</div>
               </div>
-              <div className="text-center">
-                <div className="text-4xl font-extrabold text-white">{config.estadisticas.satisfaccion.valor}</div>
-                <div className="text-blue-200 text-sm mt-1">{config.estadisticas.satisfaccion.etiqueta}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-4xl font-extrabold text-white">{config.estadisticas.respuesta.valor}</div>
-                <div className="text-blue-200 text-sm mt-1">{config.estadisticas.respuesta.etiqueta}</div>
-              </div>
-            </div>
-            <div className="mt-6 pt-6 border-t border-white/20 flex items-center justify-center gap-1.5">
-              {[1, 2, 3, 4, 5].map(i => (
-                <Star key={i} size={18} className="text-yellow-400 fill-yellow-400" />
-              ))}
-              <span className="text-white text-sm ml-2 font-medium">{config.estadisticas.rating} / 5.0</span>
             </div>
           </div>
         </div>
@@ -175,7 +174,7 @@ export default function HomePage() {
       <section className="py-16 md:py-20 bg-white">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-extrabold text-gray-900 mb-3">Nuestros Servicios</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">Nuestros Servicios</h2>
             <p className="text-gray-500 max-w-xl mx-auto">
               Reparamos todas las marcas de electrodomésticos. Servicio a domicilio o en nuestro taller.
             </p>
@@ -192,7 +191,7 @@ export default function HomePage() {
                   <Link
                     key={s.slug}
                     to={`/servicios/${s.slug}`}
-                    className="group bg-gray-bg rounded-2xl p-6 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 border border-transparent hover:border-gray-200 block"
+                    className="group bg-gray-bg rounded-2xl p-6 hover:shadow-lg transition-all duration-300 border border-transparent hover:border-gray-200 block"
                   >
                     {s.imagenCard ? (
                       <img
@@ -234,7 +233,7 @@ export default function HomePage() {
       <section className="py-16 md:py-20 bg-gray-bg">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-extrabold text-gray-900 mb-3">¿Cómo funciona?</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">¿Cómo funciona?</h2>
             <p className="text-gray-500 max-w-lg mx-auto">
               En 3 simples pasos resolvemos su problema. Sin complicaciones.
             </p>
@@ -288,7 +287,7 @@ export default function HomePage() {
       <section className="py-16 md:py-20 bg-gray-bg">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-extrabold text-gray-900 mb-3">¿Por qué elegirnos?</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-3">¿Por qué elegirnos?</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {[
@@ -309,15 +308,27 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ══════════ CTA FINAL ══════════ */}
+      {/* ══════════ TESTIMONIOS ══════════
+          SPRINT-DISENO-D (2026-05-31): sección oculta en producción
+          hasta que Jorge cargue 3 testimonios reales en
+          `src/config/testimoniosHomePage.ts` (flag activo: true).
+          Visible solo en DEV para previsualizar el diseño. */}
+      <SeccionTestimonios />
+
+      {/* ══════════ CTA FINAL ══════════
+          SPRINT-DISENO-D (2026-05-31): CTA actualizado con el copy
+          dominicano natural elegido por Jorge — "Lo arreglamos en tu
+          casa, el mismo día" comunica las 2 promesas reales del
+          negocio (a domicilio + rápido) en un texto corto y claro.
+          Aplica a todos los electrodomésticos sin cambiar la frase. */}
       {/* @safe-gradient: sección CTA marketing público — branding */}
       <section className="py-16 bg-gradient-to-r from-primary to-primary-medium">
         <div className="max-w-4xl mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
-            ¿Tiene un electrodoméstico que necesita reparación?
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+            Lo arreglamos en tu casa, el mismo día
           </h2>
           <p className="text-blue-200 text-lg mb-8 max-w-xl mx-auto">
-            No espere más. Agende su cita hoy y nuestro equipo se encargará del resto.
+            Agendá tu cita hoy. Nuestro técnico llega con todo lo necesario para diagnosticar y reparar.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link

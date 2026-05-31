@@ -14,6 +14,7 @@ import { formatFecha, formatMoneda, formatMonedaPrecisa, parseOrden, parseServic
 import { iconoCondicion, iconoOrigen, etiquetaOrigen } from '../utils/piezas';
 import { aprobarPiezasDeOrden } from '../services/piezas.service';
 import LoadingSpinner from '../components/LoadingSpinner';
+import EmptyState from '../components/EmptyState';
 import ModalEditarPiezasOrden from '../components/cierre/ModalEditarPiezasOrden';
 import ModalEditarOrdenAdmin from '../components/ordenes/ModalEditarOrdenAdmin';
 import FiltroAvanzadoFinanzas from '../components/admin/FiltroAvanzadoFinanzas';
@@ -197,13 +198,22 @@ export default function FacturacionPendiente() {
       />
 
       {ordenesFiltradas.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
-          <Receipt size={40} className="mx-auto text-gray-300 mb-3" />
-          <p className="text-gray-500 text-sm">
-            {ordenes.length === 0
-              ? 'No hay órdenes pendientes. Cuando una operaria envíe una orden para conduce de garantía, aparecerá aquí.'
-              : 'No hay órdenes pendientes en el rango de fechas seleccionado.'}
-          </p>
+        // SPRINT-DISENO-D (2026-05-31): EmptyState reusable. Distingue
+        // entre "todo al día" y "vacío por filtro de fechas".
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
+          {ordenes.length === 0 ? (
+            <EmptyState
+              icon={<Receipt size={40} />}
+              titulo="No hay órdenes para facturar"
+              descripcion="Cuando una operaria mande una orden para emitir conduce de garantía, vas a verla acá."
+            />
+          ) : (
+            <EmptyState
+              icon={<Receipt size={40} />}
+              titulo="Sin resultados en el rango"
+              descripcion="No hay órdenes pendientes para las fechas seleccionadas. Probá ampliando el rango."
+            />
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
