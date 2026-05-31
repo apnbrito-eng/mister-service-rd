@@ -240,14 +240,15 @@ export function calcularSiguientePaso(
       if (rolSoportado === 'operaria' || rolSoportado === 'secretaria' ||
           rolSoportado === 'administrador' || rolSoportado === 'coordinadora') {
         return {
-          titulo: 'Próximo paso: enviar a facturación',
-          detalle: 'Validá el cierre del técnico y enviá la orden a facturación.',
+          // SPRINT-DISENO-C (2026-05-31): microcopy dominicano natural.
+          titulo: 'Próximo paso: mandar a facturar',
+          detalle: 'Revisá el cierre del técnico y mandá la orden a facturar.',
           tono: 'accion',
         };
       }
       return {
         titulo: 'Esperando facturación',
-        detalle: 'Oficina debe procesar la facturación del trabajo.',
+        detalle: 'La oficina tiene que procesar la facturación del trabajo.',
         tono: 'espera',
       };
 

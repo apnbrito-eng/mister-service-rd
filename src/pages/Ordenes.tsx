@@ -14,7 +14,7 @@ import {
 } from '../utils';
 import Badge from '../components/Badge';
 import Modal from '../components/Modal';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { SkeletonText, SkeletonOrdenCard, SkeletonBox } from '../components/Skeleton';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import {
@@ -869,7 +869,26 @@ export default function Ordenes() {
   const fechaHoyTexto = format(hoy, "'Hoy,' EEEE dd 'de' MMMM yyyy", { locale: es });
   const fechaHoyCapitalizada = fechaHoyTexto.charAt(0).toUpperCase() + fechaHoyTexto.slice(1);
 
-  if (loading) return <LoadingSpinner fullPage text="Cargando ordenes..." />;
+  // SPRINT-DISENO-C (2026-05-31): skeleton en lugar de spinner full-page.
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="space-y-2">
+            <SkeletonText className="w-56 h-7" />
+            <SkeletonText className="w-72 h-3" />
+          </div>
+          <SkeletonBox className="h-10 w-32 rounded-lg" />
+        </div>
+        <SkeletonBox className="h-12 w-full rounded-xl" />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonOrdenCard key={i} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">

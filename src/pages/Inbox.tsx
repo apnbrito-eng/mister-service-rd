@@ -14,6 +14,7 @@ import { suscribirConversaciones } from '../services/whatsappInbox.service';
 import type { WhatsAppConversacion } from '../types';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { SkeletonConversacionRow } from '../components/Skeleton';
 
 /**
  * Página `/admin/inbox` — bandeja global de conversaciones WhatsApp.
@@ -188,10 +189,12 @@ export default function Inbox() {
 
       {/* Lista */}
       {loading ? (
-        <div className="text-center py-12 text-gray-400">
-          <MessageSquare size={32} className="mx-auto mb-2 opacity-40" />
-          Cargando conversaciones...
-        </div>
+        // SPRINT-DISENO-C (2026-05-31): 6 skeletons en lugar de "Cargando…".
+        <ul className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <SkeletonConversacionRow key={i} />
+          ))}
+        </ul>
       ) : conversacionesFiltradas.length === 0 ? (
         <div className="text-center py-12 text-gray-400 bg-gray-50 rounded-lg border border-dashed border-gray-200">
           <MessageSquare size={32} className="mx-auto mb-2 opacity-40" />

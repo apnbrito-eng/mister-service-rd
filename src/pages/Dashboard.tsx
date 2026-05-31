@@ -24,7 +24,7 @@ import {
 } from '../utils';
 // SPRINT-REPORTING-1 (2026-05-25): helpers compartidos de KPI.
 import { ingresosFacturasPagadas, conducesEmitidosMonto, conducesEmitidosCount } from '../utils/kpis';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { SkeletonBox, SkeletonText, SkeletonKpiCard, SkeletonSectionBlock } from '../components/Skeleton';
 import Badge from '../components/Badge';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import { useApp } from '../context/AppContext';
@@ -382,7 +382,9 @@ export default function Dashboard() {
     [facturas, inicioMes]
   );
 
-  // Ordenes atrasadas (>24h SLA)
+  // Órdenes atrasadas (> 1 día sin avance) — KPI hero del Dashboard.
+  // SPRINT-DISENO-C (2026-05-31): el cálculo no cambió, solo la
+  // presentación visual (KPI hero arriba en lugar de tabla aislada).
   const ordenesAtrasadas = useMemo(() => {
     return ordenes
       .filter(o => {
@@ -606,7 +608,39 @@ export default function Dashboard() {
   }, [ordenes]);
 
   // ---- loading ----
-  if (loading) return <LoadingSpinner fullPage text="Cargando dashboard..." />;
+  // SPRINT-DISENO-C (2026-05-31): skeleton en lugar de spinner full-page.
+  // Estructura imita los 3 bloques del Dashboard (Hoy/Pipeline/Plata) para
+  // que el usuario perciba la pantalla "armándose", no "esperando".
+  if (loading) {
+    return (
+      <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
+        {/* Header */}
+        <div className="space-y-2">
+          <SkeletonText className="w-40 h-7" />
+          <SkeletonText className="w-64 h-3" />
+        </div>
+        {/* KPI Hero "Órdenes atrasadas" */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+          <SkeletonText className="w-32 h-4" />
+          <SkeletonBox className="h-16 w-32 rounded mt-3" />
+        </div>
+        {/* 4 KPI cards Hoy */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <SkeletonKpiCard />
+          <SkeletonKpiCard />
+          <SkeletonKpiCard />
+          <SkeletonKpiCard />
+        </div>
+        {/* Bloque Pipeline */}
+        <SkeletonSectionBlock rows={3} />
+        {/* Bloque Plata */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <SkeletonSectionBlock rows={2} />
+          <SkeletonSectionBlock rows={2} />
+        </div>
+      </div>
+    );
+  }
 
   // ---- render ----
   return (
@@ -677,6 +711,27 @@ export default function Dashboard() {
         <RecordatorioBanner tipo="ruta_manana" tickSeed={recordatoriosTick} />
         <RecordatorioBanner tipo="horarios_clientes" tickSeed={recordatoriosTick} />
       </div>
+
+      {/* ════════════════════════════════════════════════════════════
+          SPRINT-DISENO-C (2026-05-31): el Dashboard se reorganizó en
+          3 bloques visualmente separados:
+            HOY     — KPI hero "Órdenes atrasadas" + 4 KPI cards + inbox + agenda
+            PIPELINE — embudo + alertas + estado/rendimiento técnicos + reparaciones
+            PLATA   — ingresos vs gastos + balance pendiente + nómina
+          La regla: lo más "actionable" arriba. "Órdenes atrasadas"
+          como KPI hero dominante (0 = bajo control, crece = incendio).
+          ════════════════════════════════════════════════════════════ */}
+
+      {/* ════════════ BLOQUE: HOY ════════════ */}
+      <BloqueHeader titulo="Hoy" descripcion="Lo que tiene que pasar ahora" />
+
+      {/* === KPI HERO: ÓRDENES ATRASADAS === */}
+      {/* Domina la pantalla. Si está en 0 = todo controlado. Si crece = hay incendio. */}
+      <KpiHeroAtrasadas
+        cantidad={ordenesAtrasadas.length}
+        ordenes={ordenesAtrasadas}
+        onNavegarOrden={(id) => navigate(`/admin/ordenes/${id}`)}
+      />
 
       {/* ======== 1. KPI CARDS ======== */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -775,56 +830,11 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ======== 2. ORDENES ATRASADAS ======== */}
-      {ordenesAtrasadas.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-red-200 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Timer size={20} className="text-red-500" />
-            <h2 className="text-lg font-semibold text-gray-900">Órdenes Atrasadas (SLA &gt;24h)</h2>
-            <span className="bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">
-              {ordenesAtrasadas.length}
-            </span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-gray-500 border-b border-gray-100">
-                  <th className="pb-2 pr-4 font-medium">Número</th>
-                  <th className="pb-2 pr-4 font-medium">Cliente</th>
-                  <th className="pb-2 pr-4 font-medium">Fase</th>
-                  <th className="pb-2 pr-4 font-medium">Técnico</th>
-                  <th className="pb-2 font-medium text-right">Días de Atraso</th>
-                  <th className="pb-2 font-medium text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ordenesAtrasadas.slice(0, 10).map(orden => (
-                  <tr
-                    key={orden.id}
-                    onClick={() => navigate(`/admin/ordenes/${orden.id}`)}
-                    className="border-b border-gray-50 hover:bg-red-50 cursor-pointer transition-colors"
-                  >
-                    <td className="py-2.5 pr-4 font-mono font-medium text-primary">
-                      #{orden.numero}
-                    </td>
-                    <td className="py-2.5 pr-4 text-gray-900">{orden.clienteNombre}</td>
-                    <td className="py-2.5 pr-4"><Badge fase={orden.fase} /></td>
-                    <td className="py-2.5 pr-4 text-gray-600">{orden.tecnicoNombre || 'Sin asignar'}</td>
-                    <td className="py-2.5 text-right">
-                      <span className={`font-bold ${orden.diasAtraso >= 3 ? 'text-red-600' : 'text-orange-600'}`}>
-                        {orden.diasAtraso} día{orden.diasAtraso !== 1 ? 's' : ''}
-                      </span>
-                    </td>
-                    <td className="py-2.5 text-right">
-                      <EliminarOrdenButton orden={orden} variant="icon" size="sm" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {/* (la sección "Órdenes Atrasadas" antigua fue promovida arriba
+          como KPI hero del bloque HOY — SPRINT-DISENO-C 2026-05-31) */}
+
+      {/* ════════════ BLOQUE: PIPELINE ════════════ */}
+      <BloqueHeader titulo="Pipeline" descripcion="Cómo se mueve el trabajo" />
 
       {/* ======== 3. EMBUDO VISUAL HORIZONTAL ======== */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
@@ -850,63 +860,66 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ======== 4. ALERTAS + 5. VENTAS/COMPRAS ======== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 4. Alertas en tiempo real */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <AlertTriangle size={20} className="text-red-500" />
-            <h2 className="text-lg font-semibold text-gray-900">Alertas en Tiempo Real</h2>
-            {todasAlertas.length > 0 && (
-              <span className="bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">
-                {todasAlertas.length}
-              </span>
-            )}
-          </div>
-
-          {todasAlertas.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              <AlertTriangle size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Sin alertas activas</p>
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {/* Red alerts first */}
-              {alertasRojas.length > 0 && (
-                <div className="mb-1">
-                  <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-1.5">Urgentes</p>
-                  {alertasRojas.map(alerta => (
-                    <div
-                      key={alerta.id}
-                      onClick={() => alerta.ordenId && navigate(`/admin/ordenes/${alerta.ordenId}`)}
-                      className="flex items-start gap-3 p-3 rounded-xl cursor-pointer hover:opacity-90 transition-opacity bg-red-50 border border-red-100 mb-1.5"
-                    >
-                      <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-red-500 animate-pulse" />
-                      <p className="text-sm text-red-700">{alerta.mensaje}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* Orange alerts */}
-              {alertasNaranjas.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide mb-1.5">Atención</p>
-                  {alertasNaranjas.map(alerta => (
-                    <div
-                      key={alerta.id}
-                      onClick={() => alerta.ordenId && navigate(`/admin/ordenes/${alerta.ordenId}`)}
-                      className="flex items-start gap-3 p-3 rounded-xl cursor-pointer hover:opacity-90 transition-opacity bg-orange-50 border border-orange-100 mb-1.5"
-                    >
-                      <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-orange-500" />
-                      <p className="text-sm text-orange-700">{alerta.mensaje}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+      {/* ======== 4. ALERTAS EN TIEMPO REAL (Pipeline) ======== */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <AlertTriangle size={20} className="text-red-500" />
+          <h2 className="text-lg font-semibold text-gray-900">Alertas en Tiempo Real</h2>
+          {todasAlertas.length > 0 && (
+            <span className="bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">
+              {todasAlertas.length}
+            </span>
           )}
         </div>
 
+        {todasAlertas.length === 0 ? (
+          <div className="text-center py-8 text-gray-400">
+            <AlertTriangle size={32} className="mx-auto mb-2 opacity-30" />
+            <p className="text-sm">Sin alertas activas</p>
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {/* Red alerts first */}
+            {alertasRojas.length > 0 && (
+              <div className="mb-1">
+                <p className="text-xs font-semibold text-red-600 uppercase tracking-wide mb-1.5">Urgentes</p>
+                {alertasRojas.map(alerta => (
+                  <div
+                    key={alerta.id}
+                    onClick={() => alerta.ordenId && navigate(`/admin/ordenes/${alerta.ordenId}`)}
+                    className="flex items-start gap-3 p-3 rounded-xl cursor-pointer hover:opacity-90 transition-opacity bg-red-50 border border-red-100 mb-1.5"
+                  >
+                    <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-red-500 animate-pulse" />
+                    <p className="text-sm text-red-700">{alerta.mensaje}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Orange alerts */}
+            {alertasNaranjas.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide mb-1.5">Atención</p>
+                {alertasNaranjas.map(alerta => (
+                  <div
+                    key={alerta.id}
+                    onClick={() => alerta.ordenId && navigate(`/admin/ordenes/${alerta.ordenId}`)}
+                    className="flex items-start gap-3 p-3 rounded-xl cursor-pointer hover:opacity-90 transition-opacity bg-orange-50 border border-orange-100 mb-1.5"
+                  >
+                    <div className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0 bg-orange-500" />
+                    <p className="text-sm text-orange-700">{alerta.mensaje}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ════════════ BLOQUE: PLATA ════════════ */}
+      <BloqueHeader titulo="Plata" descripcion="Ingresos, gastos y nómina" />
+
+      {/* ======== 5. VENTAS vs GASTOS + 6. BALANCE PENDIENTE ======== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 5. Ventas / Compras */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -981,11 +994,8 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ======== 6. BALANCE PENDIENTE + 7. ESTADO CASOS POR TECNICO ======== */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 6. Balance pendiente */}
+        {/* 6. Balance pendiente — pareja del 5 (Plata, ingresos vs pendientes) */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-4">
             <DollarSign size={20} className="text-primary-medium" />
@@ -1014,7 +1024,15 @@ export default function Dashboard() {
             </span>
           </div>
         </div>
+      </div>
 
+      {/* Fin Plata principal — siguen anuladas, nómina y proyección al final */}
+
+      {/* ════════════ Vuelve a Pipeline para los detalles operativos ════════════ */}
+      <BloqueHeader titulo="Equipo y trabajos" descripcion="Cómo viene cada técnico y qué se está reparando" />
+
+      {/* ======== 7. ESTADO CASOS POR TECNICO ======== */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* 7. Estado de casos por tecnico */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center gap-2 mb-4">
@@ -1330,6 +1348,133 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Bloque header (SPRINT-DISENO-C, 2026-05-31)
+// ---------------------------------------------------------------------------
+
+/**
+ * Header visual que separa los 3 grandes bloques del Dashboard:
+ * Hoy / Pipeline / Plata. Un divisor con título grande + subtítulo
+ * dominicano corto. Usa color brand para uniformidad.
+ */
+function BloqueHeader({ titulo, descripcion }: { titulo: string; descripcion: string }) {
+  return (
+    <div className="pt-4 pb-1 border-t-2 border-primary/10 first:border-t-0 first:pt-0">
+      <h2 className="text-xl font-bold text-primary">{titulo}</h2>
+      <p className="text-sm text-gray-500 mt-0.5">{descripcion}</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// KPI Hero — "Órdenes atrasadas" (SPRINT-DISENO-C, 2026-05-31)
+// ---------------------------------------------------------------------------
+
+/**
+ * KPI dominante del Dashboard. Decisión Jorge 2026-05-31 (opción C):
+ * "Órdenes atrasadas" es el indicador más actionable.
+ *   - 0 = bajo control (estado neutro brand).
+ *   - >0 = hay incendio que atacar (rojo).
+ *
+ * Si hay órdenes atrasadas, abajo del número grande renderiza el
+ * detalle (tabla con las 10 primeras + acceso al detalle de cada una).
+ * Si está en 0, oculta la tabla y muestra mensaje positivo corto.
+ */
+function KpiHeroAtrasadas({
+  cantidad,
+  ordenes,
+  onNavegarOrden,
+}: {
+  cantidad: number;
+  ordenes: (OrdenServicio & { diasAtraso: number })[];
+  onNavegarOrden: (id: string) => void;
+}) {
+  const todoBajoControl = cantidad === 0;
+  return (
+    <div
+      className={`bg-white rounded-2xl shadow-sm border p-6 ${
+        todoBajoControl ? 'border-gray-100' : 'border-red-200'
+      }`}
+    >
+      <div className="flex items-start gap-4 flex-wrap">
+        <div
+          className={`rounded-2xl p-4 ${
+            todoBajoControl ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'
+          }`}
+        >
+          <Timer size={32} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-500 uppercase tracking-wide">
+            Órdenes atrasadas
+          </p>
+          <p
+            className={`text-6xl md:text-7xl font-extrabold leading-none mt-1 ${
+              todoBajoControl ? 'text-green-600' : 'text-red-600'
+            }`}
+          >
+            {cantidad}
+          </p>
+          <p className="text-sm text-gray-600 mt-2">
+            {todoBajoControl
+              ? 'Todo bajo control. Ninguna orden atrasada más de 1 día.'
+              : `Atrasadas más de 1 día. Atender lo antes posible.`}
+          </p>
+        </div>
+      </div>
+
+      {!todoBajoControl && (
+        <div className="overflow-x-auto mt-5 border-t border-gray-100 pt-4">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-500 border-b border-gray-100">
+                <th className="pb-2 pr-4 font-medium">Número</th>
+                <th className="pb-2 pr-4 font-medium">Cliente</th>
+                <th className="pb-2 pr-4 font-medium">Fase</th>
+                <th className="pb-2 pr-4 font-medium">Técnico</th>
+                <th className="pb-2 font-medium text-right">Días atraso</th>
+                <th className="pb-2 font-medium text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ordenes.slice(0, 10).map((orden) => (
+                <tr
+                  key={orden.id}
+                  onClick={() => onNavegarOrden(orden.id)}
+                  className="border-b border-gray-50 hover:bg-red-50 cursor-pointer transition-colors"
+                >
+                  <td className="py-2.5 pr-4 font-mono font-medium text-primary">
+                    #{orden.numero}
+                  </td>
+                  <td className="py-2.5 pr-4 text-gray-900">{orden.clienteNombre}</td>
+                  <td className="py-2.5 pr-4">
+                    <Badge fase={orden.fase} />
+                  </td>
+                  <td className="py-2.5 pr-4 text-gray-600">
+                    {orden.tecnicoNombre || 'Sin asignar'}
+                  </td>
+                  <td className="py-2.5 text-right">
+                    <span
+                      className={`font-bold ${
+                        orden.diasAtraso >= 3 ? 'text-red-600' : 'text-orange-600'
+                      }`}
+                    >
+                      {orden.diasAtraso} día{orden.diasAtraso !== 1 ? 's' : ''}
+                    </span>
+                  </td>
+                  <td className="py-2.5 text-right">
+                    <EliminarOrdenButton orden={orden} variant="icon" size="sm" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

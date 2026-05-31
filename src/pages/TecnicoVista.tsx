@@ -1167,8 +1167,11 @@ export default function TecnicoVista() {
                           }
                           if (necesitaAprobacion) {
                             return (
+                              // SPRINT-DISENO-C (2026-05-31): microcopy dominicano simple.
+                              // Antes: "Esperando aprobación del precio por operaciones" (jerga interna).
                               <div className="w-full bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs text-yellow-800 flex items-center gap-1">
-                                ⏳ Esperando aprobación del precio por operaciones
+                                <Clock size={14} className="flex-shrink-0" />
+                                La oficina está revisando el precio
                               </div>
                             );
                           }
