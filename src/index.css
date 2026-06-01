@@ -36,7 +36,7 @@
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f0f4f8;
@@ -80,7 +80,7 @@ body {
   border-radius: 12px;
   border: 1px solid #e5e7eb;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   margin-top: 4px;
 }
 

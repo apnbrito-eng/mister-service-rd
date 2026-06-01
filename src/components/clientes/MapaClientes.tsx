@@ -71,7 +71,7 @@ function popupHTMLCliente(c: Cliente, meses: number | null): string {
   // Escapamos para evitar XSS al construir HTML manualmente.
   const safe = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   return `
-    <div style="min-width:200px;font-family:Inter,system-ui,sans-serif;">
+    <div style="min-width:200px;font-family:'Plus Jakarta Sans',system-ui,sans-serif;">
       <div style="font-weight:700;font-size:14px;color:#0f3460;margin-bottom:4px;">${safe(c.nombre || 'Sin nombre')}</div>
       <div style="font-size:12px;color:#475569;">${safe(tel)}</div>
       <div style="font-size:12px;color:#475569;margin-top:2px;">Zona: <span style="color:#1a5fa8;font-weight:500;">${safe(zonaTexto)}</span></div>
