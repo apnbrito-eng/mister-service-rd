@@ -14,12 +14,15 @@
 @layer components {
   .text-h1 {
     @apply text-3xl font-bold text-primary;
+    text-wrap: pretty;
   }
   .text-h2 {
     @apply text-xl font-semibold text-primary;
+    text-wrap: pretty;
   }
   .text-body {
     @apply text-base font-normal text-gray-800;
+    text-wrap: pretty;
   }
   .text-caption {
     @apply text-sm text-gray-600;
