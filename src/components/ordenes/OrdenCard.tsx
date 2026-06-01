@@ -3,7 +3,7 @@ import { Calendar, Clock, Wrench, User, XCircle, Play, RotateCcw } from 'lucide-
 import { doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, StandbyPieza } from '../../types';
-import { estadoSimpleBorder, formatFecha, tiempoTranscurrido, tieneStandby, crearRegistroAuditoria, formatearEquipoLabel } from '../../utils';
+import { estadoSimpleColor, estadoSimpleLabel, formatFecha, tiempoTranscurrido, tieneStandby, crearRegistroAuditoria, formatearEquipoLabel } from '../../utils';
 import { coordsFromLatLng } from '../../utils/maps';
 import FotoEquipoDisplay from '../shared/FotoEquipoDisplay';
 import BotonComoLlegar from '../shared/BotonComoLlegar';
@@ -63,9 +63,13 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
   };
   return (
     <div
-      className={`bg-white rounded-2xl shadow-sm border border-gray-100 border-l-4 ${estadoSimpleBorder(orden.estadoSimple)} p-4 hover:shadow-md transition-shadow`}
+      className="relative bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow"
     >
-      <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+      {/* SPRINT-DISENO-H: badge de estado arriba-derecha en lugar de border-left accent. */}
+      <div className="absolute top-2 right-2 z-10 pointer-events-none">
+        <Badge label={estadoSimpleLabel(orden.estadoSimple)} color={estadoSimpleColor(orden.estadoSimple)} />
+      </div>
+      <div className="flex flex-col lg:flex-row lg:items-center gap-3 pr-24">
         {/* Foto del equipo — thumbnail clickeable a la izquierda */}
         {orden.fotoEquipoUrl && (
           <div onClick={(e) => e.stopPropagation()} className="shrink-0 self-start">

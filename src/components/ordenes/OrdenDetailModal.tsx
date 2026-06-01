@@ -171,6 +171,7 @@ export default function OrdenDetailModal({
           Si oficina ya coordinó por otro canal (WhatsApp manual), "Marcar resuelto"
           limpia sin reagendar. */}
       {orden.visitaFallida && !orden.eliminada && orden.fase !== 'cancelado' && orden.fase !== 'cerrado' && (
+        // @safe-border-left-accent: banner de alerta (SPRINT-DISENO-H 2026-06-01)
         <div className="bg-amber-50 border-l-4 border-amber-400 p-4 rounded">
           <div className="flex items-start gap-2">
             <Bell size={18} className="text-amber-700 mt-0.5 shrink-0" />
@@ -377,6 +378,7 @@ export default function OrdenDetailModal({
             ? (reac.campanaFecha as { toDate: () => Date }).toDate()
             : null);
         return (
+          // @safe-border-left-accent: banner informativo de reactivación (SPRINT-DISENO-H 2026-06-01)
           <div className="bg-green-50 border-l-4 border-green-500 rounded-r-xl p-3 flex items-start gap-3">
             <TrendingUp size={18} className="text-green-700 mt-0.5 shrink-0" />
             <div className="flex-1">

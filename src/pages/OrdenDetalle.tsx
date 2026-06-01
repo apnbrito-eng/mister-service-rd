@@ -701,6 +701,7 @@ export default function OrdenDetalle() {
             ? (reac.campanaFecha as { toDate: () => Date }).toDate()
             : null);
         return (
+          // @safe-border-left-accent: banner informativo de reactivación (SPRINT-DISENO-H 2026-06-01)
           <div className="bg-green-50 border-l-4 border-green-500 rounded-r-2xl p-4 flex items-start gap-3">
             <TrendingUp size={20} className="text-green-700 mt-0.5 shrink-0" />
             <div className="flex-1">

@@ -8,7 +8,6 @@ import { db, storage } from '../firebase/config';
 import { OrdenServicio, EstadoOrdenSimple, Cliente, Personal, FaseOrden } from '../types';
 import {
   formatFecha, formatHora,
-  estadoSimpleBorder,
   parseOrden,
   crearRegistroAuditoria
 } from '../utils';
@@ -981,7 +980,7 @@ export default function Ordenes() {
               <div
                 key={orden.id}
                 onClick={() => setSelectedOrden(orden)}
-                className={`bg-white rounded-2xl shadow-sm border border-gray-100 p-4 cursor-pointer hover:shadow-md transition-shadow border-l-4 ${estadoSimpleBorder(orden.estadoSimple)}`}
+                className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 cursor-pointer hover:shadow-md transition-shadow"
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold text-primary">

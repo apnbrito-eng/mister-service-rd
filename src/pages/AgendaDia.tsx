@@ -955,7 +955,9 @@ function TecnicoColumn({
         {ordenes.length === 0 ? (
           <p className="text-center text-[11px] text-gray-400 py-6">Sin órdenes</p>
         ) : ordenes.map(o => {
-          const borderColor = faseBgColor(o.fase);
+          // SPRINT-DISENO-H: el badge de fase a la derecha del row ya codifica el estado;
+          // el border-left fue removido como anti-patrón explícito del prompt de diseño.
+          const faseBadgeColor = faseBgColor(o.fase);
           const puedeAccionarChequeo = puedeAprobar &&
             !o.soloChequeo &&
             !o.enStandby &&
@@ -971,8 +973,7 @@ function TecnicoColumn({
               tabIndex={0}
               onClick={() => onSelectOrden(o)}
               onKeyDown={(e) => { if (e.key === 'Enter') onSelectOrden(o); }}
-              className="w-full text-left bg-white rounded-lg border border-gray-200 border-l-4 shadow-sm hover:shadow-md transition-shadow p-2.5 cursor-pointer"
-              style={{ borderLeftColor: borderColor }}
+              className="w-full text-left bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow p-2.5 cursor-pointer"
             >
               <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -1007,7 +1008,7 @@ function TecnicoColumn({
                 </div>
                 <span
                   className="text-[10px] font-medium px-1.5 py-0.5 rounded-full text-white"
-                  style={{ backgroundColor: borderColor }}
+                  style={{ backgroundColor: faseBadgeColor }}
                 >
                   {faseLabel(o.fase)}
                 </span>

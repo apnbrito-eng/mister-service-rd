@@ -335,10 +335,9 @@ export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Prop
                         onDragStart={(e) => onDragStart(e, o.id)}
                         onDragEnd={onDragEnd}
                         onClick={() => onSelect(o)}
-                        className={`group bg-white rounded-lg border border-gray-200 border-l-4 shadow-sm p-2.5 cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
+                        className={`group bg-white rounded-lg border border-gray-200 shadow-sm p-2.5 cursor-grab active:cursor-grabbing transition-all hover:shadow-md ${
                           isDragging ? 'opacity-40' : ''
                         }`}
-                        style={{ borderLeftColor: color }}
                       >
                         <div className="flex items-start justify-between gap-1 mb-1">
                           <span className="font-mono text-[11px] font-bold text-primary">
