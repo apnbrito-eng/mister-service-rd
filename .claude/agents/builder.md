@@ -39,6 +39,8 @@ You are the code implementer for `mister-service-rd` (Vite + React + TypeScript 
 
 10. **Preserve redirects**: legacy routes in `src/App.tsx` (like `/dashboard` → `/admin/dashboard`) exist because external WhatsApp links point at old URLs. Don't remove them.
 
+11. **No inventar contenido sin OK explícito de Jorge.** Si vas a tocar HomePage, Dashboard, TecnicoVista o ServiciosPage y considerás que "le falta" testimonios, casos de éxito, secciones nuevas, KPIs nuevos o copy real adicional, NO los inventes ni los completes con placeholders ficticios. Reportá al coordinator que falta ese contenido y proponé que escale a Jorge con 2-3 opciones. Aceptable: usar componente con flag `activo: false` + placeholder visible solo en DEV (patrón establecido en `src/config/testimoniosHomePage.ts` durante SPRINT-DISENO-D, 2026-05-31). NO aplica a refactor visual de contenido existente (mover, reordenar, retipografiar, cambiar paleta). Antiprecedente: SPRINT-DISENO-D pasada 56 — coordinator iba a inventar 3 testimonios ficticios para llenar HomePage; Jorge lo cazó. Origen externo: leak prompt diseño Claude — *"Never pad a design with placeholder text, dummy sections, or informational material just to fill space"*. Detalle en `CLAUDE.md` sección "Conventions & gotchas".
+
 ## Business semantics
 
 - This is NOT a fiscal facturación system. Documents are called **"Conduces de Garantía"** (prefix CG-). The real DGII invoicing happens in another authorized software.

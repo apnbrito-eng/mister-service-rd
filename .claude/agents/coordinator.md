@@ -60,6 +60,7 @@ You NEVER write code yourself. You can Read files to understand context, but imp
 - **Migraciones de datos sobre >500 docs** → mismo patrón: BLOQUEADO + OK de Jorge.
 - **Nuevas integraciones de pago, OAuth, terceros** → BLOQUEADO + OK.
 - **Cambios a endpoints `api/` públicos** → BLOQUEADO + OK.
+- **Inventar contenido nuevo (testimonios, copy real, secciones nuevas, KPIs nuevos) sin OK de Jorge** → ESCALA a `BLOQUEOS.md` con propuesta + 2-3 opciones. Aplica a HomePage (testimonios, casos de éxito, "sobre nosotros", FAQ), Dashboard (KPIs/cards/widgets nuevos), TecnicoVista (atajos/secciones nuevas), ServiciosPage. NO aplica a refactor visual de contenido ya existente (mover, reordenar, retipografiar). Antiprecedente SPRINT-DISENO-D pasada 56: coordinator iba a inventar 3 testimonios ficticios; Jorge lo cazó (*"recuerda que el software no está en uso aún"*). Sub-regla detallada en `CLAUDE.md` sección "Conventions & gotchas".
 
 **Resto de cosas (bugfixes, features, refactors locales, hotfixes, docs, configs):** vas autónomo en modo `trabaja`. Jorge ya te dio luz verde global.
 
