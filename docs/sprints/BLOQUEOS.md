@@ -10,6 +10,47 @@
 
 ---
 
+## SPRINT-DISENO-I-DATA-SLOP-DASHBOARD-AUDIT — ESCALADO 2026-06-01 pasada 57 (Fase 2: input de Jorge)
+
+**Estado:** ⊘ Fase 1 (inventario autónomo) completada. Esperando input de Jorge para Fase 2.
+
+**Qué hacer Jorge (~10 min):**
+
+1. Abrí `docs/sprints/INVENTARIO_KPI_DASHBOARD_2026-06-01.md`.
+2. Para cada KPI/card del Dashboard, marcá `MANTENER`, `QUITAR` o `MOVER A REPORTE SEPARADO` en la columna "Decisión Jorge".
+3. Volvé acá y agregá una línea `OK: jorge YYYY-MM-DD opcion=...` con el detalle.
+
+**Formato sugerido (cualquier formato parsable sirve):**
+
+```
+OK: jorge 2026-06-XX
+  mantener=[Ingresos del Mes, Conversaciones sin responder, Embudo de Servicio, Alertas en Tiempo Real, Ingresos vs Gastos, Balance Pendiente, Estado de Casos por Técnico, Alertas de Inventario, Próxima nómina, Agenda del Día]
+  quitar=[Tiempo de respuesta (mediana), Nómina proyectada del mes]
+  mover=[Reparaciones por Tipo de Equipo → /admin/reportes/reparaciones-por-tipo, Órdenes anuladas → /admin/historial-anuladas, Rendimiento por Técnico → /admin/reportes/rendimiento-tecnicos]
+```
+
+**O respuesta minimalista si querés mantener todo:**
+
+```
+OK: jorge 2026-06-XX opcion=mantener-todo
+```
+
+**Candidatos que el coordinator sugiere de entrada** (Jorge confirma o rechaza, son SUGERENCIAS no decisiones):
+
+- **MOVER A REPORTE SEPARADO:**
+  - "Reparaciones por Tipo de Equipo" → `/admin/reportes/reparaciones-por-tipo` (analítico mensual, no operativo diario).
+  - "Órdenes anuladas esta semana" → la card actual ya linkea a `/admin/historial-anuladas`; quitar card y dejar link compacto.
+  - "Nómina proyectada del mes" → la card actual ya es solo un link a `/admin/metricas-mensuales`.
+  - "Rendimiento por Técnico" → `/admin/reportes/rendimiento-tecnicos` (análisis comparativo, no decisión de hoy).
+- **QUITAR (sospecha):**
+  - El coordinator NO propone borrar nada de entrada; prefiere "mover" antes que "borrar" para preservar info a 1 click.
+
+**Después del OK:** corré `procesa bloqueos` en Claude Code. El coordinator hará Fase 3 (autónoma): builder aplica los cambios, cazadores 25/25 PASS, build PASS, push.
+
+**Origen:** leak prompt diseño Claude — *"Avoid 'data slop' — unnecessary numbers or icons or stats that are not useful."* Sprint encolado por Cowork 2026-06-01.
+
+---
+
 ## SPRINT-DISENO-C-DASHBOARD-REDUCIDO — ✅ DESBLOQUEADO Y PROCESADO 2026-05-31 pasada 56 (hash `68a203f`)
 
 **Estado:** desbloqueado por Jorge con `OK: jorge 2026-05-31 opcion=C` y procesado autónomo en pasada 56 del coordinator. Código en producción awaiting QA Jorge. Hash: `68a203f`. Stub histórico preservado abajo para forensia.
