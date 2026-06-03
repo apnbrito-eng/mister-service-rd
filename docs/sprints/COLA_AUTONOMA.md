@@ -8274,9 +8274,46 @@ Candidatos típicos a tocar: `from-emerald-500 to-emerald-600`, `from-green-400 
 
 ---
 
-## SPRINT-DISENO-I-DATA-SLOP-DASHBOARD-AUDIT — ⊘ FASE 1 COMPLETADA, ESCALADO A BLOQUEOS (hash `1177ec2`, pasada 57)
+## SPRINT-DISENO-I-DATA-SLOP-DASHBOARD-AUDIT — 🟡 EN PRODUCCIÓN AWAITING QA JORGE hash `5ca35d2` (pasada 58, 2026-06-03)
 
-**Estado:** Fase 1 (inventario autónomo) completada y escalada a `BLOQUEOS.md`. Hash inventario: `1177ec2`. **Esperando input de Jorge** en `docs/sprints/INVENTARIO_KPI_DASHBOARD_2026-06-01.md` (~10 min de revisión). Jorge marca MANTENER/QUITAR/MOVER en cada KPI, agrega `OK: jorge ...` en BLOQUEOS, y corre `procesa bloqueos` — el coordinator hará Fase 3 (aplicar cambios).
+**Estado:** Fase 3 ejecutada autónoma post-OK Jorge `OK: jorge 2026-06-03`. Hash `5ca35d2`. [NO CERRAR sin QA Jorge]. **Resumen:** los 4 widgets analíticos (Rendimiento por Técnico, Reparaciones por Tipo de Equipo, Órdenes anuladas esta semana, Nómina proyectada del mes) se movieron a la nueva página `/admin/reporte-avanzado` SIN borrar. Dashboard quedó con los KPIs operativos del día + CTA discreto al reporte. **QA Jorge (~3 min):** hard-refresh `/admin/dashboard` (los 4 widgets ya no aparecen + link "Ver reporte avanzado →" visible al final del bloque "Equipo y trabajos") + click → abre `/admin/reporte-avanzado` con los 4 widgets renderizando datos reales (Rendimiento con barras, Reparaciones top 10, Anuladas 3 contadores, Nómina proyectada con sueldos/comisiones/bonos). Sidebar también: entrada nueva en Finanzas. Si OK → `QA: jorge YYYY-MM-DD HH:MM DISENO-I PASS`. Cazadores 25/25 PASS, typecheck PASS, lint clean, build 4.55s, pre-commit hook PASS sin bypass.
+
+---
+
+## SPRINT-DISENO-I-DATA-SLOP-DASHBOARD-AUDIT — stub histórico Fase 3 EN_EJECUCION 2026-06-03 pasada 58
+
+**Estado:** desbloqueado vía OK jorge 2026-06-03 (ver stub en BLOQUEOS.md). Fase 3 procesándose autónoma en pasada 58. **Decisión literal Jorge:** mover a reporte aparte (sin borrar, queden a un clic): "Reparaciones por Tipo de Equipo", "Órdenes anuladas esta semana", "Nómina proyectada del mes", "Rendimiento por Técnico". Resto KPIs operativos día se mantienen.
+
+**Touch-list expandido pasada 58:**
+
+- `src/pages/ReporteAvanzado.tsx` (NUEVO) — página que aloja los 4 widgets movidos + sus 4 `useMemo` (`anuladasSemana`, `proyeccionNomina`, `rendimientoTecnicos`, `reparacionesPorTipo` + `maxReparaciones`) + listeners propios de `ordenes_servicio`/`facturas`/`personal`/`comisiones` (cada widget tiene su gate de permiso — `puedeVerAnuladas`/`puedeVerNomina` para 2 de los 4, los otros 2 visibles a todos los roles que ven Dashboard).
+- `src/App.tsx` — agregar `const ReporteAvanzado = lazy(() => import('./pages/ReporteAvanzado'))` + ruta `/admin/reporte-avanzado` dentro del Layout admin (sin gating extra — el Dashboard ya es accesible a todos los roles de oficina; los gates internos del widget aplican).
+- `src/components/Sidebar.tsx` — agregar item "Reporte avanzado" en la sección Finanzas debajo de "Métricas del Mes" con `show: esAdminOCoord` (Métricas del Mes ya usa `p('rendimientoVer') || esAdminOCoord`; igualamos el más restrictivo porque incluye widgets de nómina/anuladas que ya tienen gate role-admin/coord en Dashboard).
+- `src/pages/Dashboard.tsx` — quitar los 4 widgets de JSX (líneas ~1078-1126 Rendimiento + ~1162-1189 Anuladas + ~1224-1260 ProyeccionNomina + ~1262-1294 ReparacionesPorTipo) + quitar los 4 `useMemo` correspondientes (líneas 424-431 anuladasSemana, 467-500 proyeccionNomina, 569-584 rendimientoTecnicos, 586-597 reparacionesPorTipo+maxReparaciones) + quitar `puedeVerAnuladas` (425) + ajustar imports si quedan unused (`Wrench`, `XCircle`, `Wallet` — comprobar si otros widgets los usan; `Users` y `TrendingUp` quedan porque `casosPorTecnico` los usa) + reemplazar por CTA discreto "Ver reporte avanzado →" al final del bloque "Equipo y trabajos".
+
+**Consumidores verificados read-only check:**
+- `grep -rn "rendimientoTecnicos\|reparacionesPorTipo\|anuladasSemana\|proyeccionNomina" src/ --include="*.tsx" --include="*.ts" | grep -v Dashboard.tsx` → 0 hits. Cero consumidores externos. Movimiento mecánico seguro.
+
+**Consumidores NO afectados:**
+- `MetricasMensuales.tsx` — proyección de nómina vive ahí también pero con su propio cálculo independiente; el botón que linkea a esa página queda en `ReporteAvanzado.tsx` con el mismo `navigate('/admin/metricas-mensuales')`.
+
+**Hallazgos laterales:** ninguno encontrado en la auditoría.
+
+**Restricciones duras:**
+- NO se borra ningún widget. Se mueve la lógica + JSX intacta a la página nueva.
+- Permisos preservados 1:1 (`puedeVerAnuladas`, `puedeVerNomina`).
+- Cazadores 25/25 PASS + typecheck + lint clean.
+- QA flujo Dashboard validado (página crítica → declarar en commit).
+
+**[NO CERRAR sin QA Jorge].** QA: hard-refresh `/admin/dashboard` (los 4 widgets ya NO aparecen + link "Ver reporte avanzado →" visible) + click link → abre `/admin/reporte-avanzado` con los 4 widgets renderizando datos reales (Rendimiento por técnico con barras, Reparaciones por tipo con barras, Anuladas semana con 3 contadores si hay, Nómina proyectada del mes con sueldos/comisiones/bonos). Si OK → `QA: jorge YYYY-MM-DD HH:MM DISENO-I PASS`.
+
+Procesamiento ejecutándose en pasada 58 — hash final se anota cuando termine.
+
+---
+
+## SPRINT-DISENO-I-DATA-SLOP-DASHBOARD-AUDIT (stub histórico Fase 1, hash `1177ec2`, pasada 57)
+
+**Estado:** Fase 1 (inventario autónomo) completada hash `1177ec2`. Fase 2 desbloqueada en pasada 58 con OK Jorge 2026-06-03.
 
 ---
 

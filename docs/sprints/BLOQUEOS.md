@@ -10,7 +10,15 @@
 
 ---
 
-## SPRINT-DISENO-I-DATA-SLOP-DASHBOARD-AUDIT — ESCALADO 2026-06-01 pasada 57 (Fase 2: input de Jorge)
+## SPRINT-DISENO-I-DATA-SLOP-DASHBOARD-AUDIT — ✅ DESBLOQUEADO 2026-06-03 pasada 58 (decisión Jorge mover 4 widgets)
+
+**Estado:** desbloqueado por Jorge con OK literal (ver abajo) y movido a `COLA_AUTONOMA.md` con estado `EN_EJECUCION` en pasada 58. Fase 3 procesándose autónoma. Stub histórico preservado abajo para forensia.
+
+**OK: jorge 2026-06-03** — mover a reporte aparte (sin borrar, queden a un clic): "Reparaciones por Tipo de Equipo", "Órdenes anuladas esta semana", "Nómina proyectada del mes", "Rendimiento por Técnico". Resto de KPIs operativos del día se mantienen.
+
+---
+
+## SPRINT-DISENO-I-DATA-SLOP-DASHBOARD-AUDIT — stub histórico ⊘ ESCALADO 2026-06-01 pasada 57 (Fase 2: input de Jorge)
 
 **Estado:** ⊘ Fase 1 (inventario autónomo) completada. Esperando input de Jorge para Fase 2.
 

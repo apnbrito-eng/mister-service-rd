@@ -205,10 +205,10 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 
 ### reportes
 - **Área:** reporting · **Criticidad:** media
-- **Qué hace:** Dashboards y métricas: ingresos, conduces emitidos, rendimiento técnicos, proyección de nómina.
+- **Qué hace:** Dashboards y métricas: ingresos, conduces emitidos, rendimiento técnicos, proyección de nómina. Dashboard operativo del día + Reporte avanzado para análisis comparativos.
 - **Depende de:** ordenes_servicio, facturas, pagos, comisiones, personal, productos, gastos
 - **Colecciones Firestore:** recordatorios_diarios
-- **Notas:** Tras REPORTING-1 (a4e64db) los KPIs viven en src/utils/kpis.ts (helpers compartidos). Resta anulaciones de la base de ingresos.
+- **Notas:** Tras REPORTING-1 (a4e64db) los KPIs viven en src/utils/kpis.ts (helpers compartidos). Resta anulaciones de la base de ingresos. Tras DISENO-I Fase 3 (5ca35d2, 2026-06-03) el Dashboard quedó con KPIs operativos del día solamente; los 4 widgets analíticos (Rendimiento por Técnico, Reparaciones por Tipo, Anuladas semana, Nómina proyectada del mes) se movieron a /admin/reporte-avanzado — gate admin+coord. Link a 1 clic desde Dashboard + sidebar Finanzas.
 
 ### notificaciones
 - **Área:** sistema · **Criticidad:** media
