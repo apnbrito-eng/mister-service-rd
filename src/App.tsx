@@ -51,6 +51,12 @@ const GestionUsuarios = lazy(() => import('./pages/GestionUsuarios'));
 const TrackingCliente = lazy(() => import('./pages/TrackingCliente'));
 const AgendaDia = lazy(() => import('./pages/AgendaDia'));
 const MetricasMensuales = lazy(() => import('./pages/MetricasMensuales'));
+// SPRINT-DISENO-I-DATA-SLOP (2026-06-03, pasada 58): página dedicada para
+// los 4 widgets analíticos movidos desde Dashboard.tsx (Rendimiento por
+// Técnico, Reparaciones por Tipo, Anuladas semana, Nómina proyectada del
+// mes). Permite que el Dashboard quede limpio con solo KPIs operativos
+// del día. Decisión Jorge literal: "queden a un clic".
+const ReporteAvanzado = lazy(() => import('./pages/ReporteAvanzado'));
 const Bancos = lazy(() => import('./pages/Bancos'));
 const FacturacionPendiente = lazy(() => import('./pages/FacturacionPendiente'));
 // SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 (2026-05-21): página dedicada para
@@ -254,6 +260,13 @@ function AppRoutes() {
         <Route path="productos" element={<Navigate to="/admin/precios" replace />} />
         <Route path="rendimiento" element={<PermisoRoute permiso="rendimientoVer"><Rendimiento /></PermisoRoute>} />
         <Route path="metricas-mensuales" element={<PermisoRoute permiso="rendimientoVer"><MetricasMensuales /></PermisoRoute>} />
+        {/* SPRINT-DISENO-I-DATA-SLOP (2026-06-03): página dedicada
+            "Reporte avanzado" con los 4 widgets analíticos movidos desde
+            Dashboard. Gateada por admin+coord (mismo gate que el sidebar)
+            — los 4 widgets internos preservan sus permisos originales
+            (puedeVerAnuladas/puedeVerNomina solo admin+coord; Rendimiento
+            y Reparaciones visibles a esos roles). */}
+        <Route path="reporte-avanzado" element={<RolRoute roles={['administrador', 'coordinadora']}><ReporteAvanzado /></RolRoute>} />
         <Route path="mantenimiento" element={<Mantenimiento />} />
         <Route path="gastos" element={<PermisoRoute permiso="gastosVer"><Gastos /></PermisoRoute>} />
         <Route path="personal" element={<PermisoRoute permiso="personalVer"><PersonalPage /></PermisoRoute>} />

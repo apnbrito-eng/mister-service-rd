@@ -5,7 +5,7 @@ import {
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight, ChevronDown,
   Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
   CalendarCheck, Sparkles, History, Star, RefreshCw, Banknote,
-  MessageSquare,
+  MessageSquare, BarChart3,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { signOut } from 'firebase/auth';
@@ -362,6 +362,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           // admin/coord siguen viendo "Rendimiento" (panel global). Sin cambios al gate `show:`.
           { to: '/admin/rendimiento', icon: TrendingUp, label: userProfile?.rol === 'operaria' || userProfile?.rol === 'secretaria' ? 'Mi rendimiento' : 'Rendimiento', show: p('rendimientoVer') },
           { to: '/admin/metricas-mensuales', icon: TrendingUp, label: 'Métricas del Mes', show: p('rendimientoVer') || esAdminOCoord },
+          // SPRINT-DISENO-I-DATA-SLOP (2026-06-03, pasada 58): "Reporte avanzado"
+          // aloja los 4 widgets analíticos movidos desde Dashboard (Rendimiento
+          // por Técnico, Reparaciones por Tipo, Anuladas semana, Nómina proyectada
+          // del mes). Gate `esAdminOCoord` espejo de la ruta en App.tsx (RolRoute).
+          { to: '/admin/reporte-avanzado', icon: BarChart3, label: 'Reporte avanzado', show: esAdminOCoord },
         ],
       },
     },

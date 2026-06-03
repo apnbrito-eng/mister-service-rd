@@ -4,7 +4,7 @@ import { db } from '../firebase/config';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ClipboardList, DollarSign, AlertTriangle,
-  ChevronRight, Calendar, User, TrendingUp, Wrench,
+  ChevronRight, Calendar, User,
   FileText, Receipt, BarChart3, Users, Timer
 } from 'lucide-react';
 import { differenceInDays, startOfDay, startOfWeek, startOfMonth, startOfYear, format as formatDate } from 'date-fns';
@@ -14,7 +14,7 @@ import {
 } from '../types';
 import { puede } from '../utils/permisos';
 import { Link } from 'react-router-dom';
-import { Boxes, Wallet, XCircle } from 'lucide-react';
+import { Boxes, Wallet } from 'lucide-react';
 import { calcularQuincenaActual } from '../utils/comisiones';
 import {
   faseLabel, faseBgColor, formatMoneda, formatHora,
@@ -421,16 +421,17 @@ export default function Dashboard() {
     userProfile?.rol === 'administrador' ||
     userProfile?.rol === 'coordinadora';
 
-  // Órdenes anuladas esta semana (widget informativo)
-  const puedeVerAnuladas = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
-  const anuladasSemana = useMemo(() => {
-    const haceSieteDias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const eliminadas = ordenesRaw.filter(o => o.eliminada && o.fechaEliminacion && o.fechaEliminacion >= haceSieteDias).length;
-    const canceladas = ordenesRaw.filter(o => !o.eliminada && o.fase === 'cancelado' && o.fechaCancelacion && o.fechaCancelacion >= haceSieteDias).length;
-    return { eliminadas, canceladas, total: eliminadas + canceladas };
-  }, [ordenesRaw]);
+  // SPRINT-DISENO-I-DATA-SLOP (2026-06-03, pasada 58): los memos
+  // `anuladasSemana` (widget "Órdenes anuladas esta semana") y
+  // `proyeccionNomina` (widget "Nómina proyectada del mes") se movieron
+  // a `src/pages/ReporteAvanzado.tsx` por decisión de Jorge — son
+  // analíticos, no operativos del día. Permiso `puedeVerAnuladas` también
+  // movido. El CTA "Ver reporte avanzado →" al final del bloque "Equipo
+  // y trabajos" lleva al usuario al reporte completo.
 
-  // Nómina próxima (Fase 6)
+  // Nómina próxima (Fase 6) — SE QUEDA: es operativo del día (cuántos
+  // días faltan para el próximo pago + comisiones acumuladas de la
+  // quincena corriente). El que se movió fue "Nómina proyectada del MES".
   const puedeVerNomina = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
   const nominaProxima = useMemo(() => {
     const quincenaActual = calcularQuincenaActual(new Date());
@@ -464,40 +465,9 @@ export default function Dashboard() {
     };
   }, [comisionesPendientes, personal]);
 
-  // Proyección de nómina del mes (link a /admin/metricas-mensuales)
-  const proyeccionNomina = useMemo(() => {
-    const ahora = new Date();
-    const inicio = new Date(ahora.getFullYear(), ahora.getMonth(), 1, 0, 0, 0, 0);
-    const fin = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0, 23, 59, 59, 999);
-    const activos = personal.filter(p => p.activo && p.rol !== 'ayudante');
-    const sueldos = activos.reduce((s, p) => s + (p.sueldoBase || 0), 0);
-    const comisiones = comisionesPendientes.reduce((s, c) => s + c.comisionMonto, 0);
-
-    // Bonos proyectados: operarias con desempeño >= 70% + secretarias por tiers
-    let bonos = 0;
-    for (const op of activos.filter(p => p.rol === 'operaria' || p.rol === 'coordinadora')) {
-      // SPRINT-149 (P-006 variante operariaId): fallback `op.uid || op.id`.
-      const ordsMes = ordenesRaw.filter(o =>
-        o.operariaId === (op.uid || op.id) && !o.eliminada &&
-        ((o.fase === 'cerrado') || o.soloChequeo) &&
-        o.updatedAt >= inicio && o.updatedAt <= fin,
-      );
-      const completadas = ordsMes.filter(o => o.fase === 'cerrado' && !o.soloChequeo).length;
-      const atendidas = ordsMes.length;
-      if (atendidas > 0 && (completadas / atendidas) >= 0.70) bonos += 5000;
-    }
-    const TIERS = [{ min: 400, b: 5000 }, { min: 300, b: 3500 }, { min: 200, b: 2000 }];
-    for (const s of activos.filter(p => p.rol === 'secretaria')) {
-      const agendadas = ordenesRaw.filter(o =>
-        !o.eliminada && o.creadoPor === s.nombre &&
-        o.createdAt >= inicio && o.createdAt <= fin,
-      );
-      const completadas = agendadas.filter(o => o.fase !== 'cancelado').length;
-      const tier = TIERS.find(t => completadas >= t.min);
-      if (tier) bonos += tier.b;
-    }
-    return { sueldos, comisiones, bonos, total: sueldos + comisiones + bonos };
-  }, [personal, comisionesPendientes, ordenesRaw]);
+  // SPRINT-DISENO-I-DATA-SLOP (2026-06-03): `proyeccionNomina` movido a
+  // `src/pages/ReporteAvanzado.tsx`. Era widget analítico (proyección
+  // mensual), no operativo del día.
 
   const alertasRojas = todasAlertas.filter(a => a.tipo === 'roja');
   const alertasNaranjas = todasAlertas.filter(a => a.tipo === 'naranja');
@@ -566,35 +536,9 @@ export default function Dashboard() {
     });
   }, [tecnicos, ordenes]);
 
-  // Rendimiento por tecnico
-  const rendimientoTecnicos = useMemo(() => {
-    return tecnicos.map(t => {
-      // SPRINT-149: idem casosPorTecnico — fallback pre/post c4be345.
-      // @safe-tecnicoid-id: OR explícito ya soporta pre/post c4be345 (tIdAuth || t.id).
-      const tIdAuth = t.uid || t.id;
-      const ordenesT = ordenes.filter(o => o.tecnicoId === tIdAuth || o.tecnicoId === t.id || o.tecnicoNombre === t.nombre);
-      const total = ordenesT.length;
-      const completadas = ordenesT.filter(o => ['trabajo_realizado', 'cerrado'].includes(o.fase)).length;
-      const pct = total > 0 ? Math.round((completadas / total) * 100) : 0;
-      const montoFacturado = facturas
-        .filter(f => f.estado === 'pagada' && ordenesT.some(o => o.id === f.ordenId))
-        .reduce((s, f) => s + (f.total || 0), 0);
-      return { tecnico: t, total, completadas, pct, montoFacturado };
-    }).sort((a, b) => b.pct - a.pct);
-  }, [tecnicos, ordenes, facturas]);
-
-  // Reparaciones por tipo equipo
-  const reparacionesPorTipo = useMemo(() => {
-    const conteo: Record<string, number> = {};
-    ordenes.forEach(o => {
-      const tipo = o.equipoTipo || 'Otro';
-      conteo[tipo] = (conteo[tipo] || 0) + 1;
-    });
-    return Object.entries(conteo)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10);
-  }, [ordenes]);
-  const maxReparaciones = reparacionesPorTipo.length > 0 ? reparacionesPorTipo[0][1] : 1;
+  // SPRINT-DISENO-I-DATA-SLOP (2026-06-03): `rendimientoTecnicos` y
+  // `reparacionesPorTipo` movidos a `src/pages/ReporteAvanzado.tsx`. Son
+  // análisis comparativos/históricos, no operativos del día.
 
   // Agenda del dia
   const agendaHoy = useMemo(() => {
@@ -1075,56 +1019,16 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ======== 8. RENDIMIENTO POR TECNICO + 9. REPARACIONES POR TIPO ======== */}
+      {/* ======== 8. ALERTAS DE INVENTARIO + PROXIMA NOMINA ========
+          SPRINT-DISENO-I-DATA-SLOP (2026-06-03, pasada 58 — decisión Jorge):
+          "Rendimiento por Técnico", "Reparaciones por Tipo de Equipo",
+          "Órdenes anuladas esta semana" y "Nómina proyectada del mes" se
+          movieron a `/admin/reporte-avanzado` (sin borrar — analíticos, no
+          operativos del día). Aquí quedan los widgets operativos directos:
+          Alertas de Inventario (acción inmediata: reponer) y Próxima nómina
+          (cuántos días faltan para el pago + comisiones acumuladas del
+          ciclo corriente). Al final un CTA discreto lleva al reporte. */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 8. Rendimiento por tecnico */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp size={20} className="text-primary-medium" />
-            <h2 className="text-lg font-semibold text-gray-900">Rendimiento por Técnico</h2>
-          </div>
-          {rendimientoTecnicos.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              <TrendingUp size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Sin datos de rendimiento</p>
-            </div>
-          ) : (
-            <div className="space-y-4 max-h-80 overflow-y-auto">
-              {rendimientoTecnicos.map(({ tecnico, pct, completadas, total, montoFacturado }) => (
-                <div key={tecnico.id}>
-                  <div className="flex justify-between items-center mb-1.5">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                        style={{ backgroundColor: tecnico.color || getTecnicoColor(tecnico.nombre) }}
-                      >
-                        {tecnico.nombre.charAt(0)}
-                      </div>
-                      <span className="text-sm font-medium text-gray-900">{tecnico.nombre}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm font-bold text-primary">{pct}%</span>
-                      <span className="text-xs text-gray-400 ml-1">({completadas}/{total})</span>
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${Math.max(pct, 2)}%`,
-                        backgroundColor: tecnico.color || getTecnicoColor(tecnico.nombre),
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Emitido: <span className="font-semibold text-gray-700">{formatMoneda(montoFacturado)}</span>
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
         {/* Alertas de Inventario (Fase 4B) */}
         {puedeVerInventario && alertasInventario.length > 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-amber-200 p-6">
@@ -1159,36 +1063,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Órdenes anuladas esta semana */}
-        {puedeVerAnuladas && anuladasSemana.total > 0 && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <XCircle size={20} className="text-red-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Órdenes anuladas esta semana</h2>
-              </div>
-              <Link to="/admin/historial-anuladas" className="text-xs text-primary-medium hover:underline font-medium">
-                Ver historial completo →
-              </Link>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-red-50 rounded-lg p-3">
-                <p className="text-[10px] uppercase font-medium text-red-700">Eliminadas</p>
-                <p className="text-2xl font-bold text-red-900">{anuladasSemana.eliminadas}</p>
-              </div>
-              <div className="bg-amber-50 rounded-lg p-3">
-                <p className="text-[10px] uppercase font-medium text-amber-700">Canceladas</p>
-                <p className="text-2xl font-bold text-amber-900">{anuladasSemana.canceladas}</p>
-              </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-[10px] uppercase font-medium text-gray-700">Total</p>
-                <p className="text-2xl font-bold text-gray-900">{anuladasSemana.total}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Próxima nómina (Fase 6) */}
+        {/* Próxima nómina (Fase 6) — SE QUEDA: operativo del día (días al pago). */}
         {puedeVerNomina && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
@@ -1220,79 +1095,23 @@ export default function Dashboard() {
             </div>
           </div>
         )}
-
-        {/* Nómina proyectada del mes (link a métricas mensuales) */}
-        {puedeVerNomina && (
-          <button
-            type="button"
-            onClick={() => navigate('/admin/metricas-mensuales')}
-            className="w-full text-left bg-white rounded-2xl shadow-sm border border-gray-100 p-6 hover:shadow-md hover:border-primary-medium/30 transition-all group"
-          >
-            <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Wallet size={20} className="text-primary" />
-                <h2 className="text-lg font-semibold text-gray-900 group-hover:text-primary-medium transition-colors">
-                  Nómina proyectada del mes
-                </h2>
-              </div>
-              <span className="text-xs text-primary-medium group-hover:underline font-medium">
-                Ver detalle →
-              </span>
-            </div>
-            <p className="text-2xl font-bold text-primary">
-              {formatMoneda(proyeccionNomina.total)}
-            </p>
-            <div className="grid grid-cols-3 gap-2 mt-3 text-[11px] text-gray-600">
-              <div>
-                <p className="text-[9px] uppercase text-gray-400">Sueldos</p>
-                <p className="font-semibold">{formatMoneda(proyeccionNomina.sueldos)}</p>
-              </div>
-              <div>
-                <p className="text-[9px] uppercase text-gray-400">Comisiones</p>
-                <p className="font-semibold">{formatMoneda(proyeccionNomina.comisiones)}</p>
-              </div>
-              <div>
-                <p className="text-[9px] uppercase text-gray-400">Bonos</p>
-                <p className="font-semibold">{formatMoneda(proyeccionNomina.bonos)}</p>
-              </div>
-            </div>
-          </button>
-        )}
-
-        {/* 9. Reparaciones por tipo de equipo */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Wrench size={20} className="text-primary-medium" />
-            <h2 className="text-lg font-semibold text-gray-900">Reparaciones por Tipo de Equipo</h2>
-          </div>
-          {reparacionesPorTipo.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              <Wrench size={32} className="mx-auto mb-2 opacity-30" />
-              <p className="text-sm">Sin reparaciones registradas</p>
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-80 overflow-y-auto">
-              {reparacionesPorTipo.map(([tipo, count], index) => (
-                <div key={tipo} className="flex items-center gap-3">
-                  <span className="text-xs font-mono text-gray-400 w-5 text-right">{index + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm font-medium text-gray-900 truncate">{tipo}</span>
-                      <span className="text-sm font-bold text-primary ml-2">{count}</span>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-2.5 overflow-hidden">
-                      <div
-                        className="h-full bg-primary rounded-full transition-all duration-500"
-                        style={{ width: `${(count / maxReparaciones) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
+
+      {/* CTA discreto al reporte avanzado — solo si el rol tiene acceso.
+          SPRINT-DISENO-I-DATA-SLOP: linkea a la página nueva con los 4
+          widgets movidos (Rendimiento, Reparaciones, Anuladas, Nómina
+          proyectada del mes). Gate `esAdminOCoord` espejo del sidebar +
+          de la ruta en App.tsx. */}
+      {(userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora') && (
+        <div className="flex justify-center">
+          <Link
+            to="/admin/reporte-avanzado"
+            className="inline-flex items-center gap-1.5 text-sm text-primary-medium hover:underline font-medium"
+          >
+            Ver reporte avanzado (rendimiento por técnico, anulaciones, nómina del mes, reparaciones por tipo) →
+          </Link>
+        </div>
+      )}
 
       {/* ======== 10. AGENDA DEL DIA ======== */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
