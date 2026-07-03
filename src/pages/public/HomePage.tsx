@@ -51,7 +51,7 @@ const PASOS_SERVICIO = [
 ];
 
 export default function HomePage() {
-  const { config } = useConfigWeb();
+  const { config, loading } = useConfigWeb();
 
   // ─── Hero: detectar si hay imagen de fondo configurada ───
   // Solo renderizamos la capa de imagen + overlay si:
@@ -138,7 +138,25 @@ export default function HomePage() {
     <div>
       {/* ══════════ HERO ══════════ */}
       {/* @safe-gradient: hero marketing público HomePage — branding principal del sitio */}
-      {heroTieneFondo ? (
+      {/*
+        SPRINT-2026-07-03 (S7 anti-FOUC): hasta que `useConfigWeb` resuelva
+        el snapshot real de Firestore, `config` viene de `CONFIG_WEB_DEFAULTS`
+        que tiene stats/hero hardcodeados viejos (`10+ años`, `5K+ servicios`,
+        título/subtítulo antiguos). Antes eso se pintaba ~300-800ms y
+        después saltaba al contenido real editado por Jorge desde
+        Admin → Página Web — flash molesto al recargar. Ahora mientras
+        `loading` es true renderizamos el mismo wrapper de gradient navy
+        (default seguro) SIN contenido: preserva altura y color de fondo,
+        evita layout shift, y no expone información incorrecta al visitante.
+      */}
+      {loading ? (
+        <HeroConGradient preset="navy">
+          <div
+            className="relative z-10 max-w-6xl mx-auto px-4 py-20 md:py-28 min-h-[360px] md:min-h-[460px]"
+            aria-hidden="true"
+          />
+        </HeroConGradient>
+      ) : heroTieneFondo ? (
         <section className="relative bg-gradient-to-br from-primary via-primary to-primary-medium overflow-hidden">
           {/* Capa de imagen / carrusel (debajo del overlay) */}
           {heroModo === 'carrusel' ? (
