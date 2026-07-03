@@ -10,7 +10,13 @@
 
 ---
 
-## SPRINT-WA-QA-PLANTILLAS-INBOX — ⚠️ QA MANUAL DE JORGE (encolado 2026-07-02 revisión funcional en vivo)
+## SPRINT-WA-QA-PLANTILLAS-INBOX — ✅ COMPLETADO 2026-07-02 (QA Jorge confirma envío OK)
+
+**OK: jorge 2026-07-02** — `ok=[recordatorio_mantenimiento]` `fallidas=[]`. Jorge mandó la plantilla `recordatorio_mantenimiento` a su propio número: llegó con imagen branded + botón "Leer más" + doble check ✓✓. Confirma que el envío actual funciona correcto. Los ⚠️ que aparecen en el inbox son mensajes viejos, residuo pre-fix `SPRINT-WA-FIX-PLANTILLAS-PARAMS` (hash `0ab73c5`, 2026-05-25). Sprint cerrado. Stub histórico preservado abajo para forensia.
+
+---
+
+## SPRINT-WA-QA-PLANTILLAS-INBOX — stub histórico ⚠️ QA MANUAL DE JORGE (encolado 2026-07-02 revisión funcional en vivo)
 
 **Origen:** Jorge notó desde el sidepanel Claude en producción que varias plantillas de WhatsApp enviadas desde el inbox muestran icono ⚠️ (posible envío fallido). Sospecha: son de antes del fix `SPRINT-WA-FIX-PLANTILLAS-PARAMS` (hash `0ab73c5`, 2026-05-25) — que arregló el patrón viejo de parámetros mal armados. No pidió cambio de código: pide validar en producción que el fix actual entrega correcto.
 
@@ -47,7 +53,13 @@ OK: jorge 2026-07-XX
 
 ---
 
-## SPRINT-CONFIG-WEB-STATS-HOMEPAGE — ⚠️ ACCIÓN MANUAL DE JORGE (encolado 2026-07-02 revisión funcional en vivo)
+## SPRINT-CONFIG-WEB-STATS-HOMEPAGE — ✅ COMPLETADO 2026-07-02 (Jorge editó manual)
+
+**OK: jorge 2026-07-02 opcion=manual hecho** — Jorge editó las stats desde Admin → Página Web: HomePage muestra "16 años" y "20,000+ servicios", verificado en vivo en producción. Sprint cerrado. Stub histórico preservado abajo para forensia.
+
+---
+
+## SPRINT-CONFIG-WEB-STATS-HOMEPAGE — stub histórico ⚠️ ACCIÓN MANUAL DE JORGE (encolado 2026-07-02 revisión funcional en vivo)
 
 **Origen:** Jorge notó que la HomePage pública muestra "10+ años / 5K+ servicios" (números placeholder viejos) pero la decisión de negocio ya establecida en pasada 56 (SPRINT-DISENO-D, hash `4347149`, 2026-05-31) era **"16 años / 20,000+ servicios"** — cifras reales. La corrección de código ya está en producción; el número final vive en Firestore (`config_web/*`) y se edita desde Admin → Configuración → Página Web.
 
