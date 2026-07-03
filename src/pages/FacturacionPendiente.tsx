@@ -162,7 +162,7 @@ export default function FacturacionPendiente() {
       <div className="p-6">
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
           <p className="text-amber-800 font-medium">
-            No tienes permisos para procesar conduces de garantía. Contacta al administrador.
+            No tienes permisos para procesar conduces. Contacta al administrador.
           </p>
         </div>
       </div>
@@ -178,7 +178,7 @@ export default function FacturacionPendiente() {
         <div>
           <h1 className="text-2xl font-bold text-primary">Conduces Pendientes</h1>
           <p className="text-gray-500 text-sm">
-            Órdenes enviadas por las operarias listas para emitir conduce de garantía.
+            Órdenes enviadas por las operarias listas para emitir conduce.
           </p>
         </div>
         <span className="ml-auto inline-flex items-center gap-1.5 bg-blue-50 text-primary px-3 py-1 rounded-full text-sm font-semibold">
@@ -205,7 +205,7 @@ export default function FacturacionPendiente() {
             <EmptyState
               icon={<Receipt size={40} />}
               titulo="No hay órdenes para facturar"
-              descripcion="Cuando una operaria mande una orden para emitir conduce de garantía, vas a verla acá."
+              descripcion="Cuando una operaria mande una orden para emitir conduce, vas a verla acá."
             />
           ) : (
             <EmptyState
