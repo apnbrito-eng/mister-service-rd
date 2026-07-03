@@ -10,6 +10,85 @@
 
 ---
 
+## SPRINT-WA-QA-PLANTILLAS-INBOX — ⚠️ QA MANUAL DE JORGE (encolado 2026-07-02 revisión funcional en vivo)
+
+**Origen:** Jorge notó desde el sidepanel Claude en producción que varias plantillas de WhatsApp enviadas desde el inbox muestran icono ⚠️ (posible envío fallido). Sospecha: son de antes del fix `SPRINT-WA-FIX-PLANTILLAS-PARAMS` (hash `0ab73c5`, 2026-05-25) — que arregló el patrón viejo de parámetros mal armados. No pidió cambio de código: pide validar en producción que el fix actual entrega correcto.
+
+**Qué hacer Jorge (~5 min, desde el celular real):**
+
+1. Abrí `/admin/inbox` en producción.
+2. Elegí una conversación tuya (tu propio número).
+3. Mandá **una** plantilla de cada una de las 4 disponibles:
+   - Bienvenida
+   - Confirmación cita
+   - Recordatorio cita
+   - Cierre
+4. En tu WhatsApp confirmá para cada una:
+   - ✓✓ (entregado, gris o azul)
+   - Banner branded correcto (nombre del negocio arriba)
+   - Sin ⚠️ en el inbox al lado de la línea enviada
+5. Anotá acá abajo cuál/es plantillas entregaron OK y cuál/es no.
+
+**Formato sugerido de respuesta:**
+
+```
+OK: jorge 2026-07-XX
+  ok=[bienvenida, confirmacion, recordatorio, cierre]
+  fallidas=[]
+```
+
+**Si TODAS entregan ✓✓ correctas** → el fix WA-FIX-PLANTILLAS ya está en producción y los ⚠️ del inbox son residuo histórico (mensajes viejos antes del hash `0ab73c5`). El coordinator marca este sprint COMPLETADO y agrega nota en MEMORIA_MAESTRA.md.
+
+**Si ALGUNA falla** → el coordinator abre un sprint nuevo `SPRINT-WA-DEBUG-PLANTILLA-<nombre>` con el detalle del payload que Meta reporta como fallido (el endpoint `api/whatsapp/send.ts` persiste el error en Firestore). NO se toca código de WhatsApp antes de que Jorge confirme cuál/es fallan.
+
+**Restricción explícita de Jorge:** *"No cambies código sin que yo confirme."* → el coordinator no procesa este bloqueo autónomo aunque tenga OK; el OK solo confirma qué se probó.
+
+**Origen del bloqueo:** revisión funcional en vivo del software, 2026-07-02.
+
+---
+
+## SPRINT-CONFIG-WEB-STATS-HOMEPAGE — ⚠️ ACCIÓN MANUAL DE JORGE (encolado 2026-07-02 revisión funcional en vivo)
+
+**Origen:** Jorge notó que la HomePage pública muestra "10+ años / 5K+ servicios" (números placeholder viejos) pero la decisión de negocio ya establecida en pasada 56 (SPRINT-DISENO-D, hash `4347149`, 2026-05-31) era **"16 años / 20,000+ servicios"** — cifras reales. La corrección de código ya está en producción; el número final vive en Firestore (`config_web/*`) y se edita desde Admin → Configuración → Página Web.
+
+**Ubicación en el software (la carga la lee del Firestore `config_web`):** `Admin → Configuración → Página Web` (sección "Página Pública" o similar; la ruta es `/admin/configuracion` o `/admin/web` — Jorge ubica según su sidebar).
+
+**Qué hacer Jorge (~2 min):**
+
+1. Abrí Admin → Configuración → Página Web en producción.
+2. Buscá los dos campos que muestran las stats de la HomePage: años de experiencia y cantidad de servicios (los nombres exactos dependen del schema de `config_web` — pueden llamarse `anosExperiencia`, `serviciosCompletados`, `homeStat1Numero`, `homeStat1Label`, etc.).
+3. Cambiá:
+   - `10+ años` → `16 años`
+   - `5K+ servicios` → `20,000+ servicios`
+4. Guardá y verificá en `/` (HomePage pública, hard-refresh) que los números se actualizaron.
+
+**Alternativa por script (rechazada por defecto):** el coordinator NO propone modificar el doc `config_web` desde un script server-side porque:
+- (a) Toca datos productivos sin trazabilidad clara del cambio.
+- (b) Los campos del doc pueden tener nombres distintos en producción vs. schema (config_web es editable a mano por Jorge desde admin).
+- (c) La sub-regla CLAUDE.md "Migraciones sobre >500 docs / cambios a rules → BLOQUEOS" no aplica acá (es UN solo doc), pero la sub-regla "no inventar contenido sin OK explícito de Jorge" sí — cambiar números visibles al público es contenido de marca.
+
+**Si Jorge prefiere que el coordinator lo haga por script** (respuesta abajo):
+
+```
+OK: jorge 2026-07-XX opcion=script
+  anos=16
+  servicios=20000+
+```
+
+→ el coordinator abre sprint `SPRINT-CONFIG-WEB-SEED-STATS-16-20K`, escribe un script `scripts/seed-config-web-stats.ts` idempotente (verifica valores previos + solo escribe si difieren + logea el diff), Jorge lo corre desde su Mac con `npx tsx scripts/seed-config-web-stats.ts` (server-side Firebase Admin SDK, no toca rules). Deuda: si los campos no existen en el doc actual, el script debe crearlos con `setDoc(merge:true)`.
+
+**Si Jorge prefiere editarlo a mano por admin** (recomendado, más rápido y sin escribir código):
+
+```
+OK: jorge 2026-07-XX opcion=manual hecho
+```
+
+→ el coordinator marca este sprint COMPLETADO y nota en MEMORIA_MAESTRA.md.
+
+**Origen del bloqueo:** revisión funcional en vivo del software, 2026-07-02.
+
+---
+
 ## SPRINT-DISENO-I-DATA-SLOP-DASHBOARD-AUDIT — ✅ DESBLOQUEADO 2026-06-03 pasada 58 (decisión Jorge mover 4 widgets)
 
 **Estado:** desbloqueado por Jorge con OK literal (ver abajo) y movido a `COLA_AUTONOMA.md` con estado `EN_EJECUCION` en pasada 58. Fase 3 procesándose autónoma. Stub histórico preservado abajo para forensia.
