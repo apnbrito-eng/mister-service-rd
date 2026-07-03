@@ -740,7 +740,7 @@ export default function FormularioAgendarPublico() {
       <div className={mostrarSector ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : ''}>
         <div>
           <label className={labelClass}>
-            Dirección
+            Dirección{' '}
             <span className="ml-2 text-xs text-gray-400 font-normal">
               (Busca en Google, pega URL de Maps o usa &quot;Mi ubicación&quot;)
             </span>
