@@ -173,6 +173,24 @@ function calcularRangoMes(): { desde: string; hasta: string } {
   return calcularRangoAtajo('mes');
 }
 
+function calcularRangoUltimos30Dias(): { desde: string; hasta: string } {
+  const hoy = new Date();
+  const desde = new Date(hoy);
+  desde.setDate(hoy.getDate() - 30);
+  return { desde: formatYYYYMMDDLocal(desde), hasta: formatYYYYMMDDLocal(hoy) };
+}
+
+// El default de rango cambia por página. Cotizaciones y Conduces Pendientes
+// arrancaban con "mes actual" (día 1 → hoy), lo que escondía todo el trabajo
+// abierto del mes anterior. `Facturas` conserva "mes actual" — es su vista
+// natural para KPIs mensuales.
+function calcularRangoDefault(pagina: PaginaFiltro): { desde: string; hasta: string } {
+  if (pagina === 'cotizaciones' || pagina === 'facturacion-pendiente') {
+    return calcularRangoUltimos30Dias();
+  }
+  return calcularRangoMes();
+}
+
 function leerValoresDesdeURL(): Partial<FiltroValores> | null {
   if (typeof window === 'undefined') return null;
   const params = new URLSearchParams(window.location.search);
@@ -220,13 +238,13 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
   const opcionesTipo = useMemo(() => ['Todos', ...tiposEquipo], [tiposEquipo]);
 
   const valoresIniciales = useMemo<FiltroValores>(() => {
-    const defaultMes = calcularRangoMes();
+    const rangoDefault = calcularRangoDefault(pagina);
     const defaults: FiltroValores = {
       estado: 'Todas',
       busqueda: '',
       tipoEquipo: 'Todos',
-      fechaDesde: defaultMes.desde,
-      fechaHasta: defaultMes.hasta,
+      fechaDesde: rangoDefault.desde,
+      fechaHasta: rangoDefault.hasta,
       campoFecha: 'emision',
     };
     const desdeURL = leerValoresDesdeURL();
