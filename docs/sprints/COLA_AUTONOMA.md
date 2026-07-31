@@ -8366,3 +8366,162 @@ Aplicar las decisiones: eliminar los marcados "QUITAR", mover los marcados "MOVE
 
 <!-- SPRINT-DISENO-E/F/G/H/I agregados pasada 57 (2026-06-01) por Cowork tras leer leak prompt diseño Claude -->
 
+---
+
+## SPRINT-MEMORIA-PURGA-ARCHIVAR-COLA-BLOQUEOS
+
+**Prioridad:** 🟠 ALTA (deuda documental que ralentiza cada arranque de conversación). **Estado:** 🟢 PENDIENTE — autónomo. **Origen:** auditoría 2026-07-31 (Cowork) — `COLA_AUTONOMA.md` 8368 líneas, `BLOQUEOS.md` 3751, `MEMORIA_MAESTRA.md` con 1 párrafo de 15KB imposible de escanear. Un Claude nuevo (Cowork o Claude Code) no puede ponerse al día en <2 minutos.
+
+**Objetivo:**
+
+Dejar los 3 documentos operativos vivos en tamaños escaneables (<500 líneas cada uno para COLA y BLOQUEOS, <100 para MEMORIA_MAESTRA), sin perder información — todo lo archivado queda accesible en `docs/sprints/archivo/`.
+
+**Alcance — 4 fases secuenciales autónomas:**
+
+### Fase 1 — Diagnóstico y clasificación
+
+Escribir `scripts/purga-cola.ts` (nuevo, ~150 líneas TypeScript ejecutable con `tsx`) que:
+
+1. Parsea `COLA_AUTONOMA.md` buscando `^## SPRINT-` headers y sus bloques (hasta el próximo `^## SPRINT-` o final de archivo).
+2. Para cada sprint, extrae:
+   - Nombre del sprint.
+   - Estado explícito (`🟢 PENDIENTE`, `🟡 EN PRODUCCIÓN AWAITING QA`, `✅ COMPLETADO`, `⊘ ESCALADO`, `🔴 BLOQUEADO`, "stub histórico", etc.).
+   - Fecha de última actualización (buscar `pasada N` o fecha `YYYY-MM-DD` en el bloque).
+   - Hash del último commit asociado (si se menciona con `hash \`XXXXX\``).
+3. Clasifica cada sprint en 3 categorías:
+   - **VIVO** — si el estado contiene "PENDIENTE" o "EN_EJECUCION" o "BLOQUEADO" (activos que el coordinator o Jorge sí necesitan ver).
+   - **ARCHIVABLE** — si el estado contiene "✅ COMPLETADO", "stub histórico" y la fecha es >30 días.
+   - **AWAITING_QA_VIEJO** — si el estado es "🟡 AWAITING QA JORGE" y la fecha es >30 días (Jorge nunca hizo el QA, seguro ya no aplica — mover a archivo con nota).
+4. Genera reporte `docs/sprints/PURGA_REPORT_<fecha>.md` con la lista de qué se movería y qué se mantendría.
+
+**Corrección clave:** el script NO borra ni mueve nada en esta fase — solo reporta.
+
+### Fase 2 — Ejecución de la purga
+
+Después de que Fase 1 genere el reporte, el mismo `scripts/purga-cola.ts` corrido con `--apply` hace la migración:
+
+1. Crear `docs/sprints/archivo/COLA_2026-Q2.md` (o el nombre trimestral que corresponda).
+2. Mover los bloques de sprints **ARCHIVABLE** de `COLA_AUTONOMA.md` a ese archivo, preservando el markdown intacto.
+3. En `COLA_AUTONOMA.md` dejar un separador con un índice: "Ver sprints archivados en `docs/sprints/archivo/COLA_2026-Q2.md` (N sprints)".
+4. Idem con `BLOQUEOS.md` → `docs/sprints/archivo/BLOQUEOS_2026-Q2.md` para OKs ya procesados >30 días.
+5. Cero información perdida: `git log --follow` en cualquier archivo archivado debe seguir mostrando el historial completo.
+
+### Fase 3 — Reescritura de `MEMORIA_MAESTRA.md`
+
+Escribir `scripts/regenerar-memoria.ts` (nuevo, ~80 líneas) que:
+
+1. Lee los últimos 3 `DIARIO_<fecha>.md` (más recientes).
+2. Extrae de cada uno: hash, fecha, sprints procesados, acciones pendientes de Jorge.
+3. Reescribe `MEMORIA_MAESTRA.md` completo con esta estructura fija (≤100 líneas):
+
+```
+# MEMORIA MAESTRA — Mister Service RD
+
+> Actualizado por scripts/regenerar-memoria.ts. La versión completa histórica está en docs/sprints/DIARIO_*.md.
+
+## Última actualización
+- Fecha: YYYY-MM-DD
+- Pasada #N
+- Hash producción: XXXXX
+
+## En curso (0-3 items)
+- ...
+
+## Awaiting QA Jorge (top 5)
+- SPRINT-XXX hash YYYYY: <qué revisar en 1 línea>
+
+## Bloqueado esperando OK Jorge (top 3)
+- ...
+
+## Decisiones vivas de Jorge (no se olvidan) (top 8)
+- ...
+
+## Últimas 3 pasadas
+- Pasada 60 (fecha, hash, 1 línea)
+- Pasada 59 (idem)
+- Pasada 58 (idem)
+
+## Dónde vive todo
+- COLA_AUTONOMA.md — sprints activos (archivados >30d en docs/sprints/archivo/)
+- BLOQUEOS.md — pendientes de OK Jorge
+- CLAUDE.md — reglas técnicas
+- COWORK_CONTEXTO.md — reglas de comunicación
+- MAPA_MENTAL.yaml — estructura del software
+- docs/postmortems/ — bugs históricos
+```
+
+Correr una vez para regenerar el archivo actual.
+
+### Fase 4 — Integración con el sistema
+
+1. Agregar a `package.json`: `"purga": "tsx scripts/purga-cola.ts"` y `"memoria:regen": "tsx scripts/regenerar-memoria.ts"`.
+2. Agregar sub-regla a `.claude/agents/memoria.md`: "al cerrar cada pasada, correr `npm run memoria:regen` en lugar de editar MEMORIA_MAESTRA a mano".
+3. Agregar sub-regla a `.claude/agents/coordinator.md`: "cada 10 pasadas, correr `npm run purga` para archivar sprints viejos".
+4. Nuevo cazador P-XXX (siguiente número disponible) `check-cola-inflada.ts` que falla pre-commit si `COLA_AUTONOMA.md > 2000 líneas` o `BLOQUEOS.md > 2000 líneas` o `MEMORIA_MAESTRA.md > 200 líneas` — obliga a purgar antes de que vuelva a inflarse.
+5. Registrar el cazador nuevo en `scripts/invariantes/run-all.ts`.
+
+**Touch-list explícito:**
+
+- `scripts/purga-cola.ts` (NUEVO)
+- `scripts/regenerar-memoria.ts` (NUEVO)
+- `scripts/invariantes/check-cola-inflada.ts` (NUEVO)
+- `scripts/invariantes/run-all.ts` (agregar entrada)
+- `docs/sprints/archivo/COLA_2026-Q2.md` (NUEVO, generado)
+- `docs/sprints/archivo/BLOQUEOS_2026-Q2.md` (NUEVO, generado)
+- `docs/sprints/COLA_AUTONOMA.md` (MODIFICADO — se reduce)
+- `docs/sprints/BLOQUEOS.md` (MODIFICADO — se reduce)
+- `docs/sprints/MEMORIA_MAESTRA.md` (REESCRITO)
+- `docs/sprints/PURGA_REPORT_<fecha>.md` (NUEVO, informativo)
+- `docs/PATRONES_REGRESION.md` (entrada P-XXX nuevo)
+- `.claude/agents/memoria.md` (sub-regla nueva)
+- `.claude/agents/coordinator.md` (sub-regla nueva)
+- `package.json` (2 scripts nuevos)
+- `CLAUDE.md` (mencionar los 2 nuevos comandos)
+
+**Consumidores verificados (read-only check):**
+
+- `grep -rn "COLA_AUTONOMA\|BLOQUEOS\|MEMORIA_MAESTRA" .claude/agents/ docs/ scripts/ | head -30` — todos los agentes que las referencian siguen apuntando a los archivos originales (los nombres no cambian). Cero refactor de referencias necesario.
+
+**Consumidores NO afectados:**
+
+- Los agentes `memoria`, `coordinator`, `archivist` ya leen esos archivos por path — no importa que su contenido sea menor.
+
+**Hallazgos laterales:**
+
+- Ninguno esperado. Si al hacer la clasificación aparece un sprint con estado ambiguo (ni PENDIENTE ni COMPLETADO), reportarlo en `PURGA_REPORT_<fecha>.md` con marca `⚠️ REVISAR` y NO mover — Jorge decide en la próxima pasada.
+
+**Restricciones duras:**
+
+- **NO borrar información.** Todo lo que se mueve queda en `docs/sprints/archivo/` accesible por `git log --follow` y grep normal.
+- **NO tocar código de producción.** Este sprint solo edita docs + scripts nuevos + config de agentes.
+- **NO ejecutar la purga sin dry-run previo.** El script debe correr Fase 1 (reporte), después Fase 2 (`--apply`). Si el reporte muestra >100 sprints ARCHIVABLE, escalar a Jorge antes de aplicar.
+- **NO cambiar los nombres de los archivos originales** (COLA_AUTONOMA.md, BLOQUEOS.md, MEMORIA_MAESTRA.md) — solo achicarlos y agregar índice al inicio con link al archivo trimestral.
+- **Cazadores 25/25 PASS + typecheck limpio en cada commit.** Este sprint es todo docs + scripts, no debería tocar nada que rompa cazadores.
+- **Reviewer obligatorio** — este sprint toca docs de operación diaria. El reviewer valida que la purga no rompa referencias (grep en la cola después de la purga: `grep "SPRINT-DISENO-C" docs/` debe seguir encontrando el sprint en archivo, no perdido).
+
+**Criterios de aceptación:**
+
+- [ ] `COLA_AUTONOMA.md` pasa de 8368 → <500 líneas.
+- [ ] `BLOQUEOS.md` pasa de 3751 → <500 líneas.
+- [ ] `MEMORIA_MAESTRA.md` pasa de 250+ → <100 líneas.
+- [ ] `docs/sprints/archivo/COLA_2026-Q2.md` y `BLOQUEOS_2026-Q2.md` existen con los sprints archivados.
+- [ ] `npm run purga` corre en <5s en modo reporte y <15s en modo apply.
+- [ ] `npm run memoria:regen` corre en <3s y produce un archivo válido.
+- [ ] Nuevo cazador P-XXX pasa (los 3 archivos están debajo del umbral).
+- [ ] `git log --follow docs/sprints/COLA_AUTONOMA.md` sigue mostrando el historial completo.
+- [ ] Cazadores 25+1/25+1 PASS.
+- [ ] `grep -r "SPRINT-DISENO-C\|SPRINT-DINERO-2" docs/` encuentra los sprints archivados (prueba de que nada se perdió).
+
+**Riesgo:** Medio.
+
+- Ganancia: dramática (cualquier Claude arranca en 2 min en vez de 15).
+- Peligro: sprint que toca docs operativos críticos. Un bug del script podría dejar `COLA_AUTONOMA.md` en estado incoherente. Mitigado por: `--dry-run` obligatorio antes de `--apply`, reviewer obligatorio, commit granular (una fase = un commit para poder hacer rollback quirúrgico si algo sale mal).
+
+**Autónomo hasta el final** (todo el trabajo es scripts + docs + config de agentes; no toca `src/`, ni rules, ni endpoints, ni datos). NO requiere OK Jorge salvo si aparece un sprint ambiguo — en ese caso ESCALAR con nota.
+
+**Notas para el coordinator:**
+
+- Este sprint pisa docs que otros agentes también editan. Correrlo en un momento donde no haya otras pasadas en paralelo. Ideal: primer sprint de una pasada limpia.
+- Después de este sprint, el arranque de cualquier Claude nuevo será ~5x más rápido — vale invertir el tiempo aunque parezca "solo docs".
+- Sprint follow-up sugerido: `SPRINT-BRIEF-DASHBOARD-UNICO` (que genera `docs/BRIEF.md` autogenerado con `npm run brief`) — ver `docs/COWORK_CONTEXTO.md` para el diseño. Encolar tras QA de este.
+
