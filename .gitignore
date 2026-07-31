@@ -53,3 +53,28 @@ cors.json
 service-account.json
 data-imports/
 .gstack/
+
+# MCP local configs (pueden contener tokens)
+.mcp.json
+ai-agent-settings.json
+
+# Playwright MCP artefactos
+.playwright-mcp/
+
+# Screenshots temporales en raíz (para investigaciones puntuales, no versionar)
+/*.png
+/*.PNG
+/*.jpg
+/*.jpeg
+
+# Archivos de trabajo temporales en raíz
+/lead-detail.md
+/pipeline-snapshot.md
+/pipeline-network.txt
+/PROMPT-PLAYWRIGHT-COWORK.md
+/CLAUDE.md.bak.*
+/CLAUDE.md.bak.*.*
+
+# macOS iCloud duplicados (Time Machine / iCloud Drive suele crear "Archivo 2.ext")
+* 2.*
+"* 2.*"

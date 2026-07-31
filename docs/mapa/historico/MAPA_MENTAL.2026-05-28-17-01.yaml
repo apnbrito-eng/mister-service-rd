@@ -1,0 +1,423 @@
+# ============================================================================
+# MAPA MENTAL — Mister Service RD
+# ============================================================================
+# Fuente única de verdad del mapa del sistema. Editable a mano por Jorge.
+# El agente `cartografo` lee este archivo y regenera:
+#   - docs/mapa/mapa.svg            (imagen visual)
+#   - docs/mapa/mapa.mmd            (Mermaid)
+#   - docs/mapa/explorador.html     (visor interactivo, abrir con doble clic)
+#   - docs/mapa/PROMPT_SISTEMA.md   (contexto para los demás agentes)
+#
+# Regenerar manual: `npm run mapa`
+#
+# Nombres de colecciones DEBEN existir en el código (grep en src/ y api/).
+# Si declarás una colección que no existe, el cartografo NO regenera y avisa.
+# ============================================================================
+
+meta:
+  proyecto: "Mister Service RD"
+  descripcion: "Software de gestión para taller de reparación de electrodomésticos en República Dominicana"
+  responsable_humano: "Jorge Luis Brito García"
+  version_mapa: "1.0"
+  ultima_actualizacion: "2026-05-26"
+
+# ----------------------------------------------------------------------------
+# ÁREAS — agrupaciones lógicas del software
+# ----------------------------------------------------------------------------
+areas:
+  ordenes:
+    color: "indigo"
+    descripcion: "Ciclo de vida de la orden de servicio — el corazón del sistema"
+  agendamiento:
+    color: "azul"
+    descripcion: "Calendarios, citas y mantenimientos preventivos"
+  clientes:
+    color: "amarillo"
+    descripcion: "CRM del cliente final que paga la reparación"
+  dinero:
+    color: "verde"
+    descripcion: "Cotizaciones, facturas, pagos, comisiones, nómina, gastos"
+  inventario:
+    color: "morado"
+    descripcion: "Productos, piezas, equipos en el taller, movimientos de stock"
+  personal_rrhh:
+    color: "naranja"
+    descripcion: "Empleados, usuarios, roles, ponches, cierres de día"
+  whatsapp_crm:
+    color: "teal"
+    descripcion: "Inbox de WhatsApp, plantillas HSM, conversaciones y errores Meta"
+  formularios_publicos:
+    color: "rosa"
+    descripcion: "Formularios públicos sin login, solicitudes que generan leads"
+  reporting:
+    color: "gris"
+    descripcion: "Dashboards y métricas — lee de todo, no escribe"
+  sistema:
+    color: "neutro"
+    descripcion: "Cross-cutting: auditoría, notificaciones, rate limits, configuración"
+
+# ----------------------------------------------------------------------------
+# MÓDULOS
+# ----------------------------------------------------------------------------
+modulos:
+
+  # --- ORDENES (núcleo) ----------------------------------------------------
+  ordenes_servicio:
+    area: ordenes
+    descripcion: "Orden de servicio: crea, asigna, transiciona fases (nuevo_lead → cerrado), cierra con wizard. Spine del sistema."
+    responsable_humano: "Coordinadora de servicio"
+    depende_de: [clientes, personal, calendarios]
+    expone_a: [cotizaciones, facturas, pagos, comisiones, garantias, citas_por_confirmar, mantenimiento, avances, standby_piezas, equipos_taller]
+    colecciones_firestore: [ordenes_servicio]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: alta
+    notas: "parseOrden() en utils/index.ts es la lectura común. Hoy 3 caminos de creación (useOrdenCreateForm, Mantenimiento, solicitudes); sprint NUCLEO-CREAR-ORDEN-CENTRAL unifica."
+
+  avances:
+    area: ordenes
+    descripcion: "Registro de avances/piezas usadas durante la reparación"
+    depende_de: [ordenes_servicio]
+    expone_a: []
+    colecciones_firestore: [avances, movimientos_piezas]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: media
+
+  # --- AGENDAMIENTO --------------------------------------------------------
+  calendarios:
+    area: agendamiento
+    descripcion: "Calendarios públicos por técnico (slots configurables, URL pública /cita/:calendarId)"
+    depende_de: [personal]
+    expone_a: [citas_por_confirmar]
+    colecciones_firestore: [calendarios]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: media
+
+  citas_por_confirmar:
+    area: agendamiento
+    descripcion: "Citas solicitadas (web pública o admin) pendientes de confirmar y volverse orden"
+    depende_de: [clientes, personal, calendarios]
+    expone_a: [ordenes_servicio]
+    colecciones_firestore: [citas_por_confirmar]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: alta
+    notas: "Tras AGENDA-2 (e4f92bf) visibles en calendario/agenda con estilo tentativo. Tras AGENDA-3 (f9697b9) se honra el asignadoId al confirmar."
+
+  mantenimiento:
+    area: agendamiento
+    descripcion: "Mantenimientos preventivos programados para clientes recurrentes"
+    depende_de: [clientes, personal]
+    expone_a: [ordenes_servicio]
+    colecciones_firestore: [mantenimiento]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: media
+    notas: "Tras AGENDA-1 (132d9b5) atado a cliente real (typeahead + telefono normalizado, tecnicoId=uid). Tras AGENDA-5 (8f6a72b) se ofrece programar al cerrar orden."
+
+  # --- CLIENTES ------------------------------------------------------------
+  clientes:
+    area: clientes
+    descripcion: "CRM del cliente final. Teléfono normalizado (RD: 10 dígitos sin código país)."
+    responsable_humano: "Secretaria / coordinadora"
+    depende_de: []
+    expone_a: [ordenes_servicio, citas_por_confirmar, mantenimiento, cotizaciones, facturas, garantias, whatsapp_inbox, solicitudes]
+    colecciones_firestore: [clientes]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: alta
+    notas: "Helpers canónicos: buscarClientePorTelefono, buscarOCrearCliente. Anti-duplicado por telefonoNormalizado."
+
+  garantias:
+    area: clientes
+    descripcion: "Garantías de servicio. Reapertura aplica descuento 10% sobre piezas al técnico original."
+    depende_de: [ordenes_servicio, facturas, clientes]
+    expone_a: [comisiones]
+    colecciones_firestore: [facturas]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: media
+    notas: "Fase A (59c5fb0) awaiting QA Jorge. Cazador P-024 protege regla nueva (no reintroducir anulación 100%)."
+
+  # --- DINERO --------------------------------------------------------------
+  cotizaciones:
+    area: dinero
+    descripcion: "Cotizaciones (QT-####) previas a la aprobación; al aprobar pueden generar factura."
+    depende_de: [clientes, ordenes_servicio, productos]
+    expone_a: [facturas]
+    colecciones_firestore: [cotizaciones, precios_servicios]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: alta
+    notas: "Tras DINERO-1 (bec87b3) el número QT es atómico via contadores.service.ts."
+
+  facturas:
+    area: dinero
+    descripcion: "Facturas y conduces (FAC-####, CG-####). Emisión bloqueada si hay pago sin verificar."
+    depende_de: [cotizaciones, ordenes_servicio, clientes]
+    expone_a: [pagos, comisiones, garantias]
+    colecciones_firestore: [facturas]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: alta
+    notas: "ProcesarFacturacionModal: gate del conduce vs pago verificado (cazador P-023). Tras DINERO-2 (b4fc23c) recalcula montoPagado/estadoPago al cobrar."
+
+  pagos:
+    area: dinero
+    descripcion: "Pagos del cliente. Hoy viven en array orden.pagos; subcolección /pagos espejo post B-2."
+    depende_de: [ordenes_servicio]
+    expone_a: [facturas, comisiones]
+    colecciones_firestore: [ordenes_servicio]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: alta
+    notas: "B-2 (d4d6498) migró 16 órdenes a subcolección espejo. B-3 (cut-over + endurecer rules) espera QA Jorge. Helper: obtenerPagosDeOrden(orden)."
+
+  comisiones:
+    area: dinero
+    descripcion: "Comisión del técnico por orden cerrada. Garantía aplica descuento 10% sobre piezas."
+    depende_de: [ordenes_servicio, facturas, personal]
+    expone_a: [nomina]
+    colecciones_firestore: [comisiones]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: alta
+    notas: "Dos bases de cálculo divergentes (~18% diferencia) pendientes decisión Jorge. P-021 obliga denormalización a factura."
+
+  nomina:
+    area: dinero
+    descripcion: "Liquidación mensual de nómina con bonos por tier (operaria, secretaria) y descuentos de préstamos."
+    depende_de: [comisiones, personal]
+    expone_a: []
+    colecciones_firestore: [liquidaciones_nomina]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: media
+    notas: "Reglas de bonos duplicadas hoy entre Nomina.tsx y Dashboard.tsx (REPORTING-1 las centralizó en utils/kpis.ts)."
+
+  gastos:
+    area: dinero
+    descripcion: "Gastos operativos del taller (no piezas)."
+    depende_de: []
+    expone_a: [reportes]
+    colecciones_firestore: [gastos]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: baja
+
+  # --- INVENTARIO ----------------------------------------------------------
+  productos:
+    area: inventario
+    descripcion: "Catálogo de productos/piezas con stock y costo. Dos colecciones (productos + piezas_inventario) — deuda histórica a consolidar."
+    depende_de: []
+    expone_a: [cotizaciones]
+    colecciones_firestore: [productos, piezas_inventario, movimientos_inventario]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: media
+    notas: "Solo la conversión cotización→factura descuenta stock. PiezaFormModal del cierre NO descuenta — decisión Jorge pendiente."
+
+  standby_piezas:
+    area: inventario
+    descripcion: "Piezas en espera de llegada para una orden"
+    depende_de: [ordenes_servicio]
+    expone_a: []
+    colecciones_firestore: [standby_piezas]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: media
+    notas: "No reconcilia con inventario al llegar — decisión Jorge pendiente."
+
+  equipos_taller:
+    area: inventario
+    descripcion: "Equipos físicamente en el taller (en reparación o en espera)"
+    depende_de: [ordenes_servicio]
+    expone_a: []
+    colecciones_firestore: [equipos_taller]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: baja
+
+  # --- PERSONAL / RRHH -----------------------------------------------------
+  personal:
+    area: personal_rrhh
+    descripcion: "Empleados del taller: técnicos, secretarias, coordinadoras, operarias, administradores"
+    responsable_humano: "Jorge / admin"
+    depende_de: []
+    expone_a: [ordenes_servicio, comisiones, nomina, calendarios, mantenimiento, ponches, cierres_dia, whatsapp_inbox]
+    colecciones_firestore: [personal, usuarios]
+    rutas_api: [/api/admin/crear-usuario]
+    integraciones_externas: [firebase_auth]
+    criticidad: alta
+    notas: "Alta crea AMBOS docs (personal/{autoId} + usuarios/{uid}) — invariante P-004. Los dropdowns guardan uid, no doc id — invariante P-006."
+
+  ponches:
+    area: personal_rrhh
+    descripcion: "Registro de entrada/salida del personal (control de asistencia)"
+    depende_de: [personal]
+    expone_a: [nomina, cierres_dia]
+    colecciones_firestore: [ponches]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: baja
+
+  cierres_dia:
+    area: personal_rrhh
+    descripcion: "Cierre diario operativo del taller"
+    depende_de: [personal, ponches]
+    expone_a: [reportes]
+    colecciones_firestore: [cierres_dia]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: baja
+
+  # --- WHATSAPP / CRM ------------------------------------------------------
+  whatsapp_inbox:
+    area: whatsapp_crm
+    descripcion: "Inbox de conversaciones de WhatsApp con clientes. Webhook entrante + send saliente + outbox idempotente."
+    depende_de: [clientes, personal, plantillas_whatsapp]
+    expone_a: [ordenes_servicio]
+    colecciones_firestore: [whatsapp_conversaciones, whatsapp_mensajes_inbox, whatsapp_mensajes_outbox, whatsapp_config, whatsapp_errores_meta]
+    rutas_api: [/api/whatsapp/send, /api/whatsapp/webhook, /api/whatsapp/media-proxy]
+    integraciones_externas: [meta_whatsapp]
+    criticidad: alta
+    notas: "Ventana 24h, idempotency por tempId (P-017), HMAC SHA-256 en webhook (P-016). Tras WA-FIX-PLANTILLAS (0ab73c5) catálogo alineado con Meta."
+
+  plantillas_whatsapp:
+    area: whatsapp_crm
+    descripcion: "Catálogo de plantillas HSM aprobadas en Meta (4 con imagen branded). Vive en código, no en Firestore."
+    depende_de: []
+    expone_a: [whatsapp_inbox]
+    colecciones_firestore: []
+    rutas_api: []
+    integraciones_externas: [meta_whatsapp]
+    criticidad: alta
+    notas: "src/config/plantillasWhatsApp.ts. Imágenes en public/plantillas/. Spec autoritativa en docs/sprints/PLANTILLAS_META_SPEC_2026-05-25.md."
+
+  conversaciones_ia:
+    area: whatsapp_crm
+    descripcion: "Conversaciones del agente IA con clientes (opt-in por conversación)"
+    depende_de: [whatsapp_inbox]
+    expone_a: []
+    colecciones_firestore: [conversaciones_ia]
+    rutas_api: []
+    integraciones_externas: [anthropic_api]
+    criticidad: media
+
+  # --- FORMULARIOS PÚBLICOS ------------------------------------------------
+  formularios:
+    area: formularios_publicos
+    descripcion: "Definiciones de formularios dinámicos (admin construye, público los llena en /f/:slug)"
+    depende_de: []
+    expone_a: [solicitudes]
+    colecciones_firestore: [formularios]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: media
+
+  solicitudes:
+    area: formularios_publicos
+    descripcion: "Submissions de formularios públicos. Generan lead/cliente/orden."
+    depende_de: [formularios, clientes]
+    expone_a: [ordenes_servicio]
+    colecciones_firestore: [solicitudes_servicio]
+    rutas_api: []
+    integraciones_externas: [firebase_storage]
+    criticidad: alta
+    notas: "Tras FIX-LEADS (01df699) subidas (foto/firma/PDF) van a Storage solicitudes-publico/** con whitelist contentType y size <10MB."
+
+  # --- REPORTING -----------------------------------------------------------
+  reportes:
+    area: reporting
+    descripcion: "Dashboards y métricas: ingresos, conduces emitidos, rendimiento técnicos, proyección de nómina."
+    depende_de: [ordenes_servicio, facturas, pagos, comisiones, personal, productos, gastos]
+    expone_a: []
+    colecciones_firestore: [recordatorios_diarios]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: media
+    notas: "Tras REPORTING-1 (a4e64db) los KPIs viven en src/utils/kpis.ts (helpers compartidos). Resta anulaciones de la base de ingresos."
+
+  # --- SISTEMA (cross-cutting) ---------------------------------------------
+  notificaciones:
+    area: sistema
+    descripcion: "Notificaciones internas a empleados (orden asignada, pieza llegó, etc.)"
+    depende_de: [personal]
+    expone_a: []
+    colecciones_firestore: [notificaciones]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: media
+    notas: "Rule gatea por userId == auth.uid. Cazador P-007."
+
+  auditoria:
+    area: sistema
+    descripcion: "Audit log de acciones administrativas sensibles (WhatsApp send, alta de usuarios, etc.)"
+    depende_de: []
+    expone_a: []
+    colecciones_firestore: [auditoria_admin, app_check_audit, whatsapp_errores_meta_dedupe]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: media
+
+  rate_limits:
+    area: sistema
+    descripcion: "Contadores diarios por usuario para limitar abuso (WhatsApp send, AI chat, etc.)"
+    depende_de: []
+    expone_a: []
+    colecciones_firestore: [rate_limits]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: baja
+
+  configuracion:
+    area: sistema
+    descripcion: "Documentos de configuración global (GPS, WhatsApp envío, rate limits, contadores)"
+    depende_de: []
+    expone_a: [whatsapp_inbox, cotizaciones, facturas]
+    colecciones_firestore: [config]
+    rutas_api: []
+    integraciones_externas: []
+    criticidad: alta
+    notas: "Contadores OS/QT/CG/FAC viven acá. Cazador P-022."
+
+# ----------------------------------------------------------------------------
+# INTEGRACIONES EXTERNAS
+# ----------------------------------------------------------------------------
+integraciones_externas:
+
+  meta_whatsapp:
+    descripcion: "Meta Graph API (WhatsApp Business Cloud). Mensajes entrantes (webhook con HMAC) y salientes (send con idempotency)."
+    criticidad: alta
+    notas: "WABA 1884486412326904. 2 phone_number_id activos. Tokens y números en Vercel env."
+
+  firebase_auth:
+    descripcion: "Firebase Authentication (login admin + ID tokens para endpoints api/*)"
+    criticidad: alta
+
+  firebase_firestore:
+    descripcion: "Firestore (base de datos principal). Reglas versionadas en firestore.rules + lock."
+    criticidad: alta
+
+  firebase_storage:
+    descripcion: "Firebase Storage (fotos de cierre, firmas, archivos públicos). Reglas en storage.rules + lock."
+    criticidad: alta
+
+  firebase_app_check:
+    descripcion: "App Check (defensa contra abuso desde clientes no genuinos)"
+    criticidad: media
+
+  vercel:
+    descripcion: "Hosting del SPA + serverless functions en api/*. Deploy automático en push a main."
+    criticidad: alta
+
+  anthropic_api:
+    descripcion: "Claude API para el agente IA conversacional (opt-in por conversación)"
+    criticidad: media
+
+  gps_vans:
+    descripcion: "Tracking GPS de vehículos del taller (Wialon / Samsara / Traccar / Fleet Complete / API personalizada — configurable en config_gps/sistema)"
+    criticidad: media
+    notas: "Acceso directo desde browser tiene CORS — usar el proxy /api/gps/ubicacion."
