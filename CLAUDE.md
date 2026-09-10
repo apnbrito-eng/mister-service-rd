@@ -18,8 +18,9 @@ Language/UI is Spanish (`date-fns/locale/es`, `RD$` currency). All user-facing s
 
 ```bash
 npm run dev             # Vite dev server at http://localhost:5173
-npm run build           # tsc (typecheck) + vite build  — use to verify before commits
-npm run lint            # eslint with --max-warnings 0
+npm run build           # tsc (src) + tsc -p tsconfig.api.json (api/ + scripts/) + vite build
+npm run typecheck:api   # solo api/ + scripts/ en strict (tsconfig.api.json)
+npm run lint            # eslint sobre todo el repo (el pre-commit sí usa --max-warnings 0)
 npm run preview         # preview production build
 npm run deploy:rules    # firebase deploy --only firestore:rules
 npm run deploy:indexes  # firebase deploy --only firestore:indexes
@@ -92,7 +93,12 @@ Admins build forms in `FormularioEditor` → `formularios` collection. Public us
 - **No exportes funciones non-component (helpers/formatters) desde un archivo `.tsx` de componente.** ESLint regla `react-refresh/only-export-components` lo bloquea. Si un helper es compartido entre padre e hijo, extraerlo a `utils/index.ts` o a un archivo dedicado `utils/<scope>.ts`. Patrón establecido en commit `ded0124` con `formatMonedaPrecisa`.
 - **Effects que persisten a localStorage requieren guard "ya cargué/restauré" explícito.** Sin guard, el effect puede sobrescribir un borrador antes de que el usuario tenga chance de restaurarlo. Use un ref `yaRestauradoRef` o condicionar el save a `borradorEncontrado === null`. Aplica a cualquier feature de borrador/draft con localStorage.
 - **`Ordenes.tsx` is ~1,600 lines** and intentionally monolithic. Smaller-scoped components live in `src/components/ordenes/`. Don't refactor opportunistically — only when the task demands it.
-- **Dashboard opens ~6 concurrent `onSnapshot` listeners.** Be mindful when adding more; scope queries where possible.
+- **Dashboard opens 8 concurrent `onSnapshot` listeners, todos sobre colecciones completas.** Be mindful when adding more; scope queries where possible. Deuda abierta (auditoría 2026-09-09, hallazgo P-2): ninguno filtra por período, así que el costo crece linealmente con el histórico — `comisiones` se descarga entera para filtrar `pendiente` en memoria.
+- **El Sidebar comparte UN solo listener de `ordenes_servicio` para los tres badges** (sugerencias de chequeo, reprogramaciones, pagos sin verificar). Antes eran tres listeners separados a la colección completa, y el Sidebar está montado en todas las páginas. Si agregás otro contador derivado de órdenes, calculalo DENTRO de ese listener — no abras uno nuevo. `SPRINT-FIX-SIDEBAR-LISTENERS` (2026-09-09).
+- **`api/` y `scripts/` SÍ pasan por typecheck** vía `tsconfig.api.json` (`npm run typecheck:api`, incluido en `npm run build` y en el pre-commit). Siguen ignorados por ESLint a propósito — el hook usa `--no-warn-ignored` contando con eso. Antes no los veía ni el compilador ni el linter, y tenían 3 errores de tipos reales. `SPRINT-FIX-TYPECHECK-API` (2026-09-09).
+- **Todo dato de Firestore que se interpole en un template string destinado a `document.write()` o `innerHTML` va por `escapeHtml()`** (`utils/index.ts`). Aplica hoy en `Cotizaciones.tsx::handlePrint` y `Facturas.tsx::handlePrint`. La ventana se abre con `window.open('')` — about:blank hereda el origen del opener, así que un XSS almacenado en `notas`/`descripcion` (campos que un técnico o el formulario público controlan) llegaba al token de sesión del admin que imprime. `SPRINT-SEC-XSS-IMPRESION` (2026-09-09).
+- **Los helpers de comisiones reportan sus fallos de escritura; el caller DEBE avisar al usuario.** `registrarComisionesPorItems` devuelve `fallidas[]` y `registrarComisionPorFactura` devuelve `comisionesFallidas: number`. Antes el catch del bucle sólo hacía `console.warn`: la comisión no se escribía, `totalAgregado` y el registro de auditoría cuadraban entre sí con las exitosas, y el técnico se quedaba sin cobrar sin que nadie lo notara. `registrarComisionPorOrden` nunca lanza — hay que mirar `razon === 'error interno'`, no confiar en un try/catch. `SPRINT-FIX-COMISIONES-SILENCIOSAS` (2026-09-09).
+- **`/tracking/:token` está roto en producción y su rule pública ya no existe.** `TrackingCliente.tsx:102` hace una query directa a `ordenes_servicio` filtrando por `trackingGPS.token`; Firestore evalúa por shape y esa query nunca pudo satisfacer la rama pública (que además exigía `trackingGPS.activo`, campo que nadie escribe — el código usa `habilitado`). La rama se eliminó por seguridad el 2026-09-09: exponía el documento completo de la orden a cualquiera sin autenticar. Migrar la página al endpoint `api/portal-cliente/[token].ts`, que ya devuelve campos filtrados.
 - **Spanish identifiers.** New code should follow existing naming (`clienteNombre`, `fechaCita`, `fase`, `tecnicoId`). Don't translate existing fields.
 - **No emojis** in code or commits unless the user asks.
 - **Commit messages are Spanish, Conventional-Commit style** (`feat:`, `fix:`) — match recent history.

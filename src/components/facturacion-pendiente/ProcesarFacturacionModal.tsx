@@ -658,6 +658,17 @@ export default function ProcesarFacturacionModal({
             userProfile,
             itbisPorcentaje: itbisPct,
           });
+        // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): una comisión que
+        // Firestore rechaza deja al técnico sin cobrar. Antes sólo iba a
+        // console.warn y la operación se veía exitosa.
+        if (result.fallidas.length > 0) {
+            toast.error(
+              `${result.fallidas.length} comisión(es) NO se registraron (${result.fallidas
+                .map(f => f.tecnicoNombre)
+                .join(', ')}). La factura sí se generó — revisá Comisiones.`,
+              { duration: 8000 },
+            );
+          }
           // CRÍTICO: denormalizar post-call (regla CLAUDE.md línea 89).
           // Audit fix C5: la guarda anterior `result.comisiones.length > 0`
           // saltaba la denormalización si todos los técnicos tenían 0% pero
@@ -733,6 +744,15 @@ export default function ProcesarFacturacionModal({
             userProfile,
             itbisPorcentaje: itbisPct,
           });
+        // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): una comisión que
+        // Firestore rechaza deja al técnico sin cobrar. Antes sólo iba a
+        // console.warn y la operación se veía exitosa.
+        if (comisionInfo.comisionesFallidas > 0) {
+            toast.error(
+              'La comisión NO se registró. La factura sí se generó — revisá Comisiones.',
+              { duration: 8000 },
+            );
+          }
           // Denormalizar SOLO si hay comisión efectiva (técnico válido + monto > 0).
           if (comisionInfo && comisionInfo.comisionId && comisionInfo.tecnicoId) {
             denormParaTx = {
@@ -745,7 +765,8 @@ export default function ProcesarFacturacionModal({
           }
         }
       } catch (err) {
-        console.warn('Error registrando comisión por factura:', err);
+        console.error('Error registrando comisión por factura:', err);
+        toast.error('La factura se generó pero la comisión falló. Revisá Comisiones.');
       }
 
       // Marcar la orden — payload construido PRE-tx (se aplica con tx.update).

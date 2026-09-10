@@ -89,7 +89,7 @@ export default function PanelCliente360({ waId, onCrearOrden }: Props) {
         setCliente(c);
         setTodasOrdenes(ords);
       } catch (err) {
-        // eslint-disable-next-line no-console
+         
         console.warn('[PanelCliente360] carga global falló:', err);
         if (!cancelado) {
           setCliente(null);
@@ -134,7 +134,7 @@ export default function PanelCliente360({ waId, onCrearOrden }: Props) {
         rows.sort((a, b) => b.fechaEmision.getTime() - a.fechaEmision.getTime());
         setFacturas(rows);
       } catch (err) {
-        // eslint-disable-next-line no-console
+         
         console.warn('[PanelCliente360] carga facturas falló:', err);
         if (!cancelado) setFacturas([]);
       } finally {

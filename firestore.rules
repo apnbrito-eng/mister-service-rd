@@ -313,12 +313,37 @@ service cloud.firestore {
     // Read: staff + público condicional (tracking GPS activo).
     // Write: staff oficina + técnico/ayudante para sus órdenes.
     match /ordenes_servicio/{docId} {
-      // Public read solo si el tracking GPS está activo (legacy /tracking).
-      // Sin esto se rompe el link de seguimiento del cliente.
-      allow read: if (
-        resource.data.trackingGPS != null &&
-        resource.data.trackingGPS.activo == true
-      ) || esStaff();
+      // SPRINT-FIX-RULES-ORDENES-PUBLICAS (2026-09-09) — auditoría hallazgo #2.
+      //
+      // ANTES habia una rama de lectura PUBLICA (sin auth):
+      //
+      //   allow read: if (
+      //     resource.data.trackingGPS != null &&
+      //     resource.data.trackingGPS.activo == true
+      //   ) || esStaff();
+      //
+      // Esa rama exponia el DOCUMENTO COMPLETO de la orden a cualquiera sin
+      // autenticar: precios, costos, margen, clienteTelefono, direccion,
+      // notas internas, tecnicoId e historial — saltandose por completo el
+      // whitelist de campos que `api/portal-cliente/[token].ts` implementa.
+      // Peor: permitia volcado masivo con
+      // `where('trackingGPS.activo','==',true)`.
+      //
+      // Estaba DORMIDA por un desajuste de nombre de campo: todo el codigo
+      // usa `trackingGPS.habilitado` (`OrdenDetalle.tsx:332`) y nadie setea
+      // `activo`, asi que la rama nunca se cumplia (fallaba en seguro). Se
+      // quita antes de que alguien "arregle" el tracking unificando el
+      // nombre del campo y abra la fuga sin darse cuenta.
+      //
+      // Que NO se rompe al quitarla: `/tracking/:token`
+      // (`TrackingCliente.tsx:102`) hace una query directa filtrando por
+      // `trackingGPS.token`. Firestore evalua las queries por su SHAPE: esa
+      // query nunca pudo demostrar `trackingGPS.activo == true`, asi que ya
+      // recibia permission-denied hoy. La pagina ya estaba rota en
+      // produccion — hay que migrarla al endpoint serverless
+      // `api/portal-cliente/[token].ts`, que devuelve campos filtrados y es
+      // el camino correcto (sprint aparte).
+      allow read: if esStaff();
 
       allow create: if esStaffOficina();
 

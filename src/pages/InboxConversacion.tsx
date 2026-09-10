@@ -311,7 +311,7 @@ export default function InboxConversacion() {
   useEffect(() => {
     if (!waId || !conversacionActual || conversacionActual.noLeidos === 0) return;
     marcarLeida(waId).catch((err) => {
-      // eslint-disable-next-line no-console
+       
       console.warn('[InboxConversacion] marcarLeida falló:', err);
     });
   }, [waId, conversacionActual]);
@@ -366,7 +366,7 @@ export default function InboxConversacion() {
         toast.success('Enviado');
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('[InboxConversacion] enviarTexto falló:', err);
       toast.error('Error al enviar — revisá la conexión');
     } finally {

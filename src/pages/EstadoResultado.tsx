@@ -27,6 +27,14 @@ interface DataMes {
   totalBonos: number;
   totalNomina: number;
   utilidadOperativa: number;  // utilidadBruta - gastos - nómina
+  /**
+   * SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09) — auditoría hallazgo E-2.
+   * `true` si la lectura de `liquidaciones_nomina` falló: los bonos quedaron
+   * en 0, así que `totalNomina` está SUBESTIMADO y `utilidadOperativa`
+   * SOBREESTIMADA. Antes esto se tragaba con `catch { /* silent *\/ }` y el
+   * P&L mostraba más ganancia de la real sin ninguna señal en pantalla.
+   */
+  bonosIncompletos: boolean;
 }
 
 async function cargarDataMes(year: number, month: number, personal: Personal[]): Promise<DataMes> {
@@ -92,6 +100,7 @@ async function cargarDataMes(year: number, month: number, personal: Personal[]):
 
   // Bonos: operarias/secretaria — simplificado: leemos de liquidaciones del mes
   let totalBonos = 0;
+  let bonosIncompletos = false;
   try {
     const liqSnap = await getDocs(collection(db, 'liquidaciones_nomina'));
     liqSnap.docs.forEach(d => {
@@ -105,7 +114,12 @@ async function cargarDataMes(year: number, month: number, personal: Personal[]):
         });
       }
     });
-  } catch { /* silent */ }
+  } catch (err) {
+    // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): NO tragarse esto.
+    // Sin bonos, la nómina sale corta y la utilidad operativa sale inflada.
+    console.error('[estado-resultado] no se pudieron leer las liquidaciones de nómina:', err);
+    bonosIncompletos = true;
+  }
 
   const totalNomina = sueldoBase + totalComisiones + totalBonos;
   const utilidadOperativa = utilidadBruta - totalGastos - totalNomina;
@@ -124,6 +138,7 @@ async function cargarDataMes(year: number, month: number, personal: Personal[]):
     totalBonos,
     totalNomina,
     utilidadOperativa,
+    bonosIncompletos,
   };
 }
 
@@ -274,6 +289,26 @@ export default function EstadoResultado() {
 
       {!loading && data && (
         <>
+          {/*
+            SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09) — auditoría hallazgo E-2.
+            Si no se pudieron leer las liquidaciones de nómina, los bonos quedan
+            en 0: la nómina sale corta y la utilidad operativa sale inflada. El
+            número se sigue mostrando, pero marcado como incompleto — antes el
+            error se tragaba en silencio y el P&L parecía correcto.
+          */}
+          {data.bonosIncompletos && (
+            <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
+              <div className="text-sm font-semibold text-amber-900">
+                Cifras incompletas — no se pudieron leer las liquidaciones de nómina
+              </div>
+              <div className="text-xs text-amber-800 mt-1">
+                Los bonos no se pudieron incluir, así que la nómina está subestimada
+                y la utilidad operativa aparece más alta de lo real. Recargá la página;
+                si sigue igual, avisá antes de usar estos números.
+              </div>
+            </div>
+          )}
+
           {/* Resumen destacado */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4">

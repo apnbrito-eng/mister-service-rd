@@ -1,0 +1,28 @@
+{
+  // SPRINT-FIX-TYPECHECK-API (2026-09-09) — auditoría hallazgo T-1.
+  //
+  // `tsconfig.json` sólo incluye `src`, y `eslint.config.js` ignora `api`.
+  // Resultado: toda la carpeta de endpoints serverless — Admin SDK, endpoints
+  // de admin, webhook de WhatsApp, endpoint de IA — no pasaba por ninguna
+  // verificación estática. Tenía 3 errores de tipos reales sin detectar.
+  //
+  // Es el peor sitio posible para no tener red: `api/` corre con credenciales
+  // que ignoran las reglas de Firestore.
+  //
+  // Se corre con `npm run typecheck:api` y desde `npm run build`.
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["node"]
+  },
+  "include": ["api/**/*.ts", "scripts/**/*.ts"]
+}

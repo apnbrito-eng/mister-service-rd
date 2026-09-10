@@ -104,7 +104,7 @@ export default function CardCliente({ waId, onCrearOrden }: Props) {
         if (cancelado) return;
         setOrdenes(ords);
       } catch (err) {
-        // eslint-disable-next-line no-console
+         
         console.warn('[CardCliente] carga falló:', err);
         if (!cancelado) {
           setCliente(null);

@@ -1093,8 +1093,13 @@ const TOOL_QUERY_CLIENTES: ToolDef = {
     } else {
       // Nombre y/o email → fetch con margen y filtrar in-memory (AND si ambos).
       const snap = await db.collection('clientes').limit(limite * 3).get();
+      // SPRINT-FIX-TYPECHECK-API (2026-09-09): la anotación `: DocumentData`
+      // es necesaria. Sin ella TS infiere `{ id: string }` para el resultado
+      // del map (pierde el index signature de `DocumentData` al hacer spread)
+      // y los accesos `c.nombre` / `c.email` de abajo NO compilan. Nadie lo
+      // había visto porque `api/` estaba fuera de tsconfig y de ESLint.
       docs = snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
+        .map((d): DocumentData => ({ id: d.id, ...d.data() }))
         .filter((c) => {
           if (nombre && !incluyeBusqueda(c.nombre, nombre)) return false;
           if (email && !incluyeBusqueda(c.email, email)) return false;

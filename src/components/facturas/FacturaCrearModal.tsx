@@ -278,6 +278,18 @@ export default function FacturaCrearModal({
             userProfile,
           });
 
+          // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): una comisión que
+          // Firestore rechaza deja al técnico sin cobrar. Antes sólo iba a
+          // console.warn y la operación se veía exitosa.
+          if (result.fallidas.length > 0) {
+            toast.error(
+              `${result.fallidas.length} comisión(es) NO se registraron (${result.fallidas
+                .map(f => f.tecnicoNombre)
+                .join(', ')}). La factura sí se generó — revisá Comisiones.`,
+              { duration: 8000 },
+            );
+          }
+
           // Denormalizar la comisión en el doc factura para que el render
           // de Facturas.tsx pueda mostrarla sin tener que consultar la
           // colección `comisiones`. Sin esto, el bloque N>1 muestra "—"

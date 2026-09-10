@@ -131,6 +131,13 @@ export default function FaseStepper({
         const res = await registrarComisionPorOrden(ordenAct, userProfile);
         if (res.creada) {
           toast.success(`Comisión registrada: RD$ ${(res.comisionMonto || 0).toLocaleString('es-DO')}`);
+        } else if (res.razon === 'error interno') {
+          // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): el helper captura
+          // sus errores internamente y no lanza — el catch de abajo era código
+          // muerto para este caso. Ver auditoría 2026-09-09 hallazgo E-1.
+          toast.error(
+            `Orden ${orden.numero || ''} cerrada, pero la comisión NO se registró. Revísala en Comisiones.`,
+          );
         }
       } catch (err) {
         console.error('Error registrando comisión:', err);

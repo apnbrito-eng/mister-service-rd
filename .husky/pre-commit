@@ -1,6 +1,11 @@
 #!/usr/bin/env sh
-echo "[hook] typecheck..."
-npx tsc --noEmit || { echo "[ABORT] typecheck"; exit 1; }
+echo "[hook] typecheck (src)..."
+npx tsc --noEmit || { echo "[ABORT] typecheck src"; exit 1; }
+# SPRINT-FIX-TYPECHECK-API (2026-09-09): `tsconfig.json` solo incluye `src`.
+# Sin esta linea, api/ y scripts/ (Admin SDK, endpoints de admin, webhook
+# WhatsApp, endpoint IA) se commitean sin ninguna verificacion estatica.
+echo "[hook] typecheck (api + scripts)..."
+npx tsc -p tsconfig.api.json || { echo "[ABORT] typecheck api"; exit 1; }
 echo "[hook] cazadores..."
 npm run check:regression --silent || { echo "[ABORT] regression"; exit 1; }
 STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -E "\.(ts|tsx)$" || true)

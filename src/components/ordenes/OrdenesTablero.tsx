@@ -162,9 +162,18 @@ export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Prop
         const res = await registrarComisionPorOrden(ordenAct, userProfile);
         if (res.creada) {
           toast.success(`Comisión registrada: RD$ ${(res.comisionMonto || 0).toLocaleString('es-DO')}`);
+        } else if (res.razon === 'error interno') {
+          // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): `registrarComisionPorOrden`
+          // captura sus propios errores y NUNCA lanza, así que el catch de abajo
+          // no se dispara nunca. Sin esta rama, un fallo de escritura dejaba al
+          // técnico sin comisión y la UI no decía nada.
+          toast.error(
+            `Orden ${orden.numero || ''} cerrada, pero la comisión NO se registró. Revísala en Comisiones.`,
+          );
         }
       } catch (err) {
         console.error('Error registrando comisión:', err);
+        toast.error('Orden cerrada, pero la comisión no se registró.');
       }
     }
   };

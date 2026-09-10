@@ -54,7 +54,7 @@ export default function ToggleBot({ waId, habilitado, puedeTogglear = true }: Pr
       if (/permission-denied|insufficient/i.test(msg)) {
         toast.error('Sin permiso. Solo admin/coord o quien tiene asignada la conversación pueden pausar el bot.');
       } else {
-        // eslint-disable-next-line no-console
+         
         console.error('[ToggleBot] falló:', err);
         toast.error('No se pudo cambiar el estado del bot');
       }

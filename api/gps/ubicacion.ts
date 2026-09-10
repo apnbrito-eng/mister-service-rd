@@ -206,7 +206,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const data = await response.json();
+    // SPRINT-FIX-TYPECHECK-API (2026-09-09): `response.json()` devuelve
+    // `unknown` bajo strict; `normalizarRespuesta` espera `Record<string, unknown>`
+    // y ya hace acceso defensivo campo por campo sobre lo que llegue.
+    const data = (await response.json()) as Record<string, unknown>;
     const ubicacion = normalizarRespuesta(data, proveedor as Proveedor, vehiculoId);
 
     return res.status(200).json(ubicacion);

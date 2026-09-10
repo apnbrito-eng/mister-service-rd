@@ -1347,3 +1347,33 @@ export function crearRegistroAuditoria(
     detalle,
   };
 }
+
+/**
+ * Escapa los cinco caracteres con significado en HTML.
+ *
+ * SPRINT-SEC-XSS-IMPRESION (2026-09-09) — auditoría de seguridad hallazgo #3.
+ * Obligatorio para CUALQUIER dato de Firestore que se interpole en un
+ * template string que termine en `document.write()` / `innerHTML`.
+ *
+ * Contexto del bug original: `Cotizaciones.tsx::handlePrint` y
+ * `Facturas.tsx::handlePrint` interpolaban `clienteNombre`, `notas`,
+ * `items[].descripcion` y `tecnicoNombre` sin escapar. Esos campos son
+ * controlables por un técnico (edita sus propias cotizaciones) y por el
+ * formulario público (`citas_por_confirmar` tiene `create: if true`).
+ * La ventana de impresión se abre con `window.open('')` → about:blank
+ * HEREDA EL ORIGEN del opener, así que un `<img src=x onerror=...>` en
+ * las notas ejecutaba script con acceso a `window.opener` y al IndexedDB
+ * donde Firebase guarda el token de sesión del administrador que imprime.
+ *
+ * No usar para escapar dentro de atributos sin comillas ni dentro de
+ * `<script>`/`<style>` — este helper cubre texto y atributos entrecomillados.
+ */
+export function escapeHtml(valor: unknown): string {
+  if (valor === null || valor === undefined) return '';
+  return String(valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}

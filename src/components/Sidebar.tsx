@@ -108,90 +108,93 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     return () => { unsub1(); unsub1b(); unsub2(); unsub3(); unsub4(); };
   }, []);
 
-  // Sugerencias de "solo chequeo" pendientes (sprint R4 endurecida).
-  // El badge solo se renderiza para admin/coord; gateamos el listener al
-  // mismo set de roles para evitar leer toda `ordenes_servicio` con
-  // técnico/ayudante/secretaria/operaria. No hay índice compuesto;
-  // filtramos client-side.
+  // ─────────────────────────────────────────────────────────────────────
+  // SPRINT-FIX-SIDEBAR-LISTENERS (2026-09-09) — auditoría hallazgo P-1.
+  //
+  // ANTES: tres `useEffect` separados, cada uno con su propio
+  // `onSnapshot(collection(db, 'ordenes_servicio'))` SIN where ni limit,
+  // recorriendo todos los docs en memoria para calcular un contador de
+  // badge (sugerencias de chequeo, reprogramaciones, pagos sin verificar).
+  //
+  // El Sidebar está montado en TODAS las páginas del layout admin, así que
+  // cualquier admin/coordinadora mantenía TRES streams en vivo de la tabla
+  // completa de órdenes de forma permanente. Firestore cobra por documento
+  // leído y un listener re-emite el snapshot completo con cada cambio en la
+  // colección — el costo crecía con órdenes × usuarios × cambios por minuto.
+  //
+  // AHORA: un único listener que calcula los tres contadores en la misma
+  // pasada. Se elimina 2/3 de la lectura sin cambiar arquitectura ni rules.
+  //
+  // El filtrado client-side se mantiene a propósito (evita índices
+  // compuestos sobre arrays — misma decisión que tenían los tres originales).
+  //
+  // Gate: nos suscribimos si el usuario necesita AL MENOS UNO de los tres
+  // contadores. Cada contador se pone en 0 individualmente si ese usuario
+  // no tiene por qué verlo, para no cambiar el comportamiento de los badges.
+  //
+  // @safe-listener-sin-where: `ordenes_servicio` tiene `esStaff()` como
+  // short-circuit en su `allow read`, así que la query sin where no es
+  // rechazada por rules (cazador P-012 no aplica).
+  // ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (
-      userProfile?.rol !== 'administrador' &&
-      userProfile?.rol !== 'coordinadora'
-    ) {
+    const rol = userProfile?.rol;
+    const esAdminOCoord = rol === 'administrador' || rol === 'coordinadora';
+    const puedeVerPagos = puede(userProfile, 'pagosVerificar');
+
+    if (!esAdminOCoord && !puedeVerPagos) {
       setSugerenciasChequeoCount(0);
-      return;
-    }
-    const unsub = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
-      let count = 0;
-      snap.docs.forEach(d => {
-        const data = d.data();
-        if (data.eliminada) return;
-        const lista = data.sugerenciasSoloChequeo;
-        if (!Array.isArray(lista)) return;
-        if (lista.some(s => s && s.estado === 'pendiente')) count++;
-      });
-      setSugerenciasChequeoCount(count);
-    });
-    return () => unsub();
-  }, [userProfile?.rol]);
-
-  // Reprogramaciones pendientes (Hito 2 Portal Cliente). Mismo patrón que
-  // SugerenciasChequeo: gateamos por rol para no desperdiciar lecturas
-  // y filtramos client-side para evitar índice compuesto sobre arrays.
-  useEffect(() => {
-    if (
-      userProfile?.rol !== 'administrador' &&
-      userProfile?.rol !== 'coordinadora'
-    ) {
       setReprogramacionesCount(0);
-      return;
-    }
-    const unsub = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
-      let count = 0;
-      snap.docs.forEach(d => {
-        const data = d.data();
-        if (data.eliminada) return;
-        const lista = data.propuestasReprogramacion;
-        if (!Array.isArray(lista)) return;
-        // Solo contar propuestas del CLIENTE pendientes — las
-        // contrapropuestas del propio admin no incrementan el badge.
-        if (lista.some(p => p && p.estado === 'pendiente' && p.propuestaPor === 'cliente')) count++;
-      });
-      setReprogramacionesCount(count);
-    });
-    return () => unsub();
-  }, [userProfile?.rol]);
-
-  // SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 (2026-05-21): count de pagos
-  // verificado===false across órdenes activas. Listener separado del
-  // facturacionPendienteCount (que filtra por `enviadaAFacturacion`)
-  // porque acá necesitamos todas las órdenes con pagos pendientes,
-  // incluyendo las que todavía NO se enviaron a facturación. Solo se
-  // suscribe si el user tiene `pagosVerificar` — gate por permiso, no
-  // por rol (defaults coinciden pero la categoría es editable).
-  useEffect(() => {
-    if (!puede(userProfile, 'pagosVerificar')) {
       setPagosPendientesCount(0);
       return;
     }
-    // SPRINT-PAGOS-FASE-B-2 (opción B 2026-05-25): este callsite opera sobre
-    // el doc raw de Firestore (no sobre OrdenServicio parseado), así que NO
-    // usa el helper `obtenerPagosDeOrden` (que toma OrdenServicio tipado).
-    // Cuando B-3 cambie source-of-truth a subcolección, este sitio se
-    // refactoriza junto con `suscribirPagosPendientes` y el resto.
-    // @safe-pagos-raw: lectura defensiva sobre data.pagos del doc Firestore.
+
     const unsub = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
-      let count = 0;
-      snap.docs.forEach((d) => {
+      let sugerencias = 0;
+      let reprogramaciones = 0;
+      let pagosPendientes = 0;
+
+      for (const d of snap.docs) {
         const data = d.data();
-        if (data.eliminada === true) return;
-        const pagos = Array.isArray(data.pagos) ? data.pagos : [];
-        if (pagos.some((p: { verificado?: boolean }) => p?.verificado === false)) {
-          count++;
+        if (data.eliminada === true) continue;
+
+        if (esAdminOCoord) {
+          // Sugerencias de "solo chequeo" pendientes (sprint R4 endurecida).
+          const sugs = data.sugerenciasSoloChequeo;
+          if (Array.isArray(sugs) && sugs.some(s => s && s.estado === 'pendiente')) {
+            sugerencias++;
+          }
+
+          // Reprogramaciones pendientes (Hito 2 Portal Cliente). Solo cuentan
+          // las propuestas del CLIENTE — las contrapropuestas del propio admin
+          // no incrementan el badge.
+          const props = data.propuestasReprogramacion;
+          if (
+            Array.isArray(props) &&
+            props.some(pr => pr && pr.estado === 'pendiente' && pr.propuestaPor === 'cliente')
+          ) {
+            reprogramaciones++;
+          }
         }
-      });
-      setPagosPendientesCount(count);
+
+        if (puedeVerPagos) {
+          // SPRINT-PAGOS-FASE-B-2 (opción B 2026-05-25): este callsite opera
+          // sobre el doc raw de Firestore (no sobre OrdenServicio parseado),
+          // así que NO usa el helper `obtenerPagosDeOrden`. Cuando B-3 cambie
+          // source-of-truth a subcolección, este sitio se refactoriza junto
+          // con `suscribirPagosPendientes` y el resto.
+          // @safe-pagos-raw: lectura defensiva sobre data.pagos del doc Firestore.
+          const pagos = Array.isArray(data.pagos) ? data.pagos : [];
+          if (pagos.some((pg: { verificado?: boolean }) => pg?.verificado === false)) {
+            pagosPendientes++;
+          }
+        }
+      }
+
+      setSugerenciasChequeoCount(esAdminOCoord ? sugerencias : 0);
+      setReprogramacionesCount(esAdminOCoord ? reprogramaciones : 0);
+      setPagosPendientesCount(puedeVerPagos ? pagosPendientes : 0);
     });
+
     return () => unsub();
   }, [userProfile]);
 

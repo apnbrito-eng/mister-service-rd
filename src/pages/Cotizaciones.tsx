@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, Timestamp, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cotizacion, ItemCotizacion, EstadoCotizacion, OrdenServicio } from '../types';
-import { formatMoneda, formatFechaCorta, parseOrden } from '../utils';
+import { formatMoneda, formatFechaCorta, parseOrden, escapeHtml } from '../utils';
 import { siguienteNumeroCotizacion } from '../services/contadores.service';
 import { siguienteNumeroFactura } from '../services/contadores.service';
 import { useApp } from '../context/AppContext';
@@ -396,11 +396,15 @@ export default function Cotizaciones() {
     }
   };
 
+  // SPRINT-SEC-XSS-IMPRESION (2026-09-09): todo dato de Firestore que se
+  // interpole acá va por `escapeHtml`. La ventana se abre con `window.open('')`
+  // (about:blank hereda el origen), así que un XSS almacenado en notas o
+  // descripción ejecutaría script con acceso a la sesión del que imprime.
   const handlePrint = (cot: Cotizacion) => {
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(`
-      <html><head><title>${cot.numero}</title>
+      <html><head><title>${escapeHtml(cot.numero)}</title>
       <style>body{font-family:Arial,sans-serif;padding:40px;color:#333}
       h1{color:#0f3460;border-bottom:2px solid #0f3460;padding-bottom:10px}
       table{width:100%;border-collapse:collapse;margin:20px 0}
@@ -408,14 +412,14 @@ export default function Cotizaciones() {
       th{background:#0f3460;color:white}
       .total{font-size:1.2em;font-weight:bold;text-align:right;margin-top:20px}
       </style></head><body>
-      <h1>Mister Service RD - Cotización ${cot.numero}</h1>
-      <p><strong>Cliente:</strong> ${cot.clienteNombre}</p>
+      <h1>Mister Service RD - Cotización ${escapeHtml(cot.numero)}</h1>
+      <p><strong>Cliente:</strong> ${escapeHtml(cot.clienteNombre)}</p>
       <p><strong>Fecha:</strong> ${formatFechaCorta(cot.createdAt)}</p>
-      ${cot.tecnicoNombre ? `<p><strong>Técnico:</strong> ${cot.tecnicoNombre}</p>` : ''}
+      ${cot.tecnicoNombre ? `<p><strong>Técnico:</strong> ${escapeHtml(cot.tecnicoNombre)}</p>` : ''}
       <table><thead><tr><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr></thead>
-      <tbody>${cot.items.map(i => `<tr><td>${i.descripcion}</td><td>${i.cantidad}</td><td>RD$${i.precio.toLocaleString()}</td><td>RD$${(i.cantidad * i.precio).toLocaleString()}</td></tr>`).join('')}</tbody></table>
+      <tbody>${cot.items.map(i => `<tr><td>${escapeHtml(i.descripcion)}</td><td>${i.cantidad}</td><td>RD$${i.precio.toLocaleString()}</td><td>RD$${(i.cantidad * i.precio).toLocaleString()}</td></tr>`).join('')}</tbody></table>
       <p class="total">Total: RD$${cot.total.toLocaleString()}</p>
-      ${cot.notas ? `<p><strong>Notas:</strong> ${cot.notas}</p>` : ''}
+      ${cot.notas ? `<p><strong>Notas:</strong> ${escapeHtml(cot.notas)}</p>` : ''}
       <hr><p style="font-size:0.8em;color:#999;margin-top:30px">Mister Service RD · Santo Domingo, República Dominicana</p>
       </body></html>
     `);

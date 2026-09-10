@@ -1325,7 +1325,7 @@ export async function confirmarPagoOrden(
       return { ok: true };
     });
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.error('[confirmarPagoOrden] error:', err);
     return { ok: false, razon: 'error_interno' as const };
   }

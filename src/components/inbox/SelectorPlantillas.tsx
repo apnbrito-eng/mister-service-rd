@@ -60,7 +60,7 @@ export default function SelectorPlantillas({ waId }: Props) {
         // Preferimos la orden mas reciente activa (la lista ya viene sorted desc).
         setOrdenActiva(ords[0] ?? null);
       } catch (err) {
-        // eslint-disable-next-line no-console
+         
         console.warn('[SelectorPlantillas] carga contexto falló:', err);
         if (!cancelado) {
           setCliente(null);
@@ -130,7 +130,7 @@ export default function SelectorPlantillas({ waId }: Props) {
         cerrarTodo();
       }
     } catch (err) {
-      // eslint-disable-next-line no-console
+       
       console.error('[SelectorPlantillas] enviarPlantilla falló:', err);
       toast.error('Error al enviar — revisá la conexión');
     } finally {

@@ -301,7 +301,7 @@ export async function toggleBot(
       timestamp: Timestamp.now(),
     });
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       '[whatsappInbox] audit toggleBot falló (no bloquea):',
       err,
@@ -343,7 +343,7 @@ export async function asignarConversacion(
       timestamp: Timestamp.now(),
     });
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       '[whatsappInbox] audit asignarConversacion falló (no bloquea):',
       err,

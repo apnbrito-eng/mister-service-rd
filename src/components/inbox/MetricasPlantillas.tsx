@@ -92,7 +92,7 @@ export default function MetricasPlantillas({ className = '' }: { className?: str
         setLoading(false);
       },
       (err) => {
-        // eslint-disable-next-line no-console
+         
         console.error('[MetricasPlantillas] listener error', err);
         setLoading(false);
       },

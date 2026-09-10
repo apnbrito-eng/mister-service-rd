@@ -430,6 +430,21 @@ export async function registrarComisionesPorItems(args: {
   totalAgregado: number;
   preservadasPorLiquidacion: number;
   eliminadasHuerfanas: number;
+  /**
+   * SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09) — auditoría hallazgo E-1.
+   * Comisiones que se calcularon pero NO se pudieron persistir en Firestore.
+   * Antes el catch del bucle de escritura sólo hacía `console.warn` y seguía:
+   * la comisión no entraba en `comisionesEscritas`, `totalAgregado` cuadraba
+   * con las exitosas y el registro de auditoría quedaba internamente
+   * coherente — el técnico se quedaba sin su comisión sin que nadie se
+   * enterara. El caller DEBE revisar este array y avisar al usuario.
+   */
+  fallidas: Array<{
+    tecnicoId: string;
+    tecnicoNombre: string;
+    monto: number;
+    error: string;
+  }>;
 }> {
   const { orden, facturaId, facturaNumero, totalFactura, userProfile, itbisPorcentaje } = args;
   const items = args.items || [];
@@ -445,11 +460,11 @@ export async function registrarComisionesPorItems(args: {
 
   // Caso 1: chequeo nunca genera comisión.
   if (orden.soloChequeo) {
-    return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0 };
+    return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0, fallidas: [] };
   }
   // Caso 2: sin items, nada que calcular.
   if (items.length === 0) {
-    return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0 };
+    return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0, fallidas: [] };
   }
 
   // Caso 3 (legacy fallback): si ningún item trae tecnicoId, sintetizar
@@ -460,7 +475,7 @@ export async function registrarComisionesPorItems(args: {
   const algunoConTecnico = items.some(i => !!i.tecnicoId);
   if (!algunoConTecnico) {
     if (!orden.tecnicoId) {
-      return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0 };
+      return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0, fallidas: [] };
     }
     itemsParaCalculo = items.map(i => ({
       ...i,
@@ -559,6 +574,15 @@ export async function registrarComisionesPorItems(args: {
     porcentaje: number;
   }> = [];
 
+  // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): acumulador de comisiones
+  // calculadas que Firestore rechazó. Se devuelve al caller para que avise.
+  const comisionesFallidas: Array<{
+    tecnicoId: string;
+    tecnicoNombre: string;
+    monto: number;
+    error: string;
+  }> = [];
+
   for (const c of calculadas) {
     const existente = docsExistentes.find(d => (d.data.tecnicoId as string) === c.tecnicoId);
     const itbisMontoTotal = desgloseTotal.itbis;
@@ -627,7 +651,13 @@ export async function registrarComisionesPorItems(args: {
         });
       }
     } catch (err) {
-      console.warn(`[comisiones] error escribiendo comisión para ${c.tecnicoId}:`, err);
+      console.error(`[comisiones] error escribiendo comisión para ${c.tecnicoId}:`, err);
+      comisionesFallidas.push({
+        tecnicoId: c.tecnicoId,
+        tecnicoNombre: c.tecnicoNombre,
+        monto: c.monto,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 
@@ -638,7 +668,8 @@ export async function registrarComisionesPorItems(args: {
   // updateDoc emite warn ruidoso por cada conduce manual con técnicos.
   if (
     !esOrdenSintetica &&
-    (comisionesEscritas.length > 0 || preservadasPorLiquidacion > 0 || eliminadasHuerfanas > 0)
+    (comisionesEscritas.length > 0 || preservadasPorLiquidacion > 0 || eliminadasHuerfanas > 0 ||
+      comisionesFallidas.length > 0)
   ) {
     try {
       const partes: string[] = [];
@@ -650,6 +681,16 @@ export async function registrarComisionesPorItems(args: {
       }
       if (eliminadasHuerfanas > 0) {
         partes.push(`${eliminadasHuerfanas} pendiente(s) eliminada(s)`);
+      }
+      // El fallo TIENE que quedar en la auditoría de la orden: si sólo se
+      // registran las exitosas, el log queda cuadrado y la comisión que
+      // falta se vuelve invisible (auditoría 2026-09-09, hallazgo E-1).
+      if (comisionesFallidas.length > 0) {
+        partes.push(
+          `FALLARON ${comisionesFallidas.length} comisión(es) por RD$${redondearMonto(
+            comisionesFallidas.reduce((acc, f) => acc + f.monto, 0),
+          ).toLocaleString('es-DO')} — revisar y reintentar`,
+        );
       }
       const reg = crearRegistroAuditoria(
         usuario,
@@ -673,6 +714,7 @@ export async function registrarComisionesPorItems(args: {
     totalAgregado: redondearMonto(totalAgregado),
     preservadasPorLiquidacion,
     eliminadasHuerfanas,
+    fallidas: comisionesFallidas,
   };
 }
 
@@ -698,7 +740,26 @@ export async function registrarComisionPorFactura(args: {
   userProfile: Usuario | null;
   /** Si no se pasa, usa el default 18% */
   itbisPorcentaje?: number;
-}): Promise<{ comisionId: string | null; comisionMonto: number; gananciaNeta: number; subtotal: number; itbis: number; costoPiezas: number; porcentaje: number; tecnicoId: string; tecnicoNombre: string }> {
+}): Promise<{
+  comisionId: string | null;
+  comisionMonto: number;
+  gananciaNeta: number;
+  subtotal: number;
+  itbis: number;
+  costoPiezas: number;
+  porcentaje: number;
+  tecnicoId: string;
+  tecnicoNombre: string;
+  /**
+   * SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09) — auditoría hallazgo E-1.
+   * Cantidad de comisiones que se calcularon pero Firestore rechazó.
+   * `> 0` significa que hay un técnico sin su comisión: el caller debe
+   * avisar al usuario, NO tratar la operación como exitosa. Sin esto,
+   * `comisionId: null` era indistinguible entre "no había a quién pagarle"
+   * y "la escritura falló".
+   */
+  comisionesFallidas: number;
+}> {
   const { orden, facturaId, facturaNumero, totalFactura, items, userProfile, itbisPorcentaje } = args;
   const usuario = userProfile?.nombre || 'Sistema';
   const itemsArr = items || [];
@@ -739,6 +800,7 @@ export async function registrarComisionPorFactura(args: {
         porcentaje: c.porcentaje,
         tecnicoId: c.tecnicoId,
         tecnicoNombre: c.tecnicoNombre,
+        comisionesFallidas: result.fallidas.length,
       };
     }
     if (result.comisiones.length > 1) {
@@ -753,12 +815,14 @@ export async function registrarComisionPorFactura(args: {
         porcentaje: 0, // mixto, no aplica un único %
         tecnicoId: '',
         tecnicoNombre: 'N técnicos',
+        comisionesFallidas: result.fallidas.length,
       };
     }
     // 0 técnicos válidos
     return {
       comisionId: null, comisionMonto: 0, gananciaNeta, subtotal: desg.subtotal, itbis: desg.itbis,
       costoPiezas, porcentaje: 0, tecnicoId: '', tecnicoNombre: '',
+      comisionesFallidas: result.fallidas.length,
     };
   }
 
@@ -768,7 +832,7 @@ export async function registrarComisionPorFactura(args: {
   if (!orden.tecnicoId) {
     return {
       comisionId: null, comisionMonto: 0, gananciaNeta: 0, subtotal: 0, itbis: 0, costoPiezas: 0,
-      porcentaje: 0, tecnicoId: '', tecnicoNombre: '',
+      porcentaje: 0, tecnicoId: '', tecnicoNombre: '', comisionesFallidas: 0,
     };
   }
   // El chequeo (RD$2,000) NUNCA genera comisión, ni siquiera si el cliente
@@ -779,6 +843,7 @@ export async function registrarComisionPorFactura(args: {
     return {
       comisionId: null, comisionMonto: 0, gananciaNeta: 0, subtotal: 0, itbis: 0, costoPiezas: 0,
       porcentaje: 0, tecnicoId: orden.tecnicoId, tecnicoNombre: orden.tecnicoNombre || '',
+      comisionesFallidas: 0,
     };
   }
 
@@ -824,6 +889,10 @@ export async function registrarComisionPorFactura(args: {
   };
 
   let comisionId = comisionExistenteId;
+  // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): antes, si el addDoc
+  // fallaba, se devolvía `comisionId: null` con `comisionMonto` distinto de
+  // cero y el caller no tenía forma de distinguirlo de "no hay comisión".
+  let escrituraFallo = false;
   try {
     if (comisionExistenteId) {
       await updateDoc(doc(db, 'comisiones', comisionExistenteId), payload);
@@ -852,6 +921,7 @@ export async function registrarComisionPorFactura(args: {
     }
   } catch (err) {
     console.error('Error registrando comisión por factura:', err);
+    escrituraFallo = true;
   }
 
   return {
@@ -864,6 +934,7 @@ export async function registrarComisionPorFactura(args: {
     porcentaje,
     tecnicoId: orden.tecnicoId,
     tecnicoNombre,
+    comisionesFallidas: escrituraFallo ? 1 : 0,
   };
 }
 

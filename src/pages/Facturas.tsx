@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, query, orderBy, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Factura, EstadoFactura, OrdenServicio, Personal, ServicioPrecio, PiezaInventario } from '../types';
-import { formatMoneda, formatFechaCorta, parseOrden, parseFactura, parseServicioPrecio, parsePiezaInventario } from '../utils';
+import { formatMoneda, formatFechaCorta, parseOrden, parseFactura, parseServicioPrecio, parsePiezaInventario, escapeHtml } from '../utils';
 import { METODO_PAGO_LABELS, METODO_PAGO_COLORS } from '../utils/factura';
 import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
 import { useClientesEnVivo } from '../hooks/useClientesEnVivo';
@@ -360,11 +360,13 @@ export default function Facturas() {
   };
 
   // Print
+  // SPRINT-SEC-XSS-IMPRESION (2026-09-09): todo dato de Firestore que se
+  // interpole acá va por `escapeHtml`. Ver nota en `utils/index.ts`.
   const handlePrint = (factura: Factura) => {
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(`
-      <html><head><title>Conduce de Garantía ${factura.numero}</title>
+      <html><head><title>Conduce de Garantía ${escapeHtml(factura.numero)}</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
@@ -401,15 +403,15 @@ export default function Facturas() {
         </div>
         <div class="factura-info">
           <p style="font-size:14px;font-weight:700;color:#0f3460;letter-spacing:2px;margin:0 0 4px;">CONDUCE DE GARANTÍA</p>
-          <p class="factura-num">${factura.numero}</p>
-          <span class="estado estado-${factura.estado}">${ESTADO_LABELS[factura.estado]}</span>
+          <p class="factura-num">${escapeHtml(factura.numero)}</p>
+          <span class="estado estado-${escapeHtml(factura.estado)}">${escapeHtml(ESTADO_LABELS[factura.estado])}</span>
         </div>
       </div>
       <div class="meta">
         <div class="meta-section">
           <h3>Cliente</h3>
-          <p><strong>${factura.clienteNombre}</strong></p>
-          ${factura.ordenNumero ? `<p>Orden: ${factura.ordenNumero}</p>` : ''}
+          <p><strong>${escapeHtml(factura.clienteNombre)}</strong></p>
+          ${factura.ordenNumero ? `<p>Orden: ${escapeHtml(factura.ordenNumero)}</p>` : ''}
         </div>
         <div class="meta-section">
           <h3>Detalles</h3>
@@ -425,7 +427,7 @@ export default function Facturas() {
         <tbody>
           ${factura.items.map(i => `
             <tr>
-              <td>${i.descripcion}</td>
+              <td>${escapeHtml(i.descripcion)}</td>
               <td class="text-right">${i.cantidad}</td>
               <td class="text-right">RD$${i.precio.toLocaleString('es-DO')}</td>
               <td class="text-right">RD$${(i.cantidad * i.precio).toLocaleString('es-DO')}</td>
@@ -437,7 +439,7 @@ export default function Facturas() {
           </tr>
         </tbody>
       </table>
-      ${factura.notas ? `<div class="notas"><strong>Notas:</strong> ${factura.notas}</div>` : ''}
+      ${factura.notas ? `<div class="notas"><strong>Notas:</strong> ${escapeHtml(factura.notas)}</div>` : ''}
       <div class="footer">
         <p>Mister Service RD &middot; Santo Domingo, República Dominicana</p>
         <p>Gracias por su preferencia</p>
