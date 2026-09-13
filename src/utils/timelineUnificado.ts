@@ -72,7 +72,9 @@ function preview(texto: string, max = 140): string {
 function describirMensajeEntrante(m: WhatsAppMensajeInbox): string {
   switch (m.tipo) {
     case 'text': {
-      const body = (m.contenido as { body?: string })?.body ?? '';
+      // El webhook normaliza text.body de Meta como contenido.texto.
+      // Conservamos body como respaldo para registros históricos.
+      const body = m.contenido?.texto ?? (m.contenido as { body?: string })?.body ?? '';
       return preview(body) || '(mensaje vacío)';
     }
     case 'image':
