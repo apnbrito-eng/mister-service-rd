@@ -507,8 +507,13 @@ function aplicarFiltrosPost(
   });
 }
 
-function mapearOrdenResumen(data: DocumentData): Record<string, unknown> {
+export function mapearOrdenResumen(data: DocumentData, rol: Rol): Record<string, unknown> {
   const fechaCita = toDate(data.fechaCita);
+  const historial = Array.isArray(data.historialFases) ? data.historialFases : [];
+  const eventos = historial.filter(h => h && typeof h.fase === 'string').slice(-8).map(h => ({
+    fase: h.fase,
+    fecha: toDate(h.timestamp)?.toISOString() ?? null,
+  }));
   return {
     numero: data.numero || '',
     clienteNombre: data.clienteNombre || '',
@@ -518,7 +523,15 @@ function mapearOrdenResumen(data: DocumentData): Record<string, unknown> {
     fechaCita: fechaCita ? formatFechaRD(fechaCita) : null,
     hora: fechaCita ? formatHoraRD(fechaCita) : null,
     tecnicoNombre: data.tecnicoNombre || '',
-    montoAprobado: typeof data.precioAprobado === 'number' ? data.precioAprobado : null,
+    ...(['administrador', 'coordinadora'].includes(rol)
+      ? { montoAprobado: typeof data.precioAprobado === 'number' ? data.precioAprobado : null } : {}),
+    evidenciaSeguimiento: {
+      eventosRegistrados: eventos,
+      historialRecortado: historial.length > 8,
+      alcance: 'Solo eventos de fase registrados. No confirma contacto, visita ni incumplimiento. Una fecha pasada exige verificación; no prueba abandono.',
+      ...(rol === 'administrador' && typeof data.notas === 'string'
+        ? { notaRegistrada: data.notas.slice(0, 800), notaRecortada: data.notas.length > 800 } : {}),
+    },
   };
 }
 
@@ -599,8 +612,8 @@ const TOOL_QUERY_ORDENES: ToolDef = {
     const snap = await query.limit(limite * 3).get();
     const todos = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
     const filtrados = aplicarFiltrosPost(todos, rol, postFiltros);
-    const resultado = filtrados.slice(0, limite).map(({ data }) => mapearOrdenResumen(data));
-    return { ordenes: resultado, cantidad: resultado.length };
+    const resultado = filtrados.slice(0, limite).map(({ data }) => mapearOrdenResumen(data, rol));
+    return { ordenes: resultado, cantidad: resultado.length, filtroFase: input?.fase || null, resultadosParciales: snap.size >= limite * 3 || filtrados.length > limite, alcance: 'La cantidad corresponde a esta consulta, no a todas las órdenes. El resumen incluye eventos de fase, pero no verifica visitas o contactos.' };
   },
 };
 
