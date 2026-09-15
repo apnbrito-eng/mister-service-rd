@@ -18,3 +18,13 @@ describe('evidencia de seguimiento por rol', () => {
     expect(r.evidenciaSeguimiento).toMatchObject({ historialRecortado: true, notaRecortada: true });
   });
 });
+
+describe('detalle operativo sin campos financieros heredados', () => {
+  it('excluye finanzas anidadas y campos futuros, conservando fase y cita', async () => {
+    const { proyectarOrdenAtencion } = await import('../../api/_lib/iaTools');
+    const r = proyectarOrdenAtencion({ numero: 'OS-QA', fase: 'agendado', fechaCita: new Date('2026-09-15T15:00:00Z'), precioFinal: 1500, cierreServicio: { comision: 150 }, nuevoCampoFinanciero: 900, notas: 'importe interno', historialFases: [{ fase: 'agendado', timestamp: new Date('2026-09-15T14:00:00Z'), nota: 'importe interno', pagos: [123] }] });
+    expect(r).toMatchObject({ numero: 'OS-QA', fase: 'agendado', fechaCita: '2026-09-15T15:00:00.000Z', historialFases: [{ fase: 'agendado', timestamp: '2026-09-15T14:00:00.000Z' }] });
+    for (const campo of ['precioFinal', 'cierreServicio', 'nuevoCampoFinanciero', 'notas']) expect(r).not.toHaveProperty(campo);
+    expect(JSON.stringify(r)).not.toContain('importe interno');
+  });
+});

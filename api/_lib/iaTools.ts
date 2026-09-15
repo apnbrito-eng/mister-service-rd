@@ -536,24 +536,23 @@ export function mapearOrdenResumen(data: DocumentData, rol: Rol): Record<string,
   };
 }
 
-const CAMPOS_FINANCIEROS_SENSIBLES = new Set([
-  'precioSugerido',
-  'precioAprobado',
-  'precioFinal',
-  'precioChequeo',
-  'montoPagado',
-  'pagos',
-  'costoPiezas',
-]);
-
-/** Remueve campos financieros + `comisionTecnico*` para el rol secretaria. */
-function omitirCamposSensiblesSecretaria(data: DocumentData): DocumentData {
+/** Proyección operativa explícita: no heredar campos nuevos o financieros anidados. */
+export function proyectarOrdenAtencion(data: DocumentData): DocumentData {
   const out: DocumentData = {};
-  for (const [k, v] of Object.entries(data)) {
-    if (CAMPOS_FINANCIEROS_SENSIBLES.has(k)) continue;
-    if (k.startsWith('comisionTecnico')) continue;
-    out[k] = v;
+  const campos = ['numero', 'clienteNombre', 'clienteTelefono', 'clienteDireccion',
+    'equipoTipo', 'equipoMarca', 'equipoModelo', 'equipoModeloFabricante',
+    'descripcionFalla', 'tecnicoNombre', 'responsableNombre', 'operariaNombre',
+    'fase', 'estado', 'estadoSimple', 'duracionMin', 'reagendada'];
+  for (const campo of campos) {
+    const valor = data[campo];
+    if (typeof valor === 'string' || typeof valor === 'number' || typeof valor === 'boolean') out[campo] = valor;
   }
+  const fecha = toDate(data.fechaCita);
+  if (fecha) out.fechaCita = fecha.toISOString();
+  out.historialFases = (Array.isArray(data.historialFases) ? data.historialFases : [])
+    .filter(h => h && typeof h.fase === 'string')
+    .map(h => ({ fase: h.fase, timestamp: toDate(h.timestamp)?.toISOString() ?? null }));
+  out.alcance = 'Detalle operativo. No incluye información financiera, auditoría ni notas libres; un dato no incluido no significa que no exista.';
   return out;
 }
 
@@ -653,7 +652,7 @@ const TOOL_COUNT_ORDENES: ToolDef = {
 const TOOL_GET_ORDEN: ToolDef = {
   name: 'get_orden',
   description:
-    "Trae el detalle completo de una orden por su número (ej: 'OS-0035'). Para secretaria se ocultan los campos financieros (precios, pagos, comisiones).",
+    "Trae el detalle completo de una orden por su número (ej: 'OS-0035'). Para secretaria y operaria entrega solo datos operativos e historial de fases, sin campos financieros, auditoría ni notas libres.",
   input_schema: {
     type: 'object',
     properties: {
@@ -679,7 +678,7 @@ const TOOL_GET_ORDEN: ToolDef = {
     if (data.eliminada === true) {
       return { encontrada: false, numero: input.numero, razon: 'orden eliminada' };
     }
-    const base = rol === 'secretaria' ? omitirCamposSensiblesSecretaria(data) : data;
+    const base = rol === 'secretaria' || rol === 'operaria' ? proyectarOrdenAtencion(data) : data;
     const serializado = serializarTimestamps(base) as DocumentData;
     return { encontrada: true, ...serializado, id: doc.id };
   },
