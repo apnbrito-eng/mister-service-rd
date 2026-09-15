@@ -41,6 +41,8 @@ export default function AgendaDia() {
   const esAdminOCoord = rol === 'administrador' || rol === 'coordinadora';
 
   const [loading, setLoading] = useState(true);
+  const [errorCarga, setErrorCarga] = useState('');
+  const [intentoCarga, setIntentoCarga] = useState(0);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
   // SPRINT-AGENDA-2 (2026-05-25): citas por confirmar + mantenimientos
@@ -85,18 +87,19 @@ export default function AgendaDia() {
   }, [fechaStr]);
 
   useEffect(() => {
-    let loadedCount = 0;
-    const total = 2;
-    const checkLoaded = () => { loadedCount++; if (loadedCount >= total) setLoading(false); };
+    setLoading(true); setErrorCarga('');
+    const cargados = new Set<string>();
+    const checkLoaded = (fuente: string) => { cargados.add(fuente); if (cargados.size >= 2) setLoading(false); };
+    const falloCarga = () => { setErrorCarga('No se pudo cargar toda la agenda. Reintenta antes de realizar cambios.'); setLoading(false); };
 
     const unsubOrd = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
       setOrdenes(snap.docs.map(d => parseOrden(d.id, d.data()) as OrdenServicio));
-      checkLoaded();
-    });
+      checkLoaded('ordenes');
+    }, falloCarga);
     const unsubPers = onSnapshot(collection(db, 'personal'), (snap) => {
       setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
-      checkLoaded();
-    });
+      checkLoaded('personal');
+    }, falloCarga);
     // SPRINT-AGENDA-2: capa tentativa. Sort/filter client-side (P-015).
     const unsubCitas = onSnapshot(collection(db, 'citas_por_confirmar'), (snap) => {
       setCitasTentativas(snap.docs.map(d => {
@@ -111,7 +114,7 @@ export default function AgendaDia() {
           horaSolicitada: raw.horaSolicitada || '',
         };
       }));
-    });
+    }, falloCarga);
     const unsubMant = onSnapshot(collection(db, 'mantenimiento'), (snap) => {
       setMantenimientosDelDia(snap.docs.map(d => {
         const raw = d.data();
@@ -124,10 +127,10 @@ export default function AgendaDia() {
           activo: raw.activo !== false,
         };
       }));
-    });
+    }, falloCarga);
     const unsubEmpresa = suscribirConfigEmpresa(cfg => setEmpresaConfig(cfg));
     return () => { unsubOrd(); unsubPers(); unsubCitas(); unsubMant(); unsubEmpresa(); };
-  }, []);
+  }, [intentoCarga]);
 
   const abrirChequeo = (orden: OrdenServicio) => {
     setOrdenChequeo(orden);
@@ -545,6 +548,7 @@ export default function AgendaDia() {
       .filter(m => !filtroTecnico || m.tecnicoNombre === filtroTecnico);
   }, [mantenimientosDelDia, fechaSeleccionada, filtroTecnico]);
 
+  if (errorCarga) return <div role="alert" className="m-6 rounded-xl border border-red-200 bg-red-50 p-6"><p>{errorCarga}</p><button className="mt-3 underline" onClick={() => setIntentoCarga(n => n + 1)}>Reintentar</button></div>;
   if (loading) return <LoadingSpinner fullPage text="Cargando agenda..." />;
 
   return (

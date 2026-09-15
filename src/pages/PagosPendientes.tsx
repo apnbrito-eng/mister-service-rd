@@ -124,7 +124,7 @@ export default function PagosPendientes() {
         </div>
         <p className="text-sm text-gray-500">
           Pagos registrados por operarias que aún no fueron verificados contra el
-          banco / efectivo recibido. Confirmarlos desbloquea la emisión del conduce.
+          banco o efectivo recibido. La verificación deja constancia de la revisión del pago.
         </p>
       </header>
 
