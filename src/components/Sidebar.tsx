@@ -234,221 +234,70 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   // Permisos granulares
   const p = (acc: AccionPermiso) => puede(userProfile, acc);
 
-  // Estructura del sidebar: secciones colapsables + items sueltos
+  // Agrupación por trabajo: se conservan rutas, permisos y contadores.
   const estructura: SidebarNode[] = [
-    // Ponche — item suelto (visible a TODOS los roles, primera posición)
-    {
-      kind: 'item',
-      item: { to: '/ponche', icon: Clock, label: 'Ponche', show: true },
-    },
-    // Dashboard — item suelto
-    {
-      kind: 'item',
-      item: { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', show: true },
-    },
-    // Bandeja de entrada (SPRINT-117c2): agrupa los 3 inboxes de revisión
-    // que comparten flujo "revisar → aprobar/rechazar". Reduce ruido en
-    // Operaciones. Plan de rollback: revertir el commit, los 3 ítems
-    // vuelven a Operaciones con su orden original.
-    {
-      kind: 'section',
-      section: {
-        id: 'bandeja_entrada',
-        label: 'Bandeja de entrada',
-        icon: Inbox,
-        defaultExpanded: true,
-        items: [
-          // SPRINT-INBOX-2 (2026-05-20): Inbox WhatsApp visible para staff
-          // oficina (D6=C admin/coord/secretaria/operaria). Badge suma
-          // noLeidos de todas las conversaciones.
-          { to: '/admin/marketing', icon: BarChart3, label: 'Marketing', show: esAdminOCoord },
-          { to: '/admin/conocimiento', icon: BookOpen, label: 'Conocimientos', show: esAdminOCoord || isOperaria || isSecretaria },
-          { to: '/admin/inbox', icon: MessageSquare, label: 'Inbox WhatsApp', badge: whatsappInboxCount, show: esAdminOCoord || isOperaria || isSecretaria },
-          { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
-          { to: '/admin/reprogramaciones', icon: RefreshCw, label: 'Reprogramaciones', badge: reprogramacionesCount, show: esAdminOCoord },
-          { to: '/admin/sugerencias-chequeo', icon: ClipboardCheck, label: 'Sugerencias chequeo', badge: sugerenciasChequeoCount, show: esAdminOCoord },
-        ],
-      },
-    },
-    // Operaciones
-    {
-      kind: 'section',
-      section: {
-        id: 'operaciones',
-        label: 'Operaciones',
-        icon: ClipboardList,
-        defaultExpanded: true,
-        items: [
-          { to: '/admin/agenda-dia', icon: CalendarCheck, label: 'Agenda del Día', show: p('ordenesVer') },
-          { to: '/admin/ordenes', icon: ClipboardList, label: 'Órdenes', show: p('ordenesVer') },
-          { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
-          { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios públicos (Calendly)', show: esAdminOCoord || isOperaria || isSecretaria },
-          { to: '/admin/standby', icon: Clock, label: 'Pendiente de piezas', badge: standbyCount + ordenesStandbyCount, show: p('ordenesVer') },
-          { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
-          { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
-          { to: '/admin/feedback', icon: Star, label: 'Feedback NPS', show: esAdminOCoord },
-          { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: esAdminOCoord || p('ordenesVerEliminadas') },
-          // SPRINT-117c4: Mantenimiento mudado desde top-level (era ítem suelto bajo Finanzas)
-          // hacia el final de Operaciones — conceptualmente es operación recurrente, no merece
-          // altura visual de top-level. Gate `show:` preservado idéntico al original.
-          // Plan de rollback: revertir el commit, vuelve a ser kind:'item' top-level.
-          { to: '/admin/mantenimiento', icon: Calendar, label: 'Mantenimiento', show: p('ordenesVer') },
-        ],
-      },
-    },
-    // Clientes — item suelto
-    {
-      kind: 'item',
-      item: { to: '/admin/clientes', icon: Users, label: 'Clientes', show: p('clientesVer') },
-    },
-    // Cobranza y facturación (SPRINT-117c3): renombrada desde "Documentos"
-    // y reordenada para que el pipeline factura se vea como pasos consecutivos:
-    // Cotizaciones → Conduces pendientes → Conduces de Garantía. Los 3 ítems
-    // que vivían en "Documentos" eran exactamente este pipeline, así que la
-    // sección original queda absorbida (no quedan ítems huérfanos). Plan de
-    // rollback: revertir el commit, vuelve a llamarse "Documentos" con el
-    // orden previo Cotizaciones / Conduces de Garantía / Conduces Pendientes.
-    {
-      kind: 'section',
-      section: {
-        id: 'cobranza_facturacion',
-        label: 'Cobranza y facturación',
-        icon: Receipt,
-        defaultExpanded: true,
-        items: [
-          { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: p('cotizacionesVer') },
-          { to: '/admin/pagos-pendientes', icon: Banknote, label: 'Pagos pendientes', badge: pagosPendientesCount, show: p('pagosVerificar') },
-          { to: '/admin/facturacion-pendiente', icon: Inbox, label: 'Conduces Pendientes', badge: facturacionPendienteCount, show: esAdminOCoord },
-          { to: '/admin/facturas', icon: Receipt, label: 'Conduces de Garantía', show: p('facturasVer') },
-        ],
-      },
-    },
-    // Catálogo e Inventario
-    {
-      kind: 'section',
-      section: {
-        id: 'catalogo_inventario',
-        label: 'Catálogo e Inventario',
-        icon: Boxes,
-        defaultExpanded: false,
-        items: [
-          // SPRINT-117c1: ocultar ítem "Catálogo" (apunta a /admin/productos, deuda histórica).
-          // La ruta sigue activa en App.tsx — accesible por URL hasta sprint propio futuro
-          // que la elimine del routing. Para revertir: cambiar show a `p('ordenesVer')`.
-          { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: false },
-          { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionModificar') || userProfile?.rol === 'operaria' || esAdminOCoord },
-          { to: '/admin/taller', icon: Wrench, label: 'Equipos Taller', show: p('ordenesVer') },
-          { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: esAdminOCoord || p('configuracionModificar') },
-        ],
-      },
-    },
-    // Finanzas
-    {
-      kind: 'section',
-      section: {
-        id: 'finanzas',
-        label: 'Finanzas',
-        icon: DollarSign,
-        defaultExpanded: true,
-        items: [
-          { to: '/admin/gastos', icon: DollarSign, label: 'Gastos e Ingresos', show: p('gastosVer') },
-          { to: '/admin/bancos', icon: Building2, label: 'Bancos', show: p('bancosGestionar') },
-          { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: esAdminOCoord },
-          { to: '/admin/avances', icon: Wallet, label: 'Avances a Empleados', show: p('avancesGestionar') },
-          { to: '/admin/prestamos', icon: Banknote, label: 'Préstamos a Empleados', show: esAdminOCoord },
-          // SPRINT-126: gate alineado con ruta App.tsx:252 (RolRoute admin+coord).
-          // Antes era `esAdminOCoord || p('configuracionVer')` — la disyunción mostraba
-          // el ítem a operarias con configuracionVer personalizado y luego la ruta las
-          // rechazaba con redirect. Si en el futuro Comisiones debe abrirse a otros
-          // roles, cambiar AMBOS lugares (sidebar + RolRoute en App.tsx).
-          { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: esAdminOCoord },
-          { to: '/admin/estado-resultado', icon: TrendingUp, label: 'Estado de Resultado', show: esAdminOCoord },
-          // SPRINT-117c1: label dinámico — operaria/secretaria ven "Mi rendimiento" (KPI propio),
-          // admin/coord siguen viendo "Rendimiento" (panel global). Sin cambios al gate `show:`.
-          { to: '/admin/rendimiento', icon: TrendingUp, label: userProfile?.rol === 'operaria' || userProfile?.rol === 'secretaria' ? 'Mi rendimiento' : 'Rendimiento', show: p('rendimientoVer') },
-          { to: '/admin/metricas-mensuales', icon: TrendingUp, label: 'Métricas del Mes', show: p('rendimientoVer') || esAdminOCoord },
-          // SPRINT-DISENO-I-DATA-SLOP (2026-06-03, pasada 58): "Reporte avanzado"
-          // aloja los 4 widgets analíticos movidos desde Dashboard (Rendimiento
-          // por Técnico, Reparaciones por Tipo, Anuladas semana, Nómina proyectada
-          // del mes). Gate `esAdminOCoord` espejo de la ruta en App.tsx (RolRoute).
-          { to: '/admin/reporte-avanzado', icon: BarChart3, label: 'Reporte avanzado', show: esAdminOCoord },
-        ],
-      },
-    },
-    // Web y Solicitudes
-    {
-      kind: 'section',
-      section: {
-        id: 'web_solicitudes',
-        label: 'Web y Solicitudes',
-        icon: Globe,
-        defaultExpanded: false,
-        items: [
-          // SPRINT-126: las 4 rutas siguientes están gateadas en App.tsx:241-245 con
-          // RolRoute roles={['administrador']}. Antes el sidebar mostraba el ítem a
-          // coordinadora (esAdminOCoord) y la ruta la rechazaba con redirect, creando
-          // 4 links "rotos" en su menú. Si en el futuro estas pantallas deben abrirse
-          // a coord, cambiar AMBOS lugares (sidebar + RolRoute en App.tsx).
-          { to: '/admin/web', icon: Globe, label: 'Página Web', show: userProfile?.rol === 'administrador' },
-          { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: userProfile?.rol === 'administrador' },
-          { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: userProfile?.rol === 'administrador' },
-          { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: userProfile?.rol === 'administrador' },
-        ],
-      },
-    },
-    // Asistente IA
-    {
-      kind: 'section',
-      section: {
-        id: 'asistente_ia',
-        label: 'Asistente IA',
-        icon: Sparkles,
-        defaultExpanded: false,
-        items: [
-          { to: '/admin/asistente', icon: Sparkles, label: 'Chat (pantalla completa)', show: userProfile?.rol === 'administrador' },
-          { to: '/admin/asistente/historial', icon: History, label: 'Historial IA', show: userProfile?.rol === 'administrador' },
-        ],
-      },
-    },
-    // Equipo (SPRINT-117c4): nueva sección que separa la gestión de gente
-    // (Personal, Usuarios y Permisos, Reporte de Ponches) de las configs
-    // técnicas que quedan en "Sistema". Reduce carga cognitiva al evitar
-    // mezclar conceptos heterogéneos. Gates de permisos preservados al 100%.
-    // Plan de rollback: revertir el commit, los 3 ítems vuelven a "Sistema".
-    {
-      kind: 'section',
-      section: {
-        id: 'equipo',
-        label: 'Equipo',
-        icon: UserCog,
-        defaultExpanded: false,
-        items: [
-          { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
-          // SPRINT-126: gate alineado con ruta App.tsx:240 (RolRoute admin+coord).
-          // Antes era `p('personalModificar')` — una operaria con personalModificar
-          // personalizado veía el ítem y la ruta la rechazaba. Si en el futuro
-          // Usuarios y Permisos debe controlarse vía permiso granular, cambiar AMBOS
-          // lugares (sidebar + RolRoute en App.tsx).
-          { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: esAdminOCoord },
-          { to: '/admin/ponches', icon: ClipboardCheck, label: 'Reporte de Ponches', show: esAdminOCoord },
-        ],
-      },
-    },
-    // Sistema (SPRINT-117c4): se queda solo con Configuración + Plantillas
-    // Marketing tras separar la gestión de gente a la sección "Equipo".
-    {
-      kind: 'section',
-      section: {
-        id: 'sistema',
-        label: 'Sistema',
-        icon: Settings,
-        defaultExpanded: false,
-        items: [
-          { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: p('configuracionVer') },
-          { to: '/admin/configuracion-marketing', icon: Sparkles, label: 'Plantillas Marketing', show: userProfile?.rol === 'administrador' },
-        ],
-      },
-    },
+    { kind: 'section', section: { id: 'v2_mi_dia', label: 'Mi día', icon: LayoutDashboard, defaultExpanded: true, items: [
+      { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Resumen de hoy', show: true },
+      { to: '/ponche', icon: Clock, label: 'Ponche', show: true },
+    ] } },
+    { kind: 'section', section: { id: 'v2_atencion', label: 'Atención y clientes', icon: MessageSquare, defaultExpanded: false, items: [
+      { to: '/admin/inbox', icon: MessageSquare, label: 'Inbox WhatsApp', badge: whatsappInboxCount, show: esAdminOCoord || isOperaria || isSecretaria },
+      { to: '/admin/clientes', icon: Users, label: 'Clientes', show: p('clientesVer') },
+      { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: userProfile?.rol === 'administrador' },
+      { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
+      { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: userProfile?.rol === 'administrador' },
+    ] } },
+    { kind: 'section', section: { id: 'v2_servicios', label: 'Servicios', icon: ClipboardList, defaultExpanded: false, items: [
+      { to: '/admin/ordenes', icon: ClipboardList, label: 'Órdenes', show: p('ordenesVer') },
+      { to: '/admin/agenda-dia', icon: CalendarCheck, label: 'Agenda del Día', show: p('ordenesVer') },
+      { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
+      { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
+      { to: '/admin/reprogramaciones', icon: RefreshCw, label: 'Reprogramaciones', badge: reprogramacionesCount, show: esAdminOCoord },
+      { to: '/admin/sugerencias-chequeo', icon: ClipboardCheck, label: 'Sugerencias chequeo', badge: sugerenciasChequeoCount, show: esAdminOCoord },
+      { to: '/admin/standby', icon: Clock, label: 'Pendiente de piezas', badge: standbyCount + ordenesStandbyCount, show: p('ordenesVer') },
+      { to: '/admin/taller', icon: Wrench, label: 'Equipos Taller', show: p('ordenesVer') },
+      { to: '/admin/mantenimiento', icon: Calendar, label: 'Mantenimiento', show: p('ordenesVer') },
+      { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: esAdminOCoord || p('ordenesVerEliminadas') },
+      { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios públicos (Calendly)', show: esAdminOCoord || isOperaria || isSecretaria },
+    ] } },
+    { kind: 'section', section: { id: 'v2_caja', label: 'Caja y administración', icon: Receipt, defaultExpanded: false, items: [
+      { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: p('cotizacionesVer') },
+      { to: '/admin/pagos-pendientes', icon: Banknote, label: 'Pagos pendientes', badge: pagosPendientesCount, show: p('pagosVerificar') },
+      { to: '/admin/facturacion-pendiente', icon: Inbox, label: 'Conduces Pendientes', badge: facturacionPendienteCount, show: esAdminOCoord },
+      { to: '/admin/facturas', icon: Receipt, label: 'Conduces de Garantía', show: p('facturasVer') },
+      { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
+      { to: '/admin/gastos', icon: DollarSign, label: 'Gastos e Ingresos', show: p('gastosVer') },
+      { to: '/admin/bancos', icon: Building2, label: 'Bancos', show: p('bancosGestionar') },
+      { to: '/admin/estado-resultado', icon: TrendingUp, label: 'Estado de Resultado', show: esAdminOCoord },
+      { to: '/admin/reporte-avanzado', icon: BarChart3, label: 'Reporte avanzado', show: esAdminOCoord },
+    ] } },
+    { kind: 'section', section: { id: 'v2_equipo', label: 'Equipo', icon: UserCog, defaultExpanded: false, items: [
+      { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
+      { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: esAdminOCoord },
+      { to: '/admin/ponches', icon: ClipboardCheck, label: 'Reporte de Ponches', show: esAdminOCoord },
+      { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: esAdminOCoord },
+      { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: esAdminOCoord },
+      { to: '/admin/avances', icon: Wallet, label: 'Avances a Empleados', show: p('avancesGestionar') },
+      { to: '/admin/prestamos', icon: Banknote, label: 'Préstamos a Empleados', show: esAdminOCoord },
+      { to: '/admin/rendimiento', icon: TrendingUp, label: userProfile?.rol === 'operaria' || userProfile?.rol === 'secretaria' ? 'Mi rendimiento' : 'Rendimiento', show: p('rendimientoVer') },
+      { to: '/admin/metricas-mensuales', icon: TrendingUp, label: 'Métricas del Mes', show: p('rendimientoVer') || esAdminOCoord },
+    ] } },
+    { kind: 'section', section: { id: 'v2_marketing', label: 'Marketing', icon: BarChart3, defaultExpanded: false, items: [
+      { to: '/admin/marketing', icon: BarChart3, label: 'Marketing', show: esAdminOCoord },
+      { to: '/admin/feedback', icon: Star, label: 'Feedback NPS', show: esAdminOCoord },
+      { to: '/admin/web', icon: Globe, label: 'Página Web', show: userProfile?.rol === 'administrador' },
+      { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: userProfile?.rol === 'administrador' },
+      { to: '/admin/configuracion-marketing', icon: Sparkles, label: 'Plantillas Marketing', show: userProfile?.rol === 'administrador' },
+    ] } },
+    { kind: 'section', section: { id: 'v2_recursos', label: 'Recursos', icon: BookOpen, defaultExpanded: false, items: [
+      { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: esAdminOCoord || p('configuracionModificar') },
+      { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionModificar') || userProfile?.rol === 'operaria' || esAdminOCoord },
+      { to: '/admin/conocimiento', icon: BookOpen, label: 'Conocimientos', show: esAdminOCoord || isOperaria || isSecretaria },
+      { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: false },
+    ] } },
+    { kind: 'item', item: { to: '/admin/asistente', icon: Sparkles, label: 'Chat (pantalla completa)', show: userProfile?.rol === 'administrador' } },
+    { kind: 'item', item: { to: '/admin/asistente/historial', icon: History, label: 'Historial IA', show: userProfile?.rol === 'administrador' } },
+    { kind: 'item', item: { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: p('configuracionVer') } },
   ];
 
   // Helpers para el estado de expansión de secciones

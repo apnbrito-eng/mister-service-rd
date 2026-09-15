@@ -1,6 +1,6 @@
 import {
   collection, addDoc, updateDoc, deleteDoc, getDoc, getDocs, doc,
-  query, where, serverTimestamp, onSnapshot, Timestamp,
+  query, where, serverTimestamp, onSnapshot, Timestamp, runTransaction,
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
@@ -92,32 +92,33 @@ export async function convertirAOrden(
   solicitudId: string,
   ordenData: Record<string, unknown>
 ): Promise<string> {
+  const solicitudRef = doc(db, COL, solicitudId);
+  const existente = await getDoc(solicitudRef);
+  if (!existente.exists()) throw new Error('La solicitud ya no existe.');
+  if (existente.data().ordenId) return existente.data().ordenId as string;
+  // El contador conserva su servicio central. Un intento concurrente puede reservar
+  // un número sin usar; nunca se reutiliza ni se crea una segunda orden.
   const numero = await siguienteNumeroOrden();
-  const ahora = Timestamp.now();
-
-  const ref = await addDoc(collection(db, 'ordenes_servicio'), {
-    numero,
-    ...ordenData,
-    fase: 'nuevo_lead',
-    estadoSimple: 'pendiente',
-    estado: 'activo',
-    historialFases: [{
-      fase: 'nuevo_lead',
-      timestamp: ahora,
-      usuario: 'Sistema',
-      nota: `Creada desde solicitud de formulario`,
-    }],
-    createdAt: ahora,
-    updatedAt: ahora,
+  const ordenRef = doc(collection(db, 'ordenes_servicio'));
+  return runTransaction(db, async tx => {
+    const solicitud = await tx.get(solicitudRef);
+    if (!solicitud.exists()) throw new Error('La solicitud ya no existe.');
+    const data = solicitud.data();
+    if (data.ordenId) return data.ordenId as string;
+    if (data.estado === 'rechazada' || data.estado === 'convertida') {
+      throw new Error('Esta solicitud no puede convertirse. Revisa su estado y vínculo con la orden.');
+    }
+    const ahora = Timestamp.now();
+    tx.set(ordenRef, {
+      ...ordenData,
+      numero,
+      fase: 'nuevo_lead', estadoSimple: 'pendiente', estado: 'activo',
+      historialFases: [{ fase: 'nuevo_lead', timestamp: ahora, usuario: 'Sistema', nota: 'Creada desde solicitud de formulario' }],
+      createdAt: ahora, updatedAt: ahora,
+    });
+    tx.update(solicitudRef, { estado: 'convertida', ordenId: ordenRef.id, updatedAt: serverTimestamp() });
+    return ordenRef.id;
   });
-
-  await updateDoc(doc(db, COL, solicitudId), {
-    estado: 'convertida',
-    ordenId: ref.id,
-    updatedAt: serverTimestamp(),
-  });
-
-  return ref.id;
 }
 
 export async function subirArchivoSolicitud(
