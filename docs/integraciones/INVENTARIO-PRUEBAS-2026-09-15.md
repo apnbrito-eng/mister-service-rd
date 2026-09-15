@@ -80,4 +80,6 @@ Pendiente prioritario: automatizar ajuste por garantía con autorización de ser
 
 La incompatibilidad de permisos se atiende con una revisión administrativa integrada: el cierre técnico deja el aviso, y administración/coordinación revisa y confirma el descuento tras validar piezas. No se añadieron permisos ni endpoint con privilegios. La aplicación y su auditoría son transaccionales, con historial por orden y total compatible con nómina. Repeticiones no duplican; importes cambiados y comisiones liquidadas/ambiguas se detienen para revisión.
 
-96 pruebas automatizadas aprobadas (23 nuevas: cálculo/historial, transacción con Firestore simulado, revisión/confirmación/cancelación React). Compilación e invariantes aprobados. No es prueba de reglas en emulador ni cierre completo como técnico; no se hicieron movimientos financieros reales. La lista administrativa examina como máximo 100 garantías, con advertencia de parcialidad.
+97 pruebas automatizadas aprobadas (24 nuevas: cálculo/historial, transacción con Firestore simulado, revisión/confirmación/cancelación React). Compilación e invariantes aprobados. No es prueba de reglas en emulador ni cierre completo como técnico; no se hicieron movimientos financieros reales. La lista administrativa examina como máximo 100 garantías, con advertencia de parcialidad.
+
+Vista alojada comprobada como administrador: la sección Ajustes por garantía aparece dentro de Equipo → Comisiones; la carga termina sin error y muestra que no hay ajustes pendientes entre las garantías revisadas. No hubo confirmación de un ajuste real.
