@@ -12,7 +12,7 @@ export default function Layout() {
   const { userProfile } = useApp();
 
   return (
-    <div className="flex h-screen bg-[#f0f4f8] overflow-hidden">
+    <div className="flex bg-[#f0f4f8] overflow-hidden" style={{ height: 'calc(100dvh - var(--alto-aviso-entorno, 0px))' }}>
       {/* Mobile overlay */}
       {mobileSidebarOpen && (
         <div
@@ -28,6 +28,7 @@ export default function Layout() {
 
       {/* Sidebar - mobile */}
       <div
+        style={{ top: 'var(--alto-aviso-entorno, 0px)' }}
         className={`fixed inset-y-0 left-0 z-50 lg:hidden transition-transform duration-300 ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}

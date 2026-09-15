@@ -4,6 +4,7 @@ import { signOut } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { useApp, AppProvider } from './context/AppContext';
 import Layout from './components/Layout';
+import EntornoPruebas from './components/EntornoPruebas';
 import LoadingSpinner from './components/LoadingSpinner';
 import BannerNuevaVersion from './components/BannerNuevaVersion';
 
@@ -349,6 +350,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <AppProvider>
+        <EntornoPruebas />
         <BannerNuevaVersion />
         <Toaster
           position="top-right"
