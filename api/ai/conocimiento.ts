@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { FieldValue } from 'firebase-admin/firestore';
 import { accesoEquipo, ErrorAcceso } from '../_lib/accesoEquipo.js';
-import { puedeAprobar, validarAporte } from '../_lib/conocimiento.js';
+import { puedeAprobar, validarAporte, validarDocumentoConocimiento } from '../_lib/conocimiento.js';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
   if (!['GET', 'POST'].includes(req.method || '')) return res.status(405).json({ error: 'Método no permitido.' });
@@ -22,6 +23,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try { body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body; }
     catch { return res.status(400).json({ error: 'Solicitud inválida.' }); }
     if (!body || typeof body !== 'object' || Array.isArray(body)) return res.status(400).json({ error: 'Solicitud inválida.' });
+    if (body.accion === 'importar') {
+      if (!puedeAprobar(rol)) return res.status(403).json({ error: 'Solo administración y coordinación incorporan documentos.' });
+      let documento;
+      try { documento = validarDocumentoConocimiento(body); } catch (e) { return res.status(400).json({ error: (e as Error).message }); }
+      const hash = createHash('sha256').update(documento.fragmentos.map(f => f.contenido).join('\n')).digest('hex');
+      const origen = db.collection('ia_documentos').doc(hash);
+      const duplicado = await db.runTransaction(async tx => {
+        const previo = await tx.get(origen);
+        const cap = db.collection('rate_limits').doc(uid + '_documentos_' + new Date().toISOString().slice(0,10));
+        const count = await tx.get(cap);
+        if (previo.exists) return true;
+        if ((count.data()?.total ?? 0) >= 10) throw new ErrorAcceso(429, 'Puedes incorporar hasta 10 documentos por día.');
+        tx.set(cap, { total: (count.data()?.total ?? 0) + 1 });
+        const ids: string[] = [];
+        for (const fragmento of documento.fragmentos) {
+          const ref = col.doc(); ids.push(ref.id);
+          tx.create(ref, { ...fragmento, autorUid: uid, estado: 'pendiente', version: 1, fuente: documento.nombre, documentoId: hash, creadoEn: FieldValue.serverTimestamp() });
+        }
+        tx.create(origen, { nombre: documento.nombre, fragmentoIds: ids, autorUid: uid, creadoEn: FieldValue.serverTimestamp() });
+        tx.create(db.collection('auditoria_admin').doc(), { accion: 'documento_conocimiento_importado', actorUid: uid, documentoId: hash, fecha: FieldValue.serverTimestamp() });
+        return false;
+      });
+      return res.status(duplicado ? 200 : 201).json({ ok: true, duplicado });
+    }
     if (body.accion === 'crear') {
       let aporte;
       try { aporte = validarAporte(body); } catch (e) { return res.status(400).json({ error: (e as Error).message }); }

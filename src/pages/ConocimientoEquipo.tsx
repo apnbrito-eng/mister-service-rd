@@ -1,3 +1,4 @@
+import ImportarConocimiento from '../components/ImportarConocimiento';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useCallback, useEffect, useState } from 'react';
@@ -33,6 +34,7 @@ export default function ConocimientoEquipo() {
     <header><div className="flex items-center gap-3 text-primary"><BookOpen size={28} /><h1 className="text-2xl font-bold">Conocimiento del equipo</h1></div><p className="text-gray-600 mt-2">Lo que aprendemos trabajando, disponible para la próxima persona que lo necesite.</p></header>
     {error && <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-800">{error}<button onClick={cargar} className="ml-3 underline">Reintentar</button></div>}
     {aviso && <p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-800">{aviso}</p>}
+    {revisar && <ImportarConocimiento onGuardado={() => { void cargar(); }} />}
     {revisar && <section className="rounded-2xl border bg-white p-5 space-y-3"><h2 className="text-lg font-semibold">Lo que más pregunta el equipo</h2><p className="text-sm text-gray-600">Temas de nuevas consultas, agrupados por equipo y servicio. Cada conversación cuenta una vez por tema. No se guardan aquí mensajes ni datos personales. Una pregunta frecuente no se convierte sola en una respuesta aprobada.</p>{frecuentes.length === 0 ? <p className="text-gray-500">Los temas aparecerán al consultar mantenimiento, instalación o reparación de equipos.</p> : frecuentes.map(f => <div key={f.id} className="flex flex-wrap items-center justify-between gap-3 border-t pt-3"><div><p className="font-medium">{f.titulo}</p><p className="text-sm text-gray-500">{f.conversaciones} conversaciones</p></div><button type="button" className="text-primary underline" onClick={() => {setTitulo(f.titulo); setContenido(''); document.getElementById('aporte-titulo')?.focus();}}>Preparar respuesta revisada</button></div>)}</section>}
     <div className="grid lg:grid-cols-[1fr_360px] gap-6">
       <section className="space-y-4"><label className="flex gap-2 items-center rounded-xl bg-white border p-3"><Search size={20} /><input aria-label="Buscar conocimiento" className="w-full outline-none" placeholder="Buscar procedimiento, equipo o solución" value={busqueda} onChange={e => setBusqueda(e.target.value)} /></label>
