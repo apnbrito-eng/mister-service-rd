@@ -187,8 +187,13 @@ export function rangoQuincena(quincena: string): { inicio: Date; fin: Date } {
   const m = Number(mStr);
   if (qStr === 'Q1') {
     // Q1 cubre días 30-31 del mes anterior + 1-14 de este mes (ambos pertenecen a Q1 de este YYYY-MM)
-    const inicio = new Date(y, m - 2, 30, 0, 0, 0); // mes anterior día 30
-    const fin = new Date(y, m - 1, 14, 23, 59, 59);
+    // Febrero no tiene día 30: en marzo Q1 comienza el día 1.
+    // Construir '30 de febrero' directamente saltaba al 1/2 de marzo.
+    const diasMesAnterior = new Date(y, m - 1, 0).getDate();
+    const inicio = diasMesAnterior >= 30
+      ? new Date(y, m - 2, 30, 0, 0, 0)
+      : new Date(y, m - 1, 1, 0, 0, 0);
+    const fin = new Date(y, m - 1, 14, 23, 59, 59, 999);
     return { inicio, fin };
   }
   // Q2 cubre 15-29 del mes (o hasta el último día si febrero no bisiesto, 28
@@ -197,7 +202,7 @@ export function rangoQuincena(quincena: string): { inicio: Date; fin: Date } {
   const ultimoDia = new Date(y, m, 0).getDate();
   const diaFin = Math.min(29, ultimoDia);
   const inicio = new Date(y, m - 1, 15, 0, 0, 0);
-  const fin = new Date(y, m - 1, diaFin, 23, 59, 59);
+  const fin = new Date(y, m - 1, diaFin, 23, 59, 59, 999);
   return { inicio, fin };
 }
 

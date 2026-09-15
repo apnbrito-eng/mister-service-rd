@@ -23,11 +23,12 @@ export const PERIODO_GARANTIA_DEFAULT_DIAS = 60;
 /** Convierte `Timestamp | Date | undefined` a `Date | null`. */
 function aDate(valor: Timestamp | Date | undefined | null): Date | null {
   if (!valor) return null;
-  if (valor instanceof Date) return valor;
+  if (valor instanceof Date) return Number.isFinite(valor.getTime()) ? valor : null;
   // Timestamp Firestore
   if (typeof (valor as Timestamp).toDate === 'function') {
     try {
-      return (valor as Timestamp).toDate();
+      const fecha = (valor as Timestamp).toDate();
+      return fecha instanceof Date && Number.isFinite(fecha.getTime()) ? fecha : null;
     } catch {
       return null;
     }

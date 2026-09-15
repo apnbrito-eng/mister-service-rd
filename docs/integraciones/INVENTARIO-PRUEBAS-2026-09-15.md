@@ -69,3 +69,9 @@ Inventario estático: no equivale a pruebas completas por rol. Las referencias d
 | ServiciosPage | 0 | 0 | Recorrido pendiente |
 
 Pendientes: recorridos completos por roles; cancelación/garantía; diagnóstico/cierre/piezas/pago/conduce con datos aislados; carga de documentos en navegador; seguimiento WhatsApp e Instagram/Messenger. No se emitieron conduces ni mensajes durante la revisión.
+
+### Ampliación — cierre y garantía
+
+73 pruebas automatizadas aprobadas. Diez nuevas cubren reglas de cálculo de garantía, margen/comisión y rangos de quincena; dos recorren todos los días de 2024 y 2026. Se corrigieron el inicio de Q1 en marzo, inclusión del último milisegundo y fechas inválidas. Las cinco cuentas QA pasan verificación de existencia/rol/espejos/Auth en lectura. No equivale a E2E por rol.
+
+Pendiente prioritario: automatizar ajuste por garantía con autorización de servidor, historial por evento e idempotencia; actualmente el técnico no puede escribir comisiones y el modelo permite un solo ajuste. El cierre ahora advierte el pendiente, sin ampliar permisos. Sesión disponible solo administrador, por lo que diagnóstico/foto/firma/cierre técnico siguen pendientes de prueba UI.

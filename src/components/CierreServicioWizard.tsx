@@ -553,6 +553,9 @@ export default function CierreServicioWizard({
       // descuento NO la anula. Se aplica siempre que haya piezas, lo cubra
       // él mismo u otro técnico. Try/catch defensivo: si el descuento falla
       // (comisión original no existe, etc.), el cierre ya quedó persistido.
+      // El cierre y el ajuste económico son operaciones distintas. Nunca
+      // presentar el segundo como exitoso si faltan referencias o permisos.
+      let ajusteGarantiaPendiente = !!(orden.esGarantia && hayPiezas);
       if (orden.esGarantia && hayPiezas && orden.tecnicoOriginalUid && orden.referenciaOrdenId) {
         try {
           const totales = calcularTotales(piezasUsadas);
@@ -568,6 +571,7 @@ export default function CierreServicioWizard({
             motivoLabel: 'Garantía — 10% costo de piezas',
           });
           if (result.aplicado) {
+            ajusteGarantiaPendiente = false;
             console.log(
               `[garantia-fase-A] descuento aplicado: monto=${result.monto} comisionId=${result.comisionId}`,
             );
@@ -633,7 +637,9 @@ export default function CierreServicioWizard({
                 destinatarioNombre: destino.nombre,
                 tipo: 'cierre_completado',
                 titulo: `Cierre completado · ${orden.numero || 'orden'}`,
-                mensaje: mensajeBase,
+                mensaje: ajusteGarantiaPendiente
+                  ? `${mensajeBase} Pendiente: revisar el ajuste de garantía en comisiones; no se confirmó su aplicación.`
+                  : mensajeBase,
                 ordenId: orden.id,
                 ordenNumero: orden.numero,
               });
@@ -648,7 +654,13 @@ export default function CierreServicioWizard({
         console.error('[SPRINT-174] cierre_completado bloque externo:', errNotif);
       }
 
-      toast.success('✅ Servicio cerrado exitosamente');
+      if (ajusteGarantiaPendiente) {
+        toast('Servicio cerrado. Queda pendiente que administración revise el ajuste de garantía. No necesitas volver a cerrar el servicio.', {
+          icon: '⚠️', duration: 10000,
+        });
+      } else {
+        toast.success('✅ Servicio cerrado exitosamente');
+      }
 
       // SPRINT-AGENDA-5 (2026-05-25): si la orden tiene cliente real
       // amarrado + equipoTipo, ofrecer programar próximo mantenimiento
