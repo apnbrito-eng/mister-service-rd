@@ -779,7 +779,8 @@ export interface ComisionRegistro {
    * SPRINT-GARANTIA-FLUJO-COMPLETO Fase A (2026-05-25, reglas Jorge):
    *   - El descuento es el 10% del costo de PIEZAS de la re-reparación.
    *   - El técnico ORIGINAL conserva su comisión original (NO se anula).
-   *   - Se aplica al cerrar la orden de garantía, no al confirmar la cita.
+   *   - Corresponde al cierre de garantía; administración aplica el ajuste
+   *     después de validar las piezas y revisar el importe.
    *
    * Aplicado por `aplicarDescuentoGarantiaPorPiezas` en `utils/comisiones.ts`.
    *
@@ -788,6 +789,8 @@ export interface ComisionRegistro {
    * Esa lógica se reemplazó en commit del 2026-05-25 SPRINT-GARANTIA. Los
    * registros legacy con `estaAnulada=true` mantienen su shape para forensia.)
    */
+  /** Historial por orden de garantía; descuentoPorGarantia conserva el total para nómina. */
+  ajustesGarantia?: Array<NonNullable<ComisionRegistro['descuentoPorGarantia']>>;
   descuentoPorGarantia?: {
     monto: number;
     facturaIdReasignada: string;

@@ -1,3 +1,4 @@
+import RevisionGarantias from '../components/RevisionGarantias';
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -10,7 +11,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { DollarSign, Lock, ChevronDown, ChevronRight, Calendar, Download } from 'lucide-react';
 
 export default function Comisiones() {
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
   const puedeVer = puede(userProfile, 'configuracionVer') ||
     userProfile?.rol === 'administrador' ||
     userProfile?.rol === 'coordinadora';
@@ -225,6 +226,10 @@ export default function Comisiones() {
           <Download size={14} /> Exportar CSV
         </button>
       </div>
+
+      {currentUser && (userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora') && (
+        <RevisionGarantias uid={currentUser.uid} nombre={userProfile.nombre} />
+      )}
 
       {/* Filtros */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
