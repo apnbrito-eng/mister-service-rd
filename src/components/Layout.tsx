@@ -1,5 +1,5 @@
 import EspacioTrabajo from './EspacioTrabajo';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import { useApp } from '../context/AppContext';
@@ -56,7 +56,9 @@ export default function Layout() {
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">
           <EspacioTrabajo />
-          <Outlet />
+          <Suspense fallback={<div role="status" className="p-6 text-gray-500">Cargando vista…</div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 
