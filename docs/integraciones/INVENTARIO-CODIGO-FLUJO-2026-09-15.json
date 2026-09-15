@@ -1,0 +1,5374 @@
+{
+  "alcance": "Inventario estático por patrones de todos los .ts/.tsx en src y api. No equivale a lectura manual exhaustiva ni pruebas funcionales. No resuelve nombres dinámicos ni todos los wrappers.",
+  "total_archivos": 265,
+  "total_lineas": 93260,
+  "archivos": [
+    {
+      "archivo": "api/whatsapp/media-proxy.ts",
+      "lineas": 350,
+      "imports": [
+        "@vercel/node",
+        "../_lib/firebaseAdmin.js",
+        "node:crypto"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "personal",
+        "usuarios",
+        "whatsapp_mensajes_inbox"
+      ],
+      "operaciones_mencionadas": {
+        "fetch": 2
+      }
+    },
+    {
+      "archivo": "api/whatsapp/webhook.ts",
+      "lineas": 562,
+      "imports": [
+        "../_lib/preferenciasMarketing.js",
+        "@vercel/node",
+        "node:crypto",
+        "firebase-admin/firestore",
+        "../_lib/firebaseAdmin.js",
+        "../_lib/manejarErrorMeta.js",
+        "../_lib/whatsappWebhook.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "whatsapp_config",
+        "whatsapp_conversaciones",
+        "whatsapp_mensajes_inbox",
+        "whatsapp_mensajes_outbox"
+      ],
+      "operaciones_mencionadas": {
+        "runTransaction": 2
+      }
+    },
+    {
+      "archivo": "api/whatsapp/send.ts",
+      "lineas": 1409,
+      "imports": [
+        "@vercel/node",
+        "firebase-admin/firestore",
+        "../_lib/firebaseAdmin.js",
+        "../_lib/manejarErrorMeta.js",
+        "../_lib/whatsappWebhook.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "clientes",
+        "config",
+        "personal",
+        "rate_limits",
+        "usuarios",
+        "whatsapp_config",
+        "whatsapp_conversaciones",
+        "whatsapp_mensajes_outbox"
+      ],
+      "operaciones_mencionadas": {
+        "runTransaction": 2,
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/services/geocoding.service.ts",
+      "lineas": 41,
+      "imports": [],
+      "funciones_exportadas": [
+        "geocodificarDireccion"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/services/clientes.service.ts",
+      "lineas": 430,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils/zonas"
+      ],
+      "funciones_exportadas": [
+        "normalizarTelefono",
+        "formatearTelefono",
+        "buscarClientePorTelefono",
+        "buscarOCrearCliente",
+        "validarClienteUnico",
+        "actualizarCliente",
+        "agregarDireccionCliente",
+        "actualizarDireccionCliente",
+        "crearOActualizarClienteDesdeCita",
+        "eliminarDireccionCliente"
+      ],
+      "colecciones_literal": [
+        "clientes"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "getDoc": 4,
+        "updateDoc": 6,
+        "setDoc": 3
+      }
+    },
+    {
+      "archivo": "src/services/campanasMarketing.service.ts",
+      "lineas": 609,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils/firestore"
+      ],
+      "funciones_exportadas": [
+        "subscribeToPlantillas",
+        "guardarPlantillas",
+        "seedPlantillasIniciales",
+        "leerCooldownDias",
+        "enCooldown",
+        "crearCampana",
+        "marcarClienteEnviado",
+        "marcarOrdenReactivada",
+        "subscribeToCampanas"
+      ],
+      "colecciones_literal": [
+        "clientes",
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "getDoc": 1,
+        "onSnapshot": 2,
+        "setDoc": 2,
+        "runTransaction": 3,
+        "writeBatch": 1
+      }
+    },
+    {
+      "archivo": "src/services/storage.service.ts",
+      "lineas": 162,
+      "imports": [
+        "firebase/storage",
+        "../firebase/config",
+        "../utils/rutas",
+        "../utils/uploads"
+      ],
+      "funciones_exportadas": [
+        "subirFotoCierre",
+        "subirFirmaCierre",
+        "subirFotoInicioChequeo",
+        "obtenerUbicacionGPS",
+        "distanciaMetros"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/services/whatsappRespuestasRapidas.service.ts",
+      "lineas": 110,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config"
+      ],
+      "funciones_exportadas": [
+        "obtenerRespuestasRapidas",
+        "suscribirRespuestasRapidas",
+        "actualizarRespuestasRapidas"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "getDoc": 1,
+        "onSnapshot": 1,
+        "setDoc": 1
+      }
+    },
+    {
+      "archivo": "src/services/configFiscal.service.ts",
+      "lineas": 78,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config"
+      ],
+      "funciones_exportadas": [
+        "obtenerConfigFiscal",
+        "suscribirConfigFiscal",
+        "actualizarConfigFiscal"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "getDoc": 1,
+        "onSnapshot": 1,
+        "setDoc": 1
+      }
+    },
+    {
+      "archivo": "src/services/avances.service.ts",
+      "lineas": 125,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils/comisiones"
+      ],
+      "funciones_exportadas": [
+        "suscribirAvances",
+        "obtenerAvancesPendientesDePersonal",
+        "obtenerAvancesPendientesDeQuincena",
+        "crearAvance",
+        "actualizarAvance",
+        "eliminarAvance",
+        "marcarAvanceDescontado"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "onSnapshot": 1,
+        "updateDoc": 2,
+        "addDoc": 1,
+        "deleteDoc": 1
+      }
+    },
+    {
+      "archivo": "src/services/nomina.service.ts",
+      "lineas": 719,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils/comisiones",
+        "../utils",
+        "./avances.service",
+        "./prestamos.service"
+      ],
+      "funciones_exportadas": [
+        "calcularBonoSecretaria",
+        "rangoMesCalendario",
+        "generarLiquidacion",
+        "cerrarLiquidacion",
+        "agregarDescuentoAdHoc",
+        "removerDescuentoAdHoc",
+        "marcarEmpleadoPagado",
+        "parseLiquidacion"
+      ],
+      "colecciones_literal": [
+        "avances",
+        "comisiones",
+        "liquidaciones_nomina",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 4,
+        "getDoc": 2,
+        "updateDoc": 3,
+        "addDoc": 1,
+        "runTransaction": 3
+      }
+    },
+    {
+      "archivo": "src/services/prestamos.service.ts",
+      "lineas": 212,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils/firestore"
+      ],
+      "funciones_exportadas": [
+        "parsePrestamo",
+        "crearPrestamo",
+        "suscribirPrestamos",
+        "obtenerPrestamosActivosDePersonal",
+        "obtenerPrestamosActivosTodos",
+        "aplicarCuota",
+        "cancelarPrestamo"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "onSnapshot": 1,
+        "updateDoc": 1,
+        "addDoc": 1,
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "src/services/ordenes.service.ts",
+      "lineas": 1437,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../utils",
+        "../utils/firestore",
+        "../types",
+        "./notificaciones.service",
+        "../utils/descuentoChequeo"
+      ],
+      "funciones_exportadas": [
+        "reactivarOrdenPostChequeo",
+        "resincronizarOperariaEnOrden",
+        "crearSugerenciaSoloChequeo",
+        "resolverSugerenciaSoloChequeo",
+        "resolverSugerenciaSoloChequeoConNotif",
+        "resolverPropuestaReprogramacion",
+        "resolverPropuestaReprogramacionConNotif",
+        "suscribirOrdenesConPropuestaReprogramacionPendiente",
+        "buscarChequeoVigentePorCliente",
+        "marcarVisitaFallida",
+        "limpiarVisitaFallida",
+        "obtenerOrdenesActivasPorTelefono",
+        "obtenerTodasOrdenesPorTelefono",
+        "confirmarPagoOrden",
+        "suscribirPagosPendientes",
+        "obtenerPagosDeOrden"
+      ],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 8,
+        "onSnapshot": 2,
+        "updateDoc": 2,
+        "setDoc": 1,
+        "runTransaction": 6
+      }
+    },
+    {
+      "archivo": "src/services/contadores.service.ts",
+      "lineas": 50,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config"
+      ],
+      "funciones_exportadas": [
+        "siguienteNumeroOrden",
+        "siguienteNumeroCotizacion",
+        "siguienteNumeroFactura"
+      ],
+      "colecciones_literal": [
+        "config"
+      ],
+      "operaciones_mencionadas": {
+        "runTransaction": 3
+      }
+    },
+    {
+      "archivo": "src/services/configWeb.service.ts",
+      "lineas": 893,
+      "imports": [
+        "firebase/firestore",
+        "firebase/storage",
+        "../firebase/config",
+        "../types/configFormularioAgendar",
+        "../utils/firestore"
+      ],
+      "funciones_exportadas": [
+        "parseConfigHero",
+        "slugify",
+        "parseConfigServicios",
+        "obtenerConfigWeb",
+        "guardarConfigWeb",
+        "sincronizarTiposEquipoPublicos",
+        "sincronizarModelosPorTipoEquipo",
+        "subirImagenWeb",
+        "getWhatsAppUrl",
+        "obtenerWhatsAppUrl"
+      ],
+      "colecciones_literal": [
+        "config_web"
+      ],
+      "operaciones_mencionadas": {
+        "getDoc": 1,
+        "setDoc": 3
+      }
+    },
+    {
+      "archivo": "src/services/configTiposEquipo.service.ts",
+      "lineas": 68,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../utils"
+      ],
+      "funciones_exportadas": [
+        "obtenerTiposEquipo",
+        "suscribirTiposEquipo",
+        "actualizarTiposEquipo"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "getDoc": 1,
+        "onSnapshot": 1,
+        "setDoc": 1
+      }
+    },
+    {
+      "archivo": "src/services/documentosConocimiento.ts",
+      "lineas": 57,
+      "imports": [],
+      "funciones_exportadas": [
+        "fragmentarDocumento",
+        "extraerDocumento"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/services/whatsapp.service.ts",
+      "lineas": 248,
+      "imports": [
+        "firebase/auth"
+      ],
+      "funciones_exportadas": [
+        "enviarTexto",
+        "enviarPlantilla",
+        "enviarMedia"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/services/notificaciones.service.ts",
+      "lineas": 132,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "crearNotificacion",
+        "suscribirNotificaciones",
+        "marcarLeida",
+        "marcarTodasLeidas"
+      ],
+      "colecciones_literal": [
+        "notificaciones"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "onSnapshot": 2,
+        "updateDoc": 1,
+        "addDoc": 1,
+        "writeBatch": 1
+      }
+    },
+    {
+      "archivo": "src/services/formularioAgendar.service.ts",
+      "lineas": 469,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types/configFormularioAgendar",
+        "./configWeb.service",
+        "../types",
+        "./clientes.service",
+        "./notificaciones.service",
+        "../utils",
+        "../utils/firestore"
+      ],
+      "funciones_exportadas": [
+        "obtenerConfigFormularioAgendar",
+        "suscribirConfigFormularioAgendar",
+        "guardarConfigFormularioAgendar",
+        "obtenerWhatsAppRoundRobin",
+        "enviarSolicitudCita"
+      ],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "citas_por_confirmar",
+        "config_web",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "getDoc": 2,
+        "onSnapshot": 1,
+        "setDoc": 2,
+        "addDoc": 2,
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "src/services/configEmpresa.service.ts",
+      "lineas": 144,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config"
+      ],
+      "funciones_exportadas": [
+        "obtenerConfigEmpresa",
+        "suscribirConfigEmpresa",
+        "actualizarConfigEmpresa"
+      ],
+      "colecciones_literal": [
+        "config_web"
+      ],
+      "operaciones_mencionadas": {
+        "getDoc": 1,
+        "onSnapshot": 1,
+        "setDoc": 3
+      }
+    },
+    {
+      "archivo": "src/services/configWhatsappEnvio.service.ts",
+      "lineas": 235,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config"
+      ],
+      "funciones_exportadas": [
+        "obtenerConfigWhatsappEnvio",
+        "suscribirConfigWhatsappEnvio",
+        "actualizarConfigWhatsappEnvio",
+        "obtenerConfigWhatsappNumeros",
+        "suscribirConfigWhatsappNumeros",
+        "actualizarConfigWhatsappNumeros"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "getDoc": 2,
+        "onSnapshot": 2,
+        "setDoc": 2
+      }
+    },
+    {
+      "archivo": "src/services/equipoApi.ts",
+      "lineas": 15,
+      "imports": [
+        "../firebase/config"
+      ],
+      "funciones_exportadas": [
+        "equipoApi"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/services/gps.service.ts",
+      "lineas": 176,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "obtenerConfigGPS",
+        "guardarConfigGPS",
+        "guardarUbicacionVehiculo",
+        "suscribirUbicacionVehiculo",
+        "suscribirTodasUbicaciones",
+        "obtenerUbicacionAPI",
+        "calcularETA",
+        "generarTrackingToken",
+        "buscarOrdenPorToken"
+      ],
+      "colecciones_literal": [
+        "config_gps",
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "getDoc": 1,
+        "onSnapshot": 2,
+        "setDoc": 2,
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/services/recordatorios.service.ts",
+      "lineas": 255,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "date-fns",
+        "../types",
+        "./notificaciones.service"
+      ],
+      "funciones_exportadas": [
+        "obtenerDiaSiguienteLaboral",
+        "esDiaLaboral",
+        "ventanaActiva",
+        "obtenerOCrearRecordatorio",
+        "marcarCompletado",
+        "marcarItemAvisado",
+        "actualizarItems",
+        "marcarNotificadoAAdmin",
+        "suscribirRecordatoriosDelDia",
+        "obtenerRecordatoriosDelDia",
+        "enviarRecordatorioOperaria",
+        "marcarRecordatorioCompletadoPorAdmin"
+      ],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "recordatorios_diarios"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "getDoc": 2,
+        "onSnapshot": 1,
+        "updateDoc": 4,
+        "setDoc": 1,
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "src/services/seedWebConfig.ts",
+      "lineas": 24,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "./configWeb.service"
+      ],
+      "funciones_exportadas": [
+        "seedWebConfig"
+      ],
+      "colecciones_literal": [
+        "config_web"
+      ],
+      "operaciones_mencionadas": {
+        "getDoc": 1,
+        "setDoc": 1
+      }
+    },
+    {
+      "archivo": "src/services/bancos.service.ts",
+      "lineas": 145,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "suscribirBancos",
+        "crearBanco",
+        "actualizarBanco",
+        "eliminarBanco",
+        "seedBancosSiVacio",
+        "migrarBancosGenericosAReales"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "onSnapshot": 1,
+        "updateDoc": 1,
+        "addDoc": 1,
+        "deleteDoc": 1,
+        "writeBatch": 2
+      }
+    },
+    {
+      "archivo": "src/services/formularios.service.ts",
+      "lineas": 100,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types/formularios"
+      ],
+      "funciones_exportadas": [
+        "generarSlug",
+        "crearFormulario",
+        "actualizarFormulario",
+        "obtenerFormulario",
+        "obtenerFormularioPorSlug",
+        "listarFormularios",
+        "toggleFormulario"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "getDoc": 1,
+        "updateDoc": 2,
+        "addDoc": 1
+      }
+    },
+    {
+      "archivo": "src/services/empresasAliadas.service.ts",
+      "lineas": 75,
+      "imports": [
+        "firebase/firestore",
+        "firebase/storage",
+        "../firebase/config",
+        "../types/formularios"
+      ],
+      "funciones_exportadas": [
+        "crearEmpresa",
+        "actualizarEmpresa",
+        "obtenerEmpresa",
+        "listarEmpresas",
+        "eliminarEmpresa",
+        "subirLogoEmpresa"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "getDoc": 1,
+        "updateDoc": 2,
+        "addDoc": 1
+      }
+    },
+    {
+      "archivo": "src/services/iaChatTransport.ts",
+      "lineas": 49,
+      "imports": [
+        "../lib/appCheck"
+      ],
+      "funciones_exportadas": [
+        "enviarPreguntaIA"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/services/solicitudes.service.ts",
+      "lineas": 169,
+      "imports": [
+        "firebase/firestore",
+        "firebase/storage",
+        "../firebase/config",
+        "../types/formularios",
+        "./contadores.service",
+        "../utils/uploads"
+      ],
+      "funciones_exportadas": [
+        "crearSolicitud",
+        "obtenerSolicitud",
+        "listarSolicitudes",
+        "actualizarEstadoSolicitud",
+        "convertirAOrden",
+        "subirArchivoSolicitud",
+        "eliminarSolicitud",
+        "onSolicitudesChange"
+      ],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "getDoc": 2,
+        "onSnapshot": 1,
+        "updateDoc": 1,
+        "addDoc": 1,
+        "deleteDoc": 1,
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "src/services/precios.service.ts",
+      "lineas": 55,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils"
+      ],
+      "funciones_exportadas": [
+        "buscarPrecioMantenimiento"
+      ],
+      "colecciones_literal": [
+        "precios_servicios"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1
+      }
+    },
+    {
+      "archivo": "src/services/whatsappInbox.service.ts",
+      "lineas": 462,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config",
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "suscribirConversaciones",
+        "suscribirMensajes",
+        "marcarLeida",
+        "toggleBot",
+        "asignarConversacion",
+        "actualizarEtiquetas",
+        "suscribirContadorSinLeer",
+        "suscribirMetricasInbox"
+      ],
+      "colecciones_literal": [
+        "auditoria_admin"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 3,
+        "updateDoc": 5,
+        "addDoc": 2
+      }
+    },
+    {
+      "archivo": "src/services/piezas.service.ts",
+      "lineas": 171,
+      "imports": [
+        "firebase/storage",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils"
+      ],
+      "funciones_exportadas": [
+        "subirFotoPieza",
+        "borrarFotoPieza",
+        "crearPiezaUsada",
+        "calcularTotales",
+        "aprobarPiezasDeOrden"
+      ],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/services/ponches.service.ts",
+      "lineas": 264,
+      "imports": [
+        "firebase/storage",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "subirFotoPonche",
+        "detectarDispositivo",
+        "fechaRDHoy",
+        "obtenerPoncheEntradaHoy",
+        "obtenerPoncheSalidaHoy",
+        "crearPonche",
+        "obtenerPonchesDelDia",
+        "obtenerPonchesPorPersonal",
+        "obtenerPonchesPorRango",
+        "fechaRDDe",
+        "rangoPresetHoy",
+        "rangoPresetAyer",
+        "rangoPresetUltimos30Dias",
+        "rangoPresetEsteMes",
+        "rangoPresetEstaSemana",
+        "rangoPresetEstaQuincena"
+      ],
+      "colecciones_literal": [
+        "ponches"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 5,
+        "addDoc": 1
+      }
+    },
+    {
+      "archivo": "api/portal-cliente/[token].ts",
+      "lineas": 296,
+      "imports": [
+        "@vercel/node",
+        "../_lib/firebaseAdmin.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "facturas",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/portal-cliente/[token]/posponer.ts",
+      "lineas": 312,
+      "imports": [
+        "@vercel/node",
+        "firebase-admin/firestore",
+        "../../_lib/firebaseAdmin.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "notificaciones",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "api/marketing/resumen.ts",
+      "lineas": 23,
+      "imports": [
+        "@vercel/node",
+        "../_lib/accesoEquipo.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Configuracion.tsx",
+      "lineas": 1600,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "../types",
+        "../services/gps.service",
+        "../services/geocoding.service",
+        "../services/configFiscal.service",
+        "../services/configEmpresa.service",
+        "../services/configTiposEquipo.service",
+        "../services/configWeb.service",
+        "../services/configWhatsappEnvio.service",
+        "../services/whatsappRespuestasRapidas.service",
+        "../hooks/useConfigWeb",
+        "firebase/firestore",
+        "../firebase/config",
+        "../utils",
+        "../context/AppContext",
+        "../utils/permisos"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "updateDoc": 1,
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Calendario.tsx",
+      "lineas": 421,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../components/LoadingSpinner",
+        "lucide-react",
+        "date-fns",
+        "date-fns/locale",
+        "react-router-dom"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "citas_por_confirmar",
+        "mantenimiento",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "onSnapshot": 3
+      }
+    },
+    {
+      "archivo": "src/pages/Ordenes.tsx",
+      "lineas": 1208,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "firebase/storage",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../components/Badge",
+        "../components/Modal",
+        "../components/Skeleton",
+        "../context/AppContext",
+        "../utils/permisos",
+        "lucide-react",
+        "react-hot-toast",
+        "date-fns",
+        "date-fns/locale",
+        "../components/ordenes/OrdenFilters",
+        "../components/ordenes/OrdenCard",
+        "../types",
+        "../components/ordenes/OrdenDetailModal",
+        "../components/ordenes/OrdenEditForm",
+        "../components/ordenes/OrdenEditForm",
+        "../components/ordenes/OrdenCreateModal",
+        "../components/ordenes/OrdenesTablero",
+        "../services/notificaciones.service",
+        "../services/ordenes.service",
+        "../hooks/useOrdenCreateForm",
+        "../utils/descuentoChequeo",
+        "../utils/permisos"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "clientes",
+        "ordenes_servicio",
+        "personal",
+        "standby_piezas"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "onSnapshot": 3,
+        "updateDoc": 3,
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Bancos.tsx",
+      "lineas": 389,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "../types",
+        "../services/bancos.service",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../components/LoadingSpinner",
+        "../components/Modal"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/Notificaciones.tsx",
+      "lineas": 243,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../context/AppContext",
+        "../services/notificaciones.service",
+        "../utils",
+        "../utils/permisos",
+        "../components/LoadingSpinner"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1
+      }
+    },
+    {
+      "archivo": "src/pages/ConfiguracionWeb.tsx",
+      "lineas": 1276,
+      "imports": [
+        "react",
+        "../services/configWeb.service",
+        "../utils/heroGradient",
+        "../components/LoadingSpinner",
+        "lucide-react",
+        "../components/icons/WhatsAppIcon",
+        "../components/admin/ConfigFormularioAgendarSection",
+        "../components/admin/ConfigServiciosSection",
+        "react-hot-toast",
+        "../utils/imagen",
+        "firebase/firestore",
+        "../firebase/config"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "config_web"
+      ],
+      "operaciones_mencionadas": {
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/pages/CierreDia.tsx",
+      "lineas": 467,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "date-fns",
+        "date-fns/locale",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "cierres_dia",
+        "facturas",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "onSnapshot": 2,
+        "updateDoc": 1,
+        "addDoc": 1
+      }
+    },
+    {
+      "archivo": "src/pages/AsistenteIAHistorial.tsx",
+      "lineas": 332,
+      "imports": [
+        "../components/TextoAsistente",
+        "react",
+        "firebase/firestore",
+        "date-fns",
+        "date-fns/locale",
+        "lucide-react",
+        "../firebase/config",
+        "../components/LoadingSpinner"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "conversaciones_ia"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1
+      }
+    },
+    {
+      "archivo": "src/pages/InboxConversacion.tsx",
+      "lineas": 849,
+      "imports": [
+        "../components/inbox/SugerenciaIA",
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../context/AppContext",
+        "../services/whatsappInbox.service",
+        "../services/whatsapp.service",
+        "../services/whatsappRespuestasRapidas.service",
+        "../components/inbox/MensajeBubble",
+        "../components/inbox/IndicadorVentana24h",
+        "../components/inbox/ToggleBot",
+        "../components/inbox/CardCliente",
+        "../components/inbox/PanelCliente360",
+        "../components/inbox/SelectorPlantillas",
+        "../components/ordenes/OrdenCreateModal",
+        "../hooks/useOrdenCreateForm",
+        "../types",
+        "../utils",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio",
+        "whatsapp_conversaciones"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 2,
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/pages/HistorialAnuladas.tsx",
+      "lineas": 407,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../utils/permisos",
+        "../context/AppContext",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1,
+        "updateDoc": 2
+      }
+    },
+    {
+      "archivo": "src/pages/ReporteAvanzado.tsx",
+      "lineas": 411,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "react-router-dom",
+        "lucide-react",
+        "../types",
+        "../utils",
+        "../utils/comisiones",
+        "../components/Skeleton",
+        "../context/AppContext"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "comisiones",
+        "facturas",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 4
+      }
+    },
+    {
+      "archivo": "src/pages/Feedback.tsx",
+      "lineas": 492,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../components/LoadingSpinner",
+        "../context/AppContext",
+        "../hooks/useConfigWeb",
+        "lucide-react",
+        "date-fns",
+        "date-fns/locale"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1
+      }
+    },
+    {
+      "archivo": "src/pages/ConfiguracionMarketing.tsx",
+      "lineas": 493,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "date-fns",
+        "date-fns/locale",
+        "../components/LoadingSpinner",
+        "../context/AppContext",
+        "../types",
+        "../services/campanasMarketing.service",
+        "../utils/plantillaRender"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/PreciosServicios.tsx",
+      "lineas": 440,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "precios_servicios"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1,
+        "updateDoc": 2,
+        "addDoc": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Prestamos.tsx",
+      "lineas": 377,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../services/prestamos.service",
+        "../context/AppContext",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Inventario.tsx",
+      "lineas": 706,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "movimientos_inventario",
+        "piezas_inventario"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "onSnapshot": 1,
+        "updateDoc": 2,
+        "addDoc": 1,
+        "writeBatch": 1
+      }
+    },
+    {
+      "archivo": "src/pages/SugerenciasChequeo.tsx",
+      "lineas": 359,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../context/AppContext",
+        "../services/ordenes.service",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "../components/icons/WhatsAppIcon",
+        "lucide-react",
+        "react-hot-toast",
+        "../utils"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 2
+      }
+    },
+    {
+      "archivo": "src/pages/Facturas.tsx",
+      "lineas": 992,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../utils/factura",
+        "../utils/whatsapp",
+        "../hooks/useClientesEnVivo",
+        "../utils/comisiones",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "../components/ordenes/EliminarOrdenButton",
+        "../components/facturas/FacturaCrearModal",
+        "../components/facturas/OrdenResumenLectura",
+        "../components/admin/FiltroAvanzadoFinanzas",
+        "lucide-react",
+        "date-fns",
+        "react-hot-toast",
+        "../context/AppContext",
+        "../utils/permisos"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "citas_por_confirmar",
+        "facturas",
+        "ordenes_servicio",
+        "personal",
+        "piezas_inventario",
+        "precios_servicios"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 5,
+        "updateDoc": 2,
+        "addDoc": 1,
+        "deleteDoc": 2,
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "src/pages/PagosPendientes.tsx",
+      "lineas": 266,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "react-hot-toast",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../services/ordenes.service",
+        "../utils",
+        "../components/LoadingSpinner",
+        "../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/TecnicoVista.tsx",
+      "lineas": 1764,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../components/cierre/ModalSugerirSoloChequeo",
+        "../components/cierre/BannerEstadoSugerenciaSoloChequeo",
+        "../components/shared/FotoEquipoDisplay",
+        "../services/configEmpresa.service",
+        "../services/notificaciones.service",
+        "../services/ordenes.service",
+        "../utils/comisiones",
+        "../types",
+        "../utils/whatsapp",
+        "../components/shared/BotonComoLlegar",
+        "../context/AppContext",
+        "../components/LoadingSpinner",
+        "../components/Badge",
+        "../components/Modal",
+        "../components/Logo",
+        "../components/CierreServicioWizard",
+        "../components/ordenes/FaseStepper",
+        "../components/ordenes/IniciarChequeoButton",
+        "../components/ordenes/BannerSiguientePaso",
+        "../components/NotificacionesPanel",
+        "../services/gps.service",
+        "lucide-react",
+        "../components/icons/WhatsAppIcon",
+        "date-fns",
+        "date-fns/locale",
+        "firebase/auth",
+        "../firebase/config",
+        "react-router-dom",
+        "react-hot-toast",
+        "react-leaflet",
+        "../utils/rutas",
+        "leaflet"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "clientes",
+        "comisiones",
+        "ordenes_servicio",
+        "personal",
+        "standby_piezas"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "onSnapshot": 3,
+        "updateDoc": 4
+      }
+    },
+    {
+      "archivo": "src/pages/AdminPonches.tsx",
+      "lineas": 596,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "date-fns",
+        "date-fns/locale",
+        "lucide-react",
+        "../types",
+        "../services/ponches.service"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "personal",
+        "ponches"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 2
+      }
+    },
+    {
+      "archivo": "src/pages/EquiposTaller.tsx",
+      "lineas": 292,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../hooks/useTiposEquipo",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "../components/icons/WhatsAppIcon",
+        "date-fns",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "equipos_taller",
+        "standby_piezas"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1,
+        "updateDoc": 1,
+        "addDoc": 1,
+        "writeBatch": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Rendimiento.tsx",
+      "lineas": 374,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../components/LoadingSpinner",
+        "lucide-react",
+        "../context/AppContext",
+        "../utils/comisiones",
+        "date-fns"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "facturas",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 3
+      }
+    },
+    {
+      "archivo": "src/pages/Formularios.tsx",
+      "lineas": 176,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "../hooks/useFormularios",
+        "../services/formularios.service",
+        "../types/formularios",
+        "../components/LoadingSpinner",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/Solicitudes.tsx",
+      "lineas": 582,
+      "imports": [
+        "react",
+        "../hooks/useFormularios",
+        "../services/solicitudes.service",
+        "../types/formularios",
+        "../context/AppContext",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "../components/icons/WhatsAppIcon",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/public/HomePage.tsx",
+      "lineas": 369,
+      "imports": [
+        "react-router-dom",
+        "lucide-react",
+        "../../components/icons/WhatsAppIcon",
+        "../../hooks/useConfigWeb",
+        "../../components/public/HeroCarrusel",
+        "../../components/public/HeroConGradient",
+        "../../components/public/SeccionTestimonios"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/public/ServicioDetalle.tsx",
+      "lineas": 519,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "../../components/icons/WhatsAppIcon",
+        "../../hooks/useConfigWeb",
+        "../../services/configWeb.service"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/public/ServiciosPage.tsx",
+      "lineas": 336,
+      "imports": [
+        "react-router-dom",
+        "lucide-react",
+        "../../components/icons/WhatsAppIcon",
+        "../../hooks/useConfigWeb"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/public/AgendarPage.tsx",
+      "lineas": 58,
+      "imports": [
+        "react",
+        "../../components/public/FormularioAgendarPublico",
+        "../../types/configFormularioAgendar",
+        "../../services/formularioAgendar.service"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/public/FormularioPublico.tsx",
+      "lineas": 287,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "../../hooks/useFormularios",
+        "../../services/solicitudes.service",
+        "../../components/public/CampoFormulario",
+        "../../types/formularios",
+        "../../components/LoadingSpinner",
+        "lucide-react",
+        "../../components/icons/WhatsAppIcon",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/public/GarantiaCliente.tsx",
+      "lineas": 465,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "../../components/Logo",
+        "../../components/LoadingSpinner",
+        "lucide-react",
+        "../../lib/appCheck"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 2
+      }
+    },
+    {
+      "archivo": "src/pages/public/PortalCliente.tsx",
+      "lineas": 719,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "date-fns",
+        "date-fns/locale",
+        "lucide-react",
+        "../../components/LoadingSpinner",
+        "../../components/Logo",
+        "../../components/public/FeedbackNPS",
+        "../../components/public/ModalPosponer",
+        "../../hooks/useConfigWeb",
+        "../../utils",
+        "../../lib/appCheck",
+        "../../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 2
+      }
+    },
+    {
+      "archivo": "src/pages/MarketingIntegrado.tsx",
+      "lineas": 16,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "../services/equipoApi"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/Standby.tsx",
+      "lineas": 511,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "react-router-dom",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../context/AppContext",
+        "../services/notificaciones.service",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "date-fns",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "movimientos_piezas",
+        "ordenes_servicio",
+        "standby_piezas"
+      ],
+      "operaciones_mencionadas": {
+        "getDoc": 1,
+        "onSnapshot": 3,
+        "updateDoc": 3,
+        "addDoc": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Cotizaciones.tsx",
+      "lineas": 681,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../services/contadores.service",
+        "../services/contadores.service",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "../components/CatalogoSelectorModal",
+        "../components/ordenes/EliminarOrdenButton",
+        "../components/admin/FiltroAvanzadoFinanzas",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "cotizaciones",
+        "facturas",
+        "movimientos_inventario",
+        "ordenes_servicio",
+        "piezas_inventario"
+      ],
+      "operaciones_mencionadas": {
+        "getDoc": 1,
+        "onSnapshot": 2,
+        "updateDoc": 3,
+        "addDoc": 2,
+        "deleteDoc": 1,
+        "writeBatch": 3
+      }
+    },
+    {
+      "archivo": "src/pages/Nomina.tsx",
+      "lineas": 744,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../utils/comisiones",
+        "../services/nomina.service",
+        "../services/avances.service",
+        "../context/AppContext",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "../components/nomina/AgregarDescuentoModal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "comisiones",
+        "liquidaciones_nomina"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 2
+      }
+    },
+    {
+      "archivo": "src/pages/AgendaDia.tsx",
+      "lineas": 1100,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "react-router-dom",
+        "../types",
+        "../utils",
+        "../components/shared/FotoEquipoDisplay",
+        "../components/shared/BotonComoLlegar",
+        "../utils/maps",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../services/configEmpresa.service",
+        "../services/notificaciones.service",
+        "../services/ordenes.service",
+        "../utils/descuentoChequeo",
+        "date-fns",
+        "date-fns/locale",
+        "react-hot-toast",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "citas_por_confirmar",
+        "mantenimiento",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 4,
+        "updateDoc": 2
+      }
+    },
+    {
+      "archivo": "src/pages/AsistenteIA.tsx",
+      "lineas": 157,
+      "imports": [
+        "../components/TextoAsistente",
+        "react",
+        "lucide-react",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../hooks/useAsistenteIAChat"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/OrdenDetalle.tsx",
+      "lineas": 1958,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../utils/factura",
+        "../components/cierre/ModalSugerirSoloChequeo",
+        "../components/cierre/BannerEstadoSugerenciaSoloChequeo",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "../components/Badge",
+        "../context/AppContext",
+        "lucide-react",
+        "../components/cierre/ModalEditarPiezasOrden",
+        "../components/icons/WhatsAppIcon",
+        "react-hot-toast",
+        "../utils/permisos",
+        "../components/ordenes/CancelarOrdenModal",
+        "../components/ordenes/FaseStepper",
+        "../components/ordenes/EliminarOrdenButton",
+        "../components/ordenes/BannerSiguientePaso",
+        "../components/ordenes/TimelineAcciones",
+        "../components/ordenes/TimelineUnificadoOrden",
+        "../components/ordenes/ReagendarModal",
+        "../components/ordenes/RegistrarPagoModal",
+        "../components/ordenes/EnviarFacturacionButton",
+        "lucide-react",
+        "../services/gps.service",
+        "../utils/whatsapp",
+        "../utils/maps",
+        "../components/shared/BotonComoLlegar",
+        "../services/notificaciones.service",
+        "../services/ordenes.service",
+        "../services/configEmpresa.service",
+        "date-fns",
+        "date-fns/locale",
+        "../utils/descuentoChequeo",
+        "../utils/permisos"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio",
+        "personal",
+        "standby_piezas"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "onSnapshot": 2,
+        "updateDoc": 6
+      }
+    },
+    {
+      "archivo": "src/pages/Inbox.tsx",
+      "lineas": 363,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "../context/AppContext",
+        "../services/whatsappInbox.service",
+        "../types",
+        "date-fns",
+        "date-fns/locale",
+        "../components/Skeleton",
+        "../components/EmptyState"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/Avances.tsx",
+      "lineas": 427,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../utils/comisiones",
+        "../services/avances.service",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Clientes.tsx",
+      "lineas": 967,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../services/clientes.service",
+        "../utils/whatsapp",
+        "../utils/maps",
+        "../utils/zonas",
+        "../utils/clientesFiltros",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "../components/Badge",
+        "../components/ordenes/MiniMapaCliente",
+        "../components/ordenes/EliminarOrdenButton",
+        "../components/clientes/EditarClienteModal",
+        "../components/clientes/MapaClientes",
+        "../components/clientes/FiltrosSidebarClientes",
+        "../components/clientes/TabReactivacion",
+        "../components/shared/BotonComoLlegar",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "clientes",
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "onSnapshot": 1,
+        "updateDoc": 2,
+        "fetch": 2
+      }
+    },
+    {
+      "archivo": "src/pages/PersonalPage.tsx",
+      "lineas": 1143,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "firebase/auth",
+        "firebase/app",
+        "firebase/auth",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../utils/personal",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "../components/personal/FormAltaEditarEmpleado",
+        "../components/personal/GruposOperariaTecnico",
+        "../components/personal/ModalConfirmarEliminar",
+        "../components/personal/TablaPersonalActivo",
+        "lucide-react",
+        "react-hot-toast",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../utils/roles"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio",
+        "personal",
+        "usuarios"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 2,
+        "updateDoc": 4,
+        "setDoc": 3,
+        "addDoc": 2,
+        "deleteDoc": 4,
+        "writeBatch": 2,
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/pages/FormularioEditor.tsx",
+      "lineas": 768,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "../services/formularios.service",
+        "../hooks/useFormularios",
+        "../types/formularios",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/Ponche.tsx",
+      "lineas": 676,
+      "imports": [
+        "react",
+        "firebase/auth",
+        "../firebase/config",
+        "react-router-dom",
+        "react-hot-toast",
+        "date-fns",
+        "date-fns/locale",
+        "lucide-react",
+        "../context/AppContext",
+        "../components/LoadingSpinner",
+        "../components/Logo",
+        "../components/ponche/WebcamCapture",
+        "../services/ponches.service",
+        "../services/storage.service",
+        "../types",
+        "firebase/firestore",
+        "../firebase/config"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 2
+      }
+    },
+    {
+      "archivo": "src/pages/Citas.tsx",
+      "lineas": 1051,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "firebase/storage",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../hooks/useTiposEquipo",
+        "../components/LoadingSpinner",
+        "../components/EmptyState",
+        "../components/Modal",
+        "../components/ordenes/MiniMapaCliente",
+        "../components/ordenes/OrdenCreateModal",
+        "../components/shared/FotoEquipoDisplay",
+        "../hooks/useOrdenCreateForm",
+        "lucide-react",
+        "../components/icons/WhatsAppIcon",
+        "date-fns",
+        "date-fns/locale",
+        "react-hot-toast",
+        "../context/AppContext"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "citas_por_confirmar",
+        "comisiones",
+        "facturas",
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "onSnapshot": 2,
+        "updateDoc": 2,
+        "addDoc": 2,
+        "deleteDoc": 2,
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/pages/GestionUsuarios.tsx",
+      "lineas": 1339,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "firebase/auth",
+        "firebase/app",
+        "firebase/auth",
+        "../firebase/config",
+        "../types",
+        "../utils/permisos",
+        "../utils/roles",
+        "../utils/personal",
+        "../context/AppContext",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "react-router-dom",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "personal",
+        "usuarios"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1,
+        "updateDoc": 4,
+        "setDoc": 3,
+        "addDoc": 2,
+        "fetch": 2
+      }
+    },
+    {
+      "archivo": "src/pages/EstadoResultado.tsx",
+      "lineas": 432,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../components/LoadingSpinner",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "comisiones",
+        "facturas",
+        "gastos",
+        "liquidaciones_nomina",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 5
+      }
+    },
+    {
+      "archivo": "src/pages/FacturacionPendiente.tsx",
+      "lineas": 397,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../utils",
+        "../utils/piezas",
+        "../services/piezas.service",
+        "../components/LoadingSpinner",
+        "../components/EmptyState",
+        "../components/cierre/ModalEditarPiezasOrden",
+        "../components/ordenes/ModalEditarOrdenAdmin",
+        "../components/admin/FiltroAvanzadoFinanzas",
+        "../components/admin/FiltroAvanzadoFinanzas",
+        "../components/facturacion-pendiente/ProcesarFacturacionModal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio",
+        "personal",
+        "piezas_inventario",
+        "precios_servicios"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 4
+      }
+    },
+    {
+      "archivo": "src/pages/Mantenimiento.tsx",
+      "lineas": 648,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../services/contadores.service",
+        "../services/clientes.service",
+        "../services/notificaciones.service",
+        "../hooks/useTiposEquipo",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "date-fns",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "clientes",
+        "mantenimiento",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "onSnapshot": 2,
+        "updateDoc": 1,
+        "addDoc": 1,
+        "writeBatch": 1
+      }
+    },
+    {
+      "archivo": "src/pages/ConocimientoEquipo.tsx",
+      "lineas": 47,
+      "imports": [
+        "../components/ImportarConocimiento",
+        "react-router-dom",
+        "../context/AppContext",
+        "react",
+        "lucide-react",
+        "../services/equipoApi"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/Dashboard.tsx",
+      "lineas": 1335,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "react-router-dom",
+        "lucide-react",
+        "date-fns",
+        "date-fns/locale",
+        "../types",
+        "../utils/permisos",
+        "react-router-dom",
+        "lucide-react",
+        "../utils/comisiones",
+        "../utils",
+        "../utils/kpis",
+        "../components/Skeleton",
+        "../components/Badge",
+        "../components/ordenes/EliminarOrdenButton",
+        "../context/AppContext",
+        "lucide-react",
+        "react-hot-toast",
+        "../components/recordatorios/RecordatorioBanner",
+        "../services/recordatorios.service",
+        "../services/notificaciones.service",
+        "../services/whatsappInbox.service",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "comisiones",
+        "cotizaciones",
+        "facturas",
+        "gastos",
+        "ordenes_servicio",
+        "personal",
+        "piezas_inventario",
+        "standby_piezas"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 8
+      }
+    },
+    {
+      "archivo": "src/pages/Comisiones.tsx",
+      "lineas": 493,
+      "imports": [
+        "../components/RevisionGarantias",
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../utils/comisiones",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../components/LoadingSpinner",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "comisiones",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "onSnapshot": 1
+      }
+    },
+    {
+      "archivo": "src/pages/MapaRutas.tsx",
+      "lineas": 1291,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "firebase/storage",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../utils/zonas",
+        "../utils/rutas",
+        "../utils/whatsapp",
+        "../utils/maps",
+        "../components/shared/BotonComoLlegar",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "../components/ordenes/OrdenEditForm",
+        "../components/ordenes/OrdenEditForm",
+        "../components/ordenes/EliminarOrdenButton",
+        "lucide-react",
+        "../components/icons/WhatsAppIcon",
+        "../services/gps.service",
+        "../types",
+        "date-fns",
+        "react-leaflet",
+        "leaflet",
+        "date-fns",
+        "date-fns/locale",
+        "../context/AppContext",
+        "../utils/permisos",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "clientes",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "onSnapshot": 1,
+        "updateDoc": 2,
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Login.tsx",
+      "lineas": 130,
+      "imports": [
+        "react",
+        "firebase/auth",
+        "../firebase/config",
+        "react-router-dom",
+        "../components/Logo",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/CitaPublica.tsx",
+      "lineas": 577,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "firebase/firestore",
+        "firebase/storage",
+        "../firebase/config",
+        "../types",
+        "../components/Logo",
+        "../components/LoadingSpinner",
+        "../components/ordenes/MiniMapaCliente",
+        "lucide-react",
+        "date-fns",
+        "date-fns/locale",
+        "react-hot-toast",
+        "../services/clientes.service"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "calendarios",
+        "citas_por_confirmar"
+      ],
+      "operaciones_mencionadas": {
+        "getDoc": 1,
+        "addDoc": 1,
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Calendarios.tsx",
+      "lineas": 437,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "calendarios",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "onSnapshot": 1,
+        "updateDoc": 2,
+        "addDoc": 1,
+        "deleteDoc": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Gastos.tsx",
+      "lineas": 308,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "date-fns",
+        "date-fns/locale",
+        "react-hot-toast",
+        "../context/AppContext",
+        "../utils/permisos"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "gastos",
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 2,
+        "addDoc": 1,
+        "deleteDoc": 1
+      }
+    },
+    {
+      "archivo": "src/pages/Reprogramaciones.tsx",
+      "lineas": 661,
+      "imports": [
+        "react",
+        "date-fns",
+        "date-fns/locale",
+        "lucide-react",
+        "react-hot-toast",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "../components/icons/WhatsAppIcon",
+        "../context/AppContext",
+        "../services/ordenes.service",
+        "../utils",
+        "../utils/agenda",
+        "../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/EmpresasAliadas.tsx",
+      "lineas": 352,
+      "imports": [
+        "react",
+        "../hooks/useFormularios",
+        "../services/empresasAliadas.service",
+        "../types/formularios",
+        "../components/LoadingSpinner",
+        "../components/Modal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/Admin404.tsx",
+      "lineas": 49,
+      "imports": [
+        "react-router-dom",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/pages/TrackingCliente.tsx",
+      "lineas": 431,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "../firebase/config",
+        "firebase/firestore",
+        "../types",
+        "../services/gps.service",
+        "../utils",
+        "../components/LoadingSpinner",
+        "../components/Logo",
+        "../components/public/FeedbackNPS",
+        "../hooks/useConfigWeb",
+        "lucide-react",
+        "date-fns",
+        "date-fns/locale",
+        "react-leaflet",
+        "leaflet"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1
+      }
+    },
+    {
+      "archivo": "src/pages/MetricasMensuales.tsx",
+      "lineas": 454,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "../components/LoadingSpinner",
+        "../components/AnalisisFunnel",
+        "../components/inbox/MetricasPlantillas",
+        "../context/AppContext",
+        "../services/nomina.service",
+        "date-fns",
+        "date-fns/locale",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "comisiones",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 3
+      }
+    },
+    {
+      "archivo": "src/lib/appCheck.ts",
+      "lineas": 19,
+      "imports": [
+        "firebase/app-check",
+        "../firebase/config"
+      ],
+      "funciones_exportadas": [
+        "obtenerAppCheckToken"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/ai/borrador.ts",
+      "lineas": 39,
+      "imports": [
+        "@vercel/node",
+        "@anthropic-ai/sdk",
+        "../_lib/accesoEquipo.js",
+        "../_lib/conocimiento.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "conocimiento_equipo",
+        "rate_limits",
+        "whatsapp_conversaciones",
+        "whatsapp_mensajes_inbox"
+      ],
+      "operaciones_mencionadas": {
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "api/ai/chat.ts",
+      "lineas": 524,
+      "imports": [
+        "../_lib/memoriaIA.js",
+        "../_lib/costeIA.js",
+        "../_lib/asistenteInstrucciones.js",
+        "../_lib/conocimiento.js",
+        "@vercel/node",
+        "@anthropic-ai/sdk",
+        "firebase-admin/firestore",
+        "../_lib/firebaseAdmin.js",
+        "../_lib/iaTools.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "config",
+        "conocimiento_equipo",
+        "conversaciones_ia",
+        "personal",
+        "rate_limits",
+        "usuarios"
+      ],
+      "operaciones_mencionadas": {
+        "runTransaction": 2
+      }
+    },
+    {
+      "archivo": "api/ai/conocimiento.ts",
+      "lineas": 78,
+      "imports": [
+        "node:crypto",
+        "@vercel/node",
+        "firebase-admin/firestore",
+        "../_lib/accesoEquipo.js",
+        "../_lib/conocimiento.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "conocimiento_equipo",
+        "ia_documentos",
+        "ia_preguntas_frecuentes",
+        "rate_limits"
+      ],
+      "operaciones_mencionadas": {
+        "runTransaction": 3
+      }
+    },
+    {
+      "archivo": "api/feedback/[token].ts",
+      "lineas": 257,
+      "imports": [
+        "@vercel/node",
+        "firebase-admin/firestore",
+        "../_lib/firebaseAdmin.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "notificaciones",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/hooks/useFormularios.ts",
+      "lineas": 114,
+      "imports": [
+        "react",
+        "../types/formularios",
+        "../services/empresasAliadas.service",
+        "../services/formularios.service",
+        "../services/solicitudes.service"
+      ],
+      "funciones_exportadas": [
+        "useEmpresas",
+        "useFormularios",
+        "useSolicitudes",
+        "useFormularioPublico"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "getDocs": 1
+      }
+    },
+    {
+      "archivo": "src/hooks/useAutoRefreshToken.ts",
+      "lineas": 52,
+      "imports": [
+        "react",
+        "firebase/auth"
+      ],
+      "funciones_exportadas": [
+        "useAutoRefreshToken"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/hooks/useClientesEnVivo.ts",
+      "lineas": 64,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils"
+      ],
+      "funciones_exportadas": [
+        "useClientesEnVivo"
+      ],
+      "colecciones_literal": [
+        "clientes"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1
+      }
+    },
+    {
+      "archivo": "src/hooks/useOrdenCreateForm.ts",
+      "lineas": 1127,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "date-fns",
+        "react-hot-toast",
+        "../services/contadores.service",
+        "../services/clientes.service",
+        "../services/precios.service",
+        "../services/ordenes.service",
+        "../services/campanasMarketing.service",
+        "../services/notificaciones.service",
+        "../types",
+        "../utils",
+        "../utils/descuentoChequeo"
+      ],
+      "funciones_exportadas": [
+        "useOrdenCreateForm"
+      ],
+      "colecciones_literal": [
+        "citas_por_confirmar",
+        "clientes",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "getDoc": 1,
+        "onSnapshot": 2,
+        "updateDoc": 1,
+        "setDoc": 1,
+        "addDoc": 1,
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "src/hooks/useTiposEquipo.ts",
+      "lineas": 19,
+      "imports": [
+        "./useConfigWeb",
+        "../utils/tiposEquipoFallback"
+      ],
+      "funciones_exportadas": [
+        "useTiposEquipo"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/hooks/useVersionCheck.ts",
+      "lineas": 47,
+      "imports": [
+        "react"
+      ],
+      "funciones_exportadas": [
+        "useVersionCheck"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/hooks/useAsistenteIAChat.ts",
+      "lineas": 209,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "../context/AppContext",
+        "../services/iaChatTransport"
+      ],
+      "funciones_exportadas": [
+        "useAsistenteIAChat"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/hooks/useConfigWeb.ts",
+      "lineas": 118,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../services/configWeb.service",
+        "../types/configFormularioAgendar"
+      ],
+      "funciones_exportadas": [
+        "useConfigWeb"
+      ],
+      "colecciones_literal": [
+        "config_web"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1
+      }
+    },
+    {
+      "archivo": "src/vite-env.d.ts",
+      "lineas": 17,
+      "imports": [],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/_lib/ordenVigente.ts",
+      "lineas": 6,
+      "imports": [],
+      "funciones_exportadas": [
+        "seleccionarOrdenVigente"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/_lib/asistenteInstrucciones.ts",
+      "lineas": 57,
+      "imports": [],
+      "funciones_exportadas": [
+        "contextoPantallaIA"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/_lib/iaTools.ts",
+      "lineas": 2081,
+      "imports": [
+        "./ordenVigente.js",
+        "./firebaseAdmin.js",
+        "firebase-admin/firestore"
+      ],
+      "funciones_exportadas": [
+        "iaHabilitadaDefaultPorRol",
+        "tieneAccesoAsistenteIA",
+        "parseFechaRD",
+        "contextoFechaRD",
+        "mapearOrdenResumen",
+        "proyectarOrdenAtencion",
+        "toolsParaRol",
+        "ejecutarTool"
+      ],
+      "colecciones_literal": [
+        "avances",
+        "clientes",
+        "comisiones",
+        "cotizaciones",
+        "facturas",
+        "gastos",
+        "liquidaciones_nomina",
+        "mantenimiento",
+        "ordenes_servicio",
+        "personal",
+        "piezas_inventario",
+        "ponches",
+        "precios_servicios",
+        "standby_piezas"
+      ],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/_lib/accesoEquipo.ts",
+      "lineas": 15,
+      "imports": [
+        "@vercel/node",
+        "./firebaseAdmin.js",
+        "./conocimiento.js"
+      ],
+      "funciones_exportadas": [
+        "accesoEquipo"
+      ],
+      "colecciones_literal": [
+        "usuarios"
+      ],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/_lib/conocimiento.ts",
+      "lineas": 24,
+      "imports": [],
+      "funciones_exportadas": [
+        "puedeAprobar",
+        "validarAporte",
+        "contextoConocimiento",
+        "validarDocumentoConocimiento"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/_lib/manejarErrorMeta.ts",
+      "lineas": 349,
+      "imports": [
+        "firebase-admin/firestore",
+        "./firebaseAdmin.js",
+        "./whatsappWebhook.js"
+      ],
+      "funciones_exportadas": [
+        "manejarErrorMeta"
+      ],
+      "colecciones_literal": [
+        "notificaciones",
+        "usuarios",
+        "whatsapp_errores_meta",
+        "whatsapp_errores_meta_dedupe"
+      ],
+      "operaciones_mencionadas": {
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "api/_lib/memoriaIA.ts",
+      "lineas": 33,
+      "imports": [
+        "node:crypto",
+        "firebase-admin/firestore"
+      ],
+      "funciones_exportadas": [
+        "temaPregunta",
+        "registrarTemaPregunta",
+        "seleccionarReferencias"
+      ],
+      "colecciones_literal": [
+        "ia_memoria_eventos",
+        "ia_preguntas_frecuentes"
+      ],
+      "operaciones_mencionadas": {
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "api/_lib/firebaseAdmin.ts",
+      "lineas": 232,
+      "imports": [
+        "@vercel/node",
+        "firebase-admin/app",
+        "firebase-admin/app-check",
+        "firebase-admin/auth",
+        "firebase-admin/firestore",
+        "firebase-admin/storage"
+      ],
+      "funciones_exportadas": [
+        "getAdminApp",
+        "getAdminAuth",
+        "getAdminFirestore",
+        "getAdminStorage",
+        "verificarAppCheck"
+      ],
+      "colecciones_literal": [
+        "app_check_audit"
+      ],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/_lib/whatsappWebhook.ts",
+      "lineas": 529,
+      "imports": [],
+      "funciones_exportadas": [
+        "obtenerPhoneNumberIdsAllowlist",
+        "normalizarWaIdRd",
+        "truncarWaIdParaLog",
+        "mapearEstadoStatusCallback",
+        "debeActualizarEstado",
+        "extraerContenidoMensaje",
+        "parsearTimestampMeta",
+        "parsearPayloadMeta",
+        "stripUndefinedDeep",
+        "caparRawPayload",
+        "caparObjetoSiExcede"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/_lib/preferenciasMarketing.ts",
+      "lineas": 13,
+      "imports": [],
+      "funciones_exportadas": [
+        "solicitaBaja",
+        "origenAnuncio"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/_lib/costeIA.ts",
+      "lineas": 7,
+      "imports": [],
+      "funciones_exportadas": [
+        "costeSonnet46"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/firebase/seedData.ts",
+      "lineas": 333,
+      "imports": [
+        "firebase/firestore",
+        "./config",
+        "../services/clientes.service"
+      ],
+      "funciones_exportadas": [
+        "seedDatabase"
+      ],
+      "colecciones_literal": [
+        "citas_por_confirmar",
+        "clientes",
+        "config",
+        "cotizaciones",
+        "equipos_taller",
+        "facturas",
+        "gastos",
+        "mantenimiento",
+        "ordenes_servicio",
+        "personal",
+        "productos",
+        "standby_piezas"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "getDoc": 1,
+        "setDoc": 4,
+        "addDoc": 10
+      }
+    },
+    {
+      "archivo": "src/firebase/config.ts",
+      "lineas": 70,
+      "imports": [
+        "firebase/app",
+        "firebase/app-check",
+        "firebase/auth",
+        "firebase/firestore",
+        "firebase/storage"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/firebase/seedPrecios.ts",
+      "lineas": 202,
+      "imports": [
+        "firebase/firestore",
+        "./config"
+      ],
+      "funciones_exportadas": [
+        "seedPrecios"
+      ],
+      "colecciones_literal": [
+        "config",
+        "precios_servicios"
+      ],
+      "operaciones_mencionadas": {
+        "getDoc": 1,
+        "setDoc": 1,
+        "addDoc": 1
+      }
+    },
+    {
+      "archivo": "api/admin/reset-password.ts",
+      "lineas": 166,
+      "imports": [
+        "@vercel/node"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "personal"
+      ],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/admin/cambiar-correo.ts",
+      "lineas": 193,
+      "imports": [
+        "@vercel/node",
+        "../_lib/firebaseAdmin.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "personal",
+        "usuarios"
+      ],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/admin/crear-usuario.ts",
+      "lineas": 299,
+      "imports": [
+        "@vercel/node",
+        "../_lib/firebaseAdmin.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "personal",
+        "usuarios"
+      ],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/garantia/[token].ts",
+      "lineas": 282,
+      "imports": [
+        "@vercel/node",
+        "../_lib/firebaseAdmin.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "citas_por_confirmar",
+        "facturas",
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "api/gps/ubicacion.ts",
+      "lineas": 325,
+      "imports": [
+        "@vercel/node",
+        "../_lib/firebaseAdmin.js"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "personal",
+        "usuarios"
+      ],
+      "operaciones_mencionadas": {
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/main.tsx",
+      "lineas": 10,
+      "imports": [
+        "react",
+        "react-dom/client",
+        "./App"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/App.tsx",
+      "lineas": 368,
+      "imports": [
+        "react-router-dom",
+        "react-hot-toast",
+        "firebase/auth",
+        "./firebase/config",
+        "./context/AppContext",
+        "./components/Layout",
+        "./components/EntornoPruebas",
+        "./components/LoadingSpinner",
+        "./components/BannerNuevaVersion",
+        "react",
+        "./components/public/PublicLayout",
+        "./firebase/seedData",
+        "./services/seedWebConfig",
+        "./firebase/seedPrecios",
+        "./utils/cleanFirestore",
+        "./utils/permisos",
+        "./types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/config/testimoniosHomePage.ts",
+      "lineas": 64,
+      "imports": [],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/config/plantillasWhatsApp.ts",
+      "lineas": 295,
+      "imports": [
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "formatearFechaCitaCorta",
+        "formatearFechaCitaDia",
+        "formatearFechaCitaHora",
+        "autopopularValor"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/context/AppContext.tsx",
+      "lineas": 162,
+      "imports": [
+        "react",
+        "firebase/auth",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../hooks/useAutoRefreshToken"
+      ],
+      "funciones_exportadas": [
+        "AppProvider"
+      ],
+      "colecciones_literal": [
+        "personal",
+        "usuarios"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "getDoc": 1,
+        "onSnapshot": 2
+      }
+    },
+    {
+      "archivo": "src/components/Skeleton.tsx",
+      "lineas": 109,
+      "imports": [],
+      "funciones_exportadas": [
+        "SkeletonBox",
+        "SkeletonText",
+        "SkeletonKpiCard",
+        "SkeletonSectionBlock",
+        "SkeletonConversacionRow",
+        "SkeletonOrdenCard"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/clientes/EditarClienteModal.tsx",
+      "lineas": 543,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../Modal",
+        "../ordenes/MiniMapaCliente",
+        "../../types",
+        "../../services/clientes.service",
+        "./AgregarDireccionModal",
+        "../../utils/direccion",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "clientes"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1
+      }
+    },
+    {
+      "archivo": "src/components/clientes/AgregarDireccionModal.tsx",
+      "lineas": 274,
+      "imports": [
+        "react",
+        "../Modal",
+        "../ordenes/MiniMapaCliente",
+        "../../types",
+        "../../services/clientes.service",
+        "../../utils/direccion",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/clientes/ModalLinksWhatsApp.tsx",
+      "lineas": 229,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "../Modal",
+        "../../types",
+        "../../utils/whatsapp",
+        "../../utils",
+        "../../utils/plantillaRender",
+        "../../services/campanasMarketing.service",
+        "../../utils/clientesFiltros"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/clientes/TablaReactivacion.tsx",
+      "lineas": 312,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../types",
+        "../../utils",
+        "../../utils/clientesFiltros"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/clientes/PanelPlantilla.tsx",
+      "lineas": 111,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../types",
+        "../../utils/plantillaRender"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/clientes/FiltrosSidebarClientes.tsx",
+      "lineas": 282,
+      "imports": [
+        "lucide-react",
+        "../../utils/clientesFiltros"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/clientes/TabReactivacion.tsx",
+      "lineas": 344,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../types",
+        "../../utils/clientesFiltros",
+        "../../types",
+        "../../services/campanasMarketing.service",
+        "../../utils/permisos",
+        "./FiltrosSidebarClientes",
+        "./TablaReactivacion",
+        "./PanelPlantilla",
+        "./ModalLinksWhatsApp",
+        "react-hot-toast",
+        "../../context/AppContext"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/clientes/MapaClientes.tsx",
+      "lineas": 341,
+      "imports": [
+        "react",
+        "react-leaflet",
+        "leaflet",
+        "../../types",
+        "../../utils",
+        "../../utils/zonas",
+        "../../utils/clientesFiltros",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/EmptyState.tsx",
+      "lineas": 47,
+      "imports": [
+        "react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/types/google.d.ts",
+      "lineas": 7,
+      "imports": [],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/types/index.ts",
+      "lineas": 2255,
+      "imports": [
+        "firebase/firestore"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/types/formularios.ts",
+      "lineas": 89,
+      "imports": [
+        "firebase/firestore"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/types/configFormularioAgendar.ts",
+      "lineas": 108,
+      "imports": [],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/Logo.tsx",
+      "lineas": 48,
+      "imports": [],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/shared/BadgeSoloChequeo.tsx",
+      "lineas": 47,
+      "imports": [
+        "lucide-react",
+        "../../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/shared/CampoDireccionConPlaces.tsx",
+      "lineas": 251,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "../../utils/direccion",
+        "../ordenes/MiniMapaCliente"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/shared/BotonComoLlegar.tsx",
+      "lineas": 73,
+      "imports": [
+        "lucide-react",
+        "../../utils/maps"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/shared/FotoEquipoDisplay.tsx",
+      "lineas": 99,
+      "imports": [
+        "react",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/CatalogoSelectorModal.tsx",
+      "lineas": 272,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../utils",
+        "./Modal",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "piezas_inventario",
+        "precios_servicios"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 2
+      }
+    },
+    {
+      "archivo": "src/components/cierre/PiezaFormModal.tsx",
+      "lineas": 367,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "../Modal",
+        "../../services/piezas.service",
+        "../../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/cierre/BannerEstadoSugerenciaSoloChequeo.tsx",
+      "lineas": 92,
+      "imports": [
+        "lucide-react",
+        "../../types",
+        "../../utils"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/cierre/ModalEditarPiezasOrden.tsx",
+      "lineas": 295,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "lucide-react",
+        "react-hot-toast",
+        "../../firebase/config",
+        "../../context/AppContext",
+        "../../utils",
+        "../../utils/piezas",
+        "../../services/piezas.service",
+        "../../types",
+        "../Modal",
+        "./PiezaFormModal"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/cierre/ModalSugerirSoloChequeo.tsx",
+      "lineas": 200,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "lucide-react",
+        "../Modal",
+        "react-hot-toast",
+        "../../types",
+        "../../context/AppContext",
+        "../../services/configEmpresa.service",
+        "../../services/ordenes.service"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/facturas/OrdenResumenLectura.tsx",
+      "lineas": 379,
+      "imports": [
+        "../../types",
+        "../../utils",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/facturas/FacturaItemsEditor.tsx",
+      "lineas": 309,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../types",
+        "./FacturaItemDetallesModal"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/facturas/ClienteNuevoDrawer.tsx",
+      "lineas": 400,
+      "imports": [
+        "react",
+        "react-hot-toast",
+        "../../types",
+        "../../services/clientes.service",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/facturas/FacturaItemDetallesModal.tsx",
+      "lineas": 490,
+      "imports": [
+        "react",
+        "../../types",
+        "../../utils",
+        "../Modal",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "getDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/facturas/FacturaCrearModal.tsx",
+      "lineas": 624,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "react-hot-toast",
+        "../../firebase/config",
+        "../../types",
+        "../../utils",
+        "../../utils/factura",
+        "../../services/contadores.service",
+        "../../utils/comisiones",
+        "../../utils/permisos",
+        "../../context/AppContext",
+        "../Modal",
+        "./FacturaItemsEditor",
+        "./ClienteNuevoDrawer",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "facturas"
+      ],
+      "operaciones_mencionadas": {
+        "addDoc": 1,
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "src/components/Modal.tsx",
+      "lineas": 50,
+      "imports": [
+        "react",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/permisos.ts",
+      "lineas": 90,
+      "imports": [
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "obtenerPermisos",
+        "puede",
+        "permisosDefaultDeRol",
+        "iaHabilitadaDefaultPorRol",
+        "esAdminOCoord"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/timelineAcciones.ts",
+      "lineas": 111,
+      "imports": [
+        "../types",
+        "./index"
+      ],
+      "funciones_exportadas": [
+        "obtenerTimelineAcciones"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/siguientePaso.ts",
+      "lineas": 310,
+      "imports": [
+        "../types",
+        "./index"
+      ],
+      "funciones_exportadas": [
+        "calcularSiguientePaso",
+        "classNamesPorTono"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/maps.ts",
+      "lineas": 69,
+      "imports": [],
+      "funciones_exportadas": [
+        "googleMapsDirectionsUrl",
+        "googleMapsViewUrl",
+        "coordsFromLatLng"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/agenda.ts",
+      "lineas": 25,
+      "imports": [],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/modelosEquipo.ts",
+      "lineas": 26,
+      "imports": [],
+      "funciones_exportadas": [
+        "obtenerModelosDeTipo"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/garantia.ts",
+      "lineas": 97,
+      "imports": [
+        "firebase/firestore",
+        "date-fns",
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "calcularVencimiento",
+        "vencimientoDeOrden",
+        "diasRestantes",
+        "estaDentroDePeriodo"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/clientesFiltros.ts",
+      "lineas": 145,
+      "imports": [
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "mesesDesdeUltimoServicio",
+        "tieneWhatsAppValido",
+        "equiposPresentesEnBase",
+        "aplicaFiltros"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/index.ts",
+      "lineas": 1379,
+      "imports": [
+        "date-fns",
+        "date-fns/locale",
+        "firebase/firestore",
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "formatFecha",
+        "formatFechaCorta",
+        "formatHora",
+        "tiempoTranscurrido",
+        "formatMoneda",
+        "formatMonedaPrecisa",
+        "formatTelefono",
+        "whatsappLink",
+        "googleMapsLink",
+        "faseLabel",
+        "estadoSimpleLabel",
+        "estadoSimpleColor",
+        "estadoSimpleBorder",
+        "faseColor",
+        "faseBgColor",
+        "faseToEstadoSimple",
+        "getAlertasFromOrdenes",
+        "getStandbyAlertas",
+        "generarTokenPortalCliente",
+        "calcularExpiracionTokenPortal",
+        "tokenPortalClienteValido",
+        "obtenerPropuestaReprogramacionPendiente",
+        "obtenerSugerenciaSoloChequeoPendiente",
+        "obtenerUltimaSugerenciaSoloChequeo",
+        "generateNumeroOrden",
+        "generateNumeroCotizacion",
+        "formatearEquipoLabel",
+        "labelTipoMotor",
+        "tieneStandby",
+        "esOrdenMantenimiento",
+        "getTecnicoColor",
+        "parseFirestoreDate",
+        "parseCliente",
+        "parseOrden",
+        "parseFactura",
+        "parseServicioPrecio",
+        "parsePiezaInventario",
+        "crearRegistroAuditoria",
+        "escapeHtml"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/whatsapp.ts",
+      "lineas": 164,
+      "imports": [
+        "../services/clientes.service",
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "abrirWhatsApp",
+        "whatsappUrl",
+        "mensajeConduceGarantia",
+        "mensajeDatosCuentaBancaria"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/roles.ts",
+      "lineas": 74,
+      "imports": [
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "agruparPorRol"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/descuentoChequeo.ts",
+      "lineas": 137,
+      "imports": [
+        "firebase/firestore"
+      ],
+      "funciones_exportadas": [
+        "calcularDescuentoChequeo",
+        "diasRestantesVigencia",
+        "chequeoVigente",
+        "construirCamposDescuentoChequeo",
+        "describirDescuentoChequeo"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/kpis.ts",
+      "lineas": 86,
+      "imports": [
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "ingresosFacturasPagadas",
+        "conducesEmitidosMonto",
+        "conducesEmitidosCount"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/timelineUnificado.ts",
+      "lineas": 180,
+      "imports": [
+        "../types",
+        "../types",
+        "./timelineAcciones"
+      ],
+      "funciones_exportadas": [
+        "construirTimelineUnificado"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/rutas.ts",
+      "lineas": 70,
+      "imports": [],
+      "funciones_exportadas": [
+        "calcularDistanciaKm",
+        "optimizarRuta",
+        "distanciaTotalRuta"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/imagen.ts",
+      "lineas": 93,
+      "imports": [],
+      "funciones_exportadas": [
+        "comprimirImagen"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/factura.ts",
+      "lineas": 28,
+      "imports": [
+        "../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/zonas.ts",
+      "lineas": 106,
+      "imports": [
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "inferirZona",
+        "zonaDeOrden",
+        "zonaColor",
+        "colorZonaPin",
+        "colorAntiguedadPin",
+        "etiquetaAntiguedadPin"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/piezas.ts",
+      "lineas": 20,
+      "imports": [
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "iconoCondicion",
+        "iconoOrigen",
+        "etiquetaOrigen"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/heroGradient.ts",
+      "lineas": 45,
+      "imports": [
+        "../services/configWeb.service"
+      ],
+      "funciones_exportadas": [
+        "obtenerColoresGradient"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/cleanFirestore.ts",
+      "lineas": 67,
+      "imports": [
+        "firebase/firestore",
+        "../firebase/config"
+      ],
+      "funciones_exportadas": [
+        "limpiarFirestore",
+        "limpiarOrdenDuplicada"
+      ],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 2,
+        "deleteDoc": 2
+      }
+    },
+    {
+      "archivo": "src/utils/comisiones.ts",
+      "lineas": 1374,
+      "imports": [
+        "./ajusteGarantia",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "./index"
+      ],
+      "funciones_exportadas": [
+        "desglosarTotalConITBIS",
+        "calcularDesgloseFactura",
+        "calcularCostoPiezasDeItems",
+        "calcularQuincenaActual",
+        "rangoQuincena",
+        "listarUltimasQuincenas",
+        "obtenerTecnicoParaComision",
+        "calcularComisionesProporcionales",
+        "registrarComisionesPorItems",
+        "registrarComisionPorFactura",
+        "registrarComisionPorOrden",
+        "eliminarComisionesDeFactura",
+        "aplicarDescuentoGarantiaPorPiezas"
+      ],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "comisiones",
+        "cotizaciones",
+        "facturas",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 6,
+        "getDoc": 5,
+        "updateDoc": 6,
+        "addDoc": 4,
+        "deleteDoc": 1,
+        "runTransaction": 2
+      }
+    },
+    {
+      "archivo": "src/utils/uploads.ts",
+      "lineas": 208,
+      "imports": [],
+      "funciones_exportadas": [
+        "validarArchivoPublico",
+        "validarFoto",
+        "validarFirma",
+        "validarDocumento",
+        "validarCantidadArchivos",
+        "sniffMimeCoincide"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/tiposEquipoFallback.ts",
+      "lineas": 14,
+      "imports": [],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/plantillaRender.ts",
+      "lineas": 125,
+      "imports": [
+        "../types",
+        "./clientesFiltros"
+      ],
+      "funciones_exportadas": [
+        "valoresVariablesCliente",
+        "renderizarPlantilla",
+        "variablesEnFallback"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/checklistTemplates.ts",
+      "lineas": 65,
+      "imports": [
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "getChecklistTemplate"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/ajusteGarantia.ts",
+      "lineas": 29,
+      "imports": [],
+      "funciones_exportadas": [
+        "planificarAjusteGarantia"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/tooltipsBotones.ts",
+      "lineas": 90,
+      "imports": [
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "razonIniciarChequeoDisabled",
+        "razonCerrarServicioDisabled",
+        "razonEnviarFacturacionDisabled"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/direccion.ts",
+      "lineas": 111,
+      "imports": [],
+      "funciones_exportadas": [
+        "detectarCoordenadasURL",
+        "reverseGeocode",
+        "cargarGooglePlaces"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/utils/personal.ts",
+      "lineas": 44,
+      "imports": [
+        "../types"
+      ],
+      "funciones_exportadas": [
+        "comisionDefaultPorNivel"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/utils/firestore.ts",
+      "lineas": 34,
+      "imports": [
+        "firebase/firestore"
+      ],
+      "funciones_exportadas": [
+        "stripUndefined"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/Badge.tsx",
+      "lineas": 23,
+      "imports": [
+        "../types",
+        "../utils"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/BannerNuevaVersion.tsx",
+      "lineas": 25,
+      "imports": [
+        "lucide-react",
+        "../hooks/useVersionCheck"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/CierreServicioWizard.tsx",
+      "lineas": 1043,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../types",
+        "../services/notificaciones.service",
+        "../services/storage.service",
+        "../services/piezas.service",
+        "../utils",
+        "../utils/garantia",
+        "../utils/piezas",
+        "../utils/tooltipsBotones",
+        "./Modal",
+        "./cierre/PiezaFormModal",
+        "lucide-react",
+        "react-hot-toast",
+        "date-fns"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "mantenimiento",
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "updateDoc": 1,
+        "addDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/EspacioTrabajo.tsx",
+      "lineas": 52,
+      "imports": [
+        "react-router-dom",
+        "../context/AppContext",
+        "../utils/permisos"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/Sidebar.tsx",
+      "lineas": 466,
+      "imports": [
+        "react-router-dom",
+        "lucide-react",
+        "lucide-react",
+        "firebase/auth",
+        "../firebase/config",
+        "../context/AppContext",
+        "../utils/permisos",
+        "./Logo",
+        "react",
+        "firebase/firestore",
+        "../firebase/config",
+        "../services/whatsappInbox.service"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "citas_por_confirmar",
+        "ordenes_servicio",
+        "solicitudes_servicio",
+        "standby_piezas"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 7
+      }
+    },
+    {
+      "archivo": "src/components/recordatorios/ModalAccionRecordatorio.tsx",
+      "lineas": 196,
+      "imports": [
+        "react",
+        "react-hot-toast",
+        "../Modal",
+        "../icons/WhatsAppIcon",
+        "lucide-react",
+        "../../context/AppContext",
+        "../../services/recordatorios.service",
+        "../../utils/whatsapp",
+        "../../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/recordatorios/RecordatorioBanner.tsx",
+      "lineas": 437,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../types",
+        "../../utils",
+        "../../utils/whatsapp",
+        "../../context/AppContext",
+        "../../services/recordatorios.service",
+        "lucide-react",
+        "../icons/WhatsAppIcon",
+        "date-fns",
+        "date-fns/locale",
+        "react-hot-toast",
+        "./ModalAccionRecordatorio"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 2
+      }
+    },
+    {
+      "archivo": "src/components/EntornoPruebas.tsx",
+      "lineas": 17,
+      "imports": [
+        "react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/icons/WhatsAppIcon.tsx",
+      "lineas": 46,
+      "imports": [
+        "react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/Layout.tsx",
+      "lineas": 69,
+      "imports": [
+        "./EspacioTrabajo",
+        "react",
+        "react-router-dom",
+        "./Sidebar",
+        "../context/AppContext",
+        "lucide-react",
+        "./NotificacionesPanel",
+        "./AsistenteIAFlotante"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/AnalisisFunnel.tsx",
+      "lineas": 260,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../types",
+        "../utils"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/LoadingSpinner.tsx",
+      "lineas": 30,
+      "imports": [],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/inbox/SelectorPlantillas.tsx",
+      "lineas": 297,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "../../services/whatsapp.service",
+        "../../services/clientes.service",
+        "../../services/ordenes.service",
+        "../../types",
+        "../../config/plantillasWhatsApp"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/inbox/CardCliente.tsx",
+      "lineas": 278,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "react-hot-toast",
+        "lucide-react",
+        "../../services/clientes.service",
+        "../../services/ordenes.service",
+        "../../types",
+        "../../utils"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/inbox/MetricasPlantillas.tsx",
+      "lineas": 210,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "lucide-react",
+        "../../firebase/config"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "whatsapp_mensajes_outbox"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1
+      }
+    },
+    {
+      "archivo": "src/components/inbox/SugerenciaIA.tsx",
+      "lineas": 18,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../services/equipoApi"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/inbox/MensajeBubble.tsx",
+      "lineas": 400,
+      "imports": [
+        "react",
+        "react-hot-toast",
+        "lucide-react",
+        "firebase/firestore",
+        "../../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/inbox/PanelCliente360.tsx",
+      "lineas": 681,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../services/clientes.service",
+        "../../services/ordenes.service",
+        "../../context/AppContext",
+        "./CardCliente",
+        "../ordenes/TimelineUnificadoOrden",
+        "../ordenes/EnviarFacturacionButton",
+        "../../utils",
+        "../../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "facturas"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1
+      }
+    },
+    {
+      "archivo": "src/components/inbox/IndicadorVentana24h.tsx",
+      "lineas": 86,
+      "imports": [
+        "react",
+        "lucide-react",
+        "firebase/firestore"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/inbox/ToggleBot.tsx",
+      "lineas": 5,
+      "imports": [
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/PermisoBoundary.tsx",
+      "lineas": 15,
+      "imports": [
+        "../context/AppContext",
+        "../utils/permisos"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx",
+      "lineas": 1597,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../types",
+        "../../context/AppContext",
+        "../../utils",
+        "../../utils/whatsapp",
+        "../../services/contadores.service",
+        "../../services/ordenes.service",
+        "../../services/notificaciones.service",
+        "../../utils/comisiones",
+        "../../services/configFiscal.service",
+        "../../utils/permisos",
+        "../Modal",
+        "../shared/BadgeSoloChequeo",
+        "../facturas/FacturaItemsEditor",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "auditoria_admin",
+        "clientes",
+        "cotizaciones",
+        "facturas",
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "getDoc": 2,
+        "addDoc": 3,
+        "runTransaction": 1
+      }
+    },
+    {
+      "archivo": "src/components/personal/GruposOperariaTecnico.tsx",
+      "lineas": 107,
+      "imports": [
+        "lucide-react",
+        "../../types",
+        "../../utils/personal"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/personal/TablaPersonalActivo.tsx",
+      "lineas": 144,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../types",
+        "../../types",
+        "../../utils",
+        "../../utils/roles",
+        "../../utils/personal"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/personal/FormAltaEditarEmpleado.tsx",
+      "lineas": 419,
+      "imports": [
+        "lucide-react",
+        "../../types",
+        "../../types",
+        "../../utils/personal"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/personal/ModalConfirmarEliminar.tsx",
+      "lineas": 250,
+      "imports": [
+        "lucide-react",
+        "../Modal",
+        "../../types",
+        "../../utils/personal"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/RevisionGarantias.tsx",
+      "lineas": 81,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "react-router-dom",
+        "../firebase/config",
+        "../utils/comisiones",
+        "../utils",
+        "../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "comisiones",
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 2
+      }
+    },
+    {
+      "archivo": "src/components/public/HeroCarrusel.tsx",
+      "lineas": 81,
+      "imports": [
+        "react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/public/FeedbackNPS.tsx",
+      "lineas": 408,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../services/configWeb.service",
+        "../../lib/appCheck"
+      ],
+      "funciones_exportadas": [
+        "FeedbackYaEnviado"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 2
+      }
+    },
+    {
+      "archivo": "src/components/public/ModalPosponer.tsx",
+      "lineas": 304,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../utils/agenda",
+        "../../lib/appCheck"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/components/public/FormularioAgendarPublico.tsx",
+      "lineas": 1124,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "firebase/storage",
+        "../../types/configFormularioAgendar",
+        "../../services/formularioAgendar.service",
+        "../../services/clientes.service",
+        "../../firebase/config",
+        "../../utils/imagen",
+        "../icons/WhatsAppIcon",
+        "../../hooks/useConfigWeb",
+        "../LoadingSpinner",
+        "../shared/CampoDireccionConPlaces",
+        "../../utils/modelosEquipo",
+        "../../utils/tiposEquipoFallback"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/public/CampoFormulario.tsx",
+      "lineas": 522,
+      "imports": [
+        "react",
+        "../../types/formularios",
+        "lucide-react",
+        "../ordenes/MiniMapaCliente"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {
+        "fetch": 1
+      }
+    },
+    {
+      "archivo": "src/components/public/HeroConGradient.tsx",
+      "lineas": 51,
+      "imports": [
+        "react",
+        "../../services/configWeb.service",
+        "../../utils/heroGradient"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/public/PublicLayout.tsx",
+      "lineas": 252,
+      "imports": [
+        "react-router-dom",
+        "lucide-react",
+        "../icons/WhatsAppIcon",
+        "react",
+        "../../hooks/useConfigWeb",
+        "../../services/configWeb.service"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/public/SeccionTestimonios.tsx",
+      "lineas": 93,
+      "imports": [
+        "lucide-react",
+        "../../config/testimoniosHomePage"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/NotificacionesPanel.tsx",
+      "lineas": 157,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "../types",
+        "../context/AppContext",
+        "../services/notificaciones.service",
+        "../utils"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/TextoAsistente.tsx",
+      "lineas": 10,
+      "imports": [
+        "react"
+      ],
+      "funciones_exportadas": [
+        "TextoAsistente"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ponche/WebcamCapture.tsx",
+      "lineas": 149,
+      "imports": [
+        "react",
+        "lucide-react"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/AsistenteIAFlotante.tsx",
+      "lineas": 263,
+      "imports": [
+        "./TextoAsistente",
+        "react",
+        "lucide-react",
+        "../context/AppContext",
+        "../utils/permisos",
+        "../hooks/useAsistenteIAChat"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ImportarConocimiento.tsx",
+      "lineas": 24,
+      "imports": [
+        "react",
+        "../services/documentosConocimiento",
+        "../services/equipoApi"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/nomina/AgregarDescuentoModal.tsx",
+      "lineas": 340,
+      "imports": [
+        "react",
+        "../Modal",
+        "../../types",
+        "../../services/nomina.service",
+        "../../services/prestamos.service",
+        "../../utils",
+        "../../utils/comisiones",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ordenes/BotonRederivarOperaria.tsx",
+      "lineas": 159,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "../../types",
+        "../../services/ordenes.service"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ordenes/OrdenCard.tsx",
+      "lineas": 208,
+      "imports": [
+        "react",
+        "lucide-react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../types",
+        "../../utils",
+        "../../utils/maps",
+        "../shared/FotoEquipoDisplay",
+        "../shared/BotonComoLlegar",
+        "../Badge",
+        "./EliminarOrdenButton",
+        "./FaseStepper",
+        "./CancelarOrdenModal",
+        "../../context/AppContext",
+        "../../utils/permisos",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/ordenes/EliminarOrdenModal.tsx",
+      "lineas": 107,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../types",
+        "../../utils",
+        "../Modal",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/ordenes/ReagendarModal.tsx",
+      "lineas": 181,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../types",
+        "../../utils",
+        "../../context/AppContext",
+        "../Modal",
+        "lucide-react",
+        "date-fns",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/ordenes/OrdenCreateModal.tsx",
+      "lineas": 1034,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../types",
+        "../../utils",
+        "../../utils/modelosEquipo",
+        "../../hooks/useConfigWeb",
+        "../../hooks/useTiposEquipo",
+        "../Modal",
+        "../clientes/EditarClienteModal",
+        "../shared/CampoDireccionConPlaces",
+        "../shared/FotoEquipoDisplay",
+        "../../utils/descuentoChequeo"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ordenes/OrdenDetailModal.tsx",
+      "lineas": 1253,
+      "imports": [
+        "react",
+        "react-router-dom",
+        "lucide-react",
+        "date-fns",
+        "date-fns/locale",
+        "../../types",
+        "../icons/WhatsAppIcon",
+        "../../utils",
+        "../../utils/whatsapp",
+        "../../utils/maps",
+        "../shared/BotonComoLlegar",
+        "../shared/FotoEquipoDisplay",
+        "../../utils/permisos",
+        "../Badge",
+        "./EliminarOrdenButton",
+        "./FaseStepper",
+        "./CancelarOrdenModal",
+        "./ReagendarModal",
+        "./RegistrarPagoModal",
+        "./EnviarFacturacionButton",
+        "./EnviarPortalButton",
+        "./TimelineUnificadoOrden",
+        "../shared/BadgeSoloChequeo",
+        "lucide-react",
+        "../../services/ordenes.service",
+        "../../hooks/useConfigWeb",
+        "react-hot-toast",
+        "../../utils/descuentoChequeo",
+        "../../utils/descuentoChequeo"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ordenes/TimelineAcciones.tsx",
+      "lineas": 105,
+      "imports": [
+        "date-fns",
+        "date-fns/locale",
+        "lucide-react",
+        "../../utils/timelineAcciones",
+        "../../utils/timelineAcciones",
+        "../../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ordenes/EliminarOrdenButton.tsx",
+      "lineas": 64,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../types",
+        "../../context/AppContext",
+        "../../utils/permisos",
+        "./EliminarOrdenModal"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ordenes/RegistrarPagoModal.tsx",
+      "lineas": 650,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../types",
+        "../../context/AppContext",
+        "../../services/bancos.service",
+        "../../services/ordenes.service",
+        "../../services/notificaciones.service",
+        "../../utils",
+        "../../utils/permisos",
+        "../../utils/whatsapp",
+        "../Modal",
+        "react-hot-toast",
+        "lucide-react",
+        "../icons/WhatsAppIcon"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "runTransaction": 2
+      }
+    },
+    {
+      "archivo": "src/components/ordenes/OrdenEditForm.tsx",
+      "lineas": 461,
+      "imports": [
+        "react",
+        "lucide-react",
+        "../../types",
+        "../../utils",
+        "../../hooks/useTiposEquipo",
+        "./MiniMapaCliente",
+        "./BotonRederivarOperaria"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ordenes/EnviarPortalButton.tsx",
+      "lineas": 181,
+      "imports": [
+        "react",
+        "lucide-react",
+        "firebase/firestore",
+        "date-fns",
+        "date-fns/locale",
+        "react-hot-toast",
+        "../../firebase/config",
+        "../../types",
+        "../../services/clientes.service"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/ordenes/EnviarFacturacionButton.tsx",
+      "lineas": 140,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../types",
+        "../../context/AppContext",
+        "../../utils",
+        "../../services/notificaciones.service",
+        "../../utils/tooltipsBotones",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/ordenes/ModalEditarOrdenAdmin.tsx",
+      "lineas": 844,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "react-hot-toast",
+        "lucide-react",
+        "../../firebase/config",
+        "../../context/AppContext",
+        "../../utils",
+        "../../utils/factura",
+        "../../hooks/useTiposEquipo",
+        "../../services/bancos.service",
+        "../../types",
+        "../Modal"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "onSnapshot": 1,
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/ordenes/FaseStepper.tsx",
+      "lineas": 418,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../types",
+        "../../utils",
+        "../../context/AppContext",
+        "../../utils/permisos",
+        "../../utils/comisiones",
+        "../../services/notificaciones.service",
+        "../Modal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/ordenes/IniciarChequeoButton.tsx",
+      "lineas": 407,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../types",
+        "../../services/storage.service",
+        "../../services/notificaciones.service",
+        "../../utils",
+        "../../utils/tooltipsBotones",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio",
+        "personal"
+      ],
+      "operaciones_mencionadas": {
+        "getDocs": 1,
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/ordenes/BannerSiguientePaso.tsx",
+      "lineas": 66,
+      "imports": [
+        "lucide-react",
+        "../../types",
+        "../../utils/siguientePaso"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ordenes/CancelarOrdenModal.tsx",
+      "lineas": 121,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../types",
+        "../../utils",
+        "../Modal",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/ordenes/MiniMapaCliente.tsx",
+      "lineas": 52,
+      "imports": [
+        "react",
+        "react-leaflet",
+        "leaflet"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ordenes/OrdenFilters.tsx",
+      "lineas": 70,
+      "imports": [
+        "lucide-react",
+        "../../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/ordenes/OrdenesTablero.tsx",
+      "lineas": 467,
+      "imports": [
+        "react",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../types",
+        "../../utils",
+        "../../context/AppContext",
+        "../../utils/comisiones",
+        "../../services/notificaciones.service",
+        "../Modal",
+        "lucide-react",
+        "react-hot-toast"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "ordenes_servicio"
+      ],
+      "operaciones_mencionadas": {
+        "updateDoc": 1
+      }
+    },
+    {
+      "archivo": "src/components/ordenes/TimelineUnificadoOrden.tsx",
+      "lineas": 215,
+      "imports": [
+        "react",
+        "date-fns",
+        "date-fns/locale",
+        "lucide-react",
+        "../../services/clientes.service",
+        "../../services/whatsappInbox.service",
+        "../../utils/timelineUnificado",
+        "../icons/WhatsAppIcon",
+        "../../types"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/admin/ConfigServiciosSection.tsx",
+      "lineas": 1025,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "firebase/firestore",
+        "../../firebase/config",
+        "../../services/configWeb.service",
+        "../../utils/imagen"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [
+        "config_web"
+      ],
+      "operaciones_mencionadas": {
+        "updateDoc": 3,
+        "setDoc": 2
+      }
+    },
+    {
+      "archivo": "src/components/admin/FiltroAvanzadoFinanzas.tsx",
+      "lineas": 736,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "../../hooks/useTiposEquipo"
+      ],
+      "funciones_exportadas": [
+        "formatYYYYMMDDLocal"
+      ],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    },
+    {
+      "archivo": "src/components/admin/ConfigFormularioAgendarSection.tsx",
+      "lineas": 665,
+      "imports": [
+        "react",
+        "lucide-react",
+        "react-hot-toast",
+        "../../types/configFormularioAgendar",
+        "../../services/formularioAgendar.service",
+        "../../context/AppContext"
+      ],
+      "funciones_exportadas": [],
+      "colecciones_literal": [],
+      "operaciones_mencionadas": {}
+    }
+  ]
+}
