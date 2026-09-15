@@ -40,4 +40,16 @@ describe('Transporte del asistente', () => {
     await vi.advanceTimersByTimeAsync(60000); await resultado;
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+  it('limita la lectura del cuerpo aunque ya llegaron las cabeceras', async () => {
+    vi.useFakeTimers(); vi.mocked(obtenerAppCheckToken).mockResolvedValue('app-prueba');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => new Promise(() => {}) }));
+    const resultado = expect(enviarPreguntaIA(usuario, {}, new AbortController().signal)).rejects.toThrow('tardando demasiado');
+    await vi.advanceTimersByTimeAsync(60000); await resultado;
+  });
+  it('entrega el cuerpo completo y su estado HTTP', async () => {
+    vi.mocked(obtenerAppCheckToken).mockResolvedValue('app-prueba');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ respuesta: 'Hola' }))));
+    await expect(enviarPreguntaIA(usuario, {}, new AbortController().signal)).resolves.toMatchObject({ ok: true, status: 200, data: { respuesta: 'Hola' } });
+  });
+
 });

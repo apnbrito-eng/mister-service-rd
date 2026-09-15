@@ -36,11 +36,7 @@ export interface UseAsistenteIAChatReturn {
  *    muestre como banner (decisión de Jorge).
  *  - `cancelarEnvio` está expuesto pero sin botón de UI todavía; se usa
  *    internamente en el cleanup del unmount para evitar leaks de setState.
- *  - `limpiar()` reinicia toda la sesión (nueva conversación). No hace abort
- *    del fetch en vuelo — si hay uno corriendo, cuando responda descubre que
- *    el mountedRef sigue true y hace setState sobre el estado nuevo; el
- *    `conversacionId` quedará guardado como el nuevo ID. Si se quiere evitar
- *    eso, llamar `cancelarEnvio()` antes de `limpiar()`.
+ *  - `limpiar()` cancela la solicitud e invalida respuestas de la sesión anterior.
  */
 export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
   const { currentUser } = useApp();
@@ -90,16 +86,19 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
       controllerRef.current.abort();
       controllerRef.current = null;
     }
+    if (mountedRef.current) setPensando(false);
   }, []);
 
   const limpiar = useCallback(() => {
+    cancelarEnvio();
+    mensajesRef.current = [];
     setMensajes([]);
     setPensando(false);
     setError(null);
     setTokensSesion({ input: 0, output: 0, costoUSD: 0 });
     setConversacionId(null);
     conversacionIdRef.current = null;
-  }, []);
+  }, [cancelarEnvio]);
 
   const enviar = useCallback(async (texto: string) => {
     const trimmed = texto.trim();
@@ -120,6 +119,7 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
 
     const userMsg: Mensaje = { role: 'user', content: trimmed };
     const nuevoHistorial: Mensaje[] = [...mensajesRef.current, userMsg];
+    mensajesRef.current = nuevoHistorial;
     setMensajes(nuevoHistorial);
     setPensando(true);
     setError(null);
@@ -138,11 +138,9 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
       // salir sin setState. Los fetches abortados caen por el catch con
       // AbortError, pero si el unmount fue después del parse, este guard lo
       // cubre.
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || controller.signal.aborted || controllerRef.current !== controller) return;
 
-      const data = await resp.json().catch(() => ({} as Record<string, unknown>));
-
-      if (!mountedRef.current) return;
+      const data = resp.data;
 
       if (!resp.ok) {
         const mensajeError =
@@ -163,7 +161,8 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
         ? (data as { respuesta: string }).respuesta
         : '';
       const assistantMsg: Mensaje = { role: 'assistant', content: respuesta };
-      setMensajes(prev => [...prev, assistantMsg]);
+      mensajesRef.current = [...mensajesRef.current, assistantMsg];
+      setMensajes(mensajesRef.current);
       setTokensSesion(prev => ({
         input: prev.input + (Number((data as { tokensInput?: unknown }).tokensInput) || 0),
         output: prev.output + (Number((data as { tokensOutput?: unknown }).tokensOutput) || 0),
@@ -183,11 +182,11 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
       if (err instanceof Error && err.name === 'AbortError') {
         return;
       }
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || controller.signal.aborted || controllerRef.current !== controller) return;
       console.error('[useAsistenteIAChat] error de red:', err);
       setError(err instanceof ErrorTransporteIA ? err.message : 'No pude contactar al servidor. Reintenta.');
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && controllerRef.current === controller) {
         setPensando(false);
       }
       // Limpiar controllerRef si sigue apuntando al que acabamos de usar.
