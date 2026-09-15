@@ -1,3 +1,4 @@
+import { seleccionarOrdenVigente } from './ordenVigente.js';
 import { getAdminFirestore } from './firebaseAdmin.js';
 import type { Firestore, Query, DocumentData, Timestamp as AdminTimestamp } from 'firebase-admin/firestore';
 
@@ -669,12 +670,11 @@ const TOOL_GET_ORDEN: ToolDef = {
     const snap = await db
       .collection('ordenes_servicio')
       .where('numero', '==', input.numero.trim())
-      .limit(1)
       .get();
-    if (snap.empty) {
+    const doc = seleccionarOrdenVigente(snap.docs);
+    if (!doc) {
       return { encontrada: false, numero: input.numero };
     }
-    const doc = snap.docs[0];
     const data = doc.data();
     if (data.eliminada === true) {
       return { encontrada: false, numero: input.numero, razon: 'orden eliminada' };
@@ -1264,12 +1264,11 @@ const TOOL_GET_ORDEN_DETALLADA: ToolDef = {
     const snap = await db
       .collection('ordenes_servicio')
       .where('numero', '==', numero)
-      .limit(1)
       .get();
-    if (snap.empty) {
-      throw new Error(`Orden '${numero}' no encontrada`);
+    const doc0 = seleccionarOrdenVigente(snap.docs);
+    if (!doc0) {
+      throw new Error(`Orden vigente '${numero}' no encontrada`);
     }
-    const doc0 = snap.docs[0];
     const data = doc0.data();
     const ordenId = doc0.id;
 
@@ -1448,12 +1447,12 @@ const TOOL_QUERY_STANDBY_PIEZAS: ToolDef = {
       const ordenSnap = await db
         .collection('ordenes_servicio')
         .where('numero', '==', input.ordenNumero.trim())
-        .limit(1)
         .get();
-      if (ordenSnap.empty) {
+      const orden = seleccionarOrdenVigente(ordenSnap.docs);
+      if (!orden) {
         return { standby: [], cantidad: 0 };
       }
-      ordenIdResuelto = ordenSnap.docs[0].id;
+      ordenIdResuelto = orden.id;
     }
 
     let q: Query<DocumentData> = db.collection('standby_piezas');
