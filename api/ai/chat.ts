@@ -1,3 +1,4 @@
+import { contextoConocimiento } from '../_lib/conocimiento.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
 import { Timestamp } from 'firebase-admin/firestore';
@@ -375,6 +376,9 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
         cache_control: { type: 'ephemeral' as const },
       },
     ];
+
+    const conocimientos = await db.collection('conocimiento_equipo').where('estado', '==', 'aprobado').limit(12).get();
+    if (!conocimientos.empty) systemParam.push({ type: 'text' as const, text: contextoConocimiento(conocimientos.docs.map(d => ({ id: d.id, titulo: String(d.data().titulo), contenido: String(d.data().contenido) }))) });
 
     // messages va acumulando la conversación completa (turno inicial + ida-vuelta de tools)
     const messagesLoop: Anthropic.MessageParam[] = (mensajes as Mensaje[]).map((m) => ({

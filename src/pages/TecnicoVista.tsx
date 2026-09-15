@@ -34,7 +34,7 @@ import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-f
 import { es } from 'date-fns/locale';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import { optimizarRuta } from '../utils/rutas';
@@ -792,6 +792,7 @@ export default function TecnicoVista() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Link to="/conocimiento" className="rounded-lg border border-white/30 px-3 py-3 text-sm text-white">Conocimientos</Link>
             {compartiendoGPS && (
               <div className="flex items-center gap-1 bg-green-500/20 px-2 py-1 rounded-full" title="Compartiendo ubicación">
                 <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>

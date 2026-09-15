@@ -29,7 +29,7 @@
 </head>
 <body>
   <h1>Mapa Mental — Mister Service RD</h1>
-  <div class="fecha">Última actualización: 2026-05-26 · 29 módulos · 10 áreas</div>
+  <div class="fecha">Última actualización: 2026-09-15 · 31 módulos · 10 áreas</div>
 
   <h2>Diagrama</h2>
   <div class="mermaid">
@@ -87,6 +87,7 @@ graph LR
 
   subgraph area_reporting["REPORTING"]
     reportes["reportes"]
+    marketing_meta["marketing_meta"]
   end
 
   subgraph area_sistema["SISTEMA"]
@@ -94,6 +95,7 @@ graph LR
     auditoria["auditoria"]
     rate_limits["rate_limits"]
     configuracion["configuracion"]:::critico
+    conocimiento_equipo["conocimiento_equipo"]
   end
 
   ordenes_servicio --> clientes
@@ -130,6 +132,7 @@ graph LR
   whatsapp_inbox --> personal
   whatsapp_inbox --> plantillas_whatsapp
   conversaciones_ia --> whatsapp_inbox
+  conversaciones_ia --> conocimiento_equipo
   solicitudes --> formularios
   solicitudes --> clientes
   reportes --> ordenes_servicio
@@ -140,6 +143,8 @@ graph LR
   reportes --> productos
   reportes --> gastos
   notificaciones --> personal
+  conocimiento_equipo --> personal
+  marketing_meta --> personal
 
   classDef critico stroke:#dc2626,stroke-width:3px
 
@@ -158,7 +163,7 @@ graph LR
           <div><strong>Depende de:</strong> clientes, personal, calendarios</div>
           <div><strong>Expone a:</strong> cotizaciones, facturas, pagos, comisiones, garantias, citas_por_confirmar, mantenimiento, avances, standby_piezas, equipos_taller</div>
           <div><strong>Colecciones:</strong> ordenes_servicio</div>
-          
+
           <div class="notas"><em>parseOrden() en utils/index.ts es la lectura común. Hoy 3 caminos de creación (useOrdenCreateForm, Mantenimiento, solicitudes); sprint NUCLEO-CREAR-ORDEN-CENTRAL unifica.</em></div>
         </div>
       </div>
@@ -167,10 +172,10 @@ graph LR
         <div class="desc">Registro de avances/piezas usadas durante la reparación</div>
         <div class="meta">
           <div><strong>Depende de:</strong> ordenes_servicio</div>
-          
+
           <div><strong>Colecciones:</strong> avances, movimientos_piezas</div>
-          
-          
+
+
         </div>
       </div>
       <div class="modulo media" data-area="agendamiento">
@@ -180,8 +185,8 @@ graph LR
           <div><strong>Depende de:</strong> personal</div>
           <div><strong>Expone a:</strong> citas_por_confirmar</div>
           <div><strong>Colecciones:</strong> calendarios</div>
-          
-          
+
+
         </div>
       </div>
       <div class="modulo alta" data-area="agendamiento">
@@ -191,7 +196,7 @@ graph LR
           <div><strong>Depende de:</strong> clientes, personal, calendarios</div>
           <div><strong>Expone a:</strong> ordenes_servicio</div>
           <div><strong>Colecciones:</strong> citas_por_confirmar</div>
-          
+
           <div class="notas"><em>Tras AGENDA-2 (e4f92bf) visibles en calendario/agenda con estilo tentativo. Tras AGENDA-3 (f9697b9) se honra el asignadoId al confirmar.</em></div>
         </div>
       </div>
@@ -202,7 +207,7 @@ graph LR
           <div><strong>Depende de:</strong> clientes, personal</div>
           <div><strong>Expone a:</strong> ordenes_servicio</div>
           <div><strong>Colecciones:</strong> mantenimiento</div>
-          
+
           <div class="notas"><em>Tras AGENDA-1 (132d9b5) atado a cliente real (typeahead + telefono normalizado, tecnicoId=uid). Tras AGENDA-5 (8f6a72b) se ofrece programar al cerrar orden.</em></div>
         </div>
       </div>
@@ -210,10 +215,10 @@ graph LR
         <div class="nombre">clientes <span class="area">[clientes]</span></div>
         <div class="desc">CRM del cliente final. Teléfono normalizado (RD: 10 dígitos sin código país).</div>
         <div class="meta">
-          
+
           <div><strong>Expone a:</strong> ordenes_servicio, citas_por_confirmar, mantenimiento, cotizaciones, facturas, garantias, whatsapp_inbox, solicitudes</div>
           <div><strong>Colecciones:</strong> clientes</div>
-          
+
           <div class="notas"><em>Helpers canónicos: buscarClientePorTelefono, buscarOCrearCliente. Anti-duplicado por telefonoNormalizado.</em></div>
         </div>
       </div>
@@ -224,7 +229,7 @@ graph LR
           <div><strong>Depende de:</strong> ordenes_servicio, facturas, clientes</div>
           <div><strong>Expone a:</strong> comisiones</div>
           <div><strong>Colecciones:</strong> facturas</div>
-          
+
           <div class="notas"><em>Fase A (59c5fb0) awaiting QA Jorge. Cazador P-024 protege regla nueva (no reintroducir anulación 100%).</em></div>
         </div>
       </div>
@@ -235,7 +240,7 @@ graph LR
           <div><strong>Depende de:</strong> clientes, ordenes_servicio, productos</div>
           <div><strong>Expone a:</strong> facturas</div>
           <div><strong>Colecciones:</strong> cotizaciones, precios_servicios</div>
-          
+
           <div class="notas"><em>Tras DINERO-1 (bec87b3) el número QT es atómico via contadores.service.ts.</em></div>
         </div>
       </div>
@@ -246,7 +251,7 @@ graph LR
           <div><strong>Depende de:</strong> cotizaciones, ordenes_servicio, clientes</div>
           <div><strong>Expone a:</strong> pagos, comisiones, garantias</div>
           <div><strong>Colecciones:</strong> facturas</div>
-          
+
           <div class="notas"><em>ProcesarFacturacionModal: gate del conduce vs pago verificado (cazador P-023). Tras DINERO-2 (b4fc23c) recalcula montoPagado/estadoPago al cobrar.</em></div>
         </div>
       </div>
@@ -257,7 +262,7 @@ graph LR
           <div><strong>Depende de:</strong> ordenes_servicio</div>
           <div><strong>Expone a:</strong> facturas, comisiones</div>
           <div><strong>Colecciones:</strong> ordenes_servicio</div>
-          
+
           <div class="notas"><em>B-2 (d4d6498) migró 16 órdenes a subcolección espejo. B-3 (cut-over + endurecer rules) espera QA Jorge. Helper: obtenerPagosDeOrden(orden).</em></div>
         </div>
       </div>
@@ -268,7 +273,7 @@ graph LR
           <div><strong>Depende de:</strong> ordenes_servicio, facturas, personal</div>
           <div><strong>Expone a:</strong> nomina</div>
           <div><strong>Colecciones:</strong> comisiones</div>
-          
+
           <div class="notas"><em>Dos bases de cálculo divergentes (~18% diferencia) pendientes decisión Jorge. P-021 obliga denormalización a factura.</em></div>
         </div>
       </div>
@@ -277,9 +282,9 @@ graph LR
         <div class="desc">Liquidación mensual de nómina con bonos por tier (operaria, secretaria) y descuentos de préstamos.</div>
         <div class="meta">
           <div><strong>Depende de:</strong> comisiones, personal</div>
-          
+
           <div><strong>Colecciones:</strong> liquidaciones_nomina</div>
-          
+
           <div class="notas"><em>Reglas de bonos duplicadas hoy entre Nomina.tsx y Dashboard.tsx (REPORTING-1 las centralizó en utils/kpis.ts).</em></div>
         </div>
       </div>
@@ -287,21 +292,21 @@ graph LR
         <div class="nombre">gastos <span class="area">[dinero]</span></div>
         <div class="desc">Gastos operativos del taller (no piezas).</div>
         <div class="meta">
-          
+
           <div><strong>Expone a:</strong> reportes</div>
           <div><strong>Colecciones:</strong> gastos</div>
-          
-          
+
+
         </div>
       </div>
       <div class="modulo media" data-area="inventario">
         <div class="nombre">productos <span class="area">[inventario]</span></div>
         <div class="desc">Catálogo de productos/piezas con stock y costo. Dos colecciones (productos + piezas_inventario) — deuda histórica a consolidar.</div>
         <div class="meta">
-          
+
           <div><strong>Expone a:</strong> cotizaciones</div>
           <div><strong>Colecciones:</strong> productos, piezas_inventario, movimientos_inventario</div>
-          
+
           <div class="notas"><em>Solo la conversión cotización→factura descuenta stock. PiezaFormModal del cierre NO descuenta — decisión Jorge pendiente.</em></div>
         </div>
       </div>
@@ -310,9 +315,9 @@ graph LR
         <div class="desc">Piezas en espera de llegada para una orden</div>
         <div class="meta">
           <div><strong>Depende de:</strong> ordenes_servicio</div>
-          
+
           <div><strong>Colecciones:</strong> standby_piezas</div>
-          
+
           <div class="notas"><em>No reconcilia con inventario al llegar — decisión Jorge pendiente.</em></div>
         </div>
       </div>
@@ -321,17 +326,17 @@ graph LR
         <div class="desc">Equipos físicamente en el taller (en reparación o en espera)</div>
         <div class="meta">
           <div><strong>Depende de:</strong> ordenes_servicio</div>
-          
+
           <div><strong>Colecciones:</strong> equipos_taller</div>
-          
-          
+
+
         </div>
       </div>
       <div class="modulo alta" data-area="personal_rrhh">
         <div class="nombre">personal <span class="area">[personal_rrhh]</span></div>
         <div class="desc">Empleados del taller: técnicos, secretarias, coordinadoras, operarias, administradores</div>
         <div class="meta">
-          
+
           <div><strong>Expone a:</strong> ordenes_servicio, comisiones, nomina, calendarios, mantenimiento, ponches, cierres_dia, whatsapp_inbox</div>
           <div><strong>Colecciones:</strong> personal, usuarios</div>
           <div><strong>Integraciones:</strong> firebase_auth</div>
@@ -345,8 +350,8 @@ graph LR
           <div><strong>Depende de:</strong> personal</div>
           <div><strong>Expone a:</strong> nomina, cierres_dia</div>
           <div><strong>Colecciones:</strong> ponches</div>
-          
-          
+
+
         </div>
       </div>
       <div class="modulo baja" data-area="personal_rrhh">
@@ -356,8 +361,8 @@ graph LR
           <div><strong>Depende de:</strong> personal, ponches</div>
           <div><strong>Expone a:</strong> reportes</div>
           <div><strong>Colecciones:</strong> cierres_dia</div>
-          
-          
+
+
         </div>
       </div>
       <div class="modulo alta" data-area="whatsapp_crm">
@@ -375,33 +380,33 @@ graph LR
         <div class="nombre">plantillas_whatsapp <span class="area">[whatsapp_crm]</span></div>
         <div class="desc">Catálogo de plantillas HSM aprobadas en Meta (4 con imagen branded). Vive en código, no en Firestore.</div>
         <div class="meta">
-          
+
           <div><strong>Expone a:</strong> whatsapp_inbox</div>
-          
+
           <div><strong>Integraciones:</strong> meta_whatsapp</div>
           <div class="notas"><em>src/config/plantillasWhatsApp.ts. Imágenes en public/plantillas/. Spec autoritativa en docs/sprints/PLANTILLAS_META_SPEC_2026-05-25.md.</em></div>
         </div>
       </div>
       <div class="modulo media" data-area="whatsapp_crm">
         <div class="nombre">conversaciones_ia <span class="area">[whatsapp_crm]</span></div>
-        <div class="desc">Conversaciones del agente IA con clientes (opt-in por conversación)</div>
+        <div class="desc">Asistente interno del personal con permisos por rol; incorpora conocimientos aprobados. Borradores de WhatsApp revisados por un humano, sin envío automático.</div>
         <div class="meta">
-          <div><strong>Depende de:</strong> whatsapp_inbox</div>
-          
+          <div><strong>Depende de:</strong> whatsapp_inbox, conocimiento_equipo</div>
+
           <div><strong>Colecciones:</strong> conversaciones_ia</div>
           <div><strong>Integraciones:</strong> anthropic_api</div>
-          
+
         </div>
       </div>
       <div class="modulo media" data-area="formularios_publicos">
         <div class="nombre">formularios <span class="area">[formularios_publicos]</span></div>
         <div class="desc">Definiciones de formularios dinámicos (admin construye, público los llena en /f/:slug)</div>
         <div class="meta">
-          
+
           <div><strong>Expone a:</strong> solicitudes</div>
           <div><strong>Colecciones:</strong> formularios</div>
-          
-          
+
+
         </div>
       </div>
       <div class="modulo alta" data-area="formularios_publicos">
@@ -420,9 +425,9 @@ graph LR
         <div class="desc">Dashboards y métricas: ingresos, conduces emitidos, rendimiento técnicos, proyección de nómina. Dashboard operativo del día + Reporte avanzado para análisis comparativos.</div>
         <div class="meta">
           <div><strong>Depende de:</strong> ordenes_servicio, facturas, pagos, comisiones, personal, productos, gastos</div>
-          
+
           <div><strong>Colecciones:</strong> recordatorios_diarios</div>
-          
+
           <div class="notas"><em>Tras REPORTING-1 (a4e64db) los KPIs viven en src/utils/kpis.ts (helpers compartidos). Resta anulaciones de la base de ingresos. Tras DISENO-I Fase 3 (5ca35d2, 2026-06-03) el Dashboard quedó con KPIs operativos del día solamente; los 4 widgets analíticos (Rendimiento por Técnico, Reparaciones por Tipo, Anuladas semana, Nómina proyectada del mes) se movieron a /admin/reporte-avanzado — gate admin+coord. Link a 1 clic desde Dashboard + sidebar Finanzas.</em></div>
         </div>
       </div>
@@ -431,9 +436,9 @@ graph LR
         <div class="desc">Notificaciones internas a empleados (orden asignada, pieza llegó, etc.)</div>
         <div class="meta">
           <div><strong>Depende de:</strong> personal</div>
-          
+
           <div><strong>Colecciones:</strong> notificaciones</div>
-          
+
           <div class="notas"><em>Rule gatea por userId == auth.uid. Cazador P-007.</em></div>
         </div>
       </div>
@@ -441,33 +446,55 @@ graph LR
         <div class="nombre">auditoria <span class="area">[sistema]</span></div>
         <div class="desc">Audit log de acciones administrativas sensibles (WhatsApp send, alta de usuarios, etc.)</div>
         <div class="meta">
-          
-          
+
+
           <div><strong>Colecciones:</strong> auditoria_admin, app_check_audit, whatsapp_errores_meta_dedupe</div>
-          
-          
+
+
         </div>
       </div>
       <div class="modulo baja" data-area="sistema">
         <div class="nombre">rate_limits <span class="area">[sistema]</span></div>
         <div class="desc">Contadores diarios por usuario para limitar abuso (WhatsApp send, AI chat, etc.)</div>
         <div class="meta">
-          
-          
+
+
           <div><strong>Colecciones:</strong> rate_limits</div>
-          
-          
+
+
         </div>
       </div>
       <div class="modulo alta" data-area="sistema">
         <div class="nombre">configuracion <span class="area">[sistema]</span></div>
         <div class="desc">Documentos de configuración global (GPS, WhatsApp envío, rate limits, contadores)</div>
         <div class="meta">
-          
+
           <div><strong>Expone a:</strong> whatsapp_inbox, cotizaciones, facturas</div>
           <div><strong>Colecciones:</strong> config</div>
-          
+
           <div class="notas"><em>Contadores OS/QT/CG/FAC viven acá. Cazador P-022.</em></div>
+        </div>
+      </div>
+      <div class="modulo media" data-area="sistema">
+        <div class="nombre">conocimiento_equipo <span class="area">[sistema]</span></div>
+        <div class="desc">Aportes de procedimientos del personal, revisión admin/coordinación y referencias aprobadas para IA.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> personal</div>
+          <div><strong>Expone a:</strong> conversaciones_ia</div>
+          <div><strong>Colecciones:</strong> conocimiento_equipo</div>
+
+          <div class="notas"><em>Acceso por API autenticada; cliente Firestore bloqueado por defecto. Pendientes no alimentan IA.</em></div>
+        </div>
+      </div>
+      <div class="modulo media" data-area="reporting">
+        <div class="nombre">marketing_meta <span class="area">[reporting]</span></div>
+        <div class="desc">Panel de campañas Meta Ads de Mister Service; lectura de inversión e interacción.</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> personal</div>
+
+
+          <div><strong>Integraciones:</strong> meta_ads</div>
+          <div class="notas"><em>Sin escritura de anuncios. Token separado de WhatsApp. Instagram/Messenger y atribución a ventas pendientes.</em></div>
         </div>
       </div></div>
 

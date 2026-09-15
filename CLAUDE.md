@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. **Public standalone flows** (`/cita/:calendarId`, `/tracking/:token`, `/f/:slug`) — no auth, no chrome.
 3. **Internal admin** (`/admin/*`) — auth-gated, wrapped by `Layout` + `Sidebar`. Technicians are redirected to `/tecnico` (a mobile-focused view).
 
-Firebase project: `mister-service-app-cloude`. Deploy target: Vercel (with one serverless function in `api/`).
+Firebase project: `mister-service-app-cloude`. Deploy target: Vercel (serverless endpoints in `api/` for authenticated administration, AI, WhatsApp and integrations).
 
 Language/UI is Spanish (`date-fns/locale/es`, `RD$` currency). All user-facing strings and most identifiers use Spanish.
 
@@ -26,7 +26,7 @@ npm run deploy:rules    # firebase deploy --only firestore:rules
 npm run deploy:indexes  # firebase deploy --only firestore:indexes
 ```
 
-There is **no test suite**. Do not invent `npm test`.
+Tests: `npm run test:integraciones` (Vitest); `node --import tsx --test tests/unit/timelineUnificado.test.ts` (Node). There is no `npm test` script.
 
 **Firestore rules versionadas**: el archivo `firestore.rules` en la raíz del repo es la fuente de verdad. Para deployar cambios:
 
@@ -57,7 +57,7 @@ Si ninguna colección tiene perfil para el usuario autenticado, `AppContext` set
 Permissions changes on a `personal`/`usuarios` doc propagate live now (the ref-based listener was added after the older "logout to refresh permissions" limitation documented in `CONTEXTO_PROYECTO.md`).
 
 ### Data layer
-All persistence is Firebase Firestore + Storage — no REST backend except the single GPS proxy at `api/gps/ubicacion.ts`. Services under `src/services/` wrap the collection access:
+Persistence uses Firebase Firestore + Storage. Server endpoints in `api/` validate identity and role before privileged operations. Services under `src/services/` wrap the collection access:
 - `contadores.service.ts` — **atomic transactional** counters for document numbers (`OS-####`, `QT-#####`, `FAC-#####`). Always use these, never generate numbers client-side.
 - `clientes.service.ts` — client CRUD + phone normalization (see below).
 - `gps.service.ts` — reads `config_gps/sistema`, supports Wialon/Samsara/Traccar/Fleet Complete/API Personalizada, streams `ubicaciones_vehiculos` via `onSnapshot`. **Direct API calls hit CORS in the browser** — use the `/api/gps/ubicacion` proxy.
@@ -86,7 +86,7 @@ Admins build forms in `FormularioEditor` → `formularios` collection. Public us
 
 - **`@vercel/node` ignora `export const config = { api: {...} }`.** Esa sintaxis es del Next.js Pages Router; este repo es Vite + `@vercel/node` (runtime real de la carpeta `api/`). Para parseo de body en endpoints nuevos, usar el patrón defensivo de `api/admin/crear-usuario.ts:140` y `api/whatsapp/send.ts:548-571`: aceptar `string | object | null` con `JSON.parse` fallback. Cualquier endpoint nuevo en `api/` debe probarse con `curl` real (con `--data` JSON y header `Content-Type: application/json`) ANTES de cerrar el sprint — no asumir que la config aplica. Antiprecedente SPRINT-WA-2 commit `58a642a`: el endpoint rechazó todo POST con `body-invalido` HTTP 400 hasta el hotfix SPRINT-WA-2-FIX-BODYPARSER. Para el webhook entrante (`api/whatsapp/webhook.ts`) el body raw SÍ es necesario por HMAC — `req.on('data')` ya lo lee directo del stream sin depender de `bodyParser`.
 - **Phone normalization (RD):** strip non-digits, drop leading `1` if 11 digits, take last 10. WhatsApp links prepend `1` again. Use helpers in `utils/index.ts` / `utils/whatsapp.ts`; don't reinvent.
-- **WhatsApp is manual.** `utils/whatsapp.ts` builds `wa.me/...?text=...` URLs. There is no Business API integration — don't add "automatic" send calls.
+- **WhatsApp has a Business API inbox and human-initiated sending**, alongside legacy `wa.me` links. The new AI feature prepares drafts only: it does not send them. Preserve signature validation, deduplication, opt-outs and the 24-hour window. See `docs/integraciones/ESTADO-2026-09-15.md` for tested scope and remaining setup.
 - **Checklists are hardcoded** in `utils/checklistTemplates.ts` (per `equipoTipo`). The UI does not edit them.
 - **Counters must use transactions.** `contadores.service.ts` is the only correct source of OS/QT/FAC numbers.
 - **Helpers que escriben Firestore + retornan datos no denormalizan automáticamente.** `registrarComisionPorFactura`, `registrarComisionesPorItems` y similares persisten en `comisiones`/`auditoria` pero NO actualizan el doc factura. El caller debe denormalizar explícitamente con `updateDoc(doc(db, 'facturas', id), { comisionTecnicoMonto: ..., comisionTecnicoNombre: ..., ... })` post-llamada. Sin esto, los renders que leen del doc factura (ej: tabla de Facturas) muestran `—` aunque la comisión sí esté registrada en su colección. Patrón ya en `FacturacionPendiente.tsx` post-`registrarComisionPorFactura` y en `FacturaCrearModal.tsx` post-`registrarComisionesPorItems`.

@@ -2206,6 +2206,8 @@ export interface WhatsAppUltimoMensajePreview {
  * campos da `permission-denied`. Use dot-path o updateDoc selectivo.
  */
 export interface WhatsAppConversacion {
+  bajaSolicitada?: boolean;
+  origenMarketing?: { canal: string; anuncioId: string; capturadoPor: string };
   /** Doc id = wa_id (RD 10 dígitos). */
   id: string;
   wa_id: string;

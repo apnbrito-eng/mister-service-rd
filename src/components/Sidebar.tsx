@@ -5,7 +5,7 @@ import {
   TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight, ChevronDown,
   Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
   CalendarCheck, Sparkles, History, Star, RefreshCw, Banknote,
-  MessageSquare, BarChart3,
+  MessageSquare, BarChart3, BookOpen,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { signOut } from 'firebase/auth';
@@ -261,6 +261,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
           // SPRINT-INBOX-2 (2026-05-20): Inbox WhatsApp visible para staff
           // oficina (D6=C admin/coord/secretaria/operaria). Badge suma
           // noLeidos de todas las conversaciones.
+          { to: '/admin/marketing', icon: BarChart3, label: 'Marketing', show: esAdminOCoord },
+          { to: '/admin/conocimiento', icon: BookOpen, label: 'Conocimientos', show: esAdminOCoord || isOperaria || isSecretaria },
           { to: '/admin/inbox', icon: MessageSquare, label: 'Inbox WhatsApp', badge: whatsappInboxCount, show: esAdminOCoord || isOperaria || isSecretaria },
           { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
           { to: '/admin/reprogramaciones', icon: RefreshCw, label: 'Reprogramaciones', badge: reprogramacionesCount, show: esAdminOCoord },

@@ -79,6 +79,8 @@ const Notificaciones = lazy(() => import('./pages/Notificaciones'));
 const Admin404 = lazy(() => import('./pages/Admin404'));
 // SPRINT-INBOX-2 (2026-05-20): bandeja CRM WhatsApp para staff oficina.
 // El bloque INBOX-3..6 agrega vistas hijas; ver `docs/sprints/COLA_AUTONOMA.md`.
+const MarketingIntegrado = lazy(() => import('./pages/MarketingIntegrado'));
+const ConocimientoEquipo = lazy(() => import('./pages/ConocimientoEquipo'));
 const Inbox = lazy(() => import('./pages/Inbox'));
 const InboxConversacion = lazy(() => import('./pages/InboxConversacion'));
 
@@ -207,6 +209,7 @@ function AppRoutes() {
       </Route>
 
       {/* Public standalone pages (no nav/footer — focused experience) */}
+      <Route path="/conocimiento" element={<ProtectedRoute><ConocimientoEquipo /></ProtectedRoute>} />
       <Route path="/cita/:calendarId" element={<CitaPublica />} />
       <Route path="/tracking/:token" element={<TrackingCliente />} />
       <Route path="/f/:slug" element={<FormularioPublico />} />
@@ -276,6 +279,8 @@ function AppRoutes() {
         <Route path="formularios" element={<RolRoute roles={['administrador']}><Formularios /></RolRoute>} />
         <Route path="formularios/:id" element={<RolRoute roles={['administrador']}><FormularioEditor /></RolRoute>} />
         <Route path="solicitudes" element={<RolRoute roles={['administrador']}><Solicitudes /></RolRoute>} />
+        <Route path="marketing" element={<RolRoute roles={['administrador', 'coordinadora']}><MarketingIntegrado /></RolRoute>} />
+        <Route path="conocimiento" element={<RolRoute roles={['administrador', 'coordinadora', 'secretaria', 'operaria']}><ConocimientoEquipo /></RolRoute>} />
         <Route path="asistente" element={<RolRoute roles={['administrador']}><AsistenteIA /></RolRoute>} />
         <Route path="asistente/historial" element={<RolRoute roles={['administrador']}><AsistenteIAHistorial /></RolRoute>} />
         <Route path="configuracion" element={<PermisoRoute permiso="configuracionVer"><Configuracion /></PermisoRoute>} />

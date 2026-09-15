@@ -5,6 +5,7 @@ npm-debug.log*
 
 # Dependencies
 node_modules/
+/node_modules
 
 # Build
 dist/
@@ -78,3 +79,4 @@ ai-agent-settings.json
 # macOS iCloud duplicados (Time Machine / iCloud Drive suele crear "Archivo 2.ext")
 * 2.*
 "* 2.*"
+.env*

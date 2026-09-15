@@ -1,3 +1,4 @@
+import SugerenciaIA from '../components/inbox/SugerenciaIA';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -74,6 +75,8 @@ export default function InboxConversacion() {
   const [conversacionActual, setConversacionActual] = useState<WhatsAppConversacion | null>(null);
   const [mensajes, setMensajes] = useState<MensajeRender[]>([]);
   const [texto, setTexto] = useState('');
+  const [ahora, setAhora] = useState(Date.now());
+  useEffect(() => { const id = window.setInterval(() => setAhora(Date.now()), 15000); return () => window.clearInterval(id); }, []);
   const [enviando, setEnviando] = useState(false);
   const [buscar, setBuscar] = useState('');
   const [loading, setLoading] = useState(true);
@@ -336,8 +339,8 @@ export default function InboxConversacion() {
       v.cierraEn instanceof Date
         ? v.cierraEn
         : new Date((v.cierraEn as { toMillis?: () => number }).toMillis?.() ?? 0);
-    return cierraDate.getTime() > Date.now();
-  }, [conversacionActual]);
+    return cierraDate.getTime() > ahora;
+  }, [conversacionActual, ahora]);
 
   const conversacionesFiltradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
@@ -748,6 +751,8 @@ export default function InboxConversacion() {
 
           {/* Composer */}
           <div className="bg-white border-t border-gray-200 p-3">
+            {conversacionActual?.bajaSolicitada && <div role="status" className="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">El cliente solicitó dejar de recibir mensajes. El envío está bloqueado; revisa la solicitud y coordina por otro canal si necesita atención.</div>}
+            {conversacionActual?.origenMarketing && <p className="mb-3 text-xs text-gray-500">Consulta desde anuncio de Meta: {conversacionActual.origenMarketing.anuncioId}</p>}
             {!ventanaAbierta && waId && (
               <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-800 flex items-start gap-2">
                 <CheckCheck size={14} className="mt-0.5 flex-shrink-0" />
@@ -762,6 +767,7 @@ export default function InboxConversacion() {
             )}
             <div className="flex items-end gap-2 relative">
               <div className="flex-1 relative">
+                {waId && ventanaAbierta && <SugerenciaIA key={waId} waId={waId} onUsar={sugerencia => setTexto(prev => prev.trim() ? prev + '\n\n' + sugerencia : sugerencia)} />}
                 <textarea
                   ref={textareaRef}
                   value={texto}

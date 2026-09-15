@@ -1,6 +1,6 @@
 # Contexto del sistema — Mister Service RD
 
-_Generado automáticamente desde `docs/mapa/MAPA_MENTAL.yaml` — última actualización: 2026-05-26._
+_Generado automáticamente desde `docs/mapa/MAPA_MENTAL.yaml` — última actualización: 2026-09-15._
 
 Software de gestión para taller de reparación de electrodomésticos en República Dominicana
 
@@ -19,7 +19,7 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **REPORTING**: Dashboards y métricas — lee de todo, no escribe
 - **SISTEMA**: Cross-cutting: auditoría, notificaciones, rate limits, configuración
 
-## Módulos (29 total)
+## Módulos (31 total)
 
 ### ordenes_servicio
 - **Área:** ordenes · **Criticidad:** alta
@@ -183,8 +183,8 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 
 ### conversaciones_ia
 - **Área:** whatsapp_crm · **Criticidad:** media
-- **Qué hace:** Conversaciones del agente IA con clientes (opt-in por conversación)
-- **Depende de:** whatsapp_inbox
+- **Qué hace:** Asistente interno del personal con permisos por rol; incorpora conocimientos aprobados. Borradores de WhatsApp revisados por un humano, sin envío automático.
+- **Depende de:** whatsapp_inbox, conocimiento_equipo
 - **Colecciones Firestore:** conversaciones_ia
 - **Integraciones externas:** anthropic_api
 
@@ -234,6 +234,23 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **Colecciones Firestore:** config
 - **Notas:** Contadores OS/QT/CG/FAC viven acá. Cazador P-022.
 
+### conocimiento_equipo
+- **Área:** sistema · **Criticidad:** media
+- **Qué hace:** Aportes de procedimientos del personal, revisión admin/coordinación y referencias aprobadas para IA.
+- **Depende de:** personal
+- **Expone a:** conversaciones_ia
+- **Colecciones Firestore:** conocimiento_equipo
+- **Rutas API:** /api/ai/conocimiento
+- **Notas:** Acceso por API autenticada; cliente Firestore bloqueado por defecto. Pendientes no alimentan IA.
+
+### marketing_meta
+- **Área:** reporting · **Criticidad:** media
+- **Qué hace:** Panel de campañas Meta Ads de Mister Service; lectura de inversión e interacción.
+- **Depende de:** personal
+- **Rutas API:** /api/marketing/resumen
+- **Integraciones externas:** meta_ads
+- **Notas:** Sin escritura de anuncios. Token separado de WhatsApp. Instagram/Messenger y atribución a ventas pendientes.
+
 ## Integraciones externas
 
 - **meta_whatsapp** (alta): Meta Graph API (WhatsApp Business Cloud). Mensajes entrantes (webhook con HMAC) y salientes (send con idempotency). _WABA 1884486412326904. 2 phone_number_id activos. Tokens y números en Vercel env._
@@ -244,19 +261,21 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **vercel** (alta): Hosting del SPA + serverless functions en api/*. Deploy automático en push a main.
 - **anthropic_api** (media): Claude API para el agente IA conversacional (opt-in por conversación)
 - **gps_vans** (media): Tracking GPS de vehículos del taller (Wialon / Samsara / Traccar / Fleet Complete / API personalizada — configurable en config_gps/sistema) _Acceso directo desde browser tiene CORS — usar el proxy /api/gps/ubicacion._
+- **meta_ads** (media): Consulta Marketing API de la cuenta Mister Service con credencial de servidor.
 
 ## Impacto de cambios (si tocás X, revisá Y)
 
 - Si tocás **calendarios**, verificá: ordenes_servicio, citas_por_confirmar
 - Si tocás **clientes**, verificá: ordenes_servicio, citas_por_confirmar, mantenimiento, garantias, cotizaciones, facturas, whatsapp_inbox, solicitudes
 - Si tocás **comisiones**, verificá: nomina, reportes
+- Si tocás **conocimiento_equipo**, verificá: conversaciones_ia
 - Si tocás **cotizaciones**, verificá: facturas
 - Si tocás **facturas**, verificá: garantias, comisiones, reportes
 - Si tocás **formularios**, verificá: solicitudes
 - Si tocás **gastos**, verificá: reportes
 - Si tocás **ordenes_servicio**, verificá: avances, garantias, cotizaciones, facturas, pagos, comisiones, standby_piezas, equipos_taller, reportes
 - Si tocás **pagos**, verificá: reportes
-- Si tocás **personal**, verificá: ordenes_servicio, calendarios, citas_por_confirmar, mantenimiento, comisiones, nomina, ponches, cierres_dia, whatsapp_inbox, reportes, notificaciones
+- Si tocás **personal**, verificá: ordenes_servicio, calendarios, citas_por_confirmar, mantenimiento, comisiones, nomina, ponches, cierres_dia, whatsapp_inbox, reportes, notificaciones, conocimiento_equipo, marketing_meta
 - Si tocás **plantillas_whatsapp**, verificá: whatsapp_inbox
 - Si tocás **ponches**, verificá: cierres_dia
 - Si tocás **productos**, verificá: cotizaciones, reportes

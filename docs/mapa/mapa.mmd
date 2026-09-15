@@ -52,6 +52,7 @@ graph LR
 
   subgraph area_reporting["REPORTING"]
     reportes["reportes"]
+    marketing_meta["marketing_meta"]
   end
 
   subgraph area_sistema["SISTEMA"]
@@ -59,6 +60,7 @@ graph LR
     auditoria["auditoria"]
     rate_limits["rate_limits"]
     configuracion["configuracion"]:::critico
+    conocimiento_equipo["conocimiento_equipo"]
   end
 
   ordenes_servicio --> clientes
@@ -95,6 +97,7 @@ graph LR
   whatsapp_inbox --> personal
   whatsapp_inbox --> plantillas_whatsapp
   conversaciones_ia --> whatsapp_inbox
+  conversaciones_ia --> conocimiento_equipo
   solicitudes --> formularios
   solicitudes --> clientes
   reportes --> ordenes_servicio
@@ -105,5 +108,7 @@ graph LR
   reportes --> productos
   reportes --> gastos
   notificaciones --> personal
+  conocimiento_equipo --> personal
+  marketing_meta --> personal
 
   classDef critico stroke:#dc2626,stroke-width:3px
