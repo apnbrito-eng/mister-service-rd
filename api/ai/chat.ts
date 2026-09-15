@@ -1,3 +1,4 @@
+import { registrarTemaPregunta, seleccionarReferencias } from '../_lib/memoriaIA.js';
 import { costeSonnet46 } from '../_lib/costeIA.js';
 import { INSTRUCCIONES_ASISTENTE, contextoPantallaIA } from '../_lib/asistenteInstrucciones.js';
 import { contextoConocimiento } from '../_lib/conocimiento.js';
@@ -282,8 +283,9 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
     const pantalla = contextoPantallaIA(body.rutaActual);
     if (pantalla) systemParam.push({ type: 'text', text: pantalla });
 
-    const conocimientos = await db.collection('conocimiento_equipo').where('estado', '==', 'aprobado').limit(12).get();
-    if (!conocimientos.empty) systemParam.push({ type: 'text' as const, text: contextoConocimiento(conocimientos.docs.map(d => ({ id: d.id, titulo: String(d.data().titulo), contenido: String(d.data().contenido) }))) });
+    const conocimientos = await db.collection('conocimiento_equipo').where('estado', '==', 'aprobado').get();
+    const referencias = seleccionarReferencias(conocimientos.docs.map(d => ({ id: d.id, titulo: String(d.data().titulo), contenido: String(d.data().contenido) })), (mensajes as Mensaje[]).slice(-3).map(m => m.content).join(' '));
+    if (referencias.length) systemParam.push({ type: 'text' as const, text: contextoConocimiento(referencias) });
 
     // messages va acumulando la conversación completa (turno inicial + ida-vuelta de tools)
     const messagesLoop: Anthropic.MessageParam[] = (mensajes as Mensaje[]).map((m) => ({
@@ -496,6 +498,11 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
       // respuesta al usuario. El audit log puede quedar incompleto, pero el
       // asistente sigue funcionando.
       console.error('ai/chat persistencia falló:', err);
+    }
+
+    if (conversacionIdOut && !alcanzoMaximo) {
+      try { await registrarTemaPregunta(db, lastMensaje.content, conversacionIdOut); }
+      catch { console.error('[ai/chat] No se pudo registrar el tema frecuente'); }
     }
 
     const responsePayload: Record<string, unknown> = {

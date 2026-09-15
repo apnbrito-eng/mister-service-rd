@@ -14,7 +14,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? await col.where('estado', '==', 'pendiente').limit(60).get()
         : await col.where('autorUid', '==', uid).limit(60).get();
       const docs = new Map([...aprobados.docs, ...pendientes.docs].map(d => [d.id, d]));
-      return res.json({ items: [...docs.values()].map(d => ({ id: d.id, ...d.data() })), puedeAprobar: puedeAprobar(rol) });
+      // @safe-orderby: memoria 2026-09-15; único escritor registrarTemaPregunta siempre inicializa conversaciones con increment(1).
+      const frecuentes = puedeAprobar(rol) ? await db.collection('ia_preguntas_frecuentes').orderBy('conversaciones', 'desc').limit(30).get() : null;
+      return res.json({ frecuentes: frecuentes?.docs.map(d => ({ id: d.id, titulo: d.data().titulo, conversaciones: d.data().conversaciones })) || [], items: [...docs.values()].map(d => ({ id: d.id, ...d.data() })), puedeAprobar: puedeAprobar(rol) });
     }
     let body: Record<string, unknown>;
     try { body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body; }
