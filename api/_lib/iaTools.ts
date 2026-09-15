@@ -768,7 +768,7 @@ const TOOL_QUERY_PRODUCTOS: ToolDef = {
     },
   },
   rolesPermitidos: ['administrador', 'coordinadora', 'operaria', 'secretaria'],
-  ejecutar: async (input: QueryProductosInput) => {
+  ejecutar: async (input: QueryProductosInput, { rol }) => {
     const db = getAdminFirestore();
     const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 20, 1), 50);
     const snap = await db.collection('piezas_inventario').get();
@@ -792,8 +792,10 @@ const TOOL_QUERY_PRODUCTOS: ToolDef = {
       categoria: p.categoria || '',
       stock: typeof p.stockActual === 'number' ? p.stockActual : 0,
       stockMinimo: typeof p.stockMinimo === 'number' ? p.stockMinimo : null,
-      costoUnitario: typeof p.precioCompra === 'number' ? p.precioCompra : null,
+      ...(rol === 'administrador' ? { costoUnitario: typeof p.precioCompra === 'number' ? p.precioCompra : null } : {}),
       precioVenta: typeof p.precioVenta === 'number' ? p.precioVenta : null,
+      precioDetalle: typeof p.precioDetalle === 'number' ? p.precioDetalle : (typeof p.precioVenta === 'number' ? p.precioVenta : null),
+      precioMayoreo: typeof p.precioMayoreo === 'number' ? p.precioMayoreo : (typeof p.precioVenta === 'number' ? p.precioVenta : null),
     }));
     return { productos: items, cantidad: items.length };
   },
@@ -1008,7 +1010,7 @@ interface QueryPreciosServiciosInput {
 const TOOL_QUERY_PRECIOS_SERVICIOS: ToolDef = {
   name: 'query_precios_servicios',
   description:
-    "Consulta el tarifario de servicios (precios estándar por marca, tipo de equipo y servicio). Filtra por marca, tipo de equipo, nombre de servicio o búsqueda libre. Solo retorna servicios activos. Retorna hasta 'limite' resultados (default 20, max 50). Los items pueden tener 'precioMayoreo' (B2B/talleres aliados) y 'precioDetalle' (cliente final/mostrador). Si el doc todavía no migró, ambos caen al campo legacy 'precio'.",
+    "Consulta el tarifario de servicios (precios estándar por marca, tipo de equipo y servicio). Filtra por marca, tipo de equipo, nombre de servicio o búsqueda libre. Solo retorna servicios activos. Retorna hasta 'limite' resultados (default 20, max 50). Los items pueden tener 'precioMayoreo' (B2B/talleres aliados) y 'precioDetalle' (cliente final/mostrador). Si el doc todavía no migró, ambos caen al campo legacy 'precio'. null significa precio no registrado; no equivale a cero. Usa detalle para cliente final y mayoreo solo para aliados, claramente identificado.",
   input_schema: {
     type: 'object',
     properties: {
@@ -1023,7 +1025,7 @@ const TOOL_QUERY_PRECIOS_SERVICIOS: ToolDef = {
   ejecutar: async (input: QueryPreciosServiciosInput) => {
     const db = getAdminFirestore();
     const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 20, 1), 50);
-    const snap = await db.collection('precios_servicios').limit(limite * 3).get();
+    const snap = await db.collection('precios_servicios').get();
     const filtrados = snap.docs
       .map((d) => d.data())
       .filter((raw) => {
@@ -1041,9 +1043,9 @@ const TOOL_QUERY_PRECIOS_SERVICIOS: ToolDef = {
         return true;
       });
     const items = filtrados.slice(0, limite).map((raw) => {
-      const precio = typeof raw.precio === 'number' ? raw.precio : 0;
-      const precioMayoreo = typeof raw.precioMayoreo === 'number' ? raw.precioMayoreo : precio;
-      const precioDetalle = typeof raw.precioDetalle === 'number' ? raw.precioDetalle : precioMayoreo;
+      const precio = typeof raw.precio === 'number' && Number.isFinite(raw.precio) ? raw.precio : null;
+      const precioMayoreo = typeof raw.precioMayoreo === 'number' && Number.isFinite(raw.precioMayoreo) ? raw.precioMayoreo : precio;
+      const precioDetalle = typeof raw.precioDetalle === 'number' && Number.isFinite(raw.precioDetalle) ? raw.precioDetalle : precio;
       const out: Record<string, unknown> = {
         marca: raw.marca || '',
         equipoTipo: raw.equipoTipo || '',
@@ -1058,7 +1060,7 @@ const TOOL_QUERY_PRECIOS_SERVICIOS: ToolDef = {
       }
       return out;
     });
-    return { servicios: items, cantidad: items.length };
+    return { servicios: items, cantidad: items.length, coincidencias: filtrados.length, resultadosParciales: filtrados.length > limite, fuente: 'Tarifario del sistema', moneda: 'DOP' };
   },
 };
 
