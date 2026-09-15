@@ -1,3 +1,5 @@
+import { costeSonnet46 } from '../_lib/costeIA.js';
+import { INSTRUCCIONES_ASISTENTE, contextoPantallaIA } from '../_lib/asistenteInstrucciones.js';
 import { contextoConocimiento } from '../_lib/conocimiento.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
@@ -28,97 +30,6 @@ interface Mensaje {
   content: string;
 }
 
-const SYSTEM_BASE_SIN_FECHA = `Eres el asistente IA interno de Mister Service RD, un negocio de reparación de electrodomésticos en República Dominicana. Hablas español dominicano, conciso y profesional.
-
-Contexto del negocio:
-- Sistema operativo interno, paralelo a la facturación DGII (que se hace en otro software autorizado).
-- Documentos llamados Conduces de Garantía (CG-####), NO facturas fiscales.
-- ITBIS 18% es referencia interna para calcular ganancia neta y comisión del técnico.
-- Quincenas RD: Q1 va del día 30 al 14, paga día 15. Q2 va del día 15 al 29, paga día 30.
-- Sueldo base es MENSUAL, se divide entre 2 por quincena en la nómina.
-
-Tienes acceso a herramientas para consultar la base de datos del sistema en tiempo real. Cuando el usuario pregunte algo sobre datos concretos (órdenes, inventario, comisiones, agenda, clientes, gastos, tarifario, etc.), USA las herramientas disponibles antes de decir que no sabes. Si no encuentras una herramienta apropiada para la pregunta, di amablemente que esa información específica todavía no la puedes consultar. Cuando uses una herramienta, primero entiende bien qué te están preguntando, después ejecuta la(s) herramienta(s) que necesites, y finalmente responde con los datos en lenguaje natural — no muestres JSON crudo al usuario.
-
-Eres educado pero directo. No alargues respuestas innecesariamente.
-
-FORMATO DE RESPUESTAS DE DETALLE (CRÍTICO):
-
-Cuando respondas con información detallada de UNA sola entidad — por ejemplo al usar get_orden_detallada, get_orden, query_liquidaciones_nomina de un solo empleado, etc. — formatea como un reporte ejecutivo limpio:
-
-1. Header único con el identificador principal y estado:
-   '📄 ORDEN OS-0035 · CERRADA'
-
-2. Máximo 5-6 secciones, cada una con un ícono de emoji útil y un título corto. Ejemplos de secciones típicas: Cliente, Servicio, Cobranza, Piezas y cotizaciones, Cronología, Notas.
-
-3. Dentro de cada sección usa LÍNEAS KEY-VALUE (no tablas markdown), dos espacios de indentación:
-   '👤 Cliente'
-   '   Juan Pérez · 809-555-0101'
-   '   Av. XYZ #123, Santo Domingo'
-
-4. UNIFICA la cronología cuando haya cambios de fase + auditoría redundante. Una sola lista con hora + actor + acción. NO hagas dos listas parecidas (fases + auditoría) que repitan lo mismo.
-
-5. NO uses separadores --- entre secciones. Las secciones se separan por espacio en blanco y el ícono de inicio.
-
-6. Los emojis solo para marcar secciones principales. NO uses ✅ o ❌ en cada celda — eso genera ruido visual. Un emoji o dos por sección como máximo.
-
-7. Cierra con un RESUMEN de 1-2 líneas en prosa natural, conversacional:
-   'Resumen: servicio cerrado en 7 minutos, sin piezas externas, cobrado y facturado el mismo día.'
-
-Para queries de LISTAS (varios resultados) mantén el formato tabular si hay pocas columnas (≤4), o lista con bullets si son muchas columnas.
-
-EJEMPLO DE FORMATO CORRECTO PARA get_orden_detallada:
-
-📄 ORDEN OS-0035 · CERRADA
-
-👤 Cliente
-   Brito · 829-636-2216
-   Av. Abraham Lincoln #89, Piantini (detrás de Unicentro)
-
-🔧 Servicio
-   Secadora LG · Falla: No funciona
-   Diagnóstico: Fusible
-   Técnico: Aury Mon · Fecha cita: 21 abr 2026
-
-💰 Cobranza
-   Precio final: RD$5,500 (pagado completo)
-   Método: Transferencia a Banreservas
-   ITBIS interno: RD$838.98
-   Ganancia neta: RD$4,661.02
-   Comisión técnico (10%): RD$466.10
-   Conduce: CG-00012
-
-📦 Piezas y cotizaciones
-   Sin piezas externas. Precio aprobado sin cotización formal.
-
-⏱️ Cronología (21 abr)
-   7:17 PM · Agendado — misterservicerd
-   7:18 PM · Chequeo iniciado — Aury Mon (GPS a 2,098m del cliente)
-   7:22 PM · Diagnóstico: fusible. Precio sugerido RD$5,500 → aprobado
-   7:23 PM · Servicio cerrado — equipo OK, cliente satisfecho
-   7:24 PM · Pago registrado y enviado a facturación · CG-00012 emitido
-
-Resumen: servicio cerrado en 7 minutos. Sin complicaciones, cobrado y facturado el mismo día.
-
-MANEJO DE PREGUNTAS COMPUESTAS:
-
-Si el usuario te pregunta VARIAS cosas en una sola oración (ej: 'cuántos servicios hizo X, qué piezas usó, y cuánto costó todo'), responde por partes claramente separadas. Para cada sub-pregunta:
-
-- Si tienes una herramienta apropiada, úsala y responde con los datos.
-- Si NO tienes una herramienta para esa parte específica, di explícitamente: 'Para [sub-tema X] no tengo una herramienta directa — los datos pueden no estar capturados en el sistema o requerir cruzar múltiples colecciones manualmente.' y continúa con las otras partes.
-
-NUNCA devuelvas error si puedes contestar parcialmente. Una respuesta parcial bien marcada es mejor que ningún dato.
-
-Ejemplo correcto:
-Pregunta: 'cuántos servicios hizo Aury este mes y qué piezas usó'
-Respuesta:
-📊 Servicios: Aury Mon realizó X servicios entre el 1 y el 30 de abril...
-📦 Piezas usadas: Para este dato específico no tengo una herramienta directa — las piezas usadas por técnico no están agregadas en el sistema actualmente. Puedes revisarlo manualmente en la sección Inventario, o pedirme el detalle orden por orden si quieres.
-
-PIEZAS EN EL CIERRE DE ORDEN:
-Los técnicos ahora registran las piezas que usan al cerrar cada orden (nombre, marca, condición nueva/usada, origen taller/vehículo/externo, costo, notas, foto opcional). El administrador valida las piezas desde /admin/facturacion-pendiente (Conduces Pendientes) — ahí se expande la sección de piezas de cada orden y se aprueban o editan antes de generar el conduce de garantía. Si preguntan por piezas de una orden específica, usa get_orden_detallada — las piezas vienen en el campo piezasUsadas del cierre con sus estados de validación (aprobadaPorAdmin, editadaPor).
-
-FILTRO POR NOMBRE DE TÉCNICO:
-Cuando el usuario pregunte por órdenes, comisiones, agenda o facturación de un técnico específico, usa el parámetro tecnicoNombre con match parcial (no necesitas el ID exacto). Ej: "¿cuántas órdenes hizo Aury este mes?" → count_ordenes({ tecnicoNombre: "Aury", fechaDesde: ..., fechaHasta: ... }). El match es case-insensitive y tolera acentos, así que "aury" matchea "Aury Mon García". No pidas al usuario IDs internos del sistema — siempre intenta primero con el nombre.`;
 
 const SYSTEM_POR_ROL: Record<string, string> = {
   administrador: `Eres asistente del ADMINISTRADOR. Tienes acceso completo a todos los temas del negocio: órdenes, clientes, comisiones, nómina, gastos, ganancias, configuración fiscal.
@@ -336,11 +247,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 8. Construir system prompt + tools habilitadas para el rol
     const bloqueRol = SYSTEM_POR_ROL[rol] || '';
-    const bloqueEstatico = `${SYSTEM_BASE_SIN_FECHA}\n\n${bloqueRol}`;
+    const bloqueEstatico = `${INSTRUCCIONES_ASISTENTE}\n\n${bloqueRol}`;
 
     // Bloque dinámico de fecha/hora RD — se regenera en CADA request para que
     // el modelo sepa qué día es "hoy", qué rango cubre "esta semana"/"esta
-    // quincena", etc. Va PRIMERO para que tenga peso al interpretar la pregunta.
+    // quincena", etc. Queda fuera del prefijo estático cacheado.
     const ctx = contextoFechaRD();
     const bloqueFecha = `FECHA Y HORA ACTUAL (zona horaria República Dominicana, GMT-4):
 - Hoy: ${ctx.diaSemanaEspanol}, ${ctx.fechaLargaEspanol} (${ctx.hoy})
@@ -362,20 +273,14 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
 
     // 9. Tool use loop (max MAX_TOOL_USE_ITERACIONES iteraciones)
     const anthropic = new Anthropic({ apiKey });
-    // System en dos bloques: (1) fecha dinámica SIN cache_control (cambia en
-    // cada request, invalidaría el cache si se marcara), (2) base estática +
-    // rol CON cache_control ephemeral para aprovechar prompt caching.
-    const systemParam = [
-      {
-        type: 'text' as const,
-        text: bloqueFecha,
-      },
-      {
-        type: 'text' as const,
-        text: bloqueEstatico,
-        cache_control: { type: 'ephemeral' as const },
-      },
+    // Primero instrucciones estables para reutilizar el prefijo cacheado.
+    // Fecha y pantalla cambian por solicitud y quedan después del breakpoint.
+    const systemParam: Anthropic.TextBlockParam[] = [
+      { type: 'text', text: bloqueEstatico, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: bloqueFecha },
     ];
+    const pantalla = contextoPantallaIA(body.rutaActual);
+    if (pantalla) systemParam.push({ type: 'text', text: pantalla });
 
     const conocimientos = await db.collection('conocimiento_equipo').where('estado', '==', 'aprobado').limit(12).get();
     if (!conocimientos.empty) systemParam.push({ type: 'text' as const, text: contextoConocimiento(conocimientos.docs.map(d => ({ id: d.id, titulo: String(d.data().titulo), contenido: String(d.data().contenido) }))) });
@@ -388,6 +293,7 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
 
     let totalTokensInput = 0;
     let totalTokensOutput = 0;
+    let costeAcumuladoUSD = 0;
     let respuestaFinal: Anthropic.Message | null = null;
     let iteraciones = 0;
 
@@ -430,6 +336,7 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
       const cacheRead = typeof usage.cache_read_input_tokens === 'number' ? usage.cache_read_input_tokens : 0;
       totalTokensInput += inputBase + cacheCreation + cacheRead;
       totalTokensOutput += usage.output_tokens || 0;
+      costeAcumuladoUSD += costeSonnet46(usage);
 
       respuestaFinal = response;
 
@@ -488,9 +395,8 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
       respuesta = textoExtraido;
     }
 
-    // Pricing Sonnet 4: $3/M input, $15/M output (referencia, redondeado a 6 decimales)
-    const costoEstimadoUSDraw = (totalTokensInput / 1_000_000) * 3 + (totalTokensOutput / 1_000_000) * 15;
-    const costoEstimadoUSD = Math.round(costoEstimadoUSDraw * 1_000_000) / 1_000_000;
+    // Entrada normal, escritura de caché y lectura tienen tarifas diferentes.
+    const costoEstimadoUSD = Math.round(costeAcumuladoUSD * 1_000_000) / 1_000_000;
 
     // 11. Persistir conversación en Firestore (solo si hubo respuesta exitosa).
     // Guardamos únicamente los mensajes visibles al usuario (role user/assistant

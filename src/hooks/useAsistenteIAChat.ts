@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { enviarPreguntaIA, ErrorTransporteIA } from '../services/iaChatTransport';
 
@@ -43,6 +44,7 @@ export interface UseAsistenteIAChatReturn {
  */
 export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
   const { currentUser } = useApp();
+  const { pathname } = useLocation();
 
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [pensando, setPensando] = useState(false);
@@ -125,7 +127,7 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
     try {
       // Stripear undefined en el body (convención del proyecto). `conversacionId`
       // solo se incluye si existe — el backend lo interpreta como continuación.
-      const body: Record<string, unknown> = { mensajes: nuevoHistorial };
+      const body: Record<string, unknown> = { mensajes: nuevoHistorial, rutaActual: pathname };
       if (conversacionIdRef.current !== null) {
         body.conversacionId = conversacionIdRef.current;
       }
@@ -193,7 +195,7 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
         controllerRef.current = null;
       }
     }
-  }, [currentUser]);
+  }, [currentUser, pathname]);
 
   return {
     mensajes,
