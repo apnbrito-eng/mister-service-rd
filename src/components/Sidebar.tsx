@@ -410,6 +410,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             const visibleItems = sec.items.filter((it) => it.show);
             if (visibleItems.length === 0) return null;
             const expanded = isExpanded(sec.id, sec.defaultExpanded);
+            const pendientes = visibleItems.reduce((total, item) => total + Math.max(0, item.badge ?? 0), 0);
             return (
               <div key={sec.id} className={idx > 0 ? 'mt-1' : ''}>
                 <button
@@ -420,6 +421,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                 >
                   <sec.icon size={16} className="flex-shrink-0" />
                   <span className="truncate flex-1 text-left">{sec.label}</span>
+                  {pendientes > 0 && (
+                    <span aria-label={`${pendientes} avisos pendientes`} className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center normal-case tracking-normal">
+                      {pendientes}
+                    </span>
+                  )}
                   <ChevronDown
                     size={14}
                     className={`flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-0' : '-rotate-90'}`}
