@@ -28,3 +28,8 @@ Fuentes oficiales consultadas:
 - https://developers.openai.com/api/docs/models
 - https://developers.openai.com/api/docs/guides/evaluation-best-practices
 - https://developers.openai.com/api/docs/guides/production-best-practices
+
+## Comparación real del 15/09/2026, 03:15 RD
+Versión 7ab1dac, dominio de pruebas autenticado, pregunta de priorización de nuevos leads sin escrituras. Consultó dos órdenes y respondió en texto sencillo, reconoció las 3 AM y trasladó contactos al horario de atención. Estimación mostrada: 15120 tokens de entrada, 472 de salida, USD 0.0392 (no comparable directamente con coste anterior, cuyo cálculo incluía caché incorrectamente).
+Persistieron dos defectos: llamar «activos» a los nuevos leads y deducir gravedad/funcionamiento del electrodoméstico sin diagnóstico. Se refuerzan criterios explícitos: fechas/estado/historial, urgencia desconocida si no consta, verificar cita pasada antes de concluir incumplimiento. Esta primera respuesta pasa formato y horario, pero no todos los criterios de precisión. No equivale a aceptación general.
+Meta alojado: consulta autenticada devolvió 11 campañas en la tabla del módulo Marketing. Solo lectura, no cambios en anuncios.
