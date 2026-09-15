@@ -1284,7 +1284,9 @@ export async function aplicarDescuentoGarantiaPorPiezas(args: {
   }
 
   const PORCENTAJE = 0.10; // 10% del costo de piezas — regla de Jorge.
-  const montoDescuento = -Math.round(costoPiezasReReparacion * PORCENTAJE * 100) / 100;
+  // Misma operación que la vista previa: evita diferencias de centavos
+  // por multiplicar sucesivamente por 0.1 y por 100 (p. ej. costo 0.35).
+  const montoDescuento = -Math.round(costoPiezasReReparacion * 10) / 100;
 
   // Buscar la comisión original — por ordenId + tecnicoId. La indexación
   // viene del flujo legacy (P-006: tecnicoId persiste auth.uid post-c4be345).

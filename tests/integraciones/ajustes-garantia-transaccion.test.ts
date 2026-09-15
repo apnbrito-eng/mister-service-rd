@@ -27,6 +27,10 @@ describe('Aplicación administrativa de garantía',()=>{
   expect(m.writes).toHaveLength(2); expect(m.writes[0].data.descuentoPorGarantia.monto).toBe(-100);
   expect(m.writes[1].ref.name).toBe('auditoria_admin');
  });
+ it('guarda el mismo redondeo mostrado en la confirmación',async()=>{
+  m.orden.cierreServicio.piezasUsadas=[{cantidad:1,costoUnitario:0.35}];
+  expect(await aplicar({...args,costoPiezasReReparacion:0.35})).toMatchObject({aplicado:true,monto:-0.04});
+ });
  it('un reintento no duplica el descuento ni la auditoría',async()=>{
   await aplicar(args);m.comision={...m.comision,...m.writes[0].data};m.writes=[];
   expect(await aplicar(args)).toMatchObject({aplicado:true});expect(m.writes).toHaveLength(0);

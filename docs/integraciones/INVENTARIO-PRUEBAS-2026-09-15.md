@@ -75,3 +75,9 @@ Pendientes: recorridos completos por roles; cancelación/garantía; diagnóstico
 73 pruebas automatizadas aprobadas. Diez nuevas cubren reglas de cálculo de garantía, margen/comisión y rangos de quincena; dos recorren todos los días de 2024 y 2026. Se corrigieron el inicio de Q1 en marzo, inclusión del último milisegundo y fechas inválidas. Las cinco cuentas QA pasan verificación de existencia/rol/espejos/Auth en lectura. No equivale a E2E por rol.
 
 Pendiente prioritario: automatizar ajuste por garantía con autorización de servidor, historial por evento e idempotencia; actualmente el técnico no puede escribir comisiones y el modelo permite un solo ajuste. El cierre ahora advierte el pendiente, sin ampliar permisos. Sesión disponible solo administrador, por lo que diagnóstico/foto/firma/cierre técnico siguen pendientes de prueba UI.
+
+### Continuación — revisión de ajustes en la pantalla Comisiones
+
+La incompatibilidad de permisos se atiende con una revisión administrativa integrada: el cierre técnico deja el aviso, y administración/coordinación revisa y confirma el descuento tras validar piezas. No se añadieron permisos ni endpoint con privilegios. La aplicación y su auditoría son transaccionales, con historial por orden y total compatible con nómina. Repeticiones no duplican; importes cambiados y comisiones liquidadas/ambiguas se detienen para revisión.
+
+96 pruebas automatizadas aprobadas (23 nuevas: cálculo/historial, transacción con Firestore simulado, revisión/confirmación/cancelación React). Compilación e invariantes aprobados. No es prueba de reglas en emulador ni cierre completo como técnico; no se hicieron movimientos financieros reales. La lista administrativa examina como máximo 100 garantías, con advertencia de parcialidad.
