@@ -1,3 +1,4 @@
+import { TextoAsistente } from '../components/TextoAsistente';
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { collection, onSnapshot, query, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
@@ -309,7 +310,7 @@ export default function AsistenteIAHistorial() {
                                           : 'bg-white border border-gray-200 text-gray-900 rounded-2xl px-4 py-2 max-w-[75%] text-sm whitespace-pre-wrap'
                                       }
                                     >
-                                      {m.content}
+                                      {m.role === 'assistant' ? <TextoAsistente texto={m.content} /> : m.content}
                                     </div>
                                   </div>
                                 ))

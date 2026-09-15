@@ -1,3 +1,4 @@
+import { TextoAsistente } from './TextoAsistente';
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, X, Minus, Send } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -205,7 +206,7 @@ export default function AsistenteIAFlotante() {
                   : 'self-start bg-gray-100 text-gray-900 rounded-2xl px-4 py-2 max-w-[85%] text-sm whitespace-pre-wrap'
               }
             >
-              {m.content}
+              {m.role === 'assistant' ? <TextoAsistente texto={m.content} /> : m.content}
             </div>
           </div>
         ))}

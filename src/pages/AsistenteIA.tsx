@@ -1,3 +1,4 @@
+import { TextoAsistente } from '../components/TextoAsistente';
 import { useState, useRef, useEffect } from 'react';
 import { Sparkles, Send, Plus } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -67,7 +68,7 @@ export default function AsistenteIA() {
             <Sparkles size={22} className="text-primary-medium" />
             Asistente IA · BETA
           </h1>
-          <p className="text-gray-500 text-sm">Página de prueba — UI definitiva en próxima fase</p>
+          <p className="text-gray-500 text-sm">Consulta datos del negocio y prepara el siguiente paso.</p>
         </div>
         {mensajes.length > 0 && (
           <button
@@ -92,7 +93,7 @@ export default function AsistenteIA() {
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
           {mensajes.length === 0 && !pensando && (
             <div className="text-center text-sm text-gray-400 py-10">
-              Escribí tu primer mensaje abajo para probar el asistente.
+              ¿Qué necesitas resolver? Puedes preguntar por una orden o pedir las prioridades del día.
             </div>
           )}
 
@@ -108,7 +109,7 @@ export default function AsistenteIA() {
                     : 'bg-gray-100 text-gray-800'
                 }`}
               >
-                {m.content}
+                {m.role === 'assistant' ? <TextoAsistente texto={m.content} /> : m.content}
               </div>
             </div>
           ))}
