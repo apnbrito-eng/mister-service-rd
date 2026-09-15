@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
+import { enviarPreguntaIA, ErrorTransporteIA } from '../services/iaChatTransport';
 
 export interface Mensaje {
   role: 'user' | 'assistant';
@@ -122,8 +123,6 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
     setError(null);
 
     try {
-      const idToken = await currentUser.getIdToken();
-
       // Stripear undefined en el body (convención del proyecto). `conversacionId`
       // solo se incluye si existe — el backend lo interpreta como continuación.
       const body: Record<string, unknown> = { mensajes: nuevoHistorial };
@@ -131,15 +130,7 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
         body.conversacionId = conversacionIdRef.current;
       }
 
-      const resp = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+      const resp = await enviarPreguntaIA(currentUser, body, controller.signal);
 
       // Si el componente se desmontó mientras esperábamos la respuesta,
       // salir sin setState. Los fetches abortados caen por el catch con
@@ -192,7 +183,7 @@ export function useAsistenteIAChat(): UseAsistenteIAChatReturn {
       }
       if (!mountedRef.current) return;
       console.error('[useAsistenteIAChat] error de red:', err);
-      setError('No pude contactar al servidor. Reintenta.');
+      setError(err instanceof ErrorTransporteIA ? err.message : 'No pude contactar al servidor. Reintenta.');
     } finally {
       if (mountedRef.current) {
         setPensando(false);
