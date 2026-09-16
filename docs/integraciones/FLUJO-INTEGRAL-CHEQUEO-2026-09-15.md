@@ -109,3 +109,15 @@ Esta etapa aporta mapa global y diagnóstico profundo de un recorrido crítico. 
 Datos adicionales del barrido: 77 archivos contienen operaciones de escritura detectadas y 58 mencionan literalmente la colección ordenes_servicio. Son indicadores de distribución de lógica, no una prueba de que cada archivo escriba esa colección. Refuerzan la necesidad de centralizar aprobación, transición, aplicación de beneficio y cierre en servicios compartidos antes de reorganizar más pantallas.
 
 Verificación posterior: suite normal conserva 97/97 aprobadas. Suite de auditoría separada reproduce 4 fallos y 1 caso correcto. Los problemas nuevos no se consideran resueltos por que la suite anterior siga pasando. Sin cambios funcionales ni publicación en esta etapa.
+
+## Anticipos para piezas — requisito confirmado posteriormente por Jorge
+
+En algunos servicios el cliente paga una parte para gestionar las piezas y paga el restante al entregar. Debe incorporarse como un recorrido normal, sin exigir pago completo para registrar la gestión de piezas ni confundir anticipo con servicio terminado. Esto no cambia por sí mismo la política de autorización de cierre/entrega, aún pendiente de precisar.
+
+Flujo propuesto: propuesta aprobada → anticipo registrado y verificado → gestión de piezas autorizada por oficina → reparación → entrega y cobro del saldo. Importe y propósito del anticipo, método, fecha, referencia, responsable y verificación deben quedar identificados; no equivale automáticamente al costo real de las piezas. Admitir varios abonos conservando cada movimiento.
+
+La ficha debe separar total aprobado, beneficio del chequeo aplicado (si corresponde), pagos de esta reparación, pagos por verificar y saldo. Si precioFinal ya contiene el descuento del chequeo, no volver a restarlo al calcular saldo. Ejemplo conceptual desde precio antes de beneficio: reparación RD$10,000 − chequeo aplicable RD$2,000 − anticipo confirmado RD$3,000 = saldo RD$5,000. El chequeo original no se registra otra vez como entrada nueva de caja.
+
+Código revisado: RegistrarPagoModal ya conserva array de pagos y recalcula estados pendiente/parcial/completo dentro de una transacción. Los pagos nuevos nacen sin verificar y montoPagado suma pagos registrados, sin filtrar verificado. Por ello no debe usarse ese único total como prueba de dinero confirmado disponible para comprar piezas. Integrar esos estados con compras, oficina, comprobante y entrega; no afirmar que el flujo completo ya está implementado.
+
+Pruebas a incluir: anticipo más saldo exacto; varios anticipos; transferencia pendiente; doble envío; cambio autorizado de presupuesto; devolución/cancelación con trazabilidad (política a confirmar); chequeo aplicado una sola vez más anticipo; cierre/entrega y pago con estados distintos. No se modificaron pagos reales ni reglas financieras en esta actualización.
