@@ -17,7 +17,7 @@ interface GarantiaApiInfo {
     tiempoDias: number;
     inicioFecha: string | null;
     finFecha: string | null;
-    estado: 'vigente' | 'reclamada' | 'atendida' | 'expirada';
+    estado: 'vigente' | 'reclamada' | 'atendida' | 'expirada' | 'por_confirmar';
     diasRestantes: number;
     reclamadaEn: string | null;
   };
@@ -165,7 +165,7 @@ export default function GarantiaCliente() {
           </button>
         )}
 
-        {info.garantia.estado === 'expirada' && (
+        {(info.garantia.estado === 'expirada' || info.garantia.estado === 'por_confirmar') && (
           <a
             href={`https://wa.me/1${TELEFONO_EMPRESA}`}
             target="_blank"
@@ -207,6 +207,13 @@ export default function GarantiaCliente() {
 
 function CardEstado({ info }: { info: GarantiaApiInfo }) {
   const { garantia } = info;
+
+  if (garantia.estado === 'por_confirmar') {
+    return <div className="bg-white rounded-2xl border border-slate-200 p-5" role="status">
+      <h2 className="font-semibold">Vigencia por confirmar</h2>
+      <p className="text-sm text-slate-600 mt-2">La oficina debe revisar las fechas de tu garantía. Comunícate con nosotros para ayudarte.</p>
+    </div>;
+  }
 
   if (garantia.estado === 'vigente') {
     const total = Math.max(1, garantia.tiempoDias);
@@ -268,7 +275,7 @@ function CardEstado({ info }: { info: GarantiaApiInfo }) {
               <strong>{formatearFecha(garantia.reclamadaEn)}</strong>.
             </p>
             <p className="text-xs text-gray-600">
-              Pronto un técnico te contactará para coordinar la visita.
+              Secretaría revisará tu solicitud y te contactará para confirmar y agendar la visita.
             </p>
           </div>
         </div>
@@ -411,7 +418,7 @@ function ModalReclamo({
         </div>
 
         <p className="text-sm text-gray-600 mb-3">
-          Describe el problema que estás teniendo con tu equipo. Pronto un técnico te contactará para coordinar la visita.
+          Describe el problema que estás teniendo con tu equipo. Secretaría revisará tu solicitud y te contactará para confirmar y agendar la visita.
         </p>
 
         <label className="block text-xs font-medium text-gray-700 mb-1">

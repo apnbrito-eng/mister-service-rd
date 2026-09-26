@@ -54,6 +54,8 @@ export interface RespuestaEnvioError {
 export type RespuestaEnvio = RespuestaEnvioOk | RespuestaEnvioError;
 
 interface OpcionesEnvio {
+  /** Reutilizar en reintentos del mismo envío; cambiar si cambia el contenido. */
+  tempId?: string;
   ordenId?: string;
   phoneNumberIdOverride?: string;
 }
@@ -133,9 +135,10 @@ interface BodyEnvio {
  */
 async function llamarApiSend(
   body: Omit<BodyEnvio, 'tempId'>,
+  retryId?: string,
 ): Promise<RespuestaEnvio> {
   const idToken = await obtenerIdToken();
-  const tempId = generarTempId();
+  const tempId = retryId || generarTempId();
   const payload: BodyEnvio = { ...body, tempId };
 
   const r = await fetch('/api/whatsapp/send', {
@@ -176,7 +179,7 @@ export async function enviarTexto(
     texto,
     ordenId: opciones?.ordenId,
     phoneNumberIdOverride: opciones?.phoneNumberIdOverride,
-  });
+  }, opciones?.tempId);
 }
 
 /**
@@ -244,5 +247,5 @@ export async function enviarMedia(
     media,
     ordenId: opciones?.ordenId,
     phoneNumberIdOverride: opciones?.phoneNumberIdOverride,
-  });
+  }, opciones?.tempId);
 }

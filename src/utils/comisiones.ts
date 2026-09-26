@@ -388,7 +388,7 @@ export function calcularComisionesProporcionales(args: {
       porcentaje: b.porcentaje,
       proporcionItems: redondearMonto(proporcionItems * 10000) / 10000, // 4 decimales para reportes
       itemsAsignados: b.itemsAsignados,
-      baseSinItbisAsignada: redondearMonto(b.baseSinItbisAsignada),
+      baseSinItbisAsignada: redondearMonto(gananciaNeta * proporcionItems),
     });
   }
 

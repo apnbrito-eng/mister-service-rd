@@ -10,6 +10,6 @@ export async function equipoApi<T>(ruta: string, body?: object): Promise<T> {
   });
   if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('El servicio aún no está disponible en este entorno.');
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || 'No se pudo completar la solicitud.');
+  if (!response.ok) throw Object.assign(new Error(result.error || 'No se pudo completar la solicitud.'), { status: response.status });
   return result as T;
 }

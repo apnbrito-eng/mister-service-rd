@@ -7,7 +7,7 @@ vi.mock('firebase/firestore',async importOriginal=>({
  doc:(...args:any[])=>({name:args.length===1?args[0].name:args[1],id:args[2] || 'audit'}),
  query:(...args:any[])=>args, where:(...args:any[])=>args,
  getDocs:async()=>({empty:m.cantidad===0,docs:Array.from({length:m.cantidad},(_,i)=>({id:'c'+i}))}),
- runTransaction:async(_db:unknown,fn:Function)=>{
+ runTransaction:async(_db:unknown,fn:(tx: any) => Promise<unknown>)=>{
   const pending:any[]=[];
   const result=await fn({get:async(ref:any)=>({data:()=>ref.name==='comisiones'?m.comision:m.orden}),
     update:(ref:any,data:any)=>pending.push({ref,data}),set:(ref:any,data:any)=>pending.push({ref,data})});

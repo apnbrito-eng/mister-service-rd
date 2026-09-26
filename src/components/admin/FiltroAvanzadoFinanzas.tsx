@@ -534,15 +534,16 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
   const guardadosDePagina = guardados.filter((g) => g.pagina === pagina);
 
   return (
-    <div className="space-y-3">
+    <div className="finance-filters space-y-4">
       {/* Línea 1: Tabs de estado (live) */}
       {Array.isArray(estados) && estados.length > 0 && (
-        <div className="flex gap-1.5 flex-wrap">
+        <div className="filter-status-row">
           {estados.map((e) => (
             <button
               key={e.value}
               type="button"
               onClick={() => handleEstado(e.value)}
+              aria-pressed={aplicado.estado === e.value}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 aplicado.estado === e.value
                   ? 'bg-primary text-white'
@@ -556,15 +557,16 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
       )}
 
       {/* Línea 2: Buscador + Tipo equipo */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px]">
+      <div className="filter-search-row">
+        <div className="relative min-w-0">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             value={aplicado.busqueda}
             onChange={(e) => handleBusqueda(e.target.value)}
-            placeholder="Cliente, # orden, # conduce, teléfono, equipo..."
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
+            placeholder="Buscar cliente, orden o teléfono"
+            aria-label="Buscar por cliente, orden, conduce, teléfono o equipo"
+            className="w-full pl-9 pr-10 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
           {aplicado.busqueda && (
             <button
@@ -590,8 +592,10 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
       </div>
 
       {/* Línea 3: Rango de fechas + Aplicar/Limpiar */}
-      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
-        <span className="text-xs font-medium text-gray-500 uppercase shrink-0">
+      <details className="filter-date-disclosure">
+        <summary><span>{etiquetaFechas}</span><span className="text-xs text-gray-500">Cambiar período</span></summary>
+      <div className="filter-dates">
+        <span className="filter-dates-title text-sm font-medium text-gray-600">
           {etiquetaFechas}
         </span>
         {permiteCampoFecha && (
@@ -605,6 +609,7 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
             <option value="pago">Por pago</option>
           </select>
         )}
+        <label className="filter-date-field"><span>Desde</span>
         <input
           type="date"
           value={fechaDesdeLocal}
@@ -613,7 +618,8 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
           className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
           aria-label="Fecha desde"
         />
-        <span className="text-sm text-gray-500">→</span>
+        </label>
+        <label className="filter-date-field"><span>Hasta</span>
         <input
           type="date"
           value={fechaHastaLocal}
@@ -623,7 +629,8 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
           aria-label="Fecha hasta"
         />
 
-        <div className="flex flex-wrap items-center gap-1 ml-1">
+        </label>
+        <div className="filter-date-presets">
           {ATAJOS.map((a) => (
             <button
               key={a.value}
@@ -636,7 +643,7 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
           ))}
         </div>
 
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="filter-date-actions">
           <button
             type="button"
             onClick={aplicar}
@@ -654,9 +661,11 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
         </div>
       </div>
 
+      </details>
+
       {/* Línea 4: Indicador + Filtros guardados */}
       {(mostrarIndicador || permiteFiltrosGuardados) && (
-        <div className="flex flex-wrap items-center gap-3 pt-2">
+        <div className="filter-footer">
           {mostrarIndicador && (
             <div className="flex items-center gap-2 text-xs text-gray-600">
               <Filter size={12} className="text-gray-400" />
@@ -671,7 +680,7 @@ function FiltroAvanzadoFinanzasInner<T extends ItemFiltrable>(
           )}
 
           {permiteFiltrosGuardados && (
-            <div className="flex items-center gap-2 ml-auto relative">
+            <div className="filter-saved-actions relative">
               <button
                 type="button"
                 onClick={guardarFiltro}

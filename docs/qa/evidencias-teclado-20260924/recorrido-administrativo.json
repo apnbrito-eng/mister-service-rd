@@ -1,0 +1,468 @@
+[
+  {
+    "route": "dashboard",
+    "path": "/admin/dashboard",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 1648,
+    "login": false
+  },
+  {
+    "route": "ordenes",
+    "path": "/admin/ordenes",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 393.5,
+    "bottom": 431.02381134033203,
+    "content": 485,
+    "login": false
+  },
+  {
+    "route": "citas",
+    "path": "/admin/citas",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 345,
+    "login": false
+  },
+  {
+    "route": "calendario",
+    "path": "/admin/calendario",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 517,
+    "login": false
+  },
+  {
+    "route": "agenda-dia",
+    "path": "/admin/agenda-dia",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 481,
+    "login": false
+  },
+  {
+    "route": "calendarios",
+    "path": "/admin/calendarios",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 231,
+    "login": false
+  },
+  {
+    "route": "standby",
+    "path": "/admin/standby",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 422,
+    "login": false
+  },
+  {
+    "route": "mapa",
+    "path": "/admin/mapa",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 805,
+    "login": false
+  },
+  {
+    "route": "clientes-responsables",
+    "path": "/admin/clientes-responsables",
+    "height": 839,
+    "visible": true,
+    "field": true,
+    "top": 209.52381896972656,
+    "bottom": 251.0476303100586,
+    "content": 502,
+    "login": false
+  },
+  {
+    "route": "clientes",
+    "path": "/admin/clientes",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 298.28570556640625,
+    "bottom": 339.8095169067383,
+    "content": 241,
+    "login": false
+  },
+  {
+    "route": "cotizaciones",
+    "path": "/admin/cotizaciones",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 366.5952453613281,
+    "bottom": 410.5952453613281,
+    "content": 417,
+    "login": false
+  },
+  {
+    "route": "facturas",
+    "path": "/admin/facturas",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 366.3809509277344,
+    "bottom": 410.3809509277344,
+    "content": 558,
+    "login": false
+  },
+  {
+    "route": "taller",
+    "path": "/admin/taller",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 380,
+    "login": false
+  },
+  {
+    "route": "productos",
+    "path": "/admin/precios",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 250.2857208251953,
+    "bottom": 287.80953216552734,
+    "content": 23177,
+    "login": false
+  },
+  {
+    "route": "rendimiento",
+    "path": "/admin/rendimiento",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 1033,
+    "login": false
+  },
+  {
+    "route": "metricas-mensuales",
+    "path": "/admin/metricas-mensuales",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 1077,
+    "login": false
+  },
+  {
+    "route": "reporte-avanzado",
+    "path": "/admin/reporte-avanzado",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 562,
+    "login": false
+  },
+  {
+    "route": "mantenimiento",
+    "path": "/admin/mantenimiento",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 308,
+    "login": false
+  },
+  {
+    "route": "gastos",
+    "path": "/admin/gastos",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 528,
+    "login": false
+  },
+  {
+    "route": "personal",
+    "path": "/admin/personal",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 694,
+    "login": false
+  },
+  {
+    "route": "usuarios",
+    "path": "/admin/usuarios",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 911,
+    "login": false
+  },
+  {
+    "route": "web",
+    "path": "/admin/web",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 369.9047546386719,
+    "bottom": 407.4285659790039,
+    "content": 4015,
+    "login": false
+  },
+  {
+    "route": "empresas-aliadas",
+    "path": "/admin/empresas-aliadas",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 244,
+    "login": false
+  },
+  {
+    "route": "formularios",
+    "path": "/admin/formularios",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 262,
+    "login": false
+  },
+  {
+    "route": "solicitudes",
+    "path": "/admin/solicitudes",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 393.5238037109375,
+    "bottom": 435.04761505126953,
+    "content": 320,
+    "login": false
+  },
+  {
+    "route": "marketing",
+    "path": "/admin/marketing",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 813,
+    "login": false
+  },
+  {
+    "route": "conocimiento",
+    "path": "/admin/conocimiento",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 376.4761962890625,
+    "bottom": 400.4761962890625,
+    "content": 1339,
+    "login": false
+  },
+  {
+    "route": "asistente",
+    "path": "/admin/asistente",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 427.577392578125,
+    "bottom": 485.10120391845703,
+    "content": 250,
+    "login": false
+  },
+  {
+    "route": "configuracion",
+    "path": "/admin/configuracion",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 254.2857208251953,
+    "bottom": 291.80953216552734,
+    "content": 3276,
+    "login": false
+  },
+  {
+    "route": "cierre-dia",
+    "path": "/admin/cierre-dia",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 1152,
+    "login": false
+  },
+  {
+    "route": "precios",
+    "path": "/admin/precios",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 250.2857208251953,
+    "bottom": 287.80953216552734,
+    "content": 23177,
+    "login": false
+  },
+  {
+    "route": "inventario",
+    "path": "/admin/inventario",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 250.2857208251953,
+    "bottom": 287.80953216552734,
+    "content": 304,
+    "login": false
+  },
+  {
+    "route": "comisiones",
+    "path": "/admin/comisiones",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 874,
+    "login": false
+  },
+  {
+    "route": "nomina",
+    "path": "/admin/nomina",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 486,
+    "login": false
+  },
+  {
+    "route": "historial-anuladas",
+    "path": "/admin/historial-anuladas",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 393.5238037109375,
+    "bottom": 431.04761505126953,
+    "content": 349,
+    "login": false
+  },
+  {
+    "route": "bancos",
+    "path": "/admin/bancos",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 754,
+    "login": false
+  },
+  {
+    "route": "facturacion-pendiente",
+    "path": "/admin/facturacion-pendiente",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 329.5238037109375,
+    "bottom": 373.5238037109375,
+    "content": 521,
+    "login": false
+  },
+  {
+    "route": "pagos-pendientes",
+    "path": "/admin/pagos-pendientes",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 454,
+    "login": false
+  },
+  {
+    "route": "avances",
+    "path": "/admin/avances",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 780,
+    "login": false
+  },
+  {
+    "route": "prestamos",
+    "path": "/admin/prestamos",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 647,
+    "login": false
+  },
+  {
+    "route": "estado-resultado",
+    "path": "/admin/estado-resultado",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 1543,
+    "login": false
+  },
+  {
+    "route": "ponches",
+    "path": "/admin/ponches",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 927,
+    "login": false
+  },
+  {
+    "route": "feedback",
+    "path": "/admin/feedback",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 700,
+    "login": false
+  },
+  {
+    "route": "sugerencias-chequeo",
+    "path": "/admin/sugerencias-chequeo",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 425,
+    "login": false
+  },
+  {
+    "route": "reprogramaciones",
+    "path": "/admin/reprogramaciones",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 416,
+    "login": false
+  },
+  {
+    "route": "configuracion-marketing",
+    "path": "/admin/configuracion-marketing",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 369.6190490722656,
+    "bottom": 407.14286041259766,
+    "content": 775,
+    "login": false
+  },
+  {
+    "route": "inbox",
+    "path": "/admin/inbox",
+    "height": 527,
+    "visible": true,
+    "field": true,
+    "top": 224.76190185546875,
+    "bottom": 262.2857131958008,
+    "content": 408,
+    "login": false
+  },
+  {
+    "route": "notificaciones",
+    "path": "/admin/notificaciones",
+    "height": 839,
+    "visible": true,
+    "field": false,
+    "content": 657,
+    "login": false
+  }
+]

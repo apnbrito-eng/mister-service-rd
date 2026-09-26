@@ -15,6 +15,7 @@ import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import FiltroAvanzadoFinanzas from '../components/admin/FiltroAvanzadoFinanzas';
 import { Plus, FileText, Trash2, Edit, Check, Printer, X, Copy, Receipt, Boxes, Tag, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { errorCotizacion } from '../utils/validacionCotizacion';
 
 const ESTADO_COLORS: Record<EstadoCotizacion, string> = {
   borrador: 'bg-gray-100 text-gray-700',
@@ -293,9 +294,8 @@ export default function Cotizaciones() {
   // suelta) también es 1 sola escritura.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.clienteNombre) { toast.error('Cliente es requerido'); return; }
-    if (form.items.length === 0) { toast.error('Agrega al menos un item'); return; }
-    if (form.items.some(i => !i.descripcion)) { toast.error('Completa la descripción de todos los items'); return; }
+    const error = errorCotizacion(form.clienteNombre, form.items);
+    if (error) { toast.error(error); return; }
     setSaving(true);
     try {
       if (editingId) {
@@ -455,8 +455,8 @@ export default function Cotizaciones() {
   if (loading) return <LoadingSpinner fullPage text="Cargando cotizaciones..." />;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="quotes-page space-y-6">
+      <div className="quotes-heading">
         <div>
           <h1 className="text-2xl font-bold text-primary">Cotizaciones</h1>
           <p className="text-gray-500 text-sm">
@@ -467,7 +467,7 @@ export default function Cotizaciones() {
         </div>
         {puedeCrear && (
           <button onClick={() => { resetForm(); setEditingId(null); setShowModal(true); }}
-            className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+            className="service-primary-action">
             <Plus size={18} /> Nueva Cotización
           </button>
         )}
@@ -635,7 +635,7 @@ export default function Cotizaciones() {
                         placeholder="Descripción" className="flex-1 min-w-[180px] px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                       <input type="number" value={item.cantidad} onChange={e => updateItem(i, 'cantidad', parseInt(e.target.value) || 0)} min={1}
                         className="w-16 px-2 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary-medium" />
-                      <input type="number" value={item.precio} onChange={e => updateItem(i, 'precio', parseFloat(e.target.value) || 0)}
+                      <input type="number" min={0} step="0.01" inputMode="decimal" value={item.precio} onChange={e => updateItem(i, 'precio', parseFloat(e.target.value) || 0)}
                         placeholder="RD$" className="w-28 px-2 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium" />
                       <button type="button" onClick={() => removeItem(i)} className="p-2 hover:bg-red-50 rounded-lg text-red-500">
                         <X size={14} />

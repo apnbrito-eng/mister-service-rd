@@ -1,0 +1,20 @@
+import React from 'react';
+import { act, create } from 'react-test-renderer';
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
+const m=vi.hoisted(()=>({upload:vi.fn(),gps:vi.fn(),update:vi.fn()}));
+vi.mock('../../src/firebase/config',()=>({db:{}}));
+vi.mock('firebase/firestore',()=>({doc:vi.fn(),updateDoc:m.update,Timestamp:{now:()=>({toDate:()=>new Date()})},arrayUnion:vi.fn(),collection:vi.fn(),getDocs:async()=>({docs:[]}),query:vi.fn(),where:vi.fn()}));
+vi.mock('../../src/services/storage.service',()=>({subirFotoInicioChequeo:m.upload,obtenerUbicacionGPS:m.gps,distanciaMetros:()=>0}));
+vi.mock('../../src/services/notificaciones.service',()=>({crearNotificacion:vi.fn()}));
+vi.mock('../../src/utils',()=>({crearRegistroAuditoria:()=>({}),faseLabel:(s:string)=>s}));
+vi.mock('../../src/components/Modal',()=>({default:({isOpen,children}:any)=>isOpen?React.createElement('section',null,children):null}));
+vi.mock('react-hot-toast',()=>({default:{loading:vi.fn(),dismiss:vi.fn(),success:vi.fn(),error:vi.fn()}}));
+import IniciarChequeoButton from '../../src/components/ordenes/IniciarChequeoButton';
+let tree:any; let cancel:(()=>void)|undefined;
+beforeEach(()=>{vi.clearAllMocks();vi.stubGlobal('navigator',{});m.gps.mockImplementation(async(cb:any)=>{cb({code:2,message:'No disponible',highAccuracy:false});return null;});m.upload.mockResolvedValue('foto-local');});
+afterEach(()=>{act(()=>tree?.unmount());vi.unstubAllGlobals();});
+async function mount(){await act(async()=>{tree=create(React.createElement(IniciarChequeoButton,{orden:{id:'orden',fase:'agendado',fechaCita:new Date(),historialFases:[]} as any,userProfile:{id:'tecnico',nombre:'Técnico'} as any}),{createNodeMock:(el:any)=>el.type==='input'?{value:'',click:()=>{},addEventListener:(name:string,fn:()=>void)=>{if(name==='cancel')cancel=fn;},removeEventListener:()=>{}}:null});});}
+const button=(label:string)=>tree.root.findAllByType('button').find((b:any)=>b.children.includes(label));
+it('cancelar la selección de foto permite intentar de nuevo',async()=>{await mount();act(()=>button('Iniciar chequeo').props.onClick());expect(button('Iniciando...').props.disabled).toBe(true);act(()=>cancel?.());expect(button('Iniciar chequeo').props.disabled).toBe(false);expect(m.upload).not.toHaveBeenCalled();});
+it('GPS no disponible requiere confirmación visible y cancelar no guarda',async()=>{await mount();act(()=>button('Iniciar chequeo').props.onClick());await act(async()=>{tree.root.findByType('input').props.onChange({target:{files:[{size:1,type:'image/png'}]}});});expect(button('Continuar con advertencia')).toBeTruthy();expect(m.upload).not.toHaveBeenCalled();await act(async()=>button('Cancelar inicio').props.onClick());expect(m.update).not.toHaveBeenCalled();expect(button('Iniciar chequeo').props.disabled).toBe(false);});
+it('aceptar la advertencia conserva GPS no verificado en registro e historial',async()=>{await mount();await act(async()=>{tree.root.findByType('input').props.onChange({target:{files:[{size:1,type:'image/png'}]}});});await act(async()=>button('Continuar con advertencia').props.onClick());expect(m.update).toHaveBeenCalled();const data=m.update.mock.calls[0][1];expect(data.inicioChequeo.gpsVerificado).toBe(false);expect(data.historialFases[0].nota).toContain('GPS no verificado');});

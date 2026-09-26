@@ -63,7 +63,7 @@ export default function OrdenCard({ orden, onSelect, standbyItems = [] }: OrdenC
   };
   return (
     <div
-      className="relative bg-white rounded-2xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition-shadow"
+      className="service-order-row relative bg-white border-b border-gray-200 p-4 hover:bg-slate-50 transition-colors"
     >
       {/* SPRINT-DISENO-H: badge de estado arriba-derecha en lugar de border-left accent. */}
       <div className="absolute top-2 right-2 z-10 pointer-events-none">

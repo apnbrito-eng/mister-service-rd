@@ -50,7 +50,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log(JSON.stringify({
     endpoint: 'portal-cliente/posponer',
     app_check: appCheckResult,
-    token_orden: token.substring(0, 8) + '...',
   }));
 
   // ─── Body parsing y validaciones de forma ───

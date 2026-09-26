@@ -125,7 +125,7 @@ export default function AsistenteIAFlotante() {
         title="Asistente IA"
         aria-label="Abrir Asistente IA"
         // @safe-gradient: botón flotante Asistente IA — identidad visual del producto IA
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-medium text-white shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center"
+        className="service-assistant-launcher fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-medium text-white shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center"
       >
         <Sparkles className="w-6 h-6 text-white" />
         {hayNoLeido && (
@@ -144,7 +144,7 @@ export default function AsistenteIAFlotante() {
     <div
       className={[
         'fixed z-40 bg-white flex flex-col overflow-hidden',
-        'inset-0 w-screen h-screen rounded-none',
+        'ia-panel-movil inset-0 w-full h-[100dvh] rounded-none',
         'sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[400px] sm:h-[600px] sm:max-h-[80vh] sm:rounded-2xl sm:shadow-2xl sm:border sm:border-primary/20',
         'transition-all duration-200 ease-out',
         montado ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4',

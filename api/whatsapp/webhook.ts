@@ -1,3 +1,5 @@
+import { prepararReparto } from '../_lib/repartoChats.js';
+import { rutaMensajeEntrante } from '../_lib/rutaChatOrden.js';
 import { solicitaBaja, origenAnuncio } from '../_lib/preferenciasMarketing.js';
 /**
  * Webhook entrante de WhatsApp Cloud API (Meta).
@@ -200,6 +202,18 @@ async function persistirMensajeEntrante(
 
     const conversacionSnap = await tx.get(conversacionRef);
     const conversacionExiste = conversacionSnap.exists;
+    const ordenChat = await rutaMensajeEntrante(db, tx, msg.wa_id, msg.timestampMeta);
+    const atencionRef = db.collection('crm_atencion').doc(msg.wa_id);
+    const atencion = (await tx.get(atencionRef)).data();
+    let responsableId = atencion ? atencion.responsableId : conversacionSnap.data()?.asignadaA;
+    let responsable = typeof responsableId === 'string' && /^[\w.-]{1,160}$/.test(responsableId)
+      ? (await tx.get(db.collection('usuarios').doc(responsableId))).data() : null;
+    let responsableValido = responsable && responsable.activo !== false && !responsable.eliminado && ['administrador', 'coordinadora', 'secretaria', 'operaria'].includes(responsable.rol);
+    const reparto = !responsableValido ? await prepararReparto(db, tx) : null;
+    if (reparto) { responsableId = reparto.uid; responsable = { nombre: reparto.nombre, rol: reparto.rol, activo: true }; responsableValido = true; }
+    if (!responsableValido) { responsableId = null; responsable = null; }
+    const sinAsignarAdmins = !responsableValido ? await tx.get(db.collection('usuarios').where('rol', '==', 'administrador').limit(20)) : null;
+
 
     // Preview del mensaje para la conversación (no PII completa).
     const preview =
@@ -223,10 +237,13 @@ async function persistirMensajeEntrante(
       timestampMeta: msg.timestampMeta,
       timestampRecibido: FieldValue.serverTimestamp(),
       procesadoBot: false,
+      ...(ordenChat ? { ordenId: ordenChat, visibleTecnico: false } : {}),
       conversacionId: msg.wa_id,
       raw: rawCapeado,
+      ...(origenAnuncio(msg.rawMessage) ? { origenMarketing: origenAnuncio(msg.rawMessage) } : {}),
     };
 
+    reparto?.aplicar();
     tx.set(inboxRef, stripUndefinedDeep(inboxPayload));
 
     // Conversación: merge con campos críticos siempre escritos por el SDK
@@ -271,7 +288,12 @@ async function persistirMensajeEntrante(
     }
 
     const origen = origenAnuncio(msg.rawMessage);
-    if (origen) conversacionUpdate.origenMarketing = origen;
+    if (origen) {
+      const touch = { ...origen, mensajeId: msg.wamid, fecha: msg.timestampMeta, phoneNumberId: msg.phoneNumberId };
+      conversacionUpdate.origenMarketing = touch;
+      // Preserve each advertising touch independently; later ads must not erase the origin of an existing order.
+      tx.set(db.collection('marketing_atribuciones').doc(msg.wamid), { ...touch, conversacionId: msg.wa_id });
+    }
     if (solicitaBaja(msg.contenido.texto)) {
       // Atomicidad con el mensaje: un retry no duplica la baja ni la auditoría.
       tx.set(db.collection('whatsapp_config').doc('sistema'), { optOuts: FieldValue.arrayUnion(msg.wa_id) }, { merge: true });
@@ -279,6 +301,24 @@ async function persistirMensajeEntrante(
       conversacionUpdate.bajaSolicitada = true;
       tx.create(db.collection('auditoria_admin').doc(), { accion: 'baja_whatsapp_solicitada', origen: 'mensaje_cliente', mensajeId: msg.wamid, fecha: FieldValue.serverTimestamp() });
     }
+
+    tx.set(atencionRef, { ...(!atencion || reparto || !responsableValido ? { responsableId: responsableId || null, responsableNombre: responsable?.nombre || null, traspaso: null } : {}), pendiente: true, version: (atencion?.version || 0) + 1, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+    if (responsableValido) {
+      // Same transaction as the incoming message: a Meta retry cannot duplicate the alert.
+      const avisoId = crypto.createHash('sha256').update(`chat:${msg.wamid}`).digest('hex');
+      tx.create(db.collection('notificaciones').doc(avisoId), {
+        userId: responsableId, tipo: 'crm_mensaje', titulo: 'Nuevo mensaje de cliente',
+        mensaje: 'Tienes un mensaje pendiente en una conversación a tu cargo.',
+        conversacionId: msg.wa_id, requiereResponsableActual: true, leida: false, createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    for (const admin of sinAsignarAdmins?.docs || []) {
+      if (admin.data().activo === false || admin.data().eliminado === true) continue;
+      const avisoId = crypto.createHash('sha256').update(`chat-sin-asignar:${msg.wamid}:${admin.id}`).digest('hex');
+      tx.create(db.collection('notificaciones').doc(avisoId), { userId: admin.id, tipo: 'crm_mensaje', titulo: 'Mensaje sin responsable', mensaje: 'Hay un mensaje pendiente de asignar en la bandeja.', conversacionId: msg.wa_id, leida: false, createdAt: FieldValue.serverTimestamp() });
+    }
+    if (reparto || !responsableValido) conversacionUpdate.asignadaA = responsableId;
+    if (reparto) tx.create(db.collection('auditoria_admin').doc(), { accion: 'chat_autoasignado', conversacionId: msg.wa_id, responsableId: reparto.uid, criterio: 'rotacion_personal_de_turno', mensajeId: msg.wamid, fecha: FieldValue.serverTimestamp() });
     tx.set(conversacionRef, stripUndefinedDeep(conversacionUpdate), { merge: true });
     creado = true;
   });

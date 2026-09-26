@@ -1,3 +1,4 @@
+import { equipoApi } from '../services/equipoApi';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   collection, onSnapshot, doc, updateDoc,
@@ -676,6 +677,11 @@ export default function Ordenes() {
         updateData.auditoria = arrayUnion(...registros);
       }
 
+      if (editForm.tecnicoId && editForm.tecnicoId !== (selectedOrden.tecnicoId || '')) {
+        await equipoApi('/api/crm/asignar-tecnico', { ordenId: selectedOrden.id, tecnicoId: editForm.tecnicoId, tecnicoAnterior: selectedOrden.tecnicoId || '', fechaCita: fechaCitaTs?.toDate().toISOString(), duracionMin: editForm.duracionMin, requestId: crypto.randomUUID() });
+        delete updateData.tecnicoId; delete updateData.tecnicoNombre;
+        delete updateData.operariaId; delete updateData.operariaNombre;
+      }
       await updateDoc(doc(db, 'ordenes_servicio', selectedOrden.id), updateData);
       if (editForm.clienteLat === undefined || editForm.clienteLng === undefined) {
         toast('Esta orden no tiene ubicación GPS. El técnico no podrá verla en el mapa. Puedes agregarla después desde la orden.', {
@@ -871,7 +877,7 @@ export default function Ordenes() {
   // SPRINT-DISENO-C (2026-05-31): skeleton en lugar de spinner full-page.
   if (loading) {
     return (
-      <div className="p-6 space-y-6">
+      <div className="service-page space-y-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="space-y-2">
             <SkeletonText className="w-56 h-7" />
@@ -890,7 +896,7 @@ export default function Ordenes() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="service-page space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -1049,7 +1055,7 @@ export default function Ordenes() {
 
       {/* Orders: Lista o Tablero */}
       {vista === 'lista' ? (
-        <div className="space-y-3">
+        <div className="service-record-list">
           {ordenesFiltradas.length === 0 ? (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-400">
               <FileText size={32} className="mx-auto mb-2 opacity-30" />

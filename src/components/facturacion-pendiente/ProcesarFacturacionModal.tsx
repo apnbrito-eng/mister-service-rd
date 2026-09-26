@@ -44,6 +44,8 @@ import {
   Banknote, ArrowRightLeft, CreditCard, Check, Clock, X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { itemsPropuestaCrm } from '../../utils/itemsPropuestaCrm';
+import { equipoApi } from '../../services/equipoApi';
 
 /** TTL del borrador en localStorage. 24 horas. */
 const BORRADOR_TTL_MS = 24 * 60 * 60 * 1000;
@@ -234,6 +236,16 @@ export default function ProcesarFacturacionModal({
     const cargar = async () => {
       setCargandoCotizacion(true);
       try {
+        if (orden.crmGestion && !orden.soloChequeo) {
+          const crm = await equipoApi<{ meta: { propuesta?: Parameters<typeof itemsPropuestaCrm>[0] } }>(`/api/crm/orden?ordenId=${encodeURIComponent(orden.id)}`);
+          const propuesta = crm.meta?.propuesta;
+          if (propuesta) {
+            const iniciales = itemsPropuestaCrm(propuesta, Number(orden.precioFinal ?? orden.precioAprobado ?? 0));
+            setItems(iniciales.map(it => aplicarTecnicoDefault(it, orden)));
+            yaCargoInicialRef.current = true;
+            return;
+          }
+        }
         if (orden.cotizacionId) {
           const snap = await getDoc(doc(db, 'cotizaciones', orden.cotizacionId));
           if (snap.exists()) {
@@ -247,6 +259,9 @@ export default function ProcesarFacturacionModal({
         }
         setItems([defaultItem(orden)]);
         yaCargoInicialRef.current = true;
+      } catch (error) {
+        setItems([]);
+        toast.error(error instanceof Error ? error.message : 'No se pudo cargar el presupuesto aprobado.');
       } finally {
         setCargandoCotizacion(false);
       }
@@ -357,6 +372,7 @@ export default function ProcesarFacturacionModal({
   // que lo pisó. La operaria puede sobrescribir manualmente después.
   useEffect(() => {
     if (paso !== 2) return;
+    if (orden?.crmGestion) return;
     if (pagoMonto > 0) return; // ya se setteó (por borrador o manual)
     const pendiente = Math.max(0, totalItems - totalPagado);
     if (pendiente > 0) setPagoMonto(pendiente);
@@ -411,6 +427,7 @@ export default function ProcesarFacturacionModal({
 
     // SPRINT-151: validación del pago nuevo.
     const montoPagoNuevo = Math.max(0, Number(pagoMonto) || 0);
+    if (orden.crmGestion && montoPagoNuevo > 0) { toast.error('Registra y confirma el abono en la sección Pagos de la ficha antes de emitir.'); return; }
     if (montoPagoNuevo > 0) {
       // Si hay pago en construcción, "Pago verificado" debe estar tildado.
       if (!pagoVerificado) {
@@ -443,6 +460,21 @@ export default function ProcesarFacturacionModal({
 
     setGenerando(true);
     try {
+      if (orden.crmGestion) {
+        const ficha = await equipoApi<{ orden: { precioFinal?: number }; meta: { revisionVigente: boolean; revision?: { estado: string } }; balance: { saldo: number | null; pendientes: number } }>(`/api/crm/orden?ordenId=${encodeURIComponent(orden.id)}`);
+        if (!esAdminOCoord(userProfile) || !ficha.meta.revisionVigente) {
+          toast.error('Supervisión debe confirmar la revisión en Responsables antes de emitir.', { duration: 7000 });
+          return;
+        }
+        if (Math.round(totalItems * 100) !== Math.round(Number(ficha.orden.precioFinal) * 100)) {
+          toast.error('El total debe coincidir con el presupuesto revisado por supervisión.', { duration: 7000 });
+          return;
+        }
+        if (ficha.balance.saldo !== 0 || ficha.balance.pendientes > 0) {
+          toast.error('Confirma el pago completo en Pagos antes de emitir el documento final.', { duration: 7000 });
+          return;
+        }
+      }
       const numero = await siguienteNumeroFactura();
       const ahora = Timestamp.now();
       const usuario = userProfile?.nombre || 'Sistema';
@@ -1361,7 +1393,7 @@ export default function ProcesarFacturacionModal({
                     step="0.01"
                     value={pagoMonto}
                     onChange={e => setPagoMonto(parseFloat(e.target.value) || 0)}
-                    disabled={generando}
+                    disabled={generando || orden?.crmGestion === true}
                     className="mt-1 w-full px-2 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium disabled:bg-gray-50"
                   />
                 </div>

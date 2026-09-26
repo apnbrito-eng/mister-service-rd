@@ -1,3 +1,4 @@
+import { esAppNativa, capturarFotoNativa } from '../../mobile/camara';
 import { useEffect, useRef, useState } from 'react';
 import {
   doc,
@@ -22,6 +23,7 @@ import { crearRegistroAuditoria, faseLabel } from '../../utils';
 import { razonIniciarChequeoDisabled } from '../../utils/tooltipsBotones';
 import { Camera, CheckCircle2, AlertTriangle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Modal from '../Modal';
 
 /** Log con timestamp para diagnóstico del flujo de chequeo. */
 function logChequeo(msg: string, extra?: unknown): void {
@@ -76,6 +78,25 @@ export default function IniciarChequeoButton({
   const [procesando, setProcesando] = useState(false);
   const [permisoGps, setPermisoGps] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
   const inputRef = useRef<HTMLInputElement>(null);
+  const [confirmacionGps, setConfirmacionGps] = useState<string | null>(null);
+  const resolverConfirmacion = useRef<((aceptar: boolean) => void) | null>(null);
+  const confirmarUbicacion = (mensaje: string) => new Promise<boolean>(resolve => {
+    resolverConfirmacion.current = resolve;
+    setConfirmacionGps(mensaje);
+  });
+  const responderUbicacion = (aceptar: boolean) => {
+    setConfirmacionGps(null);
+    resolverConfirmacion.current?.(aceptar);
+    resolverConfirmacion.current = null;
+  };
+  useEffect(() => () => { resolverConfirmacion.current?.(false); }, []);
+
+  useEffect(() => {
+    const input = inputRef.current;
+    const cancel = () => setProcesando(false);
+    input?.addEventListener('cancel', cancel);
+    return () => input?.removeEventListener('cancel', cancel);
+  }, []);
 
   // Query del Permissions API al montar (Chrome/Android soportan; iOS Safari no tiene 'geolocation' pero no rompe)
   useEffect(() => {
@@ -124,7 +145,7 @@ export default function IniciarChequeoButton({
    * móvil suspende getCurrentPosition mientras la cámara ocupa foreground.
    * El change event del input sigue contando como user-gesture en Chrome e iOS.
    */
-  const dispararCamara = () => {
+  const dispararCamara = async () => {
     if (procesando) return;
 
     // Si sabemos (Permissions API) que el permiso ya fue denegado, abortar sin pedir cámara.
@@ -138,6 +159,12 @@ export default function IniciarChequeoButton({
 
     setProcesando(true);
     logChequeo('tap botón Iniciar chequeo', { ordenId: orden.id, permisoGps });
+
+    if (esAppNativa()) {
+      try { await handleArchivo(await capturarFotoNativa()); }
+      catch { setProcesando(false); toast.error('No se tomó la foto. Puedes intentar de nuevo.'); }
+      return;
+    }
 
     // Abrir cámara inmediatamente — user gesture preservado (iOS + Chrome)
     if (inputRef.current) {
@@ -185,7 +212,7 @@ export default function IniciarChequeoButton({
           setProcesando(false);
           return;
         }
-        const continuar = confirm(
+        const continuar = await confirmarUbicacion(
           motivo +
           '\n\n¿Deseas iniciar el chequeo SIN verificación de ubicación?\n\n' +
           'La foto se registrará pero el chequeo quedará marcado como "GPS no verificado".',
@@ -204,7 +231,7 @@ export default function IniciarChequeoButton({
         distancia = distanciaMetros(gps.lat, gps.lng, orden.clienteLat, orden.clienteLng);
         if (distancia > UMBRAL_LEJOS_METROS) {
           toast.dismiss('chequeo');
-          const ok = confirm(
+          const ok = await confirmarUbicacion(
             `Estás a ${distancia} m del cliente (más de ${UMBRAL_LEJOS_METROS} m). ¿Confirmar inicio de chequeo de todas formas?`,
           );
           if (!ok) {
@@ -235,6 +262,8 @@ export default function IniciarChequeoButton({
         tecnicoId: usuarioId,
         tecnicoNombre: usuario,
         fotoUrl,
+        origenCaptura: esAppNativa() ? 'camara_nativa' : 'web',
+        capturadaEn: new Date(file.lastModified),
       };
       if (gps) {
         inicioChequeo.lat = gps.lat;
@@ -273,7 +302,7 @@ export default function IniciarChequeoButton({
             fase: 'en_diagnostico',
             timestamp: ahora,
             usuario,
-            nota: 'Chequeo iniciado en sitio (foto + GPS)',
+            nota: gps ? 'Chequeo iniciado en sitio (foto + GPS)' : 'Chequeo iniciado con foto; GPS no verificado',
           },
         ];
       }
@@ -372,6 +401,13 @@ export default function IniciarChequeoButton({
           </span>
         </div>
       )}
+      <Modal isOpen={confirmacionGps !== null} onClose={() => responderUbicacion(false)} title="Confirmar ubicación del chequeo" size="sm">
+        <p className="whitespace-pre-line text-sm text-gray-700">{confirmacionGps}</p>
+        <div className="flex gap-3 mt-5">
+          <button type="button" onClick={() => responderUbicacion(false)} className="px-4 py-2 border rounded-lg">Cancelar inicio</button>
+          <button type="button" onClick={() => responderUbicacion(true)} className="px-4 py-2 bg-orange-500 text-white rounded-lg">Continuar con advertencia</button>
+        </div>
+      </Modal>
       <input
         ref={inputRef}
         type="file"

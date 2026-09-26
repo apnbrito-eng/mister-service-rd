@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { useEffect, useState, useCallback, useRef } from 'react';
 
 interface VersionCheckResult {
@@ -13,6 +14,7 @@ export function useVersionCheck(intervaloMs: number = 5 * 60 * 1000): VersionChe
   const timerRef = useRef<number | null>(null);
 
   const chequear = useCallback(async () => {
+    if (Capacitor.isNativePlatform()) return;
     try {
       const res = await fetch(`/version.json?t=${Date.now()}`, {
         cache: 'no-store',
@@ -29,6 +31,8 @@ export function useVersionCheck(intervaloMs: number = 5 * 60 * 1000): VersionChe
   }, [versionCliente]);
 
   useEffect(() => {
+    // El paquete nativo se actualiza instalando una nueva app, no recargando la web.
+    if (Capacitor.isNativePlatform()) return;
     chequear(); // chequeo inicial
     timerRef.current = window.setInterval(chequear, intervaloMs);
     const onFocus = () => chequear();

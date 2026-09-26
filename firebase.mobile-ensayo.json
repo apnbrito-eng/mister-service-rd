@@ -1,0 +1,4 @@
+{
+  "firestore": { "rules": "config/firestore.mobile-ensayo.rules", "indexes": "firestore.indexes.json" },
+  "storage": { "rules": "config/storage.mobile-ensayo.rules" }
+}

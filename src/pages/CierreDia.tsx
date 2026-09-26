@@ -1,3 +1,4 @@
+import RendicionEfectivo from '../components/crm/RendicionEfectivo';
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -102,12 +103,7 @@ export default function CierreDia() {
     return ordenesCerradasHoy.filter(o => o.soloChequeo);
   }, [ordenesCerradasHoy]);
 
-  const totalIngresos = useMemo(() => {
-    return ordenesCerradasHoy.reduce((sum, o) => {
-      if (o.soloChequeo) return sum + (o.precioChequeo || 0);
-      return sum + (o.precioFinal || o.precioAprobado || 0);
-    }, 0);
-  }, [ordenesCerradasHoy]);
+  const totalIngresos = useMemo(() => ordenes.filter(o => !o.eliminada).reduce((sum, o) => sum + (o.pagos || []).filter(p => p.verificado === true && p.fecha >= fechaInicio && p.fecha <= fechaFin).reduce((s, p) => s + p.monto, 0), 0), [ordenes, fechaInicio, fechaFin]);
 
   const facturasHoy = useMemo(() => {
     return facturas.filter(f => f.fechaEmision && isSameDay(f.fechaEmision, fechaInicio));
@@ -117,7 +113,7 @@ export default function CierreDia() {
   const efectivoPorTecnico = useMemo(() => {
     const grupos: Record<string, { tecnicoNombre: string; tecnicoId: string; ordenes: OrdenServicio[]; monto: number; entregado: boolean }> = {};
     ordenesCerradasHoy
-      .filter(o => o.metodoPagoCierre === 'efectivo')
+      .filter(o => !o.crmGestion && o.metodoPagoCierre === 'efectivo')
       .forEach(o => {
         const id = o.tecnicoId || 'sin-asignar';
         const nombre = o.tecnicoNombre || 'Sin asignar';
@@ -135,16 +131,16 @@ export default function CierreDia() {
   // Transferencias por banco
   const transferenciasPorBanco = useMemo(() => {
     const grupos: Record<string, { banco: string; cantidad: number; monto: number }> = {};
-    ordenesCerradasHoy
-      .filter(o => o.metodoPagoCierre === 'transferencia')
-      .forEach(o => {
-        const banco = o.bancoDestinoCierre || 'Sin banco';
+    ordenes.filter(o => !o.eliminada).forEach(o => {
+      (o.pagos || []).filter(p => p.metodo === 'transferencia' && p.verificado === true && p.fecha >= fechaInicio && p.fecha <= fechaFin).forEach(p => {
+        const banco = p.bancoNombre || 'Sin banco registrado';
         if (!grupos[banco]) grupos[banco] = { banco, cantidad: 0, monto: 0 };
         grupos[banco].cantidad++;
-        grupos[banco].monto += o.soloChequeo ? (o.precioChequeo || 0) : (o.precioFinal || o.precioAprobado || 0);
+        grupos[banco].monto += p.monto;
       });
+    });
     return Object.values(grupos).sort((a, b) => b.monto - a.monto);
-  }, [ordenesCerradasHoy]);
+  }, [ordenes, fechaInicio, fechaFin]);
 
   const transferenciasTotal = transferenciasPorBanco.reduce((sum, t) => sum + t.monto, 0);
 
@@ -290,11 +286,14 @@ export default function CierreDia() {
         </div>
       </div>
 
+      <p className="text-sm text-amber-800 bg-amber-50 rounded p-3">El ingreso cobrado del día incluye pagos confirmados. Los registros antiguos sin verificación requieren conciliación; no se presume que el precio de una orden se haya cobrado.</p>
+      <RendicionEfectivo ordenes={ordenes} />
+
       {/* Efectivo por técnico */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-primary uppercase tracking-wide flex items-center gap-2">
-            <Truck size={16} /> Efectivo a entregar a oficina
+            <Truck size={16} /> Efectivo de registros anteriores (por conciliar)
           </h2>
           <span className="text-sm font-bold text-primary">Total: {formatMoneda(efectivoTotal)}</span>
         </div>

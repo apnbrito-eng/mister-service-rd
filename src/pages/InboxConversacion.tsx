@@ -1,6 +1,12 @@
+import { usePreferenciasChat } from '../hooks/usePreferenciasChat';
+import NotaVoz from '../components/inbox/NotaVoz';
+import AvisoRedaccion from '../components/inbox/AvisoRedaccion';
+import { equipoApi } from '../services/equipoApi';
+import AtencionChat from '../components/inbox/AtencionChat';
+import type { FuenteCrm } from '../components/crm/GestionOrden';
 import SugerenciaIA from '../components/inbox/SugerenciaIA';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Send,
@@ -8,6 +14,8 @@ import {
   Search,
   MessageSquare,
   CheckCheck,
+  MoreHorizontal,
+  UserRound,
 } from 'lucide-react';
 import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -17,7 +25,7 @@ import {
   suscribirMensajes,
   marcarLeida,
 } from '../services/whatsappInbox.service';
-import { enviarTexto } from '../services/whatsapp.service';
+import { encolarMensaje, leerPendientes, escucharPendientes, descartarPendiente, type MensajePendiente } from '../services/colaMensajes';
 import {
   suscribirRespuestasRapidas,
   type WhatsappRespuestaRapida,
@@ -67,17 +75,66 @@ type MensajeRender =
   | (WhatsAppMensajeOutbox & { _direccion: 'saliente' });
 
 export default function InboxConversacion() {
+  const [vistaCompacta, setVistaCompacta] = useState<'chat' | 'gestion'>('chat');
+  const [maxMensajes, setMaxMensajes] = useState(50);
+  const [mensajeEnlace, setMensajeEnlace] = useState<MensajeRender | null>(null);
+  const [errorMensajes, setErrorMensajes] = useState('');
+  const historialScroll = useRef<{ alto: number; top: number } | null>(null);
+  const [pantallaAmplia, setPantallaAmplia] = useState(() => window.matchMedia('(min-width: 1280px)').matches);
+  useEffect(() => { const mq = window.matchMedia('(min-width: 1280px)'); const cambiar = () => setPantallaAmplia(mq.matches); mq.addEventListener('change', cambiar); return () => mq.removeEventListener('change', cambiar); }, []);
+  const [accionesAbiertas, setAccionesAbiertas] = useState(false);
+  const [fuenteCrm, setFuenteCrm] = useState<FuenteCrm | null>(null);
   const { waId } = useParams<{ waId: string }>();
+  useEffect(() => { setMaxMensajes(50); setFuenteCrm(null); setVistaCompacta('chat'); setAccionesAbiertas(false); }, [waId]);
+  useEffect(() => { if (fuenteCrm) setVistaCompacta('gestion'); }, [fuenteCrm]);
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser, userProfile } = useApp();
 
+  const { preferencias } = usePreferenciasChat(currentUser?.uid);
+  useEffect(() => { if (location.search.includes('vista=cliente')) setVistaCompacta('gestion'); }, [location.search]);
   const [conversaciones, setConversaciones] = useState<WhatsAppConversacion[]>([]);
   const [conversacionActual, setConversacionActual] = useState<WhatsAppConversacion | null>(null);
   const [mensajes, setMensajes] = useState<MensajeRender[]>([]);
+  useEffect(() => {
+    if (!location.hash) return;
+    let id: string;
+    try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+    if (!id.startsWith('mensaje-')) return;
+    setVistaCompacta('chat');
+    const frame = requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ block: 'center' }));
+    return () => cancelAnimationFrame(frame);
+  }, [location.hash, mensajes.length, mensajeEnlace]);
+
+  useEffect(() => {
+    setMensajeEnlace(null);
+    if (!location.hash || !waId) return;
+    let id: string; try { id = decodeURIComponent(location.hash.slice(1)).replace(/^mensaje-/, ''); } catch { return; }
+    if (!id || id.includes('/')) return;
+    return onSnapshot(doc(db, 'whatsapp_mensajes_inbox', id), snap => {
+      const data = snap.data();
+      if (data?.wa_id === waId) setMensajeEnlace({ ...data, id: snap.id, wamid: snap.id, _direccion: 'entrante' } as MensajeRender);
+    });
+  }, [waId, location.hash]);
   const [texto, setTexto] = useState('');
+  const [escribiendo, setEscribiendo] = useState(false);
+  const hayBorrador = texto.trim().length > 0;
+  useEffect(() => {
+    if (!waId || !escribiendo || !hayBorrador) return;
+    const presencia = (activa: boolean) => equipoApi('/api/crm/atencion', { waId, accion: 'presencia', activa }).catch(() => {});
+    void presencia(true);
+    const timer = window.setInterval(() => { if (!document.hidden) void presencia(true); }, 20000);
+    return () => { clearInterval(timer); void presencia(false); };
+  }, [waId, escribiendo, hayBorrador]);
+
   const [ahora, setAhora] = useState(Date.now());
   useEffect(() => { const id = window.setInterval(() => setAhora(Date.now()), 15000); return () => window.clearInterval(id); }, []);
-  const [enviando, setEnviando] = useState(false);
+  const enviando = false;
+  const [pendientes, setPendientes] = useState<MensajePendiente[]>([]);
+  useEffect(() => {
+    const leer = () => setPendientes(currentUser ? leerPendientes(currentUser.uid).filter(m => m.waId === waId) : []);
+    leer(); return escucharPendientes(leer);
+  }, [currentUser, waId]);
   const [buscar, setBuscar] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -259,22 +316,21 @@ export default function InboxConversacion() {
 
   // Lista de conversaciones (col 1).
   useEffect(() => {
-    const unsub = suscribirConversaciones(setConversaciones);
+    const unsub = suscribirConversaciones(setConversaciones, undefined, 25);
     return () => unsub();
   }, []);
 
   // Mensajes de la conversación activa (col 3).
   useEffect(() => {
     if (!waId) return;
-    setMensajes([]);
-    ultimoCountRef.current = 0;
-    setLoading(true);
+    if (!historialScroll.current) { setMensajes([]); ultimoCountRef.current = 0; setLoading(true); }
+    setErrorMensajes('');
     const unsub = suscribirMensajes(waId, (items) => {
       setMensajes(items);
       setLoading(false);
-    });
+    }, maxMensajes, () => { setLoading(false); setErrorMensajes("No se pudieron cargar los mensajes. Intenta abrir de nuevo la conversación."); });
     return () => unsub();
-  }, [waId]);
+  }, [waId, maxMensajes]);
 
   // Conversación activa (read directo del doc para tener `noLeidos` actual).
   useEffect(() => {
@@ -321,6 +377,13 @@ export default function InboxConversacion() {
 
   // Scroll al final solo cuando llegan mensajes nuevos.
   useEffect(() => {
+    if (historialScroll.current && timelineRef.current) {
+      const anterior = historialScroll.current;
+      timelineRef.current.scrollTop = anterior.top + timelineRef.current.scrollHeight - anterior.alto;
+      historialScroll.current = null;
+      ultimoCountRef.current = mensajes.length;
+      return;
+    }
     if (mensajes.length > ultimoCountRef.current && timelineRef.current) {
       const el = timelineRef.current;
       // Si el user está cerca del final, hacer scroll; sino respetar su posición.
@@ -359,22 +422,13 @@ export default function InboxConversacion() {
       toast.error('Ventana 24h cerrada. Usá una plantilla aprobada para reabrir.');
       return;
     }
-    setEnviando(true);
+    if (!currentUser) return;
     try {
-      const r = await enviarTexto(waId, texto.trim());
-      if ('error' in r && r.error) {
-        toast.error(`No se pudo enviar: ${r.error}`);
-      } else {
-        setTexto('');
-        toast.success('Enviado');
-      }
-    } catch (err) {
-       
-      console.error('[InboxConversacion] enviarTexto falló:', err);
-      toast.error('Error al enviar — revisá la conexión');
-    } finally {
-      setEnviando(false);
-    }
+      encolarMensaje(currentUser.uid, waId, texto.trim());
+      setTexto('');
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+      requestAnimationFrame(() => { if (timelineRef.current) timelineRef.current.scrollTop = timelineRef.current.scrollHeight; });
+    } catch (err) { toast.error((err as Error).message || 'No se pudo guardar el mensaje pendiente.'); }
   }
 
   // SPRINT-WA-TRAZABILIDAD (2026-05-23) — detección del prefix "/atajo" en
@@ -474,7 +528,7 @@ export default function InboxConversacion() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-50">
+    <div className="inbox-page flex flex-col h-full min-h-0 min-w-0 bg-gray-50">
       <div className="flex flex-1 min-h-0">
         {/* SPRINT-INBOX-11 (2026-05-22): cuando el drawer de crear orden está
             abierto, lo montamos COMO PRIMERA COLUMNA EN FLUJO (izquierda), y
@@ -533,7 +587,7 @@ export default function InboxConversacion() {
         {/* COL 1 — lista de conversaciones (hidden <md, w-72 md:w-80).
             SPRINT-INBOX-8c (2026-05-22): se OCULTA cuando el drawer de crear
             orden está abierto, para que el chat tenga ancho real disponible. */}
-        <aside className={`${showCreateModal ? 'hidden' : 'hidden md:flex'} flex-col w-72 lg:w-80 border-r border-gray-200 bg-white`}>
+        <aside className={`${showCreateModal ? 'hidden' : 'hidden 2xl:flex'} flex-col shrink-0 w-72 border-r border-gray-200 bg-white`}>
           <div className="p-3 border-b border-gray-200 flex items-center gap-2">
             <button
               type="button"
@@ -616,8 +670,9 @@ export default function InboxConversacion() {
 
             Ancho ampliado a w-72 xl:w-80 para acomodar los tabs sin
             apretar. */}
-        <aside className={`${showCreateModal ? 'hidden' : 'hidden lg:flex'} flex-col w-72 xl:w-80 border-r border-gray-200 bg-white`}>
-          {conversacionActual ? (
+        <aside className={`${showCreateModal ? 'hidden' : vistaCompacta === 'gestion' ? 'flex' : 'hidden xl:flex'} flex-col min-w-0 w-full xl:w-80 shrink-0 border-r border-gray-200 bg-white`}>
+          <button type="button" onClick={() => setVistaCompacta('chat')} className="xl:hidden flex items-center gap-2 min-h-11 px-3 border-b text-sm font-medium"><ArrowLeft size={20} /> Volver al chat</button>
+          {conversacionActual && (pantallaAmplia || vistaCompacta === 'gestion') ? (
             <>
               {/* Header fijo con info de la CONVERSACIÓN (no del cliente) */}
               <div className="p-3 border-b border-gray-100 space-y-2 flex-shrink-0">
@@ -642,22 +697,6 @@ export default function InboxConversacion() {
                     ))}
                   </div>
                 )}
-                {conversacionActual.asignadaA && (
-                  <div className="text-[11px] text-gray-500">
-                    Asignada a:{' '}
-                    <span
-                      className={`font-medium ${
-                        conversacionActual.asignadaA === currentUser?.uid
-                          ? 'text-brand-600'
-                          : 'text-gray-700'
-                      }`}
-                    >
-                      {conversacionActual.asignadaA === currentUser?.uid
-                        ? 'Tú'
-                        : `uid ***${conversacionActual.asignadaA.slice(-6)}`}
-                    </span>
-                  </div>
-                )}
                 {/* SPRINT-INBOX-4 (2026-05-20): toggle bot IA. */}
                 <ToggleBot
                   waId={conversacionActual.wa_id}
@@ -672,12 +711,15 @@ export default function InboxConversacion() {
                 />
               </div>
 
+              <AtencionChat key={conversacionActual.wa_id} waId={conversacionActual.wa_id} />
               {/* Panel cliente 360 con tabs — flex-1 para llenar el resto */}
               <div className="flex-1 min-h-0">
                 <PanelCliente360
                   key={`${conversacionActual.wa_id}-${refreshOrdenesCardKey}`}
                   waId={conversacionActual.wa_id}
                   onCrearOrden={handleCrearOrden}
+                  fuenteCrm={fuenteCrm}
+                  alUsarFuente={() => setFuenteCrm(null)}
                 />
               </div>
             </>
@@ -693,39 +735,29 @@ export default function InboxConversacion() {
             flujo (primera columna izquierda); el chat (`main`) es su
             hermana derecha vía `flex-1`. Sin padding hack — el flexbox se
             encarga del layout. Cero solapamiento a cualquier ancho. */}
-        <main className="flex-1 flex flex-col min-w-0 bg-gray-50">
-          {/* Header */}
-          <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <button
-                type="button"
-                onClick={() => navigate('/admin/inbox')}
-                className="md:hidden p-1 rounded hover:bg-gray-100 text-gray-500"
-                title="Volver"
-              >
-                <ArrowLeft size={18} />
-              </button>
-              <div className="min-w-0">
-                <h2 className="font-semibold text-gray-900 truncate">
-                  {conversacionActual ? formatTelRD(conversacionActual.wa_id) : waId}
-                </h2>
-                <p className="text-xs text-gray-500">
-                  {conversacionActual?.ultimoPhoneNumberId
-                    ? `vía ${conversacionActual.ultimoPhoneNumberId.slice(-4)}`
-                    : 'WhatsApp'}
-                </p>
-              </div>
-            </div>
-            {conversacionActual?.ventana24h && (
-              <IndicadorVentana24h ventana24h={conversacionActual.ventana24h} />
-            )}
-          </div>
+        <main className={`${showCreateModal ? 'hidden md:flex' : vistaCompacta === 'gestion' ? 'hidden xl:flex' : 'flex'} flex-1 flex-col min-w-0 min-h-0 bg-gray-50`}>
+          <header className="shrink-0 bg-white border-b border-gray-200 flex items-center gap-1 px-2 py-1">
+            <button type="button" onClick={() => navigate('/admin/inbox')} className="min-h-11 min-w-11 flex items-center justify-center text-gray-600" aria-label="Volver a conversaciones"><ArrowLeft size={22} /></button>
+            <button type="button" onClick={() => setVistaCompacta('gestion')} className="flex items-center gap-2 min-h-11 min-w-0 flex-1 text-left" aria-label="Ver cliente, expediente y órdenes">
+              <span className="rounded-full bg-slate-100 p-2 shrink-0"><UserRound size={20} /></span>
+              <span className="min-w-0"><span className="block font-semibold text-gray-900 truncate">{conversacionActual ? formatTelRD(conversacionActual.wa_id) : waId}</span><span className="block text-xs text-gray-500">Cliente y órdenes · {ventanaAbierta ? 'Disponible para responder' : 'Requiere plantilla'}</span></span>
+            </button>
+            <button type="button" onClick={() => setAccionesAbiertas(v => !v)} aria-expanded={accionesAbiertas} aria-label="Acciones del chat" className="min-h-11 min-w-11 flex items-center justify-center"><MoreHorizontal size={22} /></button>
+          </header>
+          {accionesAbiertas && <section aria-label="Acciones del chat" className="shrink-0 max-h-[35%] overflow-y-auto border-b bg-white p-3 space-y-2">
+            {conversacionActual?.ventana24h && <IndicadorVentana24h ventana24h={conversacionActual.ventana24h} />}
+            {waId && <SelectorPlantillas waId={waId} />}
+            {waId && ventanaAbierta && <SugerenciaIA key={waId} waId={waId} onUsar={sugerencia => { setTexto(prev => prev.trim() ? prev + '\n\n' + sugerencia : sugerencia); setAccionesAbiertas(false); }} />}
+          </section>}
 
           {/* Timeline */}
           <div
             ref={timelineRef}
-            className="flex-1 overflow-y-auto px-4 py-3 space-y-2"
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 space-y-2"
           >
+            {mensajeEnlace && !mensajes.some(m => m.wamid === mensajeEnlace.wamid) && <section className="border rounded-lg p-2"><p className="text-xs mb-2">Mensaje del expediente</p><MensajeBubble mensaje={mensajeEnlace} /></section>}
+            {errorMensajes && <p role="alert" className="p-3 text-red-700">{errorMensajes}</p>}
+            {!loading && mensajes.length >= maxMensajes && <button className="block mx-auto min-h-11 text-sm underline" onClick={() => { const el = timelineRef.current; if (el) historialScroll.current = { alto: el.scrollHeight, top: el.scrollTop }; setMaxMensajes(n => n + 50); }}>Cargar mensajes anteriores</button>}
             {loading ? (
               <div className="text-center py-12 text-gray-400">
                 <MessageSquare size={28} className="mx-auto mb-2 opacity-40" />
@@ -737,20 +769,26 @@ export default function InboxConversacion() {
                 <p className="text-sm">Sin mensajes en esta conversación todavía</p>
               </div>
             ) : (
-              mensajes.map((m) => (
+              mensajes.filter(m => {
+                const corte = waId ? preferencias[waId]?.vaciadoHastaMs || 0 : 0;
+                const t = m._direccion === 'entrante' ? m.timestampMeta : m.createdAt;
+                return !corte || (t instanceof Date ? t.getTime() : t?.toMillis?.() || 0) > corte;
+              }).map((m) => (
                 <MensajeBubble
                   key={m.id}
                   mensaje={m}
+                  onGestionCrm={(msg, accion) => setFuenteCrm({ wamid: msg.wamid, tipo: msg.tipo as FuenteCrm['tipo'], texto: msg.tipo === 'image' ? '[Imagen] ' + (msg.contenido.mediaCaption || '') : msg.contenido.texto || msg.contenido.mediaCaption || msg.contenido.mediaFilename || '[' + msg.tipo + ']', accion, nonce: Date.now() })}
                   onCopiarAOrden={handleCopiarAOrden}
                   onUsarUbicacion={handleUsarUbicacion}
                   onAdjuntarAOrden={handleAdjuntarFotoAOrden}
                 />
               ))
             )}
+            {pendientes.filter(p => !mensajes.some(m => m._direccion === 'saliente' && m.tempId === p.id)).map(p => <div key={p.id} className="flex justify-end"><div className="max-w-[85%] rounded-2xl bg-emerald-50 p-3 text-sm"><p className="whitespace-pre-wrap break-words">{p.texto}</p><p role="status" className="text-xs text-gray-500 mt-1">{p.error ? 'No enviado: ' + p.error : '◷ Pendiente de envío'} · {new Date(p.fecha).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}</p>{p.error && <button className="underline min-h-11" onClick={() => { setTexto(p.texto); if (currentUser) descartarPendiente(currentUser.uid, p.id); }}>Volver a editar</button>}</div></div>)}
           </div>
 
           {/* Composer */}
-          <div className="bg-white border-t border-gray-200 p-3">
+          <div className="shrink-0 bg-white border-t border-gray-200 p-2">
             {conversacionActual?.bajaSolicitada && <div role="status" className="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">El cliente solicitó dejar de recibir mensajes. El envío está bloqueado; revisa la solicitud y coordina por otro canal si necesita atención.</div>}
             {conversacionActual?.origenMarketing && <p className="mb-3 text-xs text-gray-500">Consulta desde anuncio de Meta: {conversacionActual.origenMarketing.anuncioId}</p>}
             {!ventanaAbierta && waId && (
@@ -765,26 +803,29 @@ export default function InboxConversacion() {
                 </div>
               </div>
             )}
+            {waId && <AvisoRedaccion waId={waId} />}
             <div className="flex items-end gap-2 relative">
               <div className="flex-1 relative">
-                {waId && ventanaAbierta && <SugerenciaIA key={waId} waId={waId} onUsar={sugerencia => setTexto(prev => prev.trim() ? prev + '\n\n' + sugerencia : sugerencia)} />}
                 <textarea
                   ref={textareaRef}
                   value={texto}
-                  onChange={handleTextoChange}
+                  onChange={e => { handleTextoChange(e); e.currentTarget.style.height = 'auto'; e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 112)}px`; }}
+                  onFocus={() => setEscribiendo(true)}
                   onKeyDown={handleKeyDown}
                   onBlur={() => {
+                    setEscribiendo(false);
                     // Cerrar dropdown con un pequeño delay para permitir click en items.
                     setTimeout(() => setMostrarDropdownRespuestas(false), 150);
                   }}
                   placeholder={
                     ventanaAbierta
-                      ? 'Escribí un mensaje... (Enter para enviar, Shift+Enter salto de línea, "/" para respuestas rápidas)'
+                      ? 'Mensaje…'
                       : 'Ventana cerrada — usá una plantilla'
                   }
-                  rows={2}
+                  rows={1}
                   disabled={!ventanaAbierta || enviando}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none disabled:bg-gray-50 disabled:text-gray-400"
+                  aria-label="Mensaje"
+                  className="block min-h-11 max-h-28 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none disabled:bg-gray-50 disabled:text-gray-400"
                 />
                 {/* SPRINT-WA-TRAZABILIDAD (2026-05-23) — dropdown respuestas rápidas */}
                 {mostrarDropdownRespuestas && respuestasFiltradas.length > 0 && (
@@ -821,14 +862,13 @@ export default function InboxConversacion() {
                   ABIERTA (Meta permite enviar plantillas en cualquier
                   momento). Con ventana CERRADA el botón ya aparece arriba
                   dentro del banner amarillo — no lo duplicamos acá. */}
-              {ventanaAbierta && waId && (
-                <SelectorPlantillas waId={waId} />
-              )}
+
+              {waId && <NotaVoz key={waId} waId={waId} disabled={!ventanaAbierta || enviando} />}
               <button
                 type="button"
                 onClick={handleEnviar}
                 disabled={!ventanaAbierta || !texto.trim() || enviando}
-                className="bg-brand-600 hover:bg-brand-700 disabled:bg-gray-300 text-white p-2.5 rounded-lg transition-colors"
+                className="bg-brand-600 hover:bg-brand-700 disabled:bg-gray-300 text-white min-h-11 min-w-11 flex items-center justify-center rounded-full transition-colors"
                 title="Enviar (Enter)"
               >
                 <Send size={16} />

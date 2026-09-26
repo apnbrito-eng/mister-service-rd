@@ -1,3 +1,4 @@
+import GestionOrden from '../components/crm/GestionOrden';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -45,6 +46,7 @@ interface PagoPendienteItem {
 export default function PagosPendientes() {
   const { userProfile, currentUser } = useApp();
   const navigate = useNavigate();
+  const [ordenCrm, setOrdenCrm] = useState<string | null>(null);
   const [items, setItems] = useState<PagoPendienteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
@@ -66,6 +68,7 @@ export default function PagosPendientes() {
 
   async function handleConfirmar(item: PagoPendienteItem) {
     if (confirmandoId) return;
+    if (item.orden.crmGestion) { setOrdenCrm(item.ordenId); return; }
     // P-001: usar currentUser.uid, NO userProfile.id.
     const actorId = currentUser?.uid;
     const actorNombre = userProfile?.nombre || userProfile?.email || 'staff';
@@ -115,6 +118,7 @@ export default function PagosPendientes() {
 
   return (
     <div className="max-w-5xl mx-auto p-4 lg:p-6">
+      {ordenCrm && <div role="dialog" aria-modal="true" aria-label="Revisar pago de la orden" className="fixed inset-0 z-50 bg-black/40 p-4 overflow-auto"><div className="bg-white rounded-xl max-w-4xl mx-auto p-4"><button className="mb-3 border rounded px-3 py-2" onClick={() => setOrdenCrm(null)}>Cerrar revisión</button><GestionOrden ordenId={ordenCrm} /></div></div>}
       <header className="mb-5">
         <div className="flex items-center gap-3 mb-1">
           <Banknote size={22} className="text-emerald-600" />

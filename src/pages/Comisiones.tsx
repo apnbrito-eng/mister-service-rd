@@ -74,7 +74,9 @@ export default function Comisiones() {
             fechaCobro: raw.fechaCobro?.toDate?.() || new Date(),
             precioFinal: raw.precioFinal || 0,
             costoPiezas: raw.costoPiezas || 0,
-            basePendienteComision: raw.basePendienteComision || 0,
+            basePendienteComision: typeof raw.proporcionItems === 'number' && typeof raw.subtotal === 'number'
+              ? Math.round(Math.max(0, raw.subtotal - (raw.costoPiezas || 0)) * raw.proporcionItems * 100) / 100
+              : raw.basePendienteComision || 0,
             comisionPorcentaje: raw.comisionPorcentaje || 0,
             comisionMonto: raw.comisionMonto || 0,
             estadoLiquidacion: raw.estadoLiquidacion || 'pendiente',

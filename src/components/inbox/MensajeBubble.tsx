@@ -1,3 +1,6 @@
+import TextoMensaje from './TextoMensaje';
+import ArchivoMensaje from './ArchivoMensaje';
+import { equipoApi } from '../../services/equipoApi';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { FileText, MapPin, Mic, Image as ImageIcon, AlertTriangle, Check, CheckCheck, Clock, ClipboardCopy, Paperclip, Loader2, Copy } from 'lucide-react';
@@ -30,6 +33,7 @@ type MensajeRender =
 
 interface Props {
   mensaje: MensajeRender;
+  onGestionCrm?: (mensaje: WhatsAppMensajeInbox, accion: 'nota' | 'pago' | 'expediente') => void;
   /**
    * SPRINT-INBOX-8b: cuando el form de orden está abierto (drawer del inbox),
    * el caller pasa este callback para copiar el texto del mensaje al campo
@@ -105,7 +109,7 @@ function RenderContenidoEntrante({
   const [adjuntando, setAdjuntando] = useState(false);
 
   if (tipo === 'text') {
-    return <p className="text-sm whitespace-pre-wrap break-words">{contenido.texto ?? ''}</p>;
+    return <TextoMensaje texto={contenido.texto ?? ''} />;
   }
 
   if (tipo === 'image') {
@@ -124,6 +128,7 @@ function RenderContenidoEntrante({
           <ImageIcon size={14} />
           Imagen recibida
         </div>
+        <ArchivoMensaje mensaje={mensaje} />
         {contenido.mediaCaption && (
           <p className="text-sm whitespace-pre-wrap">{contenido.mediaCaption}</p>
         )}
@@ -143,37 +148,9 @@ function RenderContenidoEntrante({
     );
   }
 
-  if (tipo === 'audio') {
-    return (
-      <div className="flex items-center gap-2 text-sm text-gray-700">
-        <Mic size={14} className="text-gray-500" />
-        Nota de voz {contenido.mediaCaption ? `· ${contenido.mediaCaption}` : ''}
-      </div>
-    );
-  }
+  if (tipo === 'audio') return <AudioRecibido mensaje={mensaje} />;
 
-  if (tipo === 'video') {
-    return (
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <ImageIcon size={14} />
-          Video recibido
-        </div>
-        {contenido.mediaCaption && (
-          <p className="text-sm whitespace-pre-wrap">{contenido.mediaCaption}</p>
-        )}
-      </div>
-    );
-  }
-
-  if (tipo === 'document') {
-    return (
-      <div className="flex items-center gap-2 text-sm text-gray-700">
-        <FileText size={14} className="text-gray-500" />
-        Documento: {contenido.mediaFilename ?? 'sin nombre'}
-      </div>
-    );
-  }
+  if (['video', 'document', 'sticker'].includes(tipo)) return <ArchivoMensaje mensaje={mensaje} />;
 
   if (tipo === 'location') {
     const loc = contenido.location;
@@ -185,7 +162,7 @@ function RenderContenidoEntrante({
         </div>
         {loc && (
           <p className="text-xs text-gray-500">
-            {loc.name ?? loc.address ?? `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`}
+<a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${loc.lat},${loc.lng}`)}`} target="_blank" rel="noopener noreferrer" className="underline">{loc.name ?? loc.address ?? `${loc.lat.toFixed(5)}, ${loc.lng.toFixed(5)}`} · Abrir mapa</a>
           </p>
         )}
         {loc && onUsarUbicacion && (
@@ -209,17 +186,45 @@ function RenderContenidoEntrante({
     );
   }
 
+  if (tipo === 'button') return <TextoMensaje texto={contenido.buttonText || 'Respuesta de botón'} />;
+  if (tipo === 'reaction') return <p className="text-sm">Reacción: {contenido.reactionEmoji || 'retirada'}</p>;
+  if (tipo === 'interactive') {
+    const payload = contenido.interactivePayload as Record<string, unknown> | undefined;
+    const reply = (payload?.button_reply || payload?.list_reply) as { title?: string; description?: string } | undefined;
+    return <TextoMensaje texto={reply?.title || reply?.description || 'Respuesta interactiva recibida'} />;
+  }
+  if (tipo === 'contacts') {
+    const contacts = (contenido.contactsPayload as { contacts?: Array<{ name?: { formatted_name?: string }; phones?: Array<{ phone?: string }> }> } | undefined)?.contacts;
+    return <div className="space-y-2">{contacts?.map((c, i) => <div key={i}><strong>{c.name?.formatted_name || 'Contacto compartido'}</strong>{c.phones?.map((p, j) => <p key={j}>{p.phone}</p>)}</div>) || 'Contacto compartido'}</div>;
+  }
+
   // sticker / button / interactive / reaction / contacts / unsupported
   return (
     <div className="text-sm text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200">
-      Tipo {tipo} — no soportado todavía en la UI
+      WhatsApp no proporcionó un contenido que podamos mostrar para este mensaje. Pide al cliente reenviarlo como archivo o texto.
     </div>
   );
 }
 
+function AudioRecibido({ mensaje }: { mensaje: WhatsAppMensajeInbox }) {
+  const [url, setUrl] = useState('');
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState('');
+  return <div className="max-w-full">
+    {url ? <audio controls preload="metadata" src={url} className="w-full max-w-[260px]" onError={() => { setUrl(''); setError('No se pudo reproducir. Vuelve a cargar el audio.'); }} /> :
+      <button type="button" disabled={cargando} className="min-h-11 flex items-center gap-2 text-sm" onClick={async () => {
+        setCargando(true); setError('');
+        try { const r = await equipoApi<{ urlImagen: string }>('/api/whatsapp/media-proxy', { wamid: mensaje.wamid, wa_id: mensaje.wa_id }); setUrl(r.urlImagen); }
+        catch { setError('No se pudo cargar el audio. Intenta de nuevo.'); }
+        finally { setCargando(false); }
+      }}><Mic size={18} />{cargando ? 'Cargando audio…' : 'Escuchar nota de voz'}</button>}
+    {error && <p role="alert" className="text-xs text-red-700">{error}</p>}
+  </div>;
+}
+
 function RenderContenidoSaliente({ mensaje }: { mensaje: WhatsAppMensajeOutbox }) {
   if (mensaje.tipo === 'texto_libre') {
-    return <p className="text-sm whitespace-pre-wrap break-words">{mensaje.texto ?? ''}</p>;
+    return <TextoMensaje texto={mensaje.texto ?? ''} />;
   }
 
   if (mensaje.tipo === 'plantilla' && mensaje.plantilla) {
@@ -246,7 +251,7 @@ function RenderContenidoSaliente({ mensaje }: { mensaje: WhatsAppMensajeOutbox }
       label = 'Imagen enviada';
     } else if (mime.startsWith('audio/')) {
       icon = <Mic size={14} />;
-      label = 'Audio enviado';
+      return <audio controls preload="none" src={mensaje.media.storageUrl} className="w-full max-w-[260px]" />;
     } else if (mime.startsWith('video/')) {
       icon = <ImageIcon size={14} />;
       label = 'Video enviado';
@@ -286,8 +291,10 @@ function extraerTextoCopiable(mensaje: MensajeRender): string | null {
   return null;
 }
 
-export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion, onAdjuntarAOrden }: Props) {
+export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion, onAdjuntarAOrden, onGestionCrm }: Props) {
+  const [menuCrm, setMenuCrm] = useState(false);
   const esSaliente = mensaje._direccion === 'saliente';
+  const admiteFuenteCrm = !esSaliente && ['text', 'image', 'video', 'audio', 'document', 'sticker', 'location'].includes(mensaje.tipo);
   const fecha =
     mensaje._direccion === 'entrante'
       ? toDate(mensaje.timestampMeta)
@@ -312,7 +319,8 @@ export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion
   };
 
   return (
-    <div className={`group flex items-end gap-1 ${esSaliente ? 'justify-end' : 'justify-start'}`}>
+    <div id={`mensaje-${mensaje.wamid || mensaje.id}`} onContextMenu={e => { if (onGestionCrm && admiteFuenteCrm) { e.preventDefault(); setMenuCrm(true); } }} className={`group relative flex items-end gap-1 ${esSaliente ? 'justify-end' : 'justify-start'}`}>
+      {admiteFuenteCrm && onGestionCrm && <div className="relative"><button aria-label="Acciones del mensaje" aria-expanded={menuCrm} className="p-2 rounded hover:bg-gray-100" onClick={() => setMenuCrm(v => !v)}>⋯</button>{menuCrm && <div className="absolute left-0 bottom-full z-20 bg-white border shadow-lg rounded-lg p-2 min-w-[190px]" onKeyDown={e => { if (e.key === 'Escape') setMenuCrm(false); }}><button className="block p-2 w-full text-left text-sm" onClick={() => { onGestionCrm(mensaje as WhatsAppMensajeInbox, 'nota'); setMenuCrm(false); }}>Guardar en la orden</button><button className="block p-2 w-full text-left text-sm" onClick={() => { onGestionCrm(mensaje as WhatsAppMensajeInbox, 'expediente'); setMenuCrm(false); }}>Guardar en expediente del cliente</button><button className="block p-2 w-full text-left text-sm" onClick={() => { onGestionCrm(mensaje as WhatsAppMensajeInbox, 'pago'); setMenuCrm(false); }}>Registrar pago con evidencia</button><button className="block p-2 text-sm" onClick={() => setMenuCrm(false)}>Cerrar</button></div>}</div>}
       {/* SPRINT-INBOX-8b: botón "copiar a orden" (solo entrante, solo si form abierto y hay texto) */}
       {!esSaliente && textoParaOrden && onCopiarAOrden && (
         <button

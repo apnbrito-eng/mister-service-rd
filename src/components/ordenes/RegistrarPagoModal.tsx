@@ -1,3 +1,4 @@
+import GestionOrden from '../crm/GestionOrden';
 import { useEffect, useMemo, useState } from 'react';
 import { collection, doc, getDocs, query, where, Timestamp, arrayUnion, runTransaction } from 'firebase/firestore';
 import { db } from '../../firebase/config';
@@ -381,6 +382,8 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
   };
 
   const hayBancos = bancos.length > 0;
+
+  if (orden?.crmGestion) return <Modal isOpen={isOpen} onClose={onClose} title="Pagos y seguimiento" size="lg"><GestionOrden ordenId={orden.id} /></Modal>;
 
   return (
     <Modal

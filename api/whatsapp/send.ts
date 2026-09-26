@@ -1,3 +1,5 @@
+import { exigirRutaChat } from '../_lib/rutaChatOrden.js';
+import { accesoOrdenTecnico } from '../_lib/accesoOrdenTecnico.js';
 /**
  * Envío saliente de WhatsApp Cloud API (Meta).
  *
@@ -9,7 +11,7 @@
  *    `whatsapp_conversaciones/{wa_id}.ultimoPhoneNumberId` como default;
  *    si no hay conversación, se usa `process.env.META_PHONE_NUMBER_ID`.
  *  - D6=C roles autorizados: `['administrador', 'coordinadora',
- *    'secretaria', 'operaria']`. Técnico/ayudante → 403.
+ *    'secretaria', 'operaria', 'tecnico']`. Técnico requiere orden vigente y destinatario validado.
  *  - D8=A opt-out automático: rechazar envío si `wa_id` está en
  *    `whatsapp_config/sistema.optOuts[]` O si `clientes` tiene un doc con
  *    ese `telefonoNormalizado` y `optOutMarketing == true`.
@@ -72,6 +74,7 @@ const ROLES_AUTORIZADOS = new Set<string>([
   'coordinadora',
   'secretaria',
   'operaria',
+  'tecnico',
 ]);
 
 /** Regex de validación del tempId de idempotency (P-017). */
@@ -397,12 +400,16 @@ async function enviarAMetaConBackoff(
   metaUrl: string,
   metaToken: string,
   payload: PayloadMeta,
+  comprobarAcceso?: () => Promise<unknown>,
 ): Promise<{ resultado: ResultadoMeta; intentos: number }> {
   let intentos = 0;
   const resultado: ResultadoMeta = {};
 
   while (intentos < MAX_INTENTOS_META) {
     intentos++;
+    try {
+      if (comprobarAcceso) await comprobarAcceso();
+    } catch { return { resultado: { error: { mensaje: 'asignacion-no-vigente', status: 403 } }, intentos }; }
     try {
       const r = await fetch(metaUrl, {
         method: 'POST',
@@ -457,6 +464,10 @@ export default async function handler(
   res: VercelResponse,
 ): Promise<void> {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  if (process.env.APP_ENV === 'staging' && process.env.ALLOW_EXTERNAL_SENDS !== 'true') {
+    res.status(403).json({ error: 'Los envíos reales están bloqueados en este entorno de ensayo.' });
+    return;
+  }
 
   // 1) CORS preflight: este endpoint es same-origin (frontend Vercel) pero
   //    respondemos OPTIONS por defensa.
@@ -498,7 +509,7 @@ export default async function handler(
   let decodedToken: Awaited<ReturnType<typeof auth.verifyIdToken>>;
   // @safe-meta-catch: validación de token Firebase Auth del cliente, no error Meta.
   try {
-    decodedToken = await auth.verifyIdToken(idToken);
+    decodedToken = await auth.verifyIdToken(idToken, true);
   } catch {
     res.status(401).json({ error: 'invalid-token' });
     return;
@@ -689,6 +700,15 @@ export default async function handler(
       detalle: 'regex ^[A-Za-z0-9_-]{16,32}$',
     });
     return;
+  }
+
+  if (rol === 'tecnico') {
+    if (tipo !== 'texto_libre' || body.phoneNumberIdOverride || typeof body.texto !== 'string' || body.texto.length > 2000) {
+      res.status(403).json({ error: 'El técnico solo puede escribir texto desde su orden.' }); return;
+    }
+    try { const acceso = await accesoOrdenTecnico(db, callerUid, body.ordenId, wa_id, true); await exigirRutaChat(db, wa_id, acceso.ordenId); }
+    // @safe-meta-catch: validación local de asignación y ruta; todavía no se ha llamado a Meta.
+    catch { res.status(403).json({ error: 'Orden o destinatario no autorizado para este técnico.' }); return; }
   }
 
   // Narrowing de campos opcionales del body.
@@ -1136,6 +1156,7 @@ export default async function handler(
         media: media ?? null,
         estado: 'queued',
         intentosEnvio: 0,
+        visibleTecnico: rol === 'tecnico',
         creadoPor: callerUid,
         creadoPorNombre: perfilNombre,
         ordenId: ordenId ?? null,
@@ -1210,6 +1231,7 @@ export default async function handler(
     metaUrl,
     metaToken,
     metaPayload,
+    rol === 'tecnico' ? async () => { await accesoOrdenTecnico(db, callerUid, ordenId, wa_id, true); await exigirRutaChat(db, wa_id, ordenId!); } : undefined,
   );
 
   // 13) Update outbox con resultado.

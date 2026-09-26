@@ -1,3 +1,4 @@
+import EvaluacionServicio from '../../components/public/EvaluacionServicio';
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -663,6 +664,7 @@ function FeedbackNPSWrapper(props: {
   const [estado, setEstado] = useState<
     | { tipo: 'loading' }
     | { tipo: 'pendiente' }
+    | { tipo: 'evaluado' }
     | { tipo: 'enviado'; feedback: NonNullable<OrdenServicio['feedback']> }
   >({ tipo: 'loading' });
 
@@ -676,6 +678,7 @@ function FeedbackNPSWrapper(props: {
         const r = await fetch(`/api/feedback/${token}`, { headers });
         const body = (await r.json()) as {
           yaEnviado?: boolean;
+          evaluacionServicio?: boolean;
           feedback?: {
             nps?: number;
             ratingTipo?: string;
@@ -684,6 +687,7 @@ function FeedbackNPSWrapper(props: {
           };
         };
         if (cancelado) return;
+        if (body.yaEnviado && body.evaluacionServicio) { setEstado({ tipo: 'evaluado' }); return; }
         const npsRaw = body.feedback?.nps;
         if (body.yaEnviado && body.feedback && typeof npsRaw === 'number') {
           const f = body.feedback;
@@ -715,5 +719,6 @@ function FeedbackNPSWrapper(props: {
 
   if (estado.tipo === 'loading') return null;
   if (estado.tipo === 'enviado') return <FeedbackYaEnviado feedback={estado.feedback} />;
-  return <FeedbackNPS {...props} />;
+  if (estado.tipo === 'evaluado') return <p className="rounded-2xl bg-white p-5 text-center text-slate-700">Gracias. Tu evaluación quedó registrada.</p>;
+  return <EvaluacionServicio token={token} onEnviado={() => setEstado({ tipo: 'evaluado' })} />;
 }

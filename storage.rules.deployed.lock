@@ -4,5 +4,5 @@
 # Cazador P-013 lo compara contra el SHA-256 actual de storage.rules
 # para detectar diff pendiente de deployar.
 
-sha256: accf5550e87d21725f99e150e6d31e83172879a7004ff0a2d89136dc89a457e9
-deployedAt: 2026-05-25T12:24:57.159Z
+sha256: fd605585f7ed45cedb6a618f769b8127fd8c2216f2460b66429491b74485b289
+deployedAt: 2026-09-25T01:06:14.378Z

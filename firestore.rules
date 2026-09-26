@@ -102,12 +102,28 @@ service cloud.firestore {
       return esTecnico() && request.auth.uid == uid;
     }
 
+    // La revisión es un snapshot de lo aprobado, no una casilla editable por cliente.
+    function revisionCrmVigente(id, orden) {
+      let revision = get(/databases/$(database)/documents/crm_ordenes/$(id)).data.get('revision', {});
+      return esAdminOCoord() && revision != null && revision.get('estado', '') == 'revisado'
+        && revision.get('precioFinal', null) == orden.get('precioFinal', null)
+        && revision.get('pagos', []) == orden.get('pagos', [])
+        && revision.get('cierreServicio', null) == orden.get('cierreServicio', null)
+        && revision.get('tecnicoId', null) == orden.get('tecnicoId', null)
+        && orden.get('estadoPago', '') == 'completo';
+    }
+    function puedeEmitirCrm(id) {
+      let orden = get(/databases/$(database)/documents/ordenes_servicio/$(id)).data;
+      return orden.get('crmGestion', false) != true || (revisionCrmVigente(id, orden) && request.resource.data.get('total', -1) == orden.get('precioFinal', -2));
+    }
+
     // Detecta si el update intenta poner fase=trabajo_realizado
     // (transición desde otra fase). Se usa en R4 para gatear que solo
     // pase tras aprobación de oficina.
     function intentaTrabajoRealizado() {
-      return request.resource.data.fase == 'trabajo_realizado' &&
-             resource.data.fase != 'trabajo_realizado';
+      return (request.resource.data.get('fase', '') in ['trabajo_realizado', 'cerrado'] && request.resource.data.get('fase', '') != resource.data.get('fase', '')) ||
+             (request.resource.data.get('estadoSimple', '') == 'completado' && resource.data.get('estadoSimple', '') != 'completado') ||
+             request.resource.data.get('cierreServicio', null) != resource.data.get('cierreServicio', null);
     }
 
     // Detecta si el update modifica precioFinal (campo que afecta
@@ -222,7 +238,8 @@ service cloud.firestore {
     // Helper: la orden ya tiene aprobación de oficina.
     // Si el campo no existe (orden vieja o recién creada), evalúa false.
     function ordenAprobada() {
-      return resource.data.estadoAprobacion == 'aprobado';
+      return resource.data.get('estadoAprobacion', '') == 'aprobado' &&
+        (resource.data.get('propuestaCrmRevision', null) == null || resource.data.get('propuestaCrmRevision', null) == resource.data.get('propuestaCrmAprobada', null));
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -373,7 +390,9 @@ service cloud.firestore {
       //     oficina: ahora requiere flujo sugerencia → aprobación.
       // La oficina (esStaffOficina) corto-circuita TODA la rama y no
       // tiene ninguna de estas restricciones.
-      allow update: if esStaffOficina() ||
+      allow update: if (resource.data.get('crmGestion', false) != true || request.resource.data.get('facturada', false) != true || resource.data.get('facturada', false) == true || revisionCrmVigente(docId, resource.data)) && (resource.data.get('crmGestion', false) != true || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagos', 'montoPagado', 'montoReportado', 'crmGestion'])) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['propuestaCrmRevision', 'propuestaCrmAprobada']) &&
+        (resource.data.get('propuestaCrmRevision', null) == null || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['estadoAprobacion', 'precioAprobado', 'precioFinal', 'aprobadoPor', 'fechaAprobacion'])) && (esStaffOficina() ||
         (
           (
             (esTecnico() && resource.data.tecnicoId == request.auth.uid) ||
@@ -383,11 +402,12 @@ service cloud.firestore {
           noTocaAsignacion() &&
           noTocaSoloChequeo() &&
           respetaSugerenciaSoloChequeo() &&
+          !modificaPrecioFinal() &&
           (
             ordenAprobada() ||
             (!intentaTrabajoRealizado() && !modificaPrecioFinal())
           )
-        );
+        ));
 
       // Delete: gateado por el granular `ordenesEliminar` del modal de
       // Usuarios y Permisos (sub-doc `permisos` en `usuarios/{uid}`). En
@@ -429,7 +449,8 @@ service cloud.firestore {
     // Conduces (alias interno: facturas) — CG-####
     match /facturas/{docId} {
       allow read: if esStaff();
-      allow create, update: if esStaffOficina();
+      allow create: if esStaffOficina() && (request.resource.data.get('ordenId', '') == '' || puedeEmitirCrm(request.resource.data.ordenId));
+      allow update: if esStaffOficina();
       allow delete: if esAdmin();
     }
 
@@ -809,6 +830,9 @@ service cloud.firestore {
       allow create: if false;
       allow delete: if false;
       allow update: if esStaffOficina() &&
+        // Once managed by CRM, only the audited acceptance endpoint changes ownership.
+        (!exists(/databases/$(database)/documents/crm_atencion/$(waId)) ||
+         request.resource.data.get('asignadaA', null) == resource.data.get('asignadaA', null)) &&
         // Identidad/relación: snapshot inmutable.
         request.resource.data.get('wa_id', null) == resource.data.get('wa_id', null) &&
         request.resource.data.get('clienteId', null) == resource.data.get('clienteId', null) &&

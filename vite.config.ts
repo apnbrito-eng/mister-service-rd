@@ -41,5 +41,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Las compilaciones nativas generan HTML; no deben recargar la web en uso.
+    watch: { ignored: ['**/android/**', '**/ios/**', '**/dist-mobile/**'] },
   },
 })

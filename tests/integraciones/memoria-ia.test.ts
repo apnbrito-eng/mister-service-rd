@@ -22,7 +22,7 @@ describe('Memoria independiente del modelo', () => {
  });
  it('cuenta una sola vez por conversación y tema', async () => {
   const seen=new Set<string>(); const writes: unknown[]=[];
-  const db={collection:(c:string)=>({doc:(id:string)=>({path:c+'/'+id})}),runTransaction:async(fn:Function)=>fn({get:async(r:{path:string})=>({exists:seen.has(r.path)}),set:(_r:unknown,v:unknown)=>writes.push(v),create:(r:{path:string})=>seen.add(r.path)})} as unknown as Firestore;
+  const db={collection:(c:string)=>({doc:(id:string)=>({path:c+'/'+id})}),runTransaction:async(fn:(tx: any) => Promise<unknown>)=>fn({get:async(r:{path:string})=>({exists:seen.has(r.path)}),set:(_r:unknown,v:unknown)=>writes.push(v),create:(r:{path:string})=>seen.add(r.path)})} as unknown as Firestore;
   await registrarTemaPregunta(db,'mantenimiento lavadora Mabe','conv1');
   await registrarTemaPregunta(db,'mantenimiento lavadora Mabe','conv1');
   await registrarTemaPregunta(db,'mantenimiento lavadora Mabe','conv2');

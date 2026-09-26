@@ -19,7 +19,11 @@ export default ts.config(
   // `api` sigue ignorado acá a propósito (el pre-commit usa
   // `--no-warn-ignored` contando con eso), pero YA NO está sin verificar:
   // `tsconfig.api.json` + `npm run typecheck:api` lo compilan en strict.
-  { ignores: ['dist', 'dist-lazy', 'node_modules', 'public', '.vercel', '.claude', 'api'] },
+  { ignores: ['dist', 'dist-lazy', 'dist-mobile', 'node_modules', 'public', '.vercel', '.claude', 'api',
+    // Copias compiladas de Capacitor y dependencias nativas; src sigue revisándose.
+    'android/**/build/**', 'android/app/src/main/assets/public/**',
+    'android/capacitor-cordova-android-plugins/**', 'ios/App/App/public/**',
+    'ios/App/Pods/**', 'ios/DerivedData/**'] },
   js.configs.recommended,
   ...ts.configs.recommended,
   // SPRINT-FIX-LINT-RUIDO (2026-09-09): scripts Node sueltos (`diagnose-fix.js`,

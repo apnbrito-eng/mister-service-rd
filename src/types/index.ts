@@ -375,6 +375,7 @@ export interface RegistroAuditoria {
 }
 
 export interface OrdenServicio {
+  crmGestion?: boolean;
   id: string;
   numero: string;
   clienteId: string;
@@ -620,6 +621,9 @@ export interface OrdenServicio {
     enviadoPor: string;            // uid del staff que envió
     enviadoPorNombre: string;
     metodo: 'whatsapp' | 'email' | 'manual';
+    outboxId?: string;
+    /** Estado al aceptar el envío; el estado vivo está en la bandeja. */
+    estado?: 'sent' | 'delivered' | 'read';
   };
   /**
    * Historial de propuestas de reprogramación (cliente o admin). Se llena
@@ -1618,6 +1622,9 @@ export const BANCOS_RD_SEED: BancoSeed[] = [
  * (abonos parciales) que se suman en `montoPagado` a nivel de la orden.
  */
 export interface PagoOrden {
+  crm?: boolean;
+  entregadoOficina?: number;
+  fuente?: { wamid: string; waId: string; tipo: string; texto: string } | null;
   id: string;
   metodo: 'efectivo' | 'transferencia' | 'tarjeta';
   monto: number;
@@ -1889,6 +1896,8 @@ export interface AlertaItem {
 }
 
 export type TipoNotificacion =
+  | 'crm_mensaje'
+  | 'crm_traspaso'
   | 'precio_aprobado'
   | 'nueva_cita'
   | 'recordatorio'
@@ -1936,6 +1945,7 @@ export type TipoNotificacion =
   | 'otro';
 
 export interface Notificacion {
+  conversacionId?: string;
   id: string;
   userId: string;
   /** @deprecated Renombrado a `userId` para alinear con rule
@@ -2209,6 +2219,8 @@ export interface WhatsAppUltimoMensajePreview {
  * campos da `permission-denied`. Use dot-path o updateDoc selectivo.
  */
 export interface WhatsAppConversacion {
+  ocultoGlobalHastaMs?: number;
+  borradoEnCurso?: string;
   bajaSolicitada?: boolean;
   origenMarketing?: { canal: string; anuncioId: string; capturadoPor: string };
   /** Doc id = wa_id (RD 10 dígitos). */

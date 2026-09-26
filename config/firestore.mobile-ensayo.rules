@@ -1,0 +1,987 @@
+// GENERADO por scripts/mobile/reglas-ensayo.mjs. Solo mister-service-ensayo-260921.
+rules_version = '2';
+
+// ════════════════════════════════════════════════════════════════════
+// Mister Service RD — Reglas Firestore
+//
+// Estructura:
+//   1. Helpers (rol, staff, owner)
+//   2. Colecciones públicas (read sin auth — sitio, formularios, tracking)
+//   3. Submits públicos (write sin auth — formulario /agendar, /f/:slug)
+//   4. Colecciones por usuario (conversaciones_ia, ponches)
+//   5. Colecciones admin / staff (todo lo financiero y operativo)
+//   6. Auditoría (append-only)
+//
+// Convenciones de rol (campo `usuarios/{uid}.rol`):
+//   - administrador  : acceso total, único que puede borrar histórico
+//   - coordinadora   : confirma citas, asigna técnicos, edita órdenes
+//   - secretaria     : crea órdenes, confirma citas, recibe notificaciones
+//   - operaria       : registra pagos, emite conduces (CG-####)
+//   - tecnico        : vista mobile dedicada, solo sus propias órdenes
+//   - ayudante       : asiste al técnico, write a sus órdenes
+//
+// Notas de seguridad:
+//   - El catch-all `/{collection}/{docId}` que existía antes permitía
+//     write a CUALQUIER user autenticado. Esto fue un agujero crítico
+//     identificado por audit. Reemplazado por reglas explícitas por
+//     colección con gates por rol.
+//   - Endpoints serverless (`/api/*`) usan Firebase Admin SDK que
+//     bypassa estas rules. Las validaciones server-side viven en el
+//     handler. Estas rules son defense-in-depth para writes directos
+//     desde cliente.
+//   - R4 (gate aprobación oficina antes de Trabajo Realizado) ESTÁ
+//     enforced acá: técnico/ayudante NO pueden avanzar fase a
+//     'trabajo_realizado' ni cambiar precioFinal salvo que la orden
+//     tenga estadoAprobacion='aprobado'. Frontend (TecnicoVista) lo
+//     valida también; estas rules son la línea de defensa contra
+//     writes directos al cliente Firestore. Ver C2 del Sprint 3.
+//   - R4 ENDURECIDA (sprint sugerencia-solo-chequeo): el técnico ya
+//     no puede setear `soloChequeo: true` ni `precioFinal` directos.
+//     El flujo es: técnico crea sugerenciaSoloChequeo (estado=pendiente)
+//     → oficina aprueba/rechaza desde /admin/sugerencias-chequeo. Solo
+//     `esStaffOficina()` puede setear soloChequeo, precioFinal y
+//     estadoAprobacion. Los helpers `noTocaSoloChequeo()` y
+//     `respetaSugerenciaSoloChequeo()` enforcen la nueva regla.
+// ════════════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─────────────────────────────────────────────────────────────
+    // 1. Helpers
+    // ─────────────────────────────────────────────────────────────
+
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    function userExists() {
+      return isAuth() &&
+        exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+
+    function userData() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+
+    function rolUsuario() {
+      return userExists() ? userData().rol : null;
+    }
+
+    function tieneRol(r) {
+      return rolUsuario() == r;
+    }
+
+    function esAdmin()       { return tieneRol('administrador'); }
+    function esCoord()       { return tieneRol('coordinadora'); }
+    function esSecretaria()  { return tieneRol('secretaria'); }
+    function esOperaria()    { return tieneRol('operaria'); }
+    function esTecnico()     { return tieneRol('tecnico'); }
+    function esAyudante()    { return tieneRol('ayudante'); }
+
+    // Cualquier rol válido del staff (admin a ayudante)
+    function esStaff() {
+      return userExists() && rolUsuario() in [
+        'administrador', 'coordinadora', 'secretaria',
+        'operaria', 'tecnico', 'ayudante'
+      ];
+    }
+
+    // Roles que trabajan desde la oficina (no técnico/ayudante en campo)
+    function esStaffOficina() {
+      return userExists() && rolUsuario() in [
+        'administrador', 'coordinadora', 'secretaria', 'operaria'
+      ];
+    }
+
+    function esAdminOCoord() {
+      return userExists() && rolUsuario() in ['administrador', 'coordinadora'];
+    }
+
+    // El técnico que es dueño del recurso (asignado a la orden)
+    function esTecnicoDe(uid) {
+      return esTecnico() && request.auth.uid == uid;
+    }
+
+    // La revisión es un snapshot de lo aprobado, no una casilla editable por cliente.
+    function revisionCrmVigente(id, orden) {
+      let revision = get(/databases/$(database)/documents/crm_ordenes/$(id)).data.get('revision', {});
+      return esAdminOCoord() && revision != null && revision.get('estado', '') == 'revisado'
+        && revision.get('precioFinal', null) == orden.get('precioFinal', null)
+        && revision.get('pagos', []) == orden.get('pagos', [])
+        && revision.get('cierreServicio', null) == orden.get('cierreServicio', null)
+        && revision.get('tecnicoId', null) == orden.get('tecnicoId', null)
+        && orden.get('estadoPago', '') == 'completo';
+    }
+    function puedeEmitirCrm(id) {
+      let orden = get(/databases/$(database)/documents/ordenes_servicio/$(id)).data;
+      return orden.get('crmGestion', false) != true || (revisionCrmVigente(id, orden) && request.resource.data.get('total', -1) == orden.get('precioFinal', -2));
+    }
+
+    // Detecta si el update intenta poner fase=trabajo_realizado
+    // (transición desde otra fase). Se usa en R4 para gatear que solo
+    // pase tras aprobación de oficina.
+    function intentaTrabajoRealizado() {
+      return (request.resource.data.get('fase', '') in ['trabajo_realizado', 'cerrado'] && request.resource.data.get('fase', '') != resource.data.get('fase', '')) ||
+             (request.resource.data.get('estadoSimple', '') == 'completado' && resource.data.get('estadoSimple', '') != 'completado') ||
+             request.resource.data.get('cierreServicio', null) != resource.data.get('cierreServicio', null);
+    }
+
+    // Detecta si el update modifica precioFinal (campo que afecta
+    // comisión). Si el campo no cambia, OK. Si cambia, requiere
+    // aprobación previa de oficina.
+    //
+    // P-002 (variante !=): precioFinal es opcional en el create. Para órdenes
+    // sin precio asignado todavía (técnico está iniciando chequeo), el campo
+    // está missing en ambos lados. Acceso directo `request.resource.data.precioFinal`
+    // sobre campo missing tira evaluation error y la rule rechaza con
+    // permission-denied. Usar .get para tratar missing como null.
+    // Bug original: 2026-05-07 (Aury Mon - Iniciar Chequeo). El cazador P-002
+    // solo buscaba `==` directo, no detectó este `!=`. Sprint extendió cazador.
+    function modificaPrecioFinal() {
+      return request.resource.data.get('precioFinal', null) != resource.data.get('precioFinal', null);
+    }
+
+    // R4 ENDURECIDA (sprint sugerencia-solo-chequeo): el técnico ya
+    // no tiene excepción para setear precioFinal con soloChequeo=true.
+    // Cualquier modificación de precioFinal por técnico/ayudante
+    // requiere `ordenAprobada()` previamente seteado por oficina (al
+    // aprobar la sugerencia o aprobar precio normal).
+    //
+    // El helper `modificaPrecioSinSerChequeo()` (anterior) queda
+    // eliminado — su única función era darle al técnico una vía de
+    // escape vía soloChequeo=true. Ahora el técnico nunca puede setear
+    // soloChequeo (ver `noTocaSoloChequeo()` abajo).
+
+    // Sprint sugerencia-solo-chequeo: `soloChequeo` es un flag operativo
+    // que solo oficina puede tocar. El técnico que quiera marcar la
+    // orden como "solo chequeo" debe crear una sugerencia
+    // (sugerenciasSoloChequeo[]) con estado=pendiente y esperar
+    // aprobación. Esto cierra el agujero donde un técnico se auto-aprobaba
+    // un cierre alternativo evitando R4.
+    function noTocaSoloChequeo() {
+      // P-002: `soloChequeo` es opcional en el create de orden (solo se
+      // escribe en reactivación post-chequeo). Usar .get para igualdad
+      // estructural con campos missing.
+      return request.resource.data.get('soloChequeo', null) == resource.data.get('soloChequeo', null);
+    }
+
+    // Sprint sugerencia-solo-chequeo: el técnico puede AGREGAR
+    // sugerencias al array (arrayUnion), pero no puede:
+    //   - Quitar elementos del array (size no decrece).
+    //   - Modificar entries existentes (mutación in-place del estado, ej.
+    //     flippear 'pendiente' → 'aprobada' en su propia sugerencia).
+    //
+    // Defense-in-depth: además del check de tamaño, validamos que TODAS
+    // las entries previas sigan presentes en el nuevo array usando
+    // `hasAll()` sobre listas (CEL List membership). Esto bloquea la
+    // mutación in-place: si una entry vieja cambió un solo campo, ya no
+    // matcheará bit-a-bit con el original y `hasAll` retornará false.
+    //
+    // Limitaciones conocidas:
+    //   - `hasAll()` compara por igualdad estructural completa, así que
+    //     SIN cambios el original sigue presente. Si un atacante intenta
+    //     mutar un elemento, el original se considera "ausente" → bloquea.
+    //   - El último elemento agregado puede tener cualquier `estado`
+    //     porque el técnico es quien lo crea (UI lo setea a 'pendiente',
+    //     pero un cliente malicioso podría enviar otro valor). Esa
+    //     defensa la hace `noTocaSoloChequeo` + `noTocaCamposAprobacion`:
+    //     aunque el array tenga estado='aprobada' falso, el técnico no
+    //     puede tocar los campos operativos `soloChequeo`, `precioFinal`,
+    //     `estadoAprobacion` que son los que importan para el cobro.
+    //   - Si Firestore Rules NO soporta `hasAll` sobre objetos anidados
+    //     en algún ambiente futuro, la rule fallaría conservadoramente
+    //     (rechaza el write). El admin puede ajustar manualmente.
+    function respetaSugerenciaSoloChequeo() {
+      return !('sugerenciasSoloChequeo' in request.resource.data) ||
+             !('sugerenciasSoloChequeo' in resource.data) ||
+             (
+               request.resource.data.sugerenciasSoloChequeo.size() >=
+                 resource.data.sugerenciasSoloChequeo.size() &&
+               request.resource.data.sugerenciasSoloChequeo
+                 .hasAll(resource.data.sugerenciasSoloChequeo)
+             );
+    }
+
+    // R4 (audit C2 — fix BLOCKER 1): los campos de aprobación son
+    // INMUTABLES desde la rama técnico/ayudante en TODA condición
+    // (incluso si la orden ya está aprobada — el técnico no puede
+    // re-tocar el sello de aprobación). Solo esStaffOficina() puede
+    // setearlos o modificarlos. Sin esto, un técnico podría:
+    //   1. updateDoc({estadoAprobacion: 'aprobado'})
+    //   2. updateDoc({precioFinal: X, fase: 'trabajo_realizado'})
+    // y la rule de R4 se evaluaría contra el estado ya bypassed.
+    function noTocaCamposAprobacion() {
+      // P-002: estos 4 campos son opcionales en el create base — solo se
+      // escriben cuando la orden es de mantenimiento (auto-aprobación).
+      // Para órdenes regulares no existen al crear; usar .get para igualdad
+      // estructural con campos missing.
+      return request.resource.data.get('estadoAprobacion', null) == resource.data.get('estadoAprobacion', null) &&
+             request.resource.data.get('precioAprobado', null) == resource.data.get('precioAprobado', null) &&
+             request.resource.data.get('aprobadoPor', null) == resource.data.get('aprobadoPor', null) &&
+             request.resource.data.get('fechaAprobacion', null) == resource.data.get('fechaAprobacion', null);
+    }
+
+    // R4 (audit C2 — fix IMPORTANTE): los campos de asignación
+    // (tecnicoId/ayudanteId) son INMUTABLES desde la rama
+    // técnico/ayudante. Sin esto un técnico podría reasignar la orden
+    // a otro técnico (robo de comisión, desligarse de
+    // responsabilidad). Solo esStaffOficina() puede reasignar.
+    function noTocaAsignacion() {
+      // @safe-required: tecnicoId
+      // (siempre presente en el create — useOrdenCreateForm.ts:609 lo
+      // escribe SIEMPRE, puede ser '' pero el campo es string presente).
+      // P-002: ayudanteId NO se escribe en el create base — opcional.
+      return request.resource.data.tecnicoId == resource.data.tecnicoId &&
+             request.resource.data.get('ayudanteId', null) == resource.data.get('ayudanteId', null);
+    }
+
+    // Helper: la orden ya tiene aprobación de oficina.
+    // Si el campo no existe (orden vieja o recién creada), evalúa false.
+    function ordenAprobada() {
+      return resource.data.get('estadoAprobacion', '') == 'aprobado' &&
+        (resource.data.get('propuestaCrmRevision', null) == null || resource.data.get('propuestaCrmRevision', null) == resource.data.get('propuestaCrmAprobada', null));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 2. Colecciones públicas (read sin auth)
+    // ─────────────────────────────────────────────────────────────
+
+    // Configuración del sitio público (textos, imágenes, formulario,
+    // catálogo de tipos, modelos, servicios, etc.)
+    match /config_web/{docId} {
+      allow read: if true;
+      allow write: if esAdminOCoord();
+    }
+
+    // Formularios dinámicos publicados (/f/:slug los lee por slug)
+    match /formularios/{docId} {
+      allow read: if true;
+      allow write: if esAdminOCoord();
+    }
+
+    // Empresas aliadas mostradas en marketing
+    match /empresas_aliadas/{docId} {
+      allow read: if true;
+      allow write: if esAdminOCoord();
+    }
+
+    // Calendarios de citas públicas (/cita/:calendarId los lee)
+    match /calendarios/{docId} {
+      allow read: if true;
+      allow write: if esStaffOficina();
+    }
+
+    // Ubicaciones GPS de vehículos — read público para tracking del
+    // cliente (/tracking/:token usa esto vía proxy serverless o directo).
+    match /ubicaciones_vehiculos/{docId} {
+      allow read: if true;
+      allow write: if esStaff();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. Submits públicos (write sin auth)
+    // ─────────────────────────────────────────────────────────────
+
+    // Cita pública desde /agendar y /cita/:calendarId
+    match /citas_por_confirmar/{docId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if esStaff();
+    }
+
+    // Solicitud pública desde /f/:slug (formulario dinámico).
+    // OJO: la colección real es `solicitudes_servicio`, no `solicitudes`.
+    // El servicio src/services/solicitudes.service.ts usa COL='solicitudes_servicio'.
+    match /solicitudes_servicio/{docId} {
+      allow create: if request.auth != null;
+      allow read, update, delete: if esStaff();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 4. Colecciones por usuario
+    // ─────────────────────────────────────────────────────────────
+
+    // Conversaciones con la IA — solo el dueño o admin lee
+    match /conversaciones_ia/{docId} {
+      allow read: if isAuth() && (
+        resource.data.usuarioId == request.auth.uid || esAdmin()
+      );
+      allow create: if isAuth() &&
+        request.resource.data.usuarioId == request.auth.uid;
+      allow update: if isAuth() && resource.data.usuarioId == request.auth.uid;
+      allow delete: if esAdmin();
+    }
+
+    // Ponches de entrada/salida del personal
+    match /ponches/{docId} {
+      allow create: if isAuth() &&
+        request.resource.data.personalUid == request.auth.uid;
+      allow read: if isAuth() && (
+        resource.data.personalUid == request.auth.uid ||
+        esAdmin() || esCoord()
+      );
+      allow update, delete: if esAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 5. Colecciones admin / staff
+    // ─────────────────────────────────────────────────────────────
+
+    // Órdenes de servicio — el corazón del sistema.
+    // Read: staff + público condicional (tracking GPS activo).
+    // Write: staff oficina + técnico/ayudante para sus órdenes.
+    match /ordenes_servicio/{docId} {
+      // SPRINT-FIX-RULES-ORDENES-PUBLICAS (2026-09-09) — auditoría hallazgo #2.
+      //
+      // ANTES habia una rama de lectura PUBLICA (sin auth):
+      //
+      //   allow read: if (
+      //     resource.data.trackingGPS != null &&
+      //     resource.data.trackingGPS.activo == true
+      //   ) || esStaff();
+      //
+      // Esa rama exponia el DOCUMENTO COMPLETO de la orden a cualquiera sin
+      // autenticar: precios, costos, margen, clienteTelefono, direccion,
+      // notas internas, tecnicoId e historial — saltandose por completo el
+      // whitelist de campos que `api/portal-cliente/[token].ts` implementa.
+      // Peor: permitia volcado masivo con
+      // `where('trackingGPS.activo','==',true)`.
+      //
+      // Estaba DORMIDA por un desajuste de nombre de campo: todo el codigo
+      // usa `trackingGPS.habilitado` (`OrdenDetalle.tsx:332`) y nadie setea
+      // `activo`, asi que la rama nunca se cumplia (fallaba en seguro). Se
+      // quita antes de que alguien "arregle" el tracking unificando el
+      // nombre del campo y abra la fuga sin darse cuenta.
+      //
+      // Que NO se rompe al quitarla: `/tracking/:token`
+      // (`TrackingCliente.tsx:102`) hace una query directa filtrando por
+      // `trackingGPS.token`. Firestore evalua las queries por su SHAPE: esa
+      // query nunca pudo demostrar `trackingGPS.activo == true`, asi que ya
+      // recibia permission-denied hoy. La pagina ya estaba rota en
+      // produccion — hay que migrarla al endpoint serverless
+      // `api/portal-cliente/[token].ts`, que devuelve campos filtrados y es
+      // el camino correcto (sprint aparte).
+      allow read: if esStaff();
+
+      allow create: if esStaffOficina();
+
+      // Update: oficina total; técnico/ayudante solo si es la orden
+      // que tienen asignada.
+      // R4 (audit C2 + sprint sugerencia-solo-chequeo):
+      //   técnico/ayudante puede actualizar su propia orden EXCEPTO
+      //   avanzar a fase=trabajo_realizado o cambiar precioFinal sin que
+      //   la oficina haya aprobado previamente (estadoAprobacion=aprobado).
+      //   El sprint sugerencia-solo-chequeo ENDURECIÓ la rule:
+      //   - Eliminó la excepción de `modificaPrecioSinSerChequeo()` que
+      //     permitía al técnico setear precioFinal cuando soloChequeo=true.
+      //   - Agregó `noTocaSoloChequeo()`: técnico nunca puede tocar el
+      //     flag `soloChequeo`. Solo oficina lo setea al aprobar la
+      //     sugerencia.
+      //   - Agregó `respetaSugerenciaSoloChequeo()`: el técnico solo puede
+      //     agregar sugerencias al array (arrayUnion), no quitar/modificar.
+      // Defense-in-depth contra:
+      //   - inflación de precio (afecta comisión)
+      //   - skip de revisión de oficina antes de cobro
+      //   - bypass del gate vía writes secuenciales: los campos de
+      //     aprobación son INMUTABLES desde técnico/ayudante, incluso
+      //     si la orden ya está aprobada.
+      //   - reasignación maliciosa: tecnicoId/ayudanteId inmutables
+      //     desde técnico/ayudante.
+      //   - cierre unilateral como "solo chequeo" sin validación de
+      //     oficina: ahora requiere flujo sugerencia → aprobación.
+      // La oficina (esStaffOficina) corto-circuita TODA la rama y no
+      // tiene ninguna de estas restricciones.
+      allow update: if (resource.data.get('crmGestion', false) != true || request.resource.data.get('facturada', false) != true || resource.data.get('facturada', false) == true || revisionCrmVigente(docId, resource.data)) && (resource.data.get('crmGestion', false) != true || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagos', 'montoPagado', 'montoReportado', 'crmGestion'])) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['propuestaCrmRevision', 'propuestaCrmAprobada']) &&
+        (resource.data.get('propuestaCrmRevision', null) == null || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['estadoAprobacion', 'precioAprobado', 'precioFinal', 'aprobadoPor', 'fechaAprobacion'])) && (esStaffOficina() ||
+        (
+          (
+            (esTecnico() && resource.data.tecnicoId == request.auth.uid) ||
+            (esAyudante() && resource.data.ayudanteId == request.auth.uid)
+          ) &&
+          noTocaCamposAprobacion() &&
+          noTocaAsignacion() &&
+          noTocaSoloChequeo() &&
+          respetaSugerenciaSoloChequeo() &&
+          !modificaPrecioFinal() &&
+          (
+            ordenAprobada() ||
+            (!intentaTrabajoRealizado() && !modificaPrecioFinal())
+          )
+        ));
+
+      // Delete: gateado por el granular `ordenesEliminar` del modal de
+      // Usuarios y Permisos (sub-doc `permisos` en `usuarios/{uid}`). En
+      // práctica el delete es soft (campo `eliminada=true`), pero permitimos
+      // hard delete para casos extremos. Default operaria/secretaria/tec/ay
+      // es `false` (heredado de TODO_FALSE); admin/coord lo tienen `true`
+      // por TODO_TRUE. SPRINT-128 R2 (2026-05-10): se cambió de `esAdminOCoord()`
+      // a `puede('ordenesEliminar')` para alinear con la regla declarada
+      // de Jorge: "los permisos vienen del módulo de Usuarios y Permisos".
+      // El acceso es vía userData() (helper ya existente, línea 62) →
+      // .permisos.ordenesEliminar. Si el campo está missing en el doc,
+      // la comparación retorna false → rule rechaza (defensa segura).
+      allow delete: if isAuth() && userData().permisos.ordenesEliminar == true;
+    }
+
+    // Clientes
+    match /clientes/{docId} {
+      allow read: if esStaff();
+      allow create, update: if esStaffOficina();
+      allow delete: if esAdminOCoord();
+    }
+
+    // Personal (empleados)
+    match /personal/{docId} {
+      // Staff puede leer la lista (para asignación de técnicos, etc.)
+      allow read: if esStaff();
+      allow write: if esAdminOCoord();
+    }
+
+    // Usuarios (linkea uid de auth con personal/rol)
+    match /usuarios/{docId} {
+      // Cualquier usuario autenticado puede leer su propio doc + admin/coord
+      allow read: if isAuth() && (
+        request.auth.uid == docId || esAdminOCoord()
+      );
+      allow write: if esAdminOCoord();
+    }
+
+    // Conduces (alias interno: facturas) — CG-####
+    match /facturas/{docId} {
+      allow read: if esStaff();
+      allow create: if esStaffOficina() && (request.resource.data.get('ordenId', '') == '' || puedeEmitirCrm(request.resource.data.ordenId));
+      allow update: if esStaffOficina();
+      allow delete: if esAdmin();
+    }
+
+    // Cotizaciones (QT-#####)
+    match /cotizaciones/{docId} {
+      allow read: if esStaff();
+      allow create, update: if esStaffOficina() ||
+        (esTecnico() && request.resource.data.tecnicoId == request.auth.uid);
+      allow delete: if esAdminOCoord();
+    }
+
+    // Comisiones — write solo admin/coord. Técnico solo lee las suyas.
+    match /comisiones/{docId} {
+      allow read: if esAdminOCoord() || (
+        esTecnico() && resource.data.tecnicoId == request.auth.uid
+      );
+      allow write: if esAdminOCoord();
+    }
+
+    // Liquidaciones de nómina (quincenas)
+    match /liquidaciones_nomina/{docId} {
+      allow read: if esAdminOCoord() || (
+        esTecnico() && resource.data.tecnicoId == request.auth.uid
+      );
+      allow write: if esAdminOCoord();
+    }
+
+    // Avances a empleados (descuento automático en nómina).
+    // Read: cualquier staff (info administrativa). Write: oficina.
+    // Delete: solo admin (auditoría financiera).
+    match /avances/{docId} {
+      allow read: if esStaff();
+      allow create, update: if esStaffOficina();
+      allow delete: if esAdmin();
+    }
+
+    // Préstamos programados a empleados (sprint descuentos-nomina).
+    // Cuotas se descuentan automáticamente al cerrar liquidación.
+    // Read: staff (los técnicos podrían querer ver su saldo en futuro).
+    // Create/update: admin/coord. Update incluye `aplicarCuota` (transactional)
+    // y `cancelarPrestamo`.
+    // Delete: solo admin — en práctica usar `cancelarPrestamo` que mantiene
+    // el historial de cuotas aplicadas. Hard-delete reservado para casos
+    // extremos (test data, error de seed).
+    match /prestamos_empleados/{docId} {
+      allow read: if esStaff();
+      allow create, update: if esAdminOCoord();
+      allow delete: if esAdmin();
+    }
+
+    // Gastos (administrativos)
+    match /gastos/{docId} {
+      allow read: if esStaffOficina();
+      allow write: if esAdminOCoord();
+    }
+
+    // Bancos / cuentas
+    match /bancos/{docId} {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
+    // Productos (catálogo de venta)
+    match /productos/{docId} {
+      allow read: if esStaff();
+      allow write: if esAdminOCoord();
+    }
+
+    // Precios de servicios (catálogo)
+    match /precios_servicios/{docId} {
+      allow read: if esStaff();
+      allow write: if esAdminOCoord();
+    }
+
+    // Sprint Conduces SIBS C2 (decision 35): granularidad fina con affectedKeys.
+    // Operaria/secretaria pueden hacer create + update de stock/activo/recepcion,
+    // pero NO pueden tocar campos de precio. Solo admin/coord cambian precios.
+    // Defense in depth: la rule de backend matcha la intencion del negocio,
+    // no depende solo de gating en UI.
+    match /piezas_inventario/{docId} {
+      allow read: if esStaff();
+      allow create: if esStaffOficina();
+      allow update: if (
+        esAdminOCoord()
+      ) || (
+        esStaffOficina() &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'precio', 'precioVenta', 'precioMayoreo', 'precioDetalle', 'precioCompra'
+        ])
+      );
+      allow delete: if esAdmin();
+    }
+
+    // Movimientos de inventario / piezas (ledger)
+    match /movimientos_inventario/{docId} {
+      allow read: if esStaffOficina();
+      allow create: if esStaffOficina();
+      allow update, delete: if esAdmin();
+    }
+    match /movimientos_piezas/{docId} {
+      allow read: if esStaffOficina();
+      allow create: if esStaffOficina();
+      allow update, delete: if esAdmin();
+    }
+
+    // Standby de piezas (orden esperando pieza)
+    match /standby_piezas/{docId} {
+      allow read: if esStaff();
+      allow write: if esStaffOficina();
+    }
+
+    // Equipos en taller (recepción de equipos)
+    match /equipos_taller/{docId} {
+      allow read: if esStaff();
+      allow write: if esStaffOficina();
+    }
+
+    // Mantenimientos preventivos
+    match /mantenimiento/{docId} {
+      allow read: if esStaff();
+      allow write: if esStaffOficina();
+    }
+    match /mantenimientos/{docId} {
+      // Compat — si existe la colección plural en datos viejos
+      allow read: if esStaff();
+      allow write: if esStaffOficina();
+    }
+
+    // Notificaciones internas
+    match /notificaciones/{docId} {
+      allow read: if isAuth() && (
+        resource.data.userId == request.auth.uid || esStaff()
+      );
+      allow create: if esStaff();
+      allow update, delete: if isAuth() && (
+        resource.data.userId == request.auth.uid || esAdminOCoord()
+      );
+    }
+
+    // Cierres del día
+    match /cierres_dia/{docId} {
+      allow read: if esStaffOficina();
+      allow write: if esStaffOficina();
+    }
+
+    // Recordatorios diarios
+    match /recordatorios_diarios/{docId} {
+      allow read: if esStaff();
+      allow write: if esStaffOficina();
+    }
+
+    // Configuración (counters, empresa, fiscal, tiposEquipo, etc.)
+    match /config/{docId} {
+      // Public read SOLO para tipos que el form público lee (tiposEquipo).
+      // Hoy se sincroniza a config_web/sitio.tiposEquipoPublicos para
+      // evitar exponer este doc — mantenemos read solo a staff.
+      allow read: if esStaff();
+      // Counters (config/contadores) requieren write desde transactions
+      // del cliente al crear orden/cotización/factura. Permitimos write a
+      // staff oficina (admin/coord/secretaria/operaria) + tecnico (que
+      // crea cotizaciones) + ayudante.
+      //
+      // SPRINT-WA-SEGURIDAD-CONFIG-RULES (2026-05-24): excluir explícitamente
+      // los 3 docs WhatsApp admin-only. Firestore Rules evalúa múltiples
+      // matches con semántica OR (no intersección), así que sin esta
+      // exclusión el `write: esStaff()` de este genérico GANABA sobre los
+      // matches específicos `/config/whatsapp_envio|numeros|respuestas_rapidas`
+      // (líneas 583-608) con write: esAdmin(). Resultado: cualquier staff
+      // podía mutar esos 3 docs por cliente custom. Los comentarios viejos
+      // en los matches específicos decían "intersección efectiva" — eran
+      // incorrectos. Corregidos también abajo. Verificado con emulator
+      // (rules unit test) — ver pasada 45.
+      allow write: if esStaff() &&
+        docId != 'whatsapp_envio' &&
+        docId != 'whatsapp_numeros' &&
+        docId != 'whatsapp_respuestas_rapidas';
+    }
+
+    // Configuración del selector de número de envío WhatsApp (SPRINT-WA-
+    // NUMERO-RESPALDO-MANUAL Fase 1, 2026-05-22). Override admin-only
+    // para forzar el número entre los del WABA actual cuando Meta bloquea
+    // uno. `phoneNumberIdForzado: null` = modo automático (sticky intacto).
+    // Doc shape: { phoneNumberIdForzado: string|null, etiqueta?, actualizadoEn, actualizadoPor }.
+    //
+    // Múltiples matches: Firestore Rules evalúa OR (no AND). Sin la
+    // exclusión por docId en el match genérico /config/{docId} arriba, el
+    // write: esStaff() del genérico ganaría sobre este admin-only. La
+    // exclusión está aplicada desde SPRINT-WA-SEGURIDAD-CONFIG-RULES
+    // (2026-05-24); este match específico es ahora la única regla de
+    // write y restringe efectivamente a admin. Read sigue siendo staff
+    // (heredado del genérico vía OR) — UI lee para mostrar estado actual.
+    match /config/whatsapp_envio {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
+    // Catálogo de números disponibles para el selector. Mismo gate.
+    // Shape: { numeros: [{ phoneNumberId: string, etiqueta: string }], actualizadoEn, actualizadoPor }.
+    // Seed inicial en el cliente (CONFIG_WHATSAPP_NUMEROS_DEFAULT) con
+    // los 2 phone_number_ids actuales del WABA.
+    // Ver nota multi-match arriba (whatsapp_envio) — exclusión en /config/{docId} aplicada en SPRINT-WA-SEGURIDAD-CONFIG-RULES.
+    match /config/whatsapp_numeros {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
+    // Respuestas rápidas programables del inbox WhatsApp (SPRINT-WA-
+    // TRAZABILIDAD-Y-RESPUESTAS-RAPIDAS, 2026-05-23, función 3). Admin
+    // edita el catálogo desde /admin/configuracion; staff las consume
+    // desde el composer del inbox con el atajo "/".
+    // Shape: { items: [{ id: string, atajo: string, texto: string }], actualizadoEn, actualizadoPor }.
+    // Ver nota multi-match arriba (whatsapp_envio) — exclusión en /config/{docId} aplicada en SPRINT-WA-SEGURIDAD-CONFIG-RULES.
+    match /config/whatsapp_respuestas_rapidas {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
+    // Configuración del sistema GPS
+    match /config_gps/{docId} {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Marketing / Reactivación (sprint Mapa Clientes Commit 2)
+    // ─────────────────────────────────────────────────────────────
+    //
+    // Campañas de WhatsApp creadas desde el tab Reactivación de
+    // /admin/clientes. Read/create/update solo admin/coord (rol
+    // comercial). Los flippeos de `enviado` en clientesContactados[]
+    // suceden vía runTransaction → update permitido.
+    //
+    // Inmutabilidad enforced (sprint Mapa Commit 2 iter 2 — fix
+    // reviewer BLOCKER): el snapshot completo de la campaña es
+    // inmutable. Solo se permiten mutaciones a:
+    //   - `clientesContactados`        (flippeo de enviado por entry)
+    //   - `totalEnviados`              (incrementos +1, nunca decrece)
+    //   - `totalReactivados`           (commit 3 — ROI tracking)
+    //   - `totalReactivadosUpdatedAt`  (commit 3 — ROI tracking)
+    //   - `updatedAt`                  (libre, si llega)
+    //
+    // Todos los demás campos son inmutables — incluido el conjunto
+    // overrideCooldown* (no se puede flippear retroactivamente sin
+    // dejar audit), plantillaId/plantillaNombre (memoria de la
+    // campaña), filtrosAplicados (snapshot), creadaPor/creadaPorNombre
+    // (autoría), fecha/creadaEn (timestamps).
+    //
+    // CREATE: además del check de rol, `creadaPor` debe matchear el
+    // uid autenticado para prevenir spoof de autoría.
+    //
+    // Delete: nunca — son auditables.
+    match /campanas_marketing/{docId} {
+      allow read: if esAdminOCoord();
+      allow create: if esAdminOCoord() &&
+        request.resource.data.creadaPor == request.auth.uid;
+      allow update: if esAdminOCoord() &&
+        // @safe-required: creadaPor, creadaPorNombre, fecha, creadaEn, plantillaId, plantillaNombre
+        // (TODOS presentes en el create base de crearCampana —
+        // campanasMarketing.service.ts:215-225).
+        // Snapshot inmutable: autoría
+        request.resource.data.creadaPor == resource.data.creadaPor &&
+        request.resource.data.creadaPorNombre == resource.data.creadaPorNombre &&
+        // Snapshot inmutable: timestamps
+        request.resource.data.fecha == resource.data.fecha &&
+        request.resource.data.creadaEn == resource.data.creadaEn &&
+        // Snapshot inmutable: plantilla (memoria de la campaña)
+        request.resource.data.plantillaId == resource.data.plantillaId &&
+        request.resource.data.plantillaNombre == resource.data.plantillaNombre &&
+        // Snapshot inmutable: filtros aplicados (.get defensivo — el map
+        // puede ser empty {} pero igualdad estructural OK con get/null)
+        request.resource.data.get('filtrosAplicados', null) == resource.data.get('filtrosAplicados', null) &&
+        // Snapshot inmutable: override cooldown (no flippeable post-hoc).
+        // Estos campos son OPCIONALES en el create — solo presentes cuando
+        // overrideCooldown=true. Para campañas normales no existen en el doc;
+        // comparar con `resource.data.X` falla si el field nunca se escribió.
+        // Usamos `.get(field, null)` para que la rule pase cuando ambos lados
+        // son missing (null == null) sin perder la inmutabilidad cuando ambos
+        // están presentes (string == string).
+        request.resource.data.get('overrideCooldown', null) == resource.data.get('overrideCooldown', null) &&
+        request.resource.data.get('overrideCooldownPorId', null) == resource.data.get('overrideCooldownPorId', null) &&
+        request.resource.data.get('overrideCooldownPorNombre', null) == resource.data.get('overrideCooldownPorNombre', null) &&
+        request.resource.data.get('overrideCooldownEn', null) == resource.data.get('overrideCooldownEn', null) &&
+        request.resource.data.get('overrideCooldownMotivo', null) == resource.data.get('overrideCooldownMotivo', null) &&
+        // totalEnviados solo puede crecer +1 (un envío a la vez)
+        request.resource.data.totalEnviados <= resource.data.totalEnviados + 1 &&
+        request.resource.data.totalEnviados >= resource.data.totalEnviados &&
+        // totalReactivados (commit 3 — ROI tracking): puede crecer cualquier
+        // cantidad (batches, re-evaluaciones de data legacy) pero NUNCA
+        // decrece. El default cuando el campo no existe en `resource.data`
+        // es 0; usamos `get(... , 0)` para tolerar campañas pre-Commit 3.
+        request.resource.data.get('totalReactivados', 0) >= resource.data.get('totalReactivados', 0);
+      allow delete: if false;
+    }
+
+    // Configuración de marketing (plantillas WhatsApp + cooldown).
+    // Read: cualquier staff puede leer (la UI las usa para renderizar
+    // mensajes, técnicos podrían ver pero no editar).
+    // Write: solo admin (decisión comercial — plantillas afectan
+    // marca y cumplimiento).
+    match /config_marketing/{docId} {
+      allow read: if esStaff();
+      allow write: if esAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 5b. WhatsApp Cloud API (inbox, outbox, conversaciones,
+    //     plantillas, recordatorios, config) — SPRINT-WA-RULES
+    //     2026-05-19. Subsistema integración directa Meta Cloud API.
+    //
+    // Patrón general: writes son SIEMPRE desde Admin SDK (webhook
+    // serverless de Meta, endpoint api/whatsapp/send.ts, crons de
+    // recordatorios, cron sync-plantillas). Los Admin SDK bypassan
+    // estas rules — los deny explícitos abajo son defense-in-depth
+    // por si la colección se expusiera desde cliente accidentalmente.
+    // ─────────────────────────────────────────────────────────────
+
+    // Mensajes entrantes (raw payload de Meta, idempotentes por wamid).
+    // Read: staff oficina ve historial de conversaciones desde UI.
+    // Write: NUNCA cliente — el webhook serverless escribe vía Admin SDK.
+    //
+    // CAVEAT PII (security audit 2026-05-19 — E.1, accepted): el campo
+    // `raw` guarda el payload Meta completo, que incluye contenido
+    // potencialmente sensible mencionado por clientes en sus mensajes
+    // (datos médicos, financieros, conflictos). Cualquier staff oficina
+    // ve TODO el historial desde día 1. Decisión consciente — replica
+    // el statu quo de WhatsApp manual del negocio. MITIGACIÓN
+    // OPERATIVA OBLIGATORIA: revocar cuentas Firebase Auth EN EL
+    // MOMENTO de la salida de un empleado, no al final del día (sin
+    // esto, ex-empleada con cuenta no desactivada puede bulk-export
+    // todo el inbox). Sprint follow-up potencial: subcolección
+    // raw_payload accesible solo a admin (refactor futuro, no bloquea v1).
+    match /whatsapp_mensajes_inbox/{wamid} {
+      allow read: if esStaffOficina();
+      allow write: if false;
+    }
+
+    // Mensajes salientes (con tracking de estado Meta).
+    // Read: staff oficina.
+    // Write: NUNCA cliente — el endpoint api/whatsapp/send.ts escribe
+    // vía Admin SDK (lleva auth Firebase ID token verify, pero la
+    // escritura a Firestore se hace server-side con privilegios admin).
+    match /whatsapp_mensajes_outbox/{docId} {
+      allow read: if esStaffOficina();
+      allow write: if false;
+    }
+
+    // Conversaciones agregadas por wa_id de contraparte.
+    // Read: staff oficina.
+    // Create/Delete: NUNCA cliente — el webhook crea, nadie borra
+    // (auditable). Soft-delete via flag si en el futuro se necesita.
+    // Update PARCIAL permitido a staff oficina sobre campos UI seguros
+    // (marcar leído, etiquetar, tomar/soltar asignación propia,
+    //  flip bot.habilitado para una conversación propia).
+    //
+    // Control anti-sabotaje (SPRINT-WA-RULES security audit, 2026-05-19):
+    //   - Reasignar conversaciones (asignadaA): asimétrico.
+    //     • admin/coord: libre (gestión).
+    //     • resto: solo tomar (previo null → propio), soltar
+    //       (propio → null/propio), o mantener (no-op).
+    //     • NO puede "robar" (uidOtro → uidPropio): la igualdad
+    //       request.auth.uid in [...] permitía falsamente esto.
+    //       Fix: bloque asimétrico explícito por transición.
+    //   - Toggle bot.habilitado: restringido a admin/coord o quien
+    //     tiene la conversación asignada. Sin esto, un insider podía
+    //     apagar el bot en masa sin trazabilidad.
+    //
+    // Campos CRÍTICOS son inmutables desde cliente (ultimoMensaje*,
+    // contadores, ventana24h, primeraInteraccion, bot.contexto.*,
+    // bot.turnosCount, ultimaActividad, wa_id, clienteId) —
+    // solo el Admin SDK los toca desde webhook/send.
+    //
+    // Uso .get(field, null) porque updates parciales desde UI pueden
+    // no incluir estos campos (Firestore preserva los que no se mandan
+    // cuando se usa dot-path notation o updateDoc parcial).
+    match /whatsapp_conversaciones/{waId} {
+      allow read: if esStaffOficina();
+      allow create: if false;
+      allow delete: if false;
+      allow update: if esStaffOficina() &&
+        // Once managed by CRM, only the audited acceptance endpoint changes ownership.
+        (!exists(/databases/$(database)/documents/crm_atencion/$(waId)) ||
+         request.resource.data.get('asignadaA', null) == resource.data.get('asignadaA', null)) &&
+        // Identidad/relación: snapshot inmutable.
+        request.resource.data.get('wa_id', null) == resource.data.get('wa_id', null) &&
+        request.resource.data.get('clienteId', null) == resource.data.get('clienteId', null) &&
+        // Mensajes y contadores: solo Admin SDK los muta.
+        request.resource.data.get('ultimoMensajeEntrante', null) == resource.data.get('ultimoMensajeEntrante', null) &&
+        request.resource.data.get('ultimoMensajeSaliente', null) == resource.data.get('ultimoMensajeSaliente', null) &&
+        request.resource.data.get('ultimoPhoneNumberId', null) == resource.data.get('ultimoPhoneNumberId', null) &&
+        request.resource.data.get('totalMensajesEntrantes', null) == resource.data.get('totalMensajesEntrantes', null) &&
+        request.resource.data.get('totalMensajesSalientes', null) == resource.data.get('totalMensajesSalientes', null) &&
+        request.resource.data.get('ventana24h', null) == resource.data.get('ventana24h', null) &&
+        request.resource.data.get('primeraInteraccion', null) == resource.data.get('primeraInteraccion', null) &&
+        // ultimaActividad: timestamp server-only (index de sort bandeja).
+        // Si el cliente lo pudiera tocar, podría reordenar bandeja global.
+        request.resource.data.get('ultimaActividad', null) == resource.data.get('ultimaActividad', null) &&
+        // bot.contexto.* (ultimaIntencion, datosRecolectados,
+        // intentosFallidosSeguidos) + bot.turnosCount: solo Admin SDK
+        // los muta (bot logic en webhook).
+        request.resource.data.get('bot', {}).get('contexto', null) == resource.data.get('bot', {}).get('contexto', null) &&
+        request.resource.data.get('bot', {}).get('turnosCount', null) == resource.data.get('bot', {}).get('turnosCount', null) &&
+        // Control de asignación entre operarias (anti-robo, asimétrico):
+        (
+          esAdminOCoord() ||
+          // No-op de asignadaA (cambia otros campos sin tocar asignación).
+          request.resource.data.get('asignadaA', null) == resource.data.get('asignadaA', null) ||
+          // Tomar: estado previo null + nuevo == uid propio.
+          (resource.data.get('asignadaA', null) == null &&
+           request.resource.data.get('asignadaA', null) == request.auth.uid) ||
+          // Soltar: estado previo == uid propio + nuevo == null.
+          (resource.data.get('asignadaA', null) == request.auth.uid &&
+           request.resource.data.get('asignadaA', null) == null)
+        ) &&
+        // Toggle bot.habilitado: solo admin/coord o asignataria de la conv.
+        // Si cambia el valor de bot.habilitado, debe cumplir la condición.
+        (
+          esAdminOCoord() ||
+          resource.data.get('asignadaA', null) == request.auth.uid ||
+          request.resource.data.get('bot', {}).get('habilitado', null) ==
+            resource.data.get('bot', {}).get('habilitado', null)
+        );
+    }
+
+    // Cache de plantillas HSM aprobadas en Meta (sync cron c/12h).
+    // Read: esStaff() — cualquier rol que envíe mensajes necesita
+    // conocer plantillas disponibles desde la UI (composer).
+    // Write: NUNCA cliente — el cron Admin SDK upserta tras consultar
+    // Graph API. UI admin edita mappingCRM via endpoint serverless
+    // dedicado (no escribe directo).
+    match /whatsapp_plantillas/{plantillaId} {
+      allow read: if esStaff();
+      allow write: if false;
+    }
+
+    // Idempotencia de crons proactivos (recordatorios mantenimiento +
+    // garantías + NPS). Doc id determinístico tipo__entidad__fecha.
+    // Read: staff oficina (auditar qué se mandó).
+    // Write: NUNCA cliente — solo los crons Admin SDK escriben.
+    match /whatsapp_recordatorios_enviados/{docId} {
+      allow read: if esStaffOficina();
+      allow write: if false;
+    }
+
+    // Log de errores estructurados de Meta (códigos billing/spam/quality/etc).
+    // SPRINT-WA-BILLING-VERIFY (2026-05-19). Persistido por
+    // `api/_lib/manejarErrorMeta.ts` desde `api/whatsapp/send.ts` (POST a
+    // Meta falla) y `api/whatsapp/webhook.ts` (status callback con
+    // estado=failed + code). Doc id auto-generado.
+    //
+    // Read: SOLO admin (security audit hallazgo MEDIA #3 — endurecido
+    // 2026-05-19 mismo día). Los docs pueden contener fragmentos del
+    // payload original echado por Meta en `error_data.details` (códigos
+    // 132000/131051 incluyen el body del mensaje fallado). Coord no
+    // necesita ver errores Meta para operar — admin es el responsable
+    // de plataforma. Reduce superficie de leak de PII del cliente.
+    // Write/delete: NUNCA cliente — solo Admin SDK escribe. Admin puede
+    // eliminar entries viejas para housekeeping si crece descontroladamente.
+    match /whatsapp_errores_meta/{docId} {
+      allow read: if esAdmin();
+      allow create: if false;
+      allow update: if false;
+      allow delete: if esAdmin();
+    }
+
+    // Dedupe de notificaciones admin por (codigo, día RD). Doc id formato
+    // `{YYYY-MM-DD}_{codigo}`. Persistido transaccionalmente por
+    // `manejarErrorMeta.ts` para evitar spam (sin esto, incidente billing
+    // de 48h generaría miles de notif a cada admin — security audit
+    // hallazgo ALTA #1).
+    match /whatsapp_errores_meta_dedupe/{docId} {
+      allow read: if esAdmin();
+      allow write: if false;
+    }
+
+    // Configuración operativa del módulo WhatsApp (1 doc fijo
+    // whatsapp_config/sistema). NO contiene secretos — esos viven en
+    // process.env de Vercel (META_APP_SECRET, META_ACCESS_TOKEN,
+    // META_VERIFY_TOKEN, ANTHROPIC_API_KEY). Acá vive: horario bot,
+    // límite turnos, palabras escalado/urgencia/opt-out, números
+    // activos, routing zonas, opt-outs runtime.
+    //
+    // Read: admin y coord (NO secretaria/operaria — security audit
+    // 2026-05-19 C.1 decisión consciente). `optOuts[]` contiene
+    // teléfonos sensibles (PII de clientes que rechazaron contacto)
+    // y `routingZonas` expone uids de técnicos — restringido a roles
+    // de gestión. Si en el futuro la UI necesita exponer horario bot
+    // a secretaria/operaria, particionar en dos docs (sistema público
+    // + privado) en sprint follow-up.
+    // Write: solo admin (decisión operativa estratégica).
+    match /whatsapp_config/{docId} {
+      allow read: if esAdminOCoord();
+      allow write: if esAdmin();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 6. Auditoría (append-only)
+    // ─────────────────────────────────────────────────────────────
+
+    match /auditoria_admin/{docId} {
+      allow create: if isAuth();
+      allow read:   if esAdmin();
+      allow update, delete: if false;
+    }
+
+    // App Check audit log (sprint pre-C2 instrumentación). Escrito SOLO
+    // por endpoints serverless vía Firebase Admin SDK, que bypassa estas
+    // rules. Los clientes web nunca deben leer ni escribir aquí — esta
+    // rule es defense-in-depth (deny explícito) por si la colección
+    // queda expuesta accidentalmente desde un cliente.
+    match /app_check_audit/{docId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Rate limits del Asistente IA (sprint C2.5). Doc id formato
+    // `${uid}_ai_chat_${YYYY-MM-DD}`. Escrito SOLO por el endpoint
+    // serverless `api/ai/chat.ts` vía Firebase Admin SDK (bypassa
+    // rules). Defense-in-depth deny clientes — ningún componente web
+    // debe consultar este counter directo (la UI no muestra cuotas).
+    // El doc `config/rate_limits` (caps por rol) ya está cubierto por
+    // la rule de `config/{docId}` arriba (read staff, write admin).
+    match /rate_limits/{docId} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Default deny — cualquier colección no listada arriba está
+    // bloqueada. Esto incluye colecciones nuevas que se creen sin
+    // antes agregar su rule explícita.
+    // ─────────────────────────────────────────────────────────────
+  }
+}

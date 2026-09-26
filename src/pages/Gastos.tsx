@@ -2,11 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Gasto } from '../types';
-import { formatMoneda, formatFechaCorta } from '../utils';
+import { formatMoneda, formatFechaCorta, parseFirestoreDate } from '../utils';
+import { ingresosConfirmados, type OrdenConCobros } from '../utils/ingresosConfirmados';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Plus, DollarSign, Trash2, TrendingUp, TrendingDown } from 'lucide-react';
-import { startOfMonth, startOfWeek, endOfWeek, addDays, isSameWeek, format } from 'date-fns';
+import { startOfMonth, startOfWeek, endOfWeek, addDays, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
@@ -29,7 +30,7 @@ export default function Gastos() {
   const puedeEliminar = puede(userProfile, 'gastosEliminar');
   const [loading, setLoading] = useState(true);
   const [gastos, setGastos] = useState<Gasto[]>([]);
-  const [ordenes, setOrdenes] = useState<any[]>([]);
+  const [ordenes, setOrdenes] = useState<OrdenConCobros[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -52,11 +53,18 @@ export default function Gastos() {
       }
     );
     const unsub2 = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
-      setOrdenes(snap.docs.map(d => ({
-        id: d.id, ...d.data(),
-        createdAt: d.data().createdAt?.toDate?.() || new Date(),
-        updatedAt: d.data().updatedAt?.toDate?.() || new Date(),
-      })));
+      setOrdenes(snap.docs.map(d => {
+        const data = d.data();
+        return {
+          eliminada: data.eliminada === true,
+          // No asignar la fecha de hoy a pagos antiguos sin fecha comprobable.
+          pagos: (Array.isArray(data.pagos) ? data.pagos : []).filter(p => p && typeof p === 'object').map(p => ({
+            verificado: p.verificado === true,
+            monto: typeof p.monto === 'number' ? p.monto : NaN,
+            fecha: parseFirestoreDate(p.fecha) || new Date(NaN),
+          })),
+        };
+      }));
     });
     return () => { unsub1(); unsub2(); };
   }, []);
@@ -64,22 +72,20 @@ export default function Gastos() {
   const stats = useMemo(() => {
     const now = new Date();
     const monthStart = startOfMonth(now);
-    const gastosMes = gastos.filter(g => g.fecha >= monthStart);
+    const gastosMes = gastos.filter(g => g.fecha >= monthStart && g.fecha <= now);
     const totalGastosMes = gastosMes.reduce((s, g) => s + g.monto, 0);
-    const cerradosMes = ordenes.filter(o => o.fase === 'cerrado' && o.updatedAt >= monthStart);
-    const ingresosMes = cerradosMes.length * 3500; // Estimate
+    const ingresosMes = ingresosConfirmados(ordenes, monthStart, now);
 
     // Weekly chart data
     const weeks: { label: string; gastos: number; ingresos: number }[] = [];
     for (let i = 3; i >= 0; i--) {
       const weekStart = startOfWeek(addDays(now, -7 * i), { weekStartsOn: 1 });
-      const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+      const weekEnd = new Date(Math.min(endOfWeek(weekStart, { weekStartsOn: 1 }).getTime(), now.getTime()));
       const wGastos = gastos.filter(g => g.fecha >= weekStart && g.fecha <= weekEnd).reduce((s, g) => s + g.monto, 0);
-      const wOrdenes = ordenes.filter(o => o.fase === 'cerrado' && o.updatedAt >= weekStart && o.updatedAt <= weekEnd);
       weeks.push({
         label: `Sem ${format(weekStart, 'dd/MM', { locale: es })}`,
         gastos: wGastos,
-        ingresos: wOrdenes.length * 3500,
+        ingresos: ingresosConfirmados(ordenes, weekStart, weekEnd),
       });
     }
 
@@ -148,14 +154,14 @@ export default function Gastos() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <div className="flex items-center gap-2 mb-2">
             <TrendingUp size={18} className="text-green-500" />
-            <span className="text-sm text-gray-500">Ingresos Est. Mes</span>
+            <span className="text-sm text-gray-500">Cobros confirmados del mes</span>
           </div>
           <p className="text-2xl font-bold text-green-600">{formatMoneda(stats.ingresosMes)}</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <div className="flex items-center gap-2 mb-2">
             <DollarSign size={18} className="text-[#1a5fa8]" />
-            <span className="text-sm text-gray-500">Balance</span>
+            <span className="text-sm text-gray-500">Cobros menos gastos</span>
           </div>
           <p className={`text-2xl font-bold ${stats.ingresosMes - stats.totalGastosMes >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {formatMoneda(stats.ingresosMes - stats.totalGastosMes)}
@@ -163,6 +169,7 @@ export default function Gastos() {
         </div>
       </div>
 
+      <p className="text-sm text-gray-500">Solo se incluyen pagos confirmados de órdenes, según la fecha del pago. Los pendientes y los registros antiguos sin verificación requieren conciliación.</p>
       {/* Weekly chart */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Comparativo Semanal</h2>

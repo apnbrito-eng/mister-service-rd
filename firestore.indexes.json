@@ -4,26 +4,142 @@
       "collectionGroup": "ponches",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "fechaRD", "order": "ASCENDING" },
-        { "fieldPath": "timestamp", "order": "ASCENDING" }
+        {
+          "fieldPath": "fechaRD",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "ponches",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "personalUid", "order": "ASCENDING" },
-        { "fieldPath": "fechaRD", "order": "DESCENDING" }
+        {
+          "fieldPath": "personalUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaRD",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "ordenes_servicio",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "clienteId", "order": "ASCENDING" },
-        { "fieldPath": "equipoTipo", "order": "ASCENDING" },
-        { "fieldPath": "tipoCierre", "order": "ASCENDING" },
-        { "fieldPath": "fechaCierre", "order": "DESCENDING" }
+        {
+          "fieldPath": "clienteId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "equipoTipo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "tipoCierre",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "fechaCierre",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "whatsapp_mensajes_inbox",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ordenId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestampRecibido",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "whatsapp_mensajes_outbox",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ordenId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "whatsapp_mensajes_inbox",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ordenId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visibleTecnico",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestampRecibido",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "whatsapp_mensajes_outbox",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "ordenId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visibleTecnico",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "whatsapp_mensajes_inbox",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "wa_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestampMeta",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "whatsapp_mensajes_outbox",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "wa_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     }
   ],

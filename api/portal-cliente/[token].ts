@@ -44,7 +44,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log(JSON.stringify({
     endpoint: 'portal-cliente',
     app_check: appCheckResult,
-    token_orden: token.substring(0, 8) + '...',
   }));
 
   let db: ReturnType<typeof getAdminFirestore>;

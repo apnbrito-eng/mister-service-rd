@@ -372,6 +372,9 @@ export default function Citas() {
       return;
     }
 
+    // Sin configuración, conservar la entrada manual y no cargar una clave inválida.
+    if (!import.meta.env.VITE_GOOGLE_MAPS_KEY?.trim()) return;
+
     if (!document.getElementById('google-places-script')) {
       const script = document.createElement('script');
       script.id = 'google-places-script';
@@ -585,15 +588,15 @@ export default function Citas() {
   if (loading) return <LoadingSpinner fullPage text="Cargando citas..." />;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="service-page space-y-6">
+      <div className="service-page-heading">
         <div>
           <h1 className="text-2xl font-bold text-primary">Citas por Confirmar</h1>
           <p className="text-gray-500 text-sm">{citas.length} citas pendientes</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+          className="service-primary-action"
         >
           <Plus size={18} />
           Registrar Cita
@@ -610,7 +613,7 @@ export default function Citas() {
           />
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="service-record-list">
           {citas.map(cita => {
             const minutos = differenceInMinutes(new Date(), cita.createdAt);
             const esUrgente = minutos > 15;
@@ -623,7 +626,7 @@ export default function Citas() {
             return (
               <div
                 key={cita.id}
-                className={`bg-white rounded-2xl shadow-sm border-2 p-5 ${borderClass}`}
+                className={`service-record-row bg-white border-l-4 p-5 ${borderClass}`}
               >
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="flex-1 min-w-0">
@@ -788,7 +791,7 @@ export default function Citas() {
                     onChange={e => setForm(f => ({ ...f, clienteDireccion: e.target.value }))}
                     placeholder="Escribe un lugar, dirección o usa GPS"
                     autoComplete="off"
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
+                    className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
                   />
                   <button type="button" onClick={handleMiUbicacion} disabled={geoLoading}
                     className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-medium transition-colors flex items-center gap-1 shrink-0 disabled:opacity-50">

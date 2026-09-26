@@ -6,7 +6,7 @@ vi.mock('firebase/firestore', () => ({
  collection: (_db: unknown, name: string) => ({ name }),
  doc: (...args: unknown[]) => ({ id: args.length === 1 ? 'new-order' : args[2] }),
  getDoc: async () => ({ exists: () => true, data: () => mock.state }),
- runTransaction: async (_db: unknown, fn: Function) => fn({
+ runTransaction: async (_db: unknown, fn: (tx: any) => Promise<unknown>) => fn({
   get: async () => ({ exists: () => true, data: () => mock.latest || mock.state }),
   set: (_r: unknown, data: unknown) => mock.writes.push(data),
   update: (_r: unknown, data: unknown) => mock.writes.push(data),

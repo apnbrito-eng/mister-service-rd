@@ -80,3 +80,15 @@ ai-agent-settings.json
 * 2.*
 "* 2.*"
 .env*
+
+# Native generated bundles, signing and Firebase configuration
+dist-mobile/
+android/app/src/main/assets/public/
+ios/App/App/public/
+**/google-services.json
+**/GoogleService-Info.plist
+*.keystore
+*.jks
+
+# Copia de plugin con identidad SwiftPM única; generada al sincronizar
+ios/App/CapApp-SPM/.generated/

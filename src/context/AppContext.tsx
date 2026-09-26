@@ -41,7 +41,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useAutoRefreshToken(currentUser);
 
   useEffect(() => {
+    let generacion = 0;
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      const vigente = ++generacion;
+      const actual = () => vigente === generacion;
+      setLoading(true); setUserProfile(null); setAuthError(null);
       // Clean up any previous profile listener
       if (profileUnsubRef.current) {
         profileUnsubRef.current();
@@ -65,11 +69,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         // Quick check if doc exists before setting up listener
         const personalQuery = query(collection(db, 'personal'), where('email', '==', user.email));
         const personalSnap = await getDocs(personalQuery);
+        if (!actual()) return;
 
         if (personalSnap.empty) {
           // Not in personal collection either — check usuarios collection
           const { getDoc } = await import('firebase/firestore');
           const userDoc = await getDoc(userDocRef);
+          if (!actual()) return;
           if (userDoc.exists()) {
             foundInUsuarios = true;
           }
@@ -80,6 +86,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           profileUnsubRef.current = onSnapshot(
             userDocRef,
             (snap) => {
+              if (!actual()) return;
+              if (!snap.exists()) { setUserProfile(null); setAuthError('El perfil ya no está disponible.'); setLoading(false); return; }
               if (snap.exists()) {
                 setUserProfile({ id: snap.id, ...snap.data() } as Usuario);
                 setAuthError(null);
@@ -87,6 +95,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               setLoading(false);
             },
             (err) => {
+              if (!actual()) return;
+              setUserProfile(null); setAuthError('No se pudo verificar tu perfil.');
               console.error('Error listening to user profile:', err);
               setLoading(false);
             }
@@ -97,6 +107,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           profileUnsubRef.current = onSnapshot(
             personalDocRef,
             (snap) => {
+              if (!actual()) return;
+              if (!snap.exists()) { setUserProfile(null); setAuthError('El perfil ya no está disponible.'); setLoading(false); return; }
               if (snap.exists()) {
                 const data = snap.data();
                 setUserProfile({
@@ -105,7 +117,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
                   email: data.email || user.email || '',
                   rol: data.rol,
                   telefono: data.telefono || '',
-                  activo: data.activo,
+                  activo: data.eliminado === true ? false : data.activo,
                   createdAt: data.createdAt?.toDate() || new Date(),
                   permisos: data.permisos,
                   permisosSistema: data.permisosSistema,
@@ -117,6 +129,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
               setLoading(false);
             },
             (err) => {
+              if (!actual()) return;
+              setUserProfile(null); setAuthError('No se pudo verificar tu perfil.');
               console.error('Error listening to personal profile:', err);
               setLoading(false);
             }
@@ -133,6 +147,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setLoading(false);
         }
       } catch (error) {
+        if (!actual()) return;
         // Audit fix C3 iter 2: si Firestore lanza durante la carga del perfil
         // (Step 1 o Step 2), antes solo se llamaba setLoading(false) dejando
         // userProfile=null y authError=null → ProtectedRoute renderizaba la
@@ -146,6 +161,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      ++generacion;
       unsubscribeAuth();
       if (profileUnsubRef.current) {
         profileUnsubRef.current();

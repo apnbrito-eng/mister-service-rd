@@ -1,3 +1,4 @@
+import ExpedienteCliente from './ExpedienteCliente';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -11,6 +12,7 @@ import { obtenerTodasOrdenesPorTelefono } from '../../services/ordenes.service';
 import { useApp } from '../../context/AppContext';
 import CardCliente, { type PrefillCrearOrden } from './CardCliente';
 import TimelineUnificadoOrden from '../ordenes/TimelineUnificadoOrden';
+import GestionOrden, { type FuenteCrm } from '../crm/GestionOrden';
 import EnviarFacturacionButton from '../ordenes/EnviarFacturacionButton';
 import { faseLabel, faseColor, formatFecha, formatMoneda } from '../../utils';
 import type { Cliente, OrdenServicio, Factura } from '../../types';
@@ -45,22 +47,26 @@ import type { Cliente, OrdenServicio, Factura } from '../../types';
 
 interface Props {
   waId: string;
+  fuenteCrm?: FuenteCrm | null;
+  alUsarFuente?: () => void;
   /** Callback opcional para abrir el drawer "crear orden" desde el inbox.
    *  Pasa a través al `CardCliente` interno. */
   onCrearOrden?: (prefill: PrefillCrearOrden) => void;
 }
 
-type TabKey = 'datos' | 'ordenes' | 'garantias' | 'facturas' | 'historial';
+type TabKey = 'expediente' | 'gestion' | 'datos' | 'ordenes' | 'garantias' | 'facturas' | 'historial';
 
 const TABS: { key: TabKey; label: string; icono: typeof User }[] = [
-  { key: 'datos', label: 'Datos', icono: User },
+  { key: 'expediente', label: 'Notas y archivos', icono: ClipboardList },
+  { key: 'gestion', label: 'Trabajar orden', icono: ClipboardList },
+  { key: 'datos', label: 'Cliente', icono: User },
   { key: 'ordenes', label: 'Órdenes', icono: ClipboardList },
   { key: 'garantias', label: 'Garantías', icono: Shield },
   { key: 'facturas', label: 'Facturas', icono: Receipt },
   { key: 'historial', label: 'Historial', icono: History },
 ];
 
-export default function PanelCliente360({ waId, onCrearOrden }: Props) {
+export default function PanelCliente360({ waId, onCrearOrden, fuenteCrm, alUsarFuente }: Props) {
   const navigate = useNavigate();
   const { userProfile } = useApp();
   const [tab, setTab] = useState<TabKey>('datos');
@@ -70,6 +76,10 @@ export default function PanelCliente360({ waId, onCrearOrden }: Props) {
   const [cliente, setCliente] = useState<{ id: string; data: Cliente } | null>(null);
   const [todasOrdenes, setTodasOrdenes] = useState<OrdenServicio[]>([]);
   const [facturas, setFacturas] = useState<Factura[]>([]);
+  const [seleccion, setSeleccion] = useState('');
+  const [errorOrdenes, setErrorOrdenes] = useState(false);
+  const [intento, setIntento] = useState(0);
+  useEffect(() => { if (fuenteCrm) setTab(fuenteCrm.accion === 'expediente' ? 'expediente' : 'gestion'); }, [fuenteCrm]);
   const [loadingOrdenes, setLoadingOrdenes] = useState(false);
   const [loadingFacturas, setLoadingFacturas] = useState(false);
 
@@ -79,6 +89,7 @@ export default function PanelCliente360({ waId, onCrearOrden }: Props) {
   useEffect(() => {
     let cancelado = false;
     setLoadingOrdenes(true);
+    setTodasOrdenes([]); setCliente(null); setSeleccion(''); setErrorOrdenes(false);
     (async () => {
       try {
         const [c, ords] = await Promise.all([
@@ -92,6 +103,7 @@ export default function PanelCliente360({ waId, onCrearOrden }: Props) {
          
         console.warn('[PanelCliente360] carga global falló:', err);
         if (!cancelado) {
+          setErrorOrdenes(true);
           setCliente(null);
           setTodasOrdenes([]);
         }
@@ -102,7 +114,7 @@ export default function PanelCliente360({ waId, onCrearOrden }: Props) {
     return () => {
       cancelado = true;
     };
-  }, [waId]);
+  }, [waId, intento]);
 
   // Facturas del cliente — se cargan SOLO cuando entramos al tab facturas
   // (o al historial que también las muestra resumidas). Patrón
@@ -201,7 +213,7 @@ export default function PanelCliente360({ waId, onCrearOrden }: Props) {
   return (
     <div className="flex flex-col h-full">
       {/* Tabs header — compacto, scrollable horizontal en angosto */}
-      <div className="flex items-center gap-0.5 border-b border-gray-200 px-1 overflow-x-auto">
+      <div className="grid grid-cols-3 gap-1 border-b border-gray-200 p-2 shrink-0">
         {TABS.map((t) => {
           const activa = tab === t.key;
           const Icono = t.icono;
@@ -210,7 +222,7 @@ export default function PanelCliente360({ waId, onCrearOrden }: Props) {
               key={t.key}
               type="button"
               onClick={() => setTab(t.key)}
-              className={`flex items-center gap-1 px-2 py-2 text-[11px] font-medium border-b-2 transition-colors whitespace-nowrap ${
+              className={`flex items-center justify-center gap-1 min-h-11 px-2 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
                 activa
                   ? 'border-brand-600 text-brand-700'
                   : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -225,6 +237,15 @@ export default function PanelCliente360({ waId, onCrearOrden }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto p-3">
+        {tab === 'expediente' && (cliente?.id ? <ExpedienteCliente key={cliente.id} clienteId={cliente.id} fuente={fuenteCrm} alUsarFuente={alUsarFuente} /> : <p className="p-3 text-sm">Registra primero al cliente desde Datos para crear su expediente.</p>)}
+        {tab === 'gestion' && <div className="space-y-3">
+          {loadingOrdenes ? <p>Cargando órdenes…</p> : errorOrdenes ? <div role="alert">No se pudieron cargar las órdenes.<button onClick={() => setIntento(n => n + 1)}>Reintentar</button></div> : <>
+            <label className="block text-sm font-medium">Orden / equipo<select className="w-full border rounded-lg p-2 mt-1" value={seleccion} onChange={e => setSeleccion(e.target.value)}><option value="">Selecciona una orden</option>{todasOrdenes.map(o => <option key={o.id} value={o.id}>{o.numero} · {o.equipoTipo} {o.equipoMarca}</option>)}</select></label>
+            {!todasOrdenes.length && <p className="text-sm">No hay órdenes para este teléfono. Puedes crear una desde Datos.</p>}
+            {seleccion && <button type="button" className="min-h-11 text-sm underline" onClick={() => navigate(`/admin/ordenes/${seleccion}`)}>Abrir orden completa y editar</button>}
+            {seleccion && <GestionOrden key={seleccion} ordenId={seleccion} fuente={fuenteCrm?.accion === 'expediente' ? null : fuenteCrm} alUsarFuente={alUsarFuente} />}
+          </>}
+        </div>}
         {tab === 'datos' && (
           <div className="space-y-3">
             {/* SPRINT-WA-INBOX-UX-QUICKWINS quickwin 2: último servicio realizado.

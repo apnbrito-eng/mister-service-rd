@@ -3,6 +3,8 @@ import {
   doc,
   onSnapshot,
   query,
+  limit,
+  orderBy,
   updateDoc,
   where,
   Unsubscribe,
@@ -62,9 +64,11 @@ function toMillis(t: Timestamp | Date | undefined | null): number {
  * Parsea un doc de `whatsapp_conversaciones` desde Firestore al tipo
  * canónico. Tolera campos faltantes (conversaciones viejas, drift).
  */
-function parsearConversacion(id: string, data: Record<string, unknown>): WhatsAppConversacion {
+export function parsearConversacion(id: string, data: Record<string, unknown>): WhatsAppConversacion {
   return {
     id,
+    ocultoGlobalHastaMs: typeof data.ocultoGlobalHastaMs === 'number' ? data.ocultoGlobalHastaMs : 0,
+    borradoEnCurso: typeof data.borradoEnCurso === 'string' ? data.borradoEnCurso : undefined,
     wa_id: (data.wa_id as string) ?? id,
     ultimoPhoneNumberId: (data.ultimoPhoneNumberId as string) ?? '',
     clienteId: (data.clienteId as string) ?? undefined,
@@ -162,9 +166,10 @@ function parsearMensajeOutbox(
 export function suscribirConversaciones(
   callback: (conversaciones: WhatsAppConversacion[]) => void,
   onError?: (error: Error) => void,
+  maximo?: number,
 ): Unsubscribe {
   const colRef = collection(db, COLLECTION_CONVERSACIONES);
-  return onSnapshot(colRef, (snap) => {
+  return onSnapshot(maximo ? query(colRef, orderBy("ultimaActividad", "desc"), limit(maximo)) : colRef, (snap) => {
     const items: WhatsAppConversacion[] = snap.docs.map((d) =>
       parsearConversacion(d.id, d.data()),
     );
@@ -199,12 +204,16 @@ export function suscribirMensajes(
     | (WhatsAppMensajeInbox & { _direccion: 'entrante' })
     | (WhatsAppMensajeOutbox & { _direccion: 'saliente' })
   >) => void,
+  maximo = 50,
+  onError?: (error: Error) => void,
 ): Unsubscribe {
   // Estado local: 2 listas separadas que se mergean en cada cambio.
   let entrantes: WhatsAppMensajeInbox[] = [];
   let salientes: WhatsAppMensajeOutbox[] = [];
 
+  let listoIn = false, listoOut = false;
   function emit() {
+    if (!listoIn || !listoOut) return;
     const merged: Array<
       | (WhatsAppMensajeInbox & { _direccion: 'entrante' })
       | (WhatsAppMensajeOutbox & { _direccion: 'saliente' })
@@ -232,20 +241,26 @@ export function suscribirMensajes(
   const qInbox = query(
     collection(db, COLLECTION_MENSAJES_INBOX),
     where('wa_id', '==', wa_id),
+    orderBy('timestampMeta', 'desc'),
+    limit(maximo),
   );
   const qOutbox = query(
     collection(db, COLLECTION_MENSAJES_OUTBOX),
     where('wa_id', '==', wa_id),
+    orderBy('createdAt', 'desc'),
+    limit(maximo),
   );
 
   const unsubIn = onSnapshot(qInbox, (snap) => {
-    entrantes = snap.docs.map((d) => parsearMensajeInbox(d.id, d.data()));
+    listoIn = true;
+    entrantes = snap.docs.filter(d => !d.data().eliminadoDelChat).map((d) => parsearMensajeInbox(d.id, d.data()));
     emit();
-  });
+  }, onError);
   const unsubOut = onSnapshot(qOutbox, (snap) => {
-    salientes = snap.docs.map((d) => parsearMensajeOutbox(d.id, d.data()));
+    listoOut = true;
+    salientes = snap.docs.filter(d => !d.data().eliminadoDelChat).map((d) => parsearMensajeOutbox(d.id, d.data()));
     emit();
-  });
+  }, onError);
 
   return () => {
     unsubIn();

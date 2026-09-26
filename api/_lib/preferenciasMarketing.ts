@@ -9,5 +9,6 @@ export function origenAnuncio(raw: Record<string, unknown>) {
   if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return null;
   const dato = ref as Record<string, unknown>;
   if (dato.source_type !== 'ad' || typeof dato.source_id !== 'string') return null;
-  return { canal: 'whatsapp', anuncioId: dato.source_id.slice(0, 100), capturadoPor: 'referral_meta' };
+  const clic = typeof dato.ctwa_clid === 'string' && /^[A-Za-z0-9_-]{1,2048}$/.test(dato.ctwa_clid) ? dato.ctwa_clid : null;
+  return { canal: 'whatsapp', anuncioId: dato.source_id.slice(0, 100), capturadoPor: 'referral_meta', ...(clic ? { ctwaClid: clic } : {}) };
 }

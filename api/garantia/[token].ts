@@ -1,3 +1,4 @@
+import { resolverVigenciaGarantia, fechaGarantia as toDate } from '../_lib/vigenciaGarantia.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getAdminFirestore, verificarAppCheck } from '../_lib/firebaseAdmin.js';
 
@@ -12,6 +13,7 @@ import { getAdminFirestore, verificarAppCheck } from '../_lib/firebaseAdmin.js';
  *                                   `citas_por_confirmar` con `tipo: 'garantia'`.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Cache-Control', 'no-store');
   const { token } = req.query;
   if (typeof token !== 'string' || !token) {
     return res.status(400).json({ error: 'Token requerido' });
@@ -22,15 +24,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log(JSON.stringify({
     endpoint: 'garantia',
     app_check: appCheckResult,
-    token_orden: token.substring(0, 8) + '...',
   }));
 
   let db: ReturnType<typeof getAdminFirestore>;
   try {
     db = getAdminFirestore();
   } catch (err) {
-    const m = err instanceof Error ? err.message : 'Error desconocido';
-    return res.status(500).json({ error: `Error inicializando Firebase Admin: ${m}` });
+    console.error('[garantia] servicio no disponible');
+    return res.status(500).json({ error: 'Servicio temporalmente no disponible' });
   }
 
   /**
@@ -82,56 +83,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const data = facturaDoc.data() as Record<string, unknown>;
-      const garantiaRaw = (data.garantia as Record<string, unknown>) || {};
-
-      let inicioFecha = toDate(garantiaRaw.inicioFecha);
-      let finFecha = toDate(garantiaRaw.finFecha);
-      let tiempoDias = typeof garantiaRaw.tiempoDias === 'number' ? garantiaRaw.tiempoDias : 0;
-      const reclamadaEn = toDate(garantiaRaw.reclamadaEn);
+      const ordenDoc = typeof data.ordenId === 'string' && data.ordenId
+        ? await db.collection('ordenes_servicio').doc(data.ordenId).get() : null;
+      const { inicioFecha, finFecha, tiempoDias, reclamadaEn, estado, diasRestantes } =
+        resolverVigenciaGarantia(data, ordenDoc?.exists ? ordenDoc.data()! : null);
       const fechaServicio = toDate(data.fechaServicio);
-
-      // SPRINT-135a-UI: si la factura tiene `ordenId`, intentar leer la orden
-      // y preferir el modelo nuevo (`periodoGarantiaDias`, `garantiaVencimiento`,
-      // `cierreServicio.fechaCierre`) sobre los campos heredados de
-      // `facturas.garantia.*`. Esto permite migración progresiva sin breaking
-      // change para el front (`GarantiaCliente.tsx`).
-      const ordenIdRaw = data.ordenId;
-      if (typeof ordenIdRaw === 'string' && ordenIdRaw.length > 0) {
-        try {
-          const ordenSnap = await db.collection('ordenes_servicio').doc(ordenIdRaw).get();
-          if (ordenSnap.exists) {
-            const ordenData = ordenSnap.data() as Record<string, unknown>;
-            const periodoNuevo = ordenData.periodoGarantiaDias;
-            const vencNuevo = toDate(ordenData.garantiaVencimiento);
-            const cierreServicio = ordenData.cierreServicio as Record<string, unknown> | undefined;
-            const fechaCierreNueva = cierreServicio ? toDate(cierreServicio.fechaCierre) : null;
-            if (typeof periodoNuevo === 'number' && periodoNuevo > 0) {
-              tiempoDias = periodoNuevo;
-            }
-            if (vencNuevo) {
-              finFecha = vencNuevo;
-            }
-            if (fechaCierreNueva) {
-              inicioFecha = fechaCierreNueva;
-            }
-          }
-        } catch (ordenErr) {
-          // Fallback silencioso: si la orden no se puede leer, seguimos con
-          // los campos de `facturas.garantia.*` (modelo viejo).
-          console.warn('[garantia][GET] fallback modelo nuevo no disponible:', ordenErr);
-        }
-      }
-
-      // Estado dinámico — calculado al leer (sin scheduler)
-      const now = new Date();
-      let estado = (garantiaRaw.estado as string) || 'vigente';
-      if (estado === 'vigente' && finFecha && now > finFecha) {
-        estado = 'expirada';
-      }
-
-      const diasRestantes = finFecha
-        ? Math.max(0, Math.ceil((finFecha.getTime() - now.getTime()) / 86400000))
-        : 0;
 
       // Sólo campos públicos — el cliente NO ve precios ni detalles internos
       return res.status(200).json({
@@ -153,8 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     } catch (err) {
       console.error('[garantia][GET] error:', err);
-      const m = err instanceof Error ? err.message : 'Error desconocido';
-      return res.status(500).json({ error: `Error: ${m.substring(0, 300)}` });
+      return res.status(500).json({ error: 'No se pudo procesar la garantía. Intenta de nuevo.' });
     }
   }
 
@@ -163,9 +118,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const problemaRaw =
       typeof body.problemaDescripcion === 'string' ? body.problemaDescripcion : '';
     const problema = problemaRaw.trim();
-    if (problema.length < 10) {
+    if (problema.length < 10 || problema.length > 2000) {
       return res.status(400).json({
-        error: 'Descripción del problema requerida (mínimo 10 caracteres)',
+        error: 'La descripción debe tener entre 10 y 2000 caracteres',
       });
     }
 
@@ -175,108 +130,84 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ error: 'Garantía no encontrada' });
       }
 
-      const data = facturaDoc.data() as Record<string, unknown>;
-      const garantiaRaw = (data.garantia as Record<string, unknown>) || {};
-
-      const finFecha = toDate(garantiaRaw.finFecha);
-      const now = new Date();
-
-      if (finFecha && now > finFecha) {
-        return res.status(400).json({ error: 'Garantía expirada' });
-      }
-      if (garantiaRaw.estado && garantiaRaw.estado !== 'vigente') {
-        return res
-          .status(400)
-          .json({ error: 'Esta garantía ya fue reclamada o atendida' });
-      }
-
-      const ahora = new Date();
-
-      // 1) Update factura — pasa a 'reclamada'
-      await facturaDoc.ref.update({
-        'garantia.estado': 'reclamada',
-        'garantia.reclamadaEn': ahora,
-        'garantia.problemaDescripcion': problema,
-        'garantia.origen': 'reclamo_cliente',
-      });
-
-      // 2) Crear cita_por_confirmar con tipo 'garantia'
-      const citaPayload: Record<string, unknown> = {
-        tipo: 'garantia',
-        esGarantia: true,
-        referenciaFacturaId: facturaDoc.id,
-        referenciaConduce: data.numero || null,
-        referenciaOrdenId: data.ordenId || null,
-        clienteId: data.clienteId || null,
-        clienteNombre: data.clienteNombre || null,
-        clienteNombre_alias: data.clienteNombre || null, // por si alguna view legacy depende
-        telefono: data.clienteTelefono || null,
-        clienteTelefono: data.clienteTelefono || null,
-        equipoTipo: data.equipoTipo || null,
-        equipoMarca: data.equipoMarca || null,
-        equipoModelo: data.equipoModelo || null,
-        servicio: 'Reclamo de garantía',
-        falla: problema,
-        descripcionProblema: problema,
-        tecnicoOriginalUid: data.tecnicoId || null,
-        tecnicoOriginalNombre: data.tecnicoNombre || null,
-        origen: 'reclamo_garantia',
-        origenGarantia: 'reclamo_cliente',
-        createdAt: ahora,
-        estado: 'pendiente',
-      };
-
-      const citaLimpia = Object.fromEntries(
-        Object.entries(citaPayload).filter(([, v]) => v !== undefined),
-      );
-
-      await db.collection('citas_por_confirmar').add(citaLimpia);
-
-      // 3) Audit log
-      try {
-        const auditPayload: Record<string, unknown> = {
-          accion: 'reclamo_garantia_cliente',
-          objetivoTipo: 'factura',
-          objetivoId: facturaDoc.id,
-          conduceNumero: data.numero || null,
-          tokenGarantia: token.substring(0, 8) + '...', // truncado
-          problemaDescripcion: problema,
-          timestamp: ahora,
+      // ID estable y transacción: dos clics simultáneos producen una sola solicitud.
+      const solicitudRef = db.collection('citas_por_confirmar').doc(`garantia_${facturaDoc.id}`);
+      const auditRef = db.collection('auditoria_admin').doc(`reclamo_garantia_${facturaDoc.id}`);
+      await db.runTransaction(async tx => {
+        const actual = await tx.get(facturaDoc.ref);
+        if (!actual.exists) throw new ReclamoError(404, 'Garantía no encontrada');
+        const data = actual.data()!;
+        const ordenDoc = typeof data.ordenId === 'string' && data.ordenId
+          ? await tx.get(db.collection('ordenes_servicio').doc(data.ordenId)) : null;
+        const orden = ordenDoc?.exists ? ordenDoc.data()! : null;
+        const tokenValido = data.garantia?.token === token ||
+          (orden?.facturaId === actual.id && (orden?.tokenPortalCliente === token || orden?.trackingGPS?.token === token));
+        if (!tokenValido) throw new ReclamoError(404, 'Garantía no encontrada');
+        const solicitud = await tx.get(solicitudRef);
+        if (solicitud.exists) return;
+        const ahora = new Date();
+        const vigencia = resolverVigenciaGarantia(data, ordenDoc?.exists ? ordenDoc.data()! : null, ahora);
+        if (vigencia.estado !== 'vigente') {
+          const mensaje = vigencia.estado === 'expirada' ? 'Garantía expirada'
+            : vigencia.estado === 'por_confirmar' ? 'La oficina debe confirmar la vigencia de esta garantía'
+            : 'Esta garantía ya fue reclamada o atendida';
+          throw new ReclamoError(409, mensaje);
+        }
+        const citaPayload: Record<string, unknown> = {
+          tipo: 'garantia',
+          esGarantia: true,
+          referenciaFacturaId: facturaDoc.id,
+          referenciaConduce: data.numero || null,
+          referenciaOrdenId: data.ordenId || null,
+          clienteId: data.clienteId || null,
+          clienteNombre: data.clienteNombre || null,
+          clienteNombre_alias: data.clienteNombre || null, // por si alguna view legacy depende
+          telefono: data.clienteTelefono || null,
+          clienteTelefono: data.clienteTelefono || null,
+          equipoTipo: data.equipoTipo || null,
+          equipoMarca: data.equipoMarca || null,
+          equipoModelo: data.equipoModelo || null,
+          servicio: 'Reclamo de garantía',
+          falla: problema,
+          descripcionProblema: problema,
+          tecnicoOriginalUid: data.tecnicoId || null,
+          tecnicoOriginalNombre: data.tecnicoNombre || null,
+          origen: 'reclamo_garantia',
+          origenGarantia: 'reclamo_cliente',
+          createdAt: ahora,
+          estado: 'pendiente',
         };
-        await db.collection('auditoria_admin').add(
-          Object.fromEntries(
-            Object.entries(auditPayload).filter(([, v]) => v !== undefined),
-          ),
-        );
-      } catch (auditErr) {
-        console.warn('[garantia][POST] audit log falló (no bloquea):', auditErr);
-      }
+
+
+        tx.update(facturaDoc.ref, {
+          'garantia.estado': 'reclamada',
+          'garantia.reclamadaEn': ahora,
+          'garantia.problemaDescripcion': problema,
+          'garantia.origen': 'reclamo_cliente',
+          'garantia.solicitudId': solicitudRef.id,
+        });
+        tx.create(solicitudRef, citaPayload);
+        tx.create(auditRef, {
+          accion: 'reclamo_garantia_cliente', objetivoTipo: 'factura',
+          objetivoId: facturaDoc.id, solicitudId: solicitudRef.id,
+          actorTipo: 'cliente_portal', timestamp: ahora,
+        });
+      });
 
       return res.status(200).json({
         ok: true,
         mensaje: 'Recibimos tu reclamo. Te contactaremos pronto.',
       });
     } catch (err) {
+      if (err instanceof ReclamoError) return res.status(err.status).json({ error: err.message });
       console.error('[garantia][POST] error:', err);
-      const m = err instanceof Error ? err.message : 'Error desconocido';
-      return res.status(500).json({ error: `Error: ${m.substring(0, 300)}` });
+      return res.status(500).json({ error: 'No se pudo procesar la garantía. Intenta de nuevo.' });
     }
   }
 
   return res.status(405).json({ error: 'Method not allowed' });
 }
 
-/** Convierte un Timestamp/Date/string a Date, o null si no se puede */
-function toDate(val: unknown): Date | null {
-  if (!val) return null;
-  if (val instanceof Date) return val;
-  if (typeof val === 'object' && val !== null && 'toDate' in val) {
-    const fn = (val as { toDate?: () => Date }).toDate;
-    if (typeof fn === 'function') return fn.call(val);
-  }
-  if (typeof val === 'string') {
-    const d = new Date(val);
-    return isNaN(d.getTime()) ? null : d;
-  }
-  return null;
+class ReclamoError extends Error {
+  constructor(public status: number, message: string) { super(message); }
 }

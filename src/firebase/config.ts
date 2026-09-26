@@ -1,6 +1,8 @@
+import { Capacitor } from '@capacitor/core';
+import { FirebaseAppCheck } from '@capacitor-firebase/app-check';
 import { initializeApp } from 'firebase/app';
-import { initializeAppCheck, ReCaptchaV3Provider, type AppCheck } from 'firebase/app-check';
-import { getAuth } from 'firebase/auth';
+import { initializeAppCheck, CustomProvider, ReCaptchaV3Provider, type AppCheck } from 'firebase/app-check';
+import { getAuth, initializeAuth, indexedDBLocalPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
@@ -41,7 +43,19 @@ const app = initializeApp(firebaseConfig);
 // El enforcement (bloqueo real) se activa manualmente en Firebase Console
 // tras validar que los tokens llegan en producción.
 let appCheckInstance: AppCheck | null = null;
-if (typeof window !== 'undefined') {
+if (Capacitor.isNativePlatform()) {
+  const inicializacion = FirebaseAppCheck.initialize({ isTokenAutoRefreshEnabled: true, debugToken: import.meta.env.VITE_FIREBASE_PROJECT_ID === 'mister-service-ensayo-260921' && import.meta.env.VITE_MOBILE_APPCHECK_DEBUG === 'true' });
+  void inicializacion.catch(() => {}); // El proveedor propaga el error al pedir el token; nunca lo sustituye por uno ficticio.
+  appCheckInstance = initializeAppCheck(app, {
+    provider: new CustomProvider({ getToken: async () => {
+      await inicializacion;
+      const result = await FirebaseAppCheck.getToken({ forceRefresh: false });
+      if (!result.expireTimeMillis) throw new Error('App Check nativo no devolvió la vigencia.');
+      return { token: result.token, expireTimeMillis: result.expireTimeMillis };
+    } }),
+    isTokenAutoRefreshEnabled: true,
+  });
+} else if (typeof window !== 'undefined') {
   if (import.meta.env.DEV) {
     // @ts-expect-error - propiedad global de Firebase para debug en localhost
     self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
@@ -64,7 +78,10 @@ if (typeof window !== 'undefined') {
 }
 
 export const appCheck = appCheckInstance;
-export const auth = getAuth(app);
+// El WebView nativo no utiliza ventanas ni redirecciones OAuth del navegador.
+export const auth = Capacitor.isNativePlatform()
+  ? initializeAuth(app, { persistence: indexedDBLocalPersistence })
+  : getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export default app;

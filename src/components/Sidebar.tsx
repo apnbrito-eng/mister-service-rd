@@ -1,3 +1,5 @@
+import AvisosMoviles from '../mobile/AvisosMoviles';
+import { desactivarNotificacionesMoviles } from '../mobile/notificaciones';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ClipboardList, Calendar, Map,
@@ -21,6 +23,7 @@ import { suscribirContadorSinLeer } from '../services/whatsappInbox.service';
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  onNavigate?: () => void;
 }
 
 type SidebarItem = {
@@ -62,7 +65,7 @@ function saveState(state: Record<string, boolean>) {
   }
 }
 
-export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
   const { userProfile } = useApp();
   const navigate = useNavigate();
   const [standbyCount, setStandbyCount] = useState(0);
@@ -220,6 +223,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   }, [userProfile?.rol]);
 
   const handleLogout = async () => {
+    try { await desactivarNotificacionesMoviles(); } catch { /* El cierre de sesión continúa incluso sin conexión. */ }
     await signOut(auth);
     navigate('/login');
   };
@@ -242,6 +246,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     ] } },
     { kind: 'section', section: { id: 'v2_atencion', label: 'Atención y clientes', icon: MessageSquare, defaultExpanded: false, items: [
       { to: '/admin/inbox', icon: MessageSquare, label: 'Inbox WhatsApp', badge: whatsappInboxCount, show: esAdminOCoord || isOperaria || isSecretaria },
+      { to: '/admin/clientes-responsables', icon: Users, label: 'Clientes y responsables', show: userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora' },
       { to: '/admin/clientes', icon: Users, label: 'Clientes', show: p('clientesVer') },
       { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: userProfile?.rol === 'administrador' },
       { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
@@ -280,7 +285,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       { to: '/admin/avances', icon: Wallet, label: 'Avances a Empleados', show: p('avancesGestionar') },
       { to: '/admin/prestamos', icon: Banknote, label: 'Préstamos a Empleados', show: esAdminOCoord },
       { to: '/admin/rendimiento', icon: TrendingUp, label: userProfile?.rol === 'operaria' || userProfile?.rol === 'secretaria' ? 'Mi rendimiento' : 'Rendimiento', show: p('rendimientoVer') },
-      { to: '/admin/metricas-mensuales', icon: TrendingUp, label: 'Métricas del Mes', show: p('rendimientoVer') || esAdminOCoord },
+      { to: '/admin/metricas-mensuales', icon: TrendingUp, label: 'Métricas del Mes', show: p('rendimientoVer') },
     ] } },
     { kind: 'section', section: { id: 'v2_marketing', label: 'Marketing', icon: BarChart3, defaultExpanded: false, items: [
       { to: '/admin/marketing', icon: BarChart3, label: 'Marketing', show: esAdminOCoord },
@@ -290,8 +295,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       { to: '/admin/configuracion-marketing', icon: Sparkles, label: 'Plantillas Marketing', show: userProfile?.rol === 'administrador' },
     ] } },
     { kind: 'section', section: { id: 'v2_recursos', label: 'Recursos', icon: BookOpen, defaultExpanded: false, items: [
-      { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: esAdminOCoord || p('configuracionModificar') },
-      { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionModificar') || userProfile?.rol === 'operaria' || esAdminOCoord },
+      { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: p('configuracionVer') },
+      { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionVer') },
       { to: '/admin/conocimiento', icon: BookOpen, label: 'Conocimientos', show: esAdminOCoord || isOperaria || isSecretaria },
       { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: false },
     ] } },
@@ -326,8 +331,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors text-sm relative group ${
       isActive
-        ? 'bg-white/20 text-white font-medium'
-        : 'text-blue-200 hover:bg-white/10 hover:text-white'
+        ? 'bg-white/90 text-blue-700 shadow-sm font-semibold'
+        : 'text-slate-600 hover:bg-white/70 hover:text-slate-950'
     }`;
 
   // Render de un item (usado tanto colapsado como expandido dentro de secciones)
@@ -335,6 +340,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <NavLink
       key={item.to}
       to={item.to}
+      onClick={onNavigate}
       tabIndex={opts?.tabDisabled ? -1 : undefined}
       className={({ isActive }) =>
         `${navLinkClass({ isActive })} ${opts?.indent && !collapsed ? 'pl-8' : ''}`
@@ -367,18 +373,19 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   return (
     <aside
-      className={`bg-brand-800 flex flex-col h-full transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'} relative`}
+      className={`glass-sidebar flex flex-col h-full transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'} relative`}
     >
       {/* Toggle button */}
       <button
         onClick={onToggle}
+        aria-label={collapsed ? 'Expandir menú' : 'Cerrar o reducir menú'}
         className="absolute -right-3 top-6 z-10 bg-brand-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg hover:bg-brand-500 transition-colors"
       >
         {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>
 
       {/* Logo */}
-      <div className={`p-4 border-b border-brand-700 transition-all duration-300 ${collapsed ? 'flex justify-center' : ''}`}>
+      <div className={`p-4 border-b border-white/70 transition-all duration-300 ${collapsed ? 'flex justify-center' : ''}`}>
         {collapsed ? (
           <Logo size="sm" compact />
         ) : (
@@ -389,8 +396,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* User info */}
       {!collapsed && userProfile && (
         <div className="px-4 py-3 border-b border-white/10">
-          <div className="text-white font-medium text-sm truncate">{userProfile.nombre}</div>
-          <div className="text-blue-300 text-xs capitalize">{userProfile.rol}</div>
+          <div className="text-slate-900 font-semibold text-sm truncate">{userProfile.nombre}</div>
+          <div className="text-slate-600 text-xs capitalize">{userProfile.rol}</div>
         </div>
       )}
 
@@ -417,7 +424,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
                   type="button"
                   onClick={() => toggleSection(sec.id, sec.defaultExpanded)}
                   aria-expanded={expanded}
-                  className="flex items-center gap-3 px-4 py-2 mx-2 w-[calc(100%-1rem)] rounded-lg text-blue-300 hover:bg-white/5 hover:text-white transition-colors text-xs uppercase tracking-wide font-semibold"
+                  className="flex items-center gap-3 px-4 py-2 mx-2 w-[calc(100%-1rem)] rounded-lg text-slate-600 hover:bg-white/70 hover:text-slate-950 transition-colors text-xs uppercase tracking-wide font-semibold"
                 >
                   <sec.icon size={16} className="flex-shrink-0" />
                   <span className="truncate flex-1 text-left">{sec.label}</span>
@@ -444,13 +451,14 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
             );
           })
         )}
+        {!collapsed && <AvisosMoviles />}
       </nav>
 
       {/* Logout */}
       <div className="p-3 border-t border-white/10">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 px-4 py-2.5 w-full rounded-lg text-blue-200 hover:bg-white/10 hover:text-white transition-colors text-sm group relative"
+          className="flex items-center gap-3 px-4 py-2.5 w-full rounded-lg text-slate-600 hover:bg-white/70 hover:text-slate-950 transition-colors text-sm group relative"
         >
           <LogOut size={18} className="flex-shrink-0" />
           {!collapsed && <span>Cerrar sesión</span>}

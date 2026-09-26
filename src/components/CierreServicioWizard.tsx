@@ -1,3 +1,5 @@
+import { tieneAprobacionCierre } from '../utils/aprobacionCierre';
+import { esAppNativa, capturarFotoNativa } from '../mobile/camara';
 import { useState, useEffect, useRef } from 'react';
 import { collection, doc, getDocs, query, updateDoc, where, Timestamp, arrayUnion, addDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -143,6 +145,19 @@ export default function CierreServicioWizard({
   const [revisoConexiones, setRevisoConexiones] = useState<RespuestaSiNo>(null);
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmacionGps, setConfirmacionGps] = useState<string | null>(null);
+  const resolverGps = useRef<((aceptar: boolean) => void) | null>(null);
+  const confirmarSinGps = (mensaje: string) => new Promise<boolean>(resolve => {
+    resolverGps.current = resolve;
+    setConfirmacionGps(mensaje);
+  });
+  const responderGps = (aceptar: boolean) => {
+    setConfirmacionGps(null);
+    resolverGps.current?.(aceptar);
+    resolverGps.current = null;
+  };
+  useEffect(() => () => { resolverGps.current?.(false); }, []);
+
 
   // --- Firma del cliente (SPRINT-159, BLOQUEADOR go-live) ---
   // Canvas HTML5 nativo. Pointer Events soportan touch (iPad de Aury) + mouse +
@@ -344,6 +359,10 @@ export default function CierreServicioWizard({
     tieneTrazos; // SPRINT-159: firma obligatoria
 
   const handleCerrarServicio = async () => {
+    if (!tieneAprobacionCierre(orden)) {
+      toast.error("La oficina debe aprobar el presupuesto antes de cerrar el servicio");
+      return;
+    }
     console.log('Intentando cerrar:', {
       ordenId: orden.id,
       tecnicoId,
@@ -396,7 +415,7 @@ export default function CierreServicioWizard({
         toast.error(motivo, { duration: 8000 });
         return { coords: null, continuar: false };
       }
-      const continuarSinGPS = confirm(
+      const continuarSinGPS = await confirmarSinGps(
         motivo +
         '\n\n¿Deseas cerrar el servicio SIN verificación de ubicación?\n\n' +
         'La orden quedará marcada como "GPS no verificado".',
@@ -449,8 +468,10 @@ export default function CierreServicioWizard({
 
       const fotoCierre: Record<string, unknown> = {
         url: fotoUrl,
-        lat: coords?.lat ?? 0,
-        lng: coords?.lng ?? 0,
+        lat: coords?.lat ?? null,
+        lng: coords?.lng ?? null,
+        origenCaptura: esAppNativa() ? 'camara_nativa' : 'web',
+        capturadaEn: new Date(fotoBlob.lastModified),
         timestamp: Timestamp.now(),
         gpsVerificado,
       };
@@ -739,7 +760,13 @@ export default function CierreServicioWizard({
                 />
                 <button
                   type="button"
-                  onClick={() => fotoInputRef.current?.click()}
+                  onClick={async () => {
+                    if (!esAppNativa()) { fotoInputRef.current?.click(); return; }
+                    try {
+                      const file = await capturarFotoNativa();
+                      setFotoBlob(file); setFotoPreview(URL.createObjectURL(file));
+                    } catch { toast.error('No se tomó la foto. Puedes intentar de nuevo.'); }
+                  }}
                   className="w-full flex items-center justify-center gap-2 py-4 bg-primary hover:bg-primary-medium text-white rounded-xl font-semibold text-base transition-colors"
                 >
                   <Camera size={22} /> Tomar Foto
@@ -984,6 +1011,14 @@ export default function CierreServicioWizard({
           </button>
         </div>
       </Modal>
+
+      {confirmacionGps !== null && <Modal isOpen onClose={() => responderGps(false)} title="Confirmar cierre sin GPS" size="md">
+        <p className="text-sm whitespace-pre-line">{confirmacionGps}</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button type="button" onClick={() => responderGps(false)} className="px-4 py-3 rounded-xl border">Volver al cierre</button>
+          <button type="button" onClick={() => responderGps(true)} className="px-4 py-3 rounded-xl bg-amber-600 text-white">Cerrar con GPS no verificado</button>
+        </div>
+      </Modal>}
 
       {/* Sub-modal: agregar/editar pieza */}
       {modalPiezaAbierto && (

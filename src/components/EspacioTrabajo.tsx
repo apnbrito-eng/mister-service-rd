@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { puede, type AccionPermiso } from '../utils/permisos';
 
@@ -38,15 +38,19 @@ export const ESPACIOS: Array<{nombre: string; descripcion: string; vistas: Vista
     {ruta:'prestamos',nombre:'Préstamos',roles:['administrador','coordinadora']},
   ]},
 ];
-export default function EspacioTrabajo() {
+export default function EspacioTrabajo({ compacto = false }: { compacto?: boolean }) {
+  const navigate = useNavigate();
   const {pathname}=useLocation(); const {userProfile}=useApp();
   // Solo listas principales: no distraer ni romper los expedientes por ID.
   const espacio=ESPACIOS.find(e=>e.vistas.some(v=>pathname===`/admin/${v.ruta}`));
   if(!espacio||!userProfile) return null;
   const vistas=espacio.vistas.filter(v=>(!v.permiso||puede(userProfile,v.permiso))&&(!v.roles||v.roles.includes(userProfile.rol)));
-  if(vistas.length<2) return null;
-  return <section aria-label={`Espacio de trabajo: ${espacio.nombre}`} className="bg-white border-b px-4 md:px-6 pt-4">
+  if(vistas.length<2) return compacto ? <span className="font-semibold truncate">{vistas[0]?.nombre || espacio.nombre}</span> : null;
+  if (compacto) return <select aria-label={`Cambiar vista de ${espacio.nombre}`} value={pathname} onChange={e => navigate(e.target.value)} className="workspace-switch min-h-11 min-w-0 max-w-full bg-transparent font-semibold text-base text-gray-900 rounded-lg px-2">
+    {vistas.map(v => <option key={v.ruta} value={`/admin/${v.ruta}`}>{v.nombre}</option>)}
+  </select>;
+  return <section aria-label={`Espacio de trabajo: ${espacio.nombre}`} className="workspace-navigation hidden lg:block glass-toolbar px-4 md:px-6 pt-4">
     <h2 className="font-semibold text-gray-900">{espacio.nombre}</h2><p className="text-sm text-gray-500 mt-1">{espacio.descripcion}</p>
-    <nav aria-label={`Vistas de ${espacio.nombre}`} className="flex gap-1 overflow-x-auto mt-3 pb-2">{vistas.map(v=><NavLink key={v.ruta} to={`/admin/${v.ruta}`} end className={({isActive})=>`whitespace-nowrap rounded-lg px-3 py-2 text-sm ${isActive?'bg-primary text-white font-medium':'text-gray-600 hover:bg-gray-100'}`}>{v.nombre}</NavLink>)}</nav>
+    <nav aria-label={`Vistas de ${espacio.nombre}`} className="flex gap-1 overflow-x-auto mt-3 pb-2">{vistas.map(v=><NavLink key={v.ruta} to={`/admin/${v.ruta}`} end className={({isActive})=>`whitespace-nowrap rounded-full px-4 py-2 text-sm ${isActive?'bg-primary text-white font-medium':'text-gray-600 hover:bg-gray-100'}`}>{v.nombre}</NavLink>)}</nav>
   </section>;
 }

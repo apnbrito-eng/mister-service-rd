@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { visitaEnProgreso } from '../utils/estadoAgenda';
 import { collection, onSnapshot, doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useNavigate } from 'react-router-dom';
@@ -521,9 +522,7 @@ export default function AgendaDia() {
   const kpis = useMemo(() => {
     const total = ordenesVisibles.length;
     const completadas = ordenesVisibles.filter(o => ['trabajo_realizado', 'cerrado'].includes(o.fase)).length;
-    const enProgreso = ordenesVisibles.filter(o =>
-      ['en_gestion', 'en_diagnostico', 'en_cotizacion', 'aprobado', 'agendado'].includes(o.fase),
-    ).length;
+    const enProgreso = ordenesVisibles.filter(visitaEnProgreso).length;
     const ingresos = ordenesVisibles
       .filter(o => o.fase === 'cerrado')
       .reduce((sum, o) => sum + (o.precioFinal || o.precioAprobado || 0), 0);

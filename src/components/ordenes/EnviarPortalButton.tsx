@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Send, Copy } from 'lucide-react';
 import { doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -6,6 +6,7 @@ import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { db } from '../../firebase/config';
 import { OrdenServicio, Usuario } from '../../types';
+import { enviarTexto } from '../../services/whatsapp.service';
 import { normalizarTelefono } from '../../services/clientes.service';
 
 interface Props {
@@ -13,20 +14,12 @@ interface Props {
   userProfile: Usuario | null;
 }
 
-/**
- * Botón "Enviar portal al cliente" — sólo visible cuando la orden ya tiene
- * `tokenPortalCliente` (es decir, ya pasó por agendado). Al hacer click:
- *   1. Setea `portalClienteEnviado` con uid + nombre + timestamp + 'whatsapp'
- *   2. Abre `wa.me/<numero>?text=<mensaje>` en pestaña nueva.
- *
- * Si el teléfono del cliente está vacío o malformado, deshabilita la apertura
- * de WhatsApp y muestra un input copiable con el link del portal.
- *
- * Convención del proyecto: no emojis en código fuente. El mensaje WhatsApp
- * es texto plano profesional — el cliente lo lee, no es un identificador.
- */
+/** Envía por la API oficial y conserva el ID para reintentos seguros. */
 export default function EnviarPortalButton({ orden, userProfile }: Props) {
   const [enviando, setEnviando] = useState(false);
+  const intento = useRef<{ contenido: string; id: string } | null>(null);
+  const ocupado = useRef(false);
+  const [resultadoEnvio, setResultadoEnvio] = useState<string | null>(null);
   const [mostrarLinkCopiable, setMostrarLinkCopiable] = useState(false);
 
   if (!orden.tokenPortalCliente) {
@@ -84,32 +77,49 @@ export default function EnviarPortalButton({ orden, userProfile }: Props) {
       setMostrarLinkCopiable(true);
       return;
     }
+    if (ocupado.current) return;
+    ocupado.current = true;
     setEnviando(true);
     try {
-      // 1) Persistir tracking del envío. Strip undefined defensivo.
-      const portalEnviadoPayload: Record<string, unknown> = {
-        enviadoEn: Timestamp.now(),
-        enviadoPor: userProfile?.id || '',
-        enviadoPorNombre: userProfile?.nombre || 'Sistema',
-        metodo: 'whatsapp',
-      };
-      const portalEnviadoLimpio = Object.fromEntries(
-        Object.entries(portalEnviadoPayload).filter(([, v]) => v !== undefined),
-      );
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
-        portalClienteEnviado: portalEnviadoLimpio,
-        updatedAt: Timestamp.now(),
+      const contenido = `${orden.id}:${telefonoNormalizado}:${mensaje}`;
+      if (intento.current?.contenido !== contenido) {
+        intento.current = { contenido, id: crypto.randomUUID().replace(/-/g, '') };
+      }
+      const resultado = await enviarTexto(`1${telefonoNormalizado}`, mensaje, {
+        ordenId: orden.id, tempId: intento.current.id,
       });
-
-      // 2) Abrir WhatsApp
-      const numeroIntl = `1${telefonoNormalizado}`;
-      const url = `https://wa.me/${numeroIntl}?text=${encodeURIComponent(mensaje)}`;
-      window.open(url, '_blank', 'noopener,noreferrer');
-      toast.success('Portal enviado al cliente');
-    } catch (err) {
-      console.error('Error al registrar envío del portal:', err);
-      toast.error('Error al registrar el envío');
+      if (!resultado.ok) {
+        toast.error(resultado.error === 'window-cerrada'
+          ? 'Abre el chat y usa una plantilla aprobada para retomar la conversación antes de enviar el portal.'
+          : 'No se pudo enviar el portal. Revisa el estado en el chat antes de reintentar.');
+        return;
+      }
+      if (resultado.estado === 'failed') {
+        toast.error('WhatsApp no pudo enviar el portal. Revisa el envío en el chat.');
+        return;
+      }
+      const aceptado = ['sent', 'delivered', 'read'].includes(resultado.estado);
+      setResultadoEnvio(aceptado ? 'Portal aceptado por WhatsApp' : 'Portal en cola de envío');
+      if (aceptado) {
+        try {
+          await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+            portalClienteEnviado: {
+              enviadoEn: Timestamp.now(), enviadoPor: userProfile?.id || '',
+              enviadoPorNombre: userProfile?.nombre || 'Sistema', metodo: 'whatsapp',
+              outboxId: resultado.outboxId, estado: resultado.estado,
+            },
+            updatedAt: Timestamp.now(),
+          });
+        } catch {
+          toast.error('WhatsApp aceptó el mensaje, pero no se pudo actualizar la orden. Comprueba el envío en el chat.');
+          return;
+        }
+      }
+      toast.success(aceptado ? 'Portal aceptado por WhatsApp; la entrega se consulta en el chat.' : 'Portal en cola; consulta su estado en el chat.');
+    } catch {
+      toast.error('No se pudo confirmar el envío. Puedes reintentar sin crear otro mensaje.');
     } finally {
+      ocupado.current = false;
       setEnviando(false);
     }
   };
@@ -153,7 +163,7 @@ export default function EnviarPortalButton({ orden, userProfile }: Props) {
     <button
       type="button"
       onClick={ejecutarEnvio}
-      disabled={enviando}
+      disabled={enviando || resultadoEnvio !== null}
       title={!telefonoValido
         ? 'Cliente sin teléfono válido — clic para mostrar link copiable'
         : undefined}
@@ -164,7 +174,7 @@ export default function EnviarPortalButton({ orden, userProfile }: Props) {
       } disabled:opacity-60`}
     >
       <Send size={12} />
-      {enviando ? 'Enviando…' : labelBoton}
+      {enviando ? 'Enviando…' : resultadoEnvio || labelBoton}
     </button>
   );
 }

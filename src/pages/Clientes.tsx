@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, lazy, Suspense, useDeferredValue } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, onSnapshot, updateDoc, doc, Timestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -22,11 +22,11 @@ import Badge from '../components/Badge';
 import MiniMapaCliente from '../components/ordenes/MiniMapaCliente';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import EditarClienteModal from '../components/clientes/EditarClienteModal';
-import MapaClientes from '../components/clientes/MapaClientes';
+const MapaClientes = lazy(() => import('../components/clientes/MapaClientes'));
 import FiltrosSidebarClientes from '../components/clientes/FiltrosSidebarClientes';
-import TabReactivacion from '../components/clientes/TabReactivacion';
+const TabReactivacion = lazy(() => import('../components/clientes/TabReactivacion'));
 import BotonComoLlegar from '../components/shared/BotonComoLlegar';
-import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench, Edit2, MessageCircle, Archive, List, Map as MapIcon, Filter, Sparkles } from 'lucide-react';
+import { Search, Plus, User, Phone, Mail, MapPin, Download, History, ChevronRight, Calendar, Wrench, Edit2, MessageCircle, Archive, List, Map as MapIcon, Filter, Sparkles, MoreHorizontal, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Clientes() {
@@ -48,6 +48,10 @@ export default function Clientes() {
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [historialOrdenes, setHistorialOrdenes] = useState<OrdenServicio[]>([]);
   const [busqueda, setBusqueda] = useState('');
+  const busquedaDiferida = useDeferredValue(busqueda);
+  const [limiteVisible, setLimiteVisible] = useState(50);
+  const [historialLoading, setHistorialLoading] = useState(false);
+  const [historialError, setHistorialError] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -169,10 +173,15 @@ export default function Clientes() {
 
   useEffect(() => {
     if (!selectedCliente) return;
+    let vigente = true;
+    setHistorialOrdenes([]);
+    setHistorialLoading(true);
+    setHistorialError(false);
     getDocs(query(
       collection(db, 'ordenes_servicio'),
       where('clienteId', '==', selectedCliente.id)
     )).then(snap => {
+      if (!vigente) return;
       const ordenes = snap.docs.map(d => ({
         id: d.id, ...d.data(),
         createdAt: d.data().createdAt?.toDate?.() || new Date(),
@@ -182,17 +191,19 @@ export default function Clientes() {
       // Ordenar client-side por fecha descendente (más recientes primero) + excluir eliminadas
       ordenes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       setHistorialOrdenes(ordenes.filter(o => !o.eliminada));
-    });
-  }, [selectedCliente]);
+    }).catch(() => { if (vigente) setHistorialError(true); })
+      .finally(() => { if (vigente) setHistorialLoading(false); });
+    return () => { vigente = false; };
+  }, [selectedCliente?.id]);
 
   // Filtra mergedos (SPRINT-185 soft-delete) ANTES de aplicar búsqueda.
   // Los clientes con `eliminado === true` fueron consolidados con otro
   // canónico vía `scripts/dedup-clientes-por-telefono.ts --apply`.
-  const clientesVisibles = clientes.filter(c => c.eliminado !== true);
-  const filteredClientes = clientesVisibles.filter(c =>
-    c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.telefono.includes(busqueda)
-  );
+  const clientesVisibles = useMemo(() => clientes.filter(c => c.eliminado !== true), [clientes]);
+  const filteredClientes = useMemo(() => clientesVisibles.filter(c =>
+    c.nombre.toLowerCase().includes(busquedaDiferida.trim().toLowerCase()) ||
+    c.telefono.includes(busquedaDiferida.trim())
+  ), [clientesVisibles, busquedaDiferida]);
 
   // ─── Tab Mapa: derivados ────────────────────────────────────────────────
   /** Clientes que pasan los filtros del sidebar (sin importar coords). */
@@ -420,68 +431,30 @@ export default function Clientes() {
   if (loading) return <LoadingSpinner fullPage text="Cargando clientes..." />;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold text-primary">Clientes</h1>
-          {/* Tabs Lista / Mapa — Mapa oculto para técnicos y operarias */}
-          <div className="flex bg-white rounded-xl p-1 shadow-sm border border-gray-100">
-            <button
-              type="button"
-              onClick={() => setTab('lista')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                tab === 'lista' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <List size={12} /> Lista
-            </button>
-            {puedeVerMapa && (
-              <button
-                type="button"
-                onClick={() => setTab('mapa')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  tab === 'mapa' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <MapIcon size={12} /> Mapa
-              </button>
-            )}
-            {puedeVerReactivacion && (
-              <button
-                type="button"
-                onClick={() => setTab('reactivacion')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  tab === 'reactivacion' ? 'bg-primary text-white' : 'text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                <Sparkles size={12} /> Reactivación
-              </button>
-            )}
+    <div className="service-page clients-page space-y-6">
+      <header className={`clients-toolbar ${selectedCliente && tab === 'lista' ? 'clients-toolbar-detail' : ''}`}>
+        <div className="clients-title-row">
+          <h1>Clientes <span className="clients-count">{clientesVisibles.length}</span></h1>
+          <div className="flex items-center gap-2">
+            {puedeCrear && <button type="button" onClick={() => setShowModal(true)} className="clients-new"><Plus size={18} /><span>Nuevo</span></button>}
+            <details className="clients-more relative">
+              <summary aria-label="Más opciones de clientes" className="list-none flex items-center justify-center min-h-11 min-w-11 cursor-pointer rounded-xl border border-gray-200"><MoreHorizontal size={22} /></summary>
+              <div className="absolute right-0 top-full z-20 mt-1 w-48 bg-white border border-gray-200 rounded-xl shadow-lg p-1">
+                <button type="button" onClick={e => { exportCSV(); e.currentTarget.closest('details')?.removeAttribute('open'); }} className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left"><Download size={18} /> Exportar clientes</button>
+              </div>
+            </details>
           </div>
         </div>
-        <div className="flex gap-2">
-          {(tab === 'mapa' || tab === 'reactivacion') && (
-            <button
-              type="button"
-              onClick={() => setFiltrosDrawerOpen(true)}
-              className="lg:hidden flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
-            >
-              <Filter size={16} /> Filtros
-            </button>
-          )}
-          <button onClick={exportCSV}
-            className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
-            <Download size={16} /> CSV
-          </button>
-          {puedeCrear && (
-            <button onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
-              <Plus size={18} /> Nuevo Cliente
-            </button>
-          )}
+        <div className="flex items-center justify-between gap-2">
+          <nav aria-label="Vistas de clientes" className="clients-tabs">
+            <button type="button" aria-pressed={tab === 'lista'} onClick={() => setTab('lista')}><List size={16} /> Lista</button>
+            {puedeVerMapa && <button type="button" aria-pressed={tab === 'mapa'} onClick={() => setTab('mapa')}><MapIcon size={16} /> Mapa</button>}
+            {puedeVerReactivacion && <button type="button" aria-pressed={tab === 'reactivacion'} onClick={() => setTab('reactivacion')}><Sparkles size={16} /> Reactivación</button>}
+          </nav>
+          {(tab === 'mapa' || tab === 'reactivacion') && <button type="button" aria-label="Abrir filtros de clientes" onClick={() => setFiltrosDrawerOpen(true)} className="lg:hidden min-h-11 min-w-11 flex items-center justify-center"><Filter size={18} /></button>}
         </div>
-      </div>
-
+      </header>
+      <Suspense fallback={<div role="status" className="p-4 text-gray-600">Cargando vista de clientes…</div>}>
       {tab === 'mapa' && puedeVerMapa && (
         <div className="flex gap-6 flex-col lg:flex-row">
           <FiltrosSidebarClientes
@@ -517,20 +490,20 @@ export default function Clientes() {
       {tab === 'lista' && (
       <div className="flex gap-6 flex-col lg:flex-row">
         {/* Lista */}
-        <div className="w-full lg:w-1/3 space-y-4">
+        <div className={`${selectedCliente ? 'hidden lg:block' : ''} w-full lg:w-1/3 space-y-4`}>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input type="text" placeholder="Buscar por nombre o teléfono..."
-              value={busqueda} onChange={e => setBusqueda(e.target.value)}
+              aria-label="Buscar cliente por nombre o teléfono" value={busqueda} onChange={e => { setBusqueda(e.target.value); setLimiteVisible(50); }}
               className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white" />
           </div>
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-h-[70vh] overflow-y-auto">
-            {filteredClientes.map(c => {
+          <div className="service-client-list bg-white overflow-hidden lg:max-h-[70vh] lg:overflow-y-auto">
+            {filteredClientes.slice(0, limiteVisible).map(c => {
               const primerNombre = c.nombre.trim().split(/\s+/)[0] || '';
               return (
                 <div
                   key={c.id}
-                  className={`w-full border-b border-gray-100 hover:bg-gray-50 transition-colors flex items-center gap-2 ${
+                  className={`service-client-row w-full border-b border-gray-100 hover:bg-gray-50 transition-colors flex items-center gap-2 ${
                     selectedCliente?.id === c.id ? 'bg-blue-50 border-l-4 border-l-primary-medium' : ''
                   }`}
                 >
@@ -539,11 +512,11 @@ export default function Clientes() {
                     onClick={() => setSelectedCliente(c)}
                     className="flex-1 min-w-0 text-left px-4 py-3 flex items-center gap-3"
                   >
-                    <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                    <div className="w-11 h-11 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
                       <User size={14} className="text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 break-words leading-snug">{c.nombre}</p>
+                      <p className="text-base font-semibold text-gray-900 break-words leading-snug">{c.nombre}</p>
                       <p className="text-xs text-gray-500 truncate">
                         {formatTelefono(c.telefono)}
                         {c.zona && (
@@ -577,6 +550,7 @@ export default function Clientes() {
                 </div>
               );
             })}
+            {filteredClientes.length > limiteVisible && <button type="button" className="w-full min-h-11 text-blue-700 font-medium" onClick={() => setLimiteVisible(n => n + 50)}>Mostrar más clientes ({filteredClientes.length - limiteVisible})</button>}
             {filteredClientes.length === 0 && (
               <div className="p-8 text-center text-gray-400 text-sm">Sin resultados</div>
             )}
@@ -587,6 +561,9 @@ export default function Clientes() {
         <div className="flex-1">
           {selectedCliente ? (
             <div className="space-y-4">
+              {historialLoading && <p role="status" className="text-sm text-gray-600">Cargando historial…</p>}
+              {historialError && <p role="alert" className="text-sm text-red-700">No se pudo cargar el historial. Vuelve a abrir la ficha para reintentar.</p>}
+              <button type="button" onClick={() => { setSelectedCliente(null); const next = new URLSearchParams(searchParams); next.delete('id'); setSearchParams(next, { replace: true }); }} className="lg:hidden min-h-11 flex items-center gap-2 text-sm font-medium"><ArrowLeft size={20} /> Clientes</button>
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
                   <h2 className="text-xl font-bold text-gray-900">{selectedCliente.nombre}</h2>
@@ -799,7 +776,7 @@ export default function Clientes() {
                   <h3 className="font-semibold text-gray-900">Historial de Servicios</h3>
                   <span className="text-xs text-gray-500">({historialOrdenes.length})</span>
                 </div>
-                {historialOrdenes.length === 0 ? (
+                {historialLoading ? <p role="status" className="text-sm text-gray-600">Cargando servicios…</p> : historialError ? <p className="text-sm text-red-700">Historial no disponible.</p> : historialOrdenes.length === 0 ? (
                   <p className="text-sm text-gray-400">Sin servicios registrados</p>
                 ) : (
                   <div className="space-y-2">
@@ -859,6 +836,7 @@ export default function Clientes() {
       )}
 
       {/* Modal nuevo cliente */}
+      </Suspense>
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Nuevo Cliente">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

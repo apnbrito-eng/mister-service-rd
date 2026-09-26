@@ -1,3 +1,5 @@
+import { equipoApi } from '../services/equipoApi';
+import toast from 'react-hot-toast';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, X, CheckCheck } from 'lucide-react';
@@ -49,7 +51,9 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
       try { await marcarLeida(n.id); } catch (err) { console.error(err); }
     }
     setOpen(false);
-    if (n.ordenId) {
+    if (n.conversacionId && /^\d{7,16}$/.test(n.conversacionId)) {
+      try { const destino = await equipoApi<{ruta: string}>(`/api/crm/destino-aviso?id=${encodeURIComponent(n.id)}`); navigate(destino.ruta); } catch (e) { toast.error((e as Error).message); }
+    } else if (n.ordenId) {
       navigate(`/admin/ordenes/${n.ordenId}`);
     }
   };
@@ -81,7 +85,7 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 max-h-[70vh] flex flex-col">
+        <div className="absolute right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] sm:w-96 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 max-h-[70vh] flex flex-col">
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
             <div className="flex items-center gap-2">
               <Bell size={16} className="text-primary" />

@@ -1,3 +1,4 @@
+import { validarEvaluacion } from '../_lib/evaluacionServicio.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminFirestore, verificarAppCheck } from '../_lib/firebaseAdmin.js';
@@ -19,6 +20,7 @@ import { getAdminFirestore, verificarAppCheck } from '../_lib/firebaseAdmin.js';
  *    miembro de personal con rol administrador o coordinadora activo.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Cache-Control', 'no-store');
   const { token } = req.query;
   if (typeof token !== 'string' || !token) {
     return res.status(400).json({ error: 'token_invalido' });
@@ -29,7 +31,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   console.log(JSON.stringify({
     endpoint: 'feedback',
     app_check: appCheckResult,
-    token_orden: token.substring(0, 8) + '...',
   }));
 
   let db: ReturnType<typeof getAdminFirestore>;
@@ -68,6 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ error: 'orden_no_encontrada' });
       }
       const data = ordenDoc.data() as Record<string, unknown>;
+      if (data.evaluacionServicio) return res.status(200).json({ yaEnviado: true, evaluacionServicio: true });
       const fb = data.feedback as Record<string, unknown> | undefined;
       if (!fb) {
         return res.status(200).json({ yaEnviado: false });
@@ -96,6 +98,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('[feedback][GET] error:', err);
       const m = err instanceof Error ? err.message : 'Error desconocido';
       return res.status(500).json({ error: `Error: ${m.substring(0, 300)}` });
+    }
+  }
+
+  // Nueva evaluación versionada. No convierte estrellas en NPS histórico.
+  if (req.method === 'POST' && req.body?.evaluacion !== undefined) {
+    const evaluacion = validarEvaluacion(req.body.evaluacion);
+    const comentario = req.body.comentario;
+    if (!evaluacion || (comentario !== undefined && (typeof comentario !== 'string' || comentario.length > 500))) {
+      return res.status(400).json({ error: 'evaluacion_invalida' });
+    }
+    try {
+      const ordenDoc = await buscarOrden();
+      if (!ordenDoc) return res.status(404).json({ error: 'orden_no_encontrada' });
+      const result = await db.runTransaction(async tx => {
+        const actual = await tx.get(ordenDoc.ref);
+        const data = actual.data();
+        if (!data || (data.tokenPortalCliente !== token && data.trackingGPS?.token !== token)) return 'orden_no_encontrada';
+        if (data.fase !== 'cerrado') return 'orden_no_cerrada';
+        if (data.evaluacionServicio || data.feedback) return 'feedback_ya_enviado';
+        tx.update(ordenDoc.ref, { evaluacionServicio: {
+          version: 1, escala: 5, categorias: evaluacion,
+          comentario: typeof comentario === 'string' ? comentario.trim() : '',
+          fecha: FieldValue.serverTimestamp(),
+        } });
+        return 'ok';
+      });
+      if (result !== 'ok') return res.status(result === 'feedback_ya_enviado' ? 409 : result === 'orden_no_encontrada' ? 404 : 400).json({ error: result });
+      return res.status(200).json({ ok: true });
+    } catch {
+      return res.status(500).json({ error: 'No se pudo guardar la evaluación. Intenta de nuevo.' });
     }
   }
 
@@ -192,7 +224,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (googleClickRaw === true) feedbackData.googleReviewClicked = true;
       if (whatsappClickRaw === true) feedbackData.whatsappContactClicked = true;
 
-      await ordenDoc.ref.update({ feedback: feedbackData });
+      const guardado = await db.runTransaction(async tx => {
+        const actual = await tx.get(ordenDoc.ref);
+        const vigente = actual.data();
+        if (!vigente || (vigente.tokenPortalCliente !== token && vigente.trackingGPS?.token !== token)) return 'orden_no_encontrada';
+        if (vigente.fase !== 'cerrado') return 'orden_no_cerrada';
+        if (vigente.feedback || vigente.evaluacionServicio) return 'feedback_ya_enviado';
+        tx.update(ordenDoc.ref, { feedback: feedbackData });
+        return 'ok';
+      });
+      if (guardado !== 'ok') return res.status(guardado === 'feedback_ya_enviado' ? 409 : 400).json({ error: guardado });
 
       // Si es detractor, notificación in-app a admin/coordinadora activos.
       if (ratingTipo === 'detractor') {

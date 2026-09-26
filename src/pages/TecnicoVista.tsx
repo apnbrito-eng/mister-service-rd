@@ -1,3 +1,12 @@
+import { tieneAprobacionCierre } from '../utils/aprobacionCierre';
+import { esOrdenAsignada } from '../utils/asignacionTecnico';
+import { puede } from '../utils/permisos';
+import ChatOrdenTecnico from '../mobile/ChatOrdenTecnico';
+import { detenerJornada } from '../mobile/jornada';
+import { desactivarNotificacionesMoviles } from '../mobile/notificaciones';
+import PanelMovil from '../mobile/PanelMovil';
+import { esAppNativa } from '../mobile/camara';
+import GestionOrden from '../components/crm/GestionOrden';
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, updateDoc, doc, Timestamp, getDocs, query, where, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -34,7 +43,7 @@ import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-f
 import { es } from 'date-fns/locale';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import { optimizarRuta } from '../utils/rutas';
@@ -78,6 +87,7 @@ type VistaTab = 'hoy' | 'semana' | 'mes' | 'rango';
 export default function TecnicoVista() {
   const { userProfile, currentUser } = useApp();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -86,6 +96,17 @@ export default function TecnicoVista() {
   const [rangoHasta, setRangoHasta] = useState('');
   const [rangoAplicado, setRangoAplicado] = useState<{ desde: string; hasta: string } | null>(null);
   const [selectedOrden, setSelectedOrden] = useState<OrdenServicio | null>(null);
+  const ordenSolicitada = searchParams.get('orden');
+  useEffect(() => {
+    if (!ordenSolicitada || loading || !currentUser || !userProfile) return;
+    const orden = ordenes.find(o => o.id === ordenSolicitada &&
+      esOrdenAsignada(o, currentUser.uid, userProfile.id));
+    if (orden) setSelectedOrden(orden);
+    else toast.error('Esta orden ya no está disponible para tu cuenta.');
+    const siguientes = new URLSearchParams(searchParams);
+    siguientes.delete('orden');
+    setSearchParams(siguientes, { replace: true });
+  }, [ordenSolicitada, loading, currentUser, userProfile, ordenes, searchParams, setSearchParams]);
   const [showWizardCierre, setShowWizardCierre] = useState(false);
   const [showNotaModal, setShowNotaModal] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -239,7 +260,7 @@ export default function TecnicoVista() {
   // Auto-compartir ubicación cuando hay órdenes con tracking GPS activo
   useEffect(() => {
     // @safe-userprofile-id: guard de existencia, no es write.
-    if (!userProfile?.id) return;
+    if (!userProfile?.id || esAppNativa()) return;
 
     // Verificar si hay alguna orden asignada al técnico con tracking habilitado
     // @safe-userprofile-id: filtro UI local de "ordenes mías", no escribe a Firestore.
@@ -300,19 +321,8 @@ export default function TecnicoVista() {
 
   const esOrdenMia = (orden: OrdenServicio): boolean => {
     if (!userProfile) return false;
-    // @safe-userprofile-id: check UI local de "es orden mía", no escribe a
-    // Firestore. orden.tecnicoId puede ser personalDocId (legacy) o auth.uid
-    // (nuevo); el matching por id exacto cubre el primer caso, los matchings
-    // por nombre cubren el segundo.
-    if (orden.tecnicoId && orden.tecnicoId === userProfile.id) return true;
-    // Matching por nombre completo (case-insensitive + trim)
-    const nombreOrden = orden.tecnicoNombre?.toLowerCase().trim();
-    const nombreProfile = userProfile.nombre?.toLowerCase().trim();
-    if (nombreOrden && nombreProfile && nombreOrden === nombreProfile) return true;
-    // Matching fuzzy por primer nombre (tolera "Jorge" vs "Jorge Brito")
-    const primerNombre = nombreProfile?.split(' ')[0];
-    if (primerNombre && nombreOrden && nombreOrden.includes(primerNombre)) return true;
-    return false;
+    // @safe-userprofile-id: identidad exacta del perfil legacy, nunca por nombre.
+    return esOrdenAsignada(orden, currentUser?.uid, userProfile.id);
   };
 
   const getRangoFechas = (v: VistaTab): { start: Date; end: Date } => {
@@ -414,6 +424,10 @@ export default function TecnicoVista() {
   const marcadoresMapa = rutaOptimizada;
 
   const openCompletar = (orden: OrdenServicio) => {
+    if (!tieneAprobacionCierre(orden)) {
+      toast.error("La oficina debe aprobar el presupuesto antes de cerrar el servicio");
+      return;
+    }
     setSelectedOrden(orden);
     setShowWizardCierre(true);
   };
@@ -578,6 +592,10 @@ export default function TecnicoVista() {
   };
 
   const handleLogout = async () => {
+    if (esAppNativa()) {
+      try { await detenerJornada(); await desactivarNotificacionesMoviles(); }
+      catch { toast.error('No se pudo detener la sesión móvil. Reintenta antes de salir.'); return; }
+    }
     await signOut(auth);
     navigate('/login');
   };
@@ -773,6 +791,7 @@ export default function TecnicoVista() {
 
   return (
     <div className="min-h-screen bg-[#f0f4f8]">
+      <PanelMovil uid={currentUser?.uid} />
       {/* Header */}
       <div className="bg-primary px-4 py-3 sticky top-0 z-20 shadow-md">
         <div className="flex items-center justify-between gap-3 max-w-4xl mx-auto">
@@ -1152,13 +1171,13 @@ export default function TecnicoVista() {
                     {/* Actions (orden activa, no en stand-by) */}
                     {!completado && !orden.enStandby && (
                       <div className="mt-4 flex flex-wrap gap-2">
+                        <ChatOrdenTecnico ordenId={orden.id} puedeEnviar={puede(userProfile, 'tecnicoPuedeContactarCliente')} />
                         {/* Iniciar chequeo (foto + GPS, solo el día de la cita) */}
                         <IniciarChequeoButton orden={orden} userProfile={userProfile} size="sm" />
                         {permisos.puedeMarcarCompletado && (() => {
                           const sugerenciaPendiente = obtenerSugerenciaSoloChequeoPendiente(orden);
                           const necesitaAprobacion =
-                            orden.precioSugerido !== undefined &&
-                            orden.estadoAprobacion !== 'aprobado';
+                            !tieneAprobacionCierre(orden);
                           if (sugerenciaPendiente) {
                             return (
                               <div className="w-full bg-amber-50 border border-amber-200 rounded-lg p-2 text-xs text-amber-800 flex items-center gap-1">
@@ -1172,7 +1191,7 @@ export default function TecnicoVista() {
                               // Antes: "Esperando aprobación del precio por operaciones" (jerga interna).
                               <div className="w-full bg-yellow-50 border border-yellow-200 rounded-lg p-2 text-xs text-yellow-800 flex items-center gap-1">
                                 <Clock size={14} className="flex-shrink-0" />
-                                La oficina está revisando el precio
+                                El cierre requiere un presupuesto aprobado por oficina
                               </div>
                             );
                           }
@@ -1514,6 +1533,7 @@ export default function TecnicoVista() {
       {/* Modal detalle */}
       {selectedOrden && !showWizardCierre && !showNotaModal && (
         <Modal isOpen={true} onClose={() => setSelectedOrden(null)} title={`Detalle · ${selectedOrden.numero || ''}`} size="md">
+          <details className="border rounded p-3 mb-3"><summary>Instrucciones de oficina</summary><GestionOrden key={selectedOrden.id} ordenId={selectedOrden.id} /></details>
           <div className="space-y-3 text-sm">
             <div>
               <p className="text-xs text-gray-500">Hora</p>
@@ -1605,7 +1625,7 @@ export default function TecnicoVista() {
                 Cerrar
               </button>
               {permisos.puedeMarcarCompletado && selectedOrden.fase !== 'trabajo_realizado' && selectedOrden.fase !== 'cerrado' && (
-                <button onClick={() => setShowWizardCierre(true)}
+                <button onClick={() => openCompletar(selectedOrden)}
                   className="flex-1 px-4 py-2 text-sm bg-green-500 hover:bg-green-600 text-white rounded-lg flex items-center justify-center gap-1">
                   <CheckCircle size={14} /> Cerrar Servicio
                 </button>

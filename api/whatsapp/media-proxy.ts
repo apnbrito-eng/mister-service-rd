@@ -1,7 +1,7 @@
+import { mediaPermitido, limiteMedia } from '../_lib/mediaPermitido.js';
+import { accesoEquipo, ErrorAcceso } from '../_lib/accesoEquipo.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import {
-  getAdminAuth,
-  getAdminFirestore,
   getAdminStorage,
 } from '../_lib/firebaseAdmin.js';
 import { randomUUID } from 'node:crypto';
@@ -37,7 +37,7 @@ import { randomUUID } from 'node:crypto';
  */
 
 const META_API_VERSION = process.env.META_API_VERSION ?? 'v21.0';
-const MAX_IMAGE_BYTES = 16 * 1024 * 1024; // 16 MB (límite Meta para imágenes).
+
 const SIGNED_URL_TTL_DAYS = 7;
 
 const ROLES_AUTORIZADOS: ReadonlySet<string> = new Set([
@@ -54,6 +54,12 @@ interface MediaProxyRequestBody {
 
 function inferirExtension(mimeType: string | undefined): string {
   if (!mimeType) return 'bin';
+  if (mimeType === 'application/pdf') return 'pdf';
+  if (mimeType === 'video/mp4') return 'mp4';
+  if (mimeType.startsWith('audio/ogg')) return 'ogg';
+  if (mimeType.startsWith('audio/mp4')) return 'm4a';
+  if (mimeType.startsWith('audio/mpeg')) return 'mp3';
+  if (mimeType.startsWith('audio/aac')) return 'aac';
   if (mimeType.startsWith('image/jpeg') || mimeType.startsWith('image/jpg')) return 'jpg';
   if (mimeType.startsWith('image/png')) return 'png';
   if (mimeType.startsWith('image/webp')) return 'webp';
@@ -67,94 +73,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'method-not-allowed' });
   }
 
-  // 1) Auth
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res
-      .status(401)
-      .json({ error: 'Token requerido (Authorization: Bearer <idToken>)' });
-  }
-  const idToken = authHeader.substring(7).trim();
-  if (!idToken) {
-    return res.status(401).json({ error: 'token-vacio' });
-  }
-
-  let auth: ReturnType<typeof getAdminAuth>;
-  let db: ReturnType<typeof getAdminFirestore>;
-  let storage: ReturnType<typeof getAdminStorage>;
-  try {
-    auth = getAdminAuth();
-    db = getAdminFirestore();
-    storage = getAdminStorage();
-  } catch (err) {
-    console.error('[wa/media-proxy] init admin error:', err);
-    return res.status(500).json({ error: 'internal-init' });
-  }
-
-  let decodedToken: Awaited<ReturnType<typeof auth.verifyIdToken>>;
-  try {
-    decodedToken = await auth.verifyIdToken(idToken);
-    // @safe-meta-catch: error de Firebase Auth (token expirado/invalido), no de Meta Graph API.
-  } catch (err) {
-    const code = (err as { code?: string })?.code;
-    if (code === 'auth/id-token-expired' || code === 'auth/argument-error') {
-      return res
-        .status(401)
-        .json({ error: 'Token de sesión inválido o expirado.' });
-    }
-    return res.status(401).json({ error: 'token-invalido' });
-  }
-
-  // 2) Verificar rol staff oficina
-  const callerUid = decodedToken.uid;
-  const callerEmail = decodedToken.email;
-  let rolCaller: string | null = null;
-
-  try {
-    const usuarioSnap = await db.collection('usuarios').doc(callerUid).get();
-    if (usuarioSnap.exists) {
-      const data = usuarioSnap.data();
-      if (data && typeof data.rol === 'string') rolCaller = data.rol;
-    }
-  } catch (err) {
-    console.error('[wa/media-proxy] error leyendo usuarios/{uid}:', err);
-  }
-
-  if (!rolCaller) {
-    try {
-      const byUid = await db
-        .collection('personal')
-        .where('uid', '==', callerUid)
-        .limit(1)
-        .get();
-      if (!byUid.empty) {
-        const data = byUid.docs[0].data();
-        if (typeof data.rol === 'string') rolCaller = data.rol;
-      }
-    } catch {
-      /* no-op */
-    }
-  }
-
-  if (!rolCaller && callerEmail) {
-    try {
-      const byEmail = await db
-        .collection('personal')
-        .where('email', '==', callerEmail.toLowerCase())
-        .limit(1)
-        .get();
-      if (!byEmail.empty) {
-        const data = byEmail.docs[0].data();
-        if (typeof data.rol === 'string') rolCaller = data.rol;
-      }
-    } catch {
-      /* no-op */
-    }
-  }
-
-  if (!rolCaller || !ROLES_AUTORIZADOS.has(rolCaller)) {
-    return res.status(403).json({ error: 'rol-no-autorizado' });
-  }
+  let acceso: Awaited<ReturnType<typeof accesoEquipo>>;
+  try { acceso = await accesoEquipo(req); } catch (e) { return res.status(e instanceof ErrorAcceso ? e.status : 500).json({ error: 'Acceso no autorizado.' }); }
+  if (!ROLES_AUTORIZADOS.has(acceso.rol)) return res.status(403).json({ error: 'rol-no-autorizado' });
+  const db = acceso.db;
+  const storage = getAdminStorage();
 
   // 3) Validar body (acepta string|object|null — patrón defensivo CLAUDE.md
   // gotcha "@vercel/node ignora export const config" + JSON.parse fallback)
@@ -171,10 +94,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'body-requerido' });
   }
   const { wamid, wa_id } = bodyRaw as MediaProxyRequestBody;
-  if (typeof wamid !== 'string' || !wamid) {
+  if (typeof wamid !== 'string' || !wamid || wamid.length > 300 || wamid.includes('/')) {
     return res.status(400).json({ error: 'wamid-requerido' });
   }
-  if (typeof wa_id !== 'string' || !wa_id) {
+  if (typeof wa_id !== 'string' || !/^\d{7,15}$/.test(wa_id)) {
     return res.status(400).json({ error: 'wa_id-requerido' });
   }
 
@@ -203,7 +126,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Validar que el mensaje sea efectivamente image y tenga mediaId.
   const tipo = mensajeData.tipo;
-  if (tipo !== 'image') {
+  const MAX_IMAGE_BYTES = limiteMedia(tipo);
+  if (!['image', 'audio', 'video', 'document', 'sticker'].includes(String(tipo))) {
     return res.status(400).json({ error: 'tipo-no-soportado', tipo });
   }
   const contenido = mensajeData.contenido as
@@ -212,7 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const mediaId = contenido?.mediaId;
   const mediaMimeType =
     typeof contenido?.mediaMimeType === 'string' ? contenido.mediaMimeType : undefined;
-  if (typeof mediaId !== 'string' || !mediaId) {
+  if (typeof mediaId !== 'string' || !/^\d+$/.test(mediaId)) {
     return res.status(400).json({ error: 'mediaId-ausente' });
   }
 
@@ -244,6 +168,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const metaInfoUrl = `https://graph.facebook.com/${META_API_VERSION}/${mediaId}`;
       const metaInfoResp = await fetch(metaInfoUrl, {
         headers: { Authorization: `Bearer ${metaToken}` },
+        redirect: "error", signal: AbortSignal.timeout(25000),
       });
       if (!metaInfoResp.ok) {
         const body = await metaInfoResp.text().catch(() => '');
@@ -264,6 +189,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (typeof info.url !== 'string' || !info.url) {
         return res.status(502).json({ error: 'meta-info-sin-url' });
       }
+      const destino = new URL(info.url);
+      if (destino.protocol !== "https:" || !/(^|\.)(facebook\.com|fbcdn\.net|fbsbx\.com)$/.test(destino.hostname) || typeof info.mime_type !== "string" || !mediaPermitido(info.mime_type)) return res.status(400).json({ error: "Archivo no admitido." });
       metaMediaUrl = info.url;
       metaContentType =
         typeof info.mime_type === 'string' ? info.mime_type : undefined;
@@ -285,21 +212,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const binResp = await fetch(metaMediaUrl, {
         headers: { Authorization: `Bearer ${metaToken}` },
+        redirect: "error", signal: AbortSignal.timeout(25000),
       });
       if (!binResp.ok) {
         return res
           .status(502)
           .json({ error: 'meta-bin-failed', status: binResp.status });
       }
-      const arrayBuf = await binResp.arrayBuffer();
-      if (arrayBuf.byteLength > MAX_IMAGE_BYTES) {
-        return res.status(413).json({
-          error: 'archivo-excede-maximo',
-          bytesDescargados: arrayBuf.byteLength,
-          maxBytes: MAX_IMAGE_BYTES,
-        });
-      }
-      buffer = Buffer.from(arrayBuf);
+      if (!binResp.body) return res.status(502).json({ error: 'archivo-vacio' });
+      const reader = binResp.body.getReader();
+      const chunks: Uint8Array[] = []; let size = 0;
+      try { while (true) { const { done, value } = await reader.read(); if (done) break; size += value.length; if (size > MAX_IMAGE_BYTES) { await reader.cancel(); return res.status(413).json({ error: 'archivo-excede-maximo' }); } chunks.push(value); } } finally { reader.releaseLock(); }
+      buffer = Buffer.concat(chunks);
     } catch (err) {
       console.error('[wa/media-proxy] Meta bin fetch error:', err);
       return res.status(502).json({ error: 'meta-bin-error' });
@@ -309,7 +233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const downloadToken = randomUUID();
       await file.save(buffer, {
-        contentType: metaContentType ?? mediaMimeType ?? 'image/jpeg',
+        contentType: metaContentType ?? mediaMimeType ?? 'application/octet-stream',
         metadata: {
           metadata: {
             // Token de descarga (compat con `getDownloadURL` del SDK web).

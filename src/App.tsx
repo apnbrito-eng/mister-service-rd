@@ -1,3 +1,7 @@
+import { useColaMensajes } from './hooks/useColaMensajes';
+import { useAvisosNativos } from './mobile/useAvisosNativos';
+import { perfilHabilitado, inicioPorRol } from './utils/accesoSesion';
+import { esAppNativa } from './mobile/camara';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { signOut } from 'firebase/auth';
@@ -24,6 +28,7 @@ const Citas = lazy(() => import('./pages/Citas'));
 const Calendario = lazy(() => import('./pages/Calendario'));
 const Standby = lazy(() => import('./pages/Standby'));
 const MapaRutas = lazy(() => import('./pages/MapaRutas'));
+const ClientesResponsables = lazy(() => import('./pages/ClientesResponsables'));
 const Clientes = lazy(() => import('./pages/Clientes'));
 const Cotizaciones = lazy(() => import('./pages/Cotizaciones'));
 const Facturas = lazy(() => import('./pages/Facturas'));
@@ -107,7 +112,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // Audit fix C3: usuario autenticado en Firebase Auth pero sin perfil real
   // en `usuarios/{uid}` ni `personal where email==`. Antes el AppContext
   // sintetizaba un admin en memoria (escalación silenciosa). Ahora bloqueamos.
-  if (!userProfile && authError) return <PerfilNoEncontrado mensaje={authError} />;
+  if (!perfilHabilitado(userProfile)) return <PerfilNoEncontrado mensaje={authError || 'Tu perfil no está habilitado. Contacta al administrador.'} />;
   return <>{children}</>;
 }
 
@@ -182,6 +187,8 @@ function AppRoutes() {
   // componente (ProtectedRoute/PermisoRoute manejan loading internamente).
   // Eliminaba warning preexistente que bloqueaba el pre-commit hook.
   const { currentUser, userProfile } = useApp();
+  useAvisosNativos(currentUser?.uid);
+  useColaMensajes(currentUser?.uid);
 
   useEffect(() => {
     (window as unknown as { limpiarOrdenDuplicada: typeof limpiarOrdenDuplicada }).limpiarOrdenDuplicada = limpiarOrdenDuplicada;
@@ -203,7 +210,7 @@ function AppRoutes() {
           No auth required. Visible to everyone.
           ═══════════════════════════════════════════════ */}
       <Route element={<PublicLayout />}>
-        <Route path="/" element={<HomePage />} />
+        <Route path="/" element={esAppNativa() ? <Navigate to="/login" replace /> : <HomePage />} />
         <Route path="/servicios" element={<ServiciosPage />} />
         <Route path="/servicios/:slug" element={<ServicioDetalle />} />
         <Route path="/agendar" element={<AgendarPage />} />
@@ -223,11 +230,7 @@ function AppRoutes() {
           ═══════════════════════════════════════════════ */}
       <Route path="/login" element={
         currentUser ? (
-          userProfile?.rol === 'tecnico'
-            ? <Navigate to="/tecnico" replace />
-            : userProfile?.rol === 'ayudante'
-              ? <Navigate to="/ponche" replace />
-              : <Navigate to="/admin" replace />
+          <ProtectedRoute><Navigate to={inicioPorRol(userProfile?.rol)} replace /></ProtectedRoute>
         ) : <Login />
       } />
 
@@ -254,6 +257,7 @@ function AppRoutes() {
         <Route path="calendarios" element={<Calendarios />} />
         <Route path="standby" element={<Standby />} />
         <Route path="mapa" element={<MapaRutas />} />
+        <Route path="clientes-responsables" element={<ClientesResponsables />} />
         <Route path="clientes" element={<Clientes />} />
         <Route path="cotizaciones" element={<PermisoRoute permiso="cotizacionesVer"><Cotizaciones /></PermisoRoute>} />
         <Route path="facturas" element={<PermisoRoute permiso="facturasVer"><Facturas /></PermisoRoute>} />
@@ -354,6 +358,11 @@ export default function App() {
         <BannerNuevaVersion />
         <Toaster
           position="top-right"
+          containerStyle={{
+            top: 'calc(env(safe-area-inset-top, 0px) + var(--alto-aviso-entorno, 0px) + 12px)',
+            left: 'calc(env(safe-area-inset-left, 0px) + 12px)',
+            right: 'calc(env(safe-area-inset-right, 0px) + 12px)',
+          }}
           toastOptions={{
             duration: 3000,
             style: { borderRadius: '12px', padding: '12px 16px', fontSize: '14px' },

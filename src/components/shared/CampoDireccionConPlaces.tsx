@@ -205,7 +205,7 @@ export default function CampoDireccionConPlaces({
           placeholder={placeholder}
           required={required}
           autoComplete="off"
-          className={inputClassName}
+          className={`min-w-0 ${inputClassName}`}
         />
         {mostrarBotonMiUbicacion && (
           <button

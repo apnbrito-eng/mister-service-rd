@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+import { Geolocation } from '@capacitor/geolocation';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../firebase/config';
 import { calcularDistanciaKm } from '../utils/rutas';
@@ -125,6 +127,11 @@ export interface GpsErrorInfo {
 export function obtenerUbicacionGPS(
   onError?: (err: GpsErrorInfo) => void,
 ): Promise<{ lat: number; lng: number } | null> {
+  if (Capacitor.isNativePlatform()) {
+    return Geolocation.getCurrentPosition({ enableHighAccuracy: true, timeout: 15000, maximumAge: 0 })
+      .then(pos => ({ lat: pos.coords.latitude, lng: pos.coords.longitude }))
+      .catch(() => { onError?.({ code: 0, message: 'Ubicación nativa no disponible', highAccuracy: true }); return null; });
+  }
   if (!navigator.geolocation) {
     onError?.({ code: 0, message: 'navigator.geolocation no disponible', highAccuracy: true });
     return Promise.resolve(null);
