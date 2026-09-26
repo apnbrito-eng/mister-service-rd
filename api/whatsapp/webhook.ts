@@ -296,7 +296,16 @@ async function persistirMensajeEntrante(
     }
     if (solicitaBaja(msg.contenido.texto)) {
       // Atomicidad con el mensaje: un retry no duplica la baja ni la auditoría.
+      // SPRINT-FIX-S7 (2026-09-26): además del array (legacy), escribimos un
+      // doc en la subcolección `whatsapp_opt_outs/{wa_id}` para que el opt-out
+      // no dependa de un array unbounded que puede rebasar el 1MB de Firestore.
       tx.set(db.collection('whatsapp_config').doc('sistema'), { optOuts: FieldValue.arrayUnion(msg.wa_id) }, { merge: true });
+      tx.set(db.collection('whatsapp_opt_outs').doc(msg.wa_id), {
+        wa_id: msg.wa_id,
+        origen: 'mensaje_cliente',
+        mensajeId: msg.wamid,
+        fecha: FieldValue.serverTimestamp(),
+      }, { merge: true });
       conversacionUpdate.requiereHumano = true;
       conversacionUpdate.bajaSolicitada = true;
       tx.create(db.collection('auditoria_admin').doc(), { accion: 'baja_whatsapp_solicitada', origen: 'mensaje_cliente', mensajeId: msg.wamid, fecha: FieldValue.serverTimestamp() });

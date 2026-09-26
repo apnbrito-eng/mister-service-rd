@@ -859,6 +859,27 @@ export default async function handler(
   //    rechazar el envío. La política previa (warn + continuar) permitía
   //    bypass silencioso de opt-out cuando Firestore tenía un blip transient.
   try {
+    // SPRINT-FIX-S7 (2026-09-26): mirar primero la subcolección
+    // `whatsapp_opt_outs/{wa_id}` (O(1) por wa_id); si no existe, caer al
+    // legacy array de `whatsapp_config/sistema.optOuts[]` por compat.
+    const optOutSnap = await db.collection('whatsapp_opt_outs').doc(wa_id).get();
+    if (optOutSnap.exists) {
+      await escribirAuditoriaSend(db, {
+        accion: 'enviar_whatsapp',
+        resultado: 'rechazado',
+        solicitanteUid: callerUid,
+        solicitanteEmail: callerEmail,
+        wa_id,
+        tipo,
+        ordenId,
+        motivo: 'cliente-opt-out',
+        detalle: { fuente: 'whatsapp_opt_outs' },
+      });
+      res
+        .status(422)
+        .json({ error: 'cliente-opt-out', fuente: 'whatsapp_opt_outs' });
+      return;
+    }
     const configSnap = await db
       .collection('whatsapp_config')
       .doc('sistema')
