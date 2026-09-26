@@ -20,6 +20,7 @@
     "mapa": "node scripts/generar_mapa.js && node scripts/generar_svg.js",
     "prepare": "husky",
     "test:integraciones": "vitest run --config vitest.integraciones.config.ts",
+    "test:rules": "npx firebase emulators:exec --only firestore --project demo-mister-service-rules \"vitest run --config vitest.rules.config.ts\"",
     "mobile:build": "tsc && tsc -p tsconfig.api.json && vite build --mode mobile --config vite.mobile.config.ts",
     "mobile:sync": "npm run mobile:build && cap sync",
     "mobile:android": "cap open android",
@@ -62,6 +63,7 @@
   "devDependencies": {
     "@capacitor/cli": "7.6.9",
     "@eslint/js": "^9.39.4",
+    "@firebase/rules-unit-testing": "^4.0.1",
     "@types/react": "^18.2.37",
     "@types/react-dom": "^18.2.15",
     "@typescript-eslint/eslint-plugin": "^6.10.0",
