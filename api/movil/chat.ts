@@ -1,10 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { accesoEquipo, ErrorAcceso } from '../_lib/accesoEquipo.js';
 import { accesoOrdenTecnico } from '../_lib/accesoOrdenTecnico.js';
+import { exigirAppMovil } from '../_lib/appMovilVerificada.js';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET') return res.status(405).json({ error: 'Método no permitido' });
   try {
+    await exigirAppMovil(req);
     const { db, uid, rol } = await accesoEquipo(req);
     if (rol !== 'tecnico') throw new ErrorAcceso(403, 'Acceso exclusivo del técnico asignado');
     const { ordenId, telefono } = await accesoOrdenTecnico(db, uid, req.query.ordenId);
