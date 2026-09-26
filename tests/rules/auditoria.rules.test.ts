@@ -36,14 +36,13 @@ describe('auditoria_admin · log append-only', () => {
     await assertFails(setDoc(doc(anonimo(), 'auditoria_admin/aud-anon'), { accion: 'x' }));
   });
 
-  it('HUECO CONOCIDO (hallazgo #5) — cualquier autenticado falsifica entradas', async () => {
-    // `allow create: if isAuth()`. Un técnico puede inyectar entradas
-    // arbitrarias, incluso atribuyéndoselas a otra persona, y como el log es
-    // append-only y los admin confían en él, sirve para enturbiar una
-    // investigación. El fix es exigir `solicitanteUid == request.auth.uid`
-    // o mover la escritura al Admin SDK y poner `create: if false`.
-    // Ojo: el técnico ni siquiera puede LEER lo que escribió (read pide admin).
-    await assertSucceeds(
+  it('un tecnico NO puede falsificar entradas atribuyendolas a otro uid', async () => {
+    // Fix SPRINT-FIX-C1 (2026-09-26): rule ahora exige
+    // `solicitanteUid == request.auth.uid` (idem `actorUid`). Este test
+    // era HUECO CONOCIDO #5 (assertSucceeds); invertido a assertFails
+    // para verificar que el bloqueo esta en pie. Los endpoints server-side
+    // (Admin SDK) bypasean rules y siguen escribiendo la auditoria correcta.
+    await assertFails(
       setDoc(doc(como(UID.tecnico), 'auditoria_admin/falsa-1'), {
         solicitanteUid: UID.admin,          // ← se atribuye al admin
         accion: 'reset-password',

@@ -950,7 +950,16 @@ service cloud.firestore {
     // ─────────────────────────────────────────────────────────────
 
     match /auditoria_admin/{docId} {
-      allow create: if isAuth();
+      // SPRINT-FIX-C1 (2026-09-26): antes `create: if isAuth()` permitía
+      // a cualquier autenticado escribir con `solicitanteUid`/`actorUid`
+      // falso. Ahora el actor tiene que coincidir con auth.uid. Endpoints
+      // server-side (Admin SDK) bypasean rules — siguen funcionando.
+      // `.get(field, request.auth.uid)` deja pasar payloads que NO traen
+      // el campo (compat con escrituras que no lo declaran); solo bloquea
+      // cuando el payload SÍ trae el campo con un uid distinto al caller.
+      allow create: if isAuth()
+        && request.resource.data.get('solicitanteUid', request.auth.uid) == request.auth.uid
+        && request.resource.data.get('actorUid', request.auth.uid) == request.auth.uid;
       allow read:   if esAdmin();
       allow update, delete: if false;
     }
