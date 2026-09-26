@@ -22,7 +22,7 @@ import { getAdminFirestore, exigirAppCheck } from '../_lib/firebaseAdmin.js';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
   const { token } = req.query;
-  if (typeof token !== 'string' || !token) {
+  if (typeof token !== 'string' || token.length < 16) {
     return res.status(400).json({ error: 'token_invalido' });
   }
 
