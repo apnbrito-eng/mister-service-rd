@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff, MapPin, Loader2, FileText, ChevronUp, ChevronDown, ListPlus, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfigGPS, ProveedorGPS, Personal, OrdenServicio } from '../types';
@@ -35,6 +36,34 @@ import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 
 export default function Configuracion() {
+  const location = useLocation();
+
+  /**
+   * SPRINT-FIX-RESPUESTAS-VISIBLES (2026-09-12): scroll al ancla del hash.
+   * El navegador NO hace scroll automático al hash en una SPA cuando el
+   * contenido se monta después de la navegación, así que lo hacemos a mano.
+   * El `requestAnimationFrame` espera a que el DOM esté pintado; sin eso
+   * `getElementById` corre antes de que la sección exista.
+   */
+  useEffect(() => {
+    if (!location.hash) return;
+    const id = location.hash.slice(1);
+    // Reintentamos durante ~2s: la sección puede montarse después de que
+    // llegue la config desde Firestore, y un solo intento correría demasiado
+    // pronto en una carga fría.
+    let intentos = 0;
+    const timer = window.setInterval(() => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        window.clearInterval(timer);
+        return;
+      }
+      if (++intentos > 20) window.clearInterval(timer);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [location.hash]);
+
   const { userProfile } = useApp();
   const esAdmin = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
   // Selector de número WhatsApp: write rule en firestore.rules permite SOLO
@@ -1047,7 +1076,11 @@ export default function Configuracion() {
           </div>
 
           {/* SPRINT-WA-TRAZABILIDAD (2026-05-23) — editor de respuestas rápidas */}
-          <div className="mt-5 pt-4 border-t border-gray-100">
+          {/* SPRINT-FIX-RESPUESTAS-VISIBLES (2026-09-12): `id` + `scroll-mt`
+              para que el botón del Inbox pueda linkear directo acá. La sección
+              vive dentro de "Número de envío de WhatsApp", a ~1.800px de
+              scroll, y sin ancla era prácticamente imposible de encontrar. */}
+          <div id="respuestas-rapidas" className="mt-5 pt-4 border-t border-gray-100 scroll-mt-6">
             <div className="flex items-center justify-between mb-2">
               <div>
                 <h3 className="text-sm font-semibold text-gray-800">

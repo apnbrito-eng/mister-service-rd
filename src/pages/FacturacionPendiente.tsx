@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection,
   onSnapshot,
@@ -18,6 +18,7 @@ import EmptyState from '../components/EmptyState';
 import ModalEditarPiezasOrden from '../components/cierre/ModalEditarPiezasOrden';
 import ModalEditarOrdenAdmin from '../components/ordenes/ModalEditarOrdenAdmin';
 import FiltroAvanzadoFinanzas from '../components/admin/FiltroAvanzadoFinanzas';
+import type { FiltroAvanzadoFinanzasRef } from '../components/admin/FiltroAvanzadoFinanzas';
 import ProcesarFacturacionModal from '../components/facturacion-pendiente/ProcesarFacturacionModal';
 import {
   Inbox, Receipt, ArrowRight, Check,
@@ -36,6 +37,7 @@ export default function FacturacionPendiente() {
   const [aprobandoPiezasId, setAprobandoPiezasId] = useState<string | null>(null);
 
   const [ordenesFiltradas, setOrdenesFiltradas] = useState<OrdenServicio[]>([]);
+  const filtroRef = useRef<FiltroAvanzadoFinanzasRef>(null);
 
   // Catálogos + técnicos para el ProcesarFacturacionModal (C4b: vendedor por
   // línea + selector modalidad). Listeners viven acá; el modal es presentacional.
@@ -189,6 +191,7 @@ export default function FacturacionPendiente() {
       </div>
 
       <FiltroAvanzadoFinanzas
+        ref={filtroRef}
         pagina="facturacion-pendiente"
         items={ordenesFiltrables}
         etiquetaFechas="Enviadas a facturación"
@@ -210,8 +213,17 @@ export default function FacturacionPendiente() {
           ) : (
             <EmptyState
               icon={<Receipt size={40} />}
-              titulo="Sin resultados en el rango"
-              descripcion="No hay órdenes pendientes para las fechas seleccionadas. Probá ampliando el rango."
+              titulo="Sin resultados con estos filtros"
+              descripcion="Hay órdenes pendientes que no coinciden con los filtros seleccionados."
+              accion={
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => filtroRef.current?.limpiar()}
+                >
+                  Ver todos los pendientes
+                </button>
+              }
             />
           )}
         </div>

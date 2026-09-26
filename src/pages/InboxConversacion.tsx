@@ -1,3 +1,4 @@
+import SugerenciaIA from '../components/inbox/SugerenciaIA';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -7,6 +8,8 @@ import {
   Search,
   MessageSquare,
   CheckCheck,
+  Zap,
+  Settings2,
 } from 'lucide-react';
 import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -74,6 +77,8 @@ export default function InboxConversacion() {
   const [conversacionActual, setConversacionActual] = useState<WhatsAppConversacion | null>(null);
   const [mensajes, setMensajes] = useState<MensajeRender[]>([]);
   const [texto, setTexto] = useState('');
+  const [ahora, setAhora] = useState(Date.now());
+  useEffect(() => { const id = window.setInterval(() => setAhora(Date.now()), 15000); return () => window.clearInterval(id); }, []);
   const [enviando, setEnviando] = useState(false);
   const [buscar, setBuscar] = useState('');
   const [loading, setLoading] = useState(true);
@@ -336,8 +341,8 @@ export default function InboxConversacion() {
       v.cierraEn instanceof Date
         ? v.cierraEn
         : new Date((v.cierraEn as { toMillis?: () => number }).toMillis?.() ?? 0);
-    return cierraDate.getTime() > Date.now();
-  }, [conversacionActual]);
+    return cierraDate.getTime() > ahora;
+  }, [conversacionActual, ahora]);
 
   const conversacionesFiltradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
@@ -748,6 +753,8 @@ export default function InboxConversacion() {
 
           {/* Composer */}
           <div className="bg-white border-t border-gray-200 p-3">
+            {conversacionActual?.bajaSolicitada && <div role="status" className="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">El cliente solicitó dejar de recibir mensajes. El envío está bloqueado; revisa la solicitud y coordina por otro canal si necesita atención.</div>}
+            {conversacionActual?.origenMarketing && <p className="mb-3 text-xs text-gray-500">Consulta desde anuncio de Meta: {conversacionActual.origenMarketing.anuncioId}</p>}
             {!ventanaAbierta && waId && (
               <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-800 flex items-start gap-2">
                 <CheckCheck size={14} className="mt-0.5 flex-shrink-0" />
@@ -762,6 +769,7 @@ export default function InboxConversacion() {
             )}
             <div className="flex items-end gap-2 relative">
               <div className="flex-1 relative">
+                {waId && ventanaAbierta && <SugerenciaIA key={waId} waId={waId} onUsar={sugerencia => setTexto(prev => prev.trim() ? prev + '\n\n' + sugerencia : sugerencia)} />}
                 <textarea
                   ref={textareaRef}
                   value={texto}
@@ -815,6 +823,53 @@ export default function InboxConversacion() {
                   ABIERTA (Meta permite enviar plantillas en cualquier
                   momento). Con ventana CERRADA el botón ya aparece arriba
                   dentro del banner amarillo — no lo duplicamos acá. */}
+              {/* SPRINT-FIX-RESPUESTAS-VISIBLES (2026-09-12): las respuestas
+                  rápidas existían pero no había forma de descubrirlas — se
+                  invocaban escribiendo "/" en el textarea (pista escondida en
+                  el placeholder) y se administraban en Configuración, dentro
+                  de la sección "Número de envío de WhatsApp", a ~1.800px de
+                  scroll. Este botón las abre donde se usan y lleva al editor. */}
+              <div className="relative flex items-center">
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    // mouseDown + preventDefault, mismo patrón que los items del
+                    // dropdown: si dejamos que corra el onBlur del textarea, su
+                    // setTimeout de 150ms cerraría el dropdown recién abierto.
+                    e.preventDefault();
+                    setFiltroRespuestas('');
+                    setMostrarDropdownRespuestas((v) => !v);
+                    textareaRef.current?.focus();
+                  }}
+                  disabled={!ventanaAbierta}
+                  title={
+                    respuestasRapidas.length > 0
+                      ? `Respuestas rápidas (${respuestasRapidas.length}) · también con "/"`
+                      : 'No hay respuestas rápidas configuradas'
+                  }
+                  aria-label="Respuestas rápidas"
+                  className="text-gray-500 hover:text-brand-600 hover:bg-gray-100 disabled:text-gray-300 disabled:hover:bg-transparent p-2.5 rounded-lg transition-colors"
+                >
+                  <Zap size={16} />
+                </button>
+                {respuestasRapidas.length > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-0.5 -right-0.5 bg-brand-600 text-white text-[10px] leading-none min-w-[15px] h-[15px] px-1 rounded-full flex items-center justify-center pointer-events-none"
+                  >
+                    {respuestasRapidas.length}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/admin/configuracion#respuestas-rapidas')}
+                title="Administrar respuestas rápidas"
+                aria-label="Administrar respuestas rápidas"
+                className="text-gray-400 hover:text-brand-600 hover:bg-gray-100 p-2.5 rounded-lg transition-colors"
+              >
+                <Settings2 size={16} />
+              </button>
               {ventanaAbierta && waId && (
                 <SelectorPlantillas waId={waId} />
               )}

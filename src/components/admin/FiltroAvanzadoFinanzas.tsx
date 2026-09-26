@@ -180,12 +180,13 @@ function calcularRangoUltimos30Dias(): { desde: string; hasta: string } {
   return { desde: formatYYYYMMDDLocal(desde), hasta: formatYYYYMMDDLocal(hoy) };
 }
 
-// El default de rango cambia por página. Cotizaciones y Conduces Pendientes
-// arrancaban con "mes actual" (día 1 → hoy), lo que escondía todo el trabajo
-// abierto del mes anterior. `Facturas` conserva "mes actual" — es su vista
-// natural para KPIs mensuales.
+// Los pendientes deben permanecer visibles hasta resolverse, sin límite de
+// antigüedad. Cotizaciones conserva últimos 30 días y Facturas el mes actual.
 function calcularRangoDefault(pagina: PaginaFiltro): { desde: string; hasta: string } {
-  if (pagina === 'cotizaciones' || pagina === 'facturacion-pendiente') {
+  if (pagina === 'facturacion-pendiente') {
+    return { desde: '', hasta: '' };
+  }
+  if (pagina === 'cotizaciones') {
     return calcularRangoUltimos30Dias();
   }
   return calcularRangoMes();

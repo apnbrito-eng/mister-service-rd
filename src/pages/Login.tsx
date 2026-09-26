@@ -10,6 +10,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorVisible, setErrorVisible] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e: FormEvent) => {
@@ -19,6 +20,7 @@ export default function Login() {
       return;
     }
     setLoading(true);
+    setErrorVisible('');
     try {
       await signInWithEmailAndPassword(auth, email, password);
       navigate('/admin/dashboard');
@@ -32,7 +34,11 @@ export default function Login() {
       };
       const err = error as { code?: string; message?: string };
       console.error('Firebase Auth Error:', err.code, err.message);
-      toast.error((err.code && messages[err.code]) || `Error: ${err.code || err.message || 'desconocido'}`);
+      const mensaje = err.code?.startsWith('appCheck/')
+        ? 'Esta versión todavía no está autorizada para conectarse. No cambies tu contraseña: contacta al administrador para habilitar el entorno de pruebas.'
+        : (err.code && messages[err.code]) || 'No pudimos iniciar sesión. Revisa tu conexión e intenta nuevamente.';
+      setErrorVisible(mensaje);
+      toast.error(mensaje);
     } finally {
       setLoading(false);
     }
@@ -57,14 +63,16 @@ export default function Login() {
             <h2 className="text-2xl font-bold text-gray-900 mb-1">Bienvenido</h2>
             <p className="text-gray-500 text-sm mb-6">Ingresa tus credenciales para continuar</p>
 
+            {errorVisible && <p role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{errorVisible}</p>}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label htmlFor="correo-login" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Correo electrónico
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                   <input
+                    id="correo-login"
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -77,12 +85,13 @@ export default function Login() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                <label htmlFor="clave-login" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Contraseña
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                   <input
+                    id="clave-login"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

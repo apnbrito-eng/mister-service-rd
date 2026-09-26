@@ -64,6 +64,12 @@ ai-agent-settings.json
 # Screenshots temporales en raíz (para investigaciones puntuales, no versionar)
 /*.png
 /*.PNG
+
+# Imágenes de trabajo (banners, plantillas, capturas) — no son assets del build.
+# Las reglas `/*.png` de arriba solo aplican a la raíz del repo por la barra
+# inicial, así que esta carpeta se coló entera en el commit 05a00a2 (7.7 MB).
+"imagenes proyecto "/
+imagenes proyecto/
 /*.jpg
 /*.jpeg
 

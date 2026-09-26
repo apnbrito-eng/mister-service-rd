@@ -1,5 +1,8 @@
 # 🧠 MEMORIA MAESTRA — Mister Service RD
 
+> **Actualización Codex — 2026-09-13:** prueba completa en curso. Orden QA **OS-0063** (`WSY72YdHPGwnTOiwH7dd`), creada desde inbox del teléfono de prueba autorizado de Jorge, técnico QA Técnica sidepanel, cita ficticia 14/09 09:00. **NO duplicar; NO realizar visita ni cobro real.** Quedó Agendada, sin pagos. Siguiente paso pendiente de sesión qa-tecnica para inicio/diagnóstico/cierre con permisos reales. Corrección local nueva: `timelineUnificado.ts` lee `contenido.texto` con fallback legacy `body`; 3 pruebas Node en `tests/unit/timelineUnificado.test.ts`, TypeScript, lint y 24 comprobadores estáticos correctos. Se conserva corrección local anterior de filtro Conduces Pendientes. Sin commit/push/deploy. Hallazgos: agenda admite orden sin foto; ficha mezcla historial completo del cliente y deja siguiente acción debajo de eventos; bot WhatsApp no tiene procesador identificado en repo. Informe de esta pasada: `/Users/jorgeluisbritogarcia/Documents/Codex/2026-09-13/crea-una-imagen-de/outputs/prueba-servicio-completo.md`.
+
+
 > **Qué es esto:** la foto SIEMPRE actual de en qué andamos. Pendiente, en curso, hecho reciente, y las decisiones de Jorge que no se olvidan. **Es lo PRIMERO que se lee al abrir cualquier conversación** (Cowork o Claude Code) y lo ÚLTIMO que se actualiza al cerrar.
 >
 > **Cómo usarlo (Jorge):** al abrir una conversación nueva, escribí **"ponte al día"**. Claude lee este archivo y queda cargado con todo. Vos podés abrirlo cuando quieras para ver el estado: está en `docs/sprints/MEMORIA_MAESTRA.md`.

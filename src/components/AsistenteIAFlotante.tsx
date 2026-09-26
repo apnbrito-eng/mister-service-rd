@@ -13,14 +13,75 @@ import { useAsistenteIAChat } from '../hooks/useAsistenteIAChat';
  *  - rol distinto de tecnico / ayudante (backend igual lo rechaza, pero por UX no mostrar).
  *  - user autenticado (currentUser).
  *
+ * SPRINT-FIX-FAB-ARRASTRABLE (2026-09-12) — el botón era `fixed bottom-6
+ * right-6` y tapaba controles reales en 4 pantallas: el botón "Enviar" del
+ * Inbox (67% tapado — `document.elementFromPoint` devolvía el FAB, así que
+ * el clic abría el asistente en vez de mandar el mensaje), un botón de Citas
+ * por Confirmar, "Desactivar" en Precios de Servicios y "Eliminar bloque" en
+ * Página Web. Ahora se arrastra y recuerda dónde lo dejó cada usuario.
+ *
  * Sprint 5: la lógica de chat vive en `useAsistenteIAChat`. La conversación
  * se persiste en la colección `conversaciones_ia` via backend. Al minimizar
  * el panel NO se limpia (se preserva la sesión). Al hacer refresh del navegador
  * se pierde el hilo local pero queda el audit log en Firestore.
  */
+/** Lado del botón en px (w-14 h-14 = 56px). */
+const FAB_TAM = 56;
+/** Margen mínimo contra los bordes del viewport. */
+const FAB_MARGEN = 16;
+/**
+ * Separación por defecto desde el fondo. Más alta que el `bottom-6` original
+ * (24px) para despejar la barra de composición del Inbox, que mide ~72px.
+ * Solo aplica la primera vez: después manda la posición que guardó el usuario.
+ */
+const FAB_FONDO_DEFAULT = 104;
+const FAB_DERECHA_DEFAULT = 24;
+
+/** Umbral en px para distinguir un arrastre de un clic. */
+const FAB_UMBRAL_ARRASTRE = 5;
+
+const claveStorage = (uid: string | undefined) =>
+  `msrd_asistente_ia_pos_${uid || 'anon'}`;
+
+/** Mantiene el botón dentro del viewport. Se aplica al cargar y al redimensionar. */
+function acotarAlViewport(pos: { x: number; y: number }): { x: number; y: number } {
+  const maxX = Math.max(FAB_MARGEN, window.innerWidth - FAB_TAM - FAB_MARGEN);
+  const maxY = Math.max(FAB_MARGEN, window.innerHeight - FAB_TAM - FAB_MARGEN);
+  return {
+    x: Math.min(Math.max(pos.x, FAB_MARGEN), maxX),
+    y: Math.min(Math.max(pos.y, FAB_MARGEN), maxY),
+  };
+}
+
+function posicionPorDefecto(): { x: number; y: number } {
+  return acotarAlViewport({
+    x: window.innerWidth - FAB_TAM - FAB_DERECHA_DEFAULT,
+    y: window.innerHeight - FAB_TAM - FAB_FONDO_DEFAULT,
+  });
+}
+
 export default function AsistenteIAFlotante() {
   const { currentUser, userProfile } = useApp();
   const { mensajes, enviar, pensando, error, tokensSesion } = useAsistenteIAChat();
+
+  // --- SPRINT-FIX-FAB-ARRASTRABLE: posición del botón colapsado ---
+  const [posicion, setPosicion] = useState<{ x: number; y: number } | null>(null);
+  const [arrastrando, setArrastrando] = useState(false);
+  /** Offset del puntero respecto de la esquina del botón al empezar a arrastrar. */
+  const offsetArrastre = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  /** Se pone en true si el puntero se movió más que el umbral: suprime el click. */
+  const huboArrastre = useRef(false);
+  /** Punto donde se presionó, para medir la distancia recorrida. */
+  const inicioArrastre = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  /** Espejo de `posicion` para leerla al soltar sin meter efectos en el updater. */
+  const posicionRef = useRef<{ x: number; y: number } | null>(null);
+  /**
+   * Guard "ya restauré" — convención CLAUDE.md para effects que leen de
+   * localStorage. Sin esto, el effect que depende de `currentUser?.uid` puede
+   * pisar una posición que el usuario acaba de mover, porque `uid` llega en un
+   * render posterior al primero.
+   */
+  const yaRestaurado = useRef(false);
 
   const [abierto, setAbierto] = useState(false);
   const [montado, setMontado] = useState(false); // para animación de entrada
@@ -35,6 +96,101 @@ export default function AsistenteIAFlotante() {
   const abiertoRef = useRef<boolean>(abierto);
 
   useEffect(() => { abiertoRef.current = abierto; }, [abierto]);
+
+  // Restaurar la posición guardada una sola vez, cuando ya conocemos el uid.
+  useEffect(() => {
+    if (yaRestaurado.current) return;
+    if (!currentUser) return;
+    yaRestaurado.current = true;
+    let guardada: { x: number; y: number } | null = null;
+    try {
+      const raw = localStorage.getItem(claveStorage(currentUser.uid));
+      if (raw) {
+        const parsed = JSON.parse(raw) as { x?: unknown; y?: unknown };
+        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+          guardada = { x: parsed.x, y: parsed.y };
+        }
+      }
+    } catch {
+      // localStorage puede tirar en modo privado o con storage bloqueado.
+      // No es crítico: caemos a la posición por defecto.
+    }
+    const inicial = acotarAlViewport(guardada ?? posicionPorDefecto());
+    posicionRef.current = inicial;
+    setPosicion(inicial);
+  }, [currentUser]);
+
+  // Si la ventana cambia de tamaño, re-acotar para que el botón no quede fuera.
+  useEffect(() => {
+    const alRedimensionar = () => {
+      setPosicion((prev) => {
+        if (!prev) return prev;
+        const acotada = acotarAlViewport(prev);
+        posicionRef.current = acotada;
+        return acotada;
+      });
+    };
+    window.addEventListener('resize', alRedimensionar);
+    return () => window.removeEventListener('resize', alRedimensionar);
+  }, []);
+
+  // Arrastre. Usamos Pointer Events (cubre mouse, touch y lápiz con una sola
+  // implementación) y listeners a nivel `window` para que el botón siga al
+  // puntero aunque se salga de él.
+  useEffect(() => {
+    if (!arrastrando) return;
+
+    const alMover = (e: PointerEvent) => {
+      e.preventDefault();
+      // Distancia total desde donde se presionó. Recién pasado el umbral lo
+      // tratamos como arrastre — así un clic con temblor de pulso sigue
+      // abriendo el panel en vez de quedar anulado.
+      const dist = Math.hypot(
+        e.clientX - inicioArrastre.current.x,
+        e.clientY - inicioArrastre.current.y,
+      );
+      if (dist > FAB_UMBRAL_ARRASTRE) huboArrastre.current = true;
+      const nueva = acotarAlViewport({
+        x: e.clientX - offsetArrastre.current.dx,
+        y: e.clientY - offsetArrastre.current.dy,
+      });
+      posicionRef.current = nueva;
+      setPosicion(nueva);
+    };
+
+    const alSoltar = () => {
+      setArrastrando(false);
+      // Persistir leyendo del ref, NO desde dentro de un updater de estado:
+      // en StrictMode el updater corre dos veces y duplicaría la escritura.
+      const fin = posicionRef.current;
+      if (fin && currentUser && huboArrastre.current) {
+        try {
+          localStorage.setItem(claveStorage(currentUser.uid), JSON.stringify(fin));
+        } catch {
+          // Si no se puede persistir, la posición igual vale para esta sesión.
+        }
+      }
+    };
+
+    window.addEventListener('pointermove', alMover, { passive: false });
+    window.addEventListener('pointerup', alSoltar);
+    window.addEventListener('pointercancel', alSoltar);
+    return () => {
+      window.removeEventListener('pointermove', alMover);
+      window.removeEventListener('pointerup', alSoltar);
+      window.removeEventListener('pointercancel', alSoltar);
+    };
+  }, [arrastrando, currentUser]);
+
+  const alPresionarFab = (e: React.PointerEvent<HTMLButtonElement>) => {
+    // Solo botón principal del mouse; touch y lápiz no reportan `button`.
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    offsetArrastre.current = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+    inicioArrastre.current = { x: e.clientX, y: e.clientY };
+    huboArrastre.current = false;
+    setArrastrando(true);
+  };
 
   // Auto-scroll al fondo cuando cambia la lista de mensajes o el estado "pensando"
   useEffect(() => {
@@ -120,11 +276,32 @@ export default function AsistenteIAFlotante() {
     return (
       <button
         type="button"
-        onClick={abrirPanel}
-        title="Asistente IA"
+        onPointerDown={alPresionarFab}
+        onClick={() => {
+          // Si el puntero recorrió más que el umbral, fue un arrastre: no abrir.
+          if (huboArrastre.current) {
+            huboArrastre.current = false;
+            return;
+          }
+          abrirPanel();
+        }}
+        title="Asistente IA · arrastrá para moverlo"
         aria-label="Abrir Asistente IA"
+        style={
+          posicion
+            ? { left: posicion.x, top: posicion.y, touchAction: 'none' }
+            : // Hasta que se restaura la posición guardada, lo dejamos fuera de
+              // pantalla en vez de pintarlo en la esquina: evita el salto visual.
+              { left: -9999, top: -9999, touchAction: 'none' }
+        }
         // @safe-gradient: botón flotante Asistente IA — identidad visual del producto IA
-        className="fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-medium text-white shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center"
+        className={[
+          'fixed z-40 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-medium',
+          'text-white shadow-md flex items-center justify-center',
+          arrastrando
+            ? 'cursor-grabbing scale-105 shadow-xl transition-none'
+            : 'cursor-grab hover:shadow-lg hover:scale-105 transition-all duration-200',
+        ].join(' ')}
       >
         <Sparkles className="w-6 h-6 text-white" />
         {hayNoLeido && (

@@ -88,6 +88,8 @@ function parsearConversacion(id: string, data: Record<string, unknown>): WhatsAp
       cierraEn: new Date(0),
     },
     requiereHumano: data.requiereHumano === true,
+    bajaSolicitada: data.bajaSolicitada === true,
+    origenMarketing: data.origenMarketing as WhatsAppConversacion['origenMarketing'],
     asignadaA: (data.asignadaA as string | null | undefined) ?? null,
     etiquetas: Array.isArray(data.etiquetas) ? (data.etiquetas as string[]) : [],
     bot: data.bot as WhatsAppConversacion['bot'],
@@ -159,6 +161,7 @@ function parsearMensajeOutbox(
  */
 export function suscribirConversaciones(
   callback: (conversaciones: WhatsAppConversacion[]) => void,
+  onError?: (error: Error) => void,
 ): Unsubscribe {
   const colRef = collection(db, COLLECTION_CONVERSACIONES);
   return onSnapshot(colRef, (snap) => {
@@ -172,7 +175,7 @@ export function suscribirConversaciones(
       return tb - ta;
     });
     callback(items);
-  });
+  }, onError);
 }
 
 /**

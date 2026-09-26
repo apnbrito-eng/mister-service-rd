@@ -44,7 +44,7 @@ let appCheckInstance: AppCheck | null = null;
 if (typeof window !== 'undefined') {
   if (import.meta.env.DEV) {
     // @ts-expect-error - propiedad global de Firebase para debug en localhost
-    self.FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+    self.FIREBASE_APPCHECK_DEBUG_TOKEN = import.meta.env.VITE_FIREBASE_APPCHECK_DEBUG_TOKEN || true;
   }
   const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
   if (siteKey) {

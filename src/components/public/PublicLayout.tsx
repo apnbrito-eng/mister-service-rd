@@ -156,6 +156,8 @@ function Footer({ config }: { config: ConfigWeb }) {
               <Link to="/" className="block text-blue-200 hover:text-white text-sm transition-colors">Inicio</Link>
               <Link to="/servicios" className="block text-blue-200 hover:text-white text-sm transition-colors">Servicios</Link>
               <Link to="/agendar" className="block text-blue-200 hover:text-white text-sm transition-colors">Agendar Cita</Link>
+              <a href="/privacidad" className="block text-blue-200 hover:text-white text-sm">Privacidad</a>
+              <a href="/eliminacion-datos" className="block text-blue-200 hover:text-white text-sm">Eliminar mis datos</a>
               <Link to="/login" className="block text-blue-300/50 hover:text-white text-sm transition-colors mt-4">Acceso Personal</Link>
             </div>
           </div>

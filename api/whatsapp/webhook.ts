@@ -1,3 +1,4 @@
+import { solicitaBaja, origenAnuncio } from '../_lib/preferenciasMarketing.js';
 /**
  * Webhook entrante de WhatsApp Cloud API (Meta).
  *
@@ -19,8 +20,8 @@
  *  - NO procesar lógica de bot (eso es SPRINT-WA-6).
  *  - NO llamar Anthropic ni terceros — sólo escribir Firestore + responder 200.
  *  - Completar en <5s (Meta timeout 10s, reintenta si tardamos).
- *  - Si algo falla DESPUÉS de validar HMAC: igual responder 200 OK (NO
- *    queremos que Meta reintente cuando el problema es de nuestro lado).
+ *  - Si falla guardar un evento válido: responder 503 para permitir
+ *    reintentos; la deduplicación evita registrar dos veces lo guardado.
  *
  * PII en logs:
  *  - NUNCA loggear el body completo o el `texto` del mensaje (contenido
@@ -269,6 +270,15 @@ async function persistirMensajeEntrante(
       conversacionUpdate.noLeidos = FieldValue.increment(1);
     }
 
+    const origen = origenAnuncio(msg.rawMessage);
+    if (origen) conversacionUpdate.origenMarketing = origen;
+    if (solicitaBaja(msg.contenido.texto)) {
+      // Atomicidad con el mensaje: un retry no duplica la baja ni la auditoría.
+      tx.set(db.collection('whatsapp_config').doc('sistema'), { optOuts: FieldValue.arrayUnion(msg.wa_id) }, { merge: true });
+      conversacionUpdate.requiereHumano = true;
+      conversacionUpdate.bajaSolicitada = true;
+      tx.create(db.collection('auditoria_admin').doc(), { accion: 'baja_whatsapp_solicitada', origen: 'mensaje_cliente', mensajeId: msg.wamid, fecha: FieldValue.serverTimestamp() });
+    }
     tx.set(conversacionRef, stripUndefinedDeep(conversacionUpdate), { merge: true });
     creado = true;
   });
@@ -407,9 +417,8 @@ async function persistirStatusCallback(
  *  5. Para cada status callback → actualizar outbox.
  *  6. Responder 200.
  *
- * Si CUALQUIER paso después de HMAC falla, igual respondemos 200 (Meta
- * NO debe reintentar si nuestro código falla — el mensaje ya está en
- * sus logs, pueden retomarlo manual desde Meta Business Manager).
+ * Los fallos de persistencia devuelven 503 para que Meta reintente.
+ * Los mensajes guardados antes del fallo se deduplican por wamid.
  */
 async function handleEvento(req: VercelRequest, res: VercelResponse): Promise<void> {
   const appSecret = process.env.META_APP_SECRET;
@@ -468,10 +477,11 @@ async function handleEvento(req: VercelRequest, res: VercelResponse): Promise<vo
     // key o client email en mensajes de error de cert mal formado.
     const msg = err instanceof Error ? err.message : 'unknown';
     console.error(`${LOG_PREFIX} Admin SDK init falló: ${msg.substring(0, 200)}`);
-    res.status(200).json({ ok: true, processed: false });
+    res.status(503).json({ ok: false, error: 'storage-unavailable' });
     return;
   }
 
+  let fallosPersistencia = 0;
   let mensajesNuevos = 0;
   let mensajesDuplicados = 0;
   let statusesActualizados = 0;
@@ -485,6 +495,7 @@ async function handleEvento(req: VercelRequest, res: VercelResponse): Promise<vo
       if (creado) mensajesNuevos++;
       else mensajesDuplicados++;
     } catch (err) {
+      fallosPersistencia++;
       const m = err instanceof Error ? err.message : 'unknown';
       console.error(
         `${LOG_PREFIX} fallo persistencia mensaje wamid=${msg.wamid} ` +
@@ -500,6 +511,7 @@ async function handleEvento(req: VercelRequest, res: VercelResponse): Promise<vo
       if (actualizado) statusesActualizados++;
       if (!encontrado) statusesNoEncontrados++;
     } catch (err) {
+      fallosPersistencia++;
       const m = err instanceof Error ? err.message : 'unknown';
       console.error(
         `${LOG_PREFIX} fallo status callback wamid=${cb.wamid} ` +
@@ -514,7 +526,7 @@ async function handleEvento(req: VercelRequest, res: VercelResponse): Promise<vo
       `statuses=${statuses.length} (upd=${statusesActualizados}, sinOutbox=${statusesNoEncontrados})`,
   );
 
-  res.status(200).json({ ok: true });
+  res.status(fallosPersistencia ? 503 : 200).json({ ok: fallosPersistencia === 0 });
 }
 
 /**
@@ -536,13 +548,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     res.status(405).json({ error: 'method not allowed' });
   } catch (err) {
     // Última red de seguridad — cualquier excepción no atrapada arriba
-    // debe responder 200 al POST para evitar reintentos Meta. Para GET
+    // debe responder 503 al POST para permitir reintentos idempotentes. Para GET
     // un 500 es OK porque Meta marca "verification failed" y avisa al
     // operador.
     const msg = err instanceof Error ? err.message : 'unknown';
     console.error(`${LOG_PREFIX} excepción no manejada:`, msg);
     if (req.method === 'POST') {
-      res.status(200).json({ ok: true, recovered: true });
+      res.status(503).json({ ok: false, error: 'retry-required' });
     } else {
       res.status(500).send('internal');
     }

@@ -41,5 +41,6 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    proxy: process.env.MISTER_API_LOCAL === '1' ? { '/api/ai/conocimiento': 'http://127.0.0.1:5174', '/api/ai/borrador': 'http://127.0.0.1:5174', '/api/marketing/resumen': 'http://127.0.0.1:5174' } : undefined,
   },
 })

@@ -80,6 +80,7 @@ export default function Inbox() {
   const navigate = useNavigate();
   const [conversaciones, setConversaciones] = useState<WhatsAppConversacion[]>([]);
   const [loading, setLoading] = useState(true);
+  const [errorCarga, setErrorCarga] = useState('');
   const [filtro, setFiltro] = useState<FiltroChip>('todas');
   const [busqueda, setBusqueda] = useState('');
 
@@ -87,7 +88,8 @@ export default function Inbox() {
     const unsub = suscribirConversaciones((items) => {
       setConversaciones(items);
       setLoading(false);
-    });
+      setErrorCarga('');
+    }, () => { setLoading(false); setErrorCarga('No pudimos cargar las conversaciones. Revisa tu conexión y vuelve a entrar.'); });
     return () => unsub();
   }, []);
 
@@ -127,6 +129,8 @@ export default function Inbox() {
       bot_off: conversaciones.filter((c) => c.bot?.habilitado === false).length,
     };
   }, [conversaciones, currentUser?.uid]);
+
+  if (errorCarga) return <div role="alert" className="m-6 rounded-xl border border-red-200 bg-red-50 p-6 text-red-800">{errorCarga}<button className="block mt-3 underline" onClick={() => window.location.reload()}>Reintentar</button></div>;
 
   return (
     <div className="p-4 md:p-6 max-w-5xl mx-auto">
