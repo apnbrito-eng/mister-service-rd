@@ -54,7 +54,8 @@ const ROLES_AUTORIZADOS: ReadonlySet<string> = new Set([
  * El caller debe ser staff con rol en ROLES_AUTORIZADOS.
  *
  * POST /api/gps/ubicacion
- * Body: { vehiculoId, apiUrl, apiKey, proveedor }
+ * Body: { vehiculoId }
+ * (apiKey/apiUrl/proveedor se leen server-side desde config_gps/sistema)
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Solo POST
@@ -146,30 +147,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ error: 'No autorizado para usar el proxy GPS' });
   }
 
-  // 5) Validar body
-  const { vehiculoId, apiUrl, apiKey, proveedor } = (req.body || {}) as {
-    vehiculoId?: unknown;
-    apiUrl?: unknown;
-    apiKey?: unknown;
-    proveedor?: unknown;
-  };
-
-  if (
-    typeof vehiculoId !== 'string' ||
-    typeof apiUrl !== 'string' ||
-    typeof apiKey !== 'string' ||
-    typeof proveedor !== 'string' ||
-    !vehiculoId ||
-    !apiUrl ||
-    !apiKey ||
-    !proveedor
-  ) {
-    return res.status(400).json({
-      error: 'Faltan parámetros requeridos: vehiculoId, apiUrl, apiKey, proveedor',
-    });
+  // 5) Validar body — solo vehiculoId viene del cliente.
+  // SPRINT-FIX-M9 (2026-09-26): apiKey/apiUrl/proveedor se leen server-side
+  // desde config_gps/sistema con Admin SDK, para evitar que la credencial
+  // del proveedor GPS viaje del cliente al servidor en cada request.
+  const { vehiculoId } = (req.body || {}) as { vehiculoId?: unknown };
+  if (typeof vehiculoId !== 'string' || !vehiculoId) {
+    return res.status(400).json({ error: 'Falta parámetro requerido: vehiculoId' });
   }
 
-  // 6) Validar hostname contra whitelist (anti-SSRF)
+  // 6) Leer configuración GPS server-side (Admin SDK bypassa rules).
+  let apiKey: string;
+  let apiUrl: string;
+  let proveedor: string;
+  try {
+    const cfgSnap = await db.collection('config_gps').doc('sistema').get();
+    if (!cfgSnap.exists) {
+      return res.status(503).json({ error: 'GPS no configurado' });
+    }
+    const cfg = cfgSnap.data() as Record<string, unknown>;
+    if (cfg.activo !== true) {
+      return res.status(503).json({ error: 'GPS deshabilitado' });
+    }
+    apiKey = typeof cfg.apiKey === 'string' ? cfg.apiKey : '';
+    apiUrl = typeof cfg.apiUrl === 'string' ? cfg.apiUrl : '';
+    proveedor = typeof cfg.proveedor === 'string' ? cfg.proveedor : '';
+    if (!apiKey || !apiUrl || !proveedor) {
+      return res.status(503).json({ error: 'GPS mal configurado (faltan campos)' });
+    }
+  } catch (err) {
+    console.error('[gps/ubicacion] error leyendo config_gps:', err);
+    return res.status(500).json({ error: 'No se pudo leer la configuración GPS' });
+  }
+
+  // 7) Validar hostname contra whitelist (anti-SSRF)
   let hostname: string;
   try {
     hostname = new URL(apiUrl).hostname.toLowerCase();

@@ -97,18 +97,16 @@ export async function obtenerUbicacionAPI(vehiculoId: string): Promise<Ubicacion
     }
     const idToken = await currentUser.getIdToken();
 
+    // SPRINT-FIX-M9 (2026-09-26): solo `vehiculoId` viaja al server.
+    // El endpoint lee apiKey/apiUrl/proveedor server-side desde config_gps
+    // vía Admin SDK — la credencial GPS ya no cruza el cliente.
     const response = await fetch('/api/gps/ubicacion', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${idToken}`,
       },
-      body: JSON.stringify({
-        vehiculoId,
-        apiUrl: config.apiUrl,
-        apiKey: config.apiKey,
-        proveedor: config.proveedor,
-      }),
+      body: JSON.stringify({ vehiculoId }),
     });
 
     if (!response.ok) {
