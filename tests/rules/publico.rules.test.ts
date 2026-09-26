@@ -26,8 +26,10 @@ describe('citas_por_confirmar · formulario público de agendar', () => {
     await assertSucceeds(
       setDoc(doc(anonimo(), 'citas_por_confirmar/cita-1'), {
         clienteNombre: 'QA Test',
-        clienteTelefono: '8090000000',
+        telefono: '8090000000',
         origen: 'formulario_publico',
+        estado: 'pendiente',
+        createdAt: new Date(),
       }),
     );
   });
@@ -48,13 +50,12 @@ describe('citas_por_confirmar · formulario público de agendar', () => {
     await assertSucceeds(getDoc(doc(como(UID.secretaria), 'citas_por_confirmar/cita-4')));
   });
 
-  it('HUECO CONOCIDO (hallazgo #4) — el create público no valida forma ni tamaño', async () => {
-    // `allow create: if true` sin `hasOnly()` ni límites de longitud. Un
-    // atacante puede escribir documentos con campos arbitrarios y llenar la
-    // colección: spam en el CRM y costo de Firestore. No hay rate-limiting
-    // porque App Check está en modo soft (hallazgo #8).
-    // Cuando se endurezca la rule, este test pasa a `assertFails`.
-    await assertSucceeds(
+  it('un anónimo NO puede crear cita con shape invalido / campos faltantes', async () => {
+    // Fix SPRINT-FIX-A3 (2026-09-26): antes era HUECO CONOCIDO (hallazgo #4)
+    // porque la rule era `allow create: if true`. Ahora la rule exige
+    // clienteNombre + telefono + origen + estado + createdAt con caps de
+    // tamaño. Un payload sin esos campos base debe ser rechazado.
+    await assertFails(
       setDoc(doc(anonimo(), 'citas_por_confirmar/basura-1'), {
         campoInventado: 'x'.repeat(5000),
         otroCampoQueNadieEspera: { anidado: true },
@@ -65,10 +66,14 @@ describe('citas_por_confirmar · formulario público de agendar', () => {
 
 describe('solicitudes_servicio · formularios dinámicos /f/:slug', () => {
   it('un visitante sin sesión puede crear una solicitud', async () => {
+    // Fix SPRINT-FIX-A3 (2026-09-26): la rule ahora exige formularioId +
+    // estado + createdAt como shape base. `datos` sigue siendo mapa libre.
     await assertSucceeds(
       setDoc(doc(anonimo(), 'solicitudes_servicio/sol-1'), {
-        formularioSlug: 'qa',
-        respuestas: { nombre: 'QA Test' },
+        formularioId: 'qa',
+        estado: 'pendiente',
+        createdAt: new Date(),
+        datos: { nombre: 'QA Test' },
       }),
     );
   });

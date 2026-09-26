@@ -516,6 +516,7 @@ export default function Citas() {
         falla: form.falla.trim(),
         equipoTipo: form.equipoTipo,
         origen: 'oficina',
+        estado: 'pendiente',
         createdAt: Timestamp.now(),
       };
       if (form.clienteEmail) data.clienteEmail = form.clienteEmail.trim();

@@ -279,6 +279,7 @@ export async function enviarSolicitudCita(
     falla,
     equipoTipo,
     origen: 'formulario_publico',
+    estado: 'pendiente',
     createdAt: Timestamp.now(),
   };
 

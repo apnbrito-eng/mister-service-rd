@@ -284,7 +284,24 @@ service cloud.firestore {
 
     // Cita pública desde /agendar y /cita/:calendarId
     match /citas_por_confirmar/{docId} {
-      allow create: if true;
+      // SPRINT-FIX-A3 (2026-09-26): antes `create: if true` sin validar
+      // shape ni tamaño → un atacante podia crear docs de 900KB con
+      // campos arbitrarios (spam CRM + costo Firestore). Ahora exigimos
+      // campos requeridos basicos + caps de longitud + cap total de keys.
+      // Las 4 vías que escriben (CitaPublica.tsx, Citas.tsx, Facturas.tsx
+      // via garantia manual, formularioAgendar.service.ts) alinean el
+      // shape base a estos mismos campos.
+      allow create: if
+        request.resource.data.keys().hasAll(['clienteNombre', 'telefono', 'origen', 'estado', 'createdAt']) &&
+        request.resource.data.clienteNombre is string &&
+        request.resource.data.clienteNombre.size() < 200 &&
+        request.resource.data.telefono is string &&
+        request.resource.data.telefono.size() < 40 &&
+        request.resource.data.origen is string &&
+        request.resource.data.origen.size() < 60 &&
+        request.resource.data.estado is string &&
+        request.resource.data.estado.size() < 30 &&
+        request.resource.data.size() < 40;
       allow read, update, delete: if esStaff();
     }
 
@@ -292,7 +309,16 @@ service cloud.firestore {
     // OJO: la colección real es `solicitudes_servicio`, no `solicitudes`.
     // El servicio src/services/solicitudes.service.ts usa COL='solicitudes_servicio'.
     match /solicitudes_servicio/{docId} {
-      allow create: if true;
+      // SPRINT-FIX-A3 (2026-09-26): idem citas_por_confirmar. `datos` es
+      // un mapa arbitrario (formulario dinamico) — no puedo hasOnly,
+      // pero limito el shape base + cap total de keys.
+      allow create: if
+        request.resource.data.keys().hasAll(['formularioId', 'estado', 'createdAt']) &&
+        request.resource.data.formularioId is string &&
+        request.resource.data.formularioId.size() < 100 &&
+        request.resource.data.estado is string &&
+        request.resource.data.estado.size() < 30 &&
+        request.resource.data.size() < 40;
       allow read, update, delete: if esStaff();
     }
 
