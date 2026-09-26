@@ -1,6 +1,6 @@
 import { resolverVigenciaGarantia, fechaGarantia as toDate } from '../_lib/vigenciaGarantia.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getAdminFirestore, verificarAppCheck } from '../_lib/firebaseAdmin.js';
+import { getAdminFirestore, exigirAppCheck } from '../_lib/firebaseAdmin.js';
 
 /**
  * Endpoint público (sin auth) para consultar y reclamar la garantía de un
@@ -19,8 +19,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Token requerido' });
   }
 
-  // Audit C3 fase A: soft enforcement. Loggeamos resultado pero NO bloqueamos.
-  const appCheckResult = await verificarAppCheck(req);
+  // Audit C3: soft por defecto; hard cuando APPCHECK_ENFORCE=1. Loggea siempre.
+  let appCheckResult;
+  try {
+    appCheckResult = await exigirAppCheck(req);
+  } catch (err) {
+    const e = err as Error & { status?: number };
+    return res.status(e.status ?? 403).json({ error: e.message || 'app_check_requerido' });
+  }
   console.log(JSON.stringify({
     endpoint: 'garantia',
     app_check: appCheckResult,

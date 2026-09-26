@@ -130,6 +130,39 @@ export async function verificarAppCheck(
 }
 
 /**
+ * Hard enforcement de App Check controlado por env var `APPCHECK_ENFORCE`.
+ *
+ * Si `APPCHECK_ENFORCE === '1'` o `'true'`, cuando el token es inválido o
+ * está ausente lanza `Error` con `status=403` — el caller debe capturarlo
+ * y responder al cliente. Si la env var no está seteada o vale otra cosa,
+ * el comportamiento es idéntico a `verificarAppCheck` (solo loguea).
+ *
+ * Diseño intencional: la infra queda desplegada pero DESACTIVADA por default.
+ * Para activarla en Vercel: setear `APPCHECK_ENFORCE=1` cuando la métrica de
+ * `app_check_audit` muestre que el tráfico legítimo pasa el token. Reversible
+ * sin tocar código quitando la env var.
+ *
+ * Retorna el mismo `VerificarAppCheckResult` (con `ok: true`) cuando pasa;
+ * si bloquea, lanza antes de devolver.
+ */
+export async function exigirAppCheck(
+  req: VercelRequest,
+): Promise<VerificarAppCheckResult> {
+  const resultado = await verificarAppCheck(req);
+  if (resultado.ok) return resultado;
+  const flag = process.env.APPCHECK_ENFORCE;
+  const enforce = flag === '1' || flag === 'true';
+  if (!enforce) return resultado;
+  const err = new Error(
+    resultado.reason === 'no-token'
+      ? 'App Check requerido: abre esta función desde el sitio verificado.'
+      : 'App Check inválido: recarga la página y vuelve a intentar.',
+  ) as Error & { status?: number };
+  err.status = 403;
+  throw err;
+}
+
+/**
  * Deriva un identificador coarse del endpoint a partir de `req.url`.
  *
  * Ejemplos:
