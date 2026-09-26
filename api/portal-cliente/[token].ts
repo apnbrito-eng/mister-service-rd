@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getAdminFirestore, exigirAppCheck } from '../_lib/firebaseAdmin.js';
+import { tokenPortalClienteValido } from '../../src/utils/index.js';
 
 /**
  * Endpoint público (sin auth) que sirve datos de la orden al Portal del
@@ -90,6 +91,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(410).json({
         error: 'cancelada',
         mensaje: 'Esta cita fue cancelada. Contáctanos por WhatsApp si necesitas ayuda.',
+      });
+    }
+
+    // SPRINT-FIX-M10 (2026-09-26): server-side enforcement de expiración
+    // del tokenPortalCliente. Órdenes cerradas/canceladas > TOKEN_PORTAL_DIAS_GRACIA
+    // (30 días) rechazan el acceso al portal. La lógica ya vivía en el cliente
+    // (`tokenPortalClienteValido`); ahora también corre en el servidor.
+    if (!tokenPortalClienteValido({
+      fase: fase,
+      estado: typeof orden.estado === 'string' ? orden.estado : undefined,
+      tokenPortalClienteExpiraEn: orden.tokenPortalClienteExpiraEn as { toDate?: () => Date } | Date | null | undefined ?? null,
+      fechaCierre: orden.fechaCierre as { toDate?: () => Date } | Date | null | undefined ?? null,
+      fechaCancelacion: orden.fechaCancelacion as { toDate?: () => Date } | Date | null | undefined ?? null,
+    })) {
+      return res.status(410).json({
+        error: 'token_expirado',
+        mensaje: 'Este enlace ha expirado. Contáctanos por WhatsApp si necesitas ayuda.',
       });
     }
 
