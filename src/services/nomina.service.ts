@@ -1,5 +1,5 @@
 import {
-  collection, addDoc, doc, getDoc, getDocs, query, where, Timestamp, updateDoc, runTransaction,
+  collection, addDoc, doc, getDocs, query, where, Timestamp, runTransaction,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import {
@@ -9,7 +9,7 @@ import {
 import { rangoQuincena } from '../utils/comisiones';
 import { parseOrden } from '../utils';
 import { obtenerAvancesPendientesDeQuincena } from './avances.service';
-import { obtenerPrestamosActivosTodos, aplicarCuota } from './prestamos.service';
+import { obtenerPrestamosActivosTodos } from './prestamos.service';
 
 const UMBRAL_BONO = 0.70;
 const BONO_MONTO = 5000;
@@ -295,147 +295,108 @@ export async function generarLiquidacion(
 }
 
 /**
- * Marca un grupo de avances como `descontado=true` dentro de una sola
- * transacción Firestore. Garantía atómica: si cualquiera de los avances
- * no existe o está en estado inconsistente (ya descontado por OTRA
- * liquidación), aborta y NINGÚN avance queda marcado.
- *
- * Idempotencia: si el avance ya está `descontado=true` con el mismo
- * `liquidacionId`, se considera no-op (re-cierre seguro tras error de red).
- *
- * Límite Firestore: 500 writes por transacción. Una nómina típica tiene
- * 5-30 avances; si en el futuro se acerca al límite, dividir en chunks.
- */
-async function marcarAvancesDescontadosAtomic(
-  avancesIds: string[],
-  liquidacionId: string,
-): Promise<void> {
-  if (avancesIds.length === 0) return;
-  if (avancesIds.length > 400) {
-    // Margen defensivo bajo el límite duro de 500 writes/tx de Firestore.
-    throw new Error(
-      `Demasiados avances (${avancesIds.length}) para marcar atómicamente. Dividir en lotes.`,
-    );
-  }
-  await runTransaction(db, async (tx) => {
-    const refs = avancesIds.map(id => doc(db, 'avances', id));
-    // Firestore exige TODAS las lecturas antes de cualquier write en una tx.
-    const snaps = await Promise.all(refs.map(r => tx.get(r)));
-    const ahora = Timestamp.now();
-    snaps.forEach((snap, i) => {
-      const id = avancesIds[i];
-      if (!snap.exists()) {
-        throw new Error(`Avance ${id} no encontrado al cerrar liquidación`);
-      }
-      const data = snap.data() as Record<string, unknown>;
-      const yaDescontado = data.descontado === true;
-      const liqIdExistente = (data.liquidacionId as string) || '';
-      if (yaDescontado && liqIdExistente === liquidacionId) {
-        // No-op: re-cierre idempotente del mismo liquidacionId.
-        return;
-      }
-      if (yaDescontado && liqIdExistente && liqIdExistente !== liquidacionId) {
-        throw new Error(
-          `Avance ${id} ya fue descontado en la liquidación ${liqIdExistente}; no se puede re-asignar a ${liquidacionId}`,
-        );
-      }
-      tx.update(refs[i], {
-        descontado: true,
-        liquidacionId,
-        liquidacionFechaDescuento: ahora,
-        updatedAt: ahora,
-      });
-    });
-  });
-}
-
-/**
- * Cierra la liquidación: marca todas las comisiones referenciadas como
- * `estadoLiquidacion: 'liquidada'`, los avances como `descontado: true`,
- * aplica las cuotas de préstamos al historial (idempotente), y la
- * liquidación como `estado: 'cerrada'`. Después del cierre, las
- * comisiones no pueden re-asignarse a otra quincena.
- *
- * Garantías parciales de atomicidad:
- *  - Avances: marcados ATÓMICAMENTE en una transacción (audit C4). Si
- *    falla alguno, ninguno queda marcado y la liquidación NO se cierra.
- *  - Comisiones y cuotas de préstamos: aún en `Promise.all` con catch
- *    silencioso. Riesgo conocido (audit A12) — sprint separado.
- *  - Liquidación: solo se marca `cerrada` después de que avances pasen.
+ * Cierre atómico: todas las lecturas preceden a todas las escrituras.
+ * Si falla una comisión, avance o cuota, no se cierra ni se descuenta nada.
+ * Firestore reintenta ante cambios concurrentes; un cierre ya confirmado es no-op.
+ * Los cierres parciales heredados requieren conciliación si no prueban su origen.
  */
 export async function cerrarLiquidacion(
   liquidacionId: string,
   cerradaPor: Usuario,
 ): Promise<void> {
-  const ref = doc(db, 'liquidaciones_nomina', liquidacionId);
-  const raw = await runTransaction(db, async tx => {
+  const base = db;
+  const ref = doc(base, 'liquidaciones_nomina', liquidacionId);
+  await runTransaction(base, async tx => {
     const snap = await tx.get(ref);
     if (!snap.exists()) throw new Error('Liquidación no encontrada');
-    const datos = snap.data();
-    if (datos.estado === 'cerrada') throw new Error('La liquidación ya está cerrada');
-    // Congela asistencia al iniciar el cierre; el mismo documento serializa aprobaciones.
-    tx.update(ref, { asistenciaBloqueada: true });
-    return datos;
-  });
-  const empleados = (raw.empleados as Record<string, unknown>[]) || [];
-  const quincena = (raw.quincena as string) || '';
-  const ahora = Timestamp.now();
-
-  // Marcar comisiones como liquidadas (en paralelo, errores individuales loggeados)
-  const comisionesIds: string[] = [];
-  const avancesIds: string[] = [];
-  // Cuotas a aplicar: solo para empleados con totalDevengado > 0 (edge case
-  // del spec: si el empleado no devengó nada, NO se descuenta cuota).
-  const cuotasAAplicar: { prestamoId: string; monto: number }[] = [];
-  empleados.forEach(e => {
-    const cids = (e.comisionesIds as string[]) || [];
-    cids.forEach(id => comisionesIds.push(id));
-    const aids = (e.avancesIds as string[]) || [];
-    aids.forEach(id => avancesIds.push(id));
-    const totalDev = Number(e.totalDevengado) || 0;
-    if (totalDev > 0) {
-      const cuotas = (e.cuotasPrestamos as Record<string, unknown>[]) || [];
-      cuotas.forEach(c => {
-        const prestamoId = (c.prestamoId as string) || '';
-        const monto = Number(c.monto) || 0;
-        if (prestamoId && monto > 0) {
-          cuotasAAplicar.push({ prestamoId, monto });
-        }
-      });
+    const raw = snap.data();
+    if (raw.estado === 'cerrada') return;
+    if (raw.estado !== 'abierta' || !raw.quincena || !Array.isArray(raw.empleados)) {
+      throw new Error('Liquidación incompleta; revisar antes de cerrar');
     }
-  });
-  await Promise.all(comisionesIds.map(id =>
-    updateDoc(doc(db, 'comisiones', id), {
-      estadoLiquidacion: 'liquidada',
-      quincenaAsignada: raw.quincena,
-      liquidadaEn: ahora,
-      liquidadaPor: cerradaPor.nombre,
-    }).catch(err => console.error('Error liquidando comisión', id, err))
-  ));
-  // Marcar avances como descontados de forma ATÓMICA (audit C4).
-  // Antes: `Promise.all` con `.catch` que silenciaba errores → si un
-  // updateDoc fallaba, el avance quedaba SIN descontar pero el resto
-  // sí se marcaba `descontado=true`, generando pérdida silenciosa
-  // (empleado recibía extra). Ahora: una sola transacción que lee
-  // todos los avances primero y aplica los updates juntos. Si una
-  // operación falla, ninguna se persiste. Idempotente vía
-  // `liquidacionId` para soportar reintentos seguros.
-  if (avancesIds.length > 0) {
-    await marcarAvancesDescontadosAtomic(avancesIds, liquidacionId);
-  }
-  // Aplicar cuotas de préstamos. `aplicarCuota` es idempotente por
-  // (prestamoId + liquidacionId) — si se re-llama tras reintento, no
-  // doble-descuenta.
-  await Promise.all(cuotasAAplicar.map(c =>
-    aplicarCuota(c.prestamoId, liquidacionId, quincena, c.monto)
-      .catch(err => console.error('Error aplicando cuota préstamo', c.prestamoId, err))
-  ));
-
-  await updateDoc(ref, {
-    estado: 'cerrada',
-    cerradaPor: cerradaPor.nombre,
-    cerradaPorId: cerradaPor.id,
-    fechaCierre: ahora,
+    const empleados = raw.empleados as Record<string, unknown>[];
+    const operaciones: { coleccion: string; id: string; empleado: Record<string, unknown>; cuota?: Record<string, unknown> }[] = [];
+    const vistos = new Set<string>();
+    const agregar = (coleccion: string, id: string, empleado: Record<string, unknown>, cuota?: Record<string, unknown>) => {
+      const clave = `${coleccion}/${id}`;
+      if (!id || vistos.has(clave)) throw new Error(`Referencia vacía o duplicada: ${clave}`);
+      vistos.add(clave);
+      operaciones.push({ coleccion, id, empleado, cuota });
+    };
+    for (const e of empleados) {
+      for (const id of (e.comisionesIds as string[] || [])) agregar('comisiones', id, e);
+      for (const id of (e.avancesIds as string[] || [])) agregar('avances', id, e);
+      for (const cuota of (e.cuotasPrestamos as Record<string, unknown>[] || [])) {
+        if (!(Number(e.totalDevengado) > 0)) throw new Error('Cuota sin devengado: revisar liquidación');
+        agregar('prestamos_empleados', String(cuota.prestamoId || ''), e, cuota);
+      }
+    }
+    if (operaciones.length > 400) throw new Error('La liquidación supera 400 movimientos; requiere revisión administrativa');
+    const refs = operaciones.map(o => doc(base, o.coleccion, o.id));
+    const documentos = await Promise.all(refs.map(r => tx.get(r)));
+    const ahora = Timestamp.now();
+    const cambios: { indice: number; datos: Record<string, unknown> }[] = [];
+    const comisiones = new Map<Record<string, unknown>, number>();
+    const avances = new Map<Record<string, unknown>, number>();
+    const cuotas = new Map<Record<string, unknown>, number>();
+    const centavos = (valor: number) => Math.round(valor * 100);
+    documentos.forEach((documento, indice) => {
+      const o = operaciones[indice];
+      if (!documento.exists()) throw new Error(`${o.coleccion}/${o.id} no encontrado; cierre cancelado`);
+      const d = documento.data();
+      if (o.coleccion === 'comisiones') {
+        const monto = Number(d.comisionMonto) + Number(d.descuentoPorGarantia?.monto ?? 0);
+        if (!Number.isFinite(monto) || d.estaAnulada) throw new Error(`Comisión ${o.id} inválida`);
+        comisiones.set(o.empleado, (comisiones.get(o.empleado) || 0) + monto);
+        if (d.estadoLiquidacion === 'liquidada') {
+          if (d.liquidacionId !== liquidacionId) throw new Error(`Comisión ${o.id} ya liquidada: requiere conciliación`);
+          return;
+        }
+        if (d.estadoLiquidacion && d.estadoLiquidacion !== 'pendiente') throw new Error(`Estado de comisión ${o.id} inválido`);
+        cambios.push({ indice, datos: { estadoLiquidacion: 'liquidada', liquidacionId,
+          quincenaAsignada: raw.quincena, liquidadaEn: ahora, liquidadaPor: cerradaPor.nombre } });
+      } else if (o.coleccion === 'avances') {
+        if (d.personalId !== o.empleado.personalId || !Number.isFinite(d.monto) || d.monto <= 0) throw new Error(`Avance ${o.id} inconsistente`);
+        avances.set(o.empleado, (avances.get(o.empleado) || 0) + d.monto);
+        if (d.descontado === true) {
+          if (d.liquidacionId !== liquidacionId) throw new Error(`Avance ${o.id} descontado en otra liquidación o sin origen`);
+          return;
+        }
+        cambios.push({ indice, datos: { descontado: true, liquidacionId, liquidacionFechaDescuento: ahora, updatedAt: ahora } });
+      } else {
+        const monto = Number(o.cuota!.monto);
+        const numero = Number(o.cuota!.numeroCuota);
+        if (d.personalId !== o.empleado.personalId || !Number.isFinite(monto) || monto <= 0 || !Number.isInteger(numero) || numero < 1) throw new Error(`Cuota ${o.id} inválida`);
+        cuotas.set(o.empleado, (cuotas.get(o.empleado) || 0) + monto);
+        const sinPagosHistoricos = d.cuotasHistorial === undefined && Number(d.cuotasPagadas ?? 0) === 0 && Number.isFinite(Number(d.montoTotal)) && centavos(Number(d.saldoPendiente)) === centavos(Number(d.montoTotal));
+        if (!Array.isArray(d.cuotasHistorial) && !sinPagosHistoricos) throw new Error(`Historial de préstamo ${o.id} inválido`);
+        const historial = (d.cuotasHistorial ?? []) as Record<string, unknown>[];
+        if (historial.length !== Number(d.cuotasPagadas ?? 0) || historial.some(h => !Number.isFinite(Number(h.monto)) || Number(h.monto) <= 0) || new Set(historial.map(h => h.liquidacionId)).size !== historial.length) throw new Error(`Historial de préstamo ${o.id} inconsistente`);
+        const aplicado = historial.reduce((s, h) => s + Number(h.monto), 0);
+        const saldo = Number(d.montoTotal) - aplicado;
+        if (!Number.isFinite(saldo) || saldo < 0 || centavos(saldo) !== centavos(Number(d.saldoPendiente))) throw new Error(`Saldo del préstamo ${o.id} inconsistente`);
+        const existentes = historial.filter(h => h.liquidacionId === liquidacionId);
+        if (existentes.length) {
+          if (existentes.length !== 1 || centavos(Number(existentes[0].monto)) !== centavos(monto) || existentes[0].numero !== numero || existentes[0].quincena !== raw.quincena) throw new Error(`Cuota ${o.id} aplicada con otros datos: revisar`);
+          return;
+        }
+        if (d.estado !== 'activo' || !Number.isFinite(saldo) || centavos(saldo) !== centavos(Number(d.saldoPendiente)) || numero !== Number(d.cuotasPagadas ?? 0) + 1 || numero > Number(d.cuotasTotales) || centavos(monto) > centavos(saldo)) throw new Error(`Préstamo ${o.id} cambió; revisar cuota antes de cerrar`);
+        const saldoRestante = (centavos(saldo) - centavos(monto)) / 100;
+        cambios.push({ indice, datos: {
+          cuotasHistorial: [...historial, { numero, monto, liquidacionId, quincena: raw.quincena, fechaAplicacion: ahora, saldoRestante }],
+          cuotasPagadas: numero, saldoPendiente: saldoRestante,
+          estado: numero >= Number(d.cuotasTotales) || saldoRestante === 0 ? 'pagado' : 'activo', updatedAt: ahora,
+        } });
+      }
+    });
+    for (const e of empleados) {
+      for (const [sumas, campo] of [[comisiones, 'totalComisiones'], [avances, 'totalAvances'], [cuotas, 'totalCuotasPrestamos']] as const) {
+        if (centavos(sumas.get(e) || 0) !== centavos(Number(e[campo] ?? 0))) throw new Error(`El total ${campo} cambió; revisar liquidación`);
+      }
+    }
+    for (const cambio of cambios) tx.update(refs[cambio.indice], cambio.datos);
+    tx.update(ref, { estado: 'cerrada', asistenciaBloqueada: true,
+      cerradaPor: cerradaPor.nombre, cerradaPorId: cerradaPor.id, fechaCierre: ahora });
   });
 }
 
@@ -458,8 +419,8 @@ export async function agregarDescuentoAdHoc(
     const snap = await tx.get(ref);
     if (!snap.exists()) throw new Error('Liquidación no encontrada');
     const raw = snap.data() as Record<string, unknown>;
-    if (raw.estado === 'cerrada') {
-      throw new Error('La liquidación ya está cerrada — no se pueden agregar descuentos');
+    if (raw.estado === 'cerrada' || raw.asistenciaBloqueada === true) {
+      throw new Error('La liquidación está cerrada o en revisión de cierre — no se pueden agregar descuentos');
     }
     const empleadosRaw = (raw.empleados as Record<string, unknown>[]) || [];
     const idx = empleadosRaw.findIndex(e => e.personalId === personalId);
@@ -519,8 +480,8 @@ export async function removerDescuentoAdHoc(
     const snap = await tx.get(ref);
     if (!snap.exists()) throw new Error('Liquidación no encontrada');
     const raw = snap.data() as Record<string, unknown>;
-    if (raw.estado === 'cerrada') {
-      throw new Error('La liquidación ya está cerrada — no se pueden quitar descuentos');
+    if (raw.estado === 'cerrada' || raw.asistenciaBloqueada === true) {
+      throw new Error('La liquidación está cerrada o en revisión de cierre — no se pueden quitar descuentos');
     }
     const empleadosRaw = (raw.empleados as Record<string, unknown>[]) || [];
     const idx = empleadosRaw.findIndex(e => e.personalId === personalId);

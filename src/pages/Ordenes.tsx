@@ -1,3 +1,4 @@
+import { coincideBusquedaOrden } from '../utils/buscarOrden';
 import { equipoApi } from '../services/equipoApi';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -843,9 +844,7 @@ export default function Ordenes() {
   // Filtered orders
   const ordenesFiltradas = useMemo(() => {
     return ordenesVisibles.filter(o => {
-      const matchBusqueda = !busqueda ||
-        o.clienteNombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-        o.numero?.toLowerCase().includes(busqueda.toLowerCase());
+      const matchBusqueda = coincideBusquedaOrden(o, busqueda);
       const matchEstado = !filtroEstado || o.estadoSimple === filtroEstado;
       const matchTecnico = !filtroTecnico || o.tecnicoNombre === filtroTecnico;
       const matchMes = !filtroMes || (o.fechaCita && format(o.fechaCita, 'yyyy-MM') === filtroMes);

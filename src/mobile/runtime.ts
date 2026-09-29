@@ -1,6 +1,7 @@
 import { FirebaseAppCheck } from '@capacitor-firebase/app-check';
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
 import { App } from '@capacitor/app';
+import { cerrarCapaSuperior } from './capas';
 import { origenApiMovil } from './politicas';
 export async function iniciarRuntimeMovil() {
   if (!Capacitor.isNativePlatform()) return;
@@ -33,6 +34,7 @@ export async function iniciarRuntimeMovil() {
   };
   document.documentElement.classList.add('app-nativa');
   await App.addListener('backButton', ({ canGoBack }) => {
+    if (cerrarCapaSuperior()) return;
     if (canGoBack) history.back(); else if (Capacitor.getPlatform() === 'android') void App.minimizeApp();
   });
 }

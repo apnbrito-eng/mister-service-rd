@@ -44,6 +44,10 @@ import { check as checkComisionGarantiaAnulaCompleta } from './check-comision-ga
 import { check as checkMantenimientoClienteidVacio } from './check-mantenimiento-clienteid-vacio.js';
 import { check as checkCitasPublicasServidor } from './check-citas-publicas-servidor.js';
 import { check as checkContadorChats } from './check-contador-chats.js';
+import { check as checkIaCierre } from './check-ia-cierre.js';
+import { check as checkBusquedaOrden } from './check-busqueda-orden.js';
+import { check as checkNominaCierreAtomico } from './check-nomina-cierre-atomico.js';
+import { check as checkResultadoPerdidas } from './check-resultado-perdidas.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -55,6 +59,10 @@ const c = (color: keyof typeof COLOR, s: string) =>
 
 async function main() {
   const checks = [
+    checkBusquedaOrden,
+    checkNominaCierreAtomico,
+    checkResultadoPerdidas,
+    checkIaCierre,
     checkContadorChats,
     checkCitasPublicasServidor,
     checkUserprofileId,

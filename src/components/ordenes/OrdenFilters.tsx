@@ -42,7 +42,7 @@ export default function OrdenFilters({
         <input
           aria-label="Buscar órdenes"
           type="text"
-          placeholder="Buscar nombre, #OS..."
+          placeholder="Buscar orden, cliente, teléfono o detalle..."
           value={busqueda}
           onChange={e => setBusqueda(e.target.value)}
           className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"

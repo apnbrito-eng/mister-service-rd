@@ -4,9 +4,10 @@ import { obtenerTransicionMovimiento, DESPLAZAMIENTO_PANEL } from '../utils/moti
 import BotonAsistenteMovil from './BotonAsistenteMovil';
 import { TextoAsistente } from './TextoAsistente';
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Sparkles, X, Minus, Send } from 'lucide-react';
+import { Sparkles, X, Minus, Send, ArrowLeft } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { iaHabilitadaDefaultPorRol } from '../utils/permisos';
+import { registrarCierreCapa } from '../mobile/capas';
 import { useAsistenteIAChat } from '../hooks/useAsistenteIAChat';
 
 /**
@@ -29,7 +30,8 @@ export default function AsistenteIAFlotante() {
 
   const [abierto, setAbierto] = useState(false);
   const reducido = useMovimientoReducido();
-  const panelRef = useCallback((panel: HTMLDivElement | null) => { panel?.toggleAttribute('inert', !abierto); }, [abierto]);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const lanzadorRef = useRef<HTMLSpanElement | null>(null);
   const [input, setInput] = useState('');
   const [hayNoLeido, setHayNoLeido] = useState(false);
 
@@ -73,27 +75,47 @@ export default function AsistenteIAFlotante() {
     el.style.height = Math.min(el.scrollHeight, maxH) + 'px';
   }, [input, abierto]);
 
-  // ----- Guards tempranos -----
-  // iaHabilitada === undefined se trata como default por rol (Sprint 1 solo aplicó
-  // defaults en creaciones nuevas — usuarios existentes no tienen el campo).
-  const tieneAcceso =
-    userProfile?.iaHabilitada === true ||
-    (userProfile?.iaHabilitada === undefined &&
-      !!userProfile?.rol &&
-      iaHabilitadaDefaultPorRol(userProfile.rol));
+  const tieneAcceso = !!currentUser && !!userProfile &&
+    userProfile.rol !== 'tecnico' && userProfile.rol !== 'ayudante' &&
+    (userProfile.iaHabilitada === true ||
+      (userProfile.iaHabilitada === undefined && iaHabilitadaDefaultPorRol(userProfile.rol)));
 
+  const cerrarPanel = useCallback(() => {
+    // Conservar mensajes y borrador. Restaurar foco al botón, nunca al teclado.
+    setAbierto(false);
+    requestAnimationFrame(() => lanzadorRef.current?.querySelector('button')?.focus({ preventScroll: true }));
+  }, []);
+
+  useEffect(() => {
+    if (!abierto || !tieneAcceso) return;
+    const quitarCierre = registrarCierreCapa(cerrarPanel);
+    panelRef.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+    const teclado = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') {
+        evento.preventDefault();
+        cerrarPanel();
+      }
+      if (evento.key !== 'Tab') return;
+      const botones = panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), textarea:not(:disabled), a[href]');
+      if (!botones?.length) return;
+      const primero = botones[0];
+      const ultimo = botones[botones.length - 1];
+      if (evento.shiftKey && (document.activeElement === primero || !panelRef.current?.contains(document.activeElement))) {
+        evento.preventDefault(); ultimo.focus();
+      } else if (!evento.shiftKey && (document.activeElement === ultimo || !panelRef.current?.contains(document.activeElement))) {
+        evento.preventDefault(); primero.focus();
+      }
+    };
+    document.addEventListener('keydown', teclado);
+    return () => { quitarCierre(); document.removeEventListener('keydown', teclado); };
+  }, [abierto, tieneAcceso, cerrarPanel]);
+
+  // Hooks siempre antes de guards: el perfil puede llegar o revocarse en vivo.
   if (!tieneAcceso) return null;
-  if (userProfile?.rol === 'tecnico' || userProfile?.rol === 'ayudante') return null;
-  if (!currentUser) return null;
 
   const abrirPanel = () => {
     setAbierto(true);
     setHayNoLeido(false);
-  };
-
-  const cerrarPanel = () => {
-    // NO llamar limpiar() — preservar la conversación al minimizar.
-    setAbierto(false);
   };
 
   const handleEnviar = async () => {
@@ -111,8 +133,10 @@ export default function AsistenteIAFlotante() {
   };
 
   return <>
-    {!abierto && <BotonAsistenteMovil onAbrir={abrirPanel} hayNoLeido={hayNoLeido} />}
-    <motion.div ref={panelRef} aria-hidden={!abierto}
+    <span ref={lanzadorRef}>{!abierto && <BotonAsistenteMovil onAbrir={abrirPanel} hayNoLeido={hayNoLeido} />}</span>
+    {abierto && <div aria-hidden="true" className="fixed inset-0 z-40 bg-black/10" />}
+    <motion.div ref={panelRef} {...{ inert: abierto ? undefined : '' }} aria-hidden={!abierto}
+      role="dialog" aria-modal={abierto ? true : undefined} aria-label="Asistente IA"
       initial={false}
       animate={{ opacity: abierto ? 1 : 0, y: reducido || abierto ? 0 : DESPLAZAMIENTO_PANEL }}
       transition={obtenerTransicionMovimiento(reducido)}
@@ -127,6 +151,7 @@ export default function AsistenteIAFlotante() {
       {/* @safe-gradient: header del panel Asistente IA — identidad visual del producto IA */}
       <div className="bg-gradient-to-r from-primary to-primary-medium text-white p-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
+          <button type="button" onClick={cerrarPanel} aria-label="Volver a la aplicación" className="w-11 h-11 flex items-center justify-center rounded hover:bg-white/10"><ArrowLeft size={20} /></button>
           <Sparkles size={18} className="flex-shrink-0" />
           <span className="font-semibold text-sm truncate">Asistente IA · BETA</span>
         </div>
@@ -136,7 +161,7 @@ export default function AsistenteIAFlotante() {
             onClick={cerrarPanel}
             aria-label="Minimizar Asistente IA"
             title="Minimizar"
-            className="p-1 rounded hover:bg-white/10 transition-colors"
+            className="w-11 h-11 flex items-center justify-center rounded hover:bg-white/10 transition-colors"
           >
             <Minus size={18} />
           </button>
@@ -145,7 +170,7 @@ export default function AsistenteIAFlotante() {
             onClick={cerrarPanel}
             aria-label="Cerrar Asistente IA"
             title="Cerrar"
-            className="p-1 rounded hover:bg-white/10 transition-colors"
+            className="w-11 h-11 flex items-center justify-center rounded hover:bg-white/10 transition-colors"
           >
             <X size={18} />
           </button>

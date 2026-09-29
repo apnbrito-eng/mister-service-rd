@@ -823,3 +823,35 @@ Ese loop cierra el ciclo: bugs en producción → postmortem → catálogo + caz
 - **Prevención:** cada conversación sin leer aporta1. Conservar suscripciones/permisos; no presentar total de mensajes como cantidad de clientes.
 - **Cazador:** `scripts/invariantes/check-contador-chats.ts`, AST acotado al contador. **Allowlist:** vacía.
 - **Prueba:** `tests/integraciones/inbox-contador-menu.test.ts` cubre múltiples mensajes, varios chats y lectura en vivo.
+
+## P-028 — IA abierta inerte y Atrás nativo ignora el panel
+
+- **Fecha:** 2026-09-29. **Hash original/fix:** pendiente del commit del coordinador; fix local por instrucción, no se inventa hash.
+- **Síntoma:** X/minimizar no responden; tocar cabecera abre selector de módulos debajo; Atrás Android navega sin salir de IA.
+- **Causa:** ref imperativo mutaba inert en nodo Motion y el atributo seguía presente abierto; listener nativo navegaba sin consultar la capa activa.
+- **Prevención:** inert declarativo dependiente de abierto, cierre compartido botones/Escape/Atrás; registro temporal antes de history.back/minimize, limpieza al cerrar/desmontar/revocar acceso, backdrop y control de foco. Preservar chat/borrador.
+- **Cazador:** `scripts/invariantes/check-ia-cierre.ts`. **Allowlist:** vacía. Pruebas: `tests/integraciones/asistente-inert.test.ts`; fixture real Motion `tests/manual/ia-cierre.tsx`.
+
+## P-029 — Búsqueda de órdenes incompleta
+
+- **Fecha:** 2026-09-29. **Hash original/fix:** pendiente del commit del coordinador; no se inventa hash.
+- **Síntoma:** teléfono, falla y nombres sin tildes no encontraban órdenes existentes.
+- **Causa:** predicado limitado a nombre literal y número.
+- **Regla:** normalizar y buscar los campos acordados sobre órdenes visibles, conservando filtros/roles.
+- **Cazador:** `scripts/invariantes/check-busqueda-orden.ts`. **Allowlist:** vacía.
+
+## P-030 — Cierre parcial de nómina
+
+- **Fecha:** 2026-09-29. **Hash original/fix:** pendiente del commit del coordinador; no se inventa hash.
+- **Síntoma:** riesgo de marcar nómina cerrada aunque falle una cuota o liquidación de comisión, detectado al auditar el código; no confirma saldos reales afectados.
+- **Causa:** escrituras separadas y errores capturados sin abortar el cierre.
+- **Regla:** transacción única de comisiones, avances, cuotas y cierre; ningún error de esos movimientos puede quedar silenciado. Validar referencias, saldos e idempotencia antes de escribir.
+- **Cazador:** `scripts/invariantes/check-nomina-cierre-atomico.ts`. **Allowlist:** vacía. Complementar con pruebas concurrentes y de aborto transaccional.
+
+## P-031 — Pérdidas truncadas en resultados
+
+- **Fecha:** 2026-09-29. **Hash original/fix:** pendiente del commit del coordinador; no se inventa hash.
+- **Síntoma:** costos de piezas superiores a ventas mostraban utilidad bruta cero, inflando el resultado respecto a la pérdida real.
+- **Causa:** `Math.max(0, ventasNetas - costoPiezas)`.
+- **Regla:** conservar resultado negativo en utilidad bruta y sus derivados; nunca truncar pérdidas.
+- **Cazador:** `scripts/invariantes/check-resultado-perdidas.ts`. **Allowlist:** vacía.

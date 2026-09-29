@@ -1,0 +1,90 @@
+import { beforeEach, expect, it, vi } from 'vitest';
+const m = vi.hoisted(() => ({ docs: {} as Record<string, any>, fallo: '', cola: Promise.resolve() }));
+vi.mock('../../src/firebase/config', () => ({ db: {} }));
+vi.mock('../../src/services/avances.service', () => ({ obtenerAvancesPendientesDeQuincena: async () => [] }));
+vi.mock('../../src/services/prestamos.service', () => ({ obtenerPrestamosActivosTodos: async () => [] }));
+vi.mock('firebase/firestore', async original => ({ ...await original<typeof import('firebase/firestore')>(),
+ doc: (_: unknown, col: string, id: string) => `${col}/${id}`,
+ runTransaction: (_: unknown, fn: any) => {
+   const operacion = m.cola.then(async () => {
+     const writes: [string, any][] = [];
+     await fn({ get: async (id: string) => ({ exists: () => !!m.docs[id], data: () => structuredClone(m.docs[id]) }), update: (id: string, data: any) => writes.push([id, data]) });
+     if (writes.some(([id]) => id === m.fallo)) throw new Error('Fallo de escritura simulado');
+     for (const [id, data] of writes) m.docs[id] = { ...m.docs[id], ...data };
+   });
+   m.cola = operacion.catch(() => {});
+   return operacion;
+ },
+}));
+import { cerrarLiquidacion } from '../../src/services/nomina.service';
+const actor = { id: 'admin', nombre: 'Administración' } as any;
+beforeEach(() => {
+ m.fallo = ''; m.cola = Promise.resolve();
+ m.docs = {
+  'liquidaciones_nomina/l': { estado: 'abierta', quincena: '2026-09-Q2', empleados: [{ personalId: 'p', totalDevengado: 1000, comisionesIds: ['c'], totalComisiones: 100, avancesIds: ['a'], totalAvances: 50, cuotasPrestamos: [{ prestamoId: 'pr', numeroCuota: 1, monto: 100 }], totalCuotasPrestamos: 100 }] },
+  'comisiones/c': { estadoLiquidacion: 'pendiente', comisionMonto: 100 },
+  'avances/a': { personalId: 'p', monto: 50, descontado: false },
+  'prestamos_empleados/pr': { personalId: 'p', estado: 'activo', montoTotal: 300, saldoPendiente: 300, cuotasTotales: 3, cuotasPagadas: 0, cuotasHistorial: [] },
+ };
+});
+for (const fallo of ['comisiones/c', 'prestamos_empleados/pr', 'liquidaciones_nomina/l']) {
+ it(`si falla ${fallo} no persiste nada y reintento descuenta una vez`, async () => {
+   const inicial = structuredClone(m.docs); m.fallo = fallo;
+   await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('Fallo');
+   expect(m.docs).toEqual(inicial);
+   m.fallo = ''; await cerrarLiquidacion('l', actor); await cerrarLiquidacion('l', actor);
+   expect(m.docs['prestamos_empleados/pr'].saldoPendiente).toBe(200);
+   expect(m.docs['prestamos_empleados/pr'].cuotasHistorial).toHaveLength(1);
+   expect(m.docs['liquidaciones_nomina/l'].estado).toBe('cerrada');
+ });
+}
+it('dos administradores concurrentes no aplican dos cuotas', async () => {
+ await Promise.all([cerrarLiquidacion('l', actor), cerrarLiquidacion('l', { ...actor, id: 'otro' })]);
+ expect(m.docs['prestamos_empleados/pr'].cuotasPagadas).toBe(1);
+});
+it('un préstamo cancelado no se reactiva al cerrar', async () => {
+ m.docs['prestamos_empleados/pr'].estado = 'cancelado';
+ await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('cambió');
+ expect(m.docs['comisiones/c'].estadoLiquidacion).toBe('pendiente');
+});
+it('un ajuste de comisión posterior al borrador requiere revisión', async () => {
+ m.docs['comisiones/c'].descuentoPorGarantia = { monto: -10 };
+ await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('totalComisiones');
+ expect(m.docs['liquidaciones_nomina/l'].estado).toBe('abierta');
+});
+it('un cierre parcial heredado exacto permite recuperar y uno distinto no', async () => {
+ const pr = m.docs['prestamos_empleados/pr'];
+ pr.cuotasPagadas = 1; pr.saldoPendiente = 220;
+ pr.cuotasHistorial = [{ liquidacionId: 'l', quincena: '2026-09-Q2', numero: 1, monto: 80 }];
+ await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('otros datos');
+ pr.cuotasHistorial[0].monto = 100; pr.saldoPendiente = 200; pr.cuotasPagadas = 1;
+ await cerrarLiquidacion('l', actor);
+ expect(pr.cuotasHistorial).toHaveLength(1);
+});
+it('comisión liquidada sin origen no se reasigna silenciosamente', async () => {
+ m.docs['comisiones/c'].estadoLiquidacion = 'liquidada';
+ await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('conciliación');
+});
+
+it('comisión histórica sin estado conserva compatibilidad de generación', async () => {
+ delete m.docs['comisiones/c'].estadoLiquidacion;
+ await cerrarLiquidacion('l', actor);
+ expect(m.docs['comisiones/c'].estadoLiquidacion).toBe('liquidada');
+});
+
+it('préstamo histórico sin historial solo es válido si conserva todo el saldo', async () => {
+ delete m.docs['prestamos_empleados/pr'].cuotasHistorial;
+ m.docs['prestamos_empleados/pr'].saldoPendiente = 200;
+ await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('Historial');
+ m.docs['prestamos_empleados/pr'].saldoPendiente = 300;
+ await cerrarLiquidacion('l', actor);
+ expect(m.docs['prestamos_empleados/pr'].cuotasHistorial).toHaveLength(1);
+});
+
+it('reintento exacto no oculta un saldo incompatible con su historial', async () => {
+ const pr = m.docs['prestamos_empleados/pr'];
+ pr.cuotasPagadas = 1;
+ pr.cuotasHistorial = [{ liquidacionId: 'l', quincena: '2026-09-Q2', numero: 1, monto: 100 }];
+ await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('Saldo');
+ expect(m.docs['liquidaciones_nomina/l'].estado).toBe('abierta');
+});
