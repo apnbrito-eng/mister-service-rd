@@ -27,3 +27,14 @@ it('editar descuentos manuales conserva los RD$618 aprobados por asistencia',asy
  await removerDescuentoAdHoc('liq','ay',m.raw.empleados[0].descuentosAdHoc[0].id);
  expect(m.writes[1].empleados[0]).toMatchObject({totalDescuentos:1418,totalNeto:6582,totalAsistencia:618});
 });
+
+it('no inventa fecha para pagar comisión pendiente; exige conciliación', async () => {
+ m.data.comisiones = [{ id: 'sin-fecha', comisionMonto: 1500, estadoLiquidacion: 'pendiente' }];
+ await expect(generarLiquidacion('2026-09-Q2', { id: 'admin', nombre: 'QA' } as any)).rejects.toThrow('sin-fecha');
+ expect(m.writes).toHaveLength(0);
+});
+it('anulada sin fecha no bloquea ni suma a nómina', async () => {
+ m.data.comisiones = [{ id: 'anulada', comisionMonto: 1500, estaAnulada: true }];
+ await generarLiquidacion('2026-09-Q2', { id: 'admin', nombre: 'QA' } as any);
+ expect(m.writes[0].totalNomina).toBe(0);
+});

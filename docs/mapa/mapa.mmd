@@ -19,6 +19,7 @@ graph LR
   end
 
   subgraph area_dinero["DINERO"]
+    bancos["bancos"]:::critico
     cotizaciones["cotizaciones"]:::critico
     facturas["facturas"]:::critico
     pagos["pagos"]:::critico
@@ -63,6 +64,7 @@ graph LR
     conocimiento_equipo["conocimiento_equipo"]
   end
 
+  bancos --> ordenes_servicio
   ordenes_servicio --> clientes
   ordenes_servicio --> personal
   ordenes_servicio --> calendarios

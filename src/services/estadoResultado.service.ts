@@ -1,6 +1,7 @@
+import { fechaFinanciera } from '../utils/fechaFinanciera';
 import { collection, getDocs, query, where, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { Gasto, ComisionRegistro, Personal } from '../types';
+import { Gasto, Personal } from '../types';
 import { parseFactura } from '../utils';
 
 export interface DataMes {
@@ -26,11 +27,12 @@ export interface DataMes {
    * P&L mostraba más ganancia de la real sin ninguna señal en pantalla.
    */
   bonosIncompletos: boolean;
+  comisionesSinFecha: { id: string; ordenNumero: string; tecnicoNombre: string }[];
 }
 
 export async function cargarDataMes(year: number, month: number, personal: Personal[]): Promise<DataMes> {
   const inicio = new Date(year, month - 1, 1, 0, 0, 0);
-  const fin = new Date(year, month, 0, 23, 59, 59);
+  const fin = new Date(year, month, 0, 23, 59, 59, 999);
 
   // Facturas del mes
   const facturasSnap = await getDocs(query(
@@ -49,7 +51,7 @@ export async function cargarDataMes(year: number, month: number, personal: Perso
     if (f.estado === 'anulada') return;
     totalFacturas++;
     ventasBrutas += Number(f.total) || 0;
-    ventasNetas += Number(f.subtotal) || (Number(f.total) || 0); // fallback: si no tiene desglose, usar total
+    ventasNetas += typeof d.data().subtotal === 'number' && Number.isFinite(d.data().subtotal) ? Number(d.data().subtotal) : (Number(f.total) || 0); // fallback: si no tiene desglose, usar total
     itbisCobrado += Number(f.itbisMonto) || 0;
     costoPiezas += Number(f.costoPiezas) || 0;
   });
@@ -76,9 +78,15 @@ export async function cargarDataMes(year: number, month: number, personal: Perso
   // Nómina: comisiones del mes + sueldo base (mensual, todos los con acceso)
   const comisionesSnap = await getDocs(collection(db, 'comisiones'));
   let totalComisiones = 0;
+  const comisionesSinFecha: DataMes['comisionesSinFecha'] = [];
   comisionesSnap.docs.forEach(d => {
-    const c = d.data() as ComisionRegistro;
-    const fecha = (c.fechaCobro as unknown as { toDate?: () => Date }).toDate?.() || new Date();
+    const c = d.data();
+    if (c.estaAnulada) return;
+    const fecha = fechaFinanciera(c.fechaCobro);
+    if (!fecha) {
+      comisionesSinFecha.push({ id: d.id, ordenNumero: String(c.ordenNumero || ''), tecnicoNombre: String(c.tecnicoNombre || '') });
+      return;
+    }
     if (fecha >= inicio && fecha <= fin) {
       totalComisiones += Number(c.comisionMonto) || 0;
     }
@@ -133,6 +141,7 @@ export async function cargarDataMes(year: number, month: number, personal: Perso
     totalNomina,
     utilidadOperativa,
     bonosIncompletos,
+    comisionesSinFecha,
   };
 }
 

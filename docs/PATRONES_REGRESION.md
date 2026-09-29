@@ -855,3 +855,21 @@ Ese loop cierra el ciclo: bugs en producción → postmortem → catálogo + caz
 - **Causa:** `Math.max(0, ventasNetas - costoPiezas)`.
 - **Regla:** conservar resultado negativo en utilidad bruta y sus derivados; nunca truncar pérdidas.
 - **Cazador:** `scripts/invariantes/check-resultado-perdidas.ts`. **Allowlist:** vacía.
+
+
+## P-032 — Comisión sin fecha asignada al período actual
+- Fecha: 2026-09-29. Hash original/fix: pendiente de commit del coordinador (no se inventa hash).
+- Síntoma: comisiones sin fecha entraban al mes/quincena actual y no aparecían para revisión por orderBy.
+- Causa: fallback `fechaCobro?.toDate?.() || new Date()` y ordenación Firestore que omite campos ausentes.
+- Prevención: fechaFinanciera retorna Date|null; invalidas a conciliación, jamás hoy. Generación detiene pendientes desconocidas; anuladas excluidas. Sin hora se interpreta día RD.
+- Cazador: `scripts/invariantes/check-fecha-financiera.ts`; detección AST de fallback a hoy y orderBy fechaCobro en Comisiones.
+- Allowlist inicial: vacía.
+- Pruebas: fecha-financiera, estado-resultado-fechas y nomina-asistencia.
+
+## P-033 — Proyección bancaria cruda y apertura sin migración
+
+- **Fecha:** 2026-09-29. **Hash original/fix:** pendiente del coordinador; cambios locales sin commit.
+- **Síntoma/riesgo:** montar Bancos invocaba migración automática de cuentas; usar parsers con fechas fallback en nuevo historial podría asignar cobros antiguos a hoy.
+- **Causa:** efecto de montaje con mutación y parsers de presentación no adecuados para fechas financieras.
+- **Regla:** historial sólo lectura sobre pagos[] crudos, fechas ausentes como incidencias, sin subcolección espejo ni migración al abrir. Duplicados por ordenId+pagoId excluidos, nunca por monto/fecha.
+- **Cazador:** `scripts/invariantes/check-bancos-cobros-crudos.ts`; pruebas `tests/integraciones/movimientos-cobros.test.ts`. **Allowlist:** vacía.

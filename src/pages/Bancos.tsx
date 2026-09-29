@@ -1,3 +1,4 @@
+import MovimientosBanco from '../components/bancos/MovimientosBanco';
 import { useEffect, useState } from 'react';
 import { Building2, Plus, Edit, Trash2, Power, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -7,7 +8,6 @@ import {
   crearBanco,
   actualizarBanco,
   eliminarBanco,
-  migrarBancosGenericosAReales,
 } from '../services/bancos.service';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
@@ -48,13 +48,6 @@ export default function Bancos() {
   const puedeGestionar = puede(userProfile, 'bancosGestionar');
 
   useEffect(() => {
-    // Migración: si los bancos son los genéricos viejos, reemplazarlos por los reales
-    migrarBancosGenericosAReales()
-      .then(n => {
-        if (n > 0) toast.success(`Bancos actualizados (${n})`);
-      })
-      .catch(err => console.warn('migración bancos:', err));
-
     const unsub = suscribirBancos(list => {
       setBancos(list);
       setLoading(false);
@@ -171,6 +164,8 @@ export default function Bancos() {
           </button>
         )}
       </div>
+
+      <MovimientosBanco bancos={bancos} />
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">

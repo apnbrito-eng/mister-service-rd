@@ -1,3 +1,4 @@
+import { fechaFinanciera } from '../utils/fechaFinanciera';
 import {
   collection, addDoc, doc, getDocs, query, where, Timestamp, runTransaction,
 } from 'firebase/firestore';
@@ -83,6 +84,11 @@ export async function generarLiquidacion(
   const comisionesEnRango = comisionesSnap.docs
     .map(d => {
       const raw = d.data();
+      const fecha = fechaFinanciera(raw.fechaCobro);
+      if (!raw.estaAnulada && (!raw.estadoLiquidacion || raw.estadoLiquidacion === 'pendiente') && !fecha) {
+        throw new Error(`Comisión ${d.id} pendiente sin fecha de devengo válida. Conciliar en Comisiones antes de generar nómina.`);
+      }
+      if (raw.estaAnulada || !fecha) return null;
       const desc = raw.descuentoPorGarantia as Record<string, unknown> | undefined;
       const comision: ComisionRegistro = {
         id: d.id,
@@ -91,7 +97,7 @@ export async function generarLiquidacion(
         ordenId: (raw.ordenId as string) || '',
         ordenNumero: (raw.ordenNumero as string) || '',
         clienteNombre: (raw.clienteNombre as string) || '',
-        fechaCobro: raw.fechaCobro?.toDate?.() || new Date(),
+        fechaCobro: fecha,
         precioFinal: (raw.precioFinal as number) || 0,
         costoPiezas: (raw.costoPiezas as number) || 0,
         basePendienteComision: (raw.basePendienteComision as number) || 0,
@@ -117,6 +123,7 @@ export async function generarLiquidacion(
       }
       return comision;
     })
+    .filter((c): c is ComisionRegistro => c !== null)
     .filter(c =>
       c.estadoLiquidacion === 'pendiente' &&
       c.fechaCobro >= inicio &&

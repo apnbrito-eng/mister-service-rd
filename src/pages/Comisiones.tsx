@@ -1,23 +1,25 @@
+import { fechaFinanciera } from '../utils/fechaFinanciera';
 import RevisionGarantias from '../components/RevisionGarantias';
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { ComisionRegistro, Personal } from '../types';
 import { formatMoneda, formatFecha } from '../utils';
 import { calcularQuincenaActual, listarUltimasQuincenas } from '../utils/comisiones';
 import { useApp } from '../context/AppContext';
-import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { DollarSign, Lock, ChevronDown, ChevronRight, Calendar, Download } from 'lucide-react';
 
+type ComisionVista = Omit<ComisionRegistro, 'fechaCobro'> & { fechaCobro: Date | null; estaAnulada: boolean };
+
 export default function Comisiones() {
   const { userProfile, currentUser } = useApp();
-  const puedeVer = puede(userProfile, 'configuracionVer') ||
-    userProfile?.rol === 'administrador' ||
+  const puedeVer = userProfile?.rol === 'administrador' ||
     userProfile?.rol === 'coordinadora';
 
+  const [errorLectura, setErrorLectura] = useState('');
   const [loading, setLoading] = useState(true);
-  const [comisiones, setComisiones] = useState<ComisionRegistro[]>([]);
+  const [comisiones, setComisiones] = useState<ComisionVista[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [modoFiltro, setModoFiltro] = useState<'quincena' | 'rango'>('quincena');
   const [filtroQuincena, setFiltroQuincena] = useState<string>(calcularQuincenaActual(new Date()));
@@ -33,13 +35,14 @@ export default function Comisiones() {
   const [tecnicosExpandidos, setTecnicosExpandidos] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    if (userProfile?.rol !== 'administrador' && userProfile?.rol !== 'coordinadora') { setLoading(false); return; }
     // @safe-listener-sin-where: página gateada por permiso configuracionVer
     // + rol admin/coord (línea 14-16). Rule de `comisiones` corto-circuita
     // con `esAdminOCoord()` → query full-collection sin where es legítima
     // para estos usuarios. Cazador P-012 no puede inferir el gating UI
     // estáticamente.
     const unsub = onSnapshot(
-      query(collection(db, 'comisiones'), orderBy('fechaCobro', 'desc')),
+      collection(db, 'comisiones'),
       (snap) => {
         setComisiones(snap.docs.map(d => {
           const raw = d.data();
@@ -71,7 +74,8 @@ export default function Comisiones() {
             ordenId: raw.ordenId || '',
             ordenNumero: raw.ordenNumero || '',
             clienteNombre: raw.clienteNombre || '',
-            fechaCobro: raw.fechaCobro?.toDate?.() || new Date(),
+            fechaCobro: fechaFinanciera(raw.fechaCobro),
+            estaAnulada: raw.estaAnulada === true,
             precioFinal: raw.precioFinal || 0,
             costoPiezas: raw.costoPiezas || 0,
             basePendienteComision: typeof raw.proporcionItems === 'number' && typeof raw.subtotal === 'number'
@@ -86,16 +90,18 @@ export default function Comisiones() {
             notas: raw.notas,
             descuentoPorGarantia: descuento,
             createdAt: raw.createdAt?.toDate?.() || new Date(),
-          } as ComisionRegistro;
-        }));
+          } as ComisionVista;
+        }).sort((a, b) => (b.fechaCobro?.getTime() ?? 0) - (a.fechaCobro?.getTime() ?? 0)));
+        setErrorLectura('');
         setLoading(false);
-      }
+      },
+      () => { setErrorLectura('No se pudieron cargar las comisiones. Reintenta antes de usar estos totales.'); setLoading(false); }
     );
     getDocs(collection(db, 'personal')).then(snap => {
       setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
     });
     return () => unsub();
-  }, []);
+  }, [userProfile?.rol]);
 
   const quincenasDisponibles = useMemo(() => listarUltimasQuincenas(12), []);
   const tecnicos = personal.filter(p => p.rol === 'tecnico' && p.activo);
@@ -105,9 +111,10 @@ export default function Comisiones() {
     let hastaTime: number | null = null;
     if (modoFiltro === 'rango') {
       if (fechaDesde) desdeTime = new Date(fechaDesde + 'T00:00:00').getTime();
-      if (fechaHasta) hastaTime = new Date(fechaHasta + 'T23:59:59').getTime();
+      if (fechaHasta) hastaTime = new Date(fechaHasta + 'T23:59:59.999').getTime();
     }
-    return comisiones.filter(c => {
+    return comisiones.filter((c): c is ComisionRegistro & { estaAnulada: boolean } => {
+      if (!c.fechaCobro || c.estaAnulada) return false;
       if (modoFiltro === 'quincena') {
         if (filtroQuincena && c.quincenaAsignada !== filtroQuincena) return false;
       } else {
@@ -229,6 +236,12 @@ export default function Comisiones() {
         </button>
       </div>
 
+      {errorLectura && <p role="alert" className="text-red-700">{errorLectura}</p>}
+      {comisiones.some(c => !c.fechaCobro && !c.estaAnulada) && <section className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+        <h2 className="font-semibold">Pendientes de conciliación: fecha de devengo</h2>
+        <p className="text-sm">Estos registros no se suman a ningún período. Revisar su fecha original antes de generar nómina.</p>
+        <ul>{comisiones.filter(c => !c.fechaCobro && !c.estaAnulada).map(c => <li key={c.id}>{c.ordenNumero || c.id} · {c.tecnicoNombre || 'Sin técnico'} · {formatMoneda(c.comisionMonto)}</li>)}</ul>
+      </section>}
       {currentUser && (userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora') && (
         <RevisionGarantias uid={currentUser.uid} nombre={userProfile.nombre} />
       )}

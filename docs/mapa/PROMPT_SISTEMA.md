@@ -19,7 +19,14 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **REPORTING**: Dashboards y métricas — lee de todo, no escribe
 - **SISTEMA**: Cross-cutting: auditoría, notificaciones, rate limits, configuración
 
-## Módulos (31 total)
+## Módulos (32 total)
+
+### bancos
+- **Área:** dinero · **Criticidad:** alta
+- **Qué hace:** Catálogo de cuentas y proyección de cobros por cuenta, con período opcional y conciliación de incidencias
+- **Depende de:** ordenes_servicio
+- **Colecciones Firestore:** bancos, ordenes_servicio
+- **Notas:** Actualización local 2026-09-29. Historial lee sólo ordenes_servicio.pagos crudos por bancoId; nunca suma el espejo ni inventa fechas. Confirmados, pendientes e incidencias separados. Admin/coordinadora con bancosGestionar. No conecta al banco real ni ejecuta migración al abrir.
 
 ### ordenes_servicio
 - **Área:** ordenes · **Criticidad:** alta
@@ -273,7 +280,7 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - Si tocás **facturas**, verificá: garantias, comisiones, reportes
 - Si tocás **formularios**, verificá: solicitudes
 - Si tocás **gastos**, verificá: reportes
-- Si tocás **ordenes_servicio**, verificá: avances, garantias, cotizaciones, facturas, pagos, comisiones, standby_piezas, equipos_taller, reportes
+- Si tocás **ordenes_servicio**, verificá: bancos, avances, garantias, cotizaciones, facturas, pagos, comisiones, standby_piezas, equipos_taller, reportes
 - Si tocás **pagos**, verificá: reportes
 - Si tocás **personal**, verificá: ordenes_servicio, calendarios, citas_por_confirmar, mantenimiento, comisiones, nomina, ponches, cierres_dia, whatsapp_inbox, reportes, notificaciones, conocimiento_equipo, marketing_meta
 - Si tocás **plantillas_whatsapp**, verificá: whatsapp_inbox

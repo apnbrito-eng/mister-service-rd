@@ -80,6 +80,7 @@ export default function EstadoResultado() {
   const descargarCSV = () => {
     if (!data) return;
     const filas: Array<[string, number]> = [
+      ['Comisiones sin fecha: resultado incompleto si mayor a cero', data.comisionesSinFecha.length],
       ['Ventas brutas (con ITBIS)', data.ventasBrutas],
       ['Ventas netas (sin ITBIS)', data.ventasNetas],
       ['ITBIS cobrado', data.itbisCobrado],
@@ -169,6 +170,13 @@ export default function EstadoResultado() {
             número se sigue mostrando, pero marcado como incompleto — antes el
             error se tragaba en silencio y el P&L parecía correcto.
           */}
+          {data.comisionesSinFecha.length > 0 && (
+            <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
+              <p>Resultado incompleto: {data.comisionesSinFecha.length} comisiones sin fecha de devengo válida requieren conciliación. No se asignaron a ningún mes.</p>
+              <a className="underline" href="/admin/comisiones">Revisar comisiones</a>
+              <ul>{data.comisionesSinFecha.map(c => <li key={c.id}>{c.ordenNumero || c.id} · {c.tecnicoNombre || 'Sin técnico'}</li>)}</ul>
+            </div>
+          )}
           {data.bonosIncompletos && (
             <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
               <div className="text-sm font-semibold text-amber-900">

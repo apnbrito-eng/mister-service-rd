@@ -48,6 +48,8 @@ import { check as checkIaCierre } from './check-ia-cierre.js';
 import { check as checkBusquedaOrden } from './check-busqueda-orden.js';
 import { check as checkNominaCierreAtomico } from './check-nomina-cierre-atomico.js';
 import { check as checkResultadoPerdidas } from './check-resultado-perdidas.js';
+import { check as checkFechaFinanciera } from './check-fecha-financiera.js';
+import { check as checkBancosCobrosCrudos } from './check-bancos-cobros-crudos.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -59,6 +61,8 @@ const c = (color: keyof typeof COLOR, s: string) =>
 
 async function main() {
   const checks = [
+    checkBancosCobrosCrudos,
+    checkFechaFinanciera,
     checkBusquedaOrden,
     checkNominaCierreAtomico,
     checkResultadoPerdidas,
