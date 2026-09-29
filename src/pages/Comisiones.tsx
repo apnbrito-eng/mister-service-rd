@@ -1,3 +1,5 @@
+import ConciliarFechaComisionFormulario from '../components/ConciliarFechaComisionFormulario';
+import { conciliarFechaComision } from '../services/conciliarFechaComision.service';
 import { fechaFinanciera } from '../utils/fechaFinanciera';
 import RevisionGarantias from '../components/RevisionGarantias';
 import { useState, useEffect, useMemo } from 'react';
@@ -18,6 +20,21 @@ export default function Comisiones() {
     userProfile?.rol === 'coordinadora';
 
   const [errorLectura, setErrorLectura] = useState('');
+  const [conciliacionId, setConciliacionId] = useState('');
+  const [diaConciliacion, setDiaConciliacion] = useState('');
+  const [motivoConciliacion, setMotivoConciliacion] = useState('');
+  const [guardandoConciliacion, setGuardandoConciliacion] = useState(false);
+  const [avisoConciliacion, setAvisoConciliacion] = useState('');
+  const guardarConciliacion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (guardandoConciliacion || userProfile?.rol !== 'administrador') return;
+    setGuardandoConciliacion(true); setAvisoConciliacion('');
+    try {
+      await conciliarFechaComision(conciliacionId, diaConciliacion, motivoConciliacion);
+      setConciliacionId(''); setAvisoConciliacion('Fecha conciliada y registrada en auditoría.');
+    } catch (error) { setAvisoConciliacion(error instanceof Error ? error.message : 'No se pudo conciliar la fecha.'); }
+    finally { setGuardandoConciliacion(false); }
+  };
   const [loading, setLoading] = useState(true);
   const [comisiones, setComisiones] = useState<ComisionVista[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
@@ -240,8 +257,15 @@ export default function Comisiones() {
       {comisiones.some(c => !c.fechaCobro && !c.estaAnulada) && <section className="rounded-xl border border-amber-300 bg-amber-50 p-4">
         <h2 className="font-semibold">Pendientes de conciliación: fecha de devengo</h2>
         <p className="text-sm">Estos registros no se suman a ningún período. Revisar su fecha original antes de generar nómina.</p>
-        <ul>{comisiones.filter(c => !c.fechaCobro && !c.estaAnulada).map(c => <li key={c.id}>{c.ordenNumero || c.id} · {c.tecnicoNombre || 'Sin técnico'} · {formatMoneda(c.comisionMonto)}</li>)}</ul>
+        <ul>{comisiones.filter(c => !c.fechaCobro && !c.estaAnulada).map(c => <li key={c.id} className="py-2">{c.ordenNumero || c.id} · {c.tecnicoNombre || 'Sin técnico'} · {formatMoneda(c.comisionMonto)}
+          {userProfile?.rol === 'administrador' && c.estadoLiquidacion === 'pendiente' && <button type="button" disabled={guardandoConciliacion} className="ml-3 text-blue-700 underline" onClick={() => { setConciliacionId(c.id); setDiaConciliacion(''); setMotivoConciliacion(''); setAvisoConciliacion(''); }}>Conciliar fecha</button>}
+        </li>)}</ul>
       </section>}
+      {avisoConciliacion && <p role="status" className="rounded-lg border p-3">{avisoConciliacion}</p>}
+      {conciliacionId && userProfile?.rol === 'administrador' && <ConciliarFechaComisionFormulario
+        fecha={diaConciliacion} motivo={motivoConciliacion} guardando={guardandoConciliacion}
+        onFecha={setDiaConciliacion} onMotivo={setMotivoConciliacion}
+        onGuardar={guardarConciliacion} onCancelar={() => setConciliacionId('')} />}
       {currentUser && (userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora') && (
         <RevisionGarantias uid={currentUser.uid} nombre={userProfile.nombre} />
       )}

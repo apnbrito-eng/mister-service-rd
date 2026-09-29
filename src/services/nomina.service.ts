@@ -79,14 +79,20 @@ export async function generarLiquidacion(
     .map(d => ({ id: d.id, ...d.data() } as Personal))
     .filter(p => p.activo && ROLES_CON_ACCESO.includes(p.rol));
 
+  const resolverPersonal = (tecnicoId: string): string | undefined => {
+    const candidatos = personal.filter(p => p.id === tecnicoId || p.uid === tecnicoId);
+    return candidatos.length === 1 ? candidatos[0].id : undefined;
+  };
+
   // Comisiones pendientes en el rango (filtrar client-side para evitar índice compuesto)
   const comisionesSnap = await getDocs(collection(db, 'comisiones'));
+  const pendientesFecha: { id: string; tecnicoId: string }[] = [];
   const comisionesEnRango = comisionesSnap.docs
     .map(d => {
       const raw = d.data();
       const fecha = fechaFinanciera(raw.fechaCobro);
       if (!raw.estaAnulada && (!raw.estadoLiquidacion || raw.estadoLiquidacion === 'pendiente') && !fecha) {
-        throw new Error(`Comisión ${d.id} pendiente sin fecha de devengo válida. Conciliar en Comisiones antes de generar nómina.`);
+        pendientesFecha.push({ id: d.id, tecnicoId: String(raw.tecnicoId || '') });
       }
       if (raw.estaAnulada || !fecha) return null;
       const desc = raw.descuentoPorGarantia as Record<string, unknown> | undefined;
@@ -164,7 +170,7 @@ export async function generarLiquidacion(
       // SPRINT-149 (P-006 variante reversa): `c.tecnicoId` post-c4be345 persiste auth.uid;
       // fallback `p.id` para comisiones registradas pre-migración. Sin esto, técnicos
       // nuevos no acumulan comisiones en su nómina aunque la comisión SÍ exista.
-      const comisionesT = comisionesEnRango.filter(c => c.tecnicoId === (p.uid || p.id));
+      const comisionesT = comisionesEnRango.filter(c => resolverPersonal(c.tecnicoId) === p.id);
       comisionesIds = comisionesT.map(c => c.id);
       // Sumar comisión + descuentoPorGarantia.monto (que ya es negativo). Si la nómina del técnico
       // original ya cerró cuando se aplica el descuento, queda flotante y se recoge en la próxima
@@ -233,9 +239,13 @@ export async function generarLiquidacion(
     }
 
     const totalDescuentos = totalAvances + totalCuotasPrestamos;
-    const totalNeto = Math.max(0, totalDevengado - totalDescuentos);
+    const totalNeto = totalDevengado - totalDescuentos;
 
+    const pendientesEmpleado = pendientesFecha.filter(c => resolverPersonal(c.tecnicoId) === p.id).map(c => c.id);
     const emp: LiquidacionEmpleado = {
+      estadoCierre: pendientesEmpleado.length ? 'bloqueado' : 'listo',
+      personalUid: p.uid || p.id,
+      comisionesPendientesFecha: pendientesEmpleado,
       personalId: p.id,
       personalNombre: p.nombre,
       rol: p.rol,
@@ -272,7 +282,9 @@ export async function generarLiquidacion(
   // Total a pagar = suma de (totalDevengado - totalAvances)
   const totalNomina = empleados.reduce((s, e) => s + e.totalDevengado, 0);
 
+  const comisionesSinEmpleado = [...pendientesFecha, ...comisionesEnRango].filter(c => !resolverPersonal(c.tecnicoId)).map(c => c.id);
   const data: Record<string, unknown> = {
+    comisionesSinEmpleado,
     quincena,
     periodoInicio: Timestamp.fromDate(inicio),
     periodoFin: Timestamp.fromDate(fin),
@@ -297,6 +309,7 @@ export async function generarLiquidacion(
       estado: 'abierta',
       totalNomina,
       empleados,
+      comisionesSinEmpleado,
     },
   };
 }
@@ -321,7 +334,9 @@ export async function cerrarLiquidacion(
     if (raw.estado !== 'abierta' || !raw.quincena || !Array.isArray(raw.empleados)) {
       throw new Error('Liquidación incompleta; revisar antes de cerrar');
     }
-    const empleados = raw.empleados as Record<string, unknown>[];
+    const todosEmpleados = raw.empleados as Record<string, unknown>[];
+    let empleados = todosEmpleados.filter(e => !e.estadoCierre || e.estadoCierre === 'listo');
+    if (!empleados.length) throw new Error('No hay empleados listos para cerrar. Conciliar los bloqueados y recalcular.');
     const operaciones: { coleccion: string; id: string; empleado: Record<string, unknown>; cuota?: Record<string, unknown> }[] = [];
     const vistos = new Set<string>();
     const agregar = (coleccion: string, id: string, empleado: Record<string, unknown>, cuota?: Record<string, unknown>) => {
@@ -341,6 +356,19 @@ export async function cerrarLiquidacion(
     if (operaciones.length > 400) throw new Error('La liquidación supera 400 movimientos; requiere revisión administrativa');
     const refs = operaciones.map(o => doc(base, o.coleccion, o.id));
     const documentos = await Promise.all(refs.map(r => tx.get(r)));
+    const periodo = rangoQuincena(String(raw.quincena));
+    // También los borradores legacy pueden contener una fecha inventada por el lector antiguo.
+    documentos.forEach((documento, indice) => {
+      const o = operaciones[indice];
+      if (o.coleccion !== 'comisiones' || !documento.exists()) return;
+      const datos = documento.data();
+      const fecha = fechaFinanciera(datos.fechaCobro);
+      if (!datos.estaAnulada && (!fecha || fecha < periodo.inicio || fecha > periodo.fin)) {
+        o.empleado.estadoCierre = 'bloqueado';
+        o.empleado.comisionesPendientesFecha = [...new Set([...(o.empleado.comisionesPendientesFecha as string[] || []), o.id])];
+      }
+    });
+    empleados = empleados.filter(e => e.estadoCierre !== 'bloqueado');
     const ahora = Timestamp.now();
     const cambios: { indice: number; datos: Record<string, unknown> }[] = [];
     const comisiones = new Map<Record<string, unknown>, number>();
@@ -349,6 +377,7 @@ export async function cerrarLiquidacion(
     const centavos = (valor: number) => Math.round(valor * 100);
     documentos.forEach((documento, indice) => {
       const o = operaciones[indice];
+      if (!empleados.includes(o.empleado)) return;
       if (!documento.exists()) throw new Error(`${o.coleccion}/${o.id} no encontrado; cierre cancelado`);
       const d = documento.data();
       if (o.coleccion === 'comisiones') {
@@ -400,10 +429,110 @@ export async function cerrarLiquidacion(
       for (const [sumas, campo] of [[comisiones, 'totalComisiones'], [avances, 'totalAvances'], [cuotas, 'totalCuotasPrestamos']] as const) {
         if (centavos(sumas.get(e) || 0) !== centavos(Number(e[campo] ?? 0))) throw new Error(`El total ${campo} cambió; revisar liquidación`);
       }
+      // La nómina leída en esta transacción es la fuente de ajustes manuales/asistencia.
+      // No convertir descuentos que exceden devengado en un pago neto cero.
+      let ajustes = 0;
+      for (const [lista, campo] of [['descuentosAdHoc', 'totalDescuentosAdHoc'], ['descuentosAsistencia', 'totalAsistencia']] as const) {
+        const detalle = e[lista] ?? [];
+        if (!Array.isArray(detalle)) throw new Error(`Detalle ${lista} inválido; revisar liquidación`);
+        let suma = 0;
+        for (const descuento of detalle) {
+          const monto = Number(descuento?.monto);
+          if (!Number.isFinite(monto) || monto < 0) throw new Error(`Monto ${lista} inválido; revisar liquidación`);
+          suma += monto;
+        }
+        if (centavos(suma) !== centavos(Number(e[campo] ?? 0))) throw new Error(`El total ${campo} no coincide con su detalle; revisar liquidación`);
+        ajustes += suma;
+      }
+      const descuentos = (avances.get(e) || 0) + (cuotas.get(e) || 0) + ajustes;
+      const devengado = Number(e.totalDevengado);
+      if (!Number.isFinite(devengado) || devengado < 0) throw new Error('Devengado inválido; revisar liquidación');
+      if (centavos(descuentos) > centavos(devengado)) throw new Error(`Los descuentos de ${e.personalNombre || e.personalId} exceden el devengado. Revisar antes de cerrar; no se aplicó ningún descuento.`);
+      if (e.totalDescuentos !== undefined && centavos(Number(e.totalDescuentos)) !== centavos(descuentos)) throw new Error('Total de descuentos inconsistente; revisar liquidación');
+      if (e.totalNeto !== undefined && centavos(Number(e.totalNeto)) !== centavos(devengado) - centavos(descuentos)) throw new Error('Neto inconsistente; revisar liquidación');
     }
     for (const cambio of cambios) tx.update(refs[cambio.indice], cambio.datos);
-    tx.update(ref, { estado: 'cerrada', asistenciaBloqueada: true,
-      cerradaPor: cerradaPor.nombre, cerradaPorId: cerradaPor.id, fechaCierre: ahora });
+    const actualizados = todosEmpleados.map(e => empleados.includes(e) ? { ...e, estadoCierre: 'cerrado', fechaCierreEmpleado: ahora, cerradoPorId: cerradaPor.id } : e);
+    const completa = actualizados.every(e => e.estadoCierre === 'cerrado' && !(e.comisionesFueraPeriodo as string[] || []).length) && !(raw.comisionesSinEmpleado as string[] || []).length;
+    const cierre: Record<string, unknown> = { empleados: actualizados, estado: completa ? 'cerrada' : 'abierta', asistenciaBloqueada: completa };
+    if (completa) Object.assign(cierre, { cerradaPor: cerradaPor.nombre, cerradaPorId: cerradaPor.id, fechaCierre: ahora });
+    tx.update(ref, cierre);
+  });
+}
+
+/** Refresca conciliaciones ya resueltas, sin pagar ni reasignar registros a empleados cerrados. */
+export async function actualizarConciliacionLiquidacion(liquidacionId: string, actor: Usuario): Promise<void> {
+  await runTransaction(db, async tx => {
+    const ref = doc(db, 'liquidaciones_nomina', liquidacionId);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Liquidación no encontrada');
+    const raw = snap.data();
+    if (raw.estado !== 'abierta') return;
+    const empleados = raw.empleados as Record<string, unknown>[];
+    const huerfanas = raw.comisionesSinEmpleado as string[] || [];
+    const ids = [...new Set([...huerfanas, ...empleados.flatMap(e => e.comisionesFueraPeriodo as string[] || [])])];
+    if (ids.length > 400) throw new Error('Demasiadas conciliaciones; requiere revisión');
+    const snaps = await Promise.all(ids.map(id => tx.get(doc(db, 'comisiones', id))));
+    const datos = new Map(ids.map((id, i) => [id, snaps[i].exists() ? snaps[i].data() : undefined]));
+    const resuelta = (id: string) => { const c = datos.get(id); return c?.estaAnulada === true || (c?.estadoLiquidacion === 'liquidada' && !!c.liquidacionId); };
+    const pendientes: string[] = [];
+    for (const id of huerfanas) {
+      if (resuelta(id)) continue;
+      const c = datos.get(id);
+      const candidatos = empleados.filter(e => c && typeof c.tecnicoId === 'string' && c.tecnicoId.trim() && (c.tecnicoId === e.personalId || (!!e.personalUid && c.tecnicoId === e.personalUid)));
+      if (candidatos.length === 1 && !candidatos[0].pagado && candidatos[0].estadoCierre !== 'cerrado') {
+        const e = candidatos[0];
+        e.comisionesPendientesFecha = [...new Set([...(e.comisionesPendientesFecha as string[] || []), id])];
+        e.estadoCierre = 'bloqueado';
+      } else pendientes.push(id);
+    }
+    const actualizados: Record<string, unknown>[] = empleados.map(e => ({ ...e, comisionesFueraPeriodo: (e.comisionesFueraPeriodo as string[] || []).filter(id => !resuelta(id)) }));
+    const completa = !pendientes.length && actualizados.every(e => e.estadoCierre === 'cerrado' && !(e.comisionesFueraPeriodo as string[]).length);
+    const cambios: Record<string, unknown> = { empleados: actualizados, comisionesSinEmpleado: pendientes, estado: completa ? 'cerrada' : 'abierta', asistenciaBloqueada: completa };
+    if (completa) Object.assign(cambios, { cerradaPor: actor.nombre, cerradaPorId: actor.id, fechaCierre: Timestamp.now() });
+    tx.update(ref, cambios);
+  });
+}
+
+/** Recalcula solo comisiones del empleado bloqueado; conserva sueldo, bonos y descuentos del borrador. */
+export async function recalcularEmpleadoLiquidacion(liquidacionId: string, personalId: string): Promise<void> {
+  await runTransaction(db, async tx => {
+    const ref = doc(db, 'liquidaciones_nomina', liquidacionId);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Liquidación no encontrada');
+    const raw = snap.data();
+    if (raw.estado !== 'abierta') throw new Error('La liquidación ya está cerrada');
+    const empleados = raw.empleados as Record<string, unknown>[];
+    const indice = empleados.findIndex(e => e.personalId === personalId);
+    if (indice < 0) throw new Error('Empleado no encontrado');
+    const e = empleados[indice];
+    if (e.pagado || e.estadoCierre !== 'bloqueado') throw new Error('Solo se recalcula un empleado bloqueado sin pagar');
+    const ids = [...new Set([...(e.comisionesIds as string[] || []), ...(e.comisionesPendientesFecha as string[] || [])])];
+    if (ids.length > 400) throw new Error('Demasiadas comisiones; requiere revisión administrativa');
+    const snaps = await Promise.all(ids.map(id => tx.get(doc(db, 'comisiones', id))));
+    const { inicio, fin } = rangoQuincena(String(raw.quincena));
+    const incluidos: string[] = [], pendientes: string[] = [];
+    const fueraPeriodo = [...(e.comisionesFueraPeriodo as string[] || [])];
+    let totalComisiones = 0;
+    snaps.forEach((c, i) => {
+      if (!c.exists()) throw new Error(`Comisión ${ids[i]} no encontrada; revisar conciliación`);
+      const dato = c.data();
+      if (typeof dato.tecnicoId !== 'string' || !dato.tecnicoId.trim() || (dato.tecnicoId !== personalId && (!e.personalUid || dato.tecnicoId !== e.personalUid))) throw new Error(`Comisión ${ids[i]} cambió de responsable; revisar`);
+      if (dato.estaAnulada) return;
+      if (dato.estadoLiquidacion && dato.estadoLiquidacion !== 'pendiente') throw new Error(`Comisión ${ids[i]} ya liquidada; revisar`);
+      const fecha = fechaFinanciera(dato.fechaCobro);
+      if (!fecha) { pendientes.push(ids[i]); return; }
+      if (fecha < inicio || fecha > fin) { if (!fueraPeriodo.includes(ids[i])) fueraPeriodo.push(ids[i]); return; }
+      const monto = Number(dato.comisionMonto) + Number(dato.descuentoPorGarantia?.monto ?? 0);
+      if (!Number.isFinite(monto)) throw new Error(`Comisión ${ids[i]} con importe inválido`);
+      incluidos.push(ids[i]); totalComisiones += monto;
+    });
+    const totalDevengado = Number(e.sueldoBase) + Number(e.bono || 0) + totalComisiones;
+    const totalDescuentos = Number(e.totalAvances || 0) + Number(e.totalCuotasPrestamos || 0) + Number(e.totalDescuentosAdHoc || 0) + Number(e.totalAsistencia || 0);
+    empleados[indice] = { ...e, comisionesIds: incluidos, totalComisiones, cantidadOrdenesConComision: incluidos.length,
+      comisionesFueraPeriodo: fueraPeriodo, comisionesPendientesFecha: pendientes, estadoCierre: pendientes.length ? 'bloqueado' : 'listo',
+      totalDevengado, totalDescuentos, totalNeto: totalDevengado - totalDescuentos };
+    tx.update(ref, { empleados, totalNomina: empleados.reduce((s, emp) => s + Number(emp.totalDevengado), 0) });
   });
 }
 
@@ -432,6 +561,7 @@ export async function agregarDescuentoAdHoc(
     const empleadosRaw = (raw.empleados as Record<string, unknown>[]) || [];
     const idx = empleadosRaw.findIndex(e => e.personalId === personalId);
     if (idx === -1) throw new Error('Empleado no encontrado en la liquidación');
+    if (empleadosRaw[idx].pagado || (empleadosRaw[idx].estadoCierre && empleadosRaw[idx].estadoCierre !== 'listo')) throw new Error('El empleado está bloqueado, cerrado o pagado; no se pueden cambiar descuentos');
 
     // Reconstruimos el empleado a partir del raw (subset suficiente para recalcular).
     const eRaw = empleadosRaw[idx];
@@ -459,7 +589,7 @@ export async function agregarDescuentoAdHoc(
     const totalCuotasPrestamos = Number(eRaw.totalCuotasPrestamos) || 0;
     const totalDevengado = Number(eRaw.totalDevengado) || 0;
     const totalDescuentos = totalAvances + totalDescuentosAdHoc + totalCuotasPrestamos + (Number(eRaw.totalAsistencia) || 0);
-    const totalNeto = Math.max(0, totalDevengado - totalDescuentos);
+    const totalNeto = totalDevengado - totalDescuentos;
 
     const empleadosNuevos = [...empleadosRaw];
     empleadosNuevos[idx] = {
@@ -493,6 +623,7 @@ export async function removerDescuentoAdHoc(
     const empleadosRaw = (raw.empleados as Record<string, unknown>[]) || [];
     const idx = empleadosRaw.findIndex(e => e.personalId === personalId);
     if (idx === -1) throw new Error('Empleado no encontrado en la liquidación');
+    if (empleadosRaw[idx].pagado || (empleadosRaw[idx].estadoCierre && empleadosRaw[idx].estadoCierre !== 'listo')) throw new Error('El empleado está bloqueado, cerrado o pagado; no se pueden cambiar descuentos');
 
     const eRaw = empleadosRaw[idx];
     const descuentosAdHocPrev = (eRaw.descuentosAdHoc as Record<string, unknown>[]) || [];
@@ -502,7 +633,7 @@ export async function removerDescuentoAdHoc(
     const totalCuotasPrestamos = Number(eRaw.totalCuotasPrestamos) || 0;
     const totalDevengado = Number(eRaw.totalDevengado) || 0;
     const totalDescuentos = totalAvances + totalDescuentosAdHoc + totalCuotasPrestamos + (Number(eRaw.totalAsistencia) || 0);
-    const totalNeto = Math.max(0, totalDevengado - totalDescuentos);
+    const totalNeto = totalDevengado - totalDescuentos;
 
     const empleadosNuevos = [...empleadosRaw];
     const empNuevo: Record<string, unknown> = {
@@ -543,8 +674,11 @@ export async function marcarEmpleadoPagado(
   const snap = await tx.get(ref);
   if (!snap.exists()) throw new Error('Liquidación no encontrada');
   const raw = snap.data();
+  if (!((raw.empleados as Record<string, unknown>[]) || []).some(e => e.personalId === personalId)) throw new Error('Empleado no encontrado en la liquidación');
   const empleados = ((raw.empleados as Record<string, unknown>[]) || []).map(e => {
     if (e.personalId !== personalId) return e;
+    if (e.estadoCierre !== 'cerrado' && !(raw.estado === 'cerrada' && !e.estadoCierre)) throw new Error('Cerrar el empleado antes de registrar el pago');
+    if (e.pagado) return e;
     const upd: Record<string, unknown> = {
       ...e,
       pagado: true,
@@ -575,6 +709,12 @@ function serializarEmpleados(emps: LiquidacionEmpleado[]): Record<string, unknow
       totalDevengado: e.totalDevengado,
       pagado: e.pagado,
     };
+    if (e.estadoCierre) out.estadoCierre = e.estadoCierre;
+    if (e.comisionesFueraPeriodo) out.comisionesFueraPeriodo = e.comisionesFueraPeriodo;
+    if (e.personalUid) out.personalUid = e.personalUid;
+    if (e.comisionesPendientesFecha) out.comisionesPendientesFecha = e.comisionesPendientesFecha;
+    if (e.fechaCierreEmpleado) out.fechaCierreEmpleado = Timestamp.fromDate(e.fechaCierreEmpleado);
+    if (e.cerradoPorId) out.cerradoPorId = e.cerradoPorId;
     if (e.desempenoPorcentaje !== undefined) out.desempenoPorcentaje = e.desempenoPorcentaje;
     if (e.ordenesCompletadas !== undefined) out.ordenesCompletadas = e.ordenesCompletadas;
     if (e.ordenesAtendidas !== undefined) out.ordenesAtendidas = e.ordenesAtendidas;
@@ -620,6 +760,7 @@ export function parseLiquidacion(id: string, raw: Record<string, unknown>): Liqu
   const empleadosRaw = (raw.empleados as Record<string, unknown>[]) || [];
   return {
     id,
+    comisionesSinEmpleado: (raw.comisionesSinEmpleado as string[]) || [],
     quincena: (raw.quincena as string) || '',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     periodoInicio: (raw.periodoInicio as any)?.toDate?.() || new Date(),
@@ -652,6 +793,12 @@ export function parseLiquidacion(id: string, raw: Record<string, unknown>): Liqu
         motivo: (c.motivo as string) || '',
       }));
       return {
+        estadoCierre: (e.estadoCierre as LiquidacionEmpleado['estadoCierre']) || (raw.estado === 'cerrada' ? 'cerrado' : 'listo'),
+        comisionesFueraPeriodo: (e.comisionesFueraPeriodo as string[]) || [],
+        personalUid: e.personalUid as string | undefined,
+        comisionesPendientesFecha: (e.comisionesPendientesFecha as string[]) || [],
+        fechaCierreEmpleado: fechaFinanciera(e.fechaCierreEmpleado) || undefined,
+        cerradoPorId: e.cerradoPorId as string | undefined,
         personalId: (e.personalId as string) || '',
         personalNombre: (e.personalNombre as string) || '',
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

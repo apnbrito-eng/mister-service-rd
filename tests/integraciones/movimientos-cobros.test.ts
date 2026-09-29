@@ -11,8 +11,11 @@ describe('proyección de cobros por banco', () => {
     for (const monto of [100, 200]) {
       const r = proyectar([pago(), pago({ monto })]);
       expect(r.totalConfirmado).toBe(0); expect(r.incidencias).toHaveLength(2);
-      expect(r.sumaArrayVerificada).toBe(100 + monto);
     }
+  });
+  it.each(['link', 'otro'])('admite método %s con bancoId y verificación', metodo => {
+    const r = proyectar([pago({ metodo })]);
+    expect(r.totalConfirmado).toBe(100); expect(r.incidencias).toHaveLength(0);
   });
   it('dos pagos legítimos iguales conservan sus IDs distintos', () => {
     const r = proyectar([pago(), pago({ id: 'p2' })]);
@@ -51,7 +54,7 @@ describe('proyección de cobros por banco', () => {
   it('rango invertido no calcula', () => { expect(proyectar([pago()], '2026-10-01', '2026-09-01').rangoInvalido).toBe(true); });
   it('orden eliminada conserva incidencia sin sumar ni inventar reverso', () => {
     const r = proyectarCobrosBanco([{ id: 'o1', datos: { eliminada: true, pagos: [pago()] } }], 'b1');
-    expect(r.totalConfirmado).toBe(0); expect(r.sumaArrayVerificada).toBe(0); expect(r.incidencias[0].motivo).toContain('eliminada');
+    expect(r.totalConfirmado).toBe(0); expect(r.incidencias[0].motivo).toContain('eliminada');
   });
   it('duplicado entre cuentas también se excluye', () => {
     expect(proyectar([pago(), pago({ bancoId: 'b2' })]).totalConfirmado).toBe(0);

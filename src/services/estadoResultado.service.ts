@@ -88,7 +88,7 @@ export async function cargarDataMes(year: number, month: number, personal: Perso
       return;
     }
     if (fecha >= inicio && fecha <= fin) {
-      totalComisiones += Number(c.comisionMonto) || 0;
+      totalComisiones += (Number(c.comisionMonto) || 0) + (Number(c.descuentoPorGarantia?.monto) || 0);
     }
   });
 
@@ -108,10 +108,10 @@ export async function cargarDataMes(year: number, month: number, personal: Perso
       // Tomar solo liquidaciones cuyo periodo cae en este mes
       const pFin = (raw.periodoFin as { toDate?: () => Date } | undefined)?.toDate?.();
       if (pFin && pFin >= inicio && pFin <= fin) {
-        const emps = (raw.empleados as Array<{ bono?: number; totalAsistencia?: number }>) || [];
+        const emps = (raw.empleados as Array<{ bono?: number; totalAsistencia?: number; estadoCierre?: string }>) || [];
         emps.forEach(e => {
           if (typeof e.bono === 'number') totalBonos += e.bono;
-          if (raw.estado === 'cerrada' && typeof e.totalAsistencia === 'number') totalAsistencia += e.totalAsistencia;
+          if ((raw.estado === 'cerrada' || e.estadoCierre === 'cerrado') && typeof e.totalAsistencia === 'number') totalAsistencia += e.totalAsistencia;
         });
       }
     });

@@ -22,7 +22,7 @@ beforeEach(() => {
  m.fallo = ''; m.cola = Promise.resolve();
  m.docs = {
   'liquidaciones_nomina/l': { estado: 'abierta', quincena: '2026-09-Q2', empleados: [{ personalId: 'p', totalDevengado: 1000, comisionesIds: ['c'], totalComisiones: 100, avancesIds: ['a'], totalAvances: 50, cuotasPrestamos: [{ prestamoId: 'pr', numeroCuota: 1, monto: 100 }], totalCuotasPrestamos: 100 }] },
-  'comisiones/c': { estadoLiquidacion: 'pendiente', comisionMonto: 100 },
+  'comisiones/c': { estadoLiquidacion: 'pendiente', fechaCobro: '2026-09-20T12:00:00-04:00', comisionMonto: 100 },
   'avances/a': { personalId: 'p', monto: 50, descontado: false },
   'prestamos_empleados/pr': { personalId: 'p', estado: 'activo', montoTotal: 300, saldoPendiente: 300, cuotasTotales: 3, cuotasPagadas: 0, cuotasHistorial: [] },
  };
@@ -87,4 +87,31 @@ it('reintento exacto no oculta un saldo incompatible con su historial', async ()
  pr.cuotasHistorial = [{ liquidacionId: 'l', quincena: '2026-09-Q2', numero: 1, monto: 100 }];
  await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('Saldo');
  expect(m.docs['liquidaciones_nomina/l'].estado).toBe('abierta');
+});
+
+for (const origen of ['avances', 'prestamos', 'adHoc', 'asistencia']) {
+ it(`rechaza descuentos ${origen} superiores al devengado sin escrituras`, async () => {
+  const e = m.docs['liquidaciones_nomina/l'].empleados[0];
+  e.totalDevengado = 200;
+  if (origen === 'avances') { m.docs['avances/a'].monto = 150; e.totalAvances = 150; }
+  if (origen === 'prestamos') { e.cuotasPrestamos[0].monto = 200; e.totalCuotasPrestamos = 200; }
+  if (origen === 'adHoc') { e.descuentosAdHoc = [{ monto: 100 }]; e.totalDescuentosAdHoc = 100; }
+  if (origen === 'asistencia') { e.descuentosAsistencia = [{ monto: 100 }]; e.totalAsistencia = 100; }
+  e.totalNeto = 0;
+  const antes = structuredClone(m.docs);
+  await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('exceden el devengado');
+  expect(m.docs).toEqual(antes);
+ });
+}
+it('permite descuentos exactamente iguales al devengado', async () => {
+ const e = m.docs['liquidaciones_nomina/l'].empleados[0];
+ e.totalDevengado = 200; e.descuentosAsistencia = [{ monto: 50 }]; e.totalAsistencia = 50; e.totalDescuentos = 200; e.totalNeto = 0;
+ await cerrarLiquidacion('l', actor);
+ expect(m.docs['liquidaciones_nomina/l'].estado).toBe('cerrada');
+});
+it('impide ocultar descuentos de asistencia con agregado menor que detalle', async () => {
+ const e = m.docs['liquidaciones_nomina/l'].empleados[0];
+ e.descuentosAsistencia = [{ monto: 1200 }]; e.totalAsistencia = 0;
+ await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('no coincide');
+ expect(m.docs['avances/a'].descontado).toBe(false);
 });

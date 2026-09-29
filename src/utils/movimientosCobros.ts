@@ -15,9 +15,8 @@ export const diaCobroRD = (fecha: Date) => new Date(fecha.getTime() - 4 * 360000
 export function proyectarCobrosBanco(ordenes: OrdenCobrosCruda[], bancoId: string, desde = '', hasta = '') {
   const movimientos: MovimientoCobro[] = [];
   const incidencias: IncidenciaCobro[] = [];
-  let brutoCentavos = 0;
   const rangoInvalido = !!desde && !!hasta && desde > hasta;
-  if (!bancoId || rangoInvalido) return { movimientos, incidencias, totalConfirmado: 0, totalPendiente: 0, sumaArrayVerificada: 0, diferencia: 0, rangoInvalido };
+  if (!bancoId || rangoInvalido) return { movimientos, incidencias, totalConfirmado: 0, totalPendiente: 0, rangoInvalido };
   for (const orden of ordenes) {
     const pagos = Array.isArray(orden.datos.pagos) ? orden.datos.pagos.map(registro) : [];
     const frecuencias = new Map<string, number>();
@@ -29,8 +28,7 @@ export function proyectarCobrosBanco(ordenes: OrdenCobrosCruda[], bancoId: strin
       const id = texto(p.id).trim();
       const numero = texto(orden.datos.numero) || orden.id;
       const montoValido = typeof p.monto === 'number' && Number.isFinite(p.monto) && p.monto > 0;
-      const metodoValido = p.metodo === 'transferencia' || p.metodo === 'tarjeta';
-      if (orden.datos.eliminada !== true && fecha && montoValido && metodoValido && p.verificado === true) brutoCentavos += Math.round((p.monto as number) * 100);
+      const metodoValido = p.metodo === 'transferencia' || p.metodo === 'tarjeta' || p.metodo === 'link' || p.metodo === 'otro';
       const motivos: string[] = [];
       if (orden.datos.eliminada === true) motivos.push('Orden eliminada con pago: requiere conciliación');
       if (!id) motivos.push('Pago sin identificador');
@@ -48,5 +46,5 @@ export function proyectarCobrosBanco(ordenes: OrdenCobrosCruda[], bancoId: strin
   movimientos.sort((a, b) => b.fecha.getTime() - a.fecha.getTime() || a.clave.localeCompare(b.clave));
   const suma = (confirmado: boolean) => movimientos.filter(m => m.confirmado === confirmado).reduce((s, m) => s + Math.round(m.monto * 100), 0) / 100;
   const totalConfirmado = suma(true);
-  return { movimientos, incidencias, totalConfirmado, totalPendiente: suma(false), sumaArrayVerificada: brutoCentavos / 100, diferencia: (brutoCentavos - Math.round(totalConfirmado * 100)) / 100, rangoInvalido };
+  return { movimientos, incidencias, totalConfirmado, totalPendiente: suma(false), rangoInvalido };
 }

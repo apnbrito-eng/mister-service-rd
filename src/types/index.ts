@@ -810,6 +810,13 @@ export interface ComisionRegistro {
 }
 
 export interface LiquidacionEmpleado {
+  /** Ausente en nóminas legacy: hereda cerrada global o listo. */
+  estadoCierre?: 'bloqueado' | 'listo' | 'cerrado';
+  personalUid?: string;
+  comisionesPendientesFecha?: string[];
+  comisionesFueraPeriodo?: string[];
+  fechaCierreEmpleado?: Date;
+  cerradoPorId?: string;
   personalId: string;
   personalNombre: string;
   rol: Rol;
@@ -842,7 +849,7 @@ export interface LiquidacionEmpleado {
   totalAsistencia?: number;
   descuentosAsistencia?: { id: string; dia: string; monto: number }[];
   totalDescuentos?: number;
-  totalNeto?: number;              // max(0, totalDevengado - totalDescuentos)
+  totalNeto?: number;              // totalDevengado - totalDescuentos; excedente exige revisión
   notas?: string;
   // Pago
   metodoPago?: 'efectivo' | 'transferencia' | 'cheque';
@@ -931,6 +938,7 @@ export interface CuotaPrestamo {
 }
 
 export interface LiquidacionNomina {
+  comisionesSinEmpleado?: string[];
   id: string;
   quincena: string;
   periodoInicio: Date;

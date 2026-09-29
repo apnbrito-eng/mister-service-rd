@@ -32,3 +32,26 @@ it('aplica una vez, preserva préstamos/avances y bloquea nóminas cerradas',asy
  await state.db.doc('liquidaciones_nomina/l1').update({estado:'cerrada'});
  expect((await llamada({accion:'aplicar',liquidacionId:'l1'})).status).toBe(409);
 });
+
+it('omite empleados cerrados, bloqueados o pagados legacy y aplica al listo sin bloqueo global', async () => {
+ const empleados = [
+  { personalId: 'cerrado', estadoCierre: 'cerrado', pagado: false },
+  { personalId: 'bloqueado', estadoCierre: 'bloqueado', pagado: false },
+  { personalId: 'pagadoLegacy', pagado: true },
+  { personalId: 'listo', estadoCierre: 'listo', pagado: false },
+ ].map(e => ({ ...e, totalDevengado: 100, totalAvances: 20, totalCuotasPrestamos: 30, totalDescuentosAdHoc: 10, totalNeto: 40 }));
+ await state.db.doc('liquidaciones_nomina/mixta').set({ estado: 'abierta', periodoInicio: Timestamp.fromDate(new Date('2026-01-01T00:00:00-04:00')), periodoFin: Timestamp.fromDate(new Date('2026-01-14T23:59:59-04:00')), empleados });
+ for (const e of empleados) await state.db.doc(`asistencia_revisiones/${e.personalId}_2026-01-02`).set({ personalId: e.personalId, dia: '2026-01-02', estado: 'aprobada', monto: 80 });
+ const respuesta = await llamada({ accion: 'aplicar', liquidacionId: 'mixta' });
+ expect(respuesta.status).toBe(200);
+ expect(respuesta.payload).toMatchObject({ aplicadas: 1, omitidas: 3 });
+ const guardados = (await state.db.doc('liquidaciones_nomina/mixta').get()).data().empleados;
+ expect(guardados.slice(0, 3)).toEqual(empleados.slice(0, 3));
+ expect(guardados[3]).toMatchObject({ totalAsistencia: 80, totalDescuentos: 140, totalNeto: -40 });
+ expect(guardados[3].descuentosAsistencia).toHaveLength(1);
+ for (const e of empleados.slice(0, 3)) expect((await state.db.doc(`asistencia_revisiones/${e.personalId}_2026-01-02`).get()).data().liquidacionId).toBeUndefined();
+ expect((await state.db.doc('asistencia_revisiones/listo_2026-01-02').get()).data().liquidacionId).toBe('mixta');
+ const repetida = await llamada({ accion: 'aplicar', liquidacionId: 'mixta' });
+ expect(repetida.payload).toMatchObject({ aplicadas: 0, omitidas: 3 });
+ expect((await state.db.doc('liquidaciones_nomina/mixta').get()).data().empleados[3].descuentosAsistencia).toHaveLength(1);
+});

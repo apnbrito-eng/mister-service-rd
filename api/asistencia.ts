@@ -53,12 +53,12 @@ export default async function handler(req:VercelRequest,res:VercelResponse){
      if(r.liquidacionId===liq.id)continue;
      const e=empleados.find((e:Record<string,any>)=>e.personalId===r.personalId);if(!e){omitidas++;continue;}
      if(++aplicadas>400)throw new ErrorAcceso(400,'Hay más de 400 incidencias. Divide la revisión antes de aplicar.');
-     if(e.pagado)throw new ErrorAcceso(409,'Hay empleados pagados; no se modifica su asistencia.');
+     if(e.pagado || (e.estadoCierre && e.estadoCierre!=='listo')){omitidas++;aplicadas--;continue;}
      const items=(e.descuentosAsistencia||[]).filter((x:Record<string,any>)=>x.id!==rev.id);
      items.push({id:rev.id,dia:r.dia,monto:r.monto});e.descuentosAsistencia=items;
      e.totalAsistencia=items.reduce((s:number,x:Record<string,any>)=>s+x.monto,0);
      e.totalDescuentos=(e.totalAvances||0)+(e.totalDescuentosAdHoc||0)+(e.totalCuotasPrestamos||0)+e.totalAsistencia;
-     e.totalNeto=Math.max(0,e.totalDevengado-e.totalDescuentos);
+     e.totalNeto=e.totalDevengado-e.totalDescuentos;
      tx.update(rev.ref,{liquidacionId:liq.id});
     }
     tx.update(ref,{empleados});tx.create(db.collection('auditoria_admin').doc(),{accion:'asistencia_aplicada',actorUid:uid,liquidacionId:liq.id,fecha:FieldValue.serverTimestamp()});

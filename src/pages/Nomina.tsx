@@ -1,3 +1,4 @@
+import { fechaFinanciera } from '../utils/fechaFinanciera';
 import RevisionAsistencia from '../components/asistencia/RevisionAsistencia';
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
@@ -7,7 +8,7 @@ import { formatMoneda, formatFecha } from '../utils';
 import { calcularQuincenaActual, listarUltimasQuincenas } from '../utils/comisiones';
 import {
   generarLiquidacion, cerrarLiquidacion, marcarEmpleadoPagado, parseLiquidacion,
-  removerDescuentoAdHoc,
+  removerDescuentoAdHoc, recalcularEmpleadoLiquidacion, actualizarConciliacionLiquidacion,
 } from '../services/nomina.service';
 import { suscribirAvances } from '../services/avances.service';
 import { useApp } from '../context/AppContext';
@@ -28,7 +29,7 @@ export default function Nomina() {
 
   const [loading, setLoading] = useState(true);
   const [liquidaciones, setLiquidaciones] = useState<LiquidacionNomina[]>([]);
-  const [comisionesAll, setComisionesAll] = useState<ComisionRegistro[]>([]);
+  const [comisionesAll, setComisionesAll] = useState<(Omit<ComisionRegistro, 'fechaCobro'> & { fechaCobro: Date | null })[]>([]);
   const [avancesAll, setAvancesAll] = useState<AvanceEmpleado[]>([]);
   const [filtroQuincena, setFiltroQuincena] = useState<string>(calcularQuincenaActual(new Date()));
   const [generando, setGenerando] = useState(false);
@@ -76,7 +77,7 @@ export default function Nomina() {
           ordenId: raw.ordenId || '',
           ordenNumero: raw.ordenNumero || '',
           clienteNombre: raw.clienteNombre || '',
-          fechaCobro: raw.fechaCobro?.toDate?.() || new Date(),
+          fechaCobro: fechaFinanciera(raw.fechaCobro),
           precioFinal: raw.precioFinal || 0,
           costoPiezas: raw.costoPiezas || 0,
           basePendienteComision: raw.basePendienteComision || 0,
@@ -85,7 +86,7 @@ export default function Nomina() {
           estadoLiquidacion: raw.estadoLiquidacion || 'pendiente',
           quincenaAsignada: raw.quincenaAsignada,
           createdAt: raw.createdAt?.toDate?.() || new Date(),
-        } as ComisionRegistro;
+        } as Omit<ComisionRegistro, 'fechaCobro'> & { fechaCobro: Date | null };
       }));
     });
     const unsubA = suscribirAvances(items => setAvancesAll(items));
@@ -103,7 +104,7 @@ export default function Nomina() {
     [liqActual]
   );
   const netoTotal = useMemo(
-    () => liqActual?.empleados.reduce((s, e) => s + (e.totalNeto ?? e.totalDevengado), 0) ?? 0,
+    () => liqActual?.empleados.filter(e => e.estadoCierre !== 'bloqueado').reduce((s, e) => s + (e.totalNeto ?? e.totalDevengado), 0) ?? 0,
     [liqActual]
   );
 
@@ -126,7 +127,7 @@ export default function Nomina() {
     setCerrando(true);
     try {
       await cerrarLiquidacion(liqActual.id, userProfile);
-      toast.success('Liquidación cerrada. Comisiones marcadas como liquidadas.');
+      toast.success('Empleados listos cerrados. Los bloqueados permanecen pendientes.');
       setShowCierreModal(false);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al cerrar';
@@ -134,6 +135,22 @@ export default function Nomina() {
     } finally {
       setCerrando(false);
     }
+  };
+
+  const refrescarConciliacion = async () => {
+    if (!liqActual || !userProfile) return;
+    setGenerando(true);
+    try { await actualizarConciliacionLiquidacion(liqActual.id, userProfile); toast.success('Conciliaciones actualizadas; revisa los pendientes.'); }
+    catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo actualizar'); }
+    finally { setGenerando(false); }
+  };
+
+  const recalcular = async (personalId: string) => {
+    if (!liqActual) return;
+    setGenerando(true);
+    try { await recalcularEmpleadoLiquidacion(liqActual.id, personalId); toast.success('Empleado recalculado; revisa su estado e importes.'); }
+    catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo recalcular'); }
+    finally { setGenerando(false); }
   };
 
   const abrirPago = (liqId: string, emp: LiquidacionEmpleado) => {
@@ -200,7 +217,7 @@ export default function Nomina() {
 
   const exportarCSV = () => {
     if (!liqActual) return;
-    const headers = 'Personal,Rol,Sueldo Base,Comisiones,Bono,Avances,Descuentos AdHoc,Cuotas Prestamos,Asistencia,Total Descuentos,Total Devengado,Total Neto,Pagado,Metodo de Pago\n';
+    const headers = 'Personal,Rol,Sueldo Base,Comisiones,Bono,Avances,Descuentos AdHoc,Cuotas Prestamos,Asistencia,Total Descuentos,Total Devengado,Total Neto,Estado del empleado,Pagado,Metodo de Pago\n';
     const rows = liqActual.empleados.map(e => {
       const totalAvances = e.totalAvances ?? 0;
       const totalAdHoc = e.totalDescuentosAdHoc ?? 0;
@@ -218,7 +235,8 @@ export default function Nomina() {
         e.totalAsistencia ?? 0,
         totalDesc,
         e.totalDevengado,
-        e.totalNeto ?? e.totalDevengado,
+        e.estadoCierre === 'bloqueado' ? 'PENDIENTE DE CONCILIACION' : (e.totalNeto ?? e.totalDevengado),
+        e.estadoCierre || 'listo',
         e.pagado ? 'Sí' : 'No',
         e.metodoPago || '',
       ].join(',');
@@ -265,9 +283,9 @@ export default function Nomina() {
                 <Download size={14} /> Exportar CSV
               </button>
               {liqActual.estado === 'abierta' && esAdmin && (
-                <button type="button" onClick={() => setShowCierreModal(true)}
+                <button type="button" onClick={() => setShowCierreModal(true)} disabled={!liqActual.empleados.some(e => e.estadoCierre === 'listo')}
                   className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-amber-500 hover:bg-amber-600 rounded-xl">
-                  <Lock size={14} /> Cerrar liquidación
+                  <Lock size={14} /> Cerrar empleados listos
                 </button>
               )}
             </>
@@ -282,6 +300,20 @@ export default function Nomina() {
 
       {liqActual && (
         <>
+          {!!liqActual.comisionesSinEmpleado?.length && <div role="alert" className="rounded-xl bg-amber-50 p-4 text-sm">Comisiones sin empleado identificado: {liqActual.comisionesSinEmpleado.join(', ')}. Revisarlas en Comisiones; no se asignaron a esta nómina.</div>}
+          {liqActual.empleados.some(e => e.estadoCierre === 'bloqueado') && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
+            <p>Hay empleados bloqueados por comisiones sin fecha. Sus importes son estimados y no se pueden pagar ni descontar. Los demás pueden cerrarse.</p>
+            <a href="/admin/comisiones" className="underline">Conciliar fechas en Comisiones</a>
+            {liqActual.empleados.filter(e => e.estadoCierre === 'bloqueado').map(e => <div key={e.personalId} className="mt-2 flex flex-wrap gap-2 items-center">
+              <span>{e.personalNombre}: {e.comisionesPendientesFecha?.join(', ')}</span>
+              <button type="button" disabled={generando || e.pagado} onClick={() => recalcular(e.personalId)} className="border rounded px-3 py-2">{e.pagado ? 'Pago registrado: requiere revisión manual' : 'Recalcular después de conciliar'}</button>
+            </div>)}
+          </div>}
+          {liqActual.empleados.some(e => e.comisionesFueraPeriodo?.length) && <div role="alert" className="rounded-xl bg-amber-50 p-4 text-sm">
+            Comisiones conciliadas con fecha fuera de esta quincena; siguen pendientes y requieren revisar la nómina del período correspondiente:
+            {liqActual.empleados.filter(e => e.comisionesFueraPeriodo?.length).map(e => <p key={e.personalId}>{e.personalNombre}: {e.comisionesFueraPeriodo?.join(', ')}</p>)}
+          </div>}
+          {liqActual.estado === 'abierta' && (!!liqActual.comisionesSinEmpleado?.length || liqActual.empleados.some(e => e.comisionesFueraPeriodo?.length)) && <button type="button" disabled={generando} onClick={refrescarConciliacion} className="border rounded px-3 py-2">Actualizar conciliaciones resueltas</button>}
           {/* Banner estado */}
           <div className={`rounded-2xl border p-4 flex items-start gap-3 ${
             liqActual.estado === 'cerrada' ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200'
@@ -298,13 +330,13 @@ export default function Nomina() {
             </div>
             {hayDescuentos ? (
               <div className="ml-auto text-right">
-                <p className="text-[10px] uppercase tracking-wide text-gray-500">Devengado</p>
+                <p className="text-[10px] uppercase tracking-wide text-gray-500">Devengado estimado (todos)</p>
                 <p className="text-base font-semibold text-gray-700">{formatMoneda(liqActual.totalNomina)}</p>
-                <p className="text-[10px] uppercase tracking-wide text-blue-600 mt-1">Neto a pagar</p>
+                <p className="text-[10px] uppercase tracking-wide text-blue-600 mt-1">Neto habilitado (sin bloqueados)</p>
                 <p className="text-xl font-bold text-blue-600">{formatMoneda(netoTotal)}</p>
               </div>
             ) : (
-              <p className="ml-auto text-xl font-bold text-primary">{formatMoneda(liqActual.totalNomina)}</p>
+              <div className="ml-auto text-right"><p className="text-xs">Devengado estimado (todos): {formatMoneda(liqActual.totalNomina)}</p><p className="text-xs">Neto habilitado (sin bloqueados)</p><p className="text-xl font-bold text-primary">{formatMoneda(netoTotal)}</p></div>
             )}
           </div>
 
@@ -342,7 +374,7 @@ export default function Nomina() {
                     const cantidadCuotas = emp.cuotasPrestamos?.length ?? 0;
                     const tieneDetalleExpandible = emp.comisionesIds.length > 0 || cantidadAvances > 0
                       || cantidadAdHoc > 0 || cantidadCuotas > 0;
-                    const liqAbierta = liqActual.estado === 'abierta';
+                    const liqAbierta = liqActual.estado === 'abierta' && emp.estadoCierre === 'listo' && !emp.pagado;
                     const detalleAbierto = empleadoDescuentosAbierto === emp.personalId;
                     return (
                       <Fragment key={emp.personalId}>
@@ -354,7 +386,7 @@ export default function Nomina() {
                                 {tieneDetalleExpandible
                                   ? (expand ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />)
                                   : <span className="w-[14px]" />}
-                                <span className="font-medium text-gray-900">{emp.personalNombre}</span>
+                                <span className="font-medium text-gray-900">{emp.personalNombre} · {emp.estadoCierre}</span>
                               </button>
                               {liqAbierta && puedeVer && (
                                 <button
@@ -489,7 +521,7 @@ export default function Nomina() {
                           <td className="px-3 py-3 text-right font-semibold text-gray-700">{formatMoneda(emp.totalDevengado)}</td>
                           <td className="px-3 py-3 text-right">
                             {(emp.totalDescuentos ?? emp.totalAvances ?? 0) > 0 ? (
-                              <span className="font-bold text-blue-600">{formatMoneda(montoNeto)}</span>
+                              <span className="font-bold text-blue-600">{emp.estadoCierre === 'bloqueado' ? 'Pendiente de conciliación' : formatMoneda(montoNeto)}</span>
                             ) : (
                               <span className="font-bold text-primary">{formatMoneda(emp.totalDevengado)}</span>
                             )}
@@ -506,7 +538,7 @@ export default function Nomina() {
                             )}
                           </td>
                           <td className="px-3 py-3 text-right">
-                            {!emp.pagado && montoNeto > 0 && (
+                            {!emp.pagado && emp.estadoCierre === 'cerrado' && montoNeto > 0 && (
                               <button type="button" onClick={() => abrirPago(liqActual.id, emp)}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors">
                                 <DollarSign size={12} /> Marcar pagado
@@ -527,7 +559,7 @@ export default function Nomina() {
                                         <div className="flex items-center gap-3">
                                           <span className="font-mono font-semibold text-primary">{c.ordenNumero}</span>
                                           <span className="text-gray-700">{c.clienteNombre}</span>
-                                          <span className="text-gray-400">{formatFecha(c.fechaCobro)}</span>
+                                          <span className="text-gray-400">{c.fechaCobro ? formatFecha(c.fechaCobro) : 'Fecha pendiente de conciliar'}</span>
                                         </div>
                                         <span className="font-semibold text-emerald-700">{formatMoneda(c.comisionMonto)}</span>
                                       </div>
@@ -728,12 +760,12 @@ export default function Nomina() {
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900 flex items-start gap-2">
             <AlertTriangle size={14} className="mt-0.5 shrink-0" />
             <span>
-              Al cerrar, las {liqActual?.empleados.reduce((s, e) => s + e.comisionesIds.length, 0) || 0} comisión(es)
+              Al cerrar los empleados listos, sus {liqActual?.empleados.filter(e => e.estadoCierre === 'listo').reduce((s, e) => s + e.comisionesIds.length, 0) || 0} comisión(es)
               de esta quincena quedarán marcadas como liquidadas y NO se podrán re-asignar a otra quincena.
             </span>
           </div>
           <p className="text-sm text-gray-700">
-            Total a liquidar: <span className="font-bold">{formatMoneda(liqActual?.totalNomina || 0)}</span>
+            Total a liquidar: <span className="font-bold">{formatMoneda(liqActual?.empleados.filter(e => e.estadoCierre === 'listo').reduce((s, e) => s + e.totalDevengado, 0) || 0)}</span>
           </p>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={() => setShowCierreModal(false)} disabled={cerrando}
