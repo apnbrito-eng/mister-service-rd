@@ -6992,3 +6992,20 @@ Jorge respondió "1" al conflicto detectado por el coordinator entre SPRINT-116 
   - **regression_guardian = auditoría línea-por-línea** documentada en triaje preliminar de Cowork + verificación cruzada con código de servicios (`useOrdenCreateForm.ts`, `campanasMarketing.service.ts`).
   - **Reviewer = self-review** + lint final + build OK.
 - Cleanup colateral: imports unused en `Dashboard.tsx`, `OrdenDetalle.tsx`, `TecnicoVista.tsx` y dead-code `citasHoy` removido — eran warnings pre-existentes que bloqueaban el pre-commit hook.
+
+
+## ARCHIVIST PRE-CHANGE — WEB-PUBLICA-MOVIMIENTO — 28/09/2026
+
+Alcance comunicado por coordinator: escena de cuatro electrodomésticos, selector reparación/mantenimiento y equipo conservando datos, WhatsApp público central confirmado por Jorge. Solo documentación en esta pasada; ningún código ni dato modificado.
+
+Historial relevante: HomePage 1819dca (03/07/2026) evita flash de valores antiguos del CMS; 7652081 (28/04/2026) conserva actualización de imágenes; 4347149 (31/05/2026) elimina estadísticas inventadas. ConfiguracionWeb 0efd0ff (28/04/2026) limpia imagen al quitarla. configWeb.service 0491b6e (29/04/2026) unifica catálogo de equipos. formularioAgendar.service 666cb14 (26/09/2026) valida campos/caps de solicitudes; 3733237 (05/05/2026) usa userId en notificaciones.
+
+Touch-list expandido propuesto: HomePage.tsx; PublicLayout.tsx; nuevo componente PortadaElectrodomesticos; helper de WhatsApp público; configWeb.service.ts; ConfiguracionWeb.tsx; AgendarPage.tsx; FormularioAgendarPublico.tsx; formularioAgendar.service.ts; tipos de entrada si se agrega intención estructurada; assets y pruebas dirigidas. Antes de implementar, builder confirma touch-list final y consumidores.
+
+Consumidores: getWhatsAppUrl se usa en HomePage, PublicLayout, ServiciosPage, ServicioDetalle y FormularioAgendarPublico; wrapper obtenerWhatsAppUrl requiere revisar usos. Formulario asigna línea por obtenerWhatsAppRoundRobin independientemente de rotación del hero: cambiar solo CTA no centraliza el destino. PublicLayout enumera teléfonos en footer; ConfiguracionWeb tiene preview y switch que deben reflejar el comportamiento efectivo.
+
+Riesgos: conservar CMS/estado loading, catálogo, datos del formulario, antispam y handlers. No hay campo tipoServicio identificado: reparación/mantenimiento no se debe confundir con equipoTipo. P-001/P-007 aplican a autores y destinatarios; P-003 a mutaciones cross-collection; nuevas propiedades públicas requieren validar rules sin ampliar permisos. App nativa redirige raíz pública a login: portada se prueba en navegador, no prometer que aparezca en APK.
+
+Assets: logos y SVG propios disponibles; búsqueda dirigida no halló modelos 3D separados. Imagen generada es concepto fotográfico, no modelo ni despiece real. Scroll World requiere clips; no se ejecutaron servicios de pago.
+
+Antes de cerrar: builder → tester → regression_guardian → reviewer; QA 375/1440, reduced motion, CTA central, CMS y conservación de selección/datos con envío simulado. No crear citas reales ni publicar durante esta revisión. IA pública posterior debe separar tools públicas de herramientas internas con precios B2B y datos privados.

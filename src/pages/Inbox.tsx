@@ -1,3 +1,7 @@
+import { useAtencion } from '../context/AtencionContext';
+import { mismoTelefono } from '../navigation/clienteSeleccionado';
+import { useConteosBandeja } from '../hooks/useConteosBandeja';
+import { useNombresClientesInbox } from '../hooks/useNombresClientesInbox';
 import { usePreferenciasChat } from '../hooks/usePreferenciasChat';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -20,7 +24,7 @@ import EmptyState from '../components/EmptyState';
 
 /** Bandeja paginada por API; búsqueda local sobre las páginas cargadas. */
 
-type FiltroChip = 'todas' | 'no_leidos' | 'mias' | 'cartera' | 'hoy' | 'pendientes';
+type FiltroChip = 'todas' | 'no_leidos' | 'mias' | 'cartera' | 'hoy' | 'mis_ordenes' | 'pendientes';
 
 /**
  * Una conversación está "sin responder" si:
@@ -74,8 +78,10 @@ function previewMensaje(c: WhatsAppConversacion): { texto: string; direccion: 'e
 }
 
 export default function Inbox() {
+  const { seleccion } = useAtencion();
   const { currentUser, userProfile } = useApp();
   const navigate = useNavigate();
+  const {conteos, error: errorConteos} = useConteosBandeja(currentUser?.uid);
   const { preferencias, cambiar } = usePreferenciasChat(currentUser?.uid);
   const [menuChat, setMenuChat] = useState<WhatsAppConversacion | null>(null);
   const [adminAccion, setAdminAccion] = useState<'ocultar' | 'eliminar' | null>(null);
@@ -141,18 +147,20 @@ export default function Inbox() {
       setLoading(false);
     }, () => { setLoading(false); setErrorCarga('No se pudo actualizar la bandeja. Revisa la conexión.'); }, limiteEnVivo);
   }, [filtro, limiteEnVivo]);
+  const nombresClientes = useNombresClientesInbox(conversaciones.map(c => c.wa_id), currentUser?.uid);
   const conversacionesFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return conversaciones.filter(c => {
+      if (seleccion?.telefono && !(seleccion.clienteId && c.clienteId === seleccion.clienteId) && !mismoTelefono(c.wa_id, seleccion.telefono)) return false;
       const p = preferencias[c.wa_id];
       const fecha = c.ultimaActividad instanceof Date ? c.ultimaActividad.getTime() : c.ultimaActividad?.toMillis?.() || 0;
       if (c.ocultoGlobalHastaMs && fecha <= c.ocultoGlobalHastaMs && !c.borradoEnCurso) return false;
       if (p?.ocultoHastaMs && fecha <= p.ocultoHastaMs) return false;
       if (filtroPersonal === 'favoritos' && !p?.favorito) return false;
       if (filtroPersonal.startsWith('lista:') && p?.lista !== filtroPersonal.slice(6)) return false;
-      return !q || c.wa_id.includes(q) || c.ultimoMensajeEntrante?.preview?.toLowerCase().includes(q) || c.ultimoMensajeSaliente?.preview?.toLowerCase().includes(q);
+      return !q || nombresClientes[c.wa_id]?.toLowerCase().includes(q) || c.wa_id.includes(q) || c.ultimoMensajeEntrante?.preview?.toLowerCase().includes(q) || c.ultimoMensajeSaliente?.preview?.toLowerCase().includes(q);
     });
-  }, [conversaciones, busqueda, preferencias, filtroPersonal]);
+  }, [conversaciones, busqueda, preferencias, filtroPersonal, nombresClientes, seleccion]);
 
   if (errorCarga) return <div role="alert" className="m-6 rounded-xl border border-red-200 bg-red-50 p-6 text-red-800">{errorCarga}<button className="block mt-3 underline" onClick={() => window.location.reload()}>Reintentar</button></div>;
 
@@ -178,14 +186,15 @@ export default function Inbox() {
           type="search"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por teléfono o contenido del mensaje..."
+          placeholder="Buscar por nombre, teléfono o mensaje…"
           className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm"
         />
       </div>
 
       <div className="flex gap-2 mb-3 overflow-x-auto pb-2" aria-label="Buzones de atención">
-        {([['todas', 'Todos'], ['no_leidos', 'No leídos'], ['cartera', 'Mi cartera'], ['mias', 'Atiendo yo'], ['hoy', 'Órdenes del día'], ['pendientes', 'Pendientes']] as const).map(([valor, label]) => <button key={valor} type="button" aria-pressed={filtro === valor} onClick={() => setFiltro(valor)} className={`min-h-[44px] shrink-0 rounded-full border px-4 text-sm ${filtro === valor ? 'bg-brand-600 text-white' : 'bg-white text-gray-700'}`}>{label}</button>)}
+        {([['todas', 'Todos'], ['mias', 'Atiendo yo'], ['mis_ordenes', 'Mis órdenes del día'], ['cartera', 'Mi cartera'], ['hoy', 'Órdenes del día'], ['no_leidos', 'No leídos'], ['pendientes', 'Pendientes']] as const).map(([valor, label]) => <button key={valor} type="button" aria-pressed={filtro === valor} onClick={() => setFiltro(valor)} className={`min-h-[44px] shrink-0 rounded-full border px-4 text-sm ${filtro === valor ? 'bg-brand-600 text-white' : 'bg-white text-gray-700'}`}>{label}{<span aria-label={`${conteos?.[valor === 'todas' ? 'no_leidos' : valor] ?? 'Sin datos'} ${(valor === 'hoy' || valor === 'mis_ordenes') ? 'órdenes programadas hoy' : 'conversaciones sin leer'}`} className="ml-2 inline-flex min-w-5 justify-center rounded-full bg-black/10 px-1.5 text-xs font-semibold">{conteos?.[valor === 'todas' ? 'no_leidos' : valor] ?? '—'}</span>}</button>)}
       </div>
+      <p className="mb-3 text-xs text-gray-500">{errorConteos ? "No se pudieron actualizar los contadores. Se reintentará automáticamente." : "Contadores: conversaciones sin leer. Órdenes del día: todas las activas de hoy. Mis órdenes del día: las que están bajo tu responsabilidad. Se actualizan cada 15 segundos."}</p>
       <div className="flex justify-between gap-2 text-xs text-gray-500 mb-3"><span>{conversaciones.length} chats cargados · búsqueda en esta lista</span><span>{filtro === 'todas' ? 'Actualización en tiempo real' : <button className="underline min-h-[44px]" disabled={loading} onClick={() => void cargar()}>Actualizar</button>}</span></div>
       {filtro === 'pendientes' && <p className="text-xs text-gray-500 mb-3">Atenciones marcadas como pendientes. Los chats antiguos sin seguimiento siguen disponibles en Todos y No leídos.</p>}
       <div className="flex gap-2 overflow-x-auto mb-3"><button className="min-h-11 px-3 border rounded-full text-sm" aria-pressed={filtroPersonal === 'favoritos'} onClick={() => setFiltroPersonal(v => v === 'favoritos' ? '' : 'favoritos')}>★ Favoritos</button>{[...new Set(Object.values(preferencias).map(p => p.lista).filter(Boolean))].map(nombre => <button key={nombre} className="min-h-11 px-3 border rounded-full text-sm" aria-pressed={filtroPersonal === 'lista:' + nombre} onClick={() => setFiltroPersonal(v => v === 'lista:' + nombre ? '' : 'lista:' + nombre)}>{nombre}</button>)}</div>
@@ -222,6 +231,7 @@ export default function Inbox() {
             <ConversacionCard
               key={c.id}
               conversacion={c}
+              nombre={nombresClientes[c.wa_id]}
               currentUid={currentUser?.uid}
               onClick={() => navigate(`/admin/inbox/${c.wa_id}`)}
               onMenu={() => { setMenuChat(c); setAdminAccion(null); setAccionError(''); setLista(preferencias[c.wa_id]?.lista || ''); }}
@@ -235,13 +245,14 @@ export default function Inbox() {
 }
 
 interface ConversacionCardProps {
+  nombre?: string;
   conversacion: WhatsAppConversacion;
   currentUid: string | undefined;
   onClick: () => void;
   onMenu: () => void;
 }
 
-function ConversacionCard({ conversacion, currentUid, onClick, onMenu }: ConversacionCardProps) {
+function ConversacionCard({ nombre, conversacion, currentUid, onClick, onMenu }: ConversacionCardProps) {
   const timer = useRef<ReturnType<typeof setTimeout>>();
   const pulsado = useRef(false);
   const cancelar = () => clearTimeout(timer.current);
@@ -283,7 +294,7 @@ function ConversacionCard({ conversacion, currentUid, onClick, onMenu }: Convers
                     noLeidos > 0 ? 'text-gray-900' : 'text-gray-700'
                   }`}
                 >
-                  {formatTelRD(conversacion.wa_id)}
+                  {nombre || formatTelRD(conversacion.wa_id)}
                 </span>
                 {esMia && (
                   <span className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-blue-100 text-blue-700 font-medium">
@@ -309,6 +320,7 @@ function ConversacionCard({ conversacion, currentUid, onClick, onMenu }: Convers
               </div>
             </div>
 
+            {nombre && <p className="text-xs text-gray-500">{formatTelRD(conversacion.wa_id)}</p>}
             <div className="flex items-center justify-between gap-2 mt-1">
               <p
                 className={`text-sm truncate ${

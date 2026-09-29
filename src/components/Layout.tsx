@@ -1,23 +1,34 @@
+import { useMovimientoReducido } from '../hooks/useMovimientoReducido';
+import { AtencionProvider } from '../context/AtencionContext';
 import NavegacionMovil from './NavegacionMovil';
-import EspacioTrabajo, { ESPACIOS } from './EspacioTrabajo';
-import { Suspense, useState } from 'react';
+import EspacioTrabajo from './EspacioTrabajo';
+import { Suspense, useState, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
+import { obtenerTransicionMovimiento } from '../utils/motion';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { useApp } from '../context/AppContext';
 import { Menu } from 'lucide-react';
 import NotificacionesPanel from './NotificacionesPanel';
 import AsistenteIAFlotante from './AsistenteIAFlotante';
 
 export default function Layout() {
   const { pathname } = useLocation();
-  const tieneEspacio = ESPACIOS.some(e => e.vistas.some(v => pathname === `/admin/${v.ruta}`));
+
   const chatAbierto = /^\/admin\/inbox\/[^/]+/.test(pathname);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const { userProfile } = useApp();
+
+  const reducido = useMovimientoReducido();
+  const panelMovil = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    panelMovil.current?.toggleAttribute('inert', !mobileSidebarOpen);
+    const cerrar = (event: KeyboardEvent) => { if (event.key === 'Escape') setMobileSidebarOpen(false); };
+    window.addEventListener('keydown', cerrar);
+    return () => window.removeEventListener('keydown', cerrar);
+  }, [mobileSidebarOpen]);
 
   return (
-    <div className={`app-shell service-ui flex overflow-hidden ${chatAbierto ? 'chat-enfocado' : ''}`} >
+    <AtencionProvider><div className={`app-shell service-ui flex overflow-hidden ${chatAbierto ? 'chat-enfocado' : ''}`} >
       {/* Mobile overlay */}
       {mobileSidebarOpen && (
         <div
@@ -32,14 +43,17 @@ export default function Layout() {
       </div>
 
       {/* Sidebar - mobile */}
-      <div
-        style={{ top: 'calc(var(--alto-aviso-entorno, 0px) + env(safe-area-inset-top, 0px))', bottom: 'env(safe-area-inset-bottom, 0px)' }}
-        className={`fixed inset-y-0 left-0 z-50 lg:hidden transition-transform duration-300 ${
-          mobileSidebarOpen ? 'translate-x-0 visible' : '-translate-x-full invisible'
-        }`}
+      <motion.div
+        ref={panelMovil}
+        initial={false}
+        animate={{ x: reducido ? 0 : mobileSidebarOpen ? 0 : '-100%', opacity: mobileSidebarOpen ? 1 : 0 }}
+        transition={obtenerTransicionMovimiento(reducido)}
+        aria-hidden={!mobileSidebarOpen}
+        style={{ pointerEvents: mobileSidebarOpen ? 'auto' : 'none', top: 'calc(var(--alto-aviso-entorno, 0px) + env(safe-area-inset-top, 0px))', bottom: 'env(safe-area-inset-bottom, 0px)' }}
+        className="fixed inset-y-0 left-0 z-50 lg:hidden"
       >
         <Sidebar collapsed={false} onToggle={() => setMobileSidebarOpen(false)} onNavigate={() => setMobileSidebarOpen(false)} />
-      </div>
+      </motion.div>
 
       {/* Main content */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
@@ -48,7 +62,7 @@ export default function Layout() {
           <button className="shrink-0 min-h-11 min-w-11 flex items-center justify-center" aria-label="Abrir menú" onClick={() => setMobileSidebarOpen(true)}>
             <Menu size={24} />
           </button>
-          <div className="min-w-0 flex-1 flex justify-center">{tieneEspacio ? <EspacioTrabajo compacto /> : <span className="font-semibold text-sm truncate px-2">{userProfile?.nombre || 'Mister Service RD'}</span>}</div>
+          <div className="min-w-0 flex-1 flex justify-center"><EspacioTrabajo compacto /></div>
           <NotificacionesPanel theme="light" />
         </div>
 
@@ -69,6 +83,6 @@ export default function Layout() {
 
       {/* Burbuja flotante del Asistente IA — solo /admin/* (Sprint 4) */}
       <AsistenteIAFlotante />
-    </div>
+    </div></AtencionProvider>
   );
 }

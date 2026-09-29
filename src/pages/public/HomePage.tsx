@@ -1,3 +1,4 @@
+import PortadaElectrodomesticos from '../../components/public/PortadaElectrodomesticos';
 import { Link } from 'react-router-dom';
 import {
   Wrench, Shield, Clock, Phone, ChevronRight,
@@ -5,7 +6,8 @@ import {
   CheckCircle, ArrowRight, Users, MapPin, Calendar
 } from 'lucide-react';
 import WhatsAppIcon from '../../components/icons/WhatsAppIcon';
-import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
+import { useConfigWeb } from '../../hooks/useConfigWeb';
+import { obtenerWhatsAppPublico } from '../../utils/whatsappPublico';
 import HeroCarrusel from '../../components/public/HeroCarrusel';
 import HeroConGradient from '../../components/public/HeroConGradient';
 import SeccionTestimonios from '../../components/public/SeccionTestimonios';
@@ -58,9 +60,9 @@ export default function HomePage() {
   //   - modo 'fija' y hay una URL en imagenFija, o
   //   - modo 'carrusel' y hay >= 2 imágenes (validado en editor admin
   //     pero defensivo aquí por si Firestore tiene data stale).
-  // Sin imagen, el hero queda exactamente como antes (gradient + shapes).
+  // Los modos fija/carrusel conservan su fallback; escena usa la portada de equipos.
   const heroConfig = config.hero;
-  const heroModo = heroConfig.modo ?? 'fija';
+  const heroModo = heroConfig.modo ?? 'escena';
   const heroImagenFija = heroConfig.imagenFija ?? '';
   const heroImagenes = heroConfig.imagenesCarrusel ?? [];
   const heroTieneFondo =
@@ -93,7 +95,7 @@ export default function HomePage() {
               <Calendar size={18} /> Agendar Cita Online
             </Link>
             <a
-              href={getWhatsAppUrl(config)}
+              href={obtenerWhatsAppPublico(config)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 bg-green-500 text-white px-6 py-3.5 rounded-xl font-bold text-sm hover:bg-green-600 transition-colors"
@@ -156,6 +158,8 @@ export default function HomePage() {
             aria-hidden="true"
           />
         </HeroConGradient>
+      ) : heroModo === 'escena' ? (
+        <PortadaElectrodomesticos config={config} />
       ) : heroTieneFondo ? (
         <section className="relative bg-gradient-to-br from-primary via-primary to-primary-medium overflow-hidden">
           {/* Capa de imagen / carrusel (debajo del overlay) */}
@@ -179,11 +183,7 @@ export default function HomePage() {
           {heroContenido}
         </section>
       ) : (
-        <HeroConGradient
-          preset={heroConfig.gradientPreset ?? 'navy'}
-          customFrom={heroConfig.gradientCustomFrom}
-          customTo={heroConfig.gradientCustomTo}
-        >
+        <HeroConGradient preset={heroConfig.gradientPreset ?? 'navy'} customFrom={heroConfig.gradientCustomFrom} customTo={heroConfig.gradientCustomTo}>
           {heroContenido}
         </HeroConGradient>
       )}

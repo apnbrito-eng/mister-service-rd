@@ -839,6 +839,8 @@ export interface LiquidacionEmpleado {
   cuotasPrestamos?: CuotaPrestamoAplicada[];
   totalCuotasPrestamos?: number;
   // Suma total de descuentos = avances + adhoc + cuotas
+  totalAsistencia?: number;
+  descuentosAsistencia?: { id: string; dia: string; monto: number }[];
   totalDescuentos?: number;
   totalNeto?: number;              // max(0, totalDevengado - totalDescuentos)
   notas?: string;
@@ -1941,10 +1943,12 @@ export type TipoNotificacion =
   // El render UI muestra "Visita fallida" en el título de la notif sin
   // cambiar el tipo (precedente: 'cierre_completado' con título "Servicio
   // cerrado").
+  | 'mantenimiento_pendiente'
   | 'aviso_oficina'
   | 'otro';
 
 export interface Notificacion {
+  mantenimientoId?: string;
   conversacionId?: string;
   id: string;
   userId: string;

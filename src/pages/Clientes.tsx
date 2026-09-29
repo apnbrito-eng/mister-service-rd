@@ -1,3 +1,9 @@
+import { motion } from 'motion/react';
+import { useMovimientoReducido } from '../hooks/useMovimientoReducido';
+import { obtenerTransicionMovimiento, DESPLAZAMIENTO_PANEL } from '../utils/motion';
+import EditarUbicacionCliente from '../components/clientes/EditarUbicacionCliente';
+import { numeroWhatsAppCliente, resolverChatCliente } from '../utils/resolverChatCliente';
+import { useAtencion } from '../context/AtencionContext';
 import { useState, useEffect, useMemo, useRef, lazy, Suspense, useDeferredValue } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { collection, onSnapshot, updateDoc, doc, Timestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
@@ -31,6 +37,13 @@ import toast from 'react-hot-toast';
 
 export default function Clientes() {
   const navigate = useNavigate();
+  const reducido = useMovimientoReducido();
+  const [vistaMovil, setVistaMovil] = useState(() => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 1023px)').matches);
+  useEffect(() => { if (typeof window === 'undefined' || !window.matchMedia) return; const media = window.matchMedia('(max-width: 1023px)'); const cambiar = () => setVistaMovil(media.matches); media.addEventListener('change', cambiar); return () => media.removeEventListener('change', cambiar); }, []);
+  const [editarUbicacion, setEditarUbicacion] = useState(false);
+  const [abriendoChat, setAbriendoChat] = useState(false);
+  const botonClienteRef = useRef<HTMLButtonElement | null>(null);
+  const { seleccionar } = useAtencion();
   const [searchParams, setSearchParams] = useSearchParams();
   const { userProfile } = useApp();
   const puedeCrear = puede(userProfile, 'clientesCrear');
@@ -43,9 +56,22 @@ export default function Clientes() {
   // Reactivación). Default true para admin/coord, false resto.
   const puedeVerReactivacion = puede(userProfile, 'clientesReactivacionGestionar');
 
+  const puedeInbox = !!userProfile && ['administrador', 'coordinadora', 'secretaria', 'operaria'].includes(userProfile.rol);
+  async function abrirChatEmpresa(cliente: Cliente) {
+    if (abriendoChat || !puedeInbox) return;
+    setAbriendoChat(true);
+    try {
+      const waId = await resolverChatCliente(cliente);
+      seleccionar({ clienteId: cliente.id, telefono: cliente.telefono, nombre: cliente.nombre, waId });
+      navigate(`/admin/inbox/${encodeURIComponent(waId)}?clienteId=${encodeURIComponent(cliente.id)}`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo abrir la conversación.'); }
+    finally { setAbriendoChat(false); }
+  }
+
   const [loading, setLoading] = useState(true);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
+  const [detalleVisible, setDetalleVisible] = useState(false);
   const [historialOrdenes, setHistorialOrdenes] = useState<OrdenServicio[]>([]);
   const [busqueda, setBusqueda] = useState('');
   const busquedaDiferida = useDeferredValue(busqueda);
@@ -159,7 +185,8 @@ export default function Clientes() {
     if (idAbiertoRef.current === idQS) return;
     const match = clientes.find((c) => c.id === idQS);
     if (match) {
-      setSelectedCliente(match);
+      setSelectedCliente(match); setDetalleVisible(true);
+      seleccionar({clienteId:match.id, telefono:match.telefono, nombre:match.nombre});
       idAbiertoRef.current = idQS;
     } else {
       // ID no encontrado (o cliente soft-deleted). Limpiamos el param para
@@ -169,7 +196,7 @@ export default function Clientes() {
       next.delete('id');
       setSearchParams(next, { replace: true });
     }
-  }, [clientes, searchParams, setSearchParams]);
+  }, [clientes, searchParams, setSearchParams, seleccionar]);
 
   useEffect(() => {
     if (!selectedCliente) return;
@@ -456,7 +483,7 @@ export default function Clientes() {
       </header>
       <Suspense fallback={<div role="status" className="p-4 text-gray-600">Cargando vista de clientes…</div>}>
       {tab === 'mapa' && puedeVerMapa && (
-        <div className="flex gap-6 flex-col lg:flex-row">
+        <div className="grid grid-cols-1 lg:flex gap-6 lg:flex-row">
           <FiltrosSidebarClientes
             filtros={filtros}
             onChange={setFiltros}
@@ -488,9 +515,9 @@ export default function Clientes() {
       )}
 
       {tab === 'lista' && (
-      <div className="flex gap-6 flex-col lg:flex-row">
+      <div className="grid grid-cols-1 lg:flex gap-6 lg:flex-row">
         {/* Lista */}
-        <div className={`${selectedCliente ? 'hidden lg:block' : ''} w-full lg:w-1/3 space-y-4`}>
+        <motion.div initial={false} animate={{ opacity: vistaMovil && detalleVisible ? 0 : 1, x: !reducido && vistaMovil && detalleVisible ? -DESPLAZAMIENTO_PANEL : 0 }} aria-hidden={vistaMovil && detalleVisible} {...(vistaMovil && detalleVisible ? { inert: '' } : {})} style={{ gridArea: '1 / 1', pointerEvents: vistaMovil && detalleVisible ? 'none' : undefined }} transition={obtenerTransicionMovimiento(reducido)} className="w-full lg:w-1/3 space-y-4 self-start">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input type="text" placeholder="Buscar por nombre o teléfono..."
@@ -503,14 +530,14 @@ export default function Clientes() {
               return (
                 <div
                   key={c.id}
-                  className={`service-client-row w-full border-b border-gray-100 hover:bg-gray-50 transition-colors flex items-center gap-2 ${
+                  className={`service-client-row w-full border-b border-gray-100 hover:bg-gray-50 transition-colors flex flex-wrap items-center gap-2 ${
                     selectedCliente?.id === c.id ? 'bg-blue-50 border-l-4 border-l-primary-medium' : ''
                   }`}
                 >
                   <button
                     type="button"
-                    onClick={() => setSelectedCliente(c)}
-                    className="flex-1 min-w-0 text-left px-4 py-3 flex items-center gap-3"
+                    onClick={e => { botonClienteRef.current = e.currentTarget; setSelectedCliente(c); setDetalleVisible(true); seleccionar({clienteId:c.id, telefono:c.telefono, nombre:c.nombre}); }}
+                    className="w-full min-w-0 text-left px-4 py-3 flex items-center gap-3"
                   >
                     <div className="w-11 h-11 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
                       <User size={14} className="text-primary" />
@@ -532,13 +559,13 @@ export default function Clientes() {
                   </button>
                   {c.telefono && (
                     <a
-                      href={whatsappUrl(c.telefono, `Hola ${primerNombre}, te escribimos de Mister Service RD.`)}
+                      href={numeroWhatsAppCliente(c.telefono) ? whatsappUrl(c.telefono, `Hola ${primerNombre}, te escribimos de Mister Service RD.`) : undefined}
                       target="_blank"
                       rel="noopener noreferrer"
-                      onClick={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation(); if (!numeroWhatsAppCliente(c.telefono)) { e.preventDefault(); toast.error('El teléfono no es compatible con este canal. Revisa el número.'); } }}
                       title={`Enviar WhatsApp a ${c.nombre}`}
                       aria-label={`Enviar WhatsApp a ${c.nombre}`}
-                      className="flex items-center justify-center w-9 h-9 mr-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex-shrink-0"
+                      className="flex items-center justify-center min-w-11 min-h-11 mr-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex-shrink-0"
                     >
                       <MessageCircle size={15} />
                     </a>
@@ -555,37 +582,40 @@ export default function Clientes() {
               <div className="p-8 text-center text-gray-400 text-sm">Sin resultados</div>
             )}
           </div>
-        </div>
+        </motion.div>
 
         {/* Detalle */}
-        <div className="flex-1">
+        <motion.div initial={false} animate={{ opacity: vistaMovil && !detalleVisible ? 0 : 1, x: !reducido && vistaMovil && !detalleVisible ? DESPLAZAMIENTO_PANEL : 0 }} transition={obtenerTransicionMovimiento(reducido)} aria-hidden={vistaMovil && !detalleVisible} {...(vistaMovil && !detalleVisible ? { inert: '' } : {})} style={{ gridArea: '1 / 1', pointerEvents: vistaMovil && !detalleVisible ? 'none' : undefined }} className="flex-1 min-w-0 self-start">
           {selectedCliente ? (
-            <div className="space-y-4">
+            <motion.div initial={reducido ? false : { opacity: 0, x: DESPLAZAMIENTO_PANEL }} animate={{ opacity: 1, x: 0 }} transition={obtenerTransicionMovimiento(reducido)} className="space-y-4">
               {historialLoading && <p role="status" className="text-sm text-gray-600">Cargando historial…</p>}
               {historialError && <p role="alert" className="text-sm text-red-700">No se pudo cargar el historial. Vuelve a abrir la ficha para reintentar.</p>}
-              <button type="button" onClick={() => { setSelectedCliente(null); const next = new URLSearchParams(searchParams); next.delete('id'); setSearchParams(next, { replace: true }); }} className="lg:hidden min-h-11 flex items-center gap-2 text-sm font-medium"><ArrowLeft size={20} /> Clientes</button>
+              <button type="button" onClick={() => { setDetalleVisible(false); const next = new URLSearchParams(searchParams); next.delete('id'); setSearchParams(next, { replace: true }); requestAnimationFrame(() => botonClienteRef.current?.focus({ preventScroll: true })); }} className="lg:hidden min-h-11 flex items-center gap-2 text-sm font-medium"><ArrowLeft size={20} /> Clientes</button>
               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
                   <h2 className="text-xl font-bold text-gray-900">{selectedCliente.nombre}</h2>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {selectedCliente.telefono && (
                       <a
-                        href={whatsappUrl(
+                        href={numeroWhatsAppCliente(selectedCliente.telefono) ? whatsappUrl(
                           selectedCliente.telefono,
                           `Hola ${selectedCliente.nombre.trim().split(/\s+/)[0] || ''}, te escribimos de Mister Service RD.`,
-                        )}
+                        ) : undefined}
+                        onClick={e => { if (!numeroWhatsAppCliente(selectedCliente.telefono)) { e.preventDefault(); toast.error('El teléfono no es compatible con este canal. Revisa el número.'); } }}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white"
+                        className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white"
                       >
-                        <MessageCircle size={13} /> WhatsApp
+                        <MessageCircle size={13} /> WhatsApp externo
                       </a>
                     )}
+                    {puedeInbox && <button type="button" disabled={abriendoChat} onClick={() => abrirChatEmpresa(selectedCliente)} className="min-h-11 px-3 rounded-lg border text-sm">WhatsApp empresa</button>}
+                    {puedeModificar && <button type="button" onClick={() => setEditarUbicacion(true)} className="min-h-11 px-3 rounded-lg border text-sm">Cambiar ubicación</button>}
                     {puedeModificar && (
                       <button
                         type="button"
                         onClick={() => setShowEditModal(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary hover:bg-primary-medium text-white"
+                        className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary hover:bg-primary-medium text-white"
                       >
                         <Edit2 size={13} /> Editar cliente
                       </button>
@@ -643,7 +673,9 @@ export default function Clientes() {
                       }
                       const verUrl = googleMapsViewUrl(coords);
                       return (
-                        <div className="flex items-center gap-2 flex-wrap">
+                        <div>
+                          <MiniMapaCliente lat={coords.lat} lng={coords.lng} direccion={selectedCliente.direccion} />
+                          <div className="flex items-center gap-2 flex-wrap mt-2">
                           <span className="font-mono text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
                             {coords.lat.toFixed(6)}, {coords.lng.toFixed(6)}
                           </span>
@@ -658,6 +690,7 @@ export default function Clientes() {
                               Ver en mapa
                             </a>
                           )}
+                          </div>
                         </div>
                       );
                     })()}
@@ -824,14 +857,14 @@ export default function Clientes() {
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           ) : (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center">
               <User size={48} className="mx-auto text-gray-300 mb-3" />
               <p className="text-gray-400">Selecciona un cliente para ver su detalle</p>
             </div>
           )}
-        </div>
+        </motion.div>
       </div>
       )}
 
@@ -927,6 +960,8 @@ export default function Clientes() {
           </div>
         </form>
       </Modal>
+
+      {selectedCliente && puedeModificar && <EditarUbicacionCliente cliente={selectedCliente} isOpen={editarUbicacion} onClose={() => setEditarUbicacion(false)} onGuardar={setSelectedCliente} />}
 
       {/* Modal editar cliente — reutiliza el componente con soporte de direcciones, RNC, cédula */}
       {selectedCliente && (

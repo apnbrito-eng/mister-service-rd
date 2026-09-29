@@ -13,7 +13,7 @@ import {
   Unsubscribe,
   writeBatch,
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, auth } from '../firebase/config';
 import {
   CampanaMarketing,
   Cliente,
@@ -489,6 +489,8 @@ export async function marcarOrdenReactivada(
   const ultimoContacto = contactos[contactos.length - 1];
   if (!ultimoContacto || !ultimoContacto.campanaId) return { reactivada: false };
 
+  const actorUid = auth.currentUser?.uid;
+  if (!actorUid) throw new Error('Se requiere una sesión para registrar la reactivación.');
   const campanaId = ultimoContacto.campanaId;
   const ordenRef = doc(db, 'ordenes_servicio', ordenId);
   const campanaRef = doc(db, CAMPANAS_COL, campanaId);
@@ -547,6 +549,7 @@ export async function marcarOrdenReactivada(
     const auditRef = doc(collection(db, AUDITORIA_COL));
     tx.set(auditRef, stripUndefined({
       accion: 'orden_reactivada_detectada',
+      actorUid,
       tipoEntidad: 'orden',
       entidadId: ordenId,
       meta: {

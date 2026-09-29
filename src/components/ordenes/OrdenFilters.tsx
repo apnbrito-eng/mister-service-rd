@@ -26,19 +26,21 @@ export default function OrdenFilters({
   tecnicos,
 }: OrdenFiltersProps) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-wrap gap-3 items-center">
-      <div className="flex items-center gap-2">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 items-center">
+      <div className="flex items-center gap-2 min-w-0">
         <label className="text-xs text-gray-500 font-medium">Mes:</label>
         <input
+          aria-label="Mes de las órdenes"
           type="month"
           value={filtroMes}
           onChange={e => setFiltroMes(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white"
+          className="min-w-0 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white"
         />
       </div>
-      <div className="relative flex-1 min-w-48">
+      <div className="relative min-w-0 order-first">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
         <input
+          aria-label="Buscar órdenes"
           type="text"
           placeholder="Buscar nombre, #OS..."
           value={busqueda}
@@ -47,17 +49,19 @@ export default function OrdenFilters({
         />
       </div>
       <select
+        aria-label="Técnico"
         value={filtroTecnico}
         onChange={e => setFiltroTecnico(e.target.value)}
-        className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white"
+        className="min-w-0 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white"
       >
         <option value="">Todos los tecnicos</option>
         {tecnicos.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}
       </select>
       <select
+        aria-label="Estado de la orden"
         value={filtroEstado}
         onChange={e => setFiltroEstado(e.target.value)}
-        className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white"
+        className="min-w-0 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium bg-white"
       >
         <option value="">Todos los estados</option>
         <option value="pendiente">Pendiente</option>

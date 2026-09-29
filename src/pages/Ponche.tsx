@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { reconciliarJornada, detenerJornada } from '../mobile/jornada';
+import { esAppNativa } from '../mobile/camara';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useNavigate } from 'react-router-dom';
@@ -276,6 +278,15 @@ export default function Ponche() {
         ubicacion: gpsActual ?? undefined,
         dispositivo: detectarDispositivo(),
       });
+      // El ponche ya existe: un fallo GPS no debe ofrecer volver a guardarlo.
+      if (userProfile.rol === 'tecnico' && esAppNativa()) {
+        try {
+          if (tipoPendiente === 'salida') await detenerJornada();
+          else await reconciliarJornada();
+        } catch {
+          toast.error('Ponche guardado. Falta sincronizar la ubicación; abre Mi jornada para reintentar.');
+        }
+      }
       toast.success(tipoPendiente === 'entrada' ? 'Entrada registrada' : 'Salida registrada');
       // Reset + refrescar estado
       if (fotoPreview) URL.revokeObjectURL(fotoPreview);
@@ -494,11 +505,11 @@ export default function Ponche() {
       {fotoLightbox && (
         <div
           className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
-          onClick={() => setFotoLightbox(null)}
+          aria-label="Cerrar imagen de asistencia" onClick={() => setFotoLightbox(null)}
         >
           <button
             className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white rounded-full p-2"
-            onClick={() => setFotoLightbox(null)}
+            aria-label="Cerrar imagen de asistencia" onClick={() => setFotoLightbox(null)}
           >
             <X size={20} />
           </button>

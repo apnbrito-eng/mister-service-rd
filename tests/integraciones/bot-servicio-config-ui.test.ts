@@ -1,0 +1,46 @@
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { beforeEach, expect, it, vi } from 'vitest';
+import { createElement } from 'react';
+const mock = vi.hoisted(() => ({ api: vi.fn() }));
+vi.mock('../../src/services/equipoApi', () => ({ equipoApi: mock.api }));
+import BotServicioConfiguracion from '../../src/components/configuracion/BotServicioConfiguracion';
+const respuesta = { config: { version: 0, habilitado: false, modo: 'simulacion', numeroCentral: '18495646767', permitirHorarioLaboral: false, limiteDiaMicroUsd: 5000000, limiteMesMicroUsd: 50000000, limiteRespuestas24h: 15, tarifa: null, equipos: [] }, envioDisponible: false, personas: [], presupuesto: { dia: { periodo: '2026-09-28', comprometido: 0, limite: 5000000 }, mes: { periodo: '2026-09', comprometido: 0, limite: 50000000 } } };
+beforeEach(() => { mock.api.mockReset().mockResolvedValue(respuesta); });
+it('identifica simulación, no ofrece activar y pide ampliación temporal auditada', async () => {
+  let vista!: ReactTestRenderer; await act(async () => { vista = create(createElement(BotServicioConfiguracion)); });
+  const texto = JSON.stringify(vista.toJSON());
+  expect(texto).toContain('no envía mensajes'); expect(texto).toContain('Solo hoy, hasta medianoche RD');
+  expect(vista.root.findAllByType('button').some(b => b.children.includes('Activar'))).toBe(false);
+  const textarea = vista.root.findAllByType('textarea')[0];
+  await act(async () => { textarea.props.onChange({ target: { value: 'Ensayo administrativo' } }); });
+  const importe = vista.root.findAllByType('input').find(e => e.props.step === '0.000001')!;
+  await act(async () => { importe.props.onChange({ target: { value: '7' } }); });
+  mock.api.mockImplementation(async (_ruta, body) => body ? { ok: true } : respuesta);
+  await act(async () => { vista.root.findAllByType('button').find(b => b.children.includes('Ampliar con registro de auditoría'))!.props.onClick(); });
+  expect(mock.api).toHaveBeenCalledWith('/api/whatsapp/bot-config', expect.objectContaining({ accion: 'ampliar', periodo: 'dia', periodoEsperado: '2026-09-28', limiteMicroUsd: 7000000, motivo: 'Ensayo administrativo' }));
+  await act(async () => vista.unmount());
+});
+it('muestra fallo sin sustituirlo por consumo cero', async () => {
+  mock.api.mockRejectedValue(new Error('Servicio no disponible'));
+  let vista!: ReactTestRenderer; await act(async () => { vista = create(createElement(BotServicioConfiguracion)); });
+  expect(vista.root.findByProps({ role: 'alert' }).children).toContain('Servicio no disponible');
+  expect(vista.root.findAllByType('button')).toHaveLength(0);
+  await act(async () => vista.unmount());
+});
+it('doble toque produce una sola petición y reintenta con mismo ID si falló la recarga', async () => {
+  let vista!: ReactTestRenderer; await act(async () => { vista = create(createElement(BotServicioConfiguracion)); });
+  await act(async () => { vista.root.findAllByType('textarea')[0].props.onChange({ target: { value: 'Probar reintento' } }); });
+  let resolver!: (v: unknown) => void;
+  const pendiente = new Promise(resolve => { resolver = resolve; });
+  mock.api.mockImplementation((_ruta, body) => body ? pendiente : Promise.reject(new Error('Falló recarga después de guardar')));
+  const guardar = () => vista.root.findAllByType('button').find(b => b.children.includes('Guardar configuración del ensayo'))!;
+  await act(async () => { guardar().props.onClick(); guardar().props.onClick(); });
+  const primeras = mock.api.mock.calls.filter(c => c[1]?.accion === 'guardar'); expect(primeras).toHaveLength(1);
+  await act(async () => { resolver({ ok: true }); await pendiente; });
+  expect(vista.root.findByProps({ role: 'alert' }).children).toContain('Falló recarga después de guardar');
+  mock.api.mockImplementation(async (_ruta, body) => body ? { ok: true } : respuesta);
+  await act(async () => { guardar().props.onClick(); });
+  const guardados = mock.api.mock.calls.filter(c => c[1]?.accion === 'guardar');
+  expect(guardados).toHaveLength(2); expect(guardados[1][1].requestId).toBe(guardados[0][1].requestId);
+  await act(async () => vista.unmount());
+});

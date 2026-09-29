@@ -22,6 +22,8 @@ async function tecnico(suffix: string) {
   m.uid = `${id}-${suffix}`; m.rol = 'tecnico';
   for (const collection of ['jornadas_moviles', 'ubicaciones_vehiculos', 'usuarios']) refs.push(db.doc(`${collection}/${m.uid}`));
   await db.doc(`usuarios/${m.uid}`).set({ rol: 'tecnico', activo: true });
+  const entrada = db.doc(`ponches/${m.uid}-entrada`); refs.push(entrada);
+  await entrada.set({ personalUid: m.uid, fechaRD: new Date(Date.now()-4*3600000).toISOString().slice(0,10), tipo:'entrada' });
   return m.uid;
 }
 beforeAll(() => { m.db = db; });
@@ -40,8 +42,24 @@ describe('Jornada móvil con almacenamiento real aislado', () => {
     expect((await db.doc(`ubicaciones_vehiculos/${uid}`).get()).data()?.timestamp.toMillis()).toBe(muestra.capturadaEn);
     expect((await llamar(body)).status).toBe(200); // muestra repetida idempotente
     await llamar({ accion: 'finalizar', jornadaId: start.result.jornada.id });
-    expect((await llamar({ ...body, muestra: { ...muestra, capturadaEn: Date.now() } })).status).toBe(409);
+    expect((await llamar({ ...body, muestra: { ...muestra, capturadaEn: Date.now() } })).result.jornada).toBeNull();
     expect((await db.doc(`ubicaciones_vehiculos/${uid}`).get()).data()?.jornadaActiva).toBe(false);
+  });
+  it('una muestra anterior al inicio no cierra la jornada', async () => {
+    const uid = await tecnico('antigua'); const start = await llamar({accion:'iniciar'});
+    const respuesta = await llamar({accion:'ubicacion', jornadaId:start.result.jornada.id, muestra:{lat:18.4,lng:-69.9,precision:12,capturadaEn:start.result.jornada.iniciadaEn-1000,simulada:false}});
+    expect(respuesta.status).toBe(200); expect(respuesta.result.jornada.activa).toBe(true);
+    expect((await db.doc(`jornadas_moviles/${uid}`).get()).data()?.ultimaUbicacion).toBeUndefined();
+  });
+  it('el ponche de salida detiene servidor y mapa e impide reinicio', async () => {
+    const uid=await tecnico('salida'); const start=await llamar({accion:'iniciar'});
+    const salida=db.doc(`ponches/${uid}-salida`); refs.push(salida);
+    await salida.set({personalUid:uid,fechaRD:new Date(Date.now()-4*3600000).toISOString().slice(0,10),tipo:'salida'});
+    expect((await llamar({},'GET')).result.jornada).toBeNull();
+    expect((await llamar({accion:'iniciar'})).result.jornada).toBeNull();
+    expect((await db.doc(`jornadas_moviles/${uid}`).get()).data()?.activa).toBe(false);
+    expect((await db.doc(`ubicaciones_vehiculos/${uid}`).get()).data()?.jornadaActiva).toBe(false);
+    expect(start.result.jornada.activa).toBe(true);
   });
   it('rechaza ubicación simulada y jornadas ajenas', async () => {
     await tecnico('invalidos'); const start = await llamar({ accion: 'iniciar' });

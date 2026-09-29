@@ -1,56 +1,32 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useAtencion } from '../context/AtencionContext';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { puede, type AccionPermiso } from '../utils/permisos';
+import { obtenerAreas, areaPath } from '../navigation/areas';
 
-type Vista = { ruta: string; nombre: string; permiso?: AccionPermiso; roles?: string[] };
-export const ESPACIOS: Array<{nombre: string; descripcion: string; vistas: Vista[]}> = [
-  {nombre:'Atención y clientes',descripcion:'Revisa el contacto, identifica al cliente y continúa con su solicitud.',vistas:[
-    {ruta:'inbox',nombre:'Conversaciones',roles:['administrador','coordinadora','secretaria','operaria']},
-    {ruta:'clientes',nombre:'Clientes',permiso:'clientesVer'},
-    {ruta:'solicitudes',nombre:'Solicitudes',roles:['administrador']},
-    {ruta:'citas',nombre:'Citas por confirmar',permiso:'ordenesVer'},
-  ]},
-  {nombre:'Servicios',descripcion:'Trabaja sobre los servicios desde la lista, la agenda o el mapa. Revisa aquí las excepciones pendientes.',vistas:[
-    {ruta:'ordenes',nombre:'Órdenes',permiso:'ordenesVer'},
-    {ruta:'agenda-dia',nombre:'Agenda del día',permiso:'ordenesVer'},
-    {ruta:'calendario',nombre:'Calendario',permiso:'ordenesVer'},
-    {ruta:'mapa',nombre:'Rutas',permiso:'ordenesVer'},
-    {ruta:'taller',nombre:'Taller',permiso:'ordenesVer'},
-    {ruta:'standby',nombre:'Espera de piezas',permiso:'ordenesVer'},
-    {ruta:'reprogramaciones',nombre:'Reprogramaciones',roles:['administrador','coordinadora']},
-    {ruta:'sugerencias-chequeo',nombre:'Chequeos por revisar',roles:['administrador','coordinadora']},
-    {ruta:'mantenimiento',nombre:'Mantenimientos',permiso:'ordenesVer'},
-  ]},
-  {nombre:'Cobro y cierre',descripcion:'Cotiza, verifica el pago y completa el conduce y la entrega de efectivo.',vistas:[
-    {ruta:'cotizaciones',nombre:'Cotizaciones',permiso:'cotizacionesVer'},
-    {ruta:'pagos-pendientes',nombre:'Verificar pagos',permiso:'pagosVerificar'},
-    {ruta:'facturacion-pendiente',nombre:'Preparar conduces',roles:['administrador','coordinadora']},
-    {ruta:'facturas',nombre:'Conduces emitidos',permiso:'facturasVer'},
-    {ruta:'cierre-dia',nombre:'Cierre del día',permiso:'cierreDiaEjecutar'},
-  ]},
-  {nombre:'Equipo',descripcion:'Consulta el personal y gestiona por separado sus accesos, asistencia y remuneración.',vistas:[
-    {ruta:'personal',nombre:'Personal',permiso:'personalVer'},
-    {ruta:'usuarios',nombre:'Accesos',roles:['administrador','coordinadora']},
-    {ruta:'ponches',nombre:'Asistencia',roles:['administrador','coordinadora']},
-    {ruta:'comisiones',nombre:'Comisiones',roles:['administrador','coordinadora']},
-    {ruta:'nomina',nombre:'Nómina',roles:['administrador','coordinadora']},
-    {ruta:'avances',nombre:'Avances',permiso:'avancesGestionar'},
-    {ruta:'prestamos',nombre:'Préstamos',roles:['administrador','coordinadora']},
-  ]},
-];
 export default function EspacioTrabajo({ compacto = false }: { compacto?: boolean }) {
   const navigate = useNavigate();
-  const {pathname}=useLocation(); const {userProfile}=useApp();
-  // Solo listas principales: no distraer ni romper los expedientes por ID.
-  const espacio=ESPACIOS.find(e=>e.vistas.some(v=>pathname===`/admin/${v.ruta}`));
-  if(!espacio||!userProfile) return null;
-  const vistas=espacio.vistas.filter(v=>(!v.permiso||puede(userProfile,v.permiso))&&(!v.roles||v.roles.includes(userProfile.rol)));
-  if(vistas.length<2) return compacto ? <span className="font-semibold truncate">{vistas[0]?.nombre || espacio.nombre}</span> : null;
-  if (compacto) return <select aria-label={`Cambiar vista de ${espacio.nombre}`} value={pathname} onChange={e => navigate(e.target.value)} className="workspace-switch min-h-11 min-w-0 max-w-full bg-transparent font-semibold text-base text-gray-900 rounded-lg px-2">
-    {vistas.map(v => <option key={v.ruta} value={`/admin/${v.ruta}`}>{v.nombre}</option>)}
-  </select>;
-  return <section aria-label={`Espacio de trabajo: ${espacio.nombre}`} className="workspace-navigation hidden lg:block glass-toolbar px-4 md:px-6 pt-4">
-    <h2 className="font-semibold text-gray-900">{espacio.nombre}</h2><p className="text-sm text-gray-500 mt-1">{espacio.descripcion}</p>
-    <nav aria-label={`Vistas de ${espacio.nombre}`} className="flex gap-1 overflow-x-auto mt-3 pb-2">{vistas.map(v=><NavLink key={v.ruta} to={`/admin/${v.ruta}`} end className={({isActive})=>`whitespace-nowrap rounded-full px-4 py-2 text-sm ${isActive?'bg-primary text-white font-medium':'text-gray-600 hover:bg-gray-100'}`}>{v.nombre}</NavLink>)}</nav>
+  const { seleccion, seleccionar } = useAtencion();
+  const { pathname } = useLocation();
+  const { userProfile } = useApp();
+  const areas = obtenerAreas(userProfile);
+  const node = areas.find(n => n.kind === 'section' && (areaPath(n.section.id) === pathname || n.section.items.some(i => pathname === i.to || (i.to === '/admin/inbox' && pathname.startsWith(i.to + '/')))));
+  if (!node || node.kind !== 'section') return null;
+  const items = node.section.items.filter(i => i.show);
+  const esSolicitud = pathname === '/admin/solicitudes' || pathname === '/admin/citas';
+  const vistas = items.filter(i => i.to !== '/admin/citas' || !items.some(v => v.to === '/admin/solicitudes'));
+  const actual = esSolicitud && vistas.some(v => v.to === '/admin/solicitudes') ? '/admin/solicitudes' : pathname.startsWith('/admin/inbox/') ? '/admin/inbox' : pathname;
+  const destino = (to: string) => {
+    if (node.section.id !== 'v2_atencion' || !seleccion) return to;
+    if (to === '/admin/clientes' && seleccion.clienteId) return `${to}?id=${encodeURIComponent(seleccion.clienteId)}`;
+    if (to === '/admin/inbox' && seleccion.waId) return `${to}/${encodeURIComponent(seleccion.waId)}`;
+    return to;
+  };
+  const valorSelector = vistas.some(v => v.to === actual) ? actual : vistas[0]?.to ?? '';
+  if (compacto) return <select aria-label={`Cambiar vista de ${node.section.label}`} value={valorSelector} onChange={e => navigate(destino(e.target.value))} className="min-h-11 min-w-0 max-w-full bg-transparent font-semibold rounded-lg px-2">{vistas.map(v => <option key={v.to} value={v.to}>{v.to === '/admin/inbox' ? 'Conversaciones' : v.label}</option>)}</select>;
+  return <section className="px-4 pt-3 pb-2 border-b bg-white" aria-label={`Espacio de trabajo: ${node.section.label}`}>
+    <span className="hidden lg:inline-flex items-center min-h-11 font-semibold mb-3">{node.section.label}</span>
+    <nav className="hidden lg:flex gap-2 flex-wrap" aria-label="Vistas del área">{vistas.map(v => <Link key={v.to} to={destino(v.to)} className={`rounded-full px-3 py-2 text-sm ${actual === v.to ? 'bg-primary text-white' : 'bg-gray-50 text-gray-600'}`}>{v.to === '/admin/inbox' ? 'Conversaciones' : v.label}</Link>)}</nav>
+    {node.section.id === 'v2_atencion' && seleccion && <div className="flex items-center justify-between gap-2 text-sm mt-2"><span className="truncate">Cliente: {seleccion.nombre || seleccion.telefono || 'seleccionado'}</span><button className="shrink-0 min-h-11 text-blue-700" onClick={() => { seleccionar(null); navigate(pathname.startsWith('/admin/inbox') ? '/admin/inbox' : pathname); }}>Ver todos</button></div>}
+    {esSolicitud && <nav aria-label="Solicitudes y citas" className="flex gap-2 mt-2">{items.filter(i => ['/admin/solicitudes','/admin/citas'].includes(i.to)).map(v => <Link key={v.to} to={destino(v.to)} className={`flex-1 sm:flex-none text-center rounded-lg px-4 py-3 text-sm ${pathname === v.to ? 'bg-primary text-white' : 'bg-gray-100'}`}>{v.to === '/admin/solicitudes' ? 'Recibidas' : 'Citas por confirmar'}</Link>)}</nav>}
   </section>;
 }

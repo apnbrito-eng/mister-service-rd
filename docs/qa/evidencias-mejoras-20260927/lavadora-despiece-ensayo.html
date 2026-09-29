@@ -1,0 +1,85 @@
+<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lavadora · ensayo de despiece</title><style>*{box-sizing:border-box}body{margin:0;background:#f5f6f8;color:#14263c;font:16px system-ui}header{position:fixed;top:0;left:0;right:0;padding:18px 5vw;z-index:3;background:#f5f6f8}h1{font-size:clamp(22px,4vw,38px);margin:0 0 8px}p{margin:0;color:#566477;font-size:14px}.track{height:320vh}.stage{position:sticky;top:0;height:100vh;display:grid;place-items:center;overflow:hidden}svg{width:min(92vw,1000px);height:75vh;margin-top:70px}.layer{will-change:transform}footer{position:fixed;bottom:0;left:0;right:0;padding:16px 5vw;background:#f5f6f8;display:flex;gap:18px;align-items:center}input{width:min(65vw,400px);min-height:44px}label{font-size:14px}button{min-height:44px;border:1px solid #b7c1ce;background:white;color:#0f3460;border-radius:10px;padding:8px 14px}small{display:block;margin-top:8px;font-size:12px} @media(prefers-reduced-motion:reduce){.track{height:100vh}}</style><header><h1>El interior, pieza por pieza.</h1><p>Baja para separar las piezas. Sube para volver a ensamblarlas.</p><small>Ensayo visual · representación esquemática, no guía de desmontaje.</small></header><main class="track"><div class="stage"><svg viewBox="0 0 1000 650" role="img" aria-label="Esquema de lavadora con capas que se separan"><defs><linearGradient id="metal"><stop stop-color="#d8dee5"/><stop offset=".48" stop-color="#fafbfd"/><stop offset="1" stop-color="#a9b6c4"/></linearGradient></defs><ellipse cx="500" cy="555" rx="190" ry="20" fill="#dce2ea"/><g class="layer" data-x="160" data-y="-18"><rect x="340" y="130" width="320" height="405" rx="22" fill="url(#metal)" stroke="#8998a8" stroke-width="3"/><rect x="359" y="150" width="282" height="365" rx="15" fill="#586777"/><path d="M374 166h252M374 496h252" stroke="#8e9ca9" stroke-width="5"/><text x="500" y="585" text-anchor="middle" fill="#536276" class="caption">Carcasa</text></g><g class="layer" data-x="55" data-y="-5"><circle cx="500" cy="344" r="133" fill="url(#metal)" stroke="#8795a5" stroke-width="8"/><circle cx="500" cy="344" r="111" fill="#748395"/><circle cx="500" cy="344" r="86" fill="#a5b0bb"/><path d="M419 311l155 63M445 420l65-157M575 290L430 389" stroke="#d9e1e8" stroke-width="8"/><text x="500" y="585" text-anchor="middle" fill="#536276" class="caption">Tambor</text></g><g class="layer" data-x="-70" data-y="12"><rect x="340" y="130" width="320" height="405" rx="22" fill="#fafbfc" stroke="#9ba8b7" stroke-width="3"/><rect x="360" y="150" width="102" height="33" rx="5" fill="#e0e5eb"/><circle cx="545" cy="168" r="19" fill="url(#metal)" stroke="#9ba8b7"/><rect x="581" y="155" width="50" height="23" rx="4" fill="#203e60"/><circle cx="500" cy="344" r="118" fill="#5e7185" stroke="#c1cbd6" stroke-width="13"/><circle cx="500" cy="344" r="98" fill="#9eafbf"/><rect x="367" y="490" width="264" height="10" rx="5" fill="#dce3eb"/><text x="500" y="585" text-anchor="middle" fill="#536276" class="caption">Panel frontal</text></g><g class="layer" data-x="-205" data-y="30"><circle cx="500" cy="344" r="114" fill="url(#metal)" stroke="#e8edf2" stroke-width="5"/><circle cx="500" cy="344" r="94" fill="#233e5c"/><circle cx="500" cy="344" r="80" fill="#54718d"/><path d="M452 295Q500 255 548 295" fill="none" stroke="#b4c8da" stroke-width="8" stroke-linecap="round"/><rect x="590" y="323" width="13" height="42" rx="6" fill="#e3e9ef"/><text x="500" y="585" text-anchor="middle" fill="#536276" class="caption">Puerta</text></g></svg></div></main><footer><label for="progress">Despiece</label><input id="progress" aria-label="Avance del despiece" type="range" min="0" max="100" value="0"><button id="reset">Ensamblar</button></footer><script>
+const deslizador = document.querySelector('input');
+const capas = [...document.querySelectorAll('.layer')];
+const movimientoReducido = matchMedia('(prefers-reduced-motion: reduce)');
+// Resorte físico crítico: misma posición y velocidad al invertir el scroll.
+const resorte = { frecuencia: 20, reposoPosicion: 0.0001, reposoVelocidad: 0.0001, pasoMaximo: 0.05 };
+const limitar = valor => Math.max(0, Math.min(1, valor));
+const suavizar = valor => { const t = limitar(valor); return t * t * (3 - 2 * t); };
+let posicion = 0, destino = 0, velocidad = 0, cuadro = null, tiempoAnterior = null;
+let entradaManual = false;
+function dibujar() {
+  deslizador.value = String(posicion * 100);
+  capas.forEach((capa, indice) => {
+    // La puerta inicia el recorrido; las piezas interiores la siguen progresivamente.
+    const inicio = (capas.length - 1 - indice) * 0.055;
+    const avance = suavizar((posicion - inicio) / (1 - inicio));
+    capa.style.transform = `translate(${Number(capa.dataset.x) * avance}px, ${Number(capa.dataset.y) * avance}px)`;
+    capa.querySelector('.caption').style.opacity = String(suavizar((avance - 0.5) / 0.45));
+  });
+}
+function detener() {
+  if (cuadro !== null) cancelAnimationFrame(cuadro);
+  cuadro = null;
+  tiempoAnterior = null;
+}
+function avanzar(tiempo) {
+  cuadro = null;
+  if (movimientoReducido.matches) { velocidad = 0; tiempoAnterior = null; return; }
+  const paso = tiempoAnterior === null ? 0 : Math.min(resorte.pasoMaximo, (tiempo - tiempoAnterior) / 1000);
+  tiempoAnterior = tiempo;
+  // Solución analítica del resorte crítico; estable incluso si se pierde un frame.
+  const diferencia = posicion - destino;
+  const impulso = velocidad + resorte.frecuencia * diferencia;
+  const caida = Math.exp(-resorte.frecuencia * paso);
+  posicion = limitar(destino + (diferencia + impulso * paso) * caida);
+  velocidad = (velocidad - resorte.frecuencia * impulso * paso) * caida;
+  if (Math.abs(posicion - destino) < resorte.reposoPosicion && Math.abs(velocidad) < resorte.reposoVelocidad) {
+    posicion = destino;
+    velocidad = 0;
+    tiempoAnterior = null;
+    dibujar();
+    return;
+  }
+  dibujar();
+  cuadro = requestAnimationFrame(avanzar);
+}
+function dirigir(valor) {
+  destino = limitar(valor);
+  if (movimientoReducido.matches) return;
+  if (cuadro === null) cuadro = requestAnimationFrame(avanzar);
+}
+function seguirScroll() {
+  if (movimientoReducido.matches) return;
+  entradaManual = false;
+  dirigir(scrollY / Math.max(1, document.documentElement.scrollHeight - innerHeight));
+}
+addEventListener('scroll', seguirScroll, { passive: true });
+addEventListener('resize', () => { if (!entradaManual) seguirScroll(); });
+deslizador.addEventListener('pointerdown', () => { entradaManual = true; detener(); velocidad = 0; });
+deslizador.addEventListener('input', () => {
+  entradaManual = true;
+  detener();
+  velocidad = 0;
+  posicion = destino = limitar(Number(deslizador.value) / 100);
+  dibujar();
+});
+document.querySelector('button').onclick = () => {
+  entradaManual = false;
+  scrollTo({ top: 0, behavior: 'instant' });
+  if (movimientoReducido.matches) {
+    detener(); velocidad = 0; posicion = destino = 0; dibujar();
+  } else dirigir(0);
+};
+function cambiarPreferencia() {
+  detener();
+  velocidad = 0;
+  destino = posicion;
+  // Mantener la imagen actual: el deslizador sigue disponible sin movimiento autónomo.
+  dibujar();
+}
+movimientoReducido.addEventListener('change', cambiarPreferencia);
+addEventListener('pagehide', detener);
+dibujar();
+if (scrollY > 0) seguirScroll();
+</script></html>

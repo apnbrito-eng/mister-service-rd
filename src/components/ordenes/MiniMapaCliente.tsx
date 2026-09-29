@@ -22,13 +22,23 @@ function AutoPanTo({ lat, lng }: { lat: number; lng: number }) {
   useEffect(() => {
     map.setView([lat, lng], map.getZoom());
   }, [lat, lng, map]);
+  useEffect(() => {
+    const container = map.getContainer();
+    const resize = () => { if (container.clientWidth && container.clientHeight) map.invalidateSize({ pan: false }); };
+    resize();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(resize);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [map]);
   return null;
 }
 
 export default function MiniMapaCliente({ lat, lng, direccion, height = 180 }: Props) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return <p className="text-sm text-gray-500">Las coordenadas guardadas no son válidas para mostrar el mapa.</p>;
   return (
     <div
-      className="rounded-xl overflow-hidden border border-gray-200 mt-2"
+      className="relative isolate rounded-xl overflow-hidden border border-gray-200 mt-2"
       style={{ height: `${height}px` }}
     >
       <MapContainer

@@ -271,7 +271,7 @@ export default function GestionOrden({
         </h3>
         <p>{o.clienteNombre}</p>
         <p className="mt-2">
-          Responsable:{" "}
+          Responsable de esta orden:{" "}
           <strong>
             {meta.responsableNombre ||
               o.responsableNombre ||
@@ -280,7 +280,7 @@ export default function GestionOrden({
           </strong>
         </p>
         <p>
-          Responsable habitual del cliente:{" "}
+          Responsable de cartera:{" "}
           {datos.cartera?.responsableNombre || "Sin asignar"}
         </p>
         <p>Etapa: {meta.etapa || "Por registrar"}</p>

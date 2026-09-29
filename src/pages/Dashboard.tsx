@@ -1071,7 +1071,7 @@ export default function Dashboard() {
                 <Wallet size={20} className="text-primary-medium" />
                 <h2 className="text-lg font-semibold text-gray-900">Próxima nómina</h2>
               </div>
-              <Link to="/admin/nomina" className="text-xs text-primary-medium hover:underline font-medium">
+              <Link to="/admin/nomina" className="min-h-11 inline-flex items-center text-xs text-primary-medium hover:underline font-medium">
                 Ver nómina completa →
               </Link>
             </div>
@@ -1106,7 +1106,7 @@ export default function Dashboard() {
         <div className="flex justify-center">
           <Link
             to="/admin/reporte-avanzado"
-            className="inline-flex items-center gap-1.5 text-sm text-primary-medium hover:underline font-medium"
+            className="min-h-11 inline-flex items-center gap-1.5 text-sm text-primary-medium hover:underline font-medium"
           >
             Ver reporte avanzado (rendimiento por técnico, anulaciones, nómina del mes, reparaciones por tipo) →
           </Link>

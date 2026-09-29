@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const m=vi.hoisted(()=>({ comision:{} as Record<string,any>, orden:{} as Record<string,any>, writes:[] as any[], cantidad:1 }));
-vi.mock('../../src/firebase/config',()=>({db:{}}));
+const m=vi.hoisted(()=>({ comision:{} as Record<string,any>, orden:{} as Record<string,any>, writes:[] as any[], cantidad:1, auth: { currentUser: {uid:'admin'} as {uid:string}|null } }));
+vi.mock('../../src/firebase/config',()=>({db:{},auth:m.auth}));
 vi.mock('firebase/firestore',async importOriginal=>({
  ...await importOriginal<any>(),
  collection:(_db:unknown,name:string)=>({name}),
@@ -19,9 +19,22 @@ const args={ordenGarantiaId:'g1',ordenOriginalId:'o1',tecnicoOriginalUid:'t1',co
 beforeEach(()=>{
  m.comision={ordenId:'o1',tecnicoId:'t1',estadoLiquidacion:'pendiente',comisionMonto:1500};
  m.orden={esGarantia:true,referenciaOrdenId:'o1',tecnicoOriginalUid:'t1',cierreServicio:{fechaCierre:new Date(),piezasValidadasPorAdmin:true,piezasUsadas:[{cantidad:2,costoUnitario:500}]}};
- m.writes=[];m.cantidad=1;
+ m.writes=[];m.cantidad=1;m.auth.currentUser={uid:'admin'};
 });
 describe('Aplicación administrativa de garantía',()=>{
+ it('usa la sesión aunque reciba identidad vacía o de perfil',async()=>{
+  for (const uid of ['', undefined, 'perfil-distinto']) {
+   m.writes=[];
+   expect(await aplicar({...args,solicitanteUid:uid})).toMatchObject({aplicado:true});
+   expect(m.writes[1].data.solicitanteUid).toBe('admin');
+   expect(m.writes[0].data.descuentoPorGarantia.aplicadoPor).toBe('admin');
+  }
+ });
+ it('sin sesión no escribe y devuelve una razón clara',async()=>{
+  m.auth.currentUser=null;
+  expect(await aplicar(args)).toMatchObject({aplicado:false,razon:expect.stringContaining('sesión')});
+  expect(m.writes).toHaveLength(0);
+ });
  it('guarda descuento y auditoría juntos',async()=>{
   expect(await aplicar(args)).toMatchObject({aplicado:true,monto:-100});
   expect(m.writes).toHaveLength(2); expect(m.writes[0].data.descuentoPorGarantia.monto).toBe(-100);

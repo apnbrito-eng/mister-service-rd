@@ -30,32 +30,18 @@ service firebase.storage {
       allow delete: if false;
     }
 
-    // Fotos de equipos subidas desde el formulario público de agendar
-    // (sin auth). Limitado por content-type + size. Lectura solo staff
-    // autenticado.
-    // Path: `fotos-equipos-publico/{citaId}/{archivo}`.
+    // Fotos públicas nuevas: permiso firmado emitido por API con App Check y cuota.
+    // Los archivos existentes siguen legibles por staff; el comodín autenticado se conserva.
     match /fotos-equipos-publico/{citaId}/{fileName} {
-      allow write: if request.resource.contentType.matches('image/.*')
-                   && request.resource.size < 5 * 1024 * 1024;
+      // Público sube con PUT firmado, emitido por API con App Check y cuota.
+      allow write: if false;
       allow read: if request.auth != null;
       allow delete: if false;
     }
 
-    // Archivos subidos desde formularios dinámicos públicos `/f/:slug`
-    // (sin auth — el formulario público los necesita para que el lead llegue).
-    // Limitado por content-type (imágenes + PDF) + tamaño. Espejo de
-    // `fotos-equipos-publico` pero con whitelist amplio para tipo `archivo`
-    // (clientes mandan PDFs de cotizaciones competidoras, fotos de equipos,
-    // copias de garantías, etc.).
-    // Path: `solicitudes-publico/{solicitudId}/{campoId}/{archivo}`.
-    // SPRINT-FIX-LEADS-FORMULARIO-PUBLICO (2026-05-25) — opción A aprobada
-    // por Jorge (`OK: jorge 2026-05-25 opcion=A deploy=auto incluir-gps=si`).
-    // REGLA DE ORO: NO endurecer el comodín {allPaths=**} ni el match
-    // `fotos-equipos-publico/**`, solo AGREGAR este match nuevo.
+    // Archivos dinámicos: la API fija tamaño, MIME explícito y ruta aleatoria.
     match /solicitudes-publico/{solicitudId}/{campoId}/{archivo} {
-      allow write: if (request.resource.contentType.matches('image/.*')
-                       || request.resource.contentType == 'application/pdf')
-                   && request.resource.size < 10 * 1024 * 1024;
+      allow write: if false;
       allow read: if request.auth != null;
       allow delete: if false;
     }

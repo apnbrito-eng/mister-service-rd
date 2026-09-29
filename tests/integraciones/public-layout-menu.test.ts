@@ -1,0 +1,22 @@
+import React from 'react';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { MemoryRouter } from 'react-router-dom';
+import { afterEach, expect, it, vi } from 'vitest';
+vi.mock('../../src/hooks/useConfigWeb', () => ({ useConfigWeb: () => ({ config: { contacto: { telefono: '', email: '', horario: '', direccion: '' }, whatsapp: { mensajePredeterminado: 'Hola' } } }) }));
+import PublicLayout from '../../src/components/public/PublicLayout';
+let tree: ReactTestRenderer;
+afterEach(() => { act(() => tree?.unmount()); vi.unstubAllGlobals(); });
+it('menú móvil tiene nombre, área táctil y estado expandido asociado al panel', () => {
+ vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
+ act(() => { tree = create(React.createElement(MemoryRouter, {}, React.createElement(PublicLayout))); });
+ let boton = tree.root.findByProps({ 'aria-label': 'Abrir menú' });
+ expect(boton.props.className).toContain('min-h-[48px]');
+ expect(boton.props.className).toContain('min-w-[48px]');
+ expect(boton.props['aria-expanded']).toBe(false);
+ act(() => boton.props.onClick());
+ boton = tree.root.findByProps({ 'aria-label': 'Cerrar menú' });
+ expect(boton.props['aria-expanded']).toBe(true);
+ expect(tree.root.findByProps({ id: boton.props['aria-controls'] })).toBeDefined();
+ act(() => boton.props.onClick());
+ expect(tree.root.findAllByProps({ id: 'menu-publico-movil' })).toHaveLength(0);
+});

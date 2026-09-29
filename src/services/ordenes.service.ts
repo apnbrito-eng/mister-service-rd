@@ -3,7 +3,7 @@ import {
   updateDoc, arrayUnion, collection, query, where, getDocs, onSnapshot,
   limit, deleteField,
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, auth } from '../firebase/config';
 import { crearRegistroAuditoria, generarTokenPortalCliente, parseOrden } from '../utils';
 import { stripUndefined } from '../utils/firestore';
 import type { OrdenServicio, Personal, PropuestaReprogramacion, SugerenciaSoloChequeo } from '../types';
@@ -21,7 +21,7 @@ export interface ReactivarOrdenPostChequeoResult {
     | 'orden_no_existe'
     | 'ya_reactivada'
     | 'no_es_solo_chequeo'
-    | 'error_interno';
+    | 'error_interno' | 'sin_sesion';
 }
 
 /**
@@ -1226,7 +1226,7 @@ export async function obtenerTodasOrdenesPorTelefono(
  */
 export interface ConfirmarPagoResult {
   ok: boolean;
-  razon?: 'orden_no_existe' | 'pago_no_existe' | 'ya_confirmado' | 'error_interno';
+  razon?: 'orden_no_existe' | 'pago_no_existe' | 'ya_confirmado' | 'error_interno' | 'sin_sesion';
 }
 
 /**
@@ -1261,14 +1261,15 @@ export interface ConfirmarPagoResult {
  * @param ordenId — ID del doc en `ordenes_servicio`.
  * @param pagoId — `pagos[i].id` a confirmar.
  * @param confirmadoPor — `{id: currentUser.uid, nombre: userProfile.nombre}`.
- *   IMPORTANTE: el `id` debe ser `currentUser.uid`, NO `userProfile.id`
- *   (gotcha P-001). El caller es responsable.
+ *   El id se conserva por compatibilidad; el actor efectivo se obtiene de Auth.
  */
 export async function confirmarPagoOrden(
   ordenId: string,
   pagoId: string,
   confirmadoPor: { id: string; nombre: string },
 ): Promise<ConfirmarPagoResult> {
+  const actorUid = auth.currentUser?.uid;
+  if (!actorUid) return { ok: false, razon: 'sin_sesion' };
   const ordenRef = doc(db, 'ordenes_servicio', ordenId);
   const auditoriaRef = doc(collection(db, 'auditoria_admin'));
 
@@ -1296,7 +1297,7 @@ export async function confirmarPagoOrden(
       const pagoActualizado: Record<string, unknown> = {
         ...pagoActual,
         verificado: true,
-        verificadoPorId: confirmadoPor.id,
+        verificadoPorId: actorUid,
         verificadoPorNombre: confirmadoPor.nombre,
         verificadoAt: ahora,
       };
@@ -1314,7 +1315,8 @@ export async function confirmarPagoOrden(
         accion: 'pago.confirmado',
         ordenId,
         pagoId,
-        actorId: confirmadoPor.id,
+        actorId: actorUid,
+        actorUid: actorUid,
         actorNombre: confirmadoPor.nombre,
         monto: typeof pagoActual.monto === 'number' ? pagoActual.monto : 0,
         metodo: pagoActual.metodo ?? null,

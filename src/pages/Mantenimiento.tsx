@@ -1,3 +1,6 @@
+import { useNavigate } from 'react-router-dom';
+import { resolverChatCliente } from '../utils/resolverChatCliente';
+import { fechaProgramadaRD, estadoFechaMantenimiento } from '../utils/fechaMantenimiento';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, getDocs, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -10,7 +13,7 @@ import { useTiposEquipo } from '../hooks/useTiposEquipo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Plus, Calendar, Check, X, RefreshCw, Search } from 'lucide-react';
-import { isBefore, addMonths } from 'date-fns';
+import { addMonths } from 'date-fns';
 import toast from 'react-hot-toast';
 
 const FRECUENCIA_LABELS: Record<string, string> = {
@@ -56,6 +59,10 @@ const FORM_INICIAL: FormState = {
 
 export default function Mantenimiento() {
   const tiposEquipo = useTiposEquipo();
+  const navigate = useNavigate();
+  const busquedaVersion = useRef(0);
+  const generando = useRef(new Set<string>());
+  const guardandoRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<MantenimientoType[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
@@ -98,6 +105,8 @@ export default function Mantenimiento() {
       );
     });
     return () => {
+      busquedaVersion.current++;
+      if (telefonoSearchTimeout.current) clearTimeout(telefonoSearchTimeout.current);
       unsub();
       unsubClientes();
     };
@@ -120,6 +129,8 @@ export default function Mantenimiento() {
   }, [clientes, clienteBusqueda]);
 
   const handleSelectCliente = (c: Cliente) => {
+    busquedaVersion.current++;
+    if (telefonoSearchTimeout.current) clearTimeout(telefonoSearchTimeout.current);
     setForm(f => ({
       ...f,
       clienteId: c.id,
@@ -136,6 +147,7 @@ export default function Mantenimiento() {
   };
 
   const handleClienteTelefonoChange = (telefono: string) => {
+    const version = ++busquedaVersion.current;
     setForm(f => ({ ...f, clienteTelefono: telefono }));
     if (form.clienteId) {
       // si tenía cliente seleccionado y cambia el teléfono, desliga.
@@ -151,6 +163,7 @@ export default function Mantenimiento() {
     telefonoSearchTimeout.current = setTimeout(async () => {
       try {
         const existente = await buscarClientePorTelefono(telefono);
+        if (version !== busquedaVersion.current) return;
         if (existente) {
           setForm(f => ({
             ...f,
@@ -168,12 +181,13 @@ export default function Mantenimiento() {
       } catch (err) {
         console.error('Error buscando cliente por teléfono:', err);
       } finally {
-        setBuscandoTelefono(false);
+        if (version === busquedaVersion.current) setBuscandoTelefono(false);
       }
     }, 400);
   };
 
   const resetForm = () => {
+    busquedaVersion.current++;
     setForm(FORM_INICIAL);
     setClienteBusqueda('');
     setShowClienteDropdown(false);
@@ -186,6 +200,7 @@ export default function Mantenimiento() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (guardandoRef.current) return;
     // SPRINT-AGENDA-1 (2026-05-25): un mantenimiento NO se crea sin
     // cliente real amarrado. Antes guardaba `clienteId: ''` y todo el
     // flujo aguas abajo (orden generada, histórico cliente, descuento
@@ -204,10 +219,12 @@ export default function Mantenimiento() {
       toast.error('Teléfono inválido. Debe ser un número RD de 10 dígitos.');
       return;
     }
-    if (!form.proximaFecha) {
+    const fechaProgramada = fechaProgramadaRD(form.proximaFecha);
+    if (!fechaProgramada) {
       toast.error('Fecha próxima requerida');
       return;
     }
+    guardandoRef.current = true;
     setSaving(true);
     try {
       // Resolver o crear el cliente. Si el form trae `clienteId` (vino del
@@ -234,7 +251,7 @@ export default function Mantenimiento() {
         clienteDireccion: form.clienteDireccion.trim() || '',
         equipoTipo: form.equipoTipo,
         frecuencia: form.frecuencia,
-        proximaFecha: Timestamp.fromDate(new Date(form.proximaFecha)),
+        proximaFecha: Timestamp.fromDate(fechaProgramada),
         tecnicoId: form.tecnicoId || '',
         activo: true,
         createdAt: Timestamp.now(),
@@ -254,6 +271,7 @@ export default function Mantenimiento() {
       console.error('Error programando mantenimiento:', err);
       toast.error(err instanceof Error ? err.message : 'Error al programar mantenimiento');
     } finally {
+      guardandoRef.current = false;
       setSaving(false);
     }
   };
@@ -274,6 +292,7 @@ export default function Mantenimiento() {
   // que `useOrdenCreateForm`. NO duplicamos lógica de selección de cliente
   // — eso vive en el modal de alta.
   const handleGenerarOrden = async (item: MantenimientoType) => {
+    if (generando.current.has(item.id)) return;
     // Defense-in-depth: mantenimientos viejos (pre SPRINT-AGENDA-1) pueden
     // tener `clienteId: ''`. NO generamos orden huérfana — pedimos editar.
     if (!item.clienteId) {
@@ -281,6 +300,7 @@ export default function Mantenimiento() {
       return;
     }
     try {
+      generando.current.add(item.id);
       const numero = await siguienteNumeroOrden();
       const ahora = Timestamp.now();
       const meses = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 }[item.frecuencia] || 3;
@@ -370,7 +390,7 @@ export default function Mantenimiento() {
     } catch (err) {
       console.error('Error al generar orden de mantenimiento:', err);
       toast.error('Error al generar orden');
-    }
+    } finally { generando.current.delete(item.id); }
   };
 
   const toggleActivo = async (item: MantenimientoType) => {
@@ -390,29 +410,39 @@ export default function Mantenimiento() {
   // sin Auth (alta vieja sin doble-doc — P-004 ya cubre futuras altas).
   const tecnicos = personal.filter(p => p.rol === 'tecnico' && p.activo && p.uid);
 
+  const abrirChat = async (item: MantenimientoType) => {
+    const cliente = clientes.find(c => c.id === item.clienteId);
+    if (!cliente) { toast.error('Vincula este mantenimiento a un cliente vigente antes de abrir la conversación.'); return; }
+    try { const waId = await resolverChatCliente(cliente); navigate(`/admin/inbox/${encodeURIComponent(waId)}?clienteId=${encodeURIComponent(cliente.id)}`); }
+    catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo abrir el chat.'); }
+  };
+
   if (loading) return <LoadingSpinner fullPage text="Cargando mantenimientos..." />;
 
-  const vencidos = items.filter(i => i.activo && isBefore(i.proximaFecha, new Date()));
-  const proximos = items.filter(i => i.activo && !isBefore(i.proximaFecha, new Date()));
+  const vencidos = items.filter(i => i.activo && estadoFechaMantenimiento(i.proximaFecha) === 'vencido');
+  const hoy = items.filter(i => i.activo && estadoFechaMantenimiento(i.proximaFecha) === 'hoy');
+  const proximos = items.filter(i => i.activo && estadoFechaMantenimiento(i.proximaFecha) === 'proximo');
   const inactivos = items.filter(i => !i.activo);
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-primary">Mantenimiento Programado</h1>
         <button onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
+          className="flex min-h-11 shrink-0 items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
           <Plus size={18} /> Programar
         </button>
       </div>
 
+      <p className="text-sm text-gray-600">Aviso interno el día programado (0 días de antelación). El envío de la plantilla al cliente es manual desde WhatsApp empresa.</p>
+      {hoy.length > 0 && <section><h2 className="font-semibold mb-2">Hoy ({hoy.length})</h2><div className="space-y-2">{hoy.map(item => <MantenimientoCard key={item.id} item={item} onGenerar={handleGenerarOrden} onToggle={toggleActivo} onChat={abrirChat} onFicha={i => navigate(`/admin/clientes?id=${encodeURIComponent(i.clienteId)}`)} />)}</div></section>}
       {/* Vencidos */}
       {vencidos.length > 0 && (
         <div>
           <h2 className="text-sm font-semibold text-red-600 mb-2 uppercase">Vencidos ({vencidos.length})</h2>
           <div className="space-y-2">
             {vencidos.map(item => (
-              <MantenimientoCard key={item.id} item={item} onGenerar={handleGenerarOrden} onToggle={toggleActivo} isVencido />
+              <MantenimientoCard key={item.id} item={item} onGenerar={handleGenerarOrden} onToggle={toggleActivo} onChat={abrirChat} onFicha={i => navigate(`/admin/clientes?id=${encodeURIComponent(i.clienteId)}`)} isVencido />
             ))}
           </div>
         </div>
@@ -428,7 +458,7 @@ export default function Mantenimiento() {
         ) : (
           <div className="space-y-2">
             {proximos.map(item => (
-              <MantenimientoCard key={item.id} item={item} onGenerar={handleGenerarOrden} onToggle={toggleActivo} />
+              <MantenimientoCard key={item.id} item={item} onGenerar={handleGenerarOrden} onToggle={toggleActivo} onChat={abrirChat} onFicha={i => navigate(`/admin/clientes?id=${encodeURIComponent(i.clienteId)}`)} />
             ))}
           </div>
         )}
@@ -439,7 +469,7 @@ export default function Mantenimiento() {
           <h2 className="text-sm font-semibold text-gray-400 mb-2 uppercase">Inactivos ({inactivos.length})</h2>
           <div className="space-y-2">
             {inactivos.map(item => (
-              <MantenimientoCard key={item.id} item={item} onGenerar={handleGenerarOrden} onToggle={toggleActivo} />
+              <MantenimientoCard key={item.id} item={item} onGenerar={handleGenerarOrden} onToggle={toggleActivo} onChat={abrirChat} onFicha={i => navigate(`/admin/clientes?id=${encodeURIComponent(i.clienteId)}`)} />
             ))}
           </div>
         </div>
@@ -614,32 +644,34 @@ export default function Mantenimiento() {
   );
 }
 
-function MantenimientoCard({ item, onGenerar, onToggle, isVencido }: {
+function MantenimientoCard({ item, onGenerar, onToggle, onChat, onFicha, isVencido }: {
   item: MantenimientoType; onGenerar: (i: MantenimientoType) => void;
-  onToggle: (i: MantenimientoType) => void; isVencido?: boolean;
+  onToggle: (i: MantenimientoType) => void; onChat: (i: MantenimientoType) => void; onFicha: (i: MantenimientoType) => void; isVencido?: boolean;
 }) {
   return (
-    <div className={`bg-white rounded-xl shadow-sm border p-4 flex items-center gap-4 ${
+    <div className={`bg-white rounded-xl shadow-sm border p-4 flex flex-wrap items-center gap-4 ${
       isVencido ? 'border-red-200 bg-red-50/50' : !item.activo ? 'opacity-50 border-gray-100' : 'border-gray-100'
     }`}>
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isVencido ? 'bg-red-100' : 'bg-primary/10'}`}>
         <Calendar size={18} className={isVencido ? 'text-red-600' : 'text-primary'} />
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-[160px]">
         <p className="text-sm font-medium text-gray-900">{item.clienteNombre}</p>
         <p className="text-xs text-gray-500">
           {item.equipoTipo} · {FRECUENCIA_LABELS[item.frecuencia]} · {formatFechaCorta(item.proximaFecha)}
         </p>
       </div>
-      <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+        {item.clienteId && <button type="button" onClick={() => onFicha(item)} className="min-h-11 px-3 border rounded-lg text-sm">Ver cliente</button>}
+        <button type="button" onClick={() => onChat(item)} className="min-h-11 px-3 border rounded-lg text-sm">WhatsApp empresa</button>
         {item.activo && (
           <button onClick={() => onGenerar(item)}
-            className="flex items-center gap-1 bg-primary hover:bg-primary-medium text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
+            className="flex min-h-11 items-center gap-1 bg-primary hover:bg-primary-medium text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">
             <RefreshCw size={12} /> Generar Orden
           </button>
         )}
-        <button onClick={() => onToggle(item)}
-          className={`p-1.5 rounded-lg text-xs ${item.activo ? 'hover:bg-red-50 text-red-500' : 'hover:bg-green-50 text-green-500'}`}>
+        <button aria-label={item.activo ? "Desactivar mantenimiento" : "Activar mantenimiento"} onClick={() => onToggle(item)}
+          className={`min-h-11 min-w-11 p-1.5 rounded-lg text-xs ${item.activo ? 'hover:bg-red-50 text-red-500' : 'hover:bg-green-50 text-green-500'}`}>
           {item.activo ? <X size={14} /> : <Check size={14} />}
         </button>
       </div>

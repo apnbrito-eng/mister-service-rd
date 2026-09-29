@@ -85,6 +85,8 @@ export default function PagosPendientes() {
       });
       if (r.ok) {
         toast.success('Pago confirmado');
+      } else if (r.razon === 'sin_sesion') {
+        toast.error('Tu sesión terminó. Vuelve a iniciar sesión antes de confirmar el pago.');
       } else if (r.razon === 'ya_confirmado') {
         toast.success('Ese pago ya estaba confirmado (sin cambios)');
       } else if (r.razon === 'orden_no_existe') {

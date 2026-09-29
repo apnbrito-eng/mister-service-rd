@@ -2,7 +2,8 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { Phone, Mail, MapPin, Clock, Menu, X } from 'lucide-react';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import { useState, useEffect } from 'react';
-import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
+import { useConfigWeb } from '../../hooks/useConfigWeb';
+import { WHATSAPP_PUBLICO, obtenerWhatsAppPublico } from '../../utils/whatsappPublico';
 import { ConfigWeb } from '../../services/configWeb.service';
 
 function PublicNav({ config }: { config: ConfigWeb }) {
@@ -79,7 +80,7 @@ function PublicNav({ config }: { config: ConfigWeb }) {
             </Link>
           ))}
           <a
-            href={getWhatsAppUrl(config)}
+            href={obtenerWhatsAppPublico(config)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
@@ -90,8 +91,12 @@ function PublicNav({ config }: { config: ConfigWeb }) {
 
         {/* Mobile toggle */}
         <button
+          type="button"
+          aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
+          aria-expanded={menuOpen}
+          aria-controls="menu-publico-movil"
           onClick={() => setMenuOpen(!menuOpen)}
-          className="md:hidden p-2 text-gray-700 hover:text-primary"
+          className="md:hidden min-h-[48px] min-w-[48px] p-2 text-gray-700 hover:text-primary"
         >
           {menuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -99,7 +104,7 @@ function PublicNav({ config }: { config: ConfigWeb }) {
 
       {/* Mobile menu */}
       {menuOpen && (
-        <div className="md:hidden bg-white border-t border-gray-100 px-4 py-4 space-y-3 shadow-lg">
+        <div id="menu-publico-movil" className="md:hidden bg-white border-t border-gray-100 px-4 py-4 space-y-3 shadow-lg">
           {navLinks.map(link => (
             <Link
               key={link.to}
@@ -114,7 +119,7 @@ function PublicNav({ config }: { config: ConfigWeb }) {
             </Link>
           ))}
           <a
-            href={getWhatsAppUrl(config)}
+            href={obtenerWhatsAppPublico(config)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-3 rounded-xl text-sm font-semibold w-full"
@@ -166,9 +171,9 @@ function Footer({ config }: { config: ConfigWeb }) {
           <div>
             <h3 className="font-semibold text-lg mb-4">Contacto</h3>
             <div className="space-y-3">
-              {config.whatsapp.numeros.some(n => n.activo) && (
+              {(
                 <a
-                  href={getWhatsAppUrl(config)}
+                  href={obtenerWhatsAppPublico(config)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-center gap-3 bg-green-500 hover:bg-green-600 text-white text-base sm:text-lg font-semibold px-6 py-4 rounded-xl shadow-lg transition w-full mb-4"
@@ -181,9 +186,7 @@ function Footer({ config }: { config: ConfigWeb }) {
               <div className="flex items-start gap-2 text-sm text-blue-200">
                 <Phone size={14} className="mt-0.5 shrink-0" />
                 <div>
-                  {config.whatsapp.numeros.filter(n => n.activo).map((n, i) => (
-                    <span key={i} className="block">{n.numero}</span>
-                  ))}
+                  <span className="block">+{WHATSAPP_PUBLICO}</span>
                 </div>
               </div>
               <div className="flex items-start gap-2 text-sm text-blue-200">
@@ -222,7 +225,8 @@ export default function PublicLayout() {
   // El form `/agendar` ya tiene su propio CTA de WhatsApp (en la pantalla
   // post-submit y al final del form). El botón flotante tapa el botón
   // submit en mobile y duplica la acción, así que lo ocultamos aquí.
-  const ocultarWhatsAppFlotante = location.pathname === '/agendar';
+  // La portada escena ya presenta su acción WhatsApp junto a la selección; el flotante cubría equipos en375px.
+  const ocultarWhatsAppFlotante = location.pathname === '/agendar' || (location.pathname === '/' && config.hero?.modo === 'escena');
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -238,7 +242,7 @@ export default function PublicLayout() {
           z-40 (no z-50) para no chocar con modales/banners del sistema. */}
       {!ocultarWhatsAppFlotante && (
         <a
-          href={getWhatsAppUrl(config)}
+          href={obtenerWhatsAppPublico(config)}
           target="_blank"
           rel="noopener noreferrer"
           className="fixed bottom-6 right-6 z-40 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition-colors"

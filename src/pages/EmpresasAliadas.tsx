@@ -140,11 +140,11 @@ export default function EmpresasAliadas() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="min-h-screen bg-[#f0f4f8] p-6">
+    <div className="min-h-full bg-[#f0f4f8] p-4 sm:p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary rounded-xl">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="shrink-0 p-2 bg-primary rounded-xl">
             <Building2 size={24} className="text-white" />
           </div>
           <div>
@@ -170,7 +170,31 @@ export default function EmpresasAliadas() {
             <p className="text-sm mt-1">Crea la primera empresa aliada para comenzar</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <ul aria-label="Empresas Aliadas" className="lg:hidden divide-y divide-gray-100">
+            {empresas.map((empresa) => (
+              <li key={empresa.id} className="min-w-0 p-4">
+                <div className="flex items-start gap-3">
+                  {empresa.logoUrl ? <img src={empresa.logoUrl} alt={empresa.nombre} className="h-10 w-10 shrink-0 rounded-full object-cover" />
+                    : <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-100"><ImageIcon size={20} className="text-gray-400" /></div>}
+                  <div className="min-w-0 flex-1">
+                    <h2 className="break-words text-base font-semibold text-gray-900">{empresa.nombre}</h2>
+                    <span className={`mt-1 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${empresa.activa ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{empresa.activa ? 'Activa' : 'Inactiva'}</span>
+                  </div>
+                </div>
+                <dl className="mt-4 space-y-3 text-sm">
+                  <div><dt className="text-xs text-gray-500">Contacto</dt><dd className="break-words text-gray-700">{empresa.contactoNombre || '-'}</dd>{empresa.contactoTelefono && <dd className="break-words text-gray-700">{empresa.contactoTelefono}</dd>}</div>
+                  <div><dt className="text-xs text-gray-500">Email</dt><dd className="break-all text-gray-700">{empresa.contactoEmail || '-'}</dd></div>
+                </dl>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => openEdit(empresa)} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm text-gray-700 hover:bg-gray-100"><Edit size={16} />Editar</button>
+                  <button type="button" onClick={() => handleToggleActiva(empresa)} disabled={togglingId === empresa.id}
+                    className={`inline-flex min-h-11 items-center gap-2 rounded-lg border border-gray-200 px-3 text-sm text-gray-500 disabled:opacity-50 ${empresa.activa ? 'hover:bg-red-50 hover:text-red-600' : 'hover:bg-green-50 hover:text-green-600'}`}><Power size={16} />{empresa.activa ? 'Desactivar' : 'Activar'}</button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto lg:block">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-100">
@@ -247,11 +271,13 @@ export default function EmpresasAliadas() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
       {/* Modal Create / Edit */}
       <Modal
+        movimiento
         isOpen={showModal}
         onClose={closeModal}
         title={editingEmpresa ? 'Editar Empresa' : 'Nueva Empresa'}

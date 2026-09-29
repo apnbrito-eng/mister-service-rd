@@ -216,6 +216,7 @@ function ServicioEditorModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Cerrar servicio"
             className="p-2 text-gray-400 hover:text-gray-700 rounded-lg hover:bg-gray-100"
           >
             <X size={18} />
@@ -483,6 +484,7 @@ function ServicioEditorModal({
               </label>
               <button
                 type="button"
+                role="switch" aria-label="Habilitado en página de inicio" aria-checked={draft.habilitado}
                 onClick={() => update({ habilitado: !draft.habilitado })}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
                   draft.habilitado ? 'bg-green-500' : 'bg-gray-300'
@@ -518,6 +520,7 @@ function ServicioEditorModal({
           <button
             type="button"
             onClick={onClose}
+            aria-label="Cerrar servicio"
             className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900"
           >
             Cancelar

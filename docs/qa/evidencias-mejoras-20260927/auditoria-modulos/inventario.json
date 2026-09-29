@@ -1,0 +1,338 @@
+[
+  {
+    "route": "/admin/dashboard",
+    "label": "Resumen de hoy",
+    "area": "Mi día",
+    "reviewed": false,
+    "key": "admin-dashboard"
+  },
+  {
+    "route": "/ponche",
+    "label": "Ponche",
+    "area": "Mi día",
+    "reviewed": false,
+    "key": "ponche"
+  },
+  {
+    "route": "/admin/inbox",
+    "label": "Inbox WhatsApp",
+    "area": "Atención y clientes",
+    "reviewed": true,
+    "key": "admin-inbox"
+  },
+  {
+    "route": "/admin/clientes-responsables",
+    "label": "Clientes y responsables",
+    "area": "Atención y clientes",
+    "reviewed": true,
+    "key": "admin-clientes-responsables"
+  },
+  {
+    "route": "/admin/clientes",
+    "label": "Clientes",
+    "area": "Atención y clientes",
+    "reviewed": true,
+    "key": "admin-clientes"
+  },
+  {
+    "route": "/admin/solicitudes",
+    "label": "Solicitudes",
+    "area": "Atención y clientes",
+    "reviewed": true,
+    "key": "admin-solicitudes"
+  },
+  {
+    "route": "/admin/citas",
+    "label": "Citas por Confirmar",
+    "area": "Atención y clientes",
+    "reviewed": false,
+    "key": "admin-citas"
+  },
+  {
+    "route": "/admin/empresas-aliadas",
+    "label": "Empresas Aliadas",
+    "area": "Atención y clientes",
+    "reviewed": true,
+    "key": "admin-empresas-aliadas"
+  },
+  {
+    "route": "/admin/ordenes",
+    "label": "Órdenes",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-ordenes"
+  },
+  {
+    "route": "/admin/agenda-dia",
+    "label": "Agenda del Día",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-agenda-dia"
+  },
+  {
+    "route": "/admin/calendario",
+    "label": "Calendario",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-calendario"
+  },
+  {
+    "route": "/admin/mapa",
+    "label": "Mapa de Rutas",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-mapa"
+  },
+  {
+    "route": "/admin/reprogramaciones",
+    "label": "Reprogramaciones",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-reprogramaciones"
+  },
+  {
+    "route": "/admin/sugerencias-chequeo",
+    "label": "Sugerencias chequeo",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-sugerencias-chequeo"
+  },
+  {
+    "route": "/admin/standby",
+    "label": "Pendiente de piezas",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-standby"
+  },
+  {
+    "route": "/admin/taller",
+    "label": "Equipos Taller",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-taller"
+  },
+  {
+    "route": "/admin/mantenimiento",
+    "label": "Mantenimiento",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-mantenimiento"
+  },
+  {
+    "route": "/admin/historial-anuladas",
+    "label": "Historial Anuladas",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-historial-anuladas"
+  },
+  {
+    "route": "/admin/calendarios",
+    "label": "Calendarios públicos (Calendly)",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-calendarios"
+  },
+  {
+    "route": "/admin/cotizaciones",
+    "label": "Cotizaciones",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-cotizaciones"
+  },
+  {
+    "route": "/admin/pagos-pendientes",
+    "label": "Pagos pendientes",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-pagos-pendientes"
+  },
+  {
+    "route": "/admin/facturacion-pendiente",
+    "label": "Conduces Pendientes",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-facturacion-pendiente"
+  },
+  {
+    "route": "/admin/facturas",
+    "label": "Conduces de Garantía",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-facturas"
+  },
+  {
+    "route": "/admin/cierre-dia",
+    "label": "Cierre del Día",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-cierre-dia"
+  },
+  {
+    "route": "/admin/gastos",
+    "label": "Gastos e Ingresos",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-gastos"
+  },
+  {
+    "route": "/admin/bancos",
+    "label": "Bancos",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-bancos"
+  },
+  {
+    "route": "/admin/estado-resultado",
+    "label": "Estado de Resultado",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-estado-resultado"
+  },
+  {
+    "route": "/admin/reporte-avanzado",
+    "label": "Reporte avanzado",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-reporte-avanzado"
+  },
+  {
+    "route": "/admin/personal",
+    "label": "Personal",
+    "area": "Equipo",
+    "reviewed": false,
+    "key": "admin-personal"
+  },
+  {
+    "route": "/admin/usuarios",
+    "label": "Usuarios & Permisos",
+    "area": "Equipo",
+    "reviewed": false,
+    "key": "admin-usuarios"
+  },
+  {
+    "route": "/admin/ponches",
+    "label": "Reporte de Ponches",
+    "area": "Equipo",
+    "reviewed": false,
+    "key": "admin-ponches"
+  },
+  {
+    "route": "/admin/nomina",
+    "label": "Nómina",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-nomina"
+  },
+  {
+    "route": "/admin/comisiones",
+    "label": "Comisiones",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-comisiones"
+  },
+  {
+    "route": "/admin/avances",
+    "label": "Avances a Empleados",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-avances"
+  },
+  {
+    "route": "/admin/prestamos",
+    "label": "Préstamos a Empleados",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-prestamos"
+  },
+  {
+    "route": "/admin/metricas-mensuales",
+    "label": "Métricas del Mes",
+    "area": "Equipo",
+    "reviewed": false,
+    "key": "admin-metricas-mensuales"
+  },
+  {
+    "route": "/admin/marketing",
+    "label": "Marketing",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-marketing"
+  },
+  {
+    "route": "/admin/feedback",
+    "label": "Feedback NPS",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-feedback"
+  },
+  {
+    "route": "/admin/web",
+    "label": "Página Web",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-web"
+  },
+  {
+    "route": "/admin/formularios",
+    "label": "Formularios",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-formularios"
+  },
+  {
+    "route": "/admin/configuracion-marketing",
+    "label": "Plantillas Marketing",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-configuracion-marketing"
+  },
+  {
+    "route": "/admin/precios",
+    "label": "Precios de Servicios",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-precios"
+  },
+  {
+    "route": "/admin/inventario",
+    "label": "Inventario",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-inventario"
+  },
+  {
+    "route": "/admin/conocimiento",
+    "label": "Conocimientos",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-conocimiento"
+  },
+  {
+    "route": "/admin/asistente",
+    "label": "Chat (pantalla completa)",
+    "area": "Asistente IA",
+    "reviewed": false,
+    "key": "admin-asistente"
+  },
+  {
+    "route": "/admin/asistente/historial",
+    "label": "Historial IA",
+    "area": "Asistente IA",
+    "reviewed": false,
+    "key": "admin-asistente-historial"
+  },
+  {
+    "route": "/admin/configuracion",
+    "label": "Configuración",
+    "area": "Configuración",
+    "reviewed": false,
+    "key": "admin-configuracion"
+  },
+  {
+    "route": "/admin/rendimiento",
+    "label": "Rendimiento",
+    "area": "Equipo",
+    "reviewed": false,
+    "key": "admin-rendimiento"
+  }
+]

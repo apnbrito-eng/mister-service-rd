@@ -172,6 +172,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     apiKey = typeof cfg.apiKey === 'string' ? cfg.apiKey : '';
     apiUrl = typeof cfg.apiUrl === 'string' ? cfg.apiUrl : '';
     proveedor = typeof cfg.proveedor === 'string' ? cfg.proveedor : '';
+    if (proveedor === 'Dispositivo del técnico') {
+      return res.status(503).json({ error: 'GPS configurado para ubicación del dispositivo' });
+    }
     if (!apiKey || !apiUrl || !proveedor) {
       return res.status(503).json({ error: 'GPS mal configurado (faltan campos)' });
     }

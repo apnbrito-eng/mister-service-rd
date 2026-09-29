@@ -1,303 +1,166 @@
+import {motion} from 'motion/react';
+import {useMovimientoReducido} from '../../hooks/useMovimientoReducido';
+import {obtenerTransicionMovimiento} from '../../utils/motion';
+import {puede} from '../../utils/permisos';
+import CrearClienteDesdeChat from './CrearClienteDesdeChat';
 import ExpedienteCliente from './ExpedienteCliente';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  User, ClipboardList, Shield, Receipt, History,
-  Calendar, Wrench, CheckCircle2,
-} from 'lucide-react';
+import { ArrowLeft, Calendar, Wrench, CheckCircle2, ChevronDown } from 'lucide-react';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { buscarClientePorTelefono } from '../../services/clientes.service';
+import {resolverClienteFicha} from './resolverClienteFicha';
 import { obtenerTodasOrdenesPorTelefono } from '../../services/ordenes.service';
 import { useApp } from '../../context/AppContext';
-import CardCliente, { type PrefillCrearOrden } from './CardCliente';
+import type { PrefillCrearOrden } from './CardCliente';
+import FichaClienteCabecera, { type UbicacionClienteRecibida } from './FichaClienteCabecera';
+import AtencionChat from './AtencionChat';
 import TimelineUnificadoOrden from '../ordenes/TimelineUnificadoOrden';
 import GestionOrden, { type FuenteCrm } from '../crm/GestionOrden';
 import EnviarFacturacionButton from '../ordenes/EnviarFacturacionButton';
 import { faseLabel, faseColor, formatFecha, formatMoneda } from '../../utils';
 import type { Cliente, OrdenServicio, Factura } from '../../types';
 
-/**
- * PanelCliente360 — centro de mando del cliente en el panel lateral del
- * inbox (SPRINT-INBOX-10, 2026-05-22).
- *
- * Convierte el `aside` Col 2 de `InboxConversacion` en una vista 360 del
- * cliente identificado por `wa_id` (= teléfono normalizado RD): datos,
- * órdenes (activas + histórico), garantías vigentes/expiradas, facturas,
- * y un timeline unificado de la orden activa más reciente (lo que dijo
- * el técnico + cambios de fase + WhatsApp).
- *
- * Diseño:
- *   - Tabs internos: Datos | Órdenes | Garantías | Facturas | Historial.
- *   - Tab "Datos" reusa `CardCliente` INTACTO (no rompe su contrato; ese
- *     componente sigue siendo el único responsable de buscar cliente +
- *     mostrar órdenes activas + CTAs de crear orden/cliente).
- *   - Tabs nuevos: carga propia (todas las órdenes, facturas) hecha acá.
- *   - El callback `onCrearOrden` se delega a CardCliente (tab Datos).
- *
- * Convenciones del repo:
- *   - Sin orderBy en queries Firestore (cazador P-015): sort client-side.
- *   - Búsqueda de facturas por clienteId con `where` simple, sort
- *     client-side por fechaEmision desc — patrón `Clientes.tsx:143`.
- *   - Permisos: `EnviarFacturacionButton` ya gatea internamente (tienePago).
- *   - El operario interactúa SIN salir del inbox: las acciones que
- *     escriben (reagendar, enviar a conduce) lo hacen vía componentes
- *     reusados o navegan a la sección existente (NO duplicamos lógica).
- */
-
 interface Props {
   waId: string;
+  clienteIdInicial?: string;
+  conversacionExiste?: boolean;
+  onCliente?: (cliente: Cliente) => void;
+  ubicacionesRecibidas?: UbicacionClienteRecibida[];
   fuenteCrm?: FuenteCrm | null;
   alUsarFuente?: () => void;
-  /** Callback opcional para abrir el drawer "crear orden" desde el inbox.
-   *  Pasa a través al `CardCliente` interno. */
   onCrearOrden?: (prefill: PrefillCrearOrden) => void;
+  controlesChat?: ReactNode;
 }
+type Seccion = 'expediente' | 'anteriores' | 'garantias' | 'facturas' | 'historial';
 
-type TabKey = 'expediente' | 'gestion' | 'datos' | 'ordenes' | 'garantias' | 'facturas' | 'historial';
-
-const TABS: { key: TabKey; label: string; icono: typeof User }[] = [
-  { key: 'expediente', label: 'Notas y archivos', icono: ClipboardList },
-  { key: 'gestion', label: 'Trabajar orden', icono: ClipboardList },
-  { key: 'datos', label: 'Cliente', icono: User },
-  { key: 'ordenes', label: 'Órdenes', icono: ClipboardList },
-  { key: 'garantias', label: 'Garantías', icono: Shield },
-  { key: 'facturas', label: 'Facturas', icono: Receipt },
-  { key: 'historial', label: 'Historial', icono: History },
-];
-
-export default function PanelCliente360({ waId, onCrearOrden, fuenteCrm, alUsarFuente }: Props) {
+/** Una sola carga de cliente y órdenes. La ficha y la gestión comparten scroll. */
+export default function PanelCliente360(props: Props) {
+  // El cambio de teléfono nunca reutiliza borradores ni resultados del cliente anterior.
+  return <PanelCliente key={props.waId} {...props} />;
+}
+function PanelCliente({ waId, onCrearOrden, fuenteCrm, alUsarFuente, controlesChat, ubicacionesRecibidas, clienteIdInicial, conversacionExiste = true, onCliente }: Props) {
   const navigate = useNavigate();
+  const reducido = useMovimientoReducido();
+  const [creandoCliente,setCreandoCliente]=useState(false);
+  const notificarCliente=useRef(onCliente);notificarCliente.current=onCliente;
   const { userProfile } = useApp();
-  const [tab, setTab] = useState<TabKey>('datos');
-
-  // Estado cargado para los tabs que NO son "datos" (CardCliente carga lo
-  // suyo internamente).
   const [cliente, setCliente] = useState<{ id: string; data: Cliente } | null>(null);
-  const [todasOrdenes, setTodasOrdenes] = useState<OrdenServicio[]>([]);
-  const [facturas, setFacturas] = useState<Factura[]>([]);
-  const [seleccion, setSeleccion] = useState('');
-  const [errorOrdenes, setErrorOrdenes] = useState(false);
+  const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(false);
   const [intento, setIntento] = useState(0);
-  useEffect(() => { if (fuenteCrm) setTab(fuenteCrm.accion === 'expediente' ? 'expediente' : 'gestion'); }, [fuenteCrm]);
-  const [loadingOrdenes, setLoadingOrdenes] = useState(false);
-  const [loadingFacturas, setLoadingFacturas] = useState(false);
-
-  // Carga global (todas las órdenes por teléfono + cliente). Se dispara al
-  // montar y al cambiar waId. Se hace eager — la mayoría de tabs lo
-  // necesitan y son lecturas chicas.
+  const [seleccion, setSeleccion] = useState('');
+  const [vistaOrden, setVistaOrden] = useState(false);
+  const [abiertas, setAbiertas] = useState<Partial<Record<Seccion, boolean>>>({});
+  const [visitadas, setVisitadas] = useState<Partial<Record<Seccion, boolean>>>({});
+  const [facturas, setFacturas] = useState<Factura[]>([]);
+  const [estadoFacturas, setEstadoFacturas] = useState<'pendiente' | 'cargando' | 'listo' | 'error'>('pendiente');
+  const [intentoFacturas, setIntentoFacturas] = useState(0);
+  const scroll = useRef<HTMLDivElement>(null);
+  const scrollFicha = useRef(0);
+  const activarSeccion = (seccion: Seccion, abierta: boolean) => {
+    setAbiertas(prev => ({ ...prev, [seccion]: abierta }));
+    if (abierta) setVisitadas(prev => ({ ...prev, [seccion]: true }));
+  };
+  const abrirOrden = (id: string) => {
+    scrollFicha.current = scroll.current?.scrollTop ?? 0;
+    setSeleccion(id);
+    setVistaOrden(true);
+    scroll.current?.scrollTo({ top: 0 });
+  };
+  const volver = () => {
+    setVistaOrden(false);
+    requestAnimationFrame(() => scroll.current?.scrollTo({ top: scrollFicha.current }));
+  };
   useEffect(() => {
-    let cancelado = false;
-    setLoadingOrdenes(true);
-    setTodasOrdenes([]); setCliente(null); setSeleccion(''); setErrorOrdenes(false);
-    (async () => {
-      try {
-        const [c, ords] = await Promise.all([
-          buscarClientePorTelefono(waId),
-          obtenerTodasOrdenesPorTelefono(waId),
-        ]);
-        if (cancelado) return;
-        setCliente(c);
-        setTodasOrdenes(ords);
-      } catch (err) {
-         
-        console.warn('[PanelCliente360] carga global falló:', err);
-        if (!cancelado) {
-          setErrorOrdenes(true);
-          setCliente(null);
-          setTodasOrdenes([]);
-        }
-      } finally {
-        if (!cancelado) setLoadingOrdenes(false);
-      }
-    })();
-    return () => {
-      cancelado = true;
-    };
-  }, [waId, intento]);
-
-  // Facturas del cliente — se cargan SOLO cuando entramos al tab facturas
-  // (o al historial que también las muestra resumidas). Patrón
-  // `Clientes.tsx:143`: query by clienteId, sort client-side.
-  useEffect(() => {
-    if (!cliente?.id) {
-      setFacturas([]);
-      return;
+    if (!fuenteCrm) return;
+    if (fuenteCrm.accion === 'expediente') {
+      setVistaOrden(false);
+      activarSeccion('expediente', true);
+    } else {
+      setVistaOrden(true);
     }
-    if (tab !== 'facturas' && tab !== 'historial' && tab !== 'garantias') return;
-    let cancelado = false;
-    setLoadingFacturas(true);
-    (async () => {
-      try {
-        const snap = await getDocs(
-          query(collection(db, 'facturas'), where('clienteId', '==', cliente.id)),
-        );
-        if (cancelado) return;
-        const rows = snap.docs.map((d) => {
+    scroll.current?.scrollTo({ top: 0 });
+  }, [fuenteCrm]);
+  useEffect(() => {
+    let activo = true;
+    setCargando(true); setError(false);
+    Promise.all([resolverClienteFicha(waId,clienteIdInicial), obtenerTodasOrdenesPorTelefono(waId)])
+      .then(([c, o]) => { if (activo) { setCliente(c); setOrdenes(o); if(c)notificarCliente.current?.({...c.data,id:c.id}); } })
+      .catch(() => { if (activo) setError(true); })
+      .finally(() => { if (activo) setCargando(false); });
+    return () => { activo = false; };
+  }, [waId, clienteIdInicial, intento]);
+  const necesitaFacturas = !!(visitadas.garantias || visitadas.facturas || visitadas.historial);
+  useEffect(() => {
+    if (!necesitaFacturas || !cliente?.id) return;
+    let activo = true;
+    setEstadoFacturas('cargando');
+    getDocs(query(collection(db, 'facturas'), where('clienteId', '==', cliente.id)))
+      .then(snap => {
+        if (!activo) return;
+        const rows = snap.docs.map(d => {
           const data = d.data();
-          return {
-            id: d.id,
-            ...data,
-            fechaEmision: data.fechaEmision?.toDate?.() ?? new Date(),
+          return { ...data, id: d.id,
+            fechaEmision: data.fechaEmision?.toDate?.() ?? new Date(0),
             fechaVencimiento: data.fechaVencimiento?.toDate?.() ?? null,
             fechaPago: data.fechaPago?.toDate?.() ?? null,
           } as Factura;
         });
         rows.sort((a, b) => b.fechaEmision.getTime() - a.fechaEmision.getTime());
-        setFacturas(rows);
-      } catch (err) {
-         
-        console.warn('[PanelCliente360] carga facturas falló:', err);
-        if (!cancelado) setFacturas([]);
-      } finally {
-        if (!cancelado) setLoadingFacturas(false);
-      }
-    })();
-    return () => {
-      cancelado = true;
-    };
-  }, [cliente?.id, tab]);
-
-  const ordenesActivas = useMemo(
-    () => todasOrdenes.filter((o) => o.fase !== 'cerrado' && o.fase !== 'cancelado'),
-    [todasOrdenes],
+        setFacturas(rows); setEstadoFacturas('listo');
+      }).catch(() => { if (activo) setEstadoFacturas('error'); });
+    return () => { activo = false; };
+  }, [cliente?.id, necesitaFacturas, intentoFacturas]);
+  const activas = useMemo(() => ordenes.filter(o => !['cerrado', 'cancelado'].includes(o.fase)), [ordenes]);
+  const anteriores = useMemo(() => ordenes.filter(o => ['cerrado', 'cancelado'].includes(o.fase)), [ordenes]);
+  const crearOrden = () => {
+    if (!cliente) return;
+    if (onCrearOrden) onCrearOrden({ tipo: 'cliente-existente', cliente: { ...cliente.data, id: cliente.id } });
+    else navigate(`/admin/ordenes?nueva=1&clienteId=${encodeURIComponent(cliente.id)}`);
+  };
+  const seccion = (id: Seccion, titulo: string, contenido: ReactNode) => (
+    <section className="border-t border-stone-200">
+      <button type="button" aria-expanded={!!abiertas[id]} aria-controls={`ficha-${id}`} onClick={() => activarSeccion(id, !abiertas[id])}
+        className="flex min-h-12 w-full items-center justify-between gap-2 py-3 text-left text-sm font-semibold text-slate-700">
+        {titulo}<ChevronDown size={17} className={`shrink-0 ${abiertas[id] ? 'rotate-180' : ''}`} />
+      </button>
+      <motion.div id={`ficha-${id}`} hidden={!abiertas[id]} animate={{opacity:abiertas[id]?1:0}} transition={obtenerTransicionMovimiento(reducido)} aria-hidden={!abiertas[id]} {...(!abiertas[id] ? { inert: '' } : {})} className="min-w-0"><div className="min-h-0 overflow-hidden"><div className="pb-4">{visitadas[id] && contenido}</div></div></motion.div>
+    </section>
   );
-  const ordenesCerradas = useMemo(
-    () => todasOrdenes.filter((o) => o.fase === 'cerrado' || o.fase === 'cancelado'),
-    [todasOrdenes],
-  );
-
-  // Garantías: facturas (conduces) con `garantia` definida. La garantía
-  // vive denormalizada en `Factura.garantia: GarantiaInfo` al emitir el
-  // conduce. La orden tiene `garantiaVencimiento` (Date) pero la info
-  // completa (estado, tiempoDias, token) está en la factura.
-  const facturasConGarantia = useMemo(
-    () => facturas.filter((f) => !!f.garantia),
-    [facturas],
-  );
-
-  // Orden activa más reciente para el tab Historial (timeline unificado).
-  const ordenParaTimeline = useMemo<OrdenServicio | null>(() => {
-    if (ordenesActivas.length > 0) return ordenesActivas[0];
-    if (todasOrdenes.length > 0) return todasOrdenes[0];
-    return null;
-  }, [ordenesActivas, todasOrdenes]);
-
-  // SPRINT-WA-INBOX-UX-QUICKWINS quickwin 2 (2026-05-23) — último servicio
-  // realizado (orden terminal más reciente). Sort client-side (P-015: NO
-  // agregar orderBy a la query Firestore). Cascada de fechas: fechaCita →
-  // fechaCierre raíz → cierreServicio.fechaCierre → createdAt.
-  const ultimoServicioRealizado = useMemo<OrdenServicio | null>(() => {
-    if (ordenesCerradas.length === 0) return null;
-    const fechaDe = (o: OrdenServicio): number => {
-      type O = OrdenServicio & {
-        fechaCierre?: Date | { toDate?: () => Date };
-        cierreServicio?: { fechaCierre?: Date | { toDate?: () => Date } };
-      };
-      const ox = o as O;
-      const cand: unknown =
-        ox.cierreServicio?.fechaCierre ??
-        ox.fechaCierre ??
-        ox.fechaCita ??
-        ox.createdAt;
-      if (!cand) return 0;
-      if (cand instanceof Date) return cand.getTime();
-      const obj = cand as { toDate?: () => Date };
-      if (typeof obj.toDate === 'function') return obj.toDate().getTime();
-      return 0;
-    };
-    const ordenadas = [...ordenesCerradas].sort((a, b) => fechaDe(b) - fechaDe(a));
-    return ordenadas[0] ?? null;
-  }, [ordenesCerradas]);
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* Tabs header — compacto, scrollable horizontal en angosto */}
-      <div className="grid grid-cols-3 gap-1 border-b border-gray-200 p-2 shrink-0">
-        {TABS.map((t) => {
-          const activa = tab === t.key;
-          const Icono = t.icono;
-          return (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setTab(t.key)}
-              className={`flex items-center justify-center gap-1 min-h-11 px-2 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
-                activa
-                  ? 'border-brand-600 text-brand-700'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-              title={t.label}
-            >
-              <Icono size={12} />
-              {t.label}
-            </button>
-          );
-        })}
+  const contenidoFacturas = (contenido: ReactNode) => !cliente
+    ? <p className="text-sm text-slate-600">Registra al cliente para consultar sus facturas y garantías.</p>
+    : estadoFacturas === 'error'
+      ? <div role="alert" className="text-sm text-red-700">No se pudieron consultar las facturas y garantías.<button type="button" className="block min-h-11 underline" onClick={() => setIntentoFacturas(n => n + 1)}>Reintentar consulta</button></div>
+      : contenido;
+  if (cargando) return <p role="status" className="p-4 text-sm text-slate-600">Cargando ficha del cliente…</p>;
+  if (error) return <div role="alert" className="p-4 text-sm text-red-700">No se pudo cargar la ficha. Comprueba la conexión y vuelve a intentarlo.<button type="button" onClick={() => setIntento(n => n + 1)} className="block min-h-11 underline">Reintentar</button></div>;
+  return <div ref={scroll} className="h-full min-h-0 overflow-y-auto overscroll-contain bg-stone-50 p-4">
+    <div hidden={vistaOrden} className="space-y-4">
+      {cliente ? <FichaClienteCabecera ubicacionesRecibidas={ubicacionesRecibidas} cliente={{ ...cliente.data, id: cliente.id }} onGuardar={data => {setCliente({ id: cliente.id, data });notificarCliente.current?.(data);}} />
+        : <section><h2 className="font-semibold text-slate-900">Cliente no registrado</h2><p className="text-sm text-slate-600">{waId}</p>{puede(userProfile,'clientesCrear') && (creandoCliente ? <CrearClienteDesdeChat waId={waId} onCancelar={()=>setCreandoCliente(false)} onGuardar={data=>{setCliente({id:data.id,data});setCreandoCliente(false);notificarCliente.current?.(data);}}/> : <button type="button" className="min-h-11 text-sm underline" onClick={()=>setCreandoCliente(true)}>Crear cliente</button>)}</section>}
+      {conversacionExiste && <AtencionChat waId={waId} />}
+      <section aria-label="Órdenes activas" className="rounded-xl border border-stone-200 bg-white p-3">
+        <div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Órdenes activas ({activas.length})</h3>{cliente && <button type="button" className="min-h-11 text-sm font-medium text-emerald-800" onClick={crearOrden}>+ Crear orden</button>}</div>
+        <OrdenesTab loading={false} activas={activas} cerradas={[]} userProfile={userProfile} onClickOrden={abrirOrden} onIrReprogramaciones={() => navigate('/admin/reprogramaciones')} />
+      </section>
+      <div>
+        {seccion('expediente', 'Notas y archivos', cliente ? <ExpedienteCliente clienteId={cliente.id} fuente={fuenteCrm?.accion === 'expediente' ? fuenteCrm : null} alUsarFuente={alUsarFuente} /> : <p className="text-sm">Registra al cliente para crear su expediente.</p>)}
+        {seccion('anteriores', `Órdenes anteriores (${anteriores.length})`, anteriores.length ? <ul className="space-y-2">{anteriores.map(o => <li key={o.id}><ItemOrden orden={o} userProfile={userProfile} onClick={() => abrirOrden(o.id)} /></li>)}</ul> : <p className="text-sm text-slate-600">Sin órdenes anteriores.</p>)}
+        {seccion('garantias', 'Garantías', contenidoFacturas(<GarantiasTab loading={estadoFacturas !== 'listo'} facturas={facturas.filter(f => !!f.garantia)} onClickOrden={abrirOrden} />))}
+        {seccion('facturas', 'Facturas', contenidoFacturas(<FacturasTab loading={estadoFacturas !== 'listo'} facturas={facturas} onClickFactura={id => navigate(`/admin/facturas?id=${encodeURIComponent(id)}`)} />))}
+        {seccion('historial', 'Historial', contenidoFacturas(<HistorialTab ordenParaTimeline={activas[0] ?? ordenes[0] ?? null} facturas={facturas} loadingFacturas={estadoFacturas !== 'listo'} />))}
       </div>
-
-      <div className="flex-1 overflow-y-auto p-3">
-        {tab === 'expediente' && (cliente?.id ? <ExpedienteCliente key={cliente.id} clienteId={cliente.id} fuente={fuenteCrm} alUsarFuente={alUsarFuente} /> : <p className="p-3 text-sm">Registra primero al cliente desde Datos para crear su expediente.</p>)}
-        {tab === 'gestion' && <div className="space-y-3">
-          {loadingOrdenes ? <p>Cargando órdenes…</p> : errorOrdenes ? <div role="alert">No se pudieron cargar las órdenes.<button onClick={() => setIntento(n => n + 1)}>Reintentar</button></div> : <>
-            <label className="block text-sm font-medium">Orden / equipo<select className="w-full border rounded-lg p-2 mt-1" value={seleccion} onChange={e => setSeleccion(e.target.value)}><option value="">Selecciona una orden</option>{todasOrdenes.map(o => <option key={o.id} value={o.id}>{o.numero} · {o.equipoTipo} {o.equipoMarca}</option>)}</select></label>
-            {!todasOrdenes.length && <p className="text-sm">No hay órdenes para este teléfono. Puedes crear una desde Datos.</p>}
-            {seleccion && <button type="button" className="min-h-11 text-sm underline" onClick={() => navigate(`/admin/ordenes/${seleccion}`)}>Abrir orden completa y editar</button>}
-            {seleccion && <GestionOrden key={seleccion} ordenId={seleccion} fuente={fuenteCrm?.accion === 'expediente' ? null : fuenteCrm} alUsarFuente={alUsarFuente} />}
-          </>}
-        </div>}
-        {tab === 'datos' && (
-          <div className="space-y-3">
-            {/* SPRINT-WA-INBOX-UX-QUICKWINS quickwin 2: último servicio realizado.
-                Aparece solo si hay órdenes terminales. NO suprime ni reemplaza
-                a CardCliente — es un destacado contextual arriba de los datos. */}
-            {ultimoServicioRealizado && (
-              <UltimoServicioCard
-                orden={ultimoServicioRealizado}
-                onClick={() => navigate(`/admin/ordenes/${ultimoServicioRealizado.id}`)}
-              />
-            )}
-            <CardCliente waId={waId} onCrearOrden={onCrearOrden} />
-          </div>
-        )}
-
-        {tab === 'ordenes' && (
-          <OrdenesTab
-            loading={loadingOrdenes}
-            activas={ordenesActivas}
-            cerradas={ordenesCerradas}
-            userProfile={userProfile}
-            onClickOrden={(id) => navigate(`/admin/ordenes/${id}`)}
-            onIrReprogramaciones={() => navigate('/admin/reprogramaciones')}
-          />
-        )}
-
-        {tab === 'garantias' && (
-          <GarantiasTab
-            loading={loadingFacturas}
-            facturas={facturasConGarantia}
-            onClickOrden={(ordenId) => navigate(`/admin/ordenes/${ordenId}`)}
-          />
-        )}
-
-        {tab === 'facturas' && (
-          <FacturasTab
-            loading={loadingFacturas}
-            facturas={facturas}
-            onClickFactura={(id) => navigate(`/admin/facturas?id=${id}`)}
-          />
-        )}
-
-        {tab === 'historial' && (
-          <HistorialTab
-            ordenParaTimeline={ordenParaTimeline}
-            facturas={facturas}
-            loadingFacturas={loadingFacturas}
-          />
-        )}
-      </div>
+      {controlesChat && <details className="border-t pt-2"><summary className="min-h-11 cursor-pointer py-3 text-sm font-medium">Opciones de conversación</summary>{controlesChat}</details>}
     </div>
-  );
+    <div hidden={!vistaOrden} className="space-y-3">
+      <button type="button" onClick={volver} className="flex min-h-11 items-center gap-2 text-sm font-medium text-emerald-800"><ArrowLeft size={18} /> Volver a la ficha</button>
+      <label className="block text-sm font-medium">Orden / equipo<select className="mt-1 w-full rounded-lg border bg-white p-3" value={seleccion} onChange={e => setSeleccion(e.target.value)}><option value="">Selecciona una orden</option>{ordenes.map(o => <option key={o.id} value={o.id}>{o.numero} · {o.equipoTipo} {o.equipoMarca}</option>)}</select></label>
+      {!ordenes.length && <p className="text-sm">No hay órdenes para este teléfono.</p>}
+      {seleccion && <><button type="button" className="min-h-11 text-sm underline" onClick={() => navigate(`/admin/ordenes/${encodeURIComponent(seleccion)}`)}>Abrir orden completa y editar</button><GestionOrden key={seleccion} ordenId={seleccion} fuente={fuenteCrm?.accion === 'expediente' ? null : fuenteCrm} alUsarFuente={alUsarFuente} /></>}
+    </div>
+  </div>;
 }
 
 // ─── Tab: Órdenes ──────────────────────────────────────────────────────────
@@ -319,7 +182,7 @@ function OrdenesTab({
   onIrReprogramaciones,
 }: OrdenesTabProps) {
   if (loading) {
-    return <p className="text-xs text-gray-400 italic">Cargando órdenes...</p>;
+    return <p className="text-xs text-gray-500 italic">Cargando órdenes...</p>;
   }
   const hayPropuestaPendiente = activas.some(
     (o) =>
@@ -345,7 +208,7 @@ function OrdenesTab({
           Activas {activas.length > 0 && `(${activas.length})`}
         </p>
         {activas.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">Sin órdenes activas.</p>
+          <p className="text-xs text-gray-500 italic">Sin órdenes activas.</p>
         ) : (
           <ul className="space-y-1.5">
             {activas.map((o) => (
@@ -379,7 +242,7 @@ function OrdenesTab({
             ))}
           </ul>
           {cerradas.length > 10 && (
-            <p className="text-[10px] text-gray-400 italic mt-1">
+            <p className="text-xs text-gray-500 italic mt-1">
               Mostrando 10 de {cerradas.length}. Abrí la ficha del cliente para ver todas.
             </p>
           )}
@@ -410,7 +273,7 @@ function ItemOrden({
       <button
         type="button"
         onClick={onClick}
-        className="w-full text-left"
+        className="w-full min-h-11 text-left"
       >
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs font-mono font-medium text-gray-900 truncate">
@@ -418,8 +281,7 @@ function ItemOrden({
             {orden.numero || `OS-${orden.id.slice(0, 6)}`}
           </span>
           <span
-            className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white flex-shrink-0"
-            style={{ backgroundColor: faseColor(orden.fase) }}
+            className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 ${faseColor(orden.fase)}`}
           >
             {faseLabel(orden.fase)}
           </span>
@@ -428,7 +290,8 @@ function ItemOrden({
           {orden.equipoTipo}
           {orden.equipoMarca ? ` · ${orden.equipoMarca}` : ''}
         </p>
-        <p className="text-[10px] text-gray-400 mt-0.5">
+        <p className="text-xs text-slate-600 mt-1">Operaria: {orden.operariaNombre || 'Sin asignar'} · Técnico: {orden.tecnicoNombre || 'Sin asignar'}</p>
+        <p className="text-xs text-gray-500 mt-0.5">
           {orden.fechaCita ? formatFecha(orden.fechaCita) : formatFecha(orden.createdAt)}
         </p>
       </button>
@@ -455,11 +318,11 @@ interface GarantiasTabProps {
 
 function GarantiasTab({ loading, facturas, onClickOrden }: GarantiasTabProps) {
   if (loading) {
-    return <p className="text-xs text-gray-400 italic">Cargando garantías...</p>;
+    return <p className="text-xs text-gray-500 italic">Cargando garantías...</p>;
   }
   if (facturas.length === 0) {
     return (
-      <p className="text-xs text-gray-400 italic">
+      <p className="text-xs text-gray-500 italic">
         Sin garantías emitidas para este cliente.
       </p>
     );
@@ -497,7 +360,7 @@ function GarantiasTab({ loading, facturas, onClickOrden }: GarantiasTabProps) {
                   {f.numero}
                 </span>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border ${colores}`}>
-                  {g.estado}
+                  {g.estado === 'vigente' && !vigente ? 'vencida' : g.estado}
                 </span>
               </div>
               {(f.equipoTipo || f.equipoMarca) && (
@@ -506,7 +369,7 @@ function GarantiasTab({ loading, facturas, onClickOrden }: GarantiasTabProps) {
                   {f.equipoMarca ? ` · ${f.equipoMarca}` : ''}
                 </p>
               )}
-              <p className="text-[10px] text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-500 mt-0.5">
                 {g.tiempoDias}d · vence {formatFecha(fin)}
               </p>
             </button>
@@ -526,11 +389,11 @@ interface FacturasTabProps {
 
 function FacturasTab({ loading, facturas, onClickFactura }: FacturasTabProps) {
   if (loading) {
-    return <p className="text-xs text-gray-400 italic">Cargando facturas...</p>;
+    return <p className="text-xs text-gray-500 italic">Cargando facturas...</p>;
   }
   if (facturas.length === 0) {
     return (
-      <p className="text-xs text-gray-400 italic">
+      <p className="text-xs text-gray-500 italic">
         Sin conduces de garantía emitidos.
       </p>
     );
@@ -560,7 +423,7 @@ function FacturasTab({ loading, facturas, onClickFactura }: FacturasTabProps) {
         </li>
       ))}
       {facturas.length > 20 && (
-        <p className="text-[10px] text-gray-400 italic mt-1">
+        <p className="text-xs text-gray-500 italic mt-1">
           Mostrando 20 de {facturas.length}.
         </p>
       )}
@@ -582,7 +445,7 @@ function HistorialTab({
 }: HistorialTabProps) {
   if (!ordenParaTimeline) {
     return (
-      <p className="text-xs text-gray-400 italic">
+      <p className="text-xs text-gray-500 italic">
         Sin orden vinculada al cliente — sin historial todavía.
       </p>
     );
@@ -627,76 +490,5 @@ function HistorialTab({
         </div>
       )}
     </div>
-  );
-}
-
-// ─── Destacado: Último servicio realizado (quickwin 2) ─────────────────────
-function UltimoServicioCard({
-  orden,
-  onClick,
-}: {
-  orden: OrdenServicio;
-  onClick: () => void;
-}) {
-  // Misma cascada de fechas que el sort que eligió esta orden, para mostrar
-  // la fecha más representativa del cierre.
-  type O = OrdenServicio & {
-    fechaCierre?: Date | { toDate?: () => Date };
-    cierreServicio?: { fechaCierre?: Date | { toDate?: () => Date } };
-  };
-  const ox = orden as O;
-  const cand =
-    ox.cierreServicio?.fechaCierre ??
-    ox.fechaCierre ??
-    ox.fechaCita ??
-    ox.createdAt;
-  const fechaCierre =
-    cand instanceof Date
-      ? cand
-      : ((cand as { toDate?: () => Date })?.toDate?.() ?? null);
-  const falla =
-    (orden as { descripcionFalla?: string; falla?: string }).descripcionFalla ??
-    (orden as { descripcionFalla?: string; falla?: string }).falla ??
-    null;
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full text-left bg-emerald-50/60 hover:bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 transition-colors"
-      title="Abrir esta orden"
-    >
-      <div className="flex items-center gap-1.5 mb-1">
-        <CheckCircle2 size={12} className="text-emerald-600" />
-        <span className="text-[10px] font-semibold text-emerald-700 uppercase tracking-wide">
-          Último servicio realizado
-        </span>
-      </div>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-mono font-medium text-gray-900 truncate">
-          {/* @safe-numero-doc: fallback display cuando la orden todavía no tiene número asignado; no persiste */}
-          {orden.numero || `OS-${orden.id.slice(0, 6)}`}
-        </span>
-        <span
-          className="text-[10px] px-1.5 py-0.5 rounded-full font-medium text-white flex-shrink-0"
-          style={{ backgroundColor: faseColor(orden.fase) }}
-        >
-          {faseLabel(orden.fase)}
-        </span>
-      </div>
-      <p className="text-[11px] text-gray-700 mt-0.5 truncate">
-        <Wrench size={10} className="inline mr-1 text-gray-500" />
-        {orden.equipoTipo}
-        {orden.equipoMarca ? ` · ${orden.equipoMarca}` : ''}
-      </p>
-      {falla && (
-        <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-2">{falla}</p>
-      )}
-      {fechaCierre && (
-        <p className="text-[10px] text-gray-500 mt-1">
-          Cerrado · {formatFecha(fechaCierre)}
-        </p>
-      )}
-    </button>
   );
 }

@@ -790,27 +790,27 @@ export default function TecnicoVista() {
   const nombreCorto = userProfile?.nombre?.split(' ')[0] || 'Técnico';
 
   return (
-    <div className="min-h-screen bg-[#f0f4f8]">
+    <div className="tecnico-ui min-h-screen bg-[#f0f4f8]">
       <PanelMovil uid={currentUser?.uid} />
       {/* Header */}
       <div className="bg-primary px-4 py-3 sticky top-0 z-20 shadow-md">
-        <div className="flex items-center justify-between gap-3 max-w-4xl mx-auto">
+        <div className="flex flex-wrap items-center justify-between gap-3 max-w-4xl mx-auto">
           {/* SPRINT-DISENO-TECNICO-FASE-1 (2026-05-30): saludo compactado en
               el header en una sola línea junto al logo. Antes vivía como
               greeting grande arriba del listado. La fecha + botón "Ver Ruta
               del Día" quedan abajo (greeting reducido). */}
-          <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0 flex-1 basis-40">
             <Logo size="sm" white />
             <div className="min-w-0">
               <p className="text-sm font-semibold text-white truncate leading-tight">
                 {nombreCorto}
               </p>
-              <p className="text-xs text-white/70 leading-tight">
+              <p className="text-xs text-white/70 leading-tight whitespace-nowrap">
                 {citasFiltradas.length} cita{citasFiltradas.length !== 1 ? 's' : ''} hoy
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Link to="/conocimiento" className="rounded-lg border border-white/30 px-3 py-3 text-sm text-white">Conocimientos</Link>
             {compartiendoGPS && (
               <div className="flex items-center gap-1 bg-green-500/20 px-2 py-1 rounded-full" title="Compartiendo ubicación">
@@ -1370,7 +1370,7 @@ export default function TecnicoVista() {
               )}
               {nOrdenes === 0 && (
                 <div className="px-4 pb-4 text-xs text-white/75">
-                  Aún no tienes comisiones en esta quincena. Cada vez que una orden tuya pase a facturada, acumulas ganancia aquí.
+                  Aún no tienes comisiones en esta quincena. La comisión de tus trabajos terminados aparece aquí al cerrar la orden, aunque el cobro esté pendiente.
                 </div>
               )}
 

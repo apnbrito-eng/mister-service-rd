@@ -1,3 +1,5 @@
+import ProponerConocimiento from "./ProponerConocimiento";
+import ResumenBotServicio, { type ResumenServicioIA } from "./ResumenBotServicio";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { equipoApi } from "../../services/equipoApi";
@@ -6,6 +8,7 @@ import type {
   AccionAtencion,
 } from "../../utils/atencionChat";
 interface Datos {
+  resumenBot?: ResumenServicioIA | null;
   ordenes?: { id: string; numero: string; tecnicoNombre: string }[];
   atencion: EstadoAtencion;
   equipo: { uid: string; nombre: string }[];
@@ -89,17 +92,20 @@ export default function AtencionChat({ waId }: { waId: string }) {
   return (
     <section
       aria-label="Responsables y atención"
-      className="border-b border-gray-200 bg-white p-3 space-y-2 text-sm"
+      className="rounded-xl border border-stone-200 bg-white p-3 space-y-2 text-sm"
     >
       <p>
-        <span className="text-gray-500">Cartera:</span>{" "}
-        {datos?.carteraNombre || "Sin asignar"}
+        <span className="text-gray-500">Responsable de cartera:</span>{" "}
+        {datos ? datos.carteraNombre || "Sin asignar" : error ? "No disponible" : "Consultando…"}
       </p>
       <p>
         <span className="text-gray-500">Atiende el chat:</span>{" "}
-        {a?.responsableNombre ||
-          (a?.responsableId ? "Responsable asignada" : "Sin asignar")}
+        {datos ? a?.responsableNombre ||
+          (a?.responsableId ? "Responsable asignada" : "Sin asignar") : error ? "No disponible" : "Consultando…"}
       </p>
+      <ResumenBotServicio resumen={datos?.resumenBot} />
+      {["administrador", "coordinadora", "secretaria", "operaria"].includes(userProfile?.rol || "") && <ProponerConocimiento key={waId} />}
+      <details><summary className="min-h-11 cursor-pointer py-3 font-medium text-emerald-800">Atención y traspasos{a?.pendiente ? " · Pendiente" : ""}</summary>
       {!!datos?.ordenes?.length && <label className="block">Cita para el traspaso<select className="block border rounded p-2 w-full" value={ordenId} onChange={e => setOrdenId(e.target.value)}><option value="">Selecciona una cita</option>{datos.ordenes.map(o => <option key={o.id} value={o.id}>{o.numero} · {o.tecnicoNombre}</option>)}</select><span className="text-xs text-gray-500">Solo esta cita cambia de responsable. Quedará pendiente de asignar técnico.</span></label>}
       {!!datos?.redactando?.length && (
         <p role="status" className="text-blue-800">
@@ -214,6 +220,7 @@ export default function AtencionChat({ waId }: { waId: string }) {
           )}
         </>
       )}
+      </details>
     </section>
   );
 }

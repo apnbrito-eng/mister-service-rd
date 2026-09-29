@@ -22,8 +22,8 @@ afterAll(async () => { await entorno().cleanup(); });
 beforeEach(async () => { await resetearConPerfiles(); });
 
 describe('citas_por_confirmar · formulario público de agendar', () => {
-  it('un visitante sin sesión puede crear una cita (el formulario lo necesita)', async () => {
-    await assertSucceeds(
+  it('un visitante usa el endpoint y no puede crear citas directamente', async () => {
+    await assertFails(
       setDoc(doc(anonimo(), 'citas_por_confirmar/cita-1'), {
         clienteNombre: 'QA Test',
         telefono: '8090000000',
@@ -32,6 +32,18 @@ describe('citas_por_confirmar · formulario público de agendar', () => {
         createdAt: new Date(),
       }),
     );
+  });
+
+  it('preserva creación interna de secretaria para citas y garantías', async () => {
+    await assertSucceeds(setDoc(doc(como(UID.secretaria), 'citas_por_confirmar/interna'), {
+      clienteNombre: 'QA', telefono: '8090000000', origen: 'manual', estado: 'pendiente', createdAt: new Date(),
+    }));
+  });
+  it('ni anónimo ni administrador cliente pueden alterar cuotas servidor', async () => {
+    for (const coleccion of ['citas_publicas_control', 'citas_publicas_cuotas', 'citas_publicas_config', 'citas_publicas_alertas']) {
+      await assertFails(setDoc(doc(anonimo(), `${coleccion}/x`), { total: 0 }));
+      await assertFails(setDoc(doc(como(UID.admin), `${coleccion}/x`), { total: 0 }));
+    }
   });
 
   it('pero NO puede leer las citas de los demás', async () => {
@@ -65,10 +77,10 @@ describe('citas_por_confirmar · formulario público de agendar', () => {
 });
 
 describe('solicitudes_servicio · formularios dinámicos /f/:slug', () => {
-  it('un visitante sin sesión puede crear una solicitud', async () => {
+  it('un visitante usa API y no puede crear directamente una solicitud', async () => {
     // Fix SPRINT-FIX-A3 (2026-09-26): la rule ahora exige formularioId +
     // estado + createdAt como shape base. `datos` sigue siendo mapa libre.
-    await assertSucceeds(
+    await assertFails(
       setDoc(doc(anonimo(), 'solicitudes_servicio/sol-1'), {
         formularioId: 'qa',
         estado: 'pendiente',

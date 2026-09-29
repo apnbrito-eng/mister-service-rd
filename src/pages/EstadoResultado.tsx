@@ -25,6 +25,7 @@ interface DataMes {
   sueldoBase: number;
   totalComisiones: number;
   totalBonos: number;
+  totalAsistencia: number;
   totalNomina: number;
   utilidadOperativa: number;  // utilidadBruta - gastos - nómina
   /**
@@ -93,13 +94,14 @@ async function cargarDataMes(year: number, month: number, personal: Personal[]):
     }
   });
 
-  // Sueldo base mensual del personal activo (con acceso real, excluye ayudante)
+  // Sueldo base mensual del personal activo (incluye ayudantes)
   const sueldoBase = personal
-    .filter(p => p.activo && p.rol !== 'ayudante')
+    .filter(p => p.activo)
     .reduce((s, p) => s + (Number(p.sueldoBase) || 0), 0);
 
   // Bonos: operarias/secretaria — simplificado: leemos de liquidaciones del mes
   let totalBonos = 0;
+  let totalAsistencia = 0;
   let bonosIncompletos = false;
   try {
     const liqSnap = await getDocs(collection(db, 'liquidaciones_nomina'));
@@ -108,9 +110,10 @@ async function cargarDataMes(year: number, month: number, personal: Personal[]):
       // Tomar solo liquidaciones cuyo periodo cae en este mes
       const pFin = (raw.periodoFin as { toDate?: () => Date } | undefined)?.toDate?.();
       if (pFin && pFin >= inicio && pFin <= fin) {
-        const emps = (raw.empleados as Array<{ bono?: number }>) || [];
+        const emps = (raw.empleados as Array<{ bono?: number; totalAsistencia?: number }>) || [];
         emps.forEach(e => {
           if (typeof e.bono === 'number') totalBonos += e.bono;
+          if (raw.estado === 'cerrada' && typeof e.totalAsistencia === 'number') totalAsistencia += e.totalAsistencia;
         });
       }
     });
@@ -121,7 +124,7 @@ async function cargarDataMes(year: number, month: number, personal: Personal[]):
     bonosIncompletos = true;
   }
 
-  const totalNomina = sueldoBase + totalComisiones + totalBonos;
+  const totalNomina = sueldoBase + totalComisiones + totalBonos - totalAsistencia;
   const utilidadOperativa = utilidadBruta - totalGastos - totalNomina;
 
   return {
@@ -136,6 +139,7 @@ async function cargarDataMes(year: number, month: number, personal: Personal[]):
     sueldoBase,
     totalComisiones,
     totalBonos,
+    totalAsistencia,
     totalNomina,
     utilidadOperativa,
     bonosIncompletos,
@@ -222,6 +226,7 @@ export default function EstadoResultado() {
       ['Sueldo base', -data.sueldoBase],
       ['Comisiones', -data.totalComisiones],
       ['Bonos', -data.totalBonos],
+      ['Asistencia aprobada en nóminas cerradas', data.totalAsistencia],
       ['Total nómina', -data.totalNomina],
       ['UTILIDAD OPERATIVA', data.utilidadOperativa],
     ];
@@ -302,7 +307,7 @@ export default function EstadoResultado() {
                 Cifras incompletas — no se pudieron leer las liquidaciones de nómina
               </div>
               <div className="text-xs text-amber-800 mt-1">
-                Los bonos no se pudieron incluir, así que la nómina está subestimada
+                No se pudieron incluir bonos ni descuentos de asistencia; revisa las cifras antes de usar este resultado
                 y la utilidad operativa aparece más alta de lo real. Recargá la página;
                 si sigue igual, avisá antes de usar estos números.
               </div>
@@ -371,6 +376,7 @@ export default function EstadoResultado() {
                 <Row label="  Sueldos base" value={-data.sueldoBase} previo={dataPrevio ? -dataPrevio.sueldoBase : undefined} />
                 <Row label="  Comisiones" value={-data.totalComisiones} previo={dataPrevio ? -dataPrevio.totalComisiones : undefined} />
                 <Row label="  Bonos" value={-data.totalBonos} previo={dataPrevio ? -dataPrevio.totalBonos : undefined} />
+                <Row label="  Descuentos de asistencia (nóminas cerradas)" value={data.totalAsistencia} previo={dataPrevio?.totalAsistencia} />
                 <Row label="  Total nómina" value={-data.totalNomina} previo={dataPrevio ? -dataPrevio.totalNomina : undefined} bold />
 
                 <Row label="UTILIDAD OPERATIVA" value={data.utilidadOperativa} previo={dataPrevio?.utilidadOperativa} bold highlighted />
@@ -386,7 +392,7 @@ export default function EstadoResultado() {
               <li><strong>Costo de piezas</strong> = suma del costo de compra de los items tipo 'pieza' en cada factura.</li>
               <li><strong>Utilidad bruta</strong> = Ventas netas − Costo de piezas.</li>
               <li><strong>Gastos</strong> = colección de gastos registrados en el mes, por categoría.</li>
-              <li><strong>Nómina</strong> = sueldo base mensual del personal activo + comisiones del mes + bonos de liquidaciones que cierran en este mes.</li>
+              <li><strong>Nómina</strong> = sueldo base mensual del personal activo + comisiones del mes + bonos de liquidaciones que cierran en este mes − descuentos de asistencia de nóminas cerradas del mes.</li>
               <li><strong>Utilidad operativa</strong> = Utilidad bruta − Gastos − Nómina.</li>
             </ul>
           </div>

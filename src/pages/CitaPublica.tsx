@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { doc, getDoc, collection, addDoc, Timestamp } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase/config';
+import { doc, getDoc } from 'firebase/firestore';
+import { subirArchivoPublicoSeguro } from '../services/subidasPublicas.service';
+import { db } from '../firebase/config';
 import { Calendario, DiaSemana } from '../types';
 import Logo from '../components/Logo';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -12,6 +12,7 @@ import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addM
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { normalizarTelefono } from '../services/clientes.service';
+import { enviarCitaPublicaSegura } from '../services/solicitudesPublicas.service';
 
 const DIA_NOMBRE: Record<number, DiaSemana> = {
   0: 'Domingo', 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado',
@@ -46,6 +47,7 @@ export default function CitaPublica() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const autocompleteRefCita = useRef<any>(null);
 
+  const cacheFoto = useRef(new WeakMap<Blob, string>());
   const [fotoEquipo, setFotoEquipo] = useState<File | null>(null);
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
 
@@ -220,63 +222,27 @@ export default function CitaPublica() {
     try {
       const horario = `${format(selectedDate, "EEEE dd 'de' MMMM", { locale: es })} a las ${selectedHora}`;
 
-      // Intentar subir foto del equipo si existe; si falla, continuar sin foto
       let fotoEquipoUrl: string | undefined;
       if (fotoEquipo) {
-        try {
-          const ts = Date.now();
-          const slugNombre = form.nombre.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40) || 'cliente';
-          const path = `citas_publicas/${ts}_${slugNombre}.jpg`;
-          const ref = storageRef(storage, path);
-          await uploadBytes(ref, fotoEquipo);
-          fotoEquipoUrl = await getDownloadURL(ref);
-        } catch (err) {
-          console.error('Error subiendo foto del equipo:', err);
-        }
+        fotoEquipoUrl = cacheFoto.current.get(fotoEquipo) ?? await subirArchivoPublicoSeguro(fotoEquipo, 'calendario');
+        cacheFoto.current.set(fotoEquipo, fotoEquipoUrl);
       }
 
-      // SPRINT-AGENDA-4 (2026-05-25): unificar shape con
-      // `formularioAgendar.service.ts`. Antes el doc creado por esta vía
-      // NO traía `equipoTipo` ni `telefonoNormalizado` → las citas caían
-      // al fallback `servicio` (Citas.tsx:100/661) y el anti-duplicado
-      // por `telefonoNormalizado` (formularioAgendar.service.ts:339) no
-      // aplicaba al flujo /cita/:calendarId. Resultado: citas degradadas.
-      // Ahora ambos vías escriben el mismo conjunto base de campos.
-      const telNorm = normalizarTelefono(form.telefono);
-      const equipoTipoTrim = form.equipoTipo.trim();
-      const equipoMarcaTrim = form.equipoMarca.trim();
-      const docData: Record<string, unknown> = {
-        clienteNombre: form.nombre.trim(),
-        telefono: form.telefono,
-        clienteEmail: form.email,
-        clienteDireccion: form.direccion,
-        clienteLat: form.lat || null,
-        clienteLng: form.lng || null,
-        servicio: `${equipoTipoTrim}${equipoMarcaTrim ? ` ${equipoMarcaTrim}` : ''}`,
-        falla: form.falla,
-        horarioSolicitado: horario,
-        fechaSolicitada: Timestamp.fromDate(selectedDate),
-        horaSolicitada: selectedHora,
-        calendarioId: calendario.id,
-        calendarioNombre: calendario.nombre,
-        asignadoId: calendario.asignadoId,
-        asignadoNombre: calendario.asignadoNombre,
-        origen: 'formulario_publico',
-        estado: 'pendiente',
-        createdAt: Timestamp.now(),
-      };
-      // SPRINT-AGENDA-4: nuevos campos que faltaban en este vía.
-      if (equipoTipoTrim) docData.equipoTipo = equipoTipoTrim;
-      if (equipoMarcaTrim) docData.equipoMarca = equipoMarcaTrim;
-      if (telNorm.length === 10) docData.telefonoNormalizado = telNorm;
-      if (fotoEquipoUrl) docData.fotoEquipoUrl = fotoEquipoUrl;
-
-      await addDoc(collection(db, 'citas_por_confirmar'), docData);
+      const resultado = await enviarCitaPublicaSegura({
+        clienteNombre: form.nombre.trim(), telefono: form.telefono,
+        clienteEmail: form.email, clienteDireccion: form.direccion,
+        ...(form.lat !== null ? { clienteLat: form.lat } : {}),
+        ...(form.lng !== null ? { clienteLng: form.lng } : {}),
+        equipoTipo: form.equipoTipo.trim(), equipoMarca: form.equipoMarca.trim(),
+        falla: form.falla, horarioSolicitado: horario,
+        fechaSolicitada: format(selectedDate, 'yyyy-MM-dd'), horaSolicitada: selectedHora,
+        calendarioId: calendario.id, ...(fotoEquipoUrl ? { fotoEquipoUrl } : {}),
+      });
+      if (!resultado.ok) { toast.error(resultado.error || 'Error al enviar la solicitud'); return; }
       setSubmitted(true);
       toast.success('¡Solicitud enviada!');
     } catch (err) {
-      console.error(err);
-      toast.error('Error al enviar la solicitud');
+      toast.error(err instanceof Error ? err.message : 'Error al enviar la solicitud');
     } finally {
       setSubmitting(false);
     }
@@ -487,14 +453,14 @@ export default function CitaPublica() {
               <p className="text-xs text-gray-600 mb-2">Paso 1 — Elige una fecha</p>
               <div className="bg-gray-50 rounded-xl p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <button type="button" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+                  <button type="button" aria-label="Mes anterior" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
                     className="p-1 hover:bg-gray-200 rounded">
                     <ChevronLeft size={16} />
                   </button>
                   <span className="text-sm font-semibold text-gray-900 capitalize">
                     {format(currentMonth, 'MMMM yyyy', { locale: es })}
                   </span>
-                  <button type="button" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+                  <button type="button" aria-label="Mes siguiente" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
                     className="p-1 hover:bg-gray-200 rounded">
                     <ChevronRight size={16} />
                   </button>

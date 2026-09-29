@@ -1,3 +1,4 @@
+import RevisionAsistencia from '../components/asistencia/RevisionAsistencia';
 import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -110,6 +111,7 @@ export default function AdminPonches() {
 
   const [ponches, setPonches] = useState<Ponche[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [errorPonches, setErrorPonches] = useState('');
   const [personalList, setPersonalList] = useState<Personal[]>([]);
 
   const [fotoLightbox, setFotoLightbox] = useState<string | null>(null);
@@ -136,6 +138,7 @@ export default function AdminPonches() {
   // solo orderBy fechaRD + sort secundario por timestamp en memoria.
   useEffect(() => {
     setCargando(true);
+    setErrorPonches('');
     const q = query(
       collection(db, 'ponches'),
       where('fechaRD', '>=', desde),
@@ -159,6 +162,8 @@ export default function AdminPonches() {
       },
       (err) => {
         console.error('[AdminPonches] Error subscribiendo:', err);
+        setErrorPonches('No se pudo cargar la asistencia. No interpretes este resultado como ausencia.');
+        setPonches([]);
         setCargando(false);
       },
     );
@@ -219,7 +224,7 @@ export default function AdminPonches() {
   // evitar que el doc personal con uid desactualizado marque a un empleado
   // que SÍ ponchó como "ausente".
   const ausentes: Personal[] = useMemo(() => {
-    if (esRangoMultiDia) return [];
+    if (esRangoMultiDia || errorPonches || cargando) return [];
     if (!esDiaLaborable(desde)) return [];
 
     const uidsConPonche = new Set(ponches.map((p) => p.personalUid).filter(Boolean));
@@ -238,7 +243,7 @@ export default function AdminPonches() {
 
     return personalList.filter((p) => {
       if (!p.activo) return false;
-      if (p.rol === 'ayudante') return false; // ayudantes no siempre laboran
+
       // Matching por cualquiera de las 3 llaves → NO es ausente
       if (p.uid && uidsConPonche.has(p.uid)) return false;
       if (idsConPonche.has(p.id)) return false;
@@ -248,7 +253,7 @@ export default function AdminPonches() {
       if (filtroPersonal !== '' && p.id !== filtroPersonal) return false;
       return true;
     });
-  }, [personalList, ponches, desde, esRangoMultiDia, filtroRol, filtroPersonal]);
+  }, [personalList, ponches, desde, esRangoMultiDia, filtroRol, filtroPersonal, errorPonches, cargando]);
 
   // Aplicar filtros sobre filas
   const filasFiltradas = useMemo(() => {
@@ -320,6 +325,8 @@ export default function AdminPonches() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
+      <RevisionAsistencia desde={desde} hasta={hasta} />
+      {errorPonches && <p role="alert" className="text-red-700">{errorPonches}</p>}
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -575,11 +582,11 @@ export default function AdminPonches() {
       {fotoLightbox && (
         <div
           className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4"
-          onClick={() => setFotoLightbox(null)}
+          aria-label="Cerrar imagen de asistencia" onClick={() => setFotoLightbox(null)}
         >
           <button
             className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white rounded-full p-2"
-            onClick={() => setFotoLightbox(null)}
+            aria-label="Cerrar imagen de asistencia" onClick={() => setFotoLightbox(null)}
           >
             <X size={20} />
           </button>

@@ -10,14 +10,14 @@ vi.mock('../../src/context/AppContext', () => ({ useApp: () => ({ userProfile: {
 vi.mock('../../src/utils/permisos', () => ({ puede: () => true }));
 vi.mock('firebase/firestore', () => ({
  collection: vi.fn(), doc: vi.fn(), query: mock.query, orderBy: vi.fn(), where: vi.fn(), updateDoc: vi.fn(), Timestamp: { now: vi.fn() },
- onSnapshot: (_: unknown, cb: Function) => { cb({ docs: Array.from({ length: 120 }, (_, i) => ({ id: `c${i}`, data: () => ({ nombre: `Cliente ${i}`, telefono: `202555${String(i).padStart(4,'0')}` }) })) }); return () => {}; },
+ onSnapshot: (_: unknown, cb: (snapshot: { docs: Array<{ id: string; data: () => object }> }) => void) => { cb({ docs: Array.from({ length: 120 }, (_, i) => ({ id: `c${i}`, data: () => ({ nombre: `Cliente ${i}`, lat: i === 0 ? 18.48 : undefined, lng: i === 0 ? -69.94 : undefined, telefono: `202555${String(i).padStart(4,'0')}` }) })) }); return () => {}; },
  getDocs: mock.history,
 }));
 vi.mock('../../src/utils', () => ({ parseCliente: (id: string, d: object) => ({ id, ...d }), formatTelefono: (s: string) => s, formatFechaCorta: () => '', formatMoneda: () => '' }));
 vi.mock('../../src/services/clientes.service', () => ({ buscarOCrearCliente: vi.fn(), buscarClientePorTelefono: vi.fn(), normalizarTelefono: (s: string) => s }));
 vi.mock('../../src/components/Modal', () => ({ default: () => null }));
 vi.mock('../../src/components/clientes/EditarClienteModal', () => ({ default: () => null }));
-vi.mock('../../src/components/ordenes/MiniMapaCliente', () => ({ default: () => null }));
+vi.mock('../../src/components/ordenes/MiniMapaCliente', () => ({ default: (props: {lat:number;lng:number}) => React.createElement('div', {'data-mapa-cliente':true,...props}) }));
 vi.mock('../../src/components/ordenes/EliminarOrdenButton', () => ({ default: () => null }));
 vi.mock('../../src/components/shared/BotonComoLlegar', () => ({ default: () => null }));
 import Clientes from '../../src/pages/Clientes';
@@ -38,15 +38,27 @@ it('limita filas iniciales y busca también clientes fuera de las primeras 50', 
  await act(async () => { tree.unmount(); });
 });
 it('descarta historial atrasado de otra ficha al cambiar rápidamente de cliente', async () => {
- let resolveA: Function = () => {}, resolveB: Function = () => {};
+ let resolveA: (value: unknown) => void = () => {}, resolveB: (value: unknown) => void = () => {};
  mock.history.mockImplementationOnce(() => new Promise(r => { resolveA = r; })).mockImplementationOnce(() => new Promise(r => { resolveB = r; }));
  let tree: any;
  await act(async () => { tree = create(React.createElement(MemoryRouter, null, React.createElement(Clientes))); });
  const rows = () => tree.root.findAll((n: any) => n.props.className?.includes('service-client-row'));
- await act(async () => { rows()[0].findByType('button').props.onClick(); });
- await act(async () => { rows()[1].findByType('button').props.onClick(); });
+ await act(async () => { rows()[0].findByType('button').props.onClick({currentTarget:{focus:vi.fn()}}); });
+ await act(async () => { rows()[1].findByType('button').props.onClick({currentTarget:{focus:vi.fn()}}); });
  await act(async () => { resolveB({ docs: [] }); });
  await act(async () => { resolveA({ docs: [{ id:'old', data: () => ({ numero:'NO-DEBE-APARECER', createdAt:{toDate:()=>new Date()} }) }] }); });
  expect(JSON.stringify(tree.toJSON())).not.toContain('NO-DEBE-APARECER');
  await act(async () => { tree.unmount(); });
+});
+
+it('muestra previsualización GPS en la ficha de Clientes cuando hay coordenadas guardadas', async () => {
+ mock.history.mockResolvedValue({docs:[]});
+ let tree: any;
+ await act(async () => { tree = create(React.createElement(MemoryRouter, null, React.createElement(Clientes))); });
+ const rows = () => tree.root.findAll((n: any) => n.props.className?.includes('service-client-row'));
+ await act(async () => { rows()[0].findByType('button').props.onClick({currentTarget:{focus:vi.fn()}}); });
+ expect(tree.root.findByProps({'data-mapa-cliente':true}).props).toMatchObject({lat:18.48,lng:-69.94});
+ await act(async () => { rows()[1].findByType('button').props.onClick({currentTarget:{focus:vi.fn()}}); });
+ expect(tree.root.findAllByProps({'data-mapa-cliente':true})).toHaveLength(0);
+ await act(async () => tree.unmount());
 });

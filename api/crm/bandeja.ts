@@ -1,3 +1,5 @@
+import { ordenesDelResponsable } from "../_lib/ordenesDia.js";
+import { obtenerConteosBandeja } from "../_lib/conteosBandeja.js";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldPath, Timestamp } from "firebase-admin/firestore";
 import { accesoEquipo, ErrorAcceso } from "../_lib/accesoEquipo.js";
@@ -12,6 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       !["administrador", "coordinadora", "secretaria", "operaria"].includes(rol)
     )
       throw new ErrorAcceso(403, "Bandeja de oficina.");
+    if (req.query.conteos === "1") return res.json({ conteos: await obtenerConteosBandeja(db, uid) });
     const filtro = String(req.query.filtro || "todas");
     const cursor = req.query.cursor;
     if (
@@ -31,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else if (filtro === "cartera") {
       origen = "cartera";
       q = db.collection("crm_clientes").where("responsableId", "==", uid);
-    } else if (filtro === "hoy") {
+    } else if ((filtro === "hoy" || filtro === "mis_ordenes")) {
       origen = "ordenes";
       const hoy = new Intl.DateTimeFormat("en-CA", {
         timeZone: "America/Santo_Domingo",
@@ -91,17 +94,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               .get()
           ).docs;
     if (origen === "ordenes") {
+      const ordenes = filtro === "mis_ordenes" ? await ordenesDelResponsable(db, page.docs, uid) : page.docs;
       const telefonos = [
         ...new Set(
-          page.docs
+          ordenes
             .filter(
               (d) =>
-                !d.data().eliminada &&
-                !d.data().eliminado &&
-                !["cancelado", "cerrado"].includes(d.data().fase),
+                !d.data()?.eliminada &&
+                !d.data()?.eliminado &&
+                !["cancelado", "cerrado"].includes(d.data()?.fase),
             )
             .map((d) =>
-              normalizarWaIdRd(String(d.data().clienteTelefono || "")),
+              normalizarWaIdRd(String(d.data()?.clienteTelefono || "")),
             )
             .filter((t): t is string => !!t),
         ),

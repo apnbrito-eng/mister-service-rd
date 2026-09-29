@@ -1,3 +1,5 @@
+import { useAtencion } from '../context/AtencionContext';
+import { mismoTelefono } from '../navigation/clienteSeleccionado';
 import { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, Timestamp, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -22,10 +24,12 @@ import { useApp } from '../context/AppContext';
 const MARCAS_SUGERIDAS = ['LG', 'Samsung', 'Mabe', 'Whirlpool', 'GE', 'Frigidaire'];
 
 export default function Citas() {
+  const { seleccion } = useAtencion();
   const { userProfile, currentUser } = useApp();
   const tiposEquipo = useTiposEquipo();
   const [loading, setLoading] = useState(true);
   const [citas, setCitas] = useState<CitaPorConfirmar[]>([]);
+  const citasVisibles = seleccion ? citas.filter(c => mismoTelefono(c.telefono, seleccion.telefono)) : citas;
   const [showModal, setShowModal] = useState(false);
   const [showAgendarModal, setShowAgendarModal] = useState(false);
   const [selectedCita, setSelectedCita] = useState<CitaPorConfirmar | null>(null);
@@ -277,7 +281,7 @@ export default function Citas() {
         try {
           const auditPayload: Record<string, unknown> = {
             accion: 'garantia_reabierta',
-            solicitanteUid: userProfile?.id || null,
+            solicitanteUid: currentUser?.uid || null,
             solicitanteNombre: userProfile?.nombre || null,
             objetivoTipo: 'orden',
             objetivoId: nuevaOrdenId,
@@ -593,7 +597,7 @@ export default function Citas() {
       <div className="service-page-heading">
         <div>
           <h1 className="text-2xl font-bold text-primary">Citas por Confirmar</h1>
-          <p className="text-gray-500 text-sm">{citas.length} citas pendientes</p>
+          <p className="text-gray-500 text-sm">{citasVisibles.length} citas pendientes</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
@@ -604,7 +608,7 @@ export default function Citas() {
         </button>
       </div>
 
-      {citas.length === 0 ? (
+      {citasVisibles.length === 0 ? (
         // SPRINT-DISENO-D (2026-05-31): EmptyState reusable.
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100">
           <EmptyState
@@ -615,7 +619,7 @@ export default function Citas() {
         </div>
       ) : (
         <div className="service-record-list">
-          {citas.map(cita => {
+          {citasVisibles.map(cita => {
             const minutos = differenceInMinutes(new Date(), cita.createdAt);
             const esUrgente = minutos > 15;
             const esGarantia = cita.tipo === 'garantia' || cita.esGarantia === true;
@@ -629,7 +633,7 @@ export default function Citas() {
                 key={cita.id}
                 className={`service-record-row bg-white border-l-4 p-5 ${borderClass}`}
               >
-                <div className="flex items-start justify-between gap-4 flex-wrap">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold text-gray-900">{cita.clienteNombre}</h3>
@@ -698,7 +702,7 @@ export default function Citas() {
                       <Clock size={10} /> {tiempoTranscurrido(cita.createdAt)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center flex-wrap gap-2 shrink-0">
                     <a
                       href={whatsappLink(cita.telefono)}
                       target="_blank"
@@ -717,6 +721,7 @@ export default function Citas() {
                       <Check size={14} /> Confirmar
                     </button>
                     <button
+                      aria-label="No agendar esta cita"
                       onClick={() => handleNoAgendar(cita)}
                       className="flex items-center gap-1 bg-gray-200 hover:bg-gray-300 text-gray-700 px-3 py-2 rounded-lg text-xs font-medium transition-colors"
                     >

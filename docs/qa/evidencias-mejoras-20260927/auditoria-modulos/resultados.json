@@ -1,0 +1,1798 @@
+[
+  {
+    "route": "/admin/dashboard",
+    "label": "Resumen de hoy",
+    "area": "Mi día",
+    "reviewed": false,
+    "key": "admin-dashboard",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Dashboard",
+          "Hoy",
+          "Pipeline",
+          "Embudo de Servicio",
+          "Alertas en Tiempo Real",
+          "Plata",
+          "Ingresos vs Gastos",
+          "Balance Pendiente",
+          "Equipo y trabajos",
+          "Estado de Casos por Técnico",
+          "Próxima nómina",
+          "Agenda del Día"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Dashboard",
+        "unnamedButtons": 0,
+        "url": "/admin/dashboard"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Dashboard",
+          "Hoy",
+          "Pipeline",
+          "Embudo de Servicio",
+          "Alertas en Tiempo Real",
+          "Plata",
+          "Ingresos vs Gastos",
+          "Balance Pendiente",
+          "Equipo y trabajos",
+          "Estado de Casos por Técnico",
+          "Próxima nómina",
+          "Agenda del Día"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Dashboard",
+        "unnamedButtons": 0,
+        "url": "/admin/dashboard"
+      }
+    }
+  },
+  {
+    "route": "/ponche",
+    "label": "Ponche",
+    "area": "Mi día",
+    "reviewed": false,
+    "key": "ponche",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Aún no has ponchado tu entrada hoy"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 2,
+        "tables": 0,
+        "title": "Aún no has ponchado tu entrada hoy",
+        "unnamedButtons": 0,
+        "url": "/ponche"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Aún no has ponchado tu entrada hoy"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 2,
+        "tables": 0,
+        "title": "Aún no has ponchado tu entrada hoy",
+        "unnamedButtons": 0,
+        "url": "/ponche"
+      }
+    }
+  },
+  {
+    "route": "/admin/ordenes",
+    "label": "Órdenes",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-ordenes",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Ordenes de Servicio",
+          "Agenda de Hoy"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Ordenes de Servicio",
+        "unnamedButtons": 0,
+        "url": "/admin/ordenes"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Ordenes de Servicio",
+          "Agenda de Hoy"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Ordenes de Servicio",
+        "unnamedButtons": 0,
+        "url": "/admin/ordenes"
+      }
+    }
+  },
+  {
+    "route": "/admin/agenda-dia",
+    "label": "Agenda del Día",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-agenda-dia",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Agenda del Día"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Agenda del Día",
+        "unnamedButtons": 0,
+        "url": "/admin/agenda-dia"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Agenda del Día"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Agenda del Día",
+        "unnamedButtons": 0,
+        "url": "/admin/agenda-dia"
+      }
+    }
+  },
+  {
+    "route": "/admin/calendario",
+    "label": "Calendario",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-calendario",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Calendario Técnico",
+          "septiembre 2026"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 1,
+        "tables": 0,
+        "title": "Calendario Técnico",
+        "unnamedButtons": 0,
+        "url": "/admin/calendario"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Calendario Técnico",
+          "septiembre 2026"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 1,
+        "tables": 0,
+        "title": "Calendario Técnico",
+        "unnamedButtons": 0,
+        "url": "/admin/calendario"
+      }
+    }
+  },
+  {
+    "route": "/admin/mapa",
+    "label": "Mapa de Rutas",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-mapa",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Mapa de Rutas"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 2,
+        "tables": 0,
+        "title": "Mapa de Rutas",
+        "unnamedButtons": 0,
+        "url": "/admin/mapa"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Mapa de Rutas"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 2,
+        "tables": 0,
+        "title": "Mapa de Rutas",
+        "unnamedButtons": 0,
+        "url": "/admin/mapa"
+      }
+    }
+  },
+  {
+    "route": "/admin/reprogramaciones",
+    "label": "Reprogramaciones",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-reprogramaciones",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Reprogramaciones de citas"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": " Reprogramaciones de citas",
+        "unnamedButtons": 0,
+        "url": "/admin/reprogramaciones"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Reprogramaciones de citas"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": " Reprogramaciones de citas",
+        "unnamedButtons": 0,
+        "url": "/admin/reprogramaciones"
+      }
+    }
+  },
+  {
+    "route": "/admin/sugerencias-chequeo",
+    "label": "Sugerencias chequeo",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-sugerencias-chequeo",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Sugerencias de solo chequeo"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": " Sugerencias de solo chequeo",
+        "unnamedButtons": 0,
+        "url": "/admin/sugerencias-chequeo"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Sugerencias de solo chequeo"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": " Sugerencias de solo chequeo",
+        "unnamedButtons": 0,
+        "url": "/admin/sugerencias-chequeo"
+      }
+    }
+  },
+  {
+    "route": "/admin/standby",
+    "label": "Pendiente de piezas",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-standby",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Pendiente de piezas",
+          "Roberto Jiménez",
+          "Miguel Rosario",
+          "Ana Hernández",
+          "Carmen López"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Pendiente de piezas",
+        "unnamedButtons": 0,
+        "url": "/admin/standby"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Pendiente de piezas",
+          "Roberto Jiménez",
+          "Miguel Rosario",
+          "Ana Hernández",
+          "Carmen López"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Pendiente de piezas",
+        "unnamedButtons": 0,
+        "url": "/admin/standby"
+      }
+    }
+  },
+  {
+    "route": "/admin/taller",
+    "label": "Equipos Taller",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-taller",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Equipos en Taller"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Equipos en Taller",
+        "unnamedButtons": 0,
+        "url": "/admin/taller"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Equipos en Taller"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Equipos en Taller",
+        "unnamedButtons": 0,
+        "url": "/admin/taller"
+      }
+    }
+  },
+  {
+    "route": "/admin/mantenimiento",
+    "label": "Mantenimiento",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-mantenimiento",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Mantenimiento Programado",
+          "Vencidos (1)",
+          "Próximos (3)",
+          "Inactivos (1)"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Mantenimiento Programado",
+        "unnamedButtons": 0,
+        "url": "/admin/mantenimiento"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Mantenimiento Programado",
+          "Vencidos (1)",
+          "Próximos (3)",
+          "Inactivos (1)"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Mantenimiento Programado",
+        "unnamedButtons": 0,
+        "url": "/admin/mantenimiento"
+      }
+    }
+  },
+  {
+    "route": "/admin/calendarios",
+    "label": "Calendarios públicos (Calendly)",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-calendarios",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Calendarios"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Calendarios",
+        "unnamedButtons": 0,
+        "url": "/admin/calendarios"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Calendarios"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Calendarios",
+        "unnamedButtons": 0,
+        "url": "/admin/calendarios"
+      }
+    }
+  },
+  {
+    "route": "/admin/cotizaciones",
+    "label": "Cotizaciones",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-cotizaciones",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Cotizaciones"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Cotizaciones",
+        "unnamedButtons": 0,
+        "url": "/admin/cotizaciones"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Cotizaciones"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Cotizaciones",
+        "unnamedButtons": 0,
+        "url": "/admin/cotizaciones"
+      }
+    }
+  },
+  {
+    "route": "/admin/pagos-pendientes",
+    "label": "Pagos pendientes",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-pagos-pendientes",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Pagos pendientes de confirmación"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Pagos pendientes de confirmación",
+        "unnamedButtons": 0,
+        "url": "/admin/pagos-pendientes"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Pagos pendientes de confirmación",
+          "Todo al día"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Pagos pendientes de confirmación",
+        "unnamedButtons": 0,
+        "url": "/admin/pagos-pendientes"
+      }
+    }
+  },
+  {
+    "route": "/admin/facturacion-pendiente",
+    "label": "Conduces Pendientes",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-facturacion-pendiente",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Conduces Pendientes"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Conduces Pendientes",
+        "unnamedButtons": 0,
+        "url": "/admin/facturacion-pendiente"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Conduces Pendientes"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Conduces Pendientes",
+        "unnamedButtons": 0,
+        "url": "/admin/facturacion-pendiente"
+      }
+    }
+  },
+  {
+    "route": "/admin/facturas",
+    "label": "Conduces de Garantía",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-facturas",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Conduces de Garantía"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Conduces de Garantía",
+        "unnamedButtons": 0,
+        "url": "/admin/facturas"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Conduces de Garantía"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Conduces de Garantía",
+        "unnamedButtons": 0,
+        "url": "/admin/facturas"
+      }
+    }
+  },
+  {
+    "route": "/admin/cierre-dia",
+    "label": "Cierre del Día",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-cierre-dia",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Cierre del Día",
+          "Efectivo recibido pendiente de entregar",
+          " Efectivo de registros anteriores (por conciliar)",
+          "Transferencias recibidas",
+          "Órdenes aún activas (11)",
+          "Alertas sin resolver (15)"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 3,
+        "title": " Cierre del Día",
+        "unnamedButtons": 0,
+        "url": "/admin/cierre-dia"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Cierre del Día",
+          "Efectivo recibido pendiente de entregar",
+          " Efectivo de registros anteriores (por conciliar)",
+          "Transferencias recibidas",
+          "Órdenes aún activas (11)",
+          "Alertas sin resolver (15)"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 3,
+        "title": " Cierre del Día",
+        "unnamedButtons": 0,
+        "url": "/admin/cierre-dia"
+      }
+    }
+  },
+  {
+    "route": "/admin/gastos",
+    "label": "Gastos e Ingresos",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-gastos",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Gastos e Ingresos",
+          "Comparativo Semanal",
+          "Gastos por Categoría (Mes)"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Gastos e Ingresos",
+        "unnamedButtons": 0,
+        "url": "/admin/gastos"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Gastos e Ingresos",
+          "Comparativo Semanal",
+          "Gastos por Categoría (Mes)"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Gastos e Ingresos",
+        "unnamedButtons": 0,
+        "url": "/admin/gastos"
+      }
+    }
+  },
+  {
+    "route": "/admin/bancos",
+    "label": "Bancos",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-bancos",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Bancos"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Bancos",
+        "unnamedButtons": 0,
+        "url": "/admin/bancos"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Bancos"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Bancos",
+        "unnamedButtons": 0,
+        "url": "/admin/bancos"
+      }
+    }
+  },
+  {
+    "route": "/admin/personal",
+    "label": "Personal",
+    "area": "Equipo",
+    "reviewed": false,
+    "key": "admin-personal",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Personal",
+          "Administradores"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Personal",
+        "unnamedButtons": 0,
+        "url": "/admin/personal"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Personal",
+          "Administradores"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Personal",
+        "unnamedButtons": 0,
+        "url": "/admin/personal"
+      }
+    }
+  },
+  {
+    "route": "/admin/usuarios",
+    "label": "Usuarios & Permisos",
+    "area": "Equipo",
+    "reviewed": false,
+    "key": "admin-usuarios",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Gestión de Accesos",
+          "Administradores"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Gestión de Accesos",
+        "unnamedButtons": 0,
+        "url": "/admin/usuarios"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Gestión de Accesos",
+          "Administradores"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Gestión de Accesos",
+        "unnamedButtons": 0,
+        "url": "/admin/usuarios"
+      }
+    }
+  },
+  {
+    "route": "/admin/ponches",
+    "label": "Reporte de Ponches",
+    "area": "Equipo",
+    "reviewed": false,
+    "key": "admin-ponches",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Reporte de Ponches"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Reporte de Ponches",
+        "unnamedButtons": 0,
+        "url": "/admin/ponches"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Reporte de Ponches"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Reporte de Ponches",
+        "unnamedButtons": 0,
+        "url": "/admin/ponches"
+      }
+    }
+  },
+  {
+    "route": "/admin/comisiones",
+    "label": "Comisiones",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-comisiones",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Comisiones",
+          "Ajustes por garantía"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 1,
+        "tables": 1,
+        "title": " Comisiones",
+        "unnamedButtons": 0,
+        "url": "/admin/comisiones"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Comisiones",
+          "Ajustes por garantía"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 1,
+        "tables": 1,
+        "title": " Comisiones",
+        "unnamedButtons": 0,
+        "url": "/admin/comisiones"
+      }
+    }
+  },
+  {
+    "route": "/admin/avances",
+    "label": "Avances a Empleados",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-avances",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Avances a Empleados",
+          "Pendientes por empleado (a descontar en próxima nómina)"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Avances a Empleados",
+        "unnamedButtons": 0,
+        "url": "/admin/avances"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Avances a Empleados",
+          "Pendientes por empleado (a descontar en próxima nómina)"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Avances a Empleados",
+        "unnamedButtons": 0,
+        "url": "/admin/avances"
+      }
+    }
+  },
+  {
+    "route": "/admin/prestamos",
+    "label": "Préstamos a Empleados",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-prestamos",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Préstamos a empleados"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": " Préstamos a empleados",
+        "unnamedButtons": 0,
+        "url": "/admin/prestamos"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Préstamos a empleados"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": " Préstamos a empleados",
+        "unnamedButtons": 0,
+        "url": "/admin/prestamos"
+      }
+    }
+  },
+  {
+    "route": "/admin/metricas-mensuales",
+    "label": "Métricas del Mes",
+    "area": "Equipo",
+    "reviewed": false,
+    "key": "admin-metricas-mensuales",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Métricas del Mes — septiembre 2026",
+          "Proyección total de nómina del mes",
+          "Embudo de conversión por fase",
+          "Métricas de plantillas WhatsApp",
+          "Operarias",
+          "Secretarias",
+          "Técnicos",
+          "Tiers de bono secretaria"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Métricas del Mes — septiembre 2026",
+        "unnamedButtons": 0,
+        "url": "/admin/metricas-mensuales"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Métricas del Mes — septiembre 2026",
+          "Proyección total de nómina del mes",
+          "Embudo de conversión por fase",
+          "Métricas de plantillas WhatsApp",
+          "Operarias",
+          "Secretarias",
+          "Técnicos",
+          "Tiers de bono secretaria"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Métricas del Mes — septiembre 2026",
+        "unnamedButtons": 0,
+        "url": "/admin/metricas-mensuales"
+      }
+    }
+  },
+  {
+    "route": "/admin/marketing",
+    "label": "Marketing",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-marketing",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Marketing y seguimiento",
+          "Atender consultas",
+          "Dar seguimiento",
+          "Aprender del equipo",
+          "Anuncios de Mister Service"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Marketing y seguimiento",
+        "unnamedButtons": 0,
+        "url": "/admin/marketing"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Marketing y seguimiento",
+          "Atender consultas",
+          "Dar seguimiento",
+          "Aprender del equipo",
+          "Anuncios de Mister Service"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Marketing y seguimiento",
+        "unnamedButtons": 0,
+        "url": "/admin/marketing"
+      }
+    }
+  },
+  {
+    "route": "/admin/feedback",
+    "label": "Feedback NPS",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-feedback",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Feedback NPS — septiembre 2026",
+          "Distribución del mes",
+          "Detractores últimos 30 días (0)",
+          "Promotores no convertidos a Google (0)"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Feedback NPS — septiembre 2026",
+        "unnamedButtons": 0,
+        "url": "/admin/feedback"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Feedback NPS — septiembre 2026",
+          "Distribución del mes",
+          "Detractores últimos 30 días (0)",
+          "Promotores no convertidos a Google (0)"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Feedback NPS — septiembre 2026",
+        "unnamedButtons": 0,
+        "url": "/admin/feedback"
+      }
+    }
+  },
+  {
+    "route": "/admin/web",
+    "label": "Página Web",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-web",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Configuración de Página Web",
+          "Formulario de Agendamiento",
+          "Campos opcionales del formulario",
+          "Bloques de hora disponibles",
+          "Notificaciones de nueva cita",
+          "Campos personalizados",
+          "WhatsApp",
+          "Sección Hero",
+          "Servicios",
+          "Estadísticas",
+          "Contacto",
+          "Marcas",
+          "Feedback NPS de órdenes"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 12,
+        "tables": 0,
+        "title": "Configuración de Página Web",
+        "unnamedButtons": 0,
+        "url": "/admin/web"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Configuración de Página Web",
+          "Formulario de Agendamiento",
+          "Campos opcionales del formulario",
+          "Bloques de hora disponibles",
+          "Notificaciones de nueva cita",
+          "Campos personalizados",
+          "WhatsApp",
+          "Sección Hero",
+          "Servicios",
+          "Estadísticas",
+          "Contacto",
+          "Marcas",
+          "Feedback NPS de órdenes"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 12,
+        "tables": 0,
+        "title": "Configuración de Página Web",
+        "unnamedButtons": 0,
+        "url": "/admin/web"
+      }
+    }
+  },
+  {
+    "route": "/admin/configuracion-marketing",
+    "label": "Plantillas Marketing",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-configuracion-marketing",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Configuración de Marketing",
+          "Recordatorio mantenimiento (3+ meses)",
+          "Oferta promocional",
+          "Encuesta satisfacción tardía",
+          "Reactivación general",
+          "oferta de fin de mes",
+          "Campañas históricas"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 5,
+        "tables": 1,
+        "title": " Configuración de Marketing",
+        "unnamedButtons": 0,
+        "url": "/admin/configuracion-marketing"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Configuración de Marketing",
+          "Recordatorio mantenimiento (3+ meses)",
+          "Oferta promocional",
+          "Encuesta satisfacción tardía",
+          "Reactivación general",
+          "oferta de fin de mes",
+          "Campañas históricas"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 5,
+        "tables": 1,
+        "title": " Configuración de Marketing",
+        "unnamedButtons": 0,
+        "url": "/admin/configuracion-marketing"
+      }
+    }
+  },
+  {
+    "route": "/admin/precios",
+    "label": "Precios de Servicios",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-precios",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Precios de Servicios"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 1,
+        "tables": 1,
+        "title": " Precios de Servicios",
+        "unnamedButtons": 0,
+        "url": "/admin/precios"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Precios de Servicios"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 1,
+        "tables": 1,
+        "title": " Precios de Servicios",
+        "unnamedButtons": 0,
+        "url": "/admin/precios"
+      }
+    }
+  },
+  {
+    "route": "/admin/asistente",
+    "label": "Chat (pantalla completa)",
+    "area": "Asistente IA",
+    "reviewed": false,
+    "key": "admin-asistente",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Asistente IA · BETA"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Asistente IA · BETA",
+        "unnamedButtons": 0,
+        "url": "/admin/asistente"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Asistente IA · BETA"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Asistente IA · BETA",
+        "unnamedButtons": 0,
+        "url": "/admin/asistente"
+      }
+    }
+  },
+  {
+    "route": "/admin/asistente/historial",
+    "label": "Historial IA",
+    "area": "Asistente IA",
+    "reviewed": false,
+    "key": "admin-asistente-historial",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Historial del Asistente IA"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Historial del Asistente IA",
+        "unnamedButtons": 0,
+        "url": "/admin/asistente/historial"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Historial del Asistente IA"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Historial del Asistente IA",
+        "unnamedButtons": 0,
+        "url": "/admin/asistente/historial"
+      }
+    }
+  },
+  {
+    "route": "/admin/rendimiento",
+    "label": "Rendimiento",
+    "area": "Equipo",
+    "reviewed": false,
+    "key": "admin-rendimiento",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Rendimiento / KPIs",
+          "Tasa de Confirmación Global",
+          "Rendimiento por Coordinador",
+          "Rendimiento por Técnico",
+          "Desempeño de Operarias"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Rendimiento / KPIs",
+        "unnamedButtons": 0,
+        "url": "/admin/rendimiento"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Rendimiento / KPIs",
+          "Tasa de Confirmación Global",
+          "Rendimiento por Coordinador",
+          "Rendimiento por Técnico",
+          "Desempeño de Operarias"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Rendimiento / KPIs",
+        "unnamedButtons": 0,
+        "url": "/admin/rendimiento"
+      }
+    }
+  },
+  {
+    "route": "/admin/configuracion",
+    "label": "Configuración",
+    "area": "Configuración",
+    "reviewed": false,
+    "key": "admin-configuracion",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Configuración",
+          "Datos de la Empresa",
+          "Configuración Fiscal",
+          "Número de envío de WhatsApp",
+          "Catálogo de números",
+          "Anteponer nombre del agente al cliente",
+          "Respuestas rápidas",
+          "Tipos de Equipo",
+          "Catálogo de modelos por tipo",
+          "🛰️ GPS Vehicular",
+          "Mantenimiento de datos",
+          "Geocodificar órdenes sin GPS",
+          "Información del Sistema"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 2,
+        "tables": 0,
+        "title": "Configuración",
+        "unnamedButtons": 0,
+        "url": "/admin/configuracion"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Configuración",
+          "Datos de la Empresa",
+          "Configuración Fiscal",
+          "Número de envío de WhatsApp",
+          "Catálogo de números",
+          "Anteponer nombre del agente al cliente",
+          "Respuestas rápidas",
+          "Tipos de Equipo",
+          "Catálogo de modelos por tipo",
+          "🛰️ GPS Vehicular",
+          "Mantenimiento de datos",
+          "Geocodificar órdenes sin GPS",
+          "Información del Sistema"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 2,
+        "tables": 0,
+        "title": "Configuración",
+        "unnamedButtons": 0,
+        "url": "/admin/configuracion"
+      }
+    }
+  },
+  {
+    "route": "/admin/citas",
+    "label": "Citas por Confirmar",
+    "area": "Atención y clientes",
+    "reviewed": false,
+    "key": "admin-citas",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Citas por Confirmar",
+          "pedro baez",
+          "jorge manuel",
+          "Yeury",
+          "sarilis Peña",
+          "Eric Ml. Guzman",
+          "Ronald Alarcon Armas",
+          "Martinus Cromberge",
+          "Timothy DeLoach y Miguel Castro",
+          "Rodney Lee",
+          "Ruben Antonio Rodriguez",
+          "Francisco Medina",
+          "Luisa Vargas",
+          "Elizabeth Calderín"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Citas por Confirmar",
+        "unnamedButtons": 0,
+        "url": "/admin/citas"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Citas por Confirmar",
+          "pedro baez",
+          "jorge manuel",
+          "Yeury",
+          "sarilis Peña",
+          "Eric Ml. Guzman",
+          "Ronald Alarcon Armas",
+          "Martinus Cromberge",
+          "Timothy DeLoach y Miguel Castro",
+          "Rodney Lee",
+          "Ruben Antonio Rodriguez",
+          "Francisco Medina",
+          "Luisa Vargas",
+          "Elizabeth Calderín"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Citas por Confirmar",
+        "unnamedButtons": 0,
+        "url": "/admin/citas"
+      }
+    }
+  },
+  {
+    "route": "/admin/formularios",
+    "label": "Formularios",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-formularios",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Formularios de Servicio",
+          "Reparacion de Lavadoras"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Formularios de Servicio",
+        "unnamedButtons": 0,
+        "url": "/admin/formularios"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Formularios de Servicio",
+          "Reparacion de Lavadoras"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": "Formularios de Servicio",
+        "unnamedButtons": 0,
+        "url": "/admin/formularios"
+      }
+    }
+  },
+  {
+    "route": "/admin/estado-resultado",
+    "label": "Estado de Resultado",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-estado-resultado",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Estado de Resultado",
+          "Desglose · Septiembre 2026"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Estado de Resultado",
+        "unnamedButtons": 0,
+        "url": "/admin/estado-resultado"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Estado de Resultado",
+          "Desglose · Septiembre 2026"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": "Estado de Resultado",
+        "unnamedButtons": 0,
+        "url": "/admin/estado-resultado"
+      }
+    }
+  },
+  {
+    "route": "/admin/reporte-avanzado",
+    "label": "Reporte avanzado",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-reporte-avanzado",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Reporte avanzado",
+          "Rendimiento por Técnico",
+          "Reparaciones por Tipo de Equipo",
+          "Órdenes anuladas esta semana",
+          "Nómina proyectada del mes"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 2,
+        "tables": 0,
+        "title": "Reporte avanzado",
+        "unnamedButtons": 0,
+        "url": "/admin/reporte-avanzado"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Reporte avanzado",
+          "Rendimiento por Técnico",
+          "Reparaciones por Tipo de Equipo",
+          "Órdenes anuladas esta semana",
+          "Nómina proyectada del mes"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 2,
+        "tables": 0,
+        "title": "Reporte avanzado",
+        "unnamedButtons": 0,
+        "url": "/admin/reporte-avanzado"
+      }
+    }
+  },
+  {
+    "route": "/admin/nomina",
+    "label": "Nómina",
+    "area": "Contabilidad",
+    "reviewed": false,
+    "key": "admin-nomina",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Nómina Quincenal"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": " Nómina Quincenal",
+        "unnamedButtons": 0,
+        "url": "/admin/nomina"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Nómina Quincenal"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 0,
+        "title": " Nómina Quincenal",
+        "unnamedButtons": 0,
+        "url": "/admin/nomina"
+      }
+    }
+  },
+  {
+    "route": "/admin/historial-anuladas",
+    "label": "Historial Anuladas",
+    "area": "Servicios",
+    "reviewed": false,
+    "key": "admin-historial-anuladas",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Historial de órdenes anuladas"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": " Historial de órdenes anuladas",
+        "unnamedButtons": 0,
+        "url": "/admin/historial-anuladas"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Historial de órdenes anuladas"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 0,
+        "tables": 1,
+        "title": " Historial de órdenes anuladas",
+        "unnamedButtons": 0,
+        "url": "/admin/historial-anuladas"
+      }
+    }
+  },
+  {
+    "route": "/admin/inventario",
+    "label": "Inventario",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-inventario",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Inventario de Piezas"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 1,
+        "tables": 1,
+        "title": " Inventario de Piezas",
+        "unnamedButtons": 0,
+        "url": "/admin/inventario"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          " Inventario de Piezas"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 1,
+        "tables": 1,
+        "title": " Inventario de Piezas",
+        "unnamedButtons": 0,
+        "url": "/admin/inventario"
+      }
+    }
+  },
+  {
+    "route": "/admin/conocimiento",
+    "label": "Conocimientos",
+    "area": "Marketing y recursos",
+    "reviewed": false,
+    "key": "admin-conocimiento",
+    "views": {
+      "web": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Conocimiento del equipo",
+          "Incorporar un documento",
+          "Lo que más pregunta el equipo",
+          "Todavía no hay conocimientos para mostrar",
+          "Comparte lo que aprendiste"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 1,
+        "tables": 0,
+        "title": "Conocimiento del equipo",
+        "unnamedButtons": 0,
+        "url": "/admin/conocimiento"
+      },
+      "movil": {
+        "bodyPresent": true,
+        "brokenImages": 0,
+        "headings": [
+          "Conocimiento del equipo",
+          "Incorporar un documento",
+          "Lo que más pregunta el equipo",
+          "Todavía no hay conocimientos para mostrar",
+          "Comparte lo que aprendiste"
+        ],
+        "loading": false,
+        "overflow": false,
+        "smallControls": 1,
+        "tables": 0,
+        "title": "Conocimiento del equipo",
+        "unnamedButtons": 0,
+        "url": "/admin/conocimiento"
+      }
+    }
+  }
+]

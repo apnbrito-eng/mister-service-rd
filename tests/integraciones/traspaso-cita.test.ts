@@ -6,7 +6,7 @@ vi.mock('../../api/_lib/accesoEquipo.js', () => {
   const ref = (path: string): any => ({ path, id: path.split('/').pop(), collection: (n: string) => collection(path + '/' + n) });
   const snap = (path: string): any => ({ ...ref(path), ref: ref(path), exists: fake.data.has(path), data: () => structuredClone(fake.data.get(path)) });
   const collection = (path: string): any => ({ doc: (id = `auto-${++fake.seq}`) => ref(path + '/' + id), where: (field: string, op: string, value: any) => ({ query: () => ({ docs: [...fake.data.keys()].filter(k => k.startsWith(path + '/') && k.split('/').length === path.split('/').length + 1 && (op === 'in' ? value.includes(fake.data.get(k)[field]) : fake.data.get(k)[field] === value)).map(snap) }) }) });
-  const db = { collection, runTransaction: async (fn: any) => {
+  const db = { collection, doc: ref, runTransaction: async (fn: any) => {
     let written = false; const pending: (() => void)[] = [];
     const write = (r: any, d: any, merge: boolean) => { written = true; pending.push(() => { const next = merge ? { ...fake.data.get(r.path), ...d } : d; for (const k of Object.keys(next)) if (next[k] === '__DELETE__') delete next[k]; fake.data.set(r.path, next); }); };
     const result = await fn({ get: async (r: any) => { if (written) throw new Error('Read after write'); return r.query ? r.query() : snap(r.path); }, update: (r: any, d: any) => write(r,d,true), set: (r: any,d: any,o: any) => write(r,d,!!o?.merge), create: (r: any,d: any) => { if(fake.data.has(r.path)) throw new Error('Duplicate'); write(r,d,false); } });

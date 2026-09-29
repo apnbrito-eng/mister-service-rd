@@ -35,7 +35,7 @@ export async function procesarPendientes(uid: string) {
   trabajando.add(uid);
   try {
     for (const m of leerPendientes(uid).filter(m => !m.error)) {
-      if (auth.currentUser?.uid !== uid || !Boolean(navigator.onLine)) break;
+      if (auth.currentUser?.uid !== uid || !navigator.onLine) break;
       try {
         const r = await enviarTexto(m.waId, m.texto, { tempId: m.id });
         if ('ok' in r && r.ok) descartarPendiente(uid, m.id);

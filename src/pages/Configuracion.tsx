@@ -1,3 +1,4 @@
+import BotServicioConfiguracion from '../components/configuracion/BotServicioConfiguracion';
 import { useState, useEffect, useRef } from 'react';
 import { Building, Shield, Wrench, Satellite, Plus, X, Eye, EyeOff, MapPin, Loader2, FileText, ChevronUp, ChevronDown, ListPlus, MessageCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -424,11 +425,13 @@ export default function Configuracion() {
   const [nuevoVehiculo, setNuevoVehiculo] = useState({ id: '', nombre: '', tecnicoId: '' });
 
   useEffect(() => {
-    obtenerConfigGPS().then(c => { if (c) setGpsConfig(c); });
+    if (esSoloAdministrador) {
+      obtenerConfigGPS().then(c => { if (c) setGpsConfig(c); });
+    }
     getDocs(collection(db, 'personal')).then(snap => {
       setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
     });
-  }, []);
+  }, [esSoloAdministrador]);
 
   const handleSaveEmpresa = async () => {
     if (!puedeModificar) return;
@@ -838,6 +841,8 @@ export default function Configuracion() {
           )}
         </div>
       </div>
+
+      {esSoloAdministrador && <BotServicioConfiguracion />}
 
       {/* Número de envío WhatsApp (SPRINT-WA-NUMERO-RESPALDO-MANUAL Fase 1) */}
       {esSoloAdministrador && (
@@ -1399,8 +1404,8 @@ export default function Configuracion() {
         )}
       </div>
 
-      {/* GPS Vehicular */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      {/* GPS Vehicular: la configuración contiene credenciales privadas. */}
+      {esSoloAdministrador && <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center gap-2 mb-4">
           <Satellite size={20} className="text-primary-medium" />
           <h2 className="text-lg font-semibold text-gray-900">🛰️ GPS Vehicular</h2>
@@ -1461,7 +1466,7 @@ export default function Configuracion() {
                       <p className="font-medium">{v.nombre} — ID: {v.id}</p>
                       <p className="text-xs text-gray-500">Técnico: {v.tecnicoNombre || 'Sin asignar'}</p>
                     </div>
-                    <button onClick={() => handleRemoveVehiculo(v.id)} className="p-1 text-red-500 hover:bg-red-50 rounded">
+                    <button aria-label="Eliminar vehículo" onClick={() => handleRemoveVehiculo(v.id)} className="p-1 text-red-500 hover:bg-red-50 rounded">
                       <X size={14} />
                     </button>
                   </div>
@@ -1520,7 +1525,7 @@ export default function Configuracion() {
             )}
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Mantenimiento de datos (solo admin) */}
       {esAdmin && (

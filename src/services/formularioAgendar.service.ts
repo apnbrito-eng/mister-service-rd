@@ -1,27 +1,20 @@
 import {
-  addDoc,
   collection,
+  Timestamp,
   doc,
   getDoc,
   onSnapshot,
   runTransaction,
-  setDoc,
-  Timestamp,
+  writeBatch,
   Unsubscribe,
-  query,
-  where,
-  getDocs,
-  limit,
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, auth } from '../firebase/config';
 import {
   ConfigFormularioAgendar,
   CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
 } from '../types/configFormularioAgendar';
-import { ConfigWhatsApp, NumeroWhatsApp } from './configWeb.service';
-import { Personal } from '../types';
-import { normalizarTelefono } from './clientes.service';
-import { crearNotificacion } from './notificaciones.service';
+import { NumeroWhatsApp } from './configWeb.service';
+import { enviarCitaPublicaSegura } from './solicitudesPublicas.service';
 import { crearRegistroAuditoria } from '../utils';
 import { stripUndefined } from '../utils/firestore';
 
@@ -70,74 +63,35 @@ export function suscribirConfigFormularioAgendar(
   );
 }
 
-/**
- * Guarda la config del formulario en `config_web/sitio.formularioAgendar`.
- * Usa `setDoc(..., { merge: true })` para no pisar el resto de la config web.
- * Opcionalmente escribe un registro en `auditoria_admin` si se pasa el usuario.
- */
+/** Guarda configuración y auditoría juntas, atribuidas a la sesión autenticada. */
 export async function guardarConfigFormularioAgendar(
   config: ConfigFormularioAgendar,
   usuario?: { id?: string; nombre?: string },
 ): Promise<void> {
-  // Strip undefined recursivo antes de persistir (Firestore los rechaza
-  // a cualquier nivel de anidamiento, ej. dentro de
-  // `camposPersonalizados[i].opciones`).
+  const sesion = auth.currentUser;
+  if (!sesion) throw new Error('Se requiere una sesión para guardar el formulario.');
+  // El id de perfil recibido por compatibilidad nunca identifica al actor.
+  const solicitanteNombre = usuario?.nombre || sesion.displayName || 'Administrador';
   const limpio = stripUndefined(config) as ConfigFormularioAgendar;
-
-  await setDoc(
-    CONFIG_DOC,
-    {
-      formularioAgendar: limpio,
-      updatedAt: Timestamp.now(),
-    },
-    { merge: true },
-  );
-
-  // Audit log opcional — no rompe el guardado si falla
-  if (usuario?.nombre) {
-    try {
-      const registro = crearRegistroAuditoria(
-        usuario.nombre,
-        'editar',
-        'Actualizó la configuración del formulario público de agendamiento',
-        'config_web.formularioAgendar',
-      );
-      const auditPayload: Record<string, unknown> = {
-        accion: 'editar_config_formulario_agendar',
-        objetivoTipo: 'config_web',
-        objetivoId: 'sitio',
-        solicitanteUid: usuario.id || null,
-        solicitanteNombre: usuario.nombre,
-        registro,
-        timestamp: Timestamp.now(),
-      };
-      await addDoc(
-        collection(db, 'auditoria_admin'),
-        Object.fromEntries(
-          Object.entries(auditPayload).filter(([, v]) => v !== undefined),
-        ),
-      );
-    } catch (err) {
-      console.warn('Audit log editar_config_formulario_agendar falló:', err);
-    }
-  }
+  const ahora = Timestamp.now();
+  const batch = writeBatch(db);
+  batch.set(CONFIG_DOC, { formularioAgendar: limpio, updatedAt: ahora }, { merge: true });
+  batch.set(doc(collection(db, 'auditoria_admin')), {
+    accion: 'editar_config_formulario_agendar',
+    objetivoTipo: 'config_web', objetivoId: 'sitio',
+    solicitanteUid: sesion.uid, solicitanteNombre,
+    registro: crearRegistroAuditoria(solicitanteNombre, 'editar',
+      'Actualizó la configuración del formulario público de agendamiento', 'config_web.formularioAgendar'),
+    timestamp: ahora,
+  });
+  // Un rechazo impide ambos cambios y llega al mensaje de error de la pantalla.
+  await batch.commit();
 }
 
-// ─── Round-robin de WhatsApp para /agendar ──────────────────────────
+// ─── Rotación heredada (compatibilidad; el submit público ya no la usa) ───
 
-/**
- * Selecciona el siguiente número de WhatsApp en rotación verdadera
- * (round-robin) usando un contador transaccional en
- * `config_web/contadores.formularioAgendarRR`.
- *
- * - SOLO se usa en el submit del formulario público `/agendar`.
- * - Ignora el flag `rotacion` de `config_web/sitio.whatsapp`: si hay
- *   más de un activo, siempre rota.
- * - Si la lista está vacía, lanza error (el caller debe manejarlo
- *   con fallback "te llamaremos").
- *
- * El resto del sitio (marketing) sigue usando `getWhatsAppUrl` que
- * elige al azar — no modifiques ese helper.
+/** Mantiene el contrato transaccional anterior para consumidores externos.
+ * La web pública usa WHATSAPP_PUBLICO. No se modifica el helper genérico interno.
  */
 export async function obtenerWhatsAppRoundRobin(
   numerosActivos: NumeroWhatsApp[],
@@ -158,27 +112,6 @@ export async function obtenerWhatsAppRoundRobin(
   });
 
   return numerosActivos[indice];
-}
-
-/**
- * Lee `config_web/sitio.whatsapp` y devuelve los números marcados como
- * `activo === true`. Pensado para consumirse junto con
- * `obtenerWhatsAppRoundRobin`. Retorna `[]` si el doc no existe o
- * la lista de números no está, para que el caller decida si hace
- * fallback gracioso.
- */
-async function leerNumerosWhatsAppActivos(): Promise<NumeroWhatsApp[]> {
-  try {
-    const snap = await getDoc(CONFIG_DOC);
-    if (!snap.exists()) return [];
-    const data = snap.data();
-    const wa = (data?.whatsapp as ConfigWhatsApp | undefined) || undefined;
-    if (!wa || !Array.isArray(wa.numeros)) return [];
-    return wa.numeros.filter(n => n && n.activo === true && !!n.numero);
-  } catch (err) {
-    console.warn('No se pudo leer whatsapp de config_web/sitio:', err);
-    return [];
-  }
 }
 
 // ─── Submit del formulario público ──────────────────────────────────
@@ -226,245 +159,13 @@ export interface ResultadoEnvioCita {
   citaId?: string;
   error?: string;
   mensaje?: string;
-  /** Número de WhatsApp asignado al cliente por round-robin (si aplica). */
+  /** Número central del canal público para confirmar la solicitud. */
   whatsappAsignado?: string;
   /** Etiqueta del número asignado (ej: "Línea 1"). */
   whatsappAsignadoNombre?: string;
 }
 
-/**
- * Recibe un payload del formulario público, valida lo mínimo, escribe a
- * `citas_por_confirmar` y dispara notificaciones in-app a la coordinadora /
- * secretaria. No hace login ni audit log porque es un endpoint público.
- */
-export async function enviarSolicitudCita(
-  payload: PayloadEnvioCita,
-): Promise<ResultadoEnvioCita> {
-  // Honeypot — si tiene valor, retornamos ok=true silenciosamente para no
-  // dar señal al bot, pero NO escribimos nada.
-  if (payload.honeypot && payload.honeypot.trim().length > 0) {
-    return { ok: true };
-  }
-
-  // Validaciones mínimas server-side (defense in depth)
-  const nombre = payload.clienteNombre?.trim();
-  if (!nombre) {
-    return { ok: false, error: 'El nombre es obligatorio' };
-  }
-  const telNorm = normalizarTelefono(payload.telefono || '');
-  if (telNorm.length !== 10) {
-    return {
-      ok: false,
-      error: 'El teléfono debe tener 10 dígitos (formato RD)',
-    };
-  }
-  const equipoTipo = payload.equipoTipo?.trim();
-  if (!equipoTipo) {
-    return { ok: false, error: 'Selecciona el tipo de equipo' };
-  }
-  const falla = payload.falla?.trim();
-  if (!falla || falla.length < 10) {
-    return {
-      ok: false,
-      error: 'Describe el problema con al menos 10 caracteres',
-    };
-  }
-
-  // Construir payload sin undefined
-  const data: Record<string, unknown> = {
-    clienteNombre: nombre,
-    telefono: payload.telefono.trim(),
-    telefonoNormalizado: telNorm,
-    servicio: `${equipoTipo}${payload.equipoMarca ? ` ${payload.equipoMarca.trim()}` : ''}`,
-    falla,
-    equipoTipo,
-    origen: 'formulario_publico',
-    estado: 'pendiente',
-    createdAt: Timestamp.now(),
-  };
-
-  if (payload.clienteEmail?.trim()) data.clienteEmail = payload.clienteEmail.trim();
-  if (payload.clienteDireccion?.trim()) data.clienteDireccion = payload.clienteDireccion.trim();
-  if (typeof payload.clienteLat === 'number' && Number.isFinite(payload.clienteLat)) {
-    data.clienteLat = payload.clienteLat;
-  }
-  if (typeof payload.clienteLng === 'number' && Number.isFinite(payload.clienteLng)) {
-    data.clienteLng = payload.clienteLng;
-  }
-  if (payload.clienteSector?.trim()) data.clienteSector = payload.clienteSector.trim();
-  if (payload.equipoMarca?.trim()) data.equipoMarca = payload.equipoMarca.trim();
-  if (payload.equipoModelo?.trim()) data.equipoModelo = payload.equipoModelo.trim();
-  if (payload.fotoEquipoUrl?.trim()) data.fotoEquipoUrl = payload.fotoEquipoUrl.trim();
-  if (payload.citaIdProvisional?.trim()) data.citaIdProvisional = payload.citaIdProvisional.trim();
-  // RNC: solo aceptamos si limpio (solo dígitos) tiene 9-11. Defense in depth
-  // contra payloads manipulados desde fuera del form. Razón social solo se
-  // persiste si el RNC sobrevivió la validación.
-  const rncDigitos = (payload.rnc || '').replace(/\D/g, '');
-  if (rncDigitos.length >= 9 && rncDigitos.length <= 11) {
-    data.rnc = rncDigitos;
-    if (payload.razonSocial?.trim()) data.razonSocial = payload.razonSocial.trim();
-  }
-  if (payload.fechaSolicitada) {
-    try {
-      const d = new Date(payload.fechaSolicitada + 'T00:00:00');
-      if (!isNaN(d.getTime())) data.fechaSolicitada = Timestamp.fromDate(d);
-    } catch {
-      /* ignorar fechas mal formateadas */
-    }
-  }
-  if (payload.horaSolicitada?.trim()) data.horaSolicitada = payload.horaSolicitada.trim();
-  if (
-    payload.camposPersonalizados &&
-    Object.keys(payload.camposPersonalizados).length > 0
-  ) {
-    // Filtrar valores vacíos para no guardar basura
-    const limpios = Object.fromEntries(
-      Object.entries(payload.camposPersonalizados).filter(
-        ([, v]) => typeof v === 'string' && v.trim().length > 0,
-      ),
-    );
-    if (Object.keys(limpios).length > 0) {
-      data.camposPersonalizados = limpios;
-    }
-  }
-
-  // Anti-duplicado: si el mismo teléfono normalizado envió una solicitud
-  // en las últimas 24h, no creamos otra. Si el query falla (ej. permission
-  // denied porque las rules no están listas), no bloqueamos el submit —
-  // logueamos y seguimos.
-  try {
-    const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const dupSnap = await getDocs(
-      query(
-        collection(db, 'citas_por_confirmar'),
-        where('telefonoNormalizado', '==', telNorm),
-        where('createdAt', '>=', Timestamp.fromDate(hace24h)),
-        limit(1),
-      ),
-    );
-    if (!dupSnap.empty) {
-      return {
-        ok: false,
-        error: 'duplicado_24h',
-        mensaje:
-          'Ya recibimos tu solicitud reciente. Te contactaremos pronto.',
-      };
-    }
-  } catch (err) {
-    console.warn(
-      'Check anti-duplicado falló, se procede con el submit:',
-      err,
-    );
-  }
-
-  // Round-robin de WhatsApp: si hay números activos, asignamos uno
-  // y lo guardamos en la cita. Si falla cualquier paso (read, runTx),
-  // procedemos sin asignación — la cita igual queda registrada.
-  let waAsignado: NumeroWhatsApp | null = null;
-  try {
-    const activos = await leerNumerosWhatsAppActivos();
-    if (activos.length > 0) {
-      waAsignado = await obtenerWhatsAppRoundRobin(activos);
-      data.whatsappAsignado = waAsignado.numero;
-      data.whatsappAsignadoNombre = waAsignado.nombre;
-    }
-  } catch (err) {
-    console.warn(
-      'Round-robin de WhatsApp falló, se procede sin asignación:',
-      err,
-    );
-    waAsignado = null;
-  }
-
-  let citaId: string;
-  try {
-    const ref = await addDoc(collection(db, 'citas_por_confirmar'), data);
-    citaId = ref.id;
-  } catch (err) {
-    console.error('Error escribiendo cita pública:', err);
-    return {
-      ok: false,
-      error: 'No pudimos registrar tu solicitud. Inténtalo de nuevo.',
-    };
-  }
-
-  // Notificar al staff (best-effort — si falla, la cita ya quedó guardada).
-  // Los roles destinatarios se leen de la config (`notificarA`) para que el
-  // admin pueda ajustar quién recibe el ping desde /admin/web. Si la config
-  // viene vacía o no existe, se usa el default histórico del proyecto.
-  try {
-    const cfg = await obtenerConfigFormularioAgendar();
-    const rolesConfig =
-      cfg.notificarA && cfg.notificarA.length > 0
-        ? cfg.notificarA
-        : CONFIG_FORMULARIO_AGENDAR_DEFAULTS.notificarA;
-    await notificarStaffNuevaCita({
-      citaId,
-      nombre,
-      telefono: payload.telefono.trim(),
-      equipoTipo,
-      roles: rolesConfig,
-    });
-  } catch (err) {
-    console.warn('Notificación a staff falló:', err);
-  }
-
-  const resultado: ResultadoEnvioCita = { ok: true, citaId };
-  if (waAsignado) {
-    resultado.whatsappAsignado = waAsignado.numero;
-    resultado.whatsappAsignadoNombre = waAsignado.nombre;
-  }
-  return resultado;
-}
-
-/**
- * Crea notificaciones in-app para los roles especificados (activos),
- * avisándoles de una nueva cita pública. Usa el tipo existente
- * `nueva_cita` (no extiende el union de `TipoNotificacion`).
- *
- * `roles` es la lista de roles destinatarios. Por defecto histórico:
- * coordinadora, secretaria y administrador. Configurable desde
- * `config_web/sitio.formularioAgendar.notificarA`.
- */
-async function notificarStaffNuevaCita(args: {
-  citaId: string;
-  nombre: string;
-  telefono: string;
-  equipoTipo: string;
-  roles: Personal['rol'][];
-}): Promise<void> {
-  const rolesObjetivo: Personal['rol'][] = args.roles;
-
-  // Una sola query por rol para no bajar todo `personal`
-  const destinatariosVistos = new Set<string>();
-  for (const rol of rolesObjetivo) {
-    const snap = await getDocs(
-      query(
-        collection(db, 'personal'),
-        where('rol', '==', rol),
-        where('activo', '==', true),
-      ),
-    );
-    for (const docSnap of snap.docs) {
-      const raw = docSnap.data() as Partial<Personal>;
-      const destId = raw.uid || docSnap.id;
-      if (!destId || destinatariosVistos.has(destId)) continue;
-      destinatariosVistos.add(destId);
-
-      try {
-        await crearNotificacion({
-          userId: destId,
-          destinatarioNombre: raw.nombre,
-          tipo: 'nueva_cita',
-          titulo: 'Nueva solicitud de cita (web)',
-          mensaje: `${args.nombre} (${args.telefono}) — ${args.equipoTipo}`,
-        });
-      } catch (err) {
-        console.warn(
-          `crearNotificacion falló para ${rol}/${destId}:`,
-          err,
-        );
-      }
-    }
-  }
+/** La cuota y la creación se validan juntas en el servidor, también para visitantes. */
+export async function enviarSolicitudCita(payload: PayloadEnvioCita): Promise<ResultadoEnvioCita> {
+  return enviarCitaPublicaSegura(payload);
 }

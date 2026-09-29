@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Camera, CheckCircle2, Send, X } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { subirArchivoPublicoSeguro } from '../../services/subidasPublicas.service';
 import {
   ConfigFormularioAgendar,
   CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
@@ -11,10 +12,10 @@ import {
   suscribirConfigFormularioAgendar,
 } from '../../services/formularioAgendar.service';
 import { normalizarTelefono } from '../../services/clientes.service';
-import { storage } from '../../firebase/config';
 import { comprimirImagen } from '../../utils/imagen';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
-import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
+import { useConfigWeb } from '../../hooks/useConfigWeb';
+import { leerSeleccionServicio, obtenerWhatsAppPublico, type IntencionServicio } from '../../utils/whatsappPublico';
 import LoadingSpinner from '../LoadingSpinner';
 import CampoDireccionConPlaces from '../shared/CampoDireccionConPlaces';
 import { obtenerModelosDeTipo } from '../../utils/modelosEquipo';
@@ -197,6 +198,9 @@ export default function FormularioAgendarPublico() {
     ...CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
   });
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [parametros] = useSearchParams();
+  const seleccionAplicada = useRef(false);
+  const [intencion, setIntencion] = useState<IntencionServicio | ''>('');
   const [form, setForm] = useState<FormState>(FORM_INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -257,20 +261,11 @@ export default function FormularioAgendarPublico() {
     }
 
     try {
-      // Nombre FIJO `equipo.jpg` por sesión: si el cliente toma foto, decide
-      // cambiarla y toma otra, el upload sobrescribe la anterior en el mismo
-      // path en lugar de acumular huérfanos en Storage. Cada sesión tiene su
-      // propio `citaIdProvisional` (UUID), así que no hay colisión entre
-      // distintos clientes.
-      const filename = 'equipo.jpg';
-      const path = `fotos-equipos-publico/${citaIdProvisional}/${filename}`;
-      const ref = storageRef(storage, path);
-      await uploadBytes(ref, blob, { contentType: 'image/jpeg' });
-      const url = await getDownloadURL(ref);
+      // Permiso corto con ruta aleatoria, tipo y tamaño fijados por servidor.
+      const url = await subirArchivoPublicoSeguro(blob, 'agendar');
       setFotoEquipoUrl(url);
     } catch (err) {
-      console.error('Upload de foto del equipo falló:', err);
-      toast.error('No se pudo subir la foto, continúa sin ella');
+      toast.error(err instanceof Error ? err.message : 'No se pudo subir la foto. Selecciónala de nuevo para reintentar.');
       setFotoEquipoUrl(undefined);
     } finally {
       setFotoSubiendo(false);
@@ -336,6 +331,17 @@ export default function FormularioAgendarPublico() {
     if (Array.isArray(lista) && lista.length > 0) return lista;
     return TIPOS_EQUIPO_FALLBACK;
   }, [configWeb]);
+  useEffect(() => {
+    if (configWebLoading || seleccionAplicada.current) return;
+    seleccionAplicada.current = true;
+    const seleccion = leerSeleccionServicio(parametros, tiposEquipo);
+    setIntencion(seleccion.servicio as IntencionServicio | '');
+    setForm(actual => ({
+      ...actual,
+      equipoTipo: actual.equipoTipo || seleccion.equipo,
+    }));
+  }, [configWebLoading, parametros, tiposEquipo]);
+
 
   // Catálogo de modelos por tipo (configurable). Usa defaults sensatos si
   // el admin nunca tocó la sección — así el form sigue funcionando sin
@@ -495,7 +501,7 @@ export default function FormularioAgendarPublico() {
         equipoTipo: form.equipoTipo,
         equipoMarca: form.equipoMarca.trim() || undefined,
         equipoModelo: equipoModeloFinal,
-        falla: form.falla.trim(),
+        falla: intencion ? `[${intencion}] ${form.falla.trim()}` : form.falla.trim(),
         fechaSolicitada: form.fechaSolicitada || undefined,
         horaSolicitada: form.horaSolicitada || undefined,
         rnc: rncDigitos || undefined,
@@ -528,7 +534,7 @@ export default function FormularioAgendarPublico() {
         return;
       }
 
-      // Si el round-robin asignó un número, construimos URL pre-llenada
+      // Con el canal público central asignado, construimos URL pre-llenada
       // con todos los datos del form para que el agente pueda confirmar
       // sin pedir nada extra al cliente.
       if (res.whatsappAsignado) {
@@ -544,7 +550,7 @@ export default function FormularioAgendarPublico() {
             equipoTipo: form.equipoTipo,
             equipoMarca: form.equipoMarca.trim() || undefined,
             equipoModelo: equipoModeloFinal,
-            falla: form.falla.trim(),
+            falla: intencion ? `[${intencion}] ${form.falla.trim()}` : form.falla.trim(),
             fechaSolicitada: form.fechaSolicitada || undefined,
             horaSolicitada: form.horaSolicitada || undefined,
           },
@@ -592,7 +598,7 @@ export default function FormularioAgendarPublico() {
             CONFIG_FORMULARIO_AGENDAR_DEFAULTS.mensajeDeshabilitado}
         </p>
         <a
-          href={getWhatsAppUrl(configWeb, 'Hola, quiero agendar una cita')}
+          href={obtenerWhatsAppPublico(configWeb, 'Hola, quiero agendar una cita')}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-xl font-semibold text-sm hover:bg-green-600 transition-colors"
@@ -670,6 +676,7 @@ export default function FormularioAgendarPublico() {
       className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 md:p-8 pb-20 sm:pb-8 space-y-5"
       autoComplete="on"
     >
+      {intencion && <p className="text-sm font-medium text-primary">Servicio: {intencion}</p>}
       {/* Honeypot — invisible para humanos, visible para bots */}
       <div
         aria-hidden="true"
@@ -1110,7 +1117,7 @@ export default function FormularioAgendarPublico() {
       <div className="text-center pt-3 border-t border-gray-100">
         <p className="text-sm text-gray-500 mb-3">¿Prefieres contacto directo?</p>
         <a
-          href={getWhatsAppUrl(configWeb, 'Hola, quiero agendar una cita')}
+          href={obtenerWhatsAppPublico(configWeb, 'Hola, quiero agendar una cita')}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-2 bg-green-500 text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-green-600 transition-colors"

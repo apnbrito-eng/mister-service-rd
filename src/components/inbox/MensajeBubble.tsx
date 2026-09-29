@@ -1,7 +1,8 @@
 import TextoMensaje from './TextoMensaje';
 import ArchivoMensaje from './ArchivoMensaje';
 import { equipoApi } from '../../services/equipoApi';
-import { useState } from 'react';
+import { useState, useRef, useId } from 'react';
+import MenuMensaje from './MenuMensaje';
 import toast from 'react-hot-toast';
 import { FileText, MapPin, Mic, Image as ImageIcon, AlertTriangle, Check, CheckCheck, Clock, ClipboardCopy, Paperclip, Loader2, Copy } from 'lucide-react';
 import type { Timestamp } from 'firebase/firestore';
@@ -74,21 +75,21 @@ function formatHora(d: Date): string {
 
 function IconoEstadoSaliente({ estado, errorMeta }: { estado: WhatsAppMensajeOutbox['estado']; errorMeta?: WhatsAppMensajeOutbox['errorMeta'] }) {
   if (estado === 'queued') {
-    return <Clock size={12} className="text-gray-300" aria-label="En cola" />;
+    return <Clock size={12} className="text-slate-600" aria-label="En cola" />;
   }
   if (estado === 'sent') {
-    return <Check size={12} className="text-gray-300" aria-label="Enviado" />;
+    return <Check size={12} className="text-slate-600" aria-label="Enviado" />;
   }
   if (estado === 'delivered') {
-    return <CheckCheck size={12} className="text-gray-300" aria-label="Entregado" />;
+    return <CheckCheck size={12} className="text-slate-600" aria-label="Entregado" />;
   }
   if (estado === 'read') {
-    return <CheckCheck size={12} className="text-blue-300" aria-label="Leído" />;
+    return <CheckCheck size={12} className="text-blue-700" aria-label="Leído" />;
   }
   // failed
   return (
     <span
-      className="inline-flex items-center gap-1 text-red-300"
+      className="inline-flex items-center gap-1 text-red-700"
       title={errorMeta?.mensaje || errorMeta?.title || `Error Meta ${errorMeta?.code ?? ''}`}
     >
       <AlertTriangle size={12} aria-label="Falló" />
@@ -230,7 +231,7 @@ function RenderContenidoSaliente({ mensaje }: { mensaje: WhatsAppMensajeOutbox }
   if (mensaje.tipo === 'plantilla' && mensaje.plantilla) {
     return (
       <div className="space-y-1">
-        <p className="text-xs text-emerald-100/80 italic">
+        <p className="text-xs text-emerald-900/80 italic">
           Plantilla · {mensaje.plantilla.nombre}
         </p>
         {mensaje.plantilla.variables.length > 0 && (
@@ -258,7 +259,7 @@ function RenderContenidoSaliente({ mensaje }: { mensaje: WhatsAppMensajeOutbox }
     }
     return (
       <div className="space-y-1">
-        <div className="flex items-center gap-2 text-xs text-emerald-100/80">
+        <div className="flex items-center gap-2 text-xs text-emerald-900/80">
           {icon}
           {label}
         </div>
@@ -269,7 +270,7 @@ function RenderContenidoSaliente({ mensaje }: { mensaje: WhatsAppMensajeOutbox }
     );
   }
 
-  return <p className="text-sm italic text-emerald-100/70">Mensaje saliente</p>;
+  return <p className="text-sm italic text-emerald-900/80">Mensaje saliente</p>;
 }
 
 /**
@@ -293,6 +294,8 @@ function extraerTextoCopiable(mensaje: MensajeRender): string | null {
 
 export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion, onAdjuntarAOrden, onGestionCrm }: Props) {
   const [menuCrm, setMenuCrm] = useState(false);
+  const menuAncla = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
   const esSaliente = mensaje._direccion === 'saliente';
   const admiteFuenteCrm = !esSaliente && ['text', 'image', 'video', 'audio', 'document', 'sticker', 'location'].includes(mensaje.tipo);
   const fecha =
@@ -319,8 +322,12 @@ export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion
   };
 
   return (
-    <div id={`mensaje-${mensaje.wamid || mensaje.id}`} onContextMenu={e => { if (onGestionCrm && admiteFuenteCrm) { e.preventDefault(); setMenuCrm(true); } }} className={`group relative flex items-end gap-1 ${esSaliente ? 'justify-end' : 'justify-start'}`}>
-      {admiteFuenteCrm && onGestionCrm && <div className="relative"><button aria-label="Acciones del mensaje" aria-expanded={menuCrm} className="p-2 rounded hover:bg-gray-100" onClick={() => setMenuCrm(v => !v)}>⋯</button>{menuCrm && <div className="absolute left-0 bottom-full z-20 bg-white border shadow-lg rounded-lg p-2 min-w-[190px]" onKeyDown={e => { if (e.key === 'Escape') setMenuCrm(false); }}><button className="block p-2 w-full text-left text-sm" onClick={() => { onGestionCrm(mensaje as WhatsAppMensajeInbox, 'nota'); setMenuCrm(false); }}>Guardar en la orden</button><button className="block p-2 w-full text-left text-sm" onClick={() => { onGestionCrm(mensaje as WhatsAppMensajeInbox, 'expediente'); setMenuCrm(false); }}>Guardar en expediente del cliente</button><button className="block p-2 w-full text-left text-sm" onClick={() => { onGestionCrm(mensaje as WhatsAppMensajeInbox, 'pago'); setMenuCrm(false); }}>Registrar pago con evidencia</button><button className="block p-2 text-sm" onClick={() => setMenuCrm(false)}>Cerrar</button></div>}</div>}
+    <div id={`mensaje-${mensaje.wamid || mensaje.id}`} onContextMenu={e => { if (onGestionCrm && admiteFuenteCrm) { e.preventDefault(); setMenuCrm(true); } }} className={`group relative flex items-end gap-1 my-2 ${esSaliente ? 'justify-end' : 'justify-start'}`}>
+      {admiteFuenteCrm && onGestionCrm && <div className="relative order-last shrink-0">
+        <button ref={menuAncla} type="button" aria-label="Acciones del mensaje" aria-haspopup="menu" aria-controls={menuCrm ? menuId : undefined} aria-expanded={menuCrm}
+          className="min-h-11 min-w-11 p-2 rounded hover:bg-gray-100" onClick={() => setMenuCrm(v => !v)}>⋯</button>
+        {menuCrm && <MenuMensaje id={menuId} ancla={menuAncla} onCerrar={() => setMenuCrm(false)} onAccion={accion => onGestionCrm(mensaje as WhatsAppMensajeInbox, accion)} />}
+      </div>}
       {/* SPRINT-INBOX-8b: botón "copiar a orden" (solo entrante, solo si form abierto y hay texto) */}
       {!esSaliente && textoParaOrden && onCopiarAOrden && (
         <button
@@ -352,7 +359,7 @@ export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion
       <div
         className={`max-w-[75%] rounded-2xl px-3 py-2 shadow-sm ${
           esSaliente
-            ? 'bg-emerald-600 text-white rounded-br-sm'
+            ? 'bg-[#d9fdd3] text-slate-900 rounded-br-sm'
             : 'bg-white text-gray-900 border border-gray-200 rounded-bl-sm'
         }`}
       >
@@ -367,7 +374,7 @@ export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion
         )}
         <div
           className={`flex items-center gap-1.5 mt-1 text-[10px] ${
-            esSaliente ? 'text-emerald-100/80 justify-end' : 'text-gray-400 justify-start'
+            esSaliente ? 'text-emerald-900/80 justify-end' : 'text-gray-500 justify-start'
           }`}
         >
           {/* SPRINT-WA-TRAZABILIDAD 2026-05-23 función 1: mostrar quién envió en salientes.

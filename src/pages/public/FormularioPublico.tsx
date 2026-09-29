@@ -21,6 +21,9 @@ export default function FormularioPublico() {
   const [solicitudRef, setSolicitudRef] = useState('');
 
   const formRef = useRef<HTMLFormElement>(null);
+  const envio = useRef<{ huella: string; id: string } | null>(null);
+  const enviando = useRef(false);
+  const subidos = useRef(new WeakMap<Blob, Map<string, string>>());
 
   // --- Loading state ---
   if (loading) {
@@ -124,7 +127,8 @@ export default function FormularioPublico() {
   // --- Submit ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+    if (enviando.current || !validate()) return;
+    enviando.current = true;
 
     setSubmitting(true);
     try {
@@ -136,14 +140,14 @@ export default function FormularioPublico() {
         if (!val) continue;
 
         if ((campo.tipo === 'foto' || campo.tipo === 'archivo') && val instanceof File) {
-          const tempId = `temp-${Date.now()}`;
-          const url = await subirArchivoSolicitud(val, tempId, campo.id);
+          const url = subidos.current.get(val)?.get(campo.id) ?? await subirArchivoSolicitud(val, formulario.id, campo.id);
+          const cache = subidos.current.get(val) ?? new Map<string, string>(); cache.set(campo.id, url); subidos.current.set(val, cache);
           archivos.push({ campoId: campo.id, url, nombre: val.name });
         }
 
         if (campo.tipo === 'firma' && val instanceof Blob) {
-          const tempId = `temp-${Date.now()}`;
-          const url = await subirArchivoSolicitud(val as File, tempId, campo.id);
+          const url = subidos.current.get(val)?.get(campo.id) ?? await subirArchivoSolicitud(val, formulario.id, campo.id);
+          const cache = subidos.current.get(val) ?? new Map<string, string>(); cache.set(campo.id, url); subidos.current.set(val, cache);
           archivos.push({ campoId: campo.id, url, nombre: 'firma.png' });
         }
       }
@@ -193,14 +197,16 @@ export default function FormularioPublico() {
           solicitudData.ubicacion = { lat: obj.lat, lng: obj.lng };
         }
       }
-      const solicitudId = await crearSolicitud(solicitudData);
+      const huella = JSON.stringify(solicitudData);
+      if (envio.current?.huella !== huella) envio.current = { huella, id: crypto.randomUUID() };
+      const solicitudId = await crearSolicitud(solicitudData, envio.current.id);
 
       setSolicitudRef(solicitudId.slice(-8).toUpperCase());
       setSubmitted(true);
     } catch (err) {
-      console.error(err);
-      toast.error('Error al enviar. Intente de nuevo.');
+      toast.error(err instanceof Error ? err.message : 'Error al enviar. Intente de nuevo.');
     } finally {
+      enviando.current = false;
       setSubmitting(false);
     }
   };

@@ -1,0 +1,10 @@
+import {afterEach,beforeEach,expect,it,vi} from 'vitest';
+const m=vi.hoisted(()=>({usuario:{uid:'qa',getIdToken:vi.fn()}}));
+vi.mock('../../src/firebase/config',()=>({auth:{currentUser:m.usuario}}));
+import{equipoApi}from'../../src/services/equipoApi';
+const respuesta=(status:number)=>new Response(JSON.stringify(status===200?{ok:true}:{error:'denegado'}),{status,headers:{'content-type':'application/json'}});
+beforeEach(()=>{m.usuario.getIdToken.mockReset().mockResolvedValue('token-ficticio');});
+afterEach(()=>vi.unstubAllGlobals());
+it('renueva una sola vez la sesión expirada',async()=>{const f=vi.fn().mockResolvedValueOnce(respuesta(401)).mockResolvedValueOnce(respuesta(200));vi.stubGlobal('fetch',f);await expect(equipoApi('/api/movil/estado')).resolves.toEqual({ok:true});expect(m.usuario.getIdToken.mock.calls).toEqual([[false],[true]]);});
+it('no reintenta indefinidamente ni oculta el estado HTTP',async()=>{const f=vi.fn().mockImplementation(()=>Promise.resolve(respuesta(401)));vi.stubGlobal('fetch',f);await expect(equipoApi('/api/movil/estado')).rejects.toMatchObject({status:401});expect(f).toHaveBeenCalledTimes(2);});
+it('un 403 no se interpreta como token Auth vencido',async()=>{const f=vi.fn().mockResolvedValue(respuesta(403));vi.stubGlobal('fetch',f);await expect(equipoApi('/api/movil/estado')).rejects.toMatchObject({status:403});expect(f).toHaveBeenCalledTimes(1);});

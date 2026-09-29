@@ -37,7 +37,7 @@ const ESTADO_LABELS: Record<EstadoFactura, string> = {
 };
 
 export default function Facturas() {
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
   const puedeCrear = puede(userProfile, 'facturasCrear');
   const puedeModificar = puede(userProfile, 'facturasModificar');
   const puedeEliminar = puede(userProfile, 'facturasEliminar');
@@ -210,7 +210,7 @@ export default function Facturas() {
         await eliminarComisionesDeFactura({
           facturaId: factura.id,
           motivoEliminacion: `Conduce ${factura.numero} eliminado desde /admin/facturas`,
-          solicitanteUid: userProfile?.id,
+          solicitanteUid: currentUser?.uid,
           solicitanteNombre: userProfile?.nombre,
         });
       } catch (cascErr) {
@@ -322,7 +322,7 @@ export default function Facturas() {
       try {
         const auditPayload: Record<string, unknown> = {
           accion: 'marcar_garantia_admin',
-          solicitanteUid: userProfile?.id || null,
+          solicitanteUid: currentUser?.uid || null,
           solicitanteNombre: userProfile?.nombre || null,
           objetivoTipo: 'factura',
           objetivoId: facturaGarantiaManual.id,

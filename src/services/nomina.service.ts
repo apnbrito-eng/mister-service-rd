@@ -39,8 +39,7 @@ export function rangoMesCalendario(quincena: string): { inicio: Date; fin: Date 
 
 /**
  * Genera una nueva liquidación quincenal:
- * - Toma todo el personal activo con rol en ROLES_CON_ACCESO y distinto de ayudante.
- *   (ayudante tiene acceso al sistema sólo para el módulo de ponche — no entra a nómina).
+ * - Toma todo el personal activo con rol en ROLES_CON_ACCESO, incluidos ayudantes sin comisión.
  * - Para técnicos: suma comisiones pendientes que caen en la quincena.
  * - Para operarias/coordinadoras: calcula desempeño + bono.
  * - Para todos: suma sueldoBase del personal.
@@ -73,11 +72,11 @@ export async function generarLiquidacion(
 
   const { inicio, fin } = rangoQuincena(quincena);
 
-  // Personal activo con rol con acceso (excluye ayudante)
+  // Personal activo con rol con acceso, incluidos ayudantes.
   const personalSnap = await getDocs(collection(db, 'personal'));
   const personal = personalSnap.docs
     .map(d => ({ id: d.id, ...d.data() } as Personal))
-    .filter(p => p.activo && p.rol !== 'ayudante' && ROLES_CON_ACCESO.includes(p.rol));
+    .filter(p => p.activo && ROLES_CON_ACCESO.includes(p.rol));
 
   // Comisiones pendientes en el rango (filtrar client-side para evitar índice compuesto)
   const comisionesSnap = await getDocs(collection(db, 'comisiones'));
@@ -369,10 +368,15 @@ export async function cerrarLiquidacion(
   cerradaPor: Usuario,
 ): Promise<void> {
   const ref = doc(db, 'liquidaciones_nomina', liquidacionId);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) throw new Error('Liquidación no encontrada');
-  const raw = snap.data();
-  if (raw.estado === 'cerrada') throw new Error('La liquidación ya está cerrada');
+  const raw = await runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Liquidación no encontrada');
+    const datos = snap.data();
+    if (datos.estado === 'cerrada') throw new Error('La liquidación ya está cerrada');
+    // Congela asistencia al iniciar el cierre; el mismo documento serializa aprobaciones.
+    tx.update(ref, { asistenciaBloqueada: true });
+    return datos;
+  });
   const empleados = (raw.empleados as Record<string, unknown>[]) || [];
   const quincena = (raw.quincena as string) || '';
   const ahora = Timestamp.now();
@@ -486,7 +490,7 @@ export async function agregarDescuentoAdHoc(
     const totalAvances = Number(eRaw.totalAvances) || 0;
     const totalCuotasPrestamos = Number(eRaw.totalCuotasPrestamos) || 0;
     const totalDevengado = Number(eRaw.totalDevengado) || 0;
-    const totalDescuentos = totalAvances + totalDescuentosAdHoc + totalCuotasPrestamos;
+    const totalDescuentos = totalAvances + totalDescuentosAdHoc + totalCuotasPrestamos + (Number(eRaw.totalAsistencia) || 0);
     const totalNeto = Math.max(0, totalDevengado - totalDescuentos);
 
     const empleadosNuevos = [...empleadosRaw];
@@ -529,7 +533,7 @@ export async function removerDescuentoAdHoc(
     const totalAvances = Number(eRaw.totalAvances) || 0;
     const totalCuotasPrestamos = Number(eRaw.totalCuotasPrestamos) || 0;
     const totalDevengado = Number(eRaw.totalDevengado) || 0;
-    const totalDescuentos = totalAvances + totalDescuentosAdHoc + totalCuotasPrestamos;
+    const totalDescuentos = totalAvances + totalDescuentosAdHoc + totalCuotasPrestamos + (Number(eRaw.totalAsistencia) || 0);
     const totalNeto = Math.max(0, totalDevengado - totalDescuentos);
 
     const empleadosNuevos = [...empleadosRaw];
@@ -567,7 +571,8 @@ export async function marcarEmpleadoPagado(
   bancoDestino?: string,
 ): Promise<void> {
   const ref = doc(db, 'liquidaciones_nomina', liquidacionId);
-  const snap = await getDoc(ref);
+  await runTransaction(db, async tx => {
+  const snap = await tx.get(ref);
   if (!snap.exists()) throw new Error('Liquidación no encontrada');
   const raw = snap.data();
   const empleados = ((raw.empleados as Record<string, unknown>[]) || []).map(e => {
@@ -584,7 +589,8 @@ export async function marcarEmpleadoPagado(
     }
     return upd;
   });
-  await updateDoc(ref, { empleados });
+  tx.update(ref, { empleados });
+  });
 }
 
 // ─── Helpers internos ────────────────────────────────────────────────────────
@@ -630,6 +636,8 @@ function serializarEmpleados(emps: LiquidacionEmpleado[]): Record<string, unknow
       }));
     }
     if (e.totalCuotasPrestamos !== undefined) out.totalCuotasPrestamos = e.totalCuotasPrestamos;
+    if (e.totalAsistencia !== undefined) out.totalAsistencia = e.totalAsistencia;
+    if (e.descuentosAsistencia) out.descuentosAsistencia = e.descuentosAsistencia;
     if (e.totalDescuentos !== undefined) out.totalDescuentos = e.totalDescuentos;
     if (e.totalNeto !== undefined) out.totalNeto = e.totalNeto;
     if (e.notas) out.notas = e.notas;
@@ -698,6 +706,8 @@ export function parseLiquidacion(id: string, raw: Record<string, unknown>): Liqu
         totalDescuentosAdHoc: e.totalDescuentosAdHoc as number | undefined,
         cuotasPrestamos: cuotasPrestamos.length > 0 ? cuotasPrestamos : undefined,
         totalCuotasPrestamos: e.totalCuotasPrestamos as number | undefined,
+        totalAsistencia: e.totalAsistencia as number | undefined,
+        descuentosAsistencia: e.descuentosAsistencia as LiquidacionEmpleado["descuentosAsistencia"],
         totalDescuentos: e.totalDescuentos as number | undefined,
         totalNeto: e.totalNeto as number | undefined,
         notas: e.notas as string | undefined,

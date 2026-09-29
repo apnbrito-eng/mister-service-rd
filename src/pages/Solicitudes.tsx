@@ -1,3 +1,5 @@
+import { useAtencion } from '../context/AtencionContext';
+import { mismoTelefono } from '../navigation/clienteSeleccionado';
 import { useState, useMemo } from 'react';
 import { useSolicitudes, useEmpresas } from '../hooks/useFormularios';
 import { actualizarEstadoSolicitud, convertirAOrden, eliminarSolicitud } from '../services/solicitudes.service';
@@ -5,7 +7,7 @@ import { SolicitudServicio, EstadoSolicitud } from '../types/formularios';
 import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
-import { Inbox, Search, Filter, Eye, FileText, CheckCircle, XCircle, ArrowRight, ExternalLink, Download, Trash2 } from 'lucide-react';
+import { Inbox, Eye, FileText, CheckCircle, ArrowRight, ExternalLink, Download, Trash2 } from 'lucide-react';
 import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import toast from 'react-hot-toast';
 
@@ -64,6 +66,7 @@ function formatPhoneForWhatsApp(phone: string): string {
 }
 
 export default function Solicitudes() {
+  const { seleccion } = useAtencion();
   const { solicitudes, loading } = useSolicitudes();
   const { empresas, loading: loadingEmpresas } = useEmpresas();
   const { userProfile } = useApp();
@@ -82,7 +85,7 @@ export default function Solicitudes() {
 
   // Client-side filtering
   const solicitudesFiltradas = useMemo(() => {
-    let result = solicitudes;
+    let result = seleccion ? solicitudes.filter(s => mismoTelefono(s.datos.telefono, seleccion.telefono)) : solicitudes;
 
     if (tabActivo !== 'todas') {
       result = result.filter((s) => s.estado === tabActivo);
@@ -102,7 +105,7 @@ export default function Solicitudes() {
     }
 
     return result;
-  }, [solicitudes, tabActivo, filtroEmpresa, busqueda]);
+  }, [solicitudes, tabActivo, filtroEmpresa, busqueda, seleccion]);
 
   const pendientesCount = solicitudes.filter((s) => s.estado === 'pendiente').length;
 
@@ -194,7 +197,7 @@ export default function Solicitudes() {
   if (loading || loadingEmpresas) return <LoadingSpinner />;
 
   return (
-    <div className="min-h-screen bg-[#f0f4f8] p-6">
+    <div className="min-h-full bg-[#f0f4f8] p-4 md:p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
@@ -204,60 +207,16 @@ export default function Solicitudes() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Solicitudes</h1>
             <p className="text-sm text-gray-500">
-              {solicitudes.length} total &middot; {pendientesCount} pendiente{pendientesCount !== 1 ? 's' : ''}
+              {seleccion ? solicitudesFiltradas.length : solicitudes.length} total &middot; {pendientesCount} pendiente{pendientesCount !== 1 ? 's' : ''}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="mb-6 space-y-4">
-        {/* Status tabs */}
-        <div className="flex flex-wrap gap-2">
-          {TABS.map((tab) => (
-            <button
-              key={tab.value}
-              onClick={() => setTabActivo(tab.value)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                tabActivo === tab.value
-                  ? 'bg-[#0f3460] text-white'
-                  : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Empresa + Search */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex items-center gap-2">
-            <Filter size={16} className="text-gray-400" />
-            <select
-              value={filtroEmpresa}
-              onChange={(e) => setFiltroEmpresa(e.target.value)}
-              className="px-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-[#0f3460]/20 focus:border-[#0f3460] outline-none transition-all text-sm text-gray-700"
-            >
-              <option value="">Todas las empresas</option>
-              {empresas.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="relative flex-1 max-w-md">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Buscar por nombre o teléfono..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-[#0f3460]/20 focus:border-[#0f3460] outline-none transition-all text-sm text-gray-700"
-            />
-          </div>
-        </div>
+      <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6 bg-white border rounded-2xl p-4">
+        <label className="text-sm font-medium text-gray-600">Buscar solicitud<input aria-label="Buscar solicitud" placeholder="Nombre o teléfono" value={busqueda} onChange={e => setBusqueda(e.target.value)} className="block w-full min-h-11 mt-2 border rounded-xl px-3" /></label>
+        <label className="text-sm font-medium text-gray-600">Estado<select value={tabActivo} onChange={e => setTabActivo(e.target.value as EstadoSolicitud | 'todas')} className="block w-full min-h-11 mt-2 border rounded-xl px-3 bg-white">{TABS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}</select></label>
+        <label className="text-sm font-medium text-gray-600">Empresa<select value={filtroEmpresa} onChange={e => setFiltroEmpresa(e.target.value)} className="block w-full min-h-11 mt-2 border rounded-xl px-3 bg-white"><option value="">Todas las empresas</option>{empresas.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}</select></label>
       </div>
 
       {/* List */}

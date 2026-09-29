@@ -245,7 +245,7 @@ export default function Calendario() {
 
       {/* Navigation */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center justify-between">
-        <button onClick={handlePrev} className="p-2 hover:bg-gray-100 rounded-lg"><ChevronLeft size={20} /></button>
+        <button aria-label="Periodo anterior" onClick={handlePrev} className="p-2 hover:bg-gray-100 rounded-lg"><ChevronLeft size={20} /></button>
         <h2 className="text-lg font-semibold text-gray-900 capitalize">
           {vista === 'dia'
             ? format(currentDate, "EEEE, dd 'de' MMMM yyyy", { locale: es })
@@ -254,7 +254,7 @@ export default function Calendario() {
               : format(currentDate, "MMMM yyyy", { locale: es })
           }
         </h2>
-        <button onClick={handleNext} className="p-2 hover:bg-gray-100 rounded-lg"><ChevronRight size={20} /></button>
+        <button aria-label="Periodo siguiente" onClick={handleNext} className="p-2 hover:bg-gray-100 rounded-lg"><ChevronRight size={20} /></button>
       </div>
 
       {/* Calendar */}

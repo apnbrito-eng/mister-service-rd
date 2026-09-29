@@ -1,3 +1,4 @@
+import AreaTrabajo from './pages/AreaTrabajo';
 import { useColaMensajes } from './hooks/useColaMensajes';
 import { useAvisosNativos } from './mobile/useAvisosNativos';
 import { perfilHabilitado, inicioPorRol } from './utils/accesoSesion';
@@ -248,6 +249,7 @@ function AppRoutes() {
         <ProtectedRoute><TecnicoRoute><AyudanteRoute><Layout /></AyudanteRoute></TecnicoRoute></ProtectedRoute>
       }>
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
+        <Route path="area/:area" element={<AreaTrabajo />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="ordenes" element={<Ordenes />} />
         <Route path="ordenes/:id" element={<OrdenDetalle />} />

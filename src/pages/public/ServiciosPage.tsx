@@ -5,7 +5,8 @@ import {
   Home, Building, Repeat, Wrench, Shield, Clock
 } from 'lucide-react';
 import WhatsAppIcon from '../../components/icons/WhatsAppIcon';
-import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
+import { useConfigWeb } from '../../hooks/useConfigWeb';
+import { obtenerWhatsAppPublico } from '../../utils/whatsappPublico';
 
 interface Servicio {
   icon: React.ElementType;
@@ -321,7 +322,7 @@ export default function ServiciosPage() {
               <Calendar size={18} /> Agendar Cita Online
             </Link>
             <a
-              href={getWhatsAppUrl(config, 'Hola, me interesa un servicio')}
+              href={obtenerWhatsAppPublico(config, 'Hola, me interesa un servicio')}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 bg-green-500 text-white px-8 py-4 rounded-xl font-bold text-sm hover:bg-green-600 transition-colors"

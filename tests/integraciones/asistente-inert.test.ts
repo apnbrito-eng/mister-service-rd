@@ -1,0 +1,20 @@
+import React from 'react';
+import { act, create } from 'react-test-renderer';
+import { expect, it, vi } from 'vitest';
+const datos=vi.hoisted(()=>({perfil:null as null|{rol:string},usuario:null as null|{uid:string}}));
+vi.mock('../../src/context/AppContext',()=>({useApp:()=>({userProfile:datos.perfil,currentUser:datos.usuario})}));
+vi.mock('../../src/hooks/useAsistenteIAChat',()=>({useAsistenteIAChat:()=>({mensajes:[],enviar:vi.fn(),pensando:false,error:null,tokensSesion:{input:0,output:0,costoUSD:0}})}));
+vi.mock('../../src/hooks/useMovimientoReducido',()=>({useMovimientoReducido:()=>true}));
+vi.mock('../../src/components/BotonAsistenteMovil',()=>({default:()=>null}));
+vi.mock('../../src/components/TextoAsistente',()=>({TextoAsistente:()=>null}));
+vi.mock('motion/react',async()=>{const React=await import('react');return {motion:{div:React.forwardRef((props:any,ref:any)=>{const {initial,animate,transition,...rest}=props;return React.createElement('div',{...rest,ref});})}};});
+import Asistente from '../../src/components/AsistenteIAFlotante';
+it('marca inerte el panel cerrado aunque el perfil llegue después del montaje',()=>{
+ const toggleAttribute=vi.fn();let tree:ReturnType<typeof create>;
+ act(()=>{tree=create(React.createElement(Asistente),{createNodeMock:e=>e.type==='div'?{toggleAttribute,scrollHeight:0}:e.type==='textarea'?{style:{},scrollHeight:0}:null});});
+ expect(toggleAttribute).not.toHaveBeenCalled();
+ datos.perfil={rol:'administrador'};datos.usuario={uid:'qa'};
+ act(()=>tree!.update(React.createElement(Asistente)));
+ expect(toggleAttribute).toHaveBeenCalledWith('inert',true);
+ act(()=>tree!.unmount());datos.perfil=null;datos.usuario=null;
+});

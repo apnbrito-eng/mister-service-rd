@@ -210,17 +210,17 @@ export default function PreciosServicios() {
             className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
         </div>
-        <select value={filtroMarca} onChange={e => setFiltroMarca(e.target.value)}
+        <select aria-label="Filtrar por marca" value={filtroMarca} onChange={e => setFiltroMarca(e.target.value)}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
           <option value="">Todas las marcas</option>
           {marcasDisponibles.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
-        <select value={filtroEquipo} onChange={e => setFiltroEquipo(e.target.value)}
+        <select aria-label="Filtrar por equipo" value={filtroEquipo} onChange={e => setFiltroEquipo(e.target.value)}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
           <option value="">Todos los equipos</option>
           {equiposDisponibles.map(e => <option key={e} value={e}>{e}</option>)}
         </select>
-        <select value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}
+        <select aria-label="Filtrar por categoría" value={filtroCategoria} onChange={e => setFiltroCategoria(e.target.value)}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
           <option value="">Todas las categorías</option>
           {categoriasDisponibles.map(c => <option key={c} value={c}>{c}</option>)}
@@ -239,7 +239,7 @@ export default function PreciosServicios() {
       {/* Tabla */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
-          <table className="w-full text-sm">
+          <table className="precios-responsive w-full text-sm" role="table">
             <thead className="sticky top-0 bg-gray-50 z-10">
               <tr className="border-b border-gray-100">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Marca</th>
@@ -251,16 +251,16 @@ export default function PreciosServicios() {
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody role="rowgroup" className="divide-y divide-gray-50">
               {preciosFiltrados.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-12 text-center text-gray-400 text-sm">Sin servicios que coincidan con los filtros</td></tr>
               ) : preciosFiltrados.map(p => (
-                <tr key={p.id} className={`hover:bg-gray-50 ${!p.activo ? 'opacity-50' : ''}`}>
-                  <td className="px-4 py-3 text-gray-700">{p.marca}</td>
-                  <td className="px-4 py-3 text-gray-700">{p.equipoTipo}</td>
-                  <td className="px-4 py-3 font-medium text-gray-900">{p.nombre}</td>
+                <tr role="row" key={p.id} className={`hover:bg-gray-50 ${!p.activo ? 'opacity-50' : ''}`}>
+                  <td role="cell" data-label="Marca" className="px-4 py-3 text-gray-700">{p.marca}</td>
+                  <td role="cell" data-label="Equipo" className="px-4 py-3 text-gray-700">{p.equipoTipo}</td>
+                  <td role="cell" data-label="Servicio" className="precio-nombre px-4 py-3 font-medium text-gray-900">{p.nombre}</td>
                   <td className="px-4 py-3 text-xs text-gray-500 hidden md:table-cell">{p.categoria}</td>
-                  <td className="px-4 py-3 text-right">
+                  <td role="cell" data-label="Precio" className="precio-importe px-4 py-3 text-right">
                     {preciosPreMigracion.has(p.id) ? (
                       <div className="flex flex-col items-end gap-0.5">
                         <span className="font-semibold text-primary">{formatMoneda(p.precio)}</span>
@@ -273,12 +273,12 @@ export default function PreciosServicios() {
                       </div>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-center">
+                  <td role="cell" data-label="Estado" className="px-4 py-3 text-center">
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${p.activo ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                       {p.activo ? 'Activo' : 'Inactivo'}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td role="cell" data-label="Acciones" className="px-4 py-3">
                     {puedeEditar ? (
                       <div className="flex items-center justify-end gap-1">
                         <button onClick={() => openEdit(p)} title="Editar"

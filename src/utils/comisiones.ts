@@ -3,7 +3,7 @@ import {
   collection, addDoc, doc, getDoc, getDocs, query, where, Timestamp, updateDoc, arrayUnion, deleteDoc,
   runTransaction, serverTimestamp,
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db, auth } from '../firebase/config';
 import { OrdenServicio, Personal, Usuario, ItemCotizacion } from '../types';
 import { crearRegistroAuditoria } from './index';
 
@@ -945,7 +945,8 @@ export async function registrarComisionPorFactura(args: {
 }
 
 /**
- * Registra una comisión por una orden cerrada con cobro.
+ * Registra la comisión del trabajo terminado al cerrar la orden, independientemente del cobro.
+ * Política confirmada por Jorge el 28/09/2026. fechaCobro es un nombre legacy: aquí representa el devengo.
  * Idempotente: si ya existe un ComisionRegistro con `ordenId`, no inserta otro.
  * Maneja errores internos sin propagar (caller no debe revertir nada).
  */
@@ -1064,7 +1065,7 @@ export async function registrarComisionPorOrden(
  *
  * @param facturaId — ID del doc de factura. Validado: `''` o falsy lanza.
  * @param motivoEliminacion — texto opcional para forensia.
- * @param solicitanteUid — `userProfile?.id` (ya unificado en C4b).
+ * @param solicitanteUid — UID autenticado de quien solicita la eliminación.
  * @param solicitanteNombre — `userProfile?.nombre`.
  * @returns conteo `{ eliminadas, preservadas }`.
  */
@@ -1074,7 +1075,9 @@ export async function eliminarComisionesDeFactura(args: {
   solicitanteUid?: string;
   solicitanteNombre?: string;
 }): Promise<{ eliminadas: number; preservadas: number }> {
-  const { facturaId, motivoEliminacion, solicitanteUid, solicitanteNombre } = args;
+  const { facturaId, motivoEliminacion, solicitanteNombre } = args;
+  const solicitanteUid = auth.currentUser?.uid;
+  if (!solicitanteUid) throw new Error('Se requiere una sesión para auditar la eliminación de comisiones.');
 
   // Security #5: validación shape — sin esto un bug podría disparar wipe masivo.
   if (!facturaId || facturaId.trim() === '') {
@@ -1270,10 +1273,12 @@ export async function aplicarDescuentoGarantiaPorPiezas(args: {
     costoPiezasReReparacion,
     facturaIdReasignada,
     conduceNumeroOriginal,
-    solicitanteUid,
     solicitanteNombre,
     motivoLabel,
   } = args;
+
+  const solicitanteUid = auth.currentUser?.uid;
+  if (!solicitanteUid) return { aplicado: false, monto: 0, comisionId: null, razon: 'Se requiere una sesión para aplicar el descuento.' };
 
   // Guardrails.
   if (!ordenGarantiaId || !ordenOriginalId || !tecnicoOriginalUid) {
@@ -1321,7 +1326,7 @@ export async function aplicarDescuentoGarantiaPorPiezas(args: {
     ordenIdReasignada: ordenGarantiaId,
     motivo: motivoLabel || 'Garantía — 10% de piezas',
     aplicadoEn: ahoraTs,
-    aplicadoPor: solicitanteUid || '',
+    aplicadoPor: solicitanteUid,
     aplicadoPorNombre: solicitanteNombre || 'Sistema',
   };
   // Notas opcionales removidas — el motivo ya captura el contexto.
@@ -1357,7 +1362,7 @@ export async function aplicarDescuentoGarantiaPorPiezas(args: {
       if (!cambio) return;
       tx.update(ref, { ...cambio, updatedAt: ahoraTs });
       tx.set(doc(collection(db, 'auditoria_admin')), {
-        accion: 'descuento_garantia_tecnico', solicitanteUid: solicitanteUid || '',
+        accion: 'descuento_garantia_tecnico', solicitanteUid: solicitanteUid,
         objetivoTipo: 'comision', objetivoId: comisionId, ordenIdReasignada: ordenGarantiaId,
         ordenIdOriginal: ordenOriginalId, monto: montoDescuento, timestamp: ahoraTs,
         tecnicoAfectadoUid: tecnicoOriginalUid, costoPiezasReReparacion: costoActual,

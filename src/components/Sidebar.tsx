@@ -1,21 +1,17 @@
+import { useMovimientoReducido } from '../hooks/useMovimientoReducido';
 import AvisosMoviles from '../mobile/AvisosMoviles';
 import { desactivarNotificacionesMoviles } from '../mobile/notificaciones';
-import { NavLink, useNavigate } from 'react-router-dom';
-import {
-  LayoutDashboard, ClipboardList, Calendar, Map,
-  Users, UserCog, FileText, Settings, LogOut, Wrench,
-  TrendingUp, DollarSign, Bell, Clock, ChevronLeft, ChevronRight, ChevronDown,
-  Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
-  CalendarCheck, Sparkles, History, Star, RefreshCw, Banknote,
-  MessageSquare, BarChart3, BookOpen,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { ChevronDown, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { obtenerAreas, type SidebarItem } from '../navigation/areas';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useApp } from '../context/AppContext';
-import { puede, type AccionPermiso } from '../utils/permisos';
+import { puede } from '../utils/permisos';
 import Logo from './Logo';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useId, useRef, useCallback, useLayoutEffect, type ReactNode } from 'react';
+import { motion } from 'motion/react';
+import { obtenerTransicionMovimiento, ESCALA_PRESION, DESPLAZAMIENTO_PANEL } from '../utils/motion';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { suscribirContadorSinLeer } from '../services/whatsappInbox.service';
@@ -26,48 +22,55 @@ interface SidebarProps {
   onNavigate?: () => void;
 }
 
-type SidebarItem = {
-  to: string;
-  icon: LucideIcon;
-  label: string;
-  show: boolean;
-  badge?: number;
-};
-
-type SidebarSection = {
-  id: string;
-  label: string;
-  icon: LucideIcon;
-  items: SidebarItem[];
-  defaultExpanded: boolean;
-};
-
-type SidebarNode =
-  | { kind: 'item'; item: SidebarItem }
-  | { kind: 'section'; section: SidebarSection };
-
-const STORAGE_KEY = 'sidebar_sections_state';
-
-function loadState(): Record<string, boolean> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveState(state: Record<string, boolean>) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* silencio */
-  }
+/** El panel pierde interacción al cerrar; termina su salida antes de retirarse del flujo. */
+function PanelSeccion({ id, abierto, reducido, children }: { id: string; abierto: boolean; reducido: boolean; children: ReactNode }) {
+  const [oculto, setOculto] = useState(!abierto);
+  const abiertoActual = useRef(abierto);
+  abiertoActual.current = abierto;
+  const asociarPanel = useCallback((nodo: HTMLDivElement | null) => {
+    if (!abierto && typeof document !== 'undefined' && nodo?.contains(document.activeElement)) {
+      document.getElementById(`${id}-control`)?.focus();
+    }
+    nodo?.toggleAttribute('inert', !abierto);
+  }, [abierto, id]);
+  useLayoutEffect(() => {
+    if (abierto) setOculto(false);
+  }, [abierto]);
+  return <motion.div id={id} ref={asociarPanel} aria-labelledby={`${id}-control`} aria-hidden={!abierto}
+    hidden={!abierto && (reducido || oculto)} initial={false}
+    animate={{ opacity: abierto ? 1 : 0, y: reducido || abierto ? 0 : -DESPLAZAMIENTO_PANEL }}
+    transition={obtenerTransicionMovimiento(reducido)} style={{ transition: 'none', pointerEvents: abierto ? 'auto' : 'none' }}
+    onAnimationComplete={() => { if (!abiertoActual.current) setOculto(true); }}>
+    {children}
+  </motion.div>;
 }
 
 export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProps) {
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
+  const reducido = useMovimientoReducido();
+  const navId = useId();
+  const claveExpansion = `ms:sidebar:expansion:v1:${currentUser?.uid ?? 'sin-sesion'}`;
+  const [expansion, setExpansion] = useState<Record<string, boolean>>({});
+  const perfilActual = useRef(userProfile);
+  perfilActual.current = userProfile;
+  useEffect(() => {
+    try {
+      const guardado = JSON.parse(localStorage.getItem(claveExpansion) || '{}');
+      setExpansion(guardado && typeof guardado === 'object' && !Array.isArray(guardado)
+        ? Object.fromEntries(Object.entries(guardado).filter(([, valor]) => typeof valor === 'boolean')) as Record<string, boolean> : {});
+    } catch { setExpansion({}); }
+  }, [claveExpansion]);
+  const alternarSeccion = (id: string, abierta: boolean) => {
+    const siguiente = { ...expansion, [id]: !abierta };
+    setExpansion(siguiente);
+    try { localStorage.setItem(claveExpansion, JSON.stringify(siguiente)); } catch { /* Preferencia opcional. */ }
+  };
   const navigate = useNavigate();
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const actual = obtenerAreas(perfilActual.current).find(node => node.kind === 'section' && node.section.items.some(item => item.show && (pathname === item.to || pathname.startsWith(item.to + '/'))));
+    if (actual?.kind === 'section') setExpansion(previa => ({ ...previa, [actual.section.id]: true }));
+  }, [pathname, claveExpansion, userProfile?.rol]);
   const [standbyCount, setStandbyCount] = useState(0);
   const [ordenesStandbyCount, setOrdenesStandbyCount] = useState(0);
   const [citasCount, setCitasCount] = useState(0);
@@ -81,7 +84,6 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
   // `pagosVerificar` (mismo gate que la entrada del sidebar). Sin gate por
   // rol — el permiso ya es defaults admin/coord=true, resto=false.
   const [pagosPendientesCount, setPagosPendientesCount] = useState(0);
-  const [sectionsState, setSectionsState] = useState<Record<string, boolean>>(loadState);
 
   useEffect(() => {
     const q1 = query(collection(db, 'standby_piezas'), where('estado', '!=', 'llego'));
@@ -228,108 +230,11 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
     navigate('/login');
   };
 
-  // SPRINT-117c6: alias `isAdmin = esAdminOCoord` eliminado por engañoso —
-  // el nombre sugería "solo administrador" pero en realidad cubría admin+coord.
-  // Todas las usages migradas a `esAdminOCoord` directo (semántica idéntica).
-  // Plan de rollback: revertir el commit, el alias vuelve.
-  const esAdminOCoord = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
-  const isOperaria = userProfile?.rol === 'operaria' || esAdminOCoord;
-  const isSecretaria = userProfile?.rol === 'secretaria' || esAdminOCoord;
-  // Permisos granulares
-  const p = (acc: AccionPermiso) => puede(userProfile, acc);
-
-  // Agrupación por trabajo: se conservan rutas, permisos y contadores.
-  const estructura: SidebarNode[] = [
-    { kind: 'section', section: { id: 'v2_mi_dia', label: 'Mi día', icon: LayoutDashboard, defaultExpanded: true, items: [
-      { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Resumen de hoy', show: true },
-      { to: '/ponche', icon: Clock, label: 'Ponche', show: true },
-    ] } },
-    { kind: 'section', section: { id: 'v2_atencion', label: 'Atención y clientes', icon: MessageSquare, defaultExpanded: false, items: [
-      { to: '/admin/inbox', icon: MessageSquare, label: 'Inbox WhatsApp', badge: whatsappInboxCount, show: esAdminOCoord || isOperaria || isSecretaria },
-      { to: '/admin/clientes-responsables', icon: Users, label: 'Clientes y responsables', show: userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora' },
-      { to: '/admin/clientes', icon: Users, label: 'Clientes', show: p('clientesVer') },
-      { to: '/admin/solicitudes', icon: Inbox, label: 'Solicitudes', badge: solicitudesCount, show: userProfile?.rol === 'administrador' },
-      { to: '/admin/citas', icon: Bell, label: 'Citas por Confirmar', badge: citasCount, show: p('ordenesVer') },
-      { to: '/admin/empresas-aliadas', icon: Building2, label: 'Empresas Aliadas', show: userProfile?.rol === 'administrador' },
-    ] } },
-    { kind: 'section', section: { id: 'v2_servicios', label: 'Servicios', icon: ClipboardList, defaultExpanded: false, items: [
-      { to: '/admin/ordenes', icon: ClipboardList, label: 'Órdenes', show: p('ordenesVer') },
-      { to: '/admin/agenda-dia', icon: CalendarCheck, label: 'Agenda del Día', show: p('ordenesVer') },
-      { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
-      { to: '/admin/mapa', icon: Map, label: 'Mapa de Rutas', show: p('ordenesVer') },
-      { to: '/admin/reprogramaciones', icon: RefreshCw, label: 'Reprogramaciones', badge: reprogramacionesCount, show: esAdminOCoord },
-      { to: '/admin/sugerencias-chequeo', icon: ClipboardCheck, label: 'Sugerencias chequeo', badge: sugerenciasChequeoCount, show: esAdminOCoord },
-      { to: '/admin/standby', icon: Clock, label: 'Pendiente de piezas', badge: standbyCount + ordenesStandbyCount, show: p('ordenesVer') },
-      { to: '/admin/taller', icon: Wrench, label: 'Equipos Taller', show: p('ordenesVer') },
-      { to: '/admin/mantenimiento', icon: Calendar, label: 'Mantenimiento', show: p('ordenesVer') },
-      { to: '/admin/historial-anuladas', icon: XCircle, label: 'Historial Anuladas', show: esAdminOCoord || p('ordenesVerEliminadas') },
-      { to: '/admin/calendarios', icon: CalendarDays, label: 'Calendarios públicos (Calendly)', show: esAdminOCoord || isOperaria || isSecretaria },
-    ] } },
-    { kind: 'section', section: { id: 'v2_caja', label: 'Caja y administración', icon: Receipt, defaultExpanded: false, items: [
-      { to: '/admin/cotizaciones', icon: FileText, label: 'Cotizaciones', show: p('cotizacionesVer') },
-      { to: '/admin/pagos-pendientes', icon: Banknote, label: 'Pagos pendientes', badge: pagosPendientesCount, show: p('pagosVerificar') },
-      { to: '/admin/facturacion-pendiente', icon: Inbox, label: 'Conduces Pendientes', badge: facturacionPendienteCount, show: esAdminOCoord },
-      { to: '/admin/facturas', icon: Receipt, label: 'Conduces de Garantía', show: p('facturasVer') },
-      { to: '/admin/cierre-dia', icon: ClipboardCheck, label: 'Cierre del Día', show: p('cierreDiaEjecutar') },
-      { to: '/admin/gastos', icon: DollarSign, label: 'Gastos e Ingresos', show: p('gastosVer') },
-      { to: '/admin/bancos', icon: Building2, label: 'Bancos', show: p('bancosGestionar') },
-      { to: '/admin/estado-resultado', icon: TrendingUp, label: 'Estado de Resultado', show: esAdminOCoord },
-      { to: '/admin/reporte-avanzado', icon: BarChart3, label: 'Reporte avanzado', show: esAdminOCoord },
-    ] } },
-    { kind: 'section', section: { id: 'v2_equipo', label: 'Equipo', icon: UserCog, defaultExpanded: false, items: [
-      { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
-      { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: esAdminOCoord },
-      { to: '/admin/ponches', icon: ClipboardCheck, label: 'Reporte de Ponches', show: esAdminOCoord },
-      { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: esAdminOCoord },
-      { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: esAdminOCoord },
-      { to: '/admin/avances', icon: Wallet, label: 'Avances a Empleados', show: p('avancesGestionar') },
-      { to: '/admin/prestamos', icon: Banknote, label: 'Préstamos a Empleados', show: esAdminOCoord },
-      { to: '/admin/rendimiento', icon: TrendingUp, label: userProfile?.rol === 'operaria' || userProfile?.rol === 'secretaria' ? 'Mi rendimiento' : 'Rendimiento', show: p('rendimientoVer') },
-      { to: '/admin/metricas-mensuales', icon: TrendingUp, label: 'Métricas del Mes', show: p('rendimientoVer') },
-    ] } },
-    { kind: 'section', section: { id: 'v2_marketing', label: 'Marketing', icon: BarChart3, defaultExpanded: false, items: [
-      { to: '/admin/marketing', icon: BarChart3, label: 'Marketing', show: esAdminOCoord },
-      { to: '/admin/feedback', icon: Star, label: 'Feedback NPS', show: esAdminOCoord },
-      { to: '/admin/web', icon: Globe, label: 'Página Web', show: userProfile?.rol === 'administrador' },
-      { to: '/admin/formularios', icon: FileText, label: 'Formularios', show: userProfile?.rol === 'administrador' },
-      { to: '/admin/configuracion-marketing', icon: Sparkles, label: 'Plantillas Marketing', show: userProfile?.rol === 'administrador' },
-    ] } },
-    { kind: 'section', section: { id: 'v2_recursos', label: 'Recursos', icon: BookOpen, defaultExpanded: false, items: [
-      { to: '/admin/precios', icon: Tag, label: 'Precios de Servicios', show: p('configuracionVer') },
-      { to: '/admin/inventario', icon: Boxes, label: 'Inventario', show: p('configuracionVer') },
-      { to: '/admin/conocimiento', icon: BookOpen, label: 'Conocimientos', show: esAdminOCoord || isOperaria || isSecretaria },
-      { to: '/admin/productos', icon: ShoppingBag, label: 'Catálogo', show: false },
-    ] } },
-    { kind: 'item', item: { to: '/admin/asistente', icon: Sparkles, label: 'Chat (pantalla completa)', show: userProfile?.rol === 'administrador' } },
-    { kind: 'item', item: { to: '/admin/asistente/historial', icon: History, label: 'Historial IA', show: userProfile?.rol === 'administrador' } },
-    { kind: 'item', item: { to: '/admin/configuracion', icon: Settings, label: 'Configuración', show: p('configuracionVer') } },
-  ];
-
-  // Helpers para el estado de expansión de secciones
-  const isExpanded = (id: string, defaultExpanded: boolean): boolean => {
-    return id in sectionsState ? sectionsState[id] : defaultExpanded;
-  };
-
-  const toggleSection = (id: string, defaultExpanded: boolean) => {
-    setSectionsState((prev) => {
-      const current = id in prev ? prev[id] : defaultExpanded;
-      const next = { ...prev, [id]: !current };
-      saveState(next);
-      return next;
-    });
-  };
-
-  // Aplana todos los items visibles (para modo collapsed)
-  const itemsPlanos: SidebarItem[] = estructura.flatMap((node) => {
-    if (node.kind === 'item') {
-      return node.item.show ? [node.item] : [];
-    }
-    return node.section.items.filter((it) => it.show);
-  });
+  const estructura = obtenerAreas(userProfile, {standbyCount, ordenesStandbyCount, citasCount, solicitudesCount, facturacionPendienteCount, sugerenciasChequeoCount, reprogramacionesCount, whatsappInboxCount, pagosPendientesCount});
 
   // Clases compartidas del NavLink
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg transition-colors text-sm relative group ${
+    `flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg min-h-11 text-sm relative group ${
       isActive
         ? 'bg-white/90 text-blue-700 shadow-sm font-semibold'
         : 'text-slate-600 hover:bg-white/70 hover:text-slate-950'
@@ -340,10 +245,12 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
     <NavLink
       key={item.to}
       to={item.to}
+      aria-label={item.badge !== undefined && item.badge > 0 ? `${item.label}, ${item.badge} avisos` : item.label}
+      title={collapsed ? item.label : undefined}
       onClick={onNavigate}
       tabIndex={opts?.tabDisabled ? -1 : undefined}
       className={({ isActive }) =>
-        `${navLinkClass({ isActive })} ${opts?.indent && !collapsed ? 'pl-8' : ''}`
+        `${navLinkClass({ isActive: isActive || !!item.active })} ${opts?.indent && !collapsed ? 'pl-8' : ''}`
       }
     >
       <item.icon size={18} className="flex-shrink-0" />
@@ -351,14 +258,14 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
         <>
           <span className="truncate">{item.label}</span>
           {item.badge !== undefined && item.badge > 0 && (
-            <span className="ml-auto bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+            <span aria-label={`${item.badge} avisos en ${item.label}`} className="ml-auto bg-primary/10 text-primary text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
               {item.badge}
             </span>
           )}
         </>
       )}
       {collapsed && item.badge !== undefined && item.badge > 0 && (
-        <span className="absolute top-1 right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+        <span aria-label={`${item.badge} avisos en ${item.label}`} className="absolute top-1 right-1 bg-primary/10 text-primary text-xs rounded-full w-4 h-4 flex items-center justify-center">
           {item.badge > 9 ? '9+' : item.badge}
         </span>
       )}
@@ -373,19 +280,21 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
 
   return (
     <aside
-      className={`glass-sidebar flex flex-col h-full transition-all duration-300 ${collapsed ? 'w-16' : 'w-64'} relative`}
+      className={`glass-sidebar flex flex-col h-full ${collapsed ? 'w-16' : 'w-64'} relative`}
     >
       {/* Toggle button */}
-      <button
+      <motion.button data-movimiento="piloto"
+        whileTap={reducido ? undefined : { scale: ESCALA_PRESION }}
+        transition={obtenerTransicionMovimiento(reducido)} style={{ transition: 'none' }}
         onClick={onToggle}
         aria-label={collapsed ? 'Expandir menú' : 'Cerrar o reducir menú'}
-        className="absolute -right-3 top-6 z-10 bg-brand-600 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-lg hover:bg-brand-500 transition-colors"
+        className="absolute right-2 top-2 z-10 bg-brand-600 text-white rounded-full w-11 h-11 flex items-center justify-center shadow-lg hover:bg-brand-500"
       >
-        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-      </button>
+        {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+      </motion.button>
 
       {/* Logo */}
-      <div className={`p-4 border-b border-white/70 transition-all duration-300 ${collapsed ? 'flex justify-center' : ''}`}>
+      <div className={`p-4 pt-16 border-b border-white/70 ${collapsed ? 'flex justify-center' : ''}`}>
         {collapsed ? (
           <Logo size="sm" compact />
         ) : (
@@ -403,60 +312,35 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
 
       {/* Nav items */}
       <nav className="flex-1 overflow-y-auto py-2">
-        {collapsed ? (
-          // Modo colapsado: todos los items en un listado plano, sin headers
-          itemsPlanos.map((item) => renderItem(item))
-        ) : (
-          // Modo expandido: secciones colapsables + items sueltos
-          estructura.map((node, idx) => {
-            if (node.kind === 'item') {
-              if (!node.item.show) return null;
-              return renderItem(node.item);
-            }
-            const sec = node.section;
-            const visibleItems = sec.items.filter((it) => it.show);
-            if (visibleItems.length === 0) return null;
-            const expanded = isExpanded(sec.id, sec.defaultExpanded);
-            const pendientes = visibleItems.reduce((total, item) => total + Math.max(0, item.badge ?? 0), 0);
-            return (
-              <div key={sec.id} className={idx > 0 ? 'mt-1' : ''}>
-                <button
-                  type="button"
-                  onClick={() => toggleSection(sec.id, sec.defaultExpanded)}
-                  aria-expanded={expanded}
-                  className="flex items-center gap-3 px-4 py-2 mx-2 w-[calc(100%-1rem)] rounded-lg text-slate-600 hover:bg-white/70 hover:text-slate-950 transition-colors text-xs uppercase tracking-wide font-semibold"
-                >
-                  <sec.icon size={16} className="flex-shrink-0" />
-                  <span className="truncate flex-1 text-left">{sec.label}</span>
-                  {pendientes > 0 && (
-                    <span aria-label={`${pendientes} avisos pendientes`} className="bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center normal-case tracking-normal">
-                      {pendientes}
-                    </span>
-                  )}
-                  <ChevronDown
-                    size={14}
-                    className={`flex-shrink-0 transition-transform duration-200 ${expanded ? 'rotate-0' : '-rotate-90'}`}
-                  />
-                </button>
-                <div
-                  className={`overflow-hidden transition-all duration-200 ease-in-out ${
-                    expanded ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'
-                  }`}
-                >
-                  {visibleItems.map((item) =>
-                    renderItem(item, { tabDisabled: !expanded, indent: true })
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
+        {estructura.map(node => {
+          if (node.kind === 'item') return node.item.show ? renderItem(node.item) : null;
+          const items = node.section.items.filter(item => item.show);
+          if (!items.length) return null;
+          // Todos los destinos visibles inicialmente; cambiar de ruta abre su sección.
+          const abierta = expansion[node.section.id] !== false;
+          const badge = items.reduce((sum, item) => sum + (item.badge ?? 0), 0);
+          if (collapsed) return <div key={node.section.id}>{items.map(item => renderItem(item))}</div>;
+          const panelId = `${navId}-${node.section.id}`;
+          return <section key={node.section.id}>
+            <motion.button data-movimiento="piloto" type="button" id={`${panelId}-control`} aria-expanded={abierta} aria-controls={panelId}
+              className="w-full flex items-center gap-3 px-4 py-2 min-h-11 text-sm text-slate-600 text-left"
+              whileTap={reducido ? undefined : { scale: ESCALA_PRESION }} transition={obtenerTransicionMovimiento(reducido)} style={{ transition: 'none' }}
+              onClick={() => alternarSeccion(node.section.id, abierta)}>
+              <node.section.icon size={18} className="shrink-0" />
+              <span className="flex-1 truncate">{node.section.label}</span>
+              {badge > 0 && <span aria-label={`${badge} avisos en ${node.section.label}`} className="bg-primary/10 text-primary text-xs rounded-full px-1.5">{badge}</span>}
+              <motion.span animate={{ rotate: abierta ? 0 : -90 }} transition={obtenerTransicionMovimiento(reducido)} style={{ transition: 'none' }}><ChevronDown size={16}/></motion.span>
+            </motion.button>
+            <PanelSeccion id={panelId} abierto={abierta} reducido={reducido}>{items.map(item => renderItem(item, { indent: true }))}</PanelSeccion>
+          </section>;
+        })}
         {!collapsed && <AvisosMoviles />}
       </nav>
 
       {/* Logout */}
       <div className="p-3 border-t border-white/10">
         <button
+          aria-label="Cerrar sesión"
           onClick={handleLogout}
           className="flex items-center gap-3 px-4 py-2.5 w-full rounded-lg text-slate-600 hover:bg-white/70 hover:text-slate-950 transition-colors text-sm group relative"
         >

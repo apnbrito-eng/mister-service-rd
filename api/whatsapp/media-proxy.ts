@@ -74,7 +74,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   let acceso: Awaited<ReturnType<typeof accesoEquipo>>;
-  try { acceso = await accesoEquipo(req); } catch (e) { return res.status(e instanceof ErrorAcceso ? e.status : 500).json({ error: 'Acceso no autorizado.' }); }
+  try {
+    acceso = await accesoEquipo(req);
+  } catch (e) {
+    // Los rechazos esperados no son averías. Para errores inesperados del SDK,
+    // registrar solo clasificación fija: nada del mensaje, body, URL o credenciales.
+    if (!(e instanceof ErrorAcceso)) console.error('[wa/media-proxy] fallo inesperado', { etapa: 'acceso-equipo', clase: e instanceof Error ? 'error' : 'valor-no-error' });
+    return res.status(e instanceof ErrorAcceso ? e.status : 500).json({ error: 'Acceso no autorizado.' });
+  }
   if (!ROLES_AUTORIZADOS.has(acceso.rol)) return res.status(403).json({ error: 'rol-no-autorizado' });
   const db = acceso.db;
   const storage = getAdminStorage();
@@ -222,7 +229,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!binResp.body) return res.status(502).json({ error: 'archivo-vacio' });
       const reader = binResp.body.getReader();
       const chunks: Uint8Array[] = []; let size = 0;
-      try { while (true) { const { done, value } = await reader.read(); if (done) break; size += value.length; if (size > MAX_IMAGE_BYTES) { await reader.cancel(); return res.status(413).json({ error: 'archivo-excede-maximo' }); } chunks.push(value); } } finally { reader.releaseLock(); }
+      try {
+        let lectura = await reader.read();
+        while (!lectura.done) {
+          size += lectura.value.length;
+          if (size > MAX_IMAGE_BYTES) {
+            await reader.cancel();
+            return res.status(413).json({ error: 'archivo-excede-maximo' });
+          }
+          chunks.push(lectura.value);
+          lectura = await reader.read();
+        }
+      } finally { reader.releaseLock(); }
       buffer = Buffer.concat(chunks);
     } catch (err) {
       console.error('[wa/media-proxy] Meta bin fetch error:', err);

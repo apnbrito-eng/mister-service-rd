@@ -50,16 +50,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (body.accion === 'crear') {
       let aporte;
       try { aporte = validarAporte(body); } catch (e) { return res.status(400).json({ error: (e as Error).message }); }
+      if (body.requestId !== undefined && (typeof body.requestId !== 'string' || !/^[a-zA-Z0-9_-]{8,80}$/.test(body.requestId))) return res.status(400).json({ error: 'Solicitud inválida.' });
       const ref = col.doc();
-      await db.runTransaction(async tx => {
+      const huella = createHash('sha256').update(JSON.stringify(aporte)).digest('hex');
+      const solicitud = typeof body.requestId === 'string' ? db.collection('rate_limits').doc('conocimiento_req_' + createHash('sha256').update(uid + ':' + body.requestId).digest('hex')) : null;
+      const resultado = await db.runTransaction(async tx => {
+        const previa = solicitud ? await tx.get(solicitud) : null;
+        if (previa?.exists) {
+          if (previa.data()?.huella !== huella) throw new ErrorAcceso(409, 'La solicitud ya fue usada con otro contenido.');
+          return { id: previa.data()!.conocimientoId, duplicado: true };
+        }
         const cap = db.collection('rate_limits').doc(uid + '_conocimiento_' + new Date().toISOString().slice(0, 10));
         const count = await tx.get(cap);
         if ((count.data()?.total ?? 0) >= 20) throw new ErrorAcceso(429, 'Puedes aportar hasta 20 conocimientos por día.');
         tx.set(cap, { total: (count.data()?.total ?? 0) + 1 });
         tx.create(ref, { ...aporte, autorUid: uid, estado: 'pendiente', version: 1, creadoEn: FieldValue.serverTimestamp() });
+        if (solicitud) tx.create(solicitud, { huella, conocimientoId: ref.id, creadoEn: FieldValue.serverTimestamp() });
         tx.create(db.collection('auditoria_admin').doc(), { accion: 'conocimiento_creado', actorUid: uid, conocimientoId: ref.id, fecha: FieldValue.serverTimestamp() });
+        return { id: ref.id, duplicado: false };
       });
-      return res.status(201).json({ id: ref.id });
+      return res.status(resultado.duplicado ? 200 : 201).json(resultado);
     }
     if (!puedeAprobar(rol)) return res.status(403).json({ error: 'Solo administración y coordinación revisan conocimientos.' });
     if (!['aprobar', 'archivar'].includes(String(body.accion)) || typeof body.id !== 'string' || !/^[a-zA-Z0-9]{20}$/.test(body.id)) return res.status(400).json({ error: 'Acción inválida.' });

@@ -1,3 +1,4 @@
+import { prepararPausaBot } from '../_lib/botServicioStore.js';
 import { ordenAbiertaChat } from '../_lib/rutaChatOrden.js';
 import { normalizarTelefono } from '../../src/utils/crm.js';
 import type { VercelRequest, VercelResponse } from "@vercel/node";
@@ -73,10 +74,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
     if (req.method === "GET") {
-      const [conv, estado, equipo] = await Promise.all([
+      const [conv, estado, equipo, entregaBot] = await Promise.all([
         convRef.get(),
         ref.get(),
         db.collection("usuarios").get(),
+        db.collection("bot_servicio_real_handoffs").doc(body.waId).get(),
       ]);
       if (!conv.exists)
         throw new ErrorAcceso(404, "Conversación no disponible.");
@@ -103,7 +105,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .get();
       const telefonos = [...new Set([body.waId, normalizarTelefono(body.waId)])];
       const ordenes = await db.collection('ordenes_servicio').where('clienteTelefono', 'in', telefonos).get();
+      const entrega = entregaBot.data();
+      const textoBot = (v: unknown, maximo: number) => typeof v === 'string' ? v.slice(0, maximo) : '';
+      const resumenBot = entrega?.estado === 'pendiente' ? {
+        estado: 'pendiente', motivo: textoBot(entrega.motivo, 80), equipoId: textoBot(entrega.equipoId, 128) || null,
+        datos: { equipo: textoBot(entrega.datos?.equipo, 200), servicio: ['reparacion', 'mantenimiento'].includes(entrega.datos?.servicio) ? entrega.datos.servicio : '',
+          falla: textoBot(entrega.datos?.falla, 2000), direccion: textoBot(entrega.datos?.direccion, 300), tieneFoto: entrega.datos?.tieneFoto === true, tieneUbicacion: entrega.datos?.tieneUbicacion === true },
+        pendientes: Array.isArray(entrega.pendientes) ? entrega.pendientes.map((p: unknown) => p === 'tieneFoto' ? 'foto' : p === 'tieneUbicacion' ? 'ubicacion' : p).filter((p: unknown) => typeof p === 'string' && ['equipo', 'servicio', 'falla', 'foto', 'ubicacion'].includes(p)) : [],
+      } : null;
       return res.json({
+        resumenBot,
         ordenes: ordenes.docs.filter(d => ordenAbiertaChat(d.data())).map(d => ({ id: d.id, numero: d.data().numero || d.id, tecnicoNombre: d.data().tecnicoNombre || 'Sin técnico' })),
         atencion,
         equipo: personas,
@@ -127,11 +138,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new ErrorAcceso(400, "Resumen demasiado largo.");
     const evento = ref.collection("eventos").doc(body.requestId);
     await db.runTransaction(async (tx) => {
-      const [conv, estado, previo, actor] = await Promise.all([
+      const [conv, estado, previo, actor, entregaAnterior] = await Promise.all([
         tx.get(convRef),
         tx.get(ref),
         tx.get(evento),
         tx.get(db.collection("usuarios").doc(uid)),
+        tx.get(db.collection("bot_servicio_real_handoffs").doc(body.waId)),
       ]);
       if (!conv.exists)
         throw new ErrorAcceso(404, "Conversación no disponible.");
@@ -204,6 +216,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           versionOrden = (await tx.get(db.collection("crm_ordenes").doc(orden.id))).data()?.version || 0;
         }
       }
+      const pausarBot = ['tomar', 'aceptar', 'traspasar', 'transferir'].includes(body.accion)
+        ? await prepararPausaBot(db, tx, body.waId, uid) : null;
+      pausarBot?.();
+      if (body.accion === "resolver" && entregaAnterior.data()?.estado === "pendiente") tx.update(entregaAnterior.ref, { estado: "resuelto", resueltoPor: uid, updatedAt: FieldValue.serverTimestamp() });
       if (ordenRef && destino) {
         tx.update(ordenRef, { operariaId: destino.uid, operariaNombre: destino.nombre, responsableId: destino.uid, responsableNombre: destino.nombre, tecnicoId: FieldValue.delete(), tecnicoNombre: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
         tx.set(db.collection('crm_ordenes').doc(ordenRef.id), { responsableId: destino.uid, responsableNombre: destino.nombre, revision: null, version: versionOrden + 1 }, { merge: true });

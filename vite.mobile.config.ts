@@ -3,6 +3,7 @@ import { rmSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import react from '@vitejs/plugin-react';
 import ensayo from './config/mobile.staging.json';
+import {debugAppCheckActivo} from './config/mobile.production-guard';
 
 // SPRINT-FIX-MOB-3 (2026-09-26): defensa post-build para builds mobile de
 // produccion. El pre-check en linea 11 aborta si `VITE_MOBILE_APPCHECK_DEBUG`
@@ -16,7 +17,7 @@ function verificarAppCheckProduccion(): { name: string; closeBundle: () => void 
     closeBundle() {
       const outDir = resolve('dist-mobile');
       const patronesProhibidos = [
-        /debugToken\s*:\s*!?0*\s*(?:true|1)\b/i,
+        debugAppCheckActivo,
         /debugToken\s*:\s*true\b/i,
         /mister-service-ensayo-260921/,
       ];
@@ -62,5 +63,5 @@ export default defineConfig(({ mode }) => {
     { name: 'exclude-mobile-installers', closeBundle() { rmSync(resolve('dist-mobile/descargas'), { recursive: true, force: true }); } },
   ];
   if (produccion) plugins.push(verificarAppCheckProduccion());
-  return { plugins, define: { __APP_VERSION__: JSON.stringify(produccion ? 'mobile-production-1.0.9' : 'mobile-staging') }, build: { outDir: 'dist-mobile' } };
+  return { plugins, define: { __APP_VERSION__: JSON.stringify(produccion ? 'mobile-production-1.0.17' : 'mobile-staging') }, build: { outDir: 'dist-mobile' } };
 });

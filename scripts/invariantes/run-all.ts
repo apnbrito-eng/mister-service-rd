@@ -42,6 +42,8 @@ import { check as checkNumerosDocumentoClientSide } from './check-numeros-docume
 import { check as checkGateConducePagoVerificado } from './check-gate-conduce-pago-verificado.js';
 import { check as checkComisionGarantiaAnulaCompleta } from './check-comision-garantia-anula-completa.js';
 import { check as checkMantenimientoClienteidVacio } from './check-mantenimiento-clienteid-vacio.js';
+import { check as checkCitasPublicasServidor } from './check-citas-publicas-servidor.js';
+import { check as checkContadorChats } from './check-contador-chats.js';
 import { COLOR } from './types.js';
 
 const argv = process.argv.slice(2);
@@ -53,6 +55,8 @@ const c = (color: keyof typeof COLOR, s: string) =>
 
 async function main() {
   const checks = [
+    checkContadorChats,
+    checkCitasPublicasServidor,
     checkUserprofileId,
     checkRulesImmutability,
     checkCrossCollectionTx,

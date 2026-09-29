@@ -1,3 +1,5 @@
+import { prepararRepartoCanal } from '../_lib/equiposAtencion.js';
+import { prepararEntradaBot } from '../_lib/botServicioStore.js';
 import { prepararReparto } from '../_lib/repartoChats.js';
 import { rutaMensajeEntrante } from '../_lib/rutaChatOrden.js';
 import { solicitaBaja, origenAnuncio } from '../_lib/preferenciasMarketing.js';
@@ -183,7 +185,7 @@ function handleVerify(req: VercelRequest, res: VercelResponse): void {
  * transacción. Firestore aborta + reintenta el callback si otra invocación
  * paralela escribió entre nuestro `get` y el `set`.
  */
-async function persistirMensajeEntrante(
+export async function persistirMensajeEntrante(
   db: ReturnType<typeof getAdminFirestore>,
   msg: MensajeEntranteNormalizado,
 ): Promise<{ creado: boolean }> {
@@ -209,10 +211,18 @@ async function persistirMensajeEntrante(
     let responsable = typeof responsableId === 'string' && /^[\w.-]{1,160}$/.test(responsableId)
       ? (await tx.get(db.collection('usuarios').doc(responsableId))).data() : null;
     let responsableValido = responsable && responsable.activo !== false && !responsable.eliminado && ['administrador', 'coordinadora', 'secretaria', 'operaria'].includes(responsable.rol);
-    const reparto = !responsableValido ? await prepararReparto(db, tx) : null;
+    const aplicarBot = await prepararEntradaBot(db, tx, { waId: msg.wa_id, wamid: msg.wamid, phoneNumberId: msg.phoneNumberId,
+      botHabilitado: process.env.BOT_SERVICIO_ENABLED !== 'true' || process.env.ALLOW_EXTERNAL_SENDS !== 'true' || process.env.BOT_CENTRAL_PHONE_NUMBER_ID !== msg.phoneNumberId ? false : conversacionExiste ? conversacionSnap.data()?.bot?.habilitado === true : undefined,
+      baja: solicitaBaja(msg.contenido.texto), pideHumano: /\b(humano|persona|agente|operaria|secretaria)\b/i.test(msg.contenido.texto ?? '') });
+    const embudoActivo = aplicarBot.activo;
+    const canal = !embudoActivo && !responsableValido ? await prepararRepartoCanal(db, tx, conversacionSnap.data()?.clienteId ?? null, msg.wa_id) : null;
+    if (canal?.asignacion) { responsableId = canal.asignacion.secretariaUid; responsable = (await tx.get(db.doc(`usuarios/${responsableId}`))).data() ?? null; responsableValido = !!responsable; }
+    const reparto = !embudoActivo && !canal && !responsableValido ? await prepararReparto(db, tx) : null;
     if (reparto) { responsableId = reparto.uid; responsable = { nombre: reparto.nombre, rol: reparto.rol, activo: true }; responsableValido = true; }
     if (!responsableValido) { responsableId = null; responsable = null; }
-    const sinAsignarAdmins = !responsableValido ? await tx.get(db.collection('usuarios').where('rol', '==', 'administrador').limit(20)) : null;
+    const sinAsignarAdmins = !embudoActivo && !responsableValido ? await tx.get(db.collection('usuarios').where('rol', '==', 'administrador').limit(20)) : null;
+
+
 
 
     // Preview del mensaje para la conversación (no PII completa).
@@ -243,7 +253,9 @@ async function persistirMensajeEntrante(
       ...(origenAnuncio(msg.rawMessage) ? { origenMarketing: origenAnuncio(msg.rawMessage) } : {}),
     };
 
+    const nuevoBotHabilitado = aplicarBot();
     reparto?.aplicar();
+    canal?.asignacion?.aplicar();
     tx.set(inboxRef, stripUndefinedDeep(inboxPayload));
 
     // Conversación: merge con campos críticos siempre escritos por el SDK
@@ -274,9 +286,9 @@ async function persistirMensajeEntrante(
       conversacionUpdate.primeraInteraccion = FieldValue.serverTimestamp();
       conversacionUpdate.noLeidos = 1;
       conversacionUpdate.totalMensajesSalientes = 0;
-      conversacionUpdate.requiereHumano = false;
+      conversacionUpdate.requiereHumano = /\b(humano|persona|agente|operaria|secretaria)\b/i.test(msg.contenido.texto ?? '');
       conversacionUpdate.bot = {
-        habilitado: false,
+        habilitado: nuevoBotHabilitado,
         turnosCount: 0,
         contexto: {},
       };
@@ -287,6 +299,7 @@ async function persistirMensajeEntrante(
       conversacionUpdate.noLeidos = FieldValue.increment(1);
     }
 
+    if (/\b(humano|persona|agente|operaria|secretaria)\b/i.test(msg.contenido.texto ?? '')) conversacionUpdate.requiereHumano = true;
     const origen = origenAnuncio(msg.rawMessage);
     if (origen) {
       const touch = { ...origen, mensajeId: msg.wamid, fecha: msg.timestampMeta, phoneNumberId: msg.phoneNumberId };
@@ -311,7 +324,7 @@ async function persistirMensajeEntrante(
       tx.create(db.collection('auditoria_admin').doc(), { accion: 'baja_whatsapp_solicitada', origen: 'mensaje_cliente', mensajeId: msg.wamid, fecha: FieldValue.serverTimestamp() });
     }
 
-    tx.set(atencionRef, { ...(!atencion || reparto || !responsableValido ? { responsableId: responsableId || null, responsableNombre: responsable?.nombre || null, traspaso: null } : {}), pendiente: true, version: (atencion?.version || 0) + 1, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
+    tx.set(atencionRef, { ...(canal?.asignacion ? { equipoId: canal.asignacion.equipoId } : {}), ...(!atencion || reparto || canal?.asignacion || !responsableValido ? { responsableId: responsableId || null, responsableNombre: responsable?.nombre || null, traspaso: null } : {}), pendiente: embudoActivo ? atencion?.pendiente === true : true, version: (atencion?.version || 0) + 1, actualizadoEn: FieldValue.serverTimestamp() }, { merge: true });
     if (responsableValido) {
       // Same transaction as the incoming message: a Meta retry cannot duplicate the alert.
       const avisoId = crypto.createHash('sha256').update(`chat:${msg.wamid}`).digest('hex');
@@ -326,7 +339,7 @@ async function persistirMensajeEntrante(
       const avisoId = crypto.createHash('sha256').update(`chat-sin-asignar:${msg.wamid}:${admin.id}`).digest('hex');
       tx.create(db.collection('notificaciones').doc(avisoId), { userId: admin.id, tipo: 'crm_mensaje', titulo: 'Mensaje sin responsable', mensaje: 'Hay un mensaje pendiente de asignar en la bandeja.', conversacionId: msg.wa_id, leida: false, createdAt: FieldValue.serverTimestamp() });
     }
-    if (reparto || !responsableValido) conversacionUpdate.asignadaA = responsableId;
+    if (reparto || canal?.asignacion || !responsableValido) conversacionUpdate.asignadaA = responsableId;
     if (reparto) tx.create(db.collection('auditoria_admin').doc(), { accion: 'chat_autoasignado', conversacionId: msg.wa_id, responsableId: reparto.uid, criterio: 'rotacion_personal_de_turno', mensajeId: msg.wamid, fecha: FieldValue.serverTimestamp() });
     tx.set(conversacionRef, stripUndefinedDeep(conversacionUpdate), { merge: true });
     creado = true;

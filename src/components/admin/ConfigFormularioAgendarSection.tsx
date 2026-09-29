@@ -178,7 +178,6 @@ export default function ConfigFormularioAgendarSection() {
       }
 
       await guardarConfigFormularioAgendar(config, {
-        id: userProfile?.id,
         nombre: userProfile?.nombre,
       });
       toast.success('Formulario guardado correctamente');
@@ -241,6 +240,7 @@ export default function ConfigFormularioAgendarSection() {
         </div>
         <button
           type="button"
+          role="switch" aria-label="Habilitar formulario de citas" aria-checked={habilitado}
           onClick={() => update({ habilitado: !habilitado })}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
             habilitado ? 'bg-green-500' : 'bg-gray-300'

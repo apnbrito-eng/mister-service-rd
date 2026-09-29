@@ -14,7 +14,8 @@ import {
   Users,
 } from 'lucide-react';
 import WhatsAppIcon from '../../components/icons/WhatsAppIcon';
-import { useConfigWeb, getWhatsAppUrl } from '../../hooks/useConfigWeb';
+import { useConfigWeb } from '../../hooks/useConfigWeb';
+import { obtenerWhatsAppPublico } from '../../utils/whatsappPublico';
 import {
   ConfigWeb,
   ServicioDetalle as ServicioDetalleType,
@@ -77,7 +78,7 @@ function ServicioNoEncontrado({ config }: { config: ConfigWeb }) {
           </Link>
           {whatsappActivo && (
             <a
-              href={getWhatsAppUrl(config)}
+              href={obtenerWhatsAppPublico(config)}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center justify-center gap-2 bg-green-500 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-green-600 transition-colors"
@@ -196,7 +197,7 @@ export default function ServicioDetalle() {
     return <ServicioNoEncontrado config={config} />;
   }
 
-  const whatsappUrl = getWhatsAppUrl(
+  const whatsappUrl = obtenerWhatsAppPublico(
     config,
     `Hola, me interesa el servicio de ${servicio.tipoEquipo || servicio.titulo}.`,
   );

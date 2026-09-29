@@ -250,7 +250,7 @@ export default function Gastos() {
                   <td className="px-4 py-3 text-sm font-medium text-right text-red-600">{formatMoneda(g.monto)}</td>
                   <td className="px-4 py-3">
                     {puedeEliminar && (
-                      <button onClick={() => handleDelete(g.id)} className="p-1 hover:bg-red-50 rounded text-red-400">
+                      <button aria-label="Eliminar movimiento" onClick={() => handleDelete(g.id)} className="p-1 hover:bg-red-50 rounded text-red-400">
                         <Trash2 size={14} />
                       </button>
                     )}

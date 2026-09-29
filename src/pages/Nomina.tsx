@@ -1,3 +1,4 @@
+import RevisionAsistencia from '../components/asistencia/RevisionAsistencia';
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -199,7 +200,7 @@ export default function Nomina() {
 
   const exportarCSV = () => {
     if (!liqActual) return;
-    const headers = 'Personal,Rol,Sueldo Base,Comisiones,Bono,Avances,Descuentos AdHoc,Cuotas Prestamos,Total Descuentos,Total Devengado,Total Neto,Pagado,Metodo de Pago\n';
+    const headers = 'Personal,Rol,Sueldo Base,Comisiones,Bono,Avances,Descuentos AdHoc,Cuotas Prestamos,Asistencia,Total Descuentos,Total Devengado,Total Neto,Pagado,Metodo de Pago\n';
     const rows = liqActual.empleados.map(e => {
       const totalAvances = e.totalAvances ?? 0;
       const totalAdHoc = e.totalDescuentosAdHoc ?? 0;
@@ -214,6 +215,7 @@ export default function Nomina() {
         totalAvances,
         totalAdHoc,
         totalCuotas,
+        e.totalAsistencia ?? 0,
         totalDesc,
         e.totalDevengado,
         e.totalNeto ?? e.totalDevengado,
@@ -243,6 +245,7 @@ export default function Nomina() {
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+      {liqActual && <RevisionAsistencia desde={liqActual.periodoInicio.toLocaleDateString('en-CA',{timeZone:'America/Santo_Domingo'})} hasta={liqActual.periodoFin.toLocaleDateString('en-CA',{timeZone:'America/Santo_Domingo'})} liquidacionId={liqActual.estado==='abierta'?liqActual.id:undefined} />}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-primary flex items-center gap-2">
@@ -331,7 +334,7 @@ export default function Nomina() {
                     const tieneAvances = (emp.totalAvances ?? 0) > 0;
                     const totalAdHoc = emp.totalDescuentosAdHoc ?? 0;
                     const totalCuotas = emp.totalCuotasPrestamos ?? 0;
-                    const totalDescOtros = totalAdHoc + totalCuotas;
+                    const totalDescOtros = totalAdHoc + totalCuotas + (emp.totalAsistencia ?? 0);
                     const tieneDescuentosOtros = totalDescOtros > 0;
                     const montoNeto = emp.totalNeto ?? emp.totalDevengado;
                     const cantidadAvances = emp.avancesIds?.length ?? 0;
@@ -420,7 +423,7 @@ export default function Nomina() {
                                 >
                                   <p className="font-semibold text-red-600">-{formatMoneda(totalDescOtros)}</p>
                                   <p className="text-[10px] text-gray-400">
-                                    {cantidadAdHoc > 0 && `${cantidadAdHoc} ad-hoc`}
+                                    {(emp.totalAsistencia ?? 0) > 0 && "Asistencia · "}{cantidadAdHoc > 0 && `${cantidadAdHoc} ad-hoc`}
                                     {cantidadAdHoc > 0 && cantidadCuotas > 0 && ', '}
                                     {cantidadCuotas > 0 && `${cantidadCuotas} cuota(s)`}
                                   </p>
@@ -463,6 +466,7 @@ export default function Nomina() {
                                         ))}
                                       </div>
                                     )}
+                                    {(emp.totalAsistencia ?? 0) > 0 && <p className="text-xs">Asistencia aprobada: -{formatMoneda(emp.totalAsistencia ?? 0)}</p>}
                                     {emp.cuotasPrestamos && emp.cuotasPrestamos.length > 0 && (
                                       <div className="space-y-1">
                                         <p className="text-[10px] uppercase text-gray-500">Cuotas de préstamos</p>
@@ -572,7 +576,8 @@ export default function Nomina() {
                                   ))}
                                 </div>
                               )}
-                              {emp.cuotasPrestamos && emp.cuotasPrestamos.length > 0 && (
+                              {(emp.totalAsistencia ?? 0) > 0 && <p className="text-xs">Asistencia aprobada: -{formatMoneda(emp.totalAsistencia ?? 0)}</p>}
+                                    {emp.cuotasPrestamos && emp.cuotasPrestamos.length > 0 && (
                                 <div className="space-y-1 mt-3">
                                   <p className="text-[11px] font-semibold text-gray-600 uppercase mb-1">Cuotas de préstamos</p>
                                   {emp.cuotasPrestamos.map(c => (
@@ -641,6 +646,7 @@ export default function Nomina() {
                           <span className="font-semibold">-{formatMoneda(tA)}</span>
                         </div>
                       )}
+                      {(e.totalAsistencia ?? 0) > 0 && <div className="flex justify-between text-red-600"><span>Asistencia aprobada:</span><span>-{formatMoneda(e.totalAsistencia ?? 0)}</span></div>}
                       {tH > 0 && (
                         <div className="flex justify-between text-red-600">
                           <span>Descuentos ad-hoc:</span>

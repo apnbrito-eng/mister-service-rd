@@ -5,7 +5,7 @@ import { ConfigGPS, UbicacionVehiculo } from '../types';
 const CONFIG_DOC = doc(db, 'config_gps', 'sistema');
 const UBICACIONES_COLLECTION = 'ubicaciones_vehiculos';
 
-/** Carga la configuración de GPS desde Firestore */
+/** Carga configuración y credenciales GPS; disponible solo para administradores. */
 export async function obtenerConfigGPS(): Promise<ConfigGPS | null> {
   try {
     const snap = await getDoc(CONFIG_DOC);
@@ -84,9 +84,8 @@ export function suscribirTodasUbicaciones(
  * en /api/gps/ubicacion para evitar CORS.
  */
 export async function obtenerUbicacionAPI(vehiculoId: string): Promise<UbicacionVehiculo | null> {
-  const config = await obtenerConfigGPS();
-  if (!config?.activo || !config.apiKey || !config.apiUrl) return null;
-  if (config.proveedor === 'Dispositivo del técnico') return null; // No usa API externa
+  // Configuración, estado y proveedor se validan en el servidor. El cliente
+  // operativo no necesita acceso al documento que contiene la credencial.
 
   try {
     // El proxy GPS requiere auth (anti-SSRF). Si no hay usuario, abortar.

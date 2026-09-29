@@ -570,7 +570,7 @@ export default function GestionUsuarios() {
         <User size={14} className="mt-0.5 shrink-0" />
         <div className="flex-1">
           Para crear nuevos usuarios del sistema, ve a{' '}
-          <Link to="/admin/personal" className="font-semibold underline hover:text-blue-700 inline-flex items-center gap-1">
+          <Link to="/admin/personal" className="min-h-11 font-semibold underline hover:text-blue-700 inline-flex items-center gap-1">
             Personal <ExternalLink size={11} />
           </Link>
           . Al crear un miembro del personal con rol distinto de "ayudante", se genera automáticamente su cuenta de acceso.

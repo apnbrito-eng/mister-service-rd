@@ -1,8 +1,12 @@
+import {motion} from 'motion/react';
+import {useMovimientoReducido} from '../hooks/useMovimientoReducido';
+import {obtenerTransicionMovimiento,DESPLAZAMIENTO_PANEL} from '../utils/motion';
+import { useAtencion } from '../context/AtencionContext';
+import { useNombresClientesInbox } from '../hooks/useNombresClientesInbox';
 import { usePreferenciasChat } from '../hooks/usePreferenciasChat';
 import NotaVoz from '../components/inbox/NotaVoz';
 import AvisoRedaccion from '../components/inbox/AvisoRedaccion';
 import { equipoApi } from '../services/equipoApi';
-import AtencionChat from '../components/inbox/AtencionChat';
 import type { FuenteCrm } from '../components/crm/GestionOrden';
 import SugerenciaIA from '../components/inbox/SugerenciaIA';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -10,7 +14,6 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Send,
-  Phone,
   Search,
   MessageSquare,
   CheckCheck,
@@ -39,6 +42,7 @@ import SelectorPlantillas from '../components/inbox/SelectorPlantillas';
 import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
 import { useOrdenCreateForm } from '../hooks/useOrdenCreateForm';
 import type {
+  Cliente,
   OrdenServicio,
   WhatsAppConversacion,
   WhatsAppMensajeInbox,
@@ -76,6 +80,8 @@ type MensajeRender =
 
 export default function InboxConversacion() {
   const [vistaCompacta, setVistaCompacta] = useState<'chat' | 'gestion'>('chat');
+  const [fichaVisitada, setFichaVisitada] = useState(false);
+  useEffect(() => { if (vistaCompacta === 'gestion') setFichaVisitada(true); }, [vistaCompacta]);
   const [maxMensajes, setMaxMensajes] = useState(50);
   const [mensajeEnlace, setMensajeEnlace] = useState<MensajeRender | null>(null);
   const [errorMensajes, setErrorMensajes] = useState('');
@@ -84,11 +90,15 @@ export default function InboxConversacion() {
   useEffect(() => { const mq = window.matchMedia('(min-width: 1280px)'); const cambiar = () => setPantallaAmplia(mq.matches); mq.addEventListener('change', cambiar); return () => mq.removeEventListener('change', cambiar); }, []);
   const [accionesAbiertas, setAccionesAbiertas] = useState(false);
   const [fuenteCrm, setFuenteCrm] = useState<FuenteCrm | null>(null);
+  const { seleccionar } = useAtencion();
   const { waId } = useParams<{ waId: string }>();
-  useEffect(() => { setMaxMensajes(50); setFuenteCrm(null); setVistaCompacta('chat'); setAccionesAbiertas(false); }, [waId]);
+  useEffect(() => { setFichaVisitada(false); setMaxMensajes(50); setFuenteCrm(null); setVistaCompacta('chat'); setAccionesAbiertas(false); }, [waId]);
   useEffect(() => { if (fuenteCrm) setVistaCompacta('gestion'); }, [fuenteCrm]);
   const navigate = useNavigate();
   const location = useLocation();
+  const reducido=useMovimientoReducido();
+  const clienteIdRuta=new URLSearchParams(location.search).get('clienteId')||undefined;
+  const [clienteFicha,setClienteFicha]=useState<{waId:string;cliente:Cliente}|null>(null);
   const { currentUser, userProfile } = useApp();
 
   const { preferencias } = usePreferenciasChat(currentUser?.uid);
@@ -96,6 +106,9 @@ export default function InboxConversacion() {
   const [conversaciones, setConversaciones] = useState<WhatsAppConversacion[]>([]);
   const [conversacionActual, setConversacionActual] = useState<WhatsAppConversacion | null>(null);
   const [mensajes, setMensajes] = useState<MensajeRender[]>([]);
+  const clienteIdConversacion = conversacionActual?.clienteId;
+  const waIdConversacion = conversacionActual?.wa_id;
+  useEffect(() => { if (waId && waIdConversacion === waId) seleccionar({clienteId:clienteIdConversacion, waId, telefono:waId}); }, [clienteIdConversacion, waIdConversacion, waId, seleccionar]);
   useEffect(() => {
     if (!location.hash) return;
     let id: string;
@@ -120,12 +133,12 @@ export default function InboxConversacion() {
   const [escribiendo, setEscribiendo] = useState(false);
   const hayBorrador = texto.trim().length > 0;
   useEffect(() => {
-    if (!waId || !escribiendo || !hayBorrador) return;
+    if (!waId || conversacionActual?.wa_id !== waId || !escribiendo || !hayBorrador) return;
     const presencia = (activa: boolean) => equipoApi('/api/crm/atencion', { waId, accion: 'presencia', activa }).catch(() => {});
     void presencia(true);
     const timer = window.setInterval(() => { if (!document.hidden) void presencia(true); }, 20000);
     return () => { clearInterval(timer); void presencia(false); };
-  }, [waId, escribiendo, hayBorrador]);
+  }, [waId, conversacionActual?.wa_id, escribiendo, hayBorrador]);
 
   const [ahora, setAhora] = useState(Date.now());
   useEffect(() => { const id = window.setInterval(() => setAhora(Date.now()), 15000); return () => window.clearInterval(id); }, []);
@@ -405,16 +418,17 @@ export default function InboxConversacion() {
     return cierraDate.getTime() > ahora;
   }, [conversacionActual, ahora]);
 
+  const nombresClientes = useNombresClientesInbox(conversaciones.map(c => c.wa_id).concat(waId ? [waId] : []), currentUser?.uid);
   const conversacionesFiltradas = useMemo(() => {
     const q = buscar.trim().toLowerCase();
     if (q.length === 0) return conversaciones;
     return conversaciones.filter((c) => {
-      if (c.wa_id.includes(q)) return true;
+      if (c.wa_id.includes(q) || nombresClientes[c.wa_id]?.toLowerCase().includes(q)) return true;
       const ent = c.ultimoMensajeEntrante?.preview?.toLowerCase() ?? '';
       const sal = c.ultimoMensajeSaliente?.preview?.toLowerCase() ?? '';
       return ent.includes(q) || sal.includes(q);
     });
-  }, [conversaciones, buscar]);
+  }, [conversaciones, buscar, nombresClientes]);
 
   async function handleEnviar() {
     if (!waId || !texto.trim() || enviando) return;
@@ -636,7 +650,7 @@ export default function InboxConversacion() {
                             c.noLeidos > 0 ? 'font-semibold text-gray-900' : 'text-gray-700'
                           }`}
                         >
-                          {formatTelRD(c.wa_id)}
+                          {nombresClientes[c.wa_id] || formatTelRD(c.wa_id)}
                         </span>
                         {c.noLeidos > 0 && (
                           <span className="bg-brand-600 text-white text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center flex-shrink-0">
@@ -644,6 +658,7 @@ export default function InboxConversacion() {
                           </span>
                         )}
                       </div>
+                      {nombresClientes[c.wa_id] && <p className="text-xs text-gray-500">{formatTelRD(c.wa_id)}</p>}
                       <p className="text-xs text-gray-500 truncate mt-0.5">
                         {c.ultimoMensajeEntrante?.preview || c.ultimoMensajeSaliente?.preview || '—'}
                       </p>
@@ -655,68 +670,30 @@ export default function InboxConversacion() {
           </ul>
         </aside>
 
-        {/* COL 2 — Panel cliente 360 (SPRINT-INBOX-10, 2026-05-22).
-            Antes: bloque simple con datos+CardCliente (INBOX-5).
-            Ahora: centro de mando del cliente con tabs (Datos, Órdenes,
-            Garantías, Facturas, Historial) — `PanelCliente360` envuelve
-            a `CardCliente` (que sigue siendo el responsable del tab Datos)
-            y suma los tabs nuevos. El header con teléfono/etiquetas/
-            asignación/toggle bot vive ARRIBA fijo, los tabs llenan el
-            resto del aside con scroll interno.
-
-            SPRINT-INBOX-8c (2026-05-22): el aside completo se OCULTA
-            cuando el drawer de crear orden está abierto, para que el chat
-            quede visible al lado del form. Sin regresión.
-
-            Ancho ampliado a w-72 xl:w-80 para acomodar los tabs sin
-            apretar. */}
-        <aside className={`${showCreateModal ? 'hidden' : vistaCompacta === 'gestion' ? 'flex' : 'hidden xl:flex'} flex-col min-w-0 w-full xl:w-80 shrink-0 border-r border-gray-200 bg-white`}>
+        <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+        {/* Ficha persistente: en móvil se oculta al regresar al chat. */}
+        <motion.aside {...(!pantallaAmplia&&vistaCompacta!=='gestion'?{inert:''}:{})} aria-hidden={!pantallaAmplia&&vistaCompacta!=='gestion'} style={{pointerEvents:pantallaAmplia||vistaCompacta==='gestion'?'auto':'none'}} initial={false} animate={{opacity:pantallaAmplia||vistaCompacta==='gestion'?1:0,x:reducido||pantallaAmplia||vistaCompacta==='gestion'?0:DESPLAZAMIENTO_PANEL}} transition={obtenerTransicionMovimiento(reducido)} className={`${showCreateModal ? 'hidden' : 'flex'} absolute inset-0 xl:static z-10 flex-col min-w-0 w-full xl:w-[380px] xl:order-last min-h-0 shrink-0 border-r border-gray-200 bg-white`}>
           <button type="button" onClick={() => setVistaCompacta('chat')} className="xl:hidden flex items-center gap-2 min-h-11 px-3 border-b text-sm font-medium"><ArrowLeft size={20} /> Volver al chat</button>
-          {conversacionActual && (pantallaAmplia || vistaCompacta === 'gestion') ? (
+          {waId && (pantallaAmplia || fichaVisitada || vistaCompacta === 'gestion' || !!clienteIdRuta) ? (
             <>
-              {/* Header fijo con info de la CONVERSACIÓN (no del cliente) */}
-              <div className="p-3 border-b border-gray-100 space-y-2 flex-shrink-0">
-                <h3 className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
-                  Conversación
-                </h3>
-                <div className="flex items-center gap-2 text-sm">
-                  <Phone size={14} className="text-gray-400" />
-                  <span className="font-medium text-gray-900">
-                    {formatTelRD(conversacionActual.wa_id)}
-                  </span>
-                </div>
-                {conversacionActual.etiquetas && conversacionActual.etiquetas.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {conversacionActual.etiquetas.map((e) => (
-                      <span
-                        key={e}
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-700"
-                      >
-                        {e}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {/* SPRINT-INBOX-4 (2026-05-20): toggle bot IA. */}
-                <ToggleBot
-                  waId={conversacionActual.wa_id}
-                  habilitado={conversacionActual.bot?.habilitado === true}
-                  puedeTogglear={
-                    conversacionActual.asignadaA === currentUser?.uid ||
-                    // Sin asignación: cualquier staff puede tomar (la rule
-                    // de bot decide al final; si no aplica, el service
-                    // emite permission-denied y el toast lo explica).
-                    true
-                  }
-                />
-              </div>
-
-              <AtencionChat key={conversacionActual.wa_id} waId={conversacionActual.wa_id} />
-              {/* Panel cliente 360 con tabs — flex-1 para llenar el resto */}
+              {/* Cliente, atención y órdenes dentro de un único scroll. */}
               <div className="flex-1 min-h-0">
                 <PanelCliente360
-                  key={`${conversacionActual.wa_id}-${refreshOrdenesCardKey}`}
-                  waId={conversacionActual.wa_id}
+                  key={`${waId}-${refreshOrdenesCardKey}`}
+                  waId={waId}
+                  clienteIdInicial={clienteIdRuta}
+                  conversacionExiste={conversacionActual?.wa_id === waId}
+                  onCliente={cliente=>{setClienteFicha({waId,cliente});seleccionar({clienteId:cliente.id,waId,telefono:cliente.telefono});}}
+                  ubicacionesRecibidas={mensajes.filter((msg): msg is WhatsAppMensajeInbox & { _direccion: 'entrante' } => msg._direccion === 'entrante' && msg.wa_id === waId && msg.tipo === 'location').flatMap(msg => {
+                    const loc = msg.contenido.location;
+                    if (!loc) return [];
+                    const fecha = msg.timestampMeta instanceof Date ? msg.timestampMeta : msg.timestampMeta?.toDate();
+                    return [{ id: msg.wamid, lat: loc.lat, lng: loc.lng, etiqueta: [loc.name || loc.address || 'Ubicación compartida', fecha && !isNaN(fecha.getTime()) ? fecha.toLocaleString('es-DO') : ''].filter(Boolean).join(' · ') }];
+                  }).reverse()}
+                  controlesChat={conversacionActual?.wa_id === waId ? <div className="space-y-3">
+                    {!!conversacionActual.etiquetas?.length && <div className="flex flex-wrap gap-1">{conversacionActual.etiquetas.map(etiqueta => <span key={etiqueta} className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">{etiqueta}</span>)}</div>}
+                    <ToggleBot waId={conversacionActual.wa_id} habilitado={conversacionActual.bot?.habilitado === true} puedeTogglear={true} />
+                  </div> : undefined}
                   onCrearOrden={handleCrearOrden}
                   fuenteCrm={fuenteCrm}
                   alUsarFuente={() => setFuenteCrm(null)}
@@ -728,19 +705,19 @@ export default function InboxConversacion() {
               <p className="text-sm text-gray-400">Cargando conversación...</p>
             </div>
           )}
-        </aside>
+        </motion.aside>
 
         {/* COL 3 — timeline + composer.
             SPRINT-INBOX-11 (2026-05-22): drawer ahora es columna flex en
             flujo (primera columna izquierda); el chat (`main`) es su
             hermana derecha vía `flex-1`. Sin padding hack — el flexbox se
-            encarga del layout. Cero solapamiento a cualquier ancho. */}
-        <main className={`${showCreateModal ? 'hidden md:flex' : vistaCompacta === 'gestion' ? 'hidden xl:flex' : 'flex'} flex-1 flex-col min-w-0 min-h-0 bg-gray-50`}>
+            encarga del layout. En móvil ambos paneles persisten superpuestos durante la transición; en web conservan sus columnas. */}
+        <motion.main {...(!pantallaAmplia&&vistaCompacta==='gestion'?{inert:''}:{})} aria-hidden={!pantallaAmplia&&vistaCompacta==='gestion'} style={{pointerEvents:pantallaAmplia||vistaCompacta!=='gestion'?'auto':'none'}} initial={false} animate={{opacity:pantallaAmplia||vistaCompacta!=='gestion'?1:0,x:reducido||pantallaAmplia||vistaCompacta!=='gestion'?0:-DESPLAZAMIENTO_PANEL}} transition={obtenerTransicionMovimiento(reducido)} className={`${showCreateModal ? 'hidden md:flex' : 'flex'} flex-1 flex-col min-w-0 min-h-0 bg-gray-50`}>
           <header className="shrink-0 bg-white border-b border-gray-200 flex items-center gap-1 px-2 py-1">
             <button type="button" onClick={() => navigate('/admin/inbox')} className="min-h-11 min-w-11 flex items-center justify-center text-gray-600" aria-label="Volver a conversaciones"><ArrowLeft size={22} /></button>
             <button type="button" onClick={() => setVistaCompacta('gestion')} className="flex items-center gap-2 min-h-11 min-w-0 flex-1 text-left" aria-label="Ver cliente, expediente y órdenes">
               <span className="rounded-full bg-slate-100 p-2 shrink-0"><UserRound size={20} /></span>
-              <span className="min-w-0"><span className="block font-semibold text-gray-900 truncate">{conversacionActual ? formatTelRD(conversacionActual.wa_id) : waId}</span><span className="block text-xs text-gray-500">Cliente y órdenes · {ventanaAbierta ? 'Disponible para responder' : 'Requiere plantilla'}</span></span>
+              <span className="min-w-0"><span className="block font-semibold text-gray-900 truncate">{(clienteFicha && clienteFicha.waId===waId?clienteFicha.cliente.nombre:'') || (waId && nombresClientes[waId]) || (conversacionActual ? formatTelRD(conversacionActual.wa_id) : waId)}</span><span className="block text-xs text-gray-500">{waId && (nombresClientes[waId] || clienteFicha?.waId===waId) && <span className="block">{formatTelRD(waId)}</span>}Cliente y órdenes · {ventanaAbierta ? 'Disponible para responder' : 'Requiere plantilla'}</span></span>
             </button>
             <button type="button" onClick={() => setAccionesAbiertas(v => !v)} aria-expanded={accionesAbiertas} aria-label="Acciones del chat" className="min-h-11 min-w-11 flex items-center justify-center"><MoreHorizontal size={22} /></button>
           </header>
@@ -753,7 +730,7 @@ export default function InboxConversacion() {
           {/* Timeline */}
           <div
             ref={timelineRef}
-            className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3 space-y-2"
+            className="flex-1 min-h-0 overflow-y-auto overscroll-contain ms-chat-fondo px-3 py-3 space-y-2"
           >
             {mensajeEnlace && !mensajes.some(m => m.wamid === mensajeEnlace.wamid) && <section className="border rounded-lg p-2"><p className="text-xs mb-2">Mensaje del expediente</p><MensajeBubble mensaje={mensajeEnlace} /></section>}
             {errorMensajes && <p role="alert" className="p-3 text-red-700">{errorMensajes}</p>}
@@ -875,7 +852,8 @@ export default function InboxConversacion() {
               </button>
             </div>
           </div>
-        </main>
+        </motion.main>
+        </div>
       </div>
 
       {/* SPRINT-INBOX-11 (2026-05-22): el `OrdenCreateModal` con

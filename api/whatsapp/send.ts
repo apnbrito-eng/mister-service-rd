@@ -1,3 +1,4 @@
+import { prepararPausaBot } from '../_lib/botServicioStore.js';
 import { exigirRutaChat } from '../_lib/rutaChatOrden.js';
 import { accesoOrdenTecnico } from '../_lib/accesoOrdenTecnico.js';
 /**
@@ -1165,6 +1166,8 @@ export default async function handler(
         yaExistente = true;
         return;
       }
+      const pausarBot = ['administrador', 'coordinadora', 'secretaria', 'operaria'].includes(rol) ? await prepararPausaBot(db, tx, wa_id, callerUid) : null;
+      pausarBot?.();
       const payload: Record<string, unknown> = {
         id: outboxRef.id,
         tempId,

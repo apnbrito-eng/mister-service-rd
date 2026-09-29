@@ -53,6 +53,8 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
     setOpen(false);
     if (n.conversacionId && /^\d{7,16}$/.test(n.conversacionId)) {
       try { const destino = await equipoApi<{ruta: string}>(`/api/crm/destino-aviso?id=${encodeURIComponent(n.id)}`); navigate(destino.ruta); } catch (e) { toast.error((e as Error).message); }
+    } else if (n.mantenimientoId && /^[\w-]{1,160}$/.test(n.mantenimientoId)) {
+      navigate(`/admin/mantenimiento?id=${encodeURIComponent(n.mantenimientoId)}`);
     } else if (n.ordenId) {
       navigate(`/admin/ordenes/${n.ordenId}`);
     }

@@ -801,3 +801,25 @@ Cuando el `archivist` (`.claude/agents/archivist.md`) genera un postmortem en `d
 - **Recurrencia de clase ya catalogada** → reporta al coordinator que el cazador X no cazó este caso. El coordinator delega al builder el refinamiento del cazador (ampliar regex, extender allowlist, crear cazador hermano, etc.).
 
 Ese loop cierra el ciclo: bugs en producción → postmortem → catálogo + cazador refinado → próximo bug del mismo vector cazado pre-commit. La **recurrence rate** (calculada por `npm run metricas`) mide la salud de ese ciclo: si sube, los cazadores están mal calibrados.
+
+
+## P-026 — Deduplicación pública en cliente con lectura denegada y escritura abierta
+
+- **Fecha:** 2026-09-28. **Antecedente:** `666cb14` protegió el tamaño básico del documento, pero mantuvo creación anónima; la deduplicación cliente seguía fallando por permisos.
+- **Síntoma:** un visitante podía enviar repetidamente solicitudes con el mismo teléfono; el control de 24 horas no tenía efecto y se podían crear documentos fuera del formulario.
+- **Causa:** `getDocs(citas_por_confirmar)` requiere staff; el catch continuaba con `addDoc`. Honeypot y validación UI no eran controles de servidor.
+- **Regla preventiva:** visitantes usan `/api/publico/cita`, App Check obligatorio, validación y transacción única de deduplicación/cuota/cita/notificaciones. Firestore solo permite create directo a staff para preservar Citas y garantías. Nunca continuar la escritura tras un error de deduplicación.
+- **Cazador:** `scripts/invariantes/check-citas-publicas-servidor.ts` (AST de escritores públicos y gate de reglas). **Allowlist:** vacía.
+- **Verificación:** pruebas servidor concurrentes, App Check, privacidad y rules; publicar frontend/API antes del cierre de reglas y pedir recarga a pestañas antiguas.
+
+
+**Extensión /f y archivos (2026-09-28):** la misma creación pública directa existía en `solicitudes_servicio` y Storage. `/api/publico/solicitud` valida la definición vigente y hace cuota+creación idempotente; las tres subidas públicas usan permisos cortos, tamaño/MIME firmado y precondición `x-goog-if-generation-match:0`. El cazador incluye estos consumidores y reglas dedicadas. Las escrituras de staff y los archivos existentes se conservan. Firma/CORS reales requieren prueba controlada antes de desplegar el cierre de Storage.
+
+## P-027 — Badge WhatsApp suma mensajes en vez de conversaciones
+
+- **Fecha:** 2026-09-28. **Hash original/fix:** pendiente del commit del coordinador; cambio local sin commit por instrucción.
+- **Síntoma:** dos mensajes de una persona mostraban2 avisos en el menú, mientras el filtro de bandeja mostraba1 conversación.
+- **Causa:** `suscribirContadorSinLeer` sumaba `c.noLeidos` en lugar de contar conversaciones cuyo valor es positivo.
+- **Prevención:** cada conversación sin leer aporta1. Conservar suscripciones/permisos; no presentar total de mensajes como cantidad de clientes.
+- **Cazador:** `scripts/invariantes/check-contador-chats.ts`, AST acotado al contador. **Allowlist:** vacía.
+- **Prueba:** `tests/integraciones/inbox-contador-menu.test.ts` cubre múltiples mensajes, varios chats y lectura en vivo.

@@ -85,7 +85,7 @@ export default function FacturaCrearModal({
   clientes,
   clientesSinTipoDefinido,
 }: FacturaCrearModalProps) {
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
   const puedeOverrideModalidad = esAdminOCoord(userProfile);
 
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
@@ -411,7 +411,7 @@ export default function FacturaCrearModal({
               modalidadOriginal: modalidadDefaultPorTipo,
               modalidadOverride: it.precioModalidad,
               clienteTipo: clienteTipoEnEmision,
-              solicitanteUid: userProfile?.id || null,
+              solicitanteUid: currentUser?.uid || null,
               solicitanteNombre: userProfile?.nombre || null,
               facturaNumero: numero,
               timestamp: serverTimestamp(),

@@ -353,7 +353,7 @@ export default function FormularioEditor() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
             <button
-              onClick={() => navigate('/admin/formularios')}
+              aria-label="Volver a formularios" onClick={() => navigate('/admin/formularios')}
               className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 shrink-0"
             >
               <ArrowLeft size={20} />
@@ -546,27 +546,27 @@ export default function FormularioEditor() {
                         </span>
                         <div className="flex items-center gap-1 shrink-0">
                           <button
-                            onClick={() => moveCampo(index, 'up')}
+                            aria-label="Subir campo" onClick={() => moveCampo(index, 'up')}
                             disabled={index === 0}
                             className="p-1 hover:bg-gray-200 rounded transition-colors disabled:opacity-30"
                           >
                             <ChevronUp size={14} className="text-gray-500" />
                           </button>
                           <button
-                            onClick={() => moveCampo(index, 'down')}
+                            aria-label="Bajar campo" onClick={() => moveCampo(index, 'down')}
                             disabled={index === camposPersonalizados.length - 1}
                             className="p-1 hover:bg-gray-200 rounded transition-colors disabled:opacity-30"
                           >
                             <ChevronDown size={14} className="text-gray-500" />
                           </button>
                           <button
-                            onClick={() => openEditCampo(campo)}
+                            aria-label="Editar campo" onClick={() => openEditCampo(campo)}
                             className="p-1 hover:bg-blue-100 rounded transition-colors"
                           >
                             <Edit size={14} className="text-primary-medium" />
                           </button>
                           <button
-                            onClick={() => setConfirmDelete(campo.id)}
+                            aria-label="Eliminar campo" onClick={() => setConfirmDelete(campo.id)}
                             className="p-1 hover:bg-red-100 rounded transition-colors"
                           >
                             <Trash2 size={14} className="text-red-500" />
@@ -699,6 +699,7 @@ export default function FormularioEditor() {
                       className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-medium/20 focus:border-primary-medium outline-none"
                     />
                     <button
+                      aria-label="Eliminar opción"
                       onClick={() => {
                         const updated = campoForm.opciones.filter((_, idx) => idx !== i);
                         setCampoForm({ ...campoForm, opciones: updated });

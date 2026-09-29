@@ -1,3 +1,4 @@
+import { obtenerWhatsAppPublico } from '../utils/whatsappPublico';
 import { useState, useEffect } from 'react';
 import {
   ConfigWeb,
@@ -254,7 +255,7 @@ export default function ConfiguracionWeb() {
 
   const guardarHero = async () => {
     // Validación: modo carrusel requiere mínimo 2 imágenes
-    const modo = config.hero.modo ?? 'fija';
+    const modo = config.hero.modo ?? 'escena';
     const imagenes = config.hero.imagenesCarrusel ?? [];
     if (modo === 'carrusel' && imagenes.length < 2) {
       toast.error('El modo carrusel requiere mínimo 2 imágenes');
@@ -384,13 +385,7 @@ export default function ConfiguracionWeb() {
 
   // ─── Wa.me preview ────────────────────────────────────
 
-  const getPreviewUrl = () => {
-    const activos = config.whatsapp.numeros.filter((n) => n.activo);
-    if (activos.length === 0) return '—';
-    const digits = activos[0].numero.replace(/\D/g, '');
-    const intl = digits.length === 10 ? `1${digits}` : digits;
-    return `https://wa.me/${intl}?text=${encodeURIComponent(config.whatsapp.mensajePredeterminado)}`;
-  };
+  const getPreviewUrl = () => obtenerWhatsAppPublico(config);
 
   // ─── Shared styles ────────────────────────────────────
 
@@ -435,6 +430,9 @@ export default function ConfiguracionWeb() {
           <h2 className="text-lg font-semibold text-gray-900">WhatsApp</h2>
         </div>
 
+        <p className="text-sm text-gray-600">La web pública y Agendar usan el número central +1 (849) 564-6767. Los números y la rotación siguientes se conservan para los canales internos que consumen esta configuración.</p>
+        <details>
+          <summary className="cursor-pointer py-3 text-sm font-medium">Configuración de otros canales</summary>
         {/* Numbers list */}
         <div className="space-y-3">
           {config.whatsapp.numeros.map((num, idx) => (
@@ -474,7 +472,7 @@ export default function ConfiguracionWeb() {
                 <span className="text-xs text-gray-500">Activo</span>
                 <button
                   type="button"
-                  onClick={() => updateNumero(idx, { activo: !num.activo })}
+                  aria-label="Número de WhatsApp activo" role="switch" aria-checked={num.activo} onClick={() => updateNumero(idx, { activo: !num.activo })}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
                     num.activo ? 'bg-green-500' : 'bg-gray-300'
                   }`}
@@ -516,7 +514,7 @@ export default function ConfiguracionWeb() {
           </label>
           <button
             type="button"
-            onClick={() => updateWhatsapp({ rotacion: !config.whatsapp.rotacion })}
+            aria-label="Rotación de números" role="switch" aria-checked={config.whatsapp.rotacion} onClick={() => updateWhatsapp({ rotacion: !config.whatsapp.rotacion })}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
               config.whatsapp.rotacion ? 'bg-green-500' : 'bg-gray-300'
             }`}
@@ -529,6 +527,7 @@ export default function ConfiguracionWeb() {
           </button>
         </div>
 
+        </details>
         {/* Mensaje predeterminado */}
         <div>
           <label className={labelClass}>Mensaje predeterminado</label>
@@ -621,9 +620,10 @@ export default function ConfiguracionWeb() {
               [
                 { value: 'fija' as const, label: 'Imagen fija' },
                 { value: 'carrusel' as const, label: 'Carrusel rotativo' },
+                { value: 'escena' as const, label: 'Equipos y servicio' },
               ] as const
             ).map(({ value, label }) => {
-              const activo = (config.hero.modo ?? 'fija') === value;
+              const activo = (config.hero.modo ?? 'escena') === value;
               return (
                 <button
                   key={value}
@@ -646,7 +646,7 @@ export default function ConfiguracionWeb() {
         </div>
 
         {/* ── Modo: imagen fija ── */}
-        {(config.hero.modo ?? 'fija') === 'fija' && (
+        {(config.hero.modo ?? 'escena') === 'fija' && (
           <div>
             <label className={labelClass}>Imagen fija del hero</label>
             <div className="flex items-center gap-4">
@@ -686,8 +686,9 @@ export default function ConfiguracionWeb() {
           </div>
         )}
 
+        {config.hero.modo === 'escena' && <p className="text-sm text-gray-600">Equipos y servicio muestra el título «Reparación y mantenimiento de electrodomésticos». El subtítulo, distintivo y estadísticas usan los valores configurados. Los títulos de imagen fija y carrusel se conservan para esos modos.</p>}
         {/* ── Modo: carrusel ── */}
-        {(config.hero.modo ?? 'fija') === 'carrusel' && (
+        {(config.hero.modo ?? 'escena') === 'carrusel' && (
           <div className="space-y-4">
             <div>
               <label className={labelClass}>
@@ -797,7 +798,7 @@ export default function ConfiguracionWeb() {
                 Pausar cuando el cursor está encima
               </label>
               <button
-                type="button"
+                type="button" aria-label="Pausar al pasar el cursor" role="switch" aria-checked={config.hero.pausarEnHover ?? true}
                 onClick={() =>
                   updateHero({
                     pausarEnHover: !(config.hero.pausarEnHover ?? true),
@@ -1207,7 +1208,7 @@ export default function ConfiguracionWeb() {
             Habilitar feedback en /tracking
           </label>
           <button
-            type="button"
+            type="button" aria-label="Habilitar feedback" role="switch" aria-checked={config.feedbackNPS?.habilitado ?? true}
             onClick={() =>
               updateFeedback({ habilitado: !(config.feedbackNPS?.habilitado ?? true) })
             }

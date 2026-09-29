@@ -17,6 +17,14 @@
     {
       "path": "/api/movil/avisos",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/whatsapp/bot-worker",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/mantenimiento/avisos",
+      "schedule": "0 * * * *"
     }
   ]
 }

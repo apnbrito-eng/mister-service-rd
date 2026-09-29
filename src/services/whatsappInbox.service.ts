@@ -1,3 +1,4 @@
+import { equipoApi } from './equipoApi';
 import {
   collection,
   doc,
@@ -154,9 +155,10 @@ function parsearMensajeOutbox(
  * (más recientes primero). Devuelve `Unsubscribe` para que el caller
  * limpie en su useEffect cleanup.
  *
- * Ordenamiento: client-side post-snapshot por `ultimaActividad`
- * (o `updatedAt` fallback), porque la consulta sin where no requiere
- * índice compuesto (solo staff oficina lee — rule la gatea por rol).
+ * Sin máximo: ordenamiento client-side por ultimaActividad (fallback updatedAt).
+ * Con máximo: Firestore selecciona primero los recientes por ultimaActividad.
+ * Los escritores actuales webhook.ts y send.ts persisten ese campo; documentos
+ * históricos sin él no entran en la consulta limitada (sin auditoría histórica aquí).
  *
  * @safe-listener-sin-where: la rule `whatsapp_conversaciones` (line 730)
  *   permite read a `esStaffOficina()`. La query devuelve TODA la colección,
@@ -169,6 +171,7 @@ export function suscribirConversaciones(
   maximo?: number,
 ): Unsubscribe {
   const colRef = collection(db, COLLECTION_CONVERSACIONES);
+  // @safe-orderby: COLLECTION_CONVERSACIONES = whatsapp_conversaciones; webhook.ts:266 y send.ts:1330 persisten ultimaActividad al escribir actividad. No certifica documentos históricos; sin máximo conserva fallback local.
   return onSnapshot(maximo ? query(colRef, orderBy("ultimaActividad", "desc"), limit(maximo)) : colRef, (snap) => {
     const items: WhatsAppConversacion[] = snap.docs.map((d) =>
       parsearConversacion(d.id, d.data()),
@@ -241,12 +244,14 @@ export function suscribirMensajes(
   const qInbox = query(
     collection(db, COLLECTION_MENSAJES_INBOX),
     where('wa_id', '==', wa_id),
+    // @safe-orderby: COLLECTION_MENSAJES_INBOX = whatsapp_mensajes_inbox; webhook.ts:237 persiste timestampMeta en el alta. Índice wa_id+timestampMeta en firestore.indexes.json; no auditoría de históricos.
     orderBy('timestampMeta', 'desc'),
     limit(maximo),
   );
   const qOutbox = query(
     collection(db, COLLECTION_MENSAJES_OUTBOX),
     where('wa_id', '==', wa_id),
+    // @safe-orderby: COLLECTION_MENSAJES_OUTBOX = whatsapp_mensajes_outbox; send.ts:1185 persiste createdAt al crear mensaje. Índice wa_id+createdAt en firestore.indexes.json; no auditoría de históricos.
     orderBy('createdAt', 'desc'),
     limit(maximo),
   );
@@ -301,30 +306,9 @@ export async function toggleBot(
   habilitado: boolean,
   actorUid: string,
 ): Promise<void> {
-  const ref = doc(db, COLLECTION_CONVERSACIONES, wa_id);
-  // Update parcial dot-path: solo bot.habilitado. Los otros campos del
-  // sub-objeto bot (contexto, turnosCount) quedan intactos por Firestore.
-  await updateDoc(ref, { 'bot.habilitado': habilitado });
-
-  // Audit log (no bloquea si falla).
-  try {
-    await addDoc(collection(db, 'auditoria_admin'), {
-      accion: habilitado ? 'wa_bot_activar' : 'wa_bot_pausar',
-      solicitanteUid: actorUid,
-      objetivoTipo: 'whatsapp_conversacion',
-      objetivoId: wa_id,
-      // Truncamos el wa_id en el log (PII) — coincide con el patrón del
-      // backend (truncarWaIdParaLog).
-      objetivoWaIdTruncado: wa_id.length >= 4 ? `***${wa_id.slice(-4)}` : '***',
-      timestamp: Timestamp.now(),
-    });
-  } catch (err) {
-     
-    console.warn(
-      '[whatsappInbox] audit toggleBot falló (no bloquea):',
-      err,
-    );
-  }
+  // El servidor atribuye actor y pausa/reanuda sesión de forma atómica.
+  void actorUid;
+  await equipoApi('/api/whatsapp/bot-sesion', { waId: wa_id, habilitado, requestId: crypto.randomUUID() });
 }
 
 /**
@@ -383,12 +367,12 @@ export async function actualizarEtiquetas(
 }
 
 /**
- * Suma el contador de `noLeidos` de todas las conversaciones (badge
- * sidebar). Devuelve la función de unsubscribe.
+ * Cuenta conversaciones con mensajes sin leer (badge sidebar), no mensajes.
+ * Conserva la suscripción y sus permisos. Devuelve la función de unsubscribe.
  */
 export function suscribirContadorSinLeer(callback: (total: number) => void): Unsubscribe {
   return suscribirConversaciones((convs) => {
-    const total = convs.reduce((acc, c) => acc + (c.noLeidos || 0), 0);
+    const total = convs.filter(c => c.noLeidos > 0).length;
     callback(total);
   });
 }

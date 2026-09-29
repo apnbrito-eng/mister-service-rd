@@ -1,5 +1,9 @@
+import { useMovimientoReducido } from '../hooks/useMovimientoReducido';
+import { motion } from 'motion/react';
+import { obtenerTransicionMovimiento, DESPLAZAMIENTO_PANEL } from '../utils/motion';
+import BotonAsistenteMovil from './BotonAsistenteMovil';
 import { TextoAsistente } from './TextoAsistente';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Sparkles, X, Minus, Send } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { iaHabilitadaDefaultPorRol } from '../utils/permisos';
@@ -24,7 +28,8 @@ export default function AsistenteIAFlotante() {
   const { mensajes, enviar, pensando, error, tokensSesion } = useAsistenteIAChat();
 
   const [abierto, setAbierto] = useState(false);
-  const [montado, setMontado] = useState(false); // para animación de entrada
+  const reducido = useMovimientoReducido();
+  const panelRef = useCallback((panel: HTMLDivElement | null) => { panel?.toggleAttribute('inert', !abierto); }, [abierto]);
   const [input, setInput] = useState('');
   const [hayNoLeido, setHayNoLeido] = useState(false);
 
@@ -58,17 +63,6 @@ export default function AsistenteIAFlotante() {
       }
     }
   }, [mensajes]);
-
-  // Animación de entrada del panel: dejar que el DOM pinte el estado inicial
-  // antes de aplicar las clases "abiertas" para que la transición se vea.
-  useEffect(() => {
-    if (abierto) {
-      const t = window.setTimeout(() => setMontado(true), 20);
-      return () => window.clearTimeout(t);
-    }
-    setMontado(false);
-    return undefined;
-  }, [abierto]);
 
   // Auto-resize del textarea hasta ~4 líneas
   useEffect(() => {
@@ -116,38 +110,17 @@ export default function AsistenteIAFlotante() {
     }
   };
 
-  // ----- Estado COLAPSADO (botón flotante) -----
-  if (!abierto) {
-    return (
-      <button
-        type="button"
-        onClick={abrirPanel}
-        title="Asistente IA"
-        aria-label="Abrir Asistente IA"
-        // @safe-gradient: botón flotante Asistente IA — identidad visual del producto IA
-        className="service-assistant-launcher fixed bottom-6 right-6 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-primary to-primary-medium text-white shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 flex items-center justify-center"
-      >
-        <Sparkles className="w-6 h-6 text-white" />
-        {hayNoLeido && (
-          <span
-            aria-hidden="true"
-            className="absolute top-1 right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"
-          />
-        )}
-      </button>
-    );
-  }
-
-  // ----- Estado EXPANDIDO (panel de chat) -----
-  // Mobile por defecto: fullscreen. sm: desktop floating panel.
-  return (
-    <div
+  return <>
+    {!abierto && <BotonAsistenteMovil onAbrir={abrirPanel} hayNoLeido={hayNoLeido} />}
+    <motion.div ref={panelRef} aria-hidden={!abierto}
+      initial={false}
+      animate={{ opacity: abierto ? 1 : 0, y: reducido || abierto ? 0 : DESPLAZAMIENTO_PANEL }}
+      transition={obtenerTransicionMovimiento(reducido)}
+      style={{ pointerEvents: abierto ? 'auto' : 'none', transition: 'none' }}
       className={[
         'fixed z-40 bg-white flex flex-col overflow-hidden',
         'ia-panel-movil inset-0 w-full h-[100dvh] rounded-none',
         'sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[400px] sm:h-[600px] sm:max-h-[80vh] sm:rounded-2xl sm:shadow-2xl sm:border sm:border-primary/20',
-        'transition-all duration-200 ease-out',
-        montado ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4',
       ].join(' ')}
     >
       {/* Header */}
@@ -215,16 +188,13 @@ export default function AsistenteIAFlotante() {
           <div className="flex justify-start">
             <div className="bg-gray-100 text-gray-500 rounded-2xl px-4 py-2 text-sm flex items-center gap-1">
               <span
-                className="inline-block w-2 h-2 bg-gray-400 rounded-full animate-pulse"
-                style={{ animationDelay: '0ms' }}
+                className="inline-block w-2 h-2 bg-gray-400 rounded-full"
               />
               <span
-                className="inline-block w-2 h-2 bg-gray-400 rounded-full animate-pulse"
-                style={{ animationDelay: '150ms' }}
+                className="inline-block w-2 h-2 bg-gray-400 rounded-full"
               />
               <span
-                className="inline-block w-2 h-2 bg-gray-400 rounded-full animate-pulse"
-                style={{ animationDelay: '300ms' }}
+                className="inline-block w-2 h-2 bg-gray-400 rounded-full"
               />
             </div>
           </div>
@@ -258,6 +228,6 @@ export default function AsistenteIAFlotante() {
           Tokens: {tokensSesion.input} in / {tokensSesion.output} out · ${tokensSesion.costoUSD.toFixed(4)}
         </div>
       </div>
-    </div>
-  );
+    </motion.div>
+  </>;
 }

@@ -1,12 +1,12 @@
+import { obtenerAppCheckToken } from '../lib/appCheck';
 import {
-  collection, addDoc, updateDoc, deleteDoc, getDoc, getDocs, doc,
+  collection, updateDoc, deleteDoc, getDoc, getDocs, doc,
   query, where, serverTimestamp, onSnapshot, Timestamp, runTransaction,
 } from 'firebase/firestore';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase/config';
+import { db } from '../firebase/config';
 import { SolicitudServicio, EstadoSolicitud } from '../types/formularios';
 import { siguienteNumeroOrden } from './contadores.service';
-import { validarDocumento } from '../utils/uploads';
+import { subirArchivoPublicoSeguro } from './subidasPublicas.service';
 
 const COL = 'solicitudes_servicio';
 
@@ -31,18 +31,18 @@ function parseSolicitud(id: string, data: Record<string, unknown>): SolicitudSer
 }
 
 export async function crearSolicitud(
-  data: Omit<SolicitudServicio, 'id' | 'createdAt' | 'updatedAt'>
+  data: Omit<SolicitudServicio, 'id' | 'createdAt' | 'updatedAt'>,
+  requestId: string
 ): Promise<string> {
-  // Firestore no acepta valores undefined — limpiarlos antes de guardar
-  const cleanData = Object.fromEntries(
-    Object.entries(data).filter(([, v]) => v !== undefined)
-  );
-  const ref = await addDoc(collection(db, COL), {
-    ...cleanData,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+  const token = await obtenerAppCheckToken();
+  if (!token) throw new Error('No pudimos verificar la solicitud. Recarga la página e inténtalo de nuevo.');
+  const respuesta = await fetch('/api/publico/solicitud', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Firebase-AppCheck': token },
+    body: JSON.stringify({ formularioId: data.formularioId, datos: data.datos, archivos: data.archivos, requestId }),
   });
-  return ref.id;
+  const resultado = await respuesta.json() as { ok?: boolean; referencia?: string; error?: string };
+  if (!respuesta.ok || !resultado.ok || !resultado.referencia) throw new Error(resultado.error || 'No pudimos registrar la solicitud.');
+  return resultado.referencia;
 }
 
 export async function obtenerSolicitud(id: string): Promise<SolicitudServicio | null> {
@@ -121,29 +121,8 @@ export async function convertirAOrden(
   });
 }
 
-export async function subirArchivoSolicitud(
-  file: File,
-  solicitudId: string,
-  campoId: string
-): Promise<string> {
-  // SPRINT-137 (2026-05-11): validar tamaño + MIME antes de subir.
-  // Defense in depth — Storage Rules es la segunda capa (SPRINT-138 pendiente).
-  const validacion = validarDocumento(file);
-  if (!validacion.ok) {
-    throw new Error(validacion.error);
-  }
-
-  const timestamp = Date.now();
-  const ext = file.name.split('.').pop() || 'bin';
-  // SPRINT-FIX-LEADS-FORMULARIO-PUBLICO (2026-05-25): path movido a
-  // `solicitudes-publico/...` para que la rule pública dedicada (storage.rules)
-  // permita el upload sin auth. Antes caía al comodín `{allPaths=**}` que
-  // exige `request.auth != null` y el formulario público es sin login →
-  // todo formulario con foto/firma/archivo perdía el lead silenciosamente.
-  const path = `solicitudes-publico/${solicitudId}/${campoId}/${timestamp}.${ext}`;
-  const ref = storageRef(storage, path);
-  await uploadBytes(ref, file);
-  return await getDownloadURL(ref);
+export async function subirArchivoSolicitud(file: Blob, formularioId: string, campoId: string): Promise<string> {
+  return subirArchivoPublicoSeguro(file, 'solicitud', { formularioId, campoId });
 }
 
 export async function eliminarSolicitud(id: string): Promise<void> {

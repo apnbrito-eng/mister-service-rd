@@ -91,7 +91,7 @@ export default function WebcamCapture({ onFoto, onCancelar }: Props) {
             <Camera size={18} />
             <h2 className="font-semibold">Toma tu selfie</h2>
           </div>
-          <button onClick={onCancelar} className="p-1 hover:bg-white/10 rounded">
+          <button aria-label="Cerrar cámara" onClick={onCancelar} className="min-h-12 min-w-12 p-1 hover:bg-white/10 rounded">
             <X size={20} />
           </button>
         </div>

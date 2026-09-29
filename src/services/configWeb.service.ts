@@ -33,7 +33,7 @@ export interface ConfigHero {
   imagenUrl: string;
   badge: string;
   /** Modo de visualización del hero. Default `'fija'` para compat. */
-  modo?: 'fija' | 'carrusel';
+  modo?: 'fija' | 'carrusel' | 'escena';
   /** URL única usada cuando `modo === 'fija'`. */
   imagenFija?: string;
   /**
@@ -228,7 +228,7 @@ export const CONFIG_WEB_DEFAULTS: ConfigWeb = {
     subtitulo: 'Técnicos profesionales a domicilio en Santo Domingo y todo el país. Diagnóstico honesto, precios justos, seguimiento en tiempo real.',
     imagenUrl: '',
     badge: 'Servicio técnico certificado en RD',
-    modo: 'fija',
+    modo: 'escena',
     imagenFija: '',
     imagenesCarrusel: [],
     intervaloCarrusel: 3,
@@ -559,7 +559,7 @@ function parseModelosPorTipoEquipo(
  * persiste cuando el admin guarda con el editor nuevo.
  *
  * Defensas:
- * - `modo` solo acepta `'carrusel'` o (default) `'fija'`.
+ * - `modo` conserva fija/carrusel y usa escena para documentos sin modo.
  * - `imagenesCarrusel` se filtra a strings no vacíos.
  * - `intervaloCarrusel` se clampa al rango [2, 10] (default 3 si fuera de rango / NaN).
  * - `pausarEnHover` default `true`.
@@ -583,7 +583,7 @@ export function parseConfigHero(raw: unknown): ConfigHero {
   const imagenFija =
     typeof h.imagenFija === 'string' ? h.imagenFija : imagenUrl;
 
-  const modo: 'fija' | 'carrusel' = h.modo === 'carrusel' ? 'carrusel' : 'fija';
+  const modo: NonNullable<ConfigHero['modo']> = h.modo === 'carrusel' ? 'carrusel' : h.modo === 'fija' ? 'fija' : h.modo === 'escena' ? 'escena' : imagenFija ? 'fija' : 'escena';
 
   const imagenesCarrusel = Array.isArray(h.imagenesCarrusel)
     ? (h.imagenesCarrusel as unknown[]).filter(

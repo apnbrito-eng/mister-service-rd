@@ -37,7 +37,8 @@
  *
  * 1. Leer `src/types/index.ts` y extraer la unión `TipoNotificacion = | 'a' | 'b' | ...`.
  * 2. Buscar en `src/**` y `api/**` todas las apariciones de `crearNotificacion({...})`
- *    y extraer el valor literal de la prop `tipo:` cuando es string literal.
+ *    y extraer con AST los valores literales de `tipo:`, incluyendo ambas ramas
+ *    de expresiones ternarias (sin contar strings de la condición).
  *    También captura usos transitivos: `crearNotificacion({ tipo, ... })` con
  *    `tipo` como variable se omite del análisis (el cazador no resuelve el
  *    flujo de la variable — esos casos quedan como "potencialmente cubiertos"
@@ -59,6 +60,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import * as ts from 'typescript';
 import { InvariantResult, InvariantHit } from './types.js';
 
 const PATTERN_ID = 'P-010';
@@ -138,7 +140,8 @@ async function walk(rel: string, exts: string[]): Promise<string[]> {
 
 /**
  * Busca tipos emitidos en un archivo:
- *   - dentro de bloques `crearNotificacion({...})`: extrae `tipo: '<v>'` literal.
+ *   - dentro de bloques `crearNotificacion({...})`: extrae literales de tipo
+ *     directo o condicional; ignora comentarios y condiciones del ternario.
  *   - en archivos que escriben directo a la colección `notificaciones` (api
  *     serverless con Admin SDK, ej: `db.collection('notificaciones').add(...)`):
  *     extrae cualquier `tipo: '<v>'` literal del archivo. Heurística — los
@@ -146,45 +149,37 @@ async function walk(rel: string, exts: string[]): Promise<string[]> {
  *     bloque, y el costo de falso positivo es bajo (un tipo extra cuenta como
  *     "cubierto" pero el cazador igual sirve para detectar tipos huérfanos).
  */
-function extraerTiposEmitidos(src: string, filePath: string): Set<string> {
+export function extraerTiposEmitidos(src: string, filePath: string): Set<string> {
   const out = new Set<string>();
-
-  // Pasada 1: bloques crearNotificacion({...})
-  const re = /crearNotificacion\s*\(/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(src)) !== null) {
-    const start = m.index + m[0].length;
-    let depth = 1;
-    let i = start;
-    while (i < src.length && depth > 0) {
-      const ch = src[i];
-      if (ch === '(') depth++;
-      else if (ch === ')') depth--;
-      i++;
-      if (depth === 0) break;
+  if (!/\btipo\s*:/.test(src)) return out;
+  const referenciaColeccion = /collection\(\s*['"]notificaciones['"]\s*\)/;
+  // Conserva el alcance Admin SDK anterior; el AST evita comentarios y distingue
+  // las ramas resultantes del ternario de los strings usados en su condición.
+  const emisionAdmin = referenciaColeccion.test(src) || filePath.startsWith('api/');
+  const archivo = ts.createSourceFile(filePath, src, ts.ScriptTarget.Latest, true,
+    filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  function extraerValor(valor: ts.Expression): void {
+    if (ts.isStringLiteral(valor) || ts.isNoSubstitutionTemplateLiteral(valor)) {
+      out.add(valor.text);
+    } else if (ts.isConditionalExpression(valor)) {
+      extraerValor(valor.whenTrue);
+      extraerValor(valor.whenFalse);
+    } else if (ts.isParenthesizedExpression(valor) || ts.isAsExpression(valor) || ts.isSatisfiesExpression(valor) || ts.isTypeAssertionExpression(valor)) {
+      extraerValor(valor.expression);
     }
-    const block = src.slice(start, i - 1);
-    const tipoRe = /\btipo\s*:\s*['"]([a-zA-Z0-9_-]+)['"]/g;
-    let t: RegExpExecArray | null;
-    while ((t = tipoRe.exec(block)) !== null) {
-      out.add(t[1]);
-    }
+    // Variables y llamadas dinámicas siguen sin atribuirse a un tipo literal.
   }
-
-  // Pasada 2: archivos en `api/` (o cualquier archivo) que escriben directo a
-  // la colección `notificaciones` con Admin SDK. Si el archivo referencia
-  // `'notificaciones'` como string literal cerca de `.add(` o `.collection(`,
-  // tomamos todos los `tipo: '<v>'` del archivo como "emitidos".
-  const referenciaColeccion =
-    /collection\(\s*['"]notificaciones['"]\s*\)|\.collection\(\s*['"]notificaciones['"]\s*\)/;
-  if (referenciaColeccion.test(src) || filePath.startsWith('api/')) {
-    const tipoRe2 = /\btipo\s*:\s*['"]([a-zA-Z0-9_-]+)['"]/g;
-    let t2: RegExpExecArray | null;
-    while ((t2 = tipoRe2.exec(src)) !== null) {
-      out.add(t2[1]);
+  function recorrer(nodo: ts.Node, dentroEmision = false): void {
+    const llamadaEmisora = ts.isCallExpression(nodo)
+      && ts.isIdentifier(nodo.expression) && nodo.expression.text === 'crearNotificacion';
+    const emite = dentroEmision || llamadaEmisora;
+    if ((emisionAdmin || emite) && ts.isPropertyAssignment(nodo)
+      && (ts.isIdentifier(nodo.name) || ts.isStringLiteral(nodo.name)) && nodo.name.text === 'tipo') {
+      extraerValor(nodo.initializer);
     }
+    ts.forEachChild(nodo, hijo => recorrer(hijo, emite));
   }
-
+  recorrer(archivo);
   return out;
 }
 
