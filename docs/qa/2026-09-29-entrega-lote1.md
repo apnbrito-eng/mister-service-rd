@@ -16,7 +16,7 @@ Clientes/Inbox ya tenían cambios locales anteriores: alta independiente, dos ca
 - Suite final:104 archivos,474 pruebas de integración aprobadas.
 - Finanzas dirigidas:14 pruebas aprobadas; emulador Firestore3/3 con reglas reales, incluyendo admin/coordinadora concurrentes y rechazo de técnico.
 - Revisión independiente:GO tras corregir compatibilidad de comisiones antiguas sin estado, préstamos sin historial aún íntegros y recuperación con saldo inconsistente.46 pruebas focales aprobadas y lint limpio.
-- Compilación web y tipos web/API aprobados; advertencia conocida por chunks grandes.
+- Compilación web, compilación móvil con configuración de producción explícita y tipos web/API aprobados; advertencia conocida por chunks grandes. No se generó ni instaló APK. El primer intento móvil sin variables se detuvo correctamente; la compilación posterior pasó con App Check debug desactivado.
 - Nuevos cazadores P028–P031 aprobados. La suite de regresión conserva dos bloqueos previos P005/P013 por reglas Firestore/Storage pendientes de despliegue; no se alteraron locks ni desactivaron controles.
 - QA navegador375×812: IA abre/cierra con X, flecha, minimizar y Escape; borrador preservado y foco vuelve al botón. Clientes vuelve a lista y WhatsApp empresa llega al cliente elegido.
 - QA escritorio1440×900: controles44px y hit-test sobre selector inferior devuelve backdrop, evitando pulsaciones al módulo detrás.
@@ -25,7 +25,7 @@ Clientes/Inbox ya tenían cambios locales anteriores: alta independiente, dos ca
 ## Guardado y publicación
 Respaldo previo de465 archivos, parche y manifiesto en ~/.codex/artifacts/mister-service/2026-09-29/lote1-resguardo/. Referencia Git local codex/resguardo-pre-lote1-20260929, commit5968915c94a435f31665efdb8b6051a9e82c1b52. Este respaldo incluye trabajo anterior, no atribuye todos esos cambios al lote.
 
-Se conservará además una referencia local separada del lote, con inventario exacto en el manifiesto de entrega. Es un checkpoint para revisión; no es una publicación aprobada ni certificación de todos los cambios anteriores. La rama activa y su índice se mantienen. No push, despliegue, envíos WhatsApp, cobros ni descuentos reales.
+Guardada referencia local codex/lote1-20260929, checkpoint inicial b8f16d3bff6f4a171bef2f7ff8580e32b0fbd0c3, con inventario exacto en entrega-git.json. Las revisiones documentales posteriores quedan sobre esa misma referencia. Es un checkpoint para revisión; no es una publicación aprobada ni certificación de todos los cambios anteriores. La rama activa y su índice se mantienen. No push, despliegue, envíos WhatsApp, cobros ni descuentos reales.
 
 ## Próximos pasos del plan
 1. Prueba Samsung con paquete y servidor compatibles. El checkout nativo actual conserva identidad de ensayo com.misterservicerd.tecnicos, distinta de la app instalada anteriormente com.misterservicerd.app; no generar un reemplazo engañoso ni sobrescribir configuración.
