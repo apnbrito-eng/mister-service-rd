@@ -699,16 +699,16 @@ Casos legítimos comunes (todos requieren tag): fallback de display cuando `orde
 
 ---
 
-## P-023 — Gate del conduce (ProcesarFacturacionModal) bloquea emisión con pago `verificado===false`
+## P-023 — Gate del conduce (ProcesarFacturacionModal) bloquea emisión con pago `verificado!==true`
 
 **Bug original (anticipado):** SPRINT-AGENTES-1-AUDITORIA-CONTABLE (2026-05-24). Cazador preventivo blindado sobre el control de separación de funciones que SPRINT-PAGOS-CONFIRMA-MARIA fase A introdujo en `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx::handleGenerar` (~L398).
 
 **Síntoma de una regresión:** una operaria registra un pago (queda `verificado=false`), abre el modal "Emitir conduce" y el sistema le permite generar el conduce sin que María/admin haya confirmado el pago. Se rompe el control de dinero que Jorge le dio a María como responsabilidad explícita.
 
-**Causa raíz prevenida:** un refactor futuro del modal de facturación puede eliminar o desconectar el filtro `pagosPrevios.filter(p => p.verificado === false)` + el `toast.error('...sin confirmar...')` + el `return` early. Razones posibles: "limpieza" sin entender qué hace el código, merge mal resuelto, simplificación de spec, error tipo `if (false)`. Sin el cazador, el bug sólo se detecta cuando un cliente externo cobra mal o María descubre que las operarias están saltándose su validación.
+**Causa raíz prevenida:** un refactor futuro del modal de facturación puede eliminar o desconectar el filtro `pagosPrevios.filter(p => p.verificado !== true)` + el `toast.error('...sin confirmar...')` + el `return` early. Razones posibles: "limpieza" sin entender qué hace el código, merge mal resuelto, simplificación de spec, error tipo `if (false)`. Sin el cazador, el bug sólo se detecta cuando un cliente externo cobra mal o María descubre que las operarias están saltándose su validación.
 
 **Regla:** el archivo `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx` DEBE contener TODAS estas señales presentes y cerca entre sí (≤50 líneas):
-1. `.verificado === false` o `.verificado===false` (el filtro).
+1. `.verificado !== true` o `.verificado!==true` (el filtro).
 2. `pagosSinVerificar` (variable que materializa el filtro).
 3. `toast.error(...sin confirmar...)` (feedback al usuario que explica el bloqueo).
 
@@ -717,6 +717,8 @@ Casos legítimos comunes (todos requieren tag): fallback de display cuando `orde
 **Allowlist:** vacía por diseño. Si alguien necesita modificar el gate, el sprint requiere OK explícito de Jorge (sub-regla CLAUDE.md "Mutaciones cross-collection sobre dinero").
 
 ---
+
+**Ampliación 2026-09-29 (B2, revisión final local):** pagos legacy sin `verificado` eran invisibles en bandeja pero bloqueaban el conduce transaccional. Ambos lectores exigen confirmación explícita; ID/fecha inválidos requieren reparación auditada antes de verificar. El cazador cubre también `pagosConciliacion.ts`. Hash introductorio no determinado; hallazgo local registrado en `docs/qa/2026-09-29-review-final-claude.md`. No modifica datos históricos automáticamente.
 
 ## P-024 — Garantía aplica anulación completa de comisión (patrón viejo) en lugar del 10% de piezas
 
@@ -848,6 +850,8 @@ Ese loop cierra el ciclo: bugs en producción → postmortem → catálogo + caz
 - **Regla:** transacción única de comisiones, avances, cuotas y cierre; ningún error de esos movimientos puede quedar silenciado. Validar referencias, saldos e idempotencia antes de escribir.
 - **Cazador:** `scripts/invariantes/check-nomina-cierre-atomico.ts`. **Allowlist:** vacía. Complementar con pruebas concurrentes y de aborto transaccional.
 
+**Ampliación 2026-09-29:** documentos de comisión legacy distintos podían liquidarse dos veces para una misma orden/persona. Cierre descubre y relee duplicados; bloquea sólo al afectado y conserva IDs para conciliación. Generación y actualización excluyen esos importes. Manuales por ítems quedan separados. Hash introductorio no determinado; hallazgo B4 del informe revisión final local. Cazador P030 exige detector en cierre; inserciones legacy posteriores a consulta siguen como límite documentado.
+
 ## P-031 — Pérdidas truncadas en resultados
 
 - **Fecha:** 2026-09-29. **Hash original/fix:** pendiente del commit del coordinador; no se inventa hash.
@@ -873,3 +877,95 @@ Ese loop cierra el ciclo: bugs en producción → postmortem → catálogo + caz
 - **Causa:** efecto de montaje con mutación y parsers de presentación no adecuados para fechas financieras.
 - **Regla:** historial sólo lectura sobre pagos[] crudos, fechas ausentes como incidencias, sin subcolección espejo ni migración al abrir. Duplicados por ordenId+pagoId excluidos, nunca por monto/fecha.
 - **Cazador:** `scripts/invariantes/check-bancos-cobros-crudos.ts`; pruebas `tests/integraciones/movimientos-cobros.test.ts`. **Allowlist:** vacía.
+
+## P-035 — Cobros documentales y cierre parcial de caja
+- Fecha: 2026-09-29.
+- Hash original/fix: pendiente del checkpoint del coordinador; builder no ejecuta Git.
+- Síntoma: total de conduce contado como cobrado, abonos en mes equivocado; entrega de efectivo mostraba éxito aunque fallaran órdenes.
+- Causa: sumar estado documental y precio del trabajo, parsear fechas con fallback, Promise.all con catch individual y cierre addDoc sin identidad diaria.
+- Prevención: proyección RAW de pagos con ID/fecha/monto/método/verificación válidos; entrega por pagoId en una transacción, cierre determinista por día, legacy duplicado bloquea conciliación.
+- Cazador: `scripts/invariantes/check-caja-cobros.ts`.
+- Allowlist inicial: vacía.
+
+## P-034 — Comisiones tardías sin vía de liquidación
+
+- **Fecha:** 2026-09-29. **Hash original/fix:** pendiente de identificar/guardar por el coordinador; no atribuir un hash sin evidencia.
+- **Síntoma:** comisión creada después del borrador no aparece; si pertenece a una quincena anterior tampoco entra en la siguiente.
+- **Causa:** snapshot único y filtro inferior por inicio del período; generación mediante identificador aleatorio permite duplicados concurrentes.
+- **Prevención:** actualización explícita de comisiones en empleados abiertos impagos, incluir pendientes anteriores conservando fecha real y origen/destino; crear nómina canónica transaccional. Releer referencias al cerrar y verificar liquidación/propietario. Una consulta previa no impide nuevas inserciones: recuperar tardías en actualización o futura nómina.
+- **Cazador:** `scripts/invariantes/check-nomina-comisiones-tardias.ts`. **Allowlist inicial:** vacía. Pruebas funcionales/emulador complementan lo que el cazador estático no demuestra.
+
+## P-036 — Piezas/taller duplicados y llegada sin aviso atómico
+
+- Fecha: 2026-09-29. Antecedente de atomicidad: dc72250; hash de este fix pendiente del coordinador.
+- Síntoma: repetir standby genera solicitudes; llegada podía guardarse y fallar el aviso, dejando coordinación sin seguimiento.
+- Causa: ID aleatorio en cada transición y update de llegada separado de notificación.
+- Prevención: ID estable del equipo; leer y cambiar llegada/avisos dentro de una transacción idempotente; destinatario auth UID verificado; nunca reactivar automáticamente.
+- Cazador: `scripts/invariantes/check-piezas-taller.ts`.
+- Allowlist inicial: vacía.
+
+## P-037 — Métricas atribuidas por nombre, fecha inventada o estado documental
+
+- **Fecha:** 2026-09-29. Base del bug auditada: `80f704d3833ddb9e37f0e2cc31d41cb8ac75dfa4`.
+- **Síntoma:** homónimos mezclados, cobros de otros períodos y comisiones sin fecha contadas en el mes actual; ediciones de órdenes trasladaban su cierre.
+- **Causa:** matching de nombres, fallback de fecha a hoy, updatedAt como cierre y factura pagada como movimiento de caja.
+- **Regla:** IDs/UID únicos, RAW pagos confirmados con fecha real, historial de cierre validado; anomalías sin atribución visibles. Proyección de salarios actuales rotulada como estimación.
+- **Cazador:** `scripts/invariantes/check-metricas-identidad-fecha.ts`; allowlist vacía.
+- **Pruebas:** `tests/integraciones/metricas-negocio.test.ts`.
+
+**Ampliación P-034 (segunda revisión, misma fecha):** recuperar comisión con devengado previo cero puede dejar cuotas omitidas; nuevas huérfanas posteriores al borrador requieren descubrimiento explícito. `cuotasPendientesRevision` exige vista previa/confirmación antes del cierre. El cazador P-034 protege ambas rutas y las pruebas verifican cuota exactamente una vez y aviso de huérfanas sin bloquear empleados sanos.
+
+## P-038 — Cotización duplicaba conduce y emisión repetía devengo
+- Fecha: 2026-09-29. Base auditada: `80f704d3833ddb9e37f0e2cc31d41cb8ac75dfa4` (introductor exacto no determinado).
+- Síntoma: convertir cotización no marcaba orden facturada; otra ruta podía emitir segundo documento. Comisión podía escribirse antes de fallar la emisión.
+- Causa: batch independiente sin lectura de orden y helpers de comisión antes de la transacción.
+- Regla: cotización abre orden; emisión canónica valida aceptación/vínculo y marca cotización, orden y conduce juntos. Emisión refleja comisión existente; devengo corresponde a terminar trabajo.
+- Cazador: `scripts/invariantes/check-cotizacion-conduce-unico.ts`. Allowlist inicial vacía.
+
+## P-039 — Mantenimiento duplicado por ocurrencia (2026-09-29)
+
+- Base auditada: `80f704d3833ddb9e37f0e2cc31d41cb8ac75dfa4` (hash de referencia; no se atribuye como introductor).
+- Síntoma: dos oficinas generan órdenes para el mismo mantenimiento y pueden adelantar indebidamente la programación.
+- Causa: batch con ID aleatorio, sin releer la fecha activa. Además el lector inventaba hoy ante fecha ausente.
+- Prevención: identidad mantenimiento+fecha real; transacción relee orden y programación, devuelve existente y avanza una vez. Fechas ausentes requieren revisión visible. Contador central permite huecos de reserva, nunca numeración local.
+- Cazador: `scripts/invariantes/check-mantenimiento-ocurrencia.ts`.
+- Allowlist inicial: vacía.
+
+**Ampliación P-039 (29/09/2026):** addMonths en zona del dispositivo adelantaba un día al cruzar febrero (30 enero RD desde Auckland → 27 febrero); se usa calendario civil RD. Seguimiento y cron omiten fase cancelado. El cron verifica Personal por UID único y activo además de usuarios, porque la desactivación del personal ocurre en esa colección. Cazador P039 ampliado; pruebas focales/emulador verifican ambos guards.
+
+## P-040 — Estado de Resultado mezcla sueldo actual y períodos históricos
+
+- **Fecha:** 2026-09-29. Base: `80f704d3833ddb9e37f0e2cc31d41cb8ac75dfa4`.
+- **Síntoma:** modificar sueldo actual cambiaba resultado de meses anteriores; consultas Timestamp omitían gastos ISO; nóminas incompletas daban utilidad aparente.
+- **Causa:** salario de Personal como costo histórico y consulta por tipo único de fecha.
+- **Regla:** informe operativo usa snapshots cerrados según periodoFin, fechas RAW validadas y advertencias de cobertura; comisiones devengadas solo informativas, no se suman nuevamente a costo salarial. Caja confirmada separada de conduces emitidos.
+- **Cazador:** `scripts/invariantes/check-resultado-snapshots.ts`; allowlist vacía.
+- **Pruebas:** estado-resultado-rango y estado-resultado-ui, además de pérdidas y fechas anteriores.
+
+**Ampliación P-036 (29/09/2026):** reactivación humana revisaba snapshot UI y escribía fuera de transacción. Writers vinculados incrementan standbyRevision del padre en la misma transacción; reactivar captura revisión antes de descubrir refs y la revalida junto a todas las piezas. Cazador distingue llegada automática de reactivación humana. Clientes legacy/escrituras directas sin protocolo no garantizados; no se publicaron reglas.
+
+**Ampliación P-035 (29/09/2026):** CierreDia atribuía cierres a updatedAt y conduces sin fecha a hoy. Resumen RAW usa evidencia de cierre y fechas válidas; desconocidos quedan como incidencias. Cazador revisa resumenOperativoDia para impedir fallback temporal inventado.
+
+## P-041 — Comisión por UID incorrecta, carrera de devengo y comisión manual huérfana
+
+- Fecha: 2026-09-29. Fuente: revisión independiente Claude B3/B4 y revisión interna de creación manual. Base auditada `80f704d3833ddb9e37f0e2cc31d41cb8ac75dfa4`; hash exacto de introducción pendiente investigación, fix pendiente commit del coordinador.
+- Síntoma: porcentaje por defecto en técnico con UID distinto al doc de Personal; dos cierres crean dos comisiones pagables; fallo posterior puede dejar comisión manual sin conduce.
+- Causa: getDoc(personal/tecnicoId) confundía identidades, query+addDoc no era exclusión mutua y la comisión manual se escribía antes de su factura.
+- Prevención: resolver UID/docID únicos, bloquear ausencia/ambigüedad; ID canónico y transacción con relectura de orden; conduce manual y devengos en la misma transacción. Preservar ajustes y liquidaciones existentes. Intención de creación manual estable entre doble clic y reintentos.
+- Cazador: `scripts/invariantes/check-comision-devengo-unico.ts`.
+- Allowlist inicial: vacía.
+- Pruebas complementarias: `tests/ensayo/comisiones-devengo-emulador.test.ts` (carreras, identidad, atomicidad), `tests/integraciones/factura-manual-intencion.test.ts` (doble clic/timeout).
+
+## P-042 — Confirmación de cita roba o libera un bloqueo ajeno
+
+- Fecha: 2026-09-29. Base auditada: `80f704d3833ddb9e37f0e2cc31d41cb8ac75dfa4`; hash intro exacto no determinado; fix pendiente de commit del coordinador.
+- Síntoma: dos operadores pueden repetir postprocesos de garantía sobre una misma cita; un intento atrasado puede liberar al actual; vínculo erróneo permite reutilizar orden ajena.
+- Causa: rama ordenIdCreada anterior al chequeo de bloqueo, updateDoc de unlock sin condición, commit sólo comprueba existencia, reuso sólo comprueba documento.
+- Prevención: token único por intento y propietario validados en transacción; bloqueo activo siempre rechaza adquisición; commit comprueba huella vigente; reuso exige cita origen, cliente y estado activo. Fallo posterior conserva vínculo y libera únicamente su propio token. Sin expiración automática inventada.
+- Cazador: `scripts/invariantes/check-cita-intento-propio.ts`. Allowlist: vacía.
+
+### Ampliación P-038 / P-035 / P-036 — revisión final 2026-09-29
+- Referencia del bug: revisión `docs/qa/2026-09-29-review-final-claude.md`; hash del fix pendiente del commit coordinado.
+- P-038: crear borrador con batch reemplazaba el vínculo de cotización aceptada; eliminar dejaba orden vinculada a documento inexistente. Prevenir con lectura transaccional de ambos extremos y desvinculación auditada. Cazador `check-cotizacion-conduce-unico.ts` prohíbe batch/deleteDoc en la página. Allowlist vacía.
+- P-035: `isSameDay` local excluía conduces RD en otra zona. Usar día RD y comunicar creado/existente sin sobrescribir el snapshot ganador. Cazador `check-caja-cobros.ts`; prueba de Auckland y cierres concurrentes. Allowlist vacía.
+- P-036: orderBy createdAt excluía piezas antiguas sin campo aunque bloqueaban reactivación. Leer colección completa y ordenar local, marcar fecha desconocida. Prueba `fechas-cierre-piezas.test.ts` mantiene registro sin fecha visible.

@@ -1,3 +1,4 @@
+import { fechaFinanciera } from '../utils/fechaFinanciera';
 import GestionOrden from '../components/crm/GestionOrden';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -14,7 +15,7 @@ import {
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
-import { confirmarPagoOrden, suscribirPagosPendientes } from '../services/ordenes.service';
+import { confirmarPagoOrden, suscribirPagosPendientes, conciliarIdentidadFechaPago } from '../services/ordenes.service';
 import { formatFecha, formatMoneda } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import type { OrdenServicio, PagoOrden } from '../types';
@@ -41,13 +42,19 @@ interface PagoPendienteItem {
   ordenId: string;
   orden: OrdenServicio;
   pago: PagoOrden;
+  indice: number; incidencias: string[]; original: Record<string, unknown>;
 }
 
 export default function PagosPendientes() {
   const { userProfile, currentUser } = useApp();
   const navigate = useNavigate();
+  const [reparar, setReparar] = useState<PagoPendienteItem | null>(null);
+  const [fechaReal, setFechaReal] = useState('');
+  const [motivoReparacion, setMotivoReparacion] = useState('');
+  const [reparando, setReparando] = useState(false);
   const [ordenCrm, setOrdenCrm] = useState<string | null>(null);
   const [items, setItems] = useState<PagoPendienteItem[]>([]);
+  const [errorCarga, setErrorCarga] = useState('');
   const [loading, setLoading] = useState(true);
   const [confirmandoId, setConfirmandoId] = useState<string | null>(null);
 
@@ -60,14 +67,14 @@ export default function PagosPendientes() {
     }
     setLoading(true);
     const unsub = suscribirPagosPendientes((next) => {
-      setItems(next);
+      setErrorCarga(''); setItems(next);
       setLoading(false);
-    });
+    }, mensaje => { setErrorCarga(mensaje); setItems([]); setLoading(false); });
     return () => unsub();
   }, [puedeVerificar]);
 
   async function handleConfirmar(item: PagoPendienteItem) {
-    if (confirmandoId) return;
+    if (confirmandoId || !puedeVerificar || item.incidencias.length) return;
     if (item.orden.crmGestion) { setOrdenCrm(item.ordenId); return; }
     // P-001: usar currentUser.uid, NO userProfile.id.
     const actorId = currentUser?.uid;
@@ -76,7 +83,7 @@ export default function PagosPendientes() {
       toast.error('No se detectó sesión activa — recargá la página.');
       return;
     }
-    const key = `${item.ordenId}:${item.pago.id}`;
+    const key = `${item.ordenId}:${item.indice}`;
     setConfirmandoId(key);
     try {
       const r = await confirmarPagoOrden(item.ordenId, item.pago.id, {
@@ -85,6 +92,10 @@ export default function PagosPendientes() {
       });
       if (r.ok) {
         toast.success('Pago confirmado');
+      } else if (r.razon === 'requiere_conciliacion') {
+        toast.error('El pago requiere conciliar ID, fecha, importe o método antes de confirmar.');
+      } else if (r.razon === 'sin_permiso') {
+        toast.error('Tu perfil no permite verificar pagos.');
       } else if (r.razon === 'sin_sesion') {
         toast.error('Tu sesión terminó. Vuelve a iniciar sesión antes de confirmar el pago.');
       } else if (r.razon === 'ya_confirmado') {
@@ -121,6 +132,17 @@ export default function PagosPendientes() {
   return (
     <div className="max-w-5xl mx-auto p-4 lg:p-6">
       {ordenCrm && <div role="dialog" aria-modal="true" aria-label="Revisar pago de la orden" className="fixed inset-0 z-50 bg-black/40 p-4 overflow-auto"><div className="bg-white rounded-xl max-w-4xl mx-auto p-4"><button className="mb-3 border rounded px-3 py-2" onClick={() => setOrdenCrm(null)}>Cerrar revisión</button><GestionOrden ordenId={ordenCrm} /></div></div>}
+      {reparar && <section role="dialog" aria-label="Conciliar identidad y fecha del pago" className="border rounded-xl p-4 mb-4 bg-amber-50">
+        <p>Revisa el comprobante original. Se reparará el ID ausente/duplicado y la fecha inválida; el importe y método se conservarán. El pago seguirá pendiente de confirmación.</p>
+        <label>Fecha y hora real del pago (República Dominicana)<input aria-label="Fecha real del pago" type="datetime-local" value={fechaReal} onChange={e => setFechaReal(e.target.value)} className="border p-2 block" /></label>
+        <label>Evidencia y motivo<input aria-label="Motivo de conciliación" value={motivoReparacion} onChange={e => setMotivoReparacion(e.target.value)} maxLength={500} className="border p-2 block w-full" /></label>
+        <button disabled={reparando} className="border p-2" onClick={() => setReparar(null)}>Cancelar</button>
+        <button disabled={reparando || !fechaReal || motivoReparacion.trim().length < 10} className="border p-2" onClick={async () => {
+          if (reparando) return; setReparando(true);
+          try { await conciliarIdentidadFechaPago(reparar.ordenId, reparar.indice, reparar.original, `${fechaReal}:00-04:00`, motivoReparacion); setReparar(null); toast.success('Datos conciliados; revisa y confirma el pago por separado.'); }
+          catch (e) { toast.error((e as Error).message); } finally { setReparando(false); }
+        }}>Guardar reparación auditada</button>
+      </section>}
       <header className="mb-5">
         <div className="flex items-center gap-3 mb-1">
           <Banknote size={22} className="text-emerald-600" />
@@ -134,7 +156,7 @@ export default function PagosPendientes() {
         </p>
       </header>
 
-      {loading ? (
+      {errorCarga ? <p role="alert" className="text-red-700">{errorCarga}</p> : loading ? (
         <LoadingSpinner />
       ) : items.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-xl p-10 text-center">
@@ -147,7 +169,7 @@ export default function PagosPendientes() {
       ) : (
         <ul className="space-y-3">
           {items.map((item) => {
-            const key = `${item.ordenId}:${item.pago.id}`;
+            const key = `${item.ordenId}:${item.indice}`;
             const confirmando = confirmandoId === key;
             const orden = item.orden;
             const pago = item.pago;
@@ -212,7 +234,7 @@ export default function PagosPendientes() {
                       </div>
                       <div>
                         <p className="text-gray-400 uppercase tracking-wide">Fecha</p>
-                        <p className="text-gray-700">{formatFecha(pago.fecha)}</p>
+                        <p className="text-gray-700">{fechaFinanciera(pago.fecha) ? formatFecha(pago.fecha) : 'Sin fecha verificable'}</p>
                       </div>
                     </div>
                     {(pago.referencia || pago.notas) && (
@@ -230,15 +252,18 @@ export default function PagosPendientes() {
                         )}
                       </div>
                     )}
+                    {pago.verificado === undefined && <p className="text-amber-800">Pago histórico sin constancia de verificación. Revisa el banco o el efectivo antes de confirmar.</p>}
+                    {!!item.incidencias.length && <p role="alert" className="text-red-700">Requiere conciliación: {item.incidencias.join(', ')}. La confirmación está bloqueada.</p>}
                     <p className="text-[11px] text-gray-400">
                       Registrado por: {pago.registradoPorNombre || pago.registradoPorId}
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 min-w-[140px]">
+                    {item.incidencias.some(i => i.startsWith('Identificador') || i.startsWith('Fecha')) && !orden.crmGestion && <button className="border rounded p-2" onClick={() => { setReparar(item); setFechaReal(''); setMotivoReparacion(''); }}>Conciliar ID y fecha</button>}
                     <button
                       type="button"
                       onClick={() => handleConfirmar(item)}
-                      disabled={confirmando}
+                      disabled={confirmando || item.incidencias.length > 0}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
                     >
                       {confirmando ? (

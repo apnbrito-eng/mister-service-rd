@@ -1,3 +1,7 @@
+import { fechaFinanciera } from '../utils/fechaFinanciera';
+import { incidenciasPago, pagosSinConfirmacion, huellaPago } from '../utils/pagosConciliacion';
+import { puede } from '../utils/permisos';
+import type { Usuario } from '../types';
 import {
   runTransaction, doc, serverTimestamp, Timestamp,
   updateDoc, arrayUnion, collection, query, where, getDocs, onSnapshot,
@@ -1226,7 +1230,7 @@ export async function obtenerTodasOrdenesPorTelefono(
  */
 export interface ConfirmarPagoResult {
   ok: boolean;
-  razon?: 'orden_no_existe' | 'pago_no_existe' | 'ya_confirmado' | 'error_interno' | 'sin_sesion';
+  razon?: 'orden_no_existe' | 'pago_no_existe' | 'ya_confirmado' | 'error_interno' | 'sin_sesion' | 'sin_permiso' | 'requiere_conciliacion';
 }
 
 /**
@@ -1275,6 +1279,8 @@ export async function confirmarPagoOrden(
 
   try {
     return await runTransaction(db, async (tx) => {
+      const perfil = await tx.get(doc(db, 'usuarios', actorUid));
+      if (!perfil.exists() || perfil.data().activo === false || !puede({ ...perfil.data(), id: actorUid } as Usuario, 'pagosVerificar')) return { ok: false, razon: 'sin_permiso' as const };
       const snap = await tx.get(ordenRef);
       if (!snap.exists()) return { ok: false, razon: 'orden_no_existe' as const };
       const data = snap.data() as Record<string, unknown>;
@@ -1282,6 +1288,7 @@ export async function confirmarPagoOrden(
       const pagosActuales = Array.isArray(data.pagos)
         ? (data.pagos as Array<Record<string, unknown>>)
         : [];
+      if (!pagoId?.trim()) return { ok: false, razon: 'requiere_conciliacion' as const };
       const idx = pagosActuales.findIndex((p) => p.id === pagoId);
       if (idx === -1) return { ok: false, razon: 'pago_no_existe' as const };
 
@@ -1293,6 +1300,7 @@ export async function confirmarPagoOrden(
         return { ok: false, razon: 'ya_confirmado' as const };
       }
 
+      if (incidenciasPago(pagoActual, pagosActuales).length) return { ok: false, razon: 'requiere_conciliacion' as const };
       const ahora = Timestamp.now();
       const pagoActualizado: Record<string, unknown> = {
         ...pagoActual,
@@ -1336,7 +1344,7 @@ export async function confirmarPagoOrden(
 /**
  * SPRINT-PAGOS-CONFIRMA-MARIA-FASE-B-1 (2026-05-21).
  *
- * Suscripción real-time a órdenes con al menos un pago `verificado === false`.
+ * Suscripción real-time a pagos que no tienen confirmación explícita (`verificado !== true`).
  * Lee del array `orden.pagos` (modelo legacy de fase A — fase B.2 migrará a
  * subcolección).
  *
@@ -1357,8 +1365,10 @@ export function suscribirPagosPendientes(
       ordenId: string;
       orden: OrdenServicio;
       pago: NonNullable<OrdenServicio['pagos']>[number];
+      indice: number; incidencias: string[]; original: Record<string, unknown>;
     }>,
   ) => void,
+  onError?: (mensaje: string) => void,
 ): () => void {
   // No usar where() sobre `fase != 'cerrado'` porque Firestore no soporta `!=`
   // sin índice + restringe a 1 inequality filter. Filtramos client-side.
@@ -1368,6 +1378,7 @@ export function suscribirPagosPendientes(
       ordenId: string;
       orden: OrdenServicio;
       pago: NonNullable<OrdenServicio['pagos']>[number];
+      indice: number; incidencias: string[]; original: Record<string, unknown>;
     }> = [];
 
     snap.docs.forEach((d) => {
@@ -1384,28 +1395,22 @@ export function suscribirPagosPendientes(
         : [];
       if (pagos.length === 0) return;
 
-      const pagosPendientes = pagos.filter((p) => p?.verificado === false);
-      if (pagosPendientes.length === 0) return;
-
       const orden = parseOrden(d.id, data);
-      pagosPendientes.forEach((p) => {
-        // El parser ya retorna `pagos` tipados — buscamos por id para
-        // recuperar la versión tipada (con Date en lugar de Timestamp).
-        const pagoTipado = orden.pagos?.find((pp) => pp.id === p.id);
-        if (!pagoTipado) return;
-        items.push({ ordenId: d.id, orden, pago: pagoTipado });
+      pagosSinConfirmacion(pagos).forEach(({ pago: p, indice, incidencias }) => {
+        const pago = { ...p, fecha: fechaFinanciera(p.fecha) || new Date(NaN) } as NonNullable<OrdenServicio['pagos']>[number];
+        items.push({ ordenId: d.id, orden, pago, indice, incidencias, original: p });
       });
     });
 
     // Ordenar por fecha de pago desc (más reciente primero).
     items.sort((a, b) => {
-      const ta = a.pago.fecha instanceof Date ? a.pago.fecha.getTime() : 0;
-      const tb = b.pago.fecha instanceof Date ? b.pago.fecha.getTime() : 0;
+      const ta = fechaFinanciera(a.pago.fecha)?.getTime() || 0;
+      const tb = fechaFinanciera(b.pago.fecha)?.getTime() || 0;
       return tb - ta;
     });
 
     callback(items);
-  });
+  }, () => onError?.('No se pudieron leer los pagos. Recarga antes de verificar.'));
   return unsub;
 }
 
@@ -1436,4 +1441,33 @@ export function obtenerPagosDeOrden(
 ): NonNullable<OrdenServicio['pagos']> {
   if (!orden) return [];
   return Array.isArray(orden.pagos) ? orden.pagos : [];
+}
+
+
+/** Reparación explícita de identidad/fecha; nunca confirma ni modifica monto o método. */
+export async function conciliarIdentidadFechaPago(ordenId: string, indice: number, esperado: Record<string, unknown>, fechaISO: string, motivo: string): Promise<void> {
+  const uid = auth.currentUser?.uid;
+  if (!uid) throw new Error('Inicia sesión para conciliar.');
+  const fecha = fechaFinanciera(fechaISO);
+  if (!fecha || motivo.trim().length < 10) throw new Error('Indica la fecha real y un motivo de al menos 10 caracteres con la evidencia revisada.');
+  const nuevoId = crypto.randomUUID();
+  const referencia = doc(db, 'ordenes_servicio', ordenId);
+  const auditoria = doc(collection(db, 'auditoria_admin'));
+  await runTransaction(db, async tx => {
+    const perfil = await tx.get(doc(db, 'usuarios', uid));
+    const orden = await tx.get(referencia);
+    if (!perfil.exists() || perfil.data().activo === false || !puede({ ...perfil.data(), id: uid } as Usuario, 'pagosVerificar')) throw new Error('No tienes permiso de conciliación.');
+    if (!orden.exists() || orden.data().eliminada || orden.data().crmGestion) throw new Error('Revisa esta orden desde su flujo de gestión.');
+    const pagos = Array.isArray(orden.data().pagos) ? orden.data().pagos as Record<string, unknown>[] : [];
+    const actual = pagos[indice];
+    if (!actual || actual.verificado === true || huellaPago(actual) !== huellaPago(esperado)) throw new Error('El pago cambió; recarga y vuelve a revisar antes de conciliar.');
+    const idValido = typeof actual.id === 'string' && actual.id.trim() && pagos.filter(p => p?.id === actual.id).length === 1;
+    const fechaValida = fechaFinanciera(actual.fecha);
+    if (idValido && fechaValida) throw new Error('La identidad y fecha ya son válidas; revisa las demás incidencias.');
+    // Una fecha existente válida no se sustituye durante la reparación de ID.
+    const reparado = { ...actual, id: idValido ? actual.id : nuevoId, fecha: fechaValida ? actual.fecha : Timestamp.fromDate(fecha), verificado: false };
+    const nuevos = pagos.slice(); nuevos[indice] = reparado;
+    tx.update(referencia, stripUndefined({ pagos: nuevos, updatedAt: serverTimestamp() }));
+    tx.set(auditoria, stripUndefined({ accion: 'pago.conciliacion_identidad_fecha', actorUid: uid, actorId: uid, ordenId, pagoId: reparado.id, indice, anterior: actual, posterior: reparado, motivo: motivo.trim(), ts: serverTimestamp() }));
+  });
 }

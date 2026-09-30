@@ -91,10 +91,23 @@ export default function Calendarios() {
   };
 
   const openEdit = (cal: Calendario) => {
+    // Backwards compat 2026-09-29: `asignadoId` histórico apuntaba a
+    // `personal.id` (doc auto-gen). Ahora persistimos `uid` para que el
+    // resolver del hook (useOrdenCreateForm) matchee la identidad Firestore
+    // Auth. Al abrir edición, si el valor guardado es un doc.id legacy,
+    // lo mapeamos al `uid` correspondiente para que el `<select>` marque el
+    // técnico correcto. Si no encontramos match, dejamos el valor tal cual
+    // — el operador re-seleccionará.
+    const personaMatch =
+      personal.find(p => p.uid && p.uid === cal.asignadoId) ||
+      personal.find(p => p.id === cal.asignadoId);
+    const asignadoIdResuelto = personaMatch
+      ? (personaMatch.uid || personaMatch.id)
+      : (cal.asignadoId || '');
     setForm({
       nombre: cal.nombre,
-      asignadoId: cal.asignadoId || '',
-      asignadoNombre: cal.asignadoNombre || '',
+      asignadoId: asignadoIdResuelto,
+      asignadoNombre: personaMatch?.nombre || cal.asignadoNombre || '',
       color: cal.color,
       dias: cal.dias,
       horas: cal.horas,
@@ -304,15 +317,45 @@ export default function Calendarios() {
                 <select
                   value={form.asignadoId}
                   onChange={e => {
-                    const p = personal.find(x => x.id === e.target.value);
-                    setForm(f => ({ ...f, asignadoId: e.target.value, asignadoNombre: p?.nombre || '' }));
+                    // 2026-09-29 identidad escritor: guardamos `uid` (identidad
+                    // Firestore Auth) cuando existe. Es lo que
+                    // `useOrdenCreateForm` compara para pre-cargar el técnico
+                    // final de la orden. Si el empleado aún no completó el alta
+                    // en Auth (sin uid), caemos al doc.id de `personal/` para
+                    // conservar la asociación visual — el hook filtra el
+                    // resultado por rol y activo antes de pre-cargar como
+                    // técnico, así que no hay riesgo de asignar identidad
+                    // fantasma.
+                    const identidad = e.target.value;
+                    const p =
+                      personal.find(x => (x.uid || x.id) === identidad) ||
+                      personal.find(x => x.id === identidad);
+                    setForm(f => ({
+                      ...f,
+                      asignadoId: identidad,
+                      asignadoNombre: p?.nombre || '',
+                    }));
                   }}
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1a5fa8]">
                   <option value="">Sin asignar</option>
-                  {personal.filter(p => p.activo).map(p => (
-                    <option key={p.id} value={p.id}>{p.nombre} — {p.rol}</option>
-                  ))}
+                  {personal
+                    .filter(p => p.activo)
+                    .map(p => {
+                      const identidad = p.uid || p.id;
+                      const advertencia = !p.uid ? ' (sin uid Auth)' : '';
+                      return (
+                        <option key={p.id} value={identidad}>
+                          {p.nombre} — {p.rol}{advertencia}
+                        </option>
+                      );
+                    })}
                 </select>
+                <p className="text-[10px] text-gray-400 mt-1">
+                  El técnico final de la orden solo se pre-carga si el asignado
+                  del calendario tiene rol técnico y está activo. Otros roles
+                  quedan registrados como captador del lead en la metadata sin
+                  ocupar el campo técnico.
+                </p>
               </div>
 
               <div>

@@ -1,3 +1,5 @@
+import { useSearchParams } from 'react-router-dom';
+import NavegacionPersonal from '../components/personal/NavegacionPersonal';
 import { useState, useEffect, Fragment } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, Timestamp, query, orderBy, writeBatch } from 'firebase/firestore';
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
@@ -26,6 +28,8 @@ import { agruparPorRol } from '../utils/roles';
 
 export default function PersonalPage() {
   const { userProfile } = useApp();
+  const [params] = useSearchParams();
+  const personalSeleccionadoId = params.get('personalId') || '';
   const esAdmin = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
   const puedeCrearPersonal = puede(userProfile, 'personalCrear');
   const puedeModificarPersonal = puede(userProfile, 'personalModificar');
@@ -843,6 +847,8 @@ export default function PersonalPage() {
         )}
       </div>
 
+      <NavegacionPersonal personal={personal} />
+
       {/* Banner de migración: personal con rol de acceso pero sin uid vinculado */}
       {(() => {
         const sinAcceso = personal.filter(
@@ -862,13 +868,13 @@ export default function PersonalPage() {
 
       {/* SPRINT-142c (2026-05-11): bloque "Grupos operaria-técnico" extraído a componente puro.
           Plan de rollback: revertir el commit. El componente vuelve a vivir inline acá. */}
-      {esAdmin && <GruposOperariaTecnico personal={personal} />}
+      {esAdmin && !personalSeleccionadoId && <GruposOperariaTecnico personal={personal} />}
 
       {/* SPRINT-142d (2026-05-11): tabla del personal activo extraída a componente
           puro. Handlers de Edit/Vincular/Desactivar/Eliminar se quedan acá y se
           pasan como callbacks. Plan de rollback: revertir el commit. */}
       <TablaPersonalActivo
-        personal={personal}
+        personal={personal.filter(p => !personalSeleccionadoId || p.id === personalSeleccionadoId)}
         puedeModificar={puedeModificarPersonal}
         puedeEliminar={puedeEliminarPersonal}
         onEdit={handleEdit}
@@ -879,7 +885,7 @@ export default function PersonalPage() {
 
       {/* Sección Personal inactivo */}
       {(() => {
-        const inactivos = personal.filter(p => !p.activo);
+        const inactivos = personal.filter(p => !p.activo && (!personalSeleccionadoId || p.id === personalSeleccionadoId));
         if (inactivos.length === 0) return null;
         return (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">

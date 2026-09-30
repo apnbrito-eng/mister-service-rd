@@ -11,8 +11,8 @@ import { cargarDataMes } from '../../src/services/estadoResultado.service';
 beforeEach(() => { m.datos = {}; m.limites = []; });
 it('separa fecha desconocida, conserva último milisegundo y excluye anuladas', async () => {
  m.datos.comisiones = [
-  { fechaCobro: new Date(2026, 8, 30, 23, 59, 59, 999), comisionMonto: 100 },
-  { fechaCobro: new Date(2026, 9, 1), comisionMonto: 200 },
+  { fechaCobro: new Date('2026-10-01T03:59:59.999Z'), comisionMonto: 100 },
+  { fechaCobro: new Date('2026-10-01T04:00:00.000Z'), comisionMonto: 200 },
   { fechaCobro: null, comisionMonto: 300 },
   { fechaCobro: 'inválida', comisionMonto: 400 },
   { fechaCobro: new Date(2026, 8, 15).toISOString(), comisionMonto: 50 },
@@ -24,7 +24,7 @@ it('separa fecha desconocida, conserva último milisegundo y excluye anuladas', 
  expect(m.limites.every(d => d.getMilliseconds() === 999)).toBe(true);
 });
 it('subtotal cero es un importe válido y no se reemplaza por total', async () => {
- m.datos.facturas = [{ subtotal: 0, total: 100, costoPiezas: 20, estado: 'pagada' }];
+ m.datos.facturas = [{ fechaEmision: '2026-09-15', subtotal: 0, total: 100, costoPiezas: 20, itbisMonto: 100, estado: 'pagada' }];
  const datos = await cargarDataMes(2026, 9, []);
  expect(datos.ventasNetas).toBe(0);
  expect(datos.utilidadBruta).toBe(-20);

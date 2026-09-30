@@ -1,6 +1,6 @@
 import { planificarAjusteGarantia } from './ajusteGarantia';
 import {
-  collection, addDoc, doc, getDoc, getDocs, query, where, Timestamp, updateDoc, arrayUnion, deleteDoc,
+  collection, addDoc, doc, getDoc, getDocs, query, where, Timestamp, arrayUnion,
   runTransaction, serverTimestamp,
 } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
@@ -84,77 +84,6 @@ export function calcularCostoPiezasDeItems(items: ItemCotizacion[] | undefined):
 }
 
 /**
- * Lee la cotización vinculada (si existe) o factura para sumar costo de piezas.
- *
- * IMPORTANTE: una orden reactivada post-chequeo tendrá 2 facturas asociadas
- * por `ordenId` — la del chequeo previo (CG, sin piezas) y la de la reparación
- * (con piezas). Usar `docs[0]` no es determinístico y puede devolver la del
- * chequeo, reportando `costoPiezas=0` y inflando la comisión.
- *
- * Estrategia (de más explícita a más laxa):
- *  1. Si `orden.facturaId` está seteado, leer ese doc directamente. Es la
- *     factura activa: el reactivar limpia este campo y `FacturacionPendiente`
- *     lo repunta al emitir la nueva factura.
- *  2. Fallback: query por `ordenId` + filtrado client-side excluyendo
- *     facturas con `tipoCierre === 'solo_chequeo'` (denormalizado en
- *     creación). Si hay varias, prefiere la de mayor `createdAt`.
- *  3. Si todo lo anterior falla, usar la cotización vinculada.
- */
-async function obtenerCostoPiezasDeOrden(orden: OrdenServicio): Promise<number> {
-  // 1) Vía determinística: orden.facturaId apunta a la factura activa.
-  if (orden.facturaId) {
-    try {
-      const facSnap = await getDoc(doc(db, 'facturas', orden.facturaId));
-      if (facSnap.exists()) {
-        const items = facSnap.data().items as ItemCotizacion[] | undefined;
-        return calcularCostoPiezasDeItems(items);
-      }
-    } catch (err) {
-      console.warn('No se pudo leer factura por orden.facturaId:', err);
-    }
-  }
-  // 2) Fallback: query por ordenId con filtrado client-side
-  try {
-    const facturaQ = await getDocs(query(
-      collection(db, 'facturas'),
-      where('ordenId', '==', orden.id),
-    ));
-    if (!facturaQ.empty) {
-      // Excluir facturas del chequeo previo (denormalizado en factura)
-      const facturasReparacion = facturaQ.docs.filter(d => {
-        const data = d.data();
-        return data.tipoCierre !== 'solo_chequeo';
-      });
-      // Si tras filtrar quedan candidatas, tomar la más reciente
-      const candidatas = facturasReparacion.length > 0 ? facturasReparacion : facturaQ.docs;
-      const ordenadas = [...candidatas].sort((a, b) => {
-        const ta = (a.data().createdAt as { toMillis?: () => number } | undefined)?.toMillis?.() || 0;
-        const tb = (b.data().createdAt as { toMillis?: () => number } | undefined)?.toMillis?.() || 0;
-        return tb - ta;
-      });
-      const items = ordenadas[0].data().items as ItemCotizacion[] | undefined;
-      const costo = calcularCostoPiezasDeItems(items);
-      if (costo > 0) return costo;
-    }
-  } catch (err) {
-    console.warn('No se pudo leer factura vinculada para costo de piezas:', err);
-  }
-  // 3) Fallback a cotización vinculada
-  if (orden.cotizacionId) {
-    try {
-      const cotSnap = await getDoc(doc(db, 'cotizaciones', orden.cotizacionId));
-      if (cotSnap.exists()) {
-        const items = cotSnap.data().items as ItemCotizacion[] | undefined;
-        return calcularCostoPiezasDeItems(items);
-      }
-    } catch (err) {
-      console.warn('No se pudo leer cotización vinculada:', err);
-    }
-  }
-  return 0;
-}
-
-/**
  * Calcula la quincena a la que pertenece una fecha de cobro:
  * - Días 1–14:    `YYYY-MM-Q1` (paga el 15 de ese mes)
  * - Días 15–29:   `YYYY-MM-Q2` (paga el 30 de ese mes)
@@ -231,8 +160,7 @@ const COMISION_DEFAULT_SENIOR = 10;
 const COMISION_DEFAULT_JUNIOR = 8;
 const COMISION_DEFAULT_FALLBACK = 10;
 
-function obtenerPorcentajeComision(personal: Personal | null | undefined): number {
-  if (!personal) return COMISION_DEFAULT_FALLBACK;
+function obtenerPorcentajeComision(personal: Personal): number {
   if (typeof personal.comisionPorcentaje === 'number') return personal.comisionPorcentaje;
   if (personal.nivel === 'senior') return COMISION_DEFAULT_SENIOR;
   if (personal.nivel === 'junior') return COMISION_DEFAULT_JUNIOR;
@@ -246,17 +174,19 @@ function obtenerPorcentajeComision(personal: Personal | null | undefined): numbe
 export async function obtenerTecnicoParaComision(
   tecnicoId: string | undefined,
 ): Promise<{ personal: Personal | null; porcentaje: number }> {
-  if (!tecnicoId) return { personal: null, porcentaje: COMISION_DEFAULT_FALLBACK };
-  try {
-    const snap = await getDoc(doc(db, 'personal', tecnicoId));
-    if (snap.exists()) {
-      const personal = { id: snap.id, ...snap.data() } as Personal;
-      return { personal, porcentaje: obtenerPorcentajeComision(personal) };
-    }
-  } catch (err) {
-    console.warn('No se pudo leer técnico:', err);
-  }
-  return { personal: null, porcentaje: COMISION_DEFAULT_FALLBACK };
+  if (!tecnicoId) throw new Error('Comisión bloqueada: falta técnico asignado.');
+  const [directo, porUid] = await Promise.all([
+    getDoc(doc(db, 'personal', tecnicoId)),
+    getDocs(query(collection(db, 'personal'), where('uid', '==', tecnicoId))),
+  ]);
+  const candidatos = new Map<string, Personal>();
+  if (directo.exists()) candidatos.set(directo.id, { ...directo.data(), id: directo.id } as Personal);
+  porUid.docs.forEach(d => candidatos.set(d.id, { ...d.data(), id: d.id } as Personal));
+  if (candidatos.size !== 1) throw new Error(`Comisión bloqueada: identidad del técnico ${tecnicoId} ${candidatos.size ? 'ambigua' : 'no encontrada'}. Revisar Personal.`);
+  const personal = [...candidatos.values()][0];
+  const porcentaje = obtenerPorcentajeComision(personal);
+  if (!Number.isFinite(porcentaje) || porcentaje < 0 || porcentaje > 100) throw new Error('Comisión bloqueada: porcentaje del técnico inválido.');
+  return { personal, porcentaje };
 }
 
 /**
@@ -417,8 +347,23 @@ export function calcularComisionesProporcionales(args: {
  *  - genera comisión si `orden.soloChequeo`.
  *  - lanza si Firestore falla en una sub-operación; loguea warn y continúa.
  */
+async function reflejarDevengosOrden(orden: OrdenServicio) {
+  const snap = await getDocs(query(collection(db, 'comisiones'), where('ordenId', '==', orden.id)));
+  const comisiones = snap.docs.filter(d => !d.data().estaAnulada && d.data().estadoLiquidacion !== 'anulada').map(d => {
+    const c = d.data();
+    if (typeof c.comisionMonto !== 'number' || !Number.isFinite(c.comisionMonto) || !Number.isFinite(c.descuentoPorGarantia?.monto ?? 0)) throw new Error('Devengo con importe inválido; requiere conciliación.');
+    return { comisionId: d.id, tecnicoId: c.tecnicoId || '', tecnicoNombre: c.tecnicoNombre || '',
+      monto: Math.round((c.comisionMonto + (c.descuentoPorGarantia?.monto ?? 0)) * 100) / 100,
+      porcentaje: typeof c.comisionPorcentaje === 'number' ? c.comisionPorcentaje : 0 };
+  });
+  return { comisiones, totalAgregado: comisiones.reduce((s, c) => s + c.monto, 0), preservadasPorLiquidacion: snap.docs.filter(d => d.data().estadoLiquidacion === 'liquidada').length,
+    eliminadasHuerfanas: 0, fallidas: snap.docs.length || orden.soloChequeo ? [] : [{ tecnicoId: orden.tecnicoId || '', tecnicoNombre: orden.tecnicoNombre || '', monto: 0, error: 'No hay devengo registrado. Revisar comisión del trabajo terminado; emitir conduce no genera otro cálculo.' }] };
+}
+
 export async function registrarComisionesPorItems(args: {
   orden: OrdenServicio;
+  /** Creación manual: conduce y todos sus devengos se persisten en una sola transacción. */
+  conduceNuevo?: Record<string, unknown>;
   facturaId: string;
   facturaNumero: string;
   totalFactura: number;
@@ -452,290 +397,81 @@ export async function registrarComisionesPorItems(args: {
     error: string;
   }>;
 }> {
-  const { orden, facturaId, facturaNumero, totalFactura, userProfile, itbisPorcentaje } = args;
+  const { orden, facturaId, facturaNumero, totalFactura, itbisPorcentaje, conduceNuevo } = args;
+  if (!orden.id.startsWith('factura-manual-')) {
+    if (conduceNuevo) throw new Error('Creación manual requiere orden sintética.');
+    return reflejarDevengosOrden(orden);
+  }
   const items = args.items || [];
-  const usuario = userProfile?.nombre || 'Sistema';
-
-  // Detectar órdenes sintéticas creadas por flujos manuales (`FacturaCrearModal`
-  // arma una `OrdenServicio`-like con id `factura-manual-{facturaRef.id}`).
-  // Estas IDs NO existen en `ordenes_servicio`, así que cualquier `updateDoc`
-  // contra esa colección emite warn ruidoso (`not-found`). El audit de la
-  // orden se skipea — pero las comisiones siguen escribiéndose normalmente
-  // en la colección `comisiones` (la auditoría detallada se registra ahí).
-  const esOrdenSintetica = typeof orden.id === 'string' && orden.id.startsWith('factura-manual-');
-
-  // Caso 1: chequeo nunca genera comisión.
-  if (orden.soloChequeo) {
-    return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0, fallidas: [] };
+  const asignados = items.some(i => i.tecnicoId) ? items : items.map(i => ({ ...i, tecnicoId: orden.tecnicoId }));
+  const personas = new Map<string, { personal: Personal; porcentaje: number }>();
+  for (const id of new Set(asignados.map(i => i.tecnicoId).filter((id): id is string => !!id))) {
+    const r = await obtenerTecnicoParaComision(id);
+    personas.set(id, { personal: r.personal!, porcentaje: r.porcentaje });
   }
-  // Caso 2: sin items, nada que calcular.
-  if (items.length === 0) {
-    return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0, fallidas: [] };
-  }
-
-  // Caso 3 (legacy fallback): si ningún item trae tecnicoId, sintetizar
-  // todos con orden.tecnicoId — preserva flujo legacy y mantiene única
-  // ruta de cálculo (usa la misma función pura). Si la orden tampoco tiene
-  // técnico, retornamos vacío (no hay a quién pagar comisión).
-  let itemsParaCalculo: ItemCotizacion[] = items;
-  const algunoConTecnico = items.some(i => !!i.tecnicoId);
-  if (!algunoConTecnico) {
-    if (!orden.tecnicoId) {
-      return { comisiones: [], totalAgregado: 0, preservadasPorLiquidacion: 0, eliminadasHuerfanas: 0, fallidas: [] };
+  const normalizados = asignados.map(i => i.tecnicoId ? { ...i, tecnicoId: personas.get(i.tecnicoId)!.personal.id } : i);
+  const porId = new Map([...personas.values()].map(p => [p.personal.id, p]));
+  const costoPiezas = calcularCostoPiezasDeItems(items);
+  const calculadas = orden.soloChequeo ? [] : calcularComisionesProporcionales({ items: normalizados, totalConItbis: totalFactura, costoPiezasTotal: costoPiezas, itbisPorcentaje,
+    getTecnico: id => { const p = porId.get(id); if (!p) throw new Error('Técnico no identificado.'); return { nombre: p.personal.nombre || 'Técnico', porcentaje: p.porcentaje }; } });
+  const legacy = await getDocs(query(collection(db, 'comisiones'), where('ordenId', '==', orden.id)));
+  const facturaRef = doc(db, 'facturas', facturaId);
+  const desglose = desglosarTotalConITBIS(totalFactura, itbisPorcentaje);
+  return runTransaction(db, async tx => {
+    const factura = await tx.get(facturaRef);
+    const referencias = calculadas.map(c => doc(db, 'comisiones', `manual_${encodeURIComponent(facturaId)}_${encodeURIComponent(c.tecnicoId)}`));
+    const actuales = await Promise.all(referencias.map(r => tx.get(r)));
+    const anteriores = await Promise.all(legacy.docs.filter(d => !referencias.some(r => r.id === d.id)).map(d => tx.get(doc(db, 'comisiones', d.id))));
+    const personalActual = await Promise.all([...porId.keys()].map(id => tx.get(doc(db, 'personal', id))));
+    for (const p of personalActual) {
+      const esperado = porId.get(p.id)!;
+      if (!p.exists() || p.data().uid !== esperado.personal.uid || obtenerPorcentajeComision({ ...p.data(), id: p.id } as Personal) !== esperado.porcentaje) throw new Error('Configuración del técnico cambió; recarga.');
     }
-    itemsParaCalculo = items.map(i => ({
-      ...i,
-      tecnicoId: orden.tecnicoId,
-      tecnicoNombre: orden.tecnicoNombre,
-    }));
-  }
-
-  const costoPiezasTotal = calcularCostoPiezasDeItems(items);
-
-  // Pre-cargar Personal de los técnicos distintos (en paralelo).
-  const tecnicoIdsDistintos = Array.from(new Set(
-    itemsParaCalculo.flatMap(i => (i.tecnicoId ? [i.tecnicoId] : [])),
-  ));
-  const lookup = new Map<string, { nombre: string; porcentaje: number }>();
-  await Promise.all(tecnicoIdsDistintos.map(async tid => {
-    try {
-      const snap = await getDoc(doc(db, 'personal', tid));
-      if (snap.exists()) {
-        const personal = { id: snap.id, ...snap.data() } as Personal;
-        lookup.set(tid, {
-          nombre: personal.nombre || 'Técnico',
-          porcentaje: obtenerPorcentajeComision(personal),
-        });
-      } else {
-        console.error(`[comisiones] Tecnico huerfano detectado: tecnicoId=${tid} en orden=${orden.id}. Comision skipeada (0%)`);
+    if (factura.exists() && factura.data().estado === 'anulada') throw new Error('Conduce anulado.');
+    if (!conduceNuevo && !factura.exists()) throw new Error('El conduce debe existir antes de registrar comisiones.');
+    if (factura.exists() && factura.data().total !== totalFactura) throw new Error('El total del conduce cambió.');
+    const firmaItems = (lista: ItemCotizacion[]) => JSON.stringify(lista.map(i => [i.tipoItem || '', i.precio, i.cantidad || 1, i.costoCompra ?? null, i.tecnicoId || '']));
+    if (factura.exists() && firmaItems(factura.data().items || []) !== firmaItems(items)) throw new Error('Los ítems del conduce cambiaron; no se recalcula un devengo existente.');
+    const escritos: { comisionId: string; tecnicoId: string; tecnicoNombre: string; monto: number; porcentaje: number }[] = [];
+    const nuevos: { ref: typeof facturaRef; payload: Record<string, unknown> }[] = [];
+    let preservadasPorLiquidacion = 0;
+    for (let i = 0; i < calculadas.length; i++) {
+      const c = calculadas[i], p = porId.get(c.tecnicoId)!;
+      const aliases = new Set([p.personal.id, p.personal.uid].filter(Boolean));
+      const coincidentes = [...actuales, ...anteriores].filter(d => d.exists() && aliases.has(d.data().tecnicoId));
+      if (coincidentes.length > 1) throw new Error('Comisiones duplicadas previas requieren conciliación.');
+      if (coincidentes.length) {
+        const d = coincidentes[0], raw = d.data()!;
+        if (raw.estadoLiquidacion === 'liquidada') preservadasPorLiquidacion++;
+        escritos.push({ comisionId: d.id, tecnicoId: raw.tecnicoId, tecnicoNombre: raw.tecnicoNombre, monto: raw.comisionMonto, porcentaje: raw.comisionPorcentaje });
+        continue;
       }
-    } catch (err) {
-      console.warn(`[comisiones] error leyendo personal/${tid}:`, err);
+      if (actuales[i].exists()) throw new Error('Identidad de comisión canónica inconsistente.');
+      const ahora = Timestamp.now();
+      const payload = { tecnicoId: p.personal.uid || p.personal.id, tecnicoNombre: c.tecnicoNombre,
+        ordenId: orden.id, ordenNumero: orden.numero || '', clienteNombre: orden.clienteNombre || '',
+        fechaCobro: ahora, precioFinal: totalFactura, subtotal: desglose.subtotal, itbisMonto: desglose.itbis,
+        costoPiezas, basePendienteComision: c.baseSinItbisAsignada, comisionPorcentaje: c.porcentaje, comisionMonto: c.monto,
+        facturaId, facturaNumero, estadoLiquidacion: 'pendiente', quincenaAsignada: calcularQuincenaActual(ahora.toDate()),
+        proporcionItems: c.proporcionItems, itemsAsignados: c.itemsAsignados, createdAt: ahora, updatedAt: ahora };
+      nuevos.push({ ref: referencias[i], payload });
+      escritos.push({ comisionId: referencias[i].id, tecnicoId: payload.tecnicoId, tecnicoNombre: c.tecnicoNombre, monto: c.monto, porcentaje: c.porcentaje });
     }
-  }));
-
-  const calculadas = calcularComisionesProporcionales({
-    items: itemsParaCalculo,
-    totalConItbis: totalFactura,
-    costoPiezasTotal,
-    itbisPorcentaje,
-    getTecnico: tid => lookup.get(tid) || { nombre: '', porcentaje: 0 },
+    const totalAgregado = redondearMonto(escritos.reduce((s, c) => s + c.monto, 0));
+    if (conduceNuevo && !factura.exists()) {
+      const unica = escritos.length === 1 ? escritos[0] : null;
+      const payload: Record<string, unknown> = { ...conduceNuevo, comisionTecnicoMonto: totalAgregado,
+        comisionTecnicoId: unica?.tecnicoId || '', comisionTecnicoNombre: unica?.tecnicoNombre || (escritos.length ? 'N técnicos' : ''), comisionTecnicoPorcentaje: unica?.porcentaje || 0 };
+      if (unica) payload.comisionRegistroId = unica.comisionId;
+      tx.set(facturaRef, Object.fromEntries(Object.entries(payload).filter(([, v]) => v !== undefined)));
+    }
+    for (const n of nuevos) tx.set(n.ref, n.payload);
+    return { comisiones: escritos, totalAgregado, preservadasPorLiquidacion, eliminadasHuerfanas: 0, fallidas: [] };
   });
-
-  const tecnicoIdsCalculados = new Set(calculadas.map(c => c.tecnicoId));
-  const fechaCobro = new Date();
-  const quincena = calcularQuincenaActual(fechaCobro);
-  const desgloseTotal = desglosarTotalConITBIS(totalFactura, itbisPorcentaje);
-
-  // Leer todas las comisiones existentes para esta orden (cleanup huérfanas
-  // + idempotencia por tecnicoId).
-  let docsExistentes: Array<{ id: string; data: Record<string, unknown> }> = [];
-  try {
-    const existQ = await getDocs(query(
-      collection(db, 'comisiones'),
-      where('ordenId', '==', orden.id),
-    ));
-    docsExistentes = existQ.docs.map(d => ({ id: d.id, data: d.data() as Record<string, unknown> }));
-  } catch (err) {
-    console.warn('[comisiones] no se pudo leer comisiones existentes:', err);
-  }
-
-  let preservadasPorLiquidacion = 0;
-  let eliminadasHuerfanas = 0;
-
-  // Cleanup: comisiones existentes cuyo tecnicoId YA NO aparece en items.
-  for (const ex of docsExistentes) {
-    const exTecnicoId = (ex.data.tecnicoId as string) || '';
-    if (!exTecnicoId) continue;
-    if (tecnicoIdsCalculados.has(exTecnicoId)) continue; // se maneja en el upsert abajo
-    const estadoLiq = ex.data.estadoLiquidacion as string | undefined;
-    if (estadoLiq === 'liquidada') {
-      // Preservar + marcar como obsoleta por re-emisión.
-      try {
-        await updateDoc(doc(db, 'comisiones', ex.id), {
-          obsoletaPorReemisionConduce: true,
-          updatedAt: Timestamp.now(),
-        });
-        preservadasPorLiquidacion += 1;
-      } catch (err) {
-        console.warn(`[comisiones] no se pudo marcar obsoleta ${ex.id}:`, err);
-      }
-    } else {
-      // Pendiente: borrar.
-      try {
-        await deleteDoc(doc(db, 'comisiones', ex.id));
-        eliminadasHuerfanas += 1;
-      } catch (err) {
-        console.warn(`[comisiones] no se pudo eliminar huérfana ${ex.id}:`, err);
-      }
-    }
-  }
-
-  // Upsert por (ordenId, tecnicoId).
-  const comisionesEscritas: Array<{
-    comisionId: string;
-    tecnicoId: string;
-    tecnicoNombre: string;
-    monto: number;
-    porcentaje: number;
-  }> = [];
-
-  // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): acumulador de comisiones
-  // calculadas que Firestore rechazó. Se devuelve al caller para que avise.
-  const comisionesFallidas: Array<{
-    tecnicoId: string;
-    tecnicoNombre: string;
-    monto: number;
-    error: string;
-  }> = [];
-
-  for (const c of calculadas) {
-    const existente = docsExistentes.find(d => (d.data.tecnicoId as string) === c.tecnicoId);
-    const itbisMontoTotal = desgloseTotal.itbis;
-
-    // Si existe Y está liquidada: preservar tal cual. NO reescribir montos
-    // ni quincena (decisión 20 H9: respetar lo que ya pagó nómina).
-    if (existente && (existente.data.estadoLiquidacion as string) === 'liquidada') {
-      comisionesEscritas.push({
-        comisionId: existente.id,
-        tecnicoId: c.tecnicoId,
-        tecnicoNombre: c.tecnicoNombre,
-        monto: typeof existente.data.comisionMonto === 'number'
-          ? (existente.data.comisionMonto as number)
-          : c.monto,
-        porcentaje: typeof existente.data.comisionPorcentaje === 'number'
-          ? (existente.data.comisionPorcentaje as number)
-          : c.porcentaje,
-      });
-      continue;
-    }
-
-    // Strip undefined antes de Firestore — convención CLAUDE.md.
-    const payload: Record<string, unknown> = {
-      tecnicoId: c.tecnicoId,
-      tecnicoNombre: c.tecnicoNombre,
-      ordenId: orden.id,
-      ordenNumero: orden.numero || '',
-      clienteNombre: orden.clienteNombre || '',
-      fechaCobro: Timestamp.fromDate(fechaCobro),
-      precioFinal: totalFactura,
-      subtotal: desgloseTotal.subtotal,
-      itbisMonto: itbisMontoTotal,
-      costoPiezas: costoPiezasTotal,
-      basePendienteComision: c.baseSinItbisAsignada,
-      comisionPorcentaje: c.porcentaje,
-      comisionMonto: c.monto,
-      facturaId,
-      facturaNumero,
-      estadoLiquidacion: 'pendiente',
-      quincenaAsignada: quincena,
-      // Metadata específica del flujo proporcional (informativa, no rompe shape legacy)
-      proporcionItems: c.proporcionItems,
-      itemsAsignados: c.itemsAsignados,
-      updatedAt: Timestamp.now(),
-    };
-
-    try {
-      if (existente) {
-        await updateDoc(doc(db, 'comisiones', existente.id), payload);
-        comisionesEscritas.push({
-          comisionId: existente.id,
-          tecnicoId: c.tecnicoId,
-          tecnicoNombre: c.tecnicoNombre,
-          monto: c.monto,
-          porcentaje: c.porcentaje,
-        });
-      } else {
-        payload.createdAt = Timestamp.now();
-        const ref = await addDoc(collection(db, 'comisiones'), payload);
-        comisionesEscritas.push({
-          comisionId: ref.id,
-          tecnicoId: c.tecnicoId,
-          tecnicoNombre: c.tecnicoNombre,
-          monto: c.monto,
-          porcentaje: c.porcentaje,
-        });
-      }
-    } catch (err) {
-      console.error(`[comisiones] error escribiendo comisión para ${c.tecnicoId}:`, err);
-      comisionesFallidas.push({
-        tecnicoId: c.tecnicoId,
-        tecnicoNombre: c.tecnicoNombre,
-        monto: c.monto,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  const totalAgregado = comisionesEscritas.reduce((acc, c) => acc + c.monto, 0);
-
-  // Auditoría única (resumen) — no bloqueante. Skip para órdenes sintéticas
-  // (`factura-manual-...`) porque no existen en `ordenes_servicio` y el
-  // updateDoc emite warn ruidoso por cada conduce manual con técnicos.
-  if (
-    !esOrdenSintetica &&
-    (comisionesEscritas.length > 0 || preservadasPorLiquidacion > 0 || eliminadasHuerfanas > 0 ||
-      comisionesFallidas.length > 0)
-  ) {
-    try {
-      const partes: string[] = [];
-      if (comisionesEscritas.length > 0) {
-        partes.push(`Comisiones generadas/actualizadas: ${comisionesEscritas.length} técnico(s) por RD$${redondearMonto(totalAgregado).toLocaleString('es-DO')}`);
-      }
-      if (preservadasPorLiquidacion > 0) {
-        partes.push(`${preservadasPorLiquidacion} liquidada(s) preservada(s)`);
-      }
-      if (eliminadasHuerfanas > 0) {
-        partes.push(`${eliminadasHuerfanas} pendiente(s) eliminada(s)`);
-      }
-      // El fallo TIENE que quedar en la auditoría de la orden: si sólo se
-      // registran las exitosas, el log queda cuadrado y la comisión que
-      // falta se vuelve invisible (auditoría 2026-09-09, hallazgo E-1).
-      if (comisionesFallidas.length > 0) {
-        partes.push(
-          `FALLARON ${comisionesFallidas.length} comisión(es) por RD$${redondearMonto(
-            comisionesFallidas.reduce((acc, f) => acc + f.monto, 0),
-          ).toLocaleString('es-DO')} — revisar y reintentar`,
-        );
-      }
-      const reg = crearRegistroAuditoria(
-        usuario,
-        'cierre',
-        `Factura ${facturaNumero} — ${partes.join('. ')}`,
-        'comision',
-        '',
-        `RD$${redondearMonto(totalAgregado).toLocaleString('es-DO')}`,
-      );
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
-        auditoria: arrayUnion(reg),
-        updatedAt: Timestamp.now(),
-      });
-    } catch (err) {
-      console.warn('[comisiones] no se pudo registrar auditoría agregada:', err);
-    }
-  }
-
-  return {
-    comisiones: comisionesEscritas,
-    totalAgregado: redondearMonto(totalAgregado),
-    preservadasPorLiquidacion,
-    eliminadasHuerfanas,
-    fallidas: comisionesFallidas,
-  };
 }
 
-/**
- * Crea o actualiza un ComisionRegistro a partir de una factura recién generada.
- * Wrapper backwards-compat: si los items traen `tecnicoId` por línea (vendedor
- * por línea), delega a `registrarComisionesPorItems` y adapta el shape de
- * retorno. Si NO traen `tecnicoId`, usa el flujo legacy (1 técnico por orden).
- *
- * **Shape de retorno**:
- *  - 1 técnico (legacy o N=1): `comisionId`, `tecnicoId`, `tecnicoNombre`,
- *    `comisionMonto` poblados.
- *  - N>1 técnicos: `comisionId=null`, `tecnicoId=''`, `tecnicoNombre='N técnicos'`,
- *    `comisionMonto=totalAgregado`. El caller debe denormalizar como agregado.
- *  - 0 técnicos válidos: `comisionId=null`, `comisionMonto=0`.
+/** Compatibilidad: orden real refleja devengos vigentes; manual conserva reparto por ítems.
+ * Emitir un conduce de orden nunca crea ni recalcula su comisión del trabajo.
  */
 export async function registrarComisionPorFactura(args: {
   orden: OrdenServicio;
@@ -767,7 +503,13 @@ export async function registrarComisionPorFactura(args: {
   comisionesFallidas: number;
 }> {
   const { orden, facturaId, facturaNumero, totalFactura, items, userProfile, itbisPorcentaje } = args;
-  const usuario = userProfile?.nombre || 'Sistema';
+  if (!orden.id.startsWith('factura-manual-')) {
+    const r = await reflejarDevengosOrden(orden);
+    const unica = r.comisiones.length === 1 ? r.comisiones[0] : null;
+    return { comisionId: unica?.comisionId || null, comisionMonto: r.totalAgregado, gananciaNeta: 0, subtotal: 0, itbis: 0, costoPiezas: 0,
+      porcentaje: unica?.porcentaje || 0, tecnicoId: unica?.tecnicoId || '', tecnicoNombre: unica?.tecnicoNombre || (r.comisiones.length ? 'Varios técnicos' : ''), comisionesFallidas: r.fallidas.length };
+  }
+
   const itemsArr = items || [];
 
   // Detectar vendedor por línea — si CUALQUIER item trae tecnicoId, delegar
@@ -832,116 +574,10 @@ export async function registrarComisionPorFactura(args: {
     };
   }
 
-  // ---------------- Flujo legacy (sin tecnicoId por línea) ----------------
-  // Se preserva exactamente el comportamiento previo a Conduces SIBS C1.
-
-  if (!orden.tecnicoId) {
-    return {
-      comisionId: null, comisionMonto: 0, gananciaNeta: 0, subtotal: 0, itbis: 0, costoPiezas: 0,
-      porcentaje: 0, tecnicoId: '', tecnicoNombre: '', comisionesFallidas: 0,
-    };
-  }
-  // El chequeo (RD$2,000) NUNCA genera comisión, ni siquiera si el cliente
-  // luego regresa para reparar. Si el cliente regresa, esa nueva orden se
-  // reactiva con `reactivadaPostChequeo=true` y la comisión se paga sobre el
-  // monto de la reparación, no incluye los 2,000 del chequeo previo.
-  if (orden.soloChequeo) {
-    return {
-      comisionId: null, comisionMonto: 0, gananciaNeta: 0, subtotal: 0, itbis: 0, costoPiezas: 0,
-      porcentaje: 0, tecnicoId: orden.tecnicoId, tecnicoNombre: orden.tecnicoNombre || '',
-      comisionesFallidas: 0,
-    };
-  }
-
-  const { personal, porcentaje } = await obtenerTecnicoParaComision(orden.tecnicoId);
-  const tecnicoNombre = orden.tecnicoNombre || personal?.nombre || 'Técnico';
-
-  const desglose = calcularDesgloseFactura({ total: totalFactura, items: itemsArr, porcentajeTecnico: porcentaje, itbisPorcentaje });
-
-  const fechaCobro = new Date();
-  const quincena = calcularQuincenaActual(fechaCobro);
-
-  // Buscar si ya existe comisión para esta orden (idempotencia + actualización)
-  let comisionExistenteId: string | null = null;
-  try {
-    const existQ = await getDocs(query(
-      collection(db, 'comisiones'),
-      where('ordenId', '==', orden.id),
-    ));
-    if (!existQ.empty) comisionExistenteId = existQ.docs[0].id;
-  } catch (err) {
-    console.warn('No se pudo buscar comisión existente:', err);
-  }
-
-  const payload: Record<string, unknown> = {
-    tecnicoId: orden.tecnicoId,
-    tecnicoNombre,
-    ordenId: orden.id,
-    ordenNumero: orden.numero || '',
-    clienteNombre: orden.clienteNombre || '',
-    fechaCobro: Timestamp.fromDate(fechaCobro),
-    precioFinal: totalFactura,
-    subtotal: desglose.subtotal,
-    itbisMonto: desglose.itbis,
-    costoPiezas: desglose.costoPiezas,
-    basePendienteComision: desglose.gananciaNeta,
-    comisionPorcentaje: desglose.comisionPorcentaje,
-    comisionMonto: desglose.comisionMonto,
-    facturaId,
-    facturaNumero,
-    estadoLiquidacion: 'pendiente',
-    quincenaAsignada: quincena,
-    updatedAt: Timestamp.now(),
-  };
-
-  let comisionId = comisionExistenteId;
-  // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): antes, si el addDoc
-  // fallaba, se devolvía `comisionId: null` con `comisionMonto` distinto de
-  // cero y el caller no tenía forma de distinguirlo de "no hay comisión".
-  let escrituraFallo = false;
-  try {
-    if (comisionExistenteId) {
-      await updateDoc(doc(db, 'comisiones', comisionExistenteId), payload);
-    } else {
-      payload.createdAt = Timestamp.now();
-      const ref = await addDoc(collection(db, 'comisiones'), payload);
-      comisionId = ref.id;
-    }
-
-    // Auditoría en la orden (no bloqueante)
-    try {
-      const reg = crearRegistroAuditoria(
-        usuario,
-        'cierre',
-        `Factura ${facturaNumero} generada — Comisión RD$${desglose.comisionMonto.toLocaleString('es-DO')} para ${tecnicoNombre} (${porcentaje}%)`,
-        'comision',
-        '',
-        `RD$${desglose.comisionMonto.toLocaleString('es-DO')}`,
-      );
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
-        auditoria: arrayUnion(reg),
-        updatedAt: Timestamp.now(),
-      });
-    } catch (err) {
-      console.warn('No se pudo registrar auditoría de comisión:', err);
-    }
-  } catch (err) {
-    console.error('Error registrando comisión por factura:', err);
-    escrituraFallo = true;
-  }
-
-  return {
-    comisionId,
-    comisionMonto: desglose.comisionMonto,
-    gananciaNeta: desglose.gananciaNeta,
-    subtotal: desglose.subtotal,
-    itbis: desglose.itbis,
-    costoPiezas: desglose.costoPiezas,
-    porcentaje,
-    tecnicoId: orden.tecnicoId,
-    tecnicoNombre,
-    comisionesFallidas: escrituraFallo ? 1 : 0,
-  };
+  const r = await registrarComisionesPorItems({ ...args, items: itemsArr });
+  const unica = r.comisiones.length === 1 ? r.comisiones[0] : null;
+  return { comisionId: unica?.comisionId || null, comisionMonto: r.totalAgregado, gananciaNeta: 0, subtotal: 0, itbis: 0, costoPiezas: 0,
+    porcentaje: unica?.porcentaje || 0, tecnicoId: unica?.tecnicoId || '', tecnicoNombre: unica?.tecnicoNombre || '', comisionesFallidas: r.fallidas.length };
 }
 
 /**
@@ -978,66 +614,55 @@ export async function registrarComisionPorOrden(
     if (orden.precioSugerido !== undefined && orden.estadoAprobacion !== 'aprobado') {
       return { creada: false, razon: 'precio sugerido pero no aprobado por oficina' };
     }
-    // Idempotencia
-    const existeQ = await getDocs(query(
-      collection(db, 'comisiones'),
-      where('ordenId', '==', orden.id),
-    ));
-    if (!existeQ.empty) {
-      return { creada: false, razon: 'comisión ya registrada' };
-    }
-
-    // Resolver técnico
-    let tecnicoDoc: Personal | null = null;
-    try {
-      const snap = await getDoc(doc(db, 'personal', orden.tecnicoId));
-      if (snap.exists()) tecnicoDoc = { id: snap.id, ...snap.data() } as Personal;
-    } catch (err) {
-      console.warn('No se pudo leer técnico para comisión:', err);
-    }
-
-    const porcentaje = obtenerPorcentajeComision(tecnicoDoc);
-    const costoPiezas = await obtenerCostoPiezasDeOrden(orden);
-    const base = Math.max(0, orden.precioFinal - costoPiezas);
-    const comisionMonto = Math.round(base * (porcentaje / 100) * 100) / 100;
-
-    const fechaCobro = new Date();
-    const data: Record<string, unknown> = {
-      tecnicoId: orden.tecnicoId,
-      tecnicoNombre: orden.tecnicoNombre || tecnicoDoc?.nombre || 'Sin nombre',
-      ordenId: orden.id,
-      ordenNumero: orden.numero || '',
-      clienteNombre: orden.clienteNombre || '',
-      fechaCobro: Timestamp.fromDate(fechaCobro),
-      precioFinal: orden.precioFinal,
-      costoPiezas,
-      basePendienteComision: base,
-      comisionPorcentaje: porcentaje,
-      comisionMonto,
-      estadoLiquidacion: 'pendiente',
-      quincenaAsignada: calcularQuincenaActual(fechaCobro),
-      createdAt: Timestamp.now(),
-    };
-
-    await addDoc(collection(db, 'comisiones'), data);
-
-    // Auditoría en la orden (no bloqueante)
-    try {
-      const usuario = userProfile?.nombre || 'Sistema';
-      const reg = crearRegistroAuditoria(
-        usuario, 'cierre',
-        `Comisión RD$ ${comisionMonto.toLocaleString('es-DO')} registrada para ${orden.tecnicoNombre || tecnicoDoc?.nombre || 'técnico'}`,
-        'comision', '', `RD$ ${comisionMonto.toLocaleString('es-DO')}`
-      );
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
-        auditoria: arrayUnion(reg),
-        updatedAt: Timestamp.now(),
-      });
-    } catch (err) {
-      console.warn('No se pudo registrar auditoría de comisión:', err);
-    }
-
-    return { creada: true, comisionMonto };
+    const { personal, porcentaje } = await obtenerTecnicoParaComision(orden.tecnicoId);
+    const [legacy, facturas] = await Promise.all([
+      getDocs(query(collection(db, 'comisiones'), where('ordenId', '==', orden.id))),
+      getDocs(query(collection(db, 'facturas'), where('ordenId', '==', orden.id))),
+    ]);
+    const canonica = doc(db, 'comisiones', `orden_${encodeURIComponent(orden.id)}`);
+    const ordenRef = doc(db, 'ordenes_servicio', orden.id);
+    return await runTransaction(db, async tx => {
+      // Lecturas antes de escrituras; conflictos sobre orden/canónica fuerzan reintento.
+      const actual = await tx.get(ordenRef);
+      const existente = await tx.get(canonica);
+      const antiguas = await Promise.all(legacy.docs.filter(d => d.id !== canonica.id).map(d => tx.get(doc(db, 'comisiones', d.id))));
+      if (!actual.exists()) throw new Error('La orden ya no existe.');
+      if (existente.exists() || antiguas.some(d => d.exists())) return { creada: false, razon: 'comisión ya registrada' };
+      const o = actual.data();
+      if (o.eliminada || !['cerrado', 'trabajo_realizado'].includes(o.fase) || o.soloChequeo) throw new Error('La orden no tiene trabajo terminado comisionable.');
+      if (o.tecnicoId !== orden.tecnicoId || o.precioFinal !== orden.precioFinal || o.cotizacionId !== orden.cotizacionId || o.facturaId !== orden.facturaId) throw new Error('La orden cambió; recarga antes de calcular comisión.');
+      if (typeof o.precioFinal !== 'number' || !Number.isFinite(o.precioFinal) || o.precioFinal <= 0) throw new Error('Precio final inválido.');
+      if (o.precioSugerido !== undefined && o.estadoAprobacion !== 'aprobado') throw new Error('Precio sin aprobación de oficina.');
+      const persona = await tx.get(doc(db, 'personal', personal!.id));
+      if (!persona.exists()) throw new Error('El técnico ya no existe.');
+      const p = { ...persona.data(), id: persona.id } as Personal;
+      if (p.id !== o.tecnicoId && p.uid !== o.tecnicoId) throw new Error('La identidad del técnico cambió.');
+      if (obtenerPorcentajeComision(p) !== porcentaje) throw new Error('El porcentaje cambió; recarga antes de calcular comisión.');
+      const idsFacturas = new Set(facturas.docs.map(d => d.id));
+      if (o.facturaId) idsFacturas.add(o.facturaId);
+      const fuentes = await Promise.all([...idsFacturas].map(id => tx.get(doc(db, 'facturas', id))));
+      const cot = o.cotizacionId ? await tx.get(doc(db, 'cotizaciones', o.cotizacionId)) : null;
+      const activas = fuentes.filter(d => d.exists() && d.data().estado !== 'anulada' && d.data().tipoCierre !== 'solo_chequeo');
+      const fuente = activas.find(d => d.id === o.facturaId) || activas.sort((a, b) => (b.data()!.createdAt?.toMillis?.() || 0) - (a.data()!.createdAt?.toMillis?.() || 0))[0];
+      const items = fuente?.data()?.items || (cot?.exists() && cot.data().estado === 'aceptada' ? cot.data().items : []);
+      const tecnicosItems = new Set((Array.isArray(items) ? items : []).map(i => i.tecnicoId).filter(Boolean));
+      if (tecnicosItems.size > 1) throw new Error('Reparto entre varios técnicos requiere revisión antes del devengo.');
+      const costoPiezas = calcularCostoPiezasDeItems(items);
+      if (!Number.isFinite(costoPiezas) || costoPiezas < 0) throw new Error('Costo de piezas inválido.');
+      const base = Math.max(0, o.precioFinal - costoPiezas);
+      const comisionMonto = Math.round(base * (porcentaje / 100) * 100) / 100;
+      const ahora = Timestamp.now();
+      const data = {
+        tecnicoId: p.uid || p.id, tecnicoNombre: p.nombre || orden.tecnicoNombre || 'Sin nombre',
+        ordenId: orden.id, ordenNumero: o.numero || '', clienteNombre: o.clienteNombre || '',
+        fechaCobro: ahora, precioFinal: o.precioFinal, costoPiezas, basePendienteComision: base,
+        comisionPorcentaje: porcentaje, comisionMonto, estadoLiquidacion: 'pendiente',
+        quincenaAsignada: calcularQuincenaActual(ahora.toDate()), createdAt: ahora,
+      };
+      tx.set(canonica, data);
+      tx.update(ordenRef, { auditoria: arrayUnion(crearRegistroAuditoria(userProfile?.nombre || 'Sistema', 'cierre', `Comisión registrada RD$ ${comisionMonto}`, 'comision', '', canonica.id)), updatedAt: ahora });
+      return { creada: true, comisionMonto };
+    });
   } catch (err) {
     console.error('Error registrando comisión:', err);
     return { creada: false, razon: 'error interno' };

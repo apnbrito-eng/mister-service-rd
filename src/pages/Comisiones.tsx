@@ -1,3 +1,5 @@
+import ConciliarDuplicadosComision from '../components/ConciliarDuplicadosComision';
+import { comisionesDuplicadasNomina } from '../utils/comisionesDuplicadasNomina';
 import ConciliarFechaComisionFormulario from '../components/ConciliarFechaComisionFormulario';
 import { conciliarFechaComision } from '../services/conciliarFechaComision.service';
 import { fechaFinanciera } from '../utils/fechaFinanciera';
@@ -120,6 +122,10 @@ export default function Comisiones() {
     return () => unsub();
   }, [userProfile?.rol]);
 
+  const gruposDuplicados = useMemo(() => {
+    const duplicados = comisionesDuplicadasNomina(comisiones.map(c => ({ id: c.id, datos: c as unknown as Record<string, unknown> })), personal);
+    return [...duplicados.entries()].flatMap(([personalId, ids]) => [...new Set(comisiones.filter(c => ids.includes(c.id)).map(c => c.ordenId))].map(ordenId => ({ ordenId, personalId, nombre: personal.find(p => p.id === personalId)?.nombre || personalId })));
+  }, [comisiones, personal]);
   const quincenasDisponibles = useMemo(() => listarUltimasQuincenas(12), []);
   const tecnicos = personal.filter(p => p.rol === 'tecnico' && p.activo);
 
@@ -233,6 +239,7 @@ export default function Comisiones() {
 
   return (
     <div className="p-6 space-y-6">
+      <ConciliarDuplicadosComision grupos={gruposDuplicados} administrador={userProfile?.rol === 'administrador'} />
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-primary flex items-center gap-2">

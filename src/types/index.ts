@@ -443,6 +443,14 @@ export interface OrdenServicio {
   historialFases: HistorialFase[];
   auditoria?: RegistroAuditoria[];
   creadoPor?: string;
+  /**
+   * UID (auth) del creador de la orden. Complemento verificable de
+   * `creadoPor` (nombre humano que se pisa cuando cambia el `personal.nombre`).
+   * Agregado 2026-09-29 (sprint calendarios/solicitudes): auditar quién creó
+   * cada orden aunque el nombre legacy cambie. Opcional para preservar
+   * órdenes históricas — no se migra retroactivamente.
+   */
+  creadoPorId?: string;
   cierreServicio?: CierreServicio;
   trackingGPS?: TrackingGPS;
   metodoPagoCierre?: MetodoPago;
@@ -571,6 +579,28 @@ export interface OrdenServicio {
     whatsappAsignado?: string;
     whatsappAsignadoNombre?: string;
     citaOrigenId?: string;
+    // Sprint calendarios/solicitudes 2026-09-29 — trazabilidad de origen.
+    /** Fuente del lead (formulario público /agendar, calendario público,
+     *  oficina, o formulario dinámico convertido en orden desde /solicitudes). */
+    origen?: 'formulario_publico' | 'calendario_publico' | 'oficina' | 'solicitud_formulario' | 'garantia';
+    /** Id del calendario público desde el que se agendó la cita (si aplica). */
+    calendarioId?: string;
+    calendarioNombre?: string;
+    /** UID del técnico "captador" — el asignado al calendario público que el
+     *  cliente eligió. Puede diferir del `tecnicoId` final si la oficina
+     *  cambia la elección al confirmar. Se preserva para atribución/marketing. */
+    asignadoCaptadorId?: string;
+    asignadoCaptadorNombre?: string;
+    /** Equipo de atención WhatsApp responsable del canal al recibir la cita. */
+    equipoId?: string;
+    /** UID de la secretaria/operaria responsable del canal WhatsApp. */
+    responsableAtencionId?: string;
+    /** ID de la `solicitudes_servicio` cuando la orden nace de un formulario dinámico. */
+    solicitudId?: string;
+    formularioId?: string;
+    formularioNombre?: string;
+    empresaId?: string;
+    empresaNombre?: string;
   };
   /**
    * Feedback NPS del cliente al cerrar la orden (Sistema NPS — sprint feedback).
@@ -814,7 +844,11 @@ export interface LiquidacionEmpleado {
   estadoCierre?: 'bloqueado' | 'listo' | 'cerrado';
   personalUid?: string;
   comisionesPendientesFecha?: string[];
+  comisionesDuplicadas?: string[];
   comisionesFueraPeriodo?: string[];
+  cuotasPendientesRevision?: boolean;
+  comisionesYaLiquidadas?: { id: string; liquidacionId: string }[];
+  comisionesAtrasadas?: { id: string; fechaDevengo: string; quincenaDevengo: string; quincenaLiquidacion: string; incorporadaPorId: string }[];
   fechaCierreEmpleado?: Date;
   cerradoPorId?: string;
   personalId: string;
@@ -1105,6 +1139,24 @@ export interface CitaPorConfirmar {
   citaIdProvisional?: string;
   calendarioId?: string;
   calendarioNombre?: string;
+  /** UID del técnico asignado desde el calendario público (round-robin o
+   *  configuración manual del calendario). Puede diferir del técnico final
+   *  si la oficina cambia la elección al confirmar la cita. Agregado
+   *  2026-09-29 al parser de `Citas.tsx` para que el modal "Confirmar y
+   *  Agendar" no pierda la promesa al cliente ("Agendando con María"). */
+  asignadoId?: string;
+  asignadoNombre?: string;
+  /** Equipo de atención WhatsApp que quedó como responsable inicial del
+   *  canal (round-robin al recibir la cita). Persistido por
+   *  `api/publico/cita.ts` vía `prepararRepartoCanal`. */
+  equipoId?: string;
+  /** UID de la secretaria/operaria asignada al canal WhatsApp para atender
+   *  la conversación entrante. */
+  responsableAtencionId?: string;
+  /** True cuando el reparto de canal quedó pendiente (no había equipo
+   *  activo, round-robin falló, etc.). La oficina puede reasignar
+   *  manualmente al confirmar. */
+  repartoPendiente?: boolean;
   fechaSolicitada?: Date;
   horaSolicitada?: string;
   // Garantía (cuando esta cita proviene de un reclamo de garantía)

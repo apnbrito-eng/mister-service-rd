@@ -1,3 +1,4 @@
+import { completarConsumoConduce } from '../services/consumoConduce.service';
 import { fechaFinanciera } from '../utils/fechaFinanciera';
 import { useNavigate } from 'react-router-dom';
 import { proyectarCobrosCaja, diaCobroRD, type OrdenCobrosCruda } from '../utils/movimientosCobros';
@@ -67,6 +68,7 @@ export default function Facturas() {
   // Filtro avanzado: el componente maneja estado, persistencia y URL sync.
   // Acá solo recibimos los items filtrados via callback.
   const filtroRef = useRef<FiltroAvanzadoFinanzasRef>(null);
+  const [inventarioPendienteIds, setInventarioPendienteIds] = useState<Set<string>>(new Set());
   const [facturasFiltradas, setFacturasFiltradas] = useState<Factura[]>([]);
   const [filtroActivo, setFiltroActivo] = useState<FiltroActivo | null>(null);
 
@@ -83,6 +85,7 @@ export default function Facturas() {
       query(collection(db, 'facturas'), orderBy('createdAt', 'desc')),
       (snap) => {
         setEmisiones(snap.docs.map(d => fechaFinanciera(d.data().fechaEmision)).filter((f): f is Date => !!f));
+        setInventarioPendienteIds(new Set(snap.docs.filter(d => d.data().inventarioPendiente === true).map(d => d.id)));
         setFacturas(snap.docs.map(d => parseFactura(d.id, d.data() as Record<string, unknown>)));
         setLoading(false);
       }
@@ -621,6 +624,12 @@ export default function Facturas() {
                     </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center justify-end gap-1.5">
+                        {inventarioPendienteIds.has(factura.id) && <span className="text-xs text-amber-800">Consumo de piezas pendiente</span>}
+                        {inventarioPendienteIds.has(factura.id) && puedeModificar && <button className="text-xs underline" onClick={async e => {
+                          e.stopPropagation();
+                          try { await completarConsumoConduce(factura.id, userProfile?.nombre || ''); toast.success('Consumo de piezas completado'); }
+                          catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo completar el consumo'); }
+                        }}>Registrar consumo</button>}
                         {factura.estado === 'emitida' && puedeModificar && (
                           <button
                             onClick={() => handleMarcarPagada(factura)}

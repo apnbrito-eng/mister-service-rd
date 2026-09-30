@@ -1,4 +1,4 @@
-import { collection, doc, getDoc, getDocs, runTransaction, Timestamp } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, runTransaction, Timestamp, query, where, increment, arrayUnion } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
 import type { Cliente, EquipoTaller, EstadoEquipo, StandbyPieza } from '../types';
 import { resolverChatCliente } from '../utils/resolverChatCliente';
@@ -32,7 +32,7 @@ export async function cambiarEstadoTaller(equipoId: string, estado: EquipoVincul
     const cambio: Record<string, unknown> = { estado, updatedAt: Timestamp.now() };
     if (estado === 'descartado') Object.assign(cambio, { motivoDescarte: motivo.trim(), descartadoPor: actorUid, descartadoEn: Timestamp.now() });
     tx.update(equipoRef, cambio);
-    if (ordenRef) tx.update(ordenRef, { enStandby: true, updatedAt: Timestamp.now() });
+    if (ordenRef) tx.update(ordenRef, { enStandby: true, standbyRevision: increment(1), updatedAt: Timestamp.now() });
     if (pieza && !pieza.exists()) {
       const payload: Record<string, unknown> = {
         equipoTallerId: equipoId, clienteNombre: datos.clienteNombre || '', equipoTipo: datos.equipoTipo || '',
@@ -66,6 +66,7 @@ export async function registrarLlegadaPieza(piezaId: string): Promise<void> {
     responsables = responsables.filter((p, i, lista) => lista.findIndex(otro => otro.uid === p.uid) === i);
     if (!responsables.length) throw new Error('No hay responsables activos con acceso para recibir el aviso.');
     tx.update(piezaRef, { estado: 'llego', llegadaEn: Timestamp.now(), llegadaPor: actorUid });
+    if (orden?.exists()) tx.update(orden.ref, { standbyRevision: increment(1), updatedAt: Timestamp.now() });
     for (const responsable of responsables) {
       const payload: Record<string, unknown> = { userId: responsable.uid, tipo: 'pieza_llego', titulo: 'Pieza recibida: coordinar instalación', mensaje: `${datos.piezaFaltante || 'Pieza'} · ${datos.clienteNombre || 'Cliente'}. Revisar las demás piezas y contactar al cliente para coordinar.`, leida: false, createdAt: Timestamp.now() };
       if (datos.ordenId) payload.ordenId = datos.ordenId;
@@ -94,7 +95,7 @@ export async function guardarSolicitudPieza(id: string, ordenId: string, datos: 
     if (equipoTallerId) payload.equipoTallerId = equipoTallerId;
     if (!anterior.exists()) Object.assign(payload, { estado: 'buscando', createdAt: Timestamp.now(), fechaInicio: Timestamp.now() });
     tx.set(piezaRef, payload, { merge: true });
-    tx.update(ordenRef, { enStandby: true, updatedAt: Timestamp.now() });
+    tx.update(ordenRef, { enStandby: true, standbyRevision: increment(1), updatedAt: Timestamp.now() });
   });
 }
 
@@ -116,7 +117,7 @@ export async function vincularEquipoOrden(equipoId: string, ordenId: string) {
     tx.update(equipoRef, { ...vinculo, clienteTelefono: orden.data().clienteTelefono || '', vinculadoPor: actorUid, vinculadoEn: Timestamp.now() });
     if (pieza.exists()) {
       tx.update(piezaRef, { ...vinculo, equipoTallerId: equipoId, updatedAt: Timestamp.now() });
-      tx.update(ordenRef, { enStandby: true, updatedAt: Timestamp.now() });
+      tx.update(ordenRef, { enStandby: true, standbyRevision: increment(1), updatedAt: Timestamp.now() });
     }
   });
 }
@@ -126,7 +127,11 @@ export async function cambiarEstadoSolicitud(id: string, estado: 'buscando' | 'i
     const referencia = doc(db, 'standby_piezas', id);
     const actual = await tx.get(referencia);
     if (!actual.exists() || actual.data().estado === 'llego') throw new Error('La pieza ya llegó o no está disponible. Actualiza la lista.');
+    const ordenRef = actual.data().ordenId ? doc(db, 'ordenes_servicio', actual.data().ordenId) : null;
+    const orden = ordenRef ? await tx.get(ordenRef) : null;
+    if (ordenRef && !orden?.exists()) throw new Error('La orden vinculada ya no existe.');
     tx.update(referencia, { estado, updatedAt: Timestamp.now() });
+    if (ordenRef) tx.update(ordenRef, { enStandby: true, standbyRevision: increment(1), updatedAt: Timestamp.now() });
   });
 }
 
@@ -144,5 +149,33 @@ export async function recibirEquipoTaller(id: string, ordenId: string, datos: Re
     const payload: Record<string, unknown> = { ordenId, clienteId: o.clienteId, clienteNombre: o.clienteNombre || '', clienteTelefono: o.clienteTelefono || '', equipoTipo: o.equipoTipo || '', equipoMarca: o.equipoMarca || '', tecnicoNombre: o.tecnicoNombre || '', estado: 'recibido', fechaRecibido: Timestamp.now(), createdAt: Timestamp.now(), recibidoPor: actorUid };
     for (const campo of ['numeroSerie', 'fallaReportada', 'diagnostico', 'fechaPrometida', 'costoReparacion']) if (datos[campo] !== undefined) payload[campo] = datos[campo];
     tx.set(equipoRef, payload);
+  });
+}
+
+/** Descubrimiento fuera de tx protegido por revisión del documento padre.
+ * Todos los escritores compatibles incrementan esa revisión junto a la pieza.
+ * Clientes antiguos/escrituras directas que omiten el protocolo requieren conciliación.
+ */
+export async function reactivarOrdenPorPiezas(ordenId: string): Promise<boolean> {
+  const actorUid = auth.currentUser?.uid;
+  if (!actorUid) throw new Error('Inicia sesión para reactivar la orden.');
+  const ordenRef = doc(db, 'ordenes_servicio', ordenId);
+  const inicial = await getDoc(ordenRef);
+  if (!inicial.exists()) throw new Error('La orden ya no existe.');
+  const revision = inicial.data().standbyRevision ?? 0;
+  if (!Number.isInteger(revision) || revision < 0) throw new Error('La revisión de piezas requiere conciliación.');
+  const piezas = await getDocs(query(collection(db, 'standby_piezas'), where('ordenId', '==', ordenId)));
+  return runTransaction(db, async tx => {
+    const orden = await tx.get(ordenRef);
+    const actual = orden.data();
+    if (!actual || actual.eliminada || [actual.fase, actual.estado, actual.estadoSimple].some(e => ['cerrado', 'completado', 'cancelado'].includes(e))) throw new Error('La orden ya no está activa. No se puede reactivar.');
+    if ((actual.standbyRevision ?? 0) !== revision) throw new Error('Las piezas cambiaron durante la revisión. Actualiza y vuelve a intentarlo.');
+    const actuales = await Promise.all(piezas.docs.map(p => tx.get(p.ref)));
+    if (actuales.some(p => !p.exists() || p.data()?.ordenId !== ordenId || p.data()?.estado !== 'llego')) throw new Error('Hay piezas pendientes o cambios de vínculo. Revisa su llegada antes de reactivar.');
+    if (actual.enStandby !== true) return false;
+    const ahora = Timestamp.now();
+    tx.update(ordenRef, { enStandby: false, standbyReactivadaPor: actorUid, standbyReactivadaEn: ahora, updatedAt: ahora,
+      auditoria: arrayUnion({ fecha: ahora, usuario: actorUid, solicitanteUid: actorUid, accion: 'reactivar_orden', campo: 'enStandby', valorAnterior: 'true', valorNuevo: 'false', detalle: 'Piezas revisadas. Pendiente coordinar visita; no se modificó la fase.' }) });
+    return true;
   });
 }

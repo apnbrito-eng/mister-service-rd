@@ -1004,6 +1004,32 @@ service cloud.firestore {
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Directorio de suplidores: oficina, esquema cerrado y baja lógica.
+    // ID = teléfono normalizado; actor y fechas se verifican en el servidor.
+    function suplidorValido(d, id) {
+      return d.keys().hasOnly(['nombre', 'telefono', 'telefonoNormalizado', 'especialidad', 'notas', 'activo',
+                               'creadoPor', 'actualizadoPor', 'createdAt', 'updatedAt'])
+        && d.nombre is string && d.nombre.size() >= 2 && d.nombre.size() <= 120
+        && d.telefono is string && d.telefono.size() <= 40
+        && d.telefonoNormalizado is string && d.telefonoNormalizado.matches('^[0-9]{10}$')
+        && d.telefonoNormalizado == id
+        && d.especialidad is string && d.especialidad.size() >= 2 && d.especialidad.size() <= 120
+        && d.notas is string && d.notas.size() <= 500
+        && d.activo is bool
+        && d.actualizadoPor == request.auth.uid
+        && d.updatedAt == request.time;
+    }
+    match /suplidores/{suplidorId} {
+      allow read: if esStaffOficina();
+      allow create: if esStaffOficina() && suplidorValido(request.resource.data, suplidorId)
+        && request.resource.data.creadoPor == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if esStaffOficina() && suplidorValido(request.resource.data, suplidorId)
+        && request.resource.data.creadoPor == resource.data.creadoPor
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+
     // Default deny — cualquier colección no listada arriba está
     // bloqueada. Esto incluye colecciones nuevas que se creen sin
     // antes agregar su rule explícita.

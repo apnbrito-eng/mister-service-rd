@@ -1,0 +1,40 @@
+import React from 'react';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { expect, it, vi } from 'vitest';
+const m = vi.hoisted(() => ({ guardar: vi.fn(), numero: vi.fn().mockResolvedValue('CG-QA'), next: 0 }));
+vi.mock('../../src/firebase/config', () => ({ db: {} }));
+vi.mock('../../src/context/AppContext', () => ({ useApp: () => ({ userProfile: { rol: 'administrador', nombre: 'QA' }, currentUser: { uid: 'qa' } }) }));
+vi.mock('../../src/services/contadores.service', () => ({ siguienteNumeroFactura: m.numero }));
+vi.mock('../../src/utils/comisiones', () => ({ registrarComisionesPorItems: m.guardar }));
+vi.mock('firebase/firestore', async original => ({ ...await original<typeof import('firebase/firestore')>(), collection: () => ({}), doc: (_: unknown, _col?: string, id?: string) => ({ id: id || `f${++m.next}` }), addDoc: vi.fn() }));
+vi.mock('../../src/components/Modal', () => ({ default: ({ children }: { children: React.ReactNode }) => children }));
+vi.mock('../../src/components/facturas/ClienteNuevoDrawer', () => ({ default: () => null }));
+vi.mock('../../src/components/facturas/FacturaItemsEditor', () => ({ default: () => null }));
+import FacturaCrearModal from '../../src/components/facturas/FacturaCrearModal';
+import Editor from '../../src/components/facturas/FacturaItemsEditor';
+it('doble submit y timeout/reintento conservan una intención y su payload original', async () => {
+  let rechazar!: (err: Error) => void;
+  m.guardar.mockImplementationOnce(() => new Promise((_, reject) => { rechazar = reject; })).mockResolvedValueOnce({});
+  let vista!: ReactTestRenderer;
+  await act(async () => { vista = create(React.createElement(FacturaCrearModal, { open: true, onClose() {}, catalogoServicios: [], catalogoPiezas: [], tecnicos: [], clientes: [], clientesSinTipoDefinido: new Set<string>() })); });
+  await act(async () => {
+    vista.root.findByProps({ placeholder: 'Buscar cliente por nombre o teléfono...' }).props.onChange({ target: { value: 'QA' } });
+    vista.root.findByType(Editor).props.onItemsChange([{ descripcion: 'Servicio QA', precio: 1000, cantidad: 1, tipoItem: 'servicio', tecnicoId: 'u' }]);
+  });
+  let primera!: Promise<void>;
+  await act(async () => {
+    const enviar = vista.root.findByType('form').props.onSubmit;
+    primera = enviar({ preventDefault() {} });
+    void enviar({ preventDefault() {} });
+    await Promise.resolve(); await Promise.resolve();
+  });
+  expect(m.guardar).toHaveBeenCalledTimes(1);
+  await act(async () => { rechazar(new Error('Respuesta perdida después del commit')); await primera; });
+  await act(async () => vista.root.findByType(Editor).props.onItemsChange([{ descripcion: 'Edición posterior', precio: 9000, cantidad: 1, tecnicoId: 'u' }]));
+  await act(async () => vista.root.findByType('form').props.onSubmit({ preventDefault() {} }));
+  expect(m.numero).toHaveBeenCalledTimes(1);
+  expect(m.guardar.mock.calls[1][0].facturaId).toBe(m.guardar.mock.calls[0][0].facturaId);
+  expect(m.guardar.mock.calls[1][0].totalFactura).toBe(1000);
+  expect(m.guardar.mock.calls[1][0].conduceNuevo).toEqual(m.guardar.mock.calls[0][0].conduceNuevo);
+  await act(async () => vista.unmount());
+});

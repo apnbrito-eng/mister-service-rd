@@ -40,6 +40,7 @@ export function analizarCierreNomina(texto: string, file = 'src/services/nomina.
       if (!/estado:\s*completa\s*\?\s*['"]cerrada['"]\s*:\s*['"]abierta['"]/.test(cuerpo) || !/asistenciaBloqueada:\s*completa/.test(cuerpo) || !/actualizados\.every/.test(cuerpo) || !/raw\.comisionesSinEmpleado/.test(cuerpo)) {
         agregar(funcion, 'El estado global sólo se cierra cuando todos están cerrados y no quedan incidencias. Un lote parcial conserva abierta la nómina y la asistencia de los pendientes.');
       }
+      if (!cuerpo.includes('comisionesDuplicadasNomina(') || !cuerpo.includes('e.comisionesDuplicadas')) agregar(funcion, 'Releer y bloquear comisiones duplicadas de la misma orden/persona antes de liquidar; doc IDs distintos no prueban devengos distintos.');
       if (transacciones !== 1) agregar(funcion, 'El cierre debe tener una única transacción que incluya todos sus movimientos y estado final; varios commits pueden dejar un mismo empleado parcialmente descontado.');
     }
   }

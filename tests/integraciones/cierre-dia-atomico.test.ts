@@ -17,9 +17,9 @@ import { cerrarDiaAtomico, entregarEfectivoOrdenes } from '../../src/services/ci
 beforeEach(()=>{ m.docs={};m.fallo=false;m.cola=Promise.resolve(); });
 it('dos cierres conservan un único documento y primer total',async()=>{
  const resultados=await Promise.all([cerrarDiaAtomico('2026-09-29',{totalIngresos:30}),cerrarDiaAtomico('2026-09-29',{totalIngresos:90})]);
- expect(Object.keys(m.docs)).toEqual(['cierres_dia/2026-09-29']); expect(resultados[1]).toMatchObject({totalIngresos:30});
+ expect(Object.keys(m.docs)).toEqual(['cierres_dia/2026-09-29']); expect(resultados[0]).toMatchObject({creado:true,totalIngresos:30}); expect(resultados[1]).toMatchObject({creado:false,totalIngresos:30});
 });
-it('adopta cierre histórico sin copiar importes',async()=>{m.docs['cierres_dia/legacy']={totalIngresos:50};expect(await cerrarDiaAtomico('2026-09-29',{})).toMatchObject({id:'legacy',totalIngresos:50});expect(Object.keys(m.docs)).toHaveLength(1);});
+it('adopta cierre histórico sin copiar importes',async()=>{m.docs['cierres_dia/legacy']={totalIngresos:50};expect(await cerrarDiaAtomico('2026-09-29',{})).toMatchObject({id:'legacy',creado:false,totalIngresos:50});expect(Object.keys(m.docs)).toHaveLength(1);});
 it('varios legacy requieren conciliación',async()=>{m.docs={'cierres_dia/a':{},'cierres_dia/b':{}};await expect(cerrarDiaAtomico('2026-09-29',{})).rejects.toThrow('varios');});
 const raw = () => ({ pagos: [{id:'p1', monto:50,fecha:'2026-09-29',metodo:'efectivo',verificado:true}] });
 const movimientos = () => proyectarCobrosCaja(Object.entries(m.docs).map(([k,datos])=>({id:k.split('/')[1],datos}))).movimientos;

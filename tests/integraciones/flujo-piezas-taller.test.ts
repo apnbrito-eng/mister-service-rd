@@ -5,10 +5,10 @@ vi.mock('../../src/utils/resolverChatCliente', () => ({ resolverChatCliente: vi.
 vi.mock('firebase/firestore', () => ({
   collection: (_: unknown, path: string) => path, doc: (_: unknown, col: string, id: string) => `${col}/${id}`,
   getDoc: vi.fn(), getDocs: async (col: string) => ({ docs: col === 'usuarios' ? m.usuarios : m.personal }),
-  Timestamp: { now: () => 'fecha' },
+  Timestamp: { now: () => 'fecha' }, increment: (n: number) => n, arrayUnion: (...v: unknown[]) => v, query: (v: unknown) => v, where: () => null,
   runTransaction: async (_: unknown, cb: (tx: unknown) => unknown) => {
     const writes: typeof m.writes = [];
-    await cb({ get: async (path: string) => ({ exists: () => m.docs.has(path), data: () => m.docs.get(path) }), update: (path: string, data: Record<string, unknown>) => writes.push([path, data]), set: (path: string, data: Record<string, unknown>) => writes.push([path, data]) });
+    await cb({ get: async (path: string) => ({ ref: path, exists: () => m.docs.has(path), data: () => m.docs.get(path) }), update: (path: string, data: Record<string, unknown>) => writes.push([path, data]), set: (path: string, data: Record<string, unknown>) => writes.push([path, data]) });
     for (const [path, data] of writes) m.docs.set(path, { ...m.docs.get(path), ...data });
     m.writes.push(...writes);
   },

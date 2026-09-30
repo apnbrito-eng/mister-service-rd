@@ -7,7 +7,7 @@ vi.mock('firebase/firestore',async original=>({...await original<typeof import('
  collection:(_:unknown,name:string)=>({name}),doc:(_:unknown,name:string,id:string)=>({name,id}),query:(r:any)=>r,
  getDocs:async(r:any)=>({empty:!(m.data[r.name]||[]).length,docs:(m.data[r.name]||[]).map((x:any)=>({id:x.id,data:()=>x}))}),
  addDoc:async(_:unknown,data:any)=>{m.writes.push(data);return {id:'nueva'};},
- runTransaction:async(_:unknown,fn:any)=>fn({get:async()=>({exists:()=>true,data:()=>m.raw}),update:(_:unknown,data:any)=>m.writes.push(data)}),
+ runTransaction:async(_:unknown,fn:any)=>fn({get:async()=>({exists:()=>Object.keys(m.raw).length>0,data:()=>m.raw}),set:(_:unknown,data:any)=>m.writes.push(data),update:(_:unknown,data:any)=>m.writes.push(data)}),
 }));
 import {generarLiquidacion,agregarDescuentoAdHoc,removerDescuentoAdHoc} from '../../src/services/nomina.service';
 beforeEach(()=>{m.data={};m.raw={};m.writes=[];});

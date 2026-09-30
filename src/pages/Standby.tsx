@@ -1,18 +1,21 @@
+import { piezasLegacyVisibles } from '../utils/piezasLegacy';
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, updateDoc, doc, Timestamp, query, orderBy, where, arrayUnion } from 'firebase/firestore';
+import { collection, onSnapshot, doc, Timestamp, query, orderBy, where } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase/config';
 import { EstadoStandby, MovimientoPieza, OrdenServicio } from '../types';
-import { formatFechaCorta, formatFecha, parseOrden, crearRegistroAuditoria } from '../utils';
+import { formatFechaCorta, formatFecha, parseOrden } from '../utils';
 import { puede } from '../utils/permisos';
 import { useApp } from '../context/AppContext';
-import { registrarLlegadaPieza, cambiarEstadoSolicitud, guardarSolicitudPieza, abrirChatVinculado, type PiezaVinculada } from '../services/flujoPiezasTaller.service';
+import { reactivarOrdenPorPiezas, registrarLlegadaPieza, cambiarEstadoSolicitud, guardarSolicitudPieza, abrirChatVinculado, type PiezaVinculada } from '../services/flujoPiezasTaller.service';
 import { subirFotoPieza } from '../services/piezas.service';
 import { validarArchivoPublico } from '../utils/uploads';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { differenceInDays } from 'date-fns';
-import { Plus, Package, Check, Clock, History, ArrowDown, ArrowUp, Pause, Play, Wrench } from 'lucide-react';
+import { Plus, Package, Check, Clock, History, ArrowDown, ArrowUp, Pause, Play, Wrench, Truck } from 'lucide-react';
+import DirectorioSuplidores from '../components/standby/DirectorioSuplidores';
+import ConsultaSuplidorModal from '../components/standby/ConsultaSuplidorModal';
 import toast from 'react-hot-toast';
 
 const ESTADO_LABELS: Record<EstadoStandby, string> = {
@@ -45,7 +48,8 @@ export default function Standby() {
   const [showModal, setShowModal] = useState(false);
   const [filtroEstado, setFiltroEstado] = useState<string>('activas');
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState<'piezas' | 'ordenes' | 'historial'>('piezas');
+  const [tab, setTab] = useState<'piezas' | 'ordenes' | 'historial' | 'suplidores'>('piezas');
+  const [consultaPieza, setConsultaPieza] = useState<{ piezaFaltante: string; equipoTipo?: string; equipoMarca?: string; equipoModelo?: string; fotoUrl?: string } | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'retirada' | 'instalada'>('todos');
   const [reactivandoId, setReactivandoId] = useState<string | null>(null);
 
@@ -57,13 +61,9 @@ export default function Standby() {
   useEffect(() => {
     const unsubOrdenes = onSnapshot(collection(db, 'ordenes_servicio'), snap => setTodasOrdenes(snap.docs.map(d => parseOrden(d.id, d.data())).filter(o => !o.eliminada)));
     const unsub = onSnapshot(
-      query(collection(db, 'standby_piezas'), orderBy('createdAt', 'desc')),
+      collection(db, 'standby_piezas'),
       (snap) => {
-        setItems(snap.docs.map(d => ({
-          id: d.id, ...d.data(),
-          fechaInicio: d.data().fechaInicio?.toDate?.() || new Date(),
-          createdAt: d.data().createdAt?.toDate?.() || new Date(),
-        } as PiezaVinculada)));
+        setItems(piezasLegacyVisibles(snap.docs.map(d => ({ id: d.id, ...d.data() } as PiezaVinculada))));
         setLoading(false);
       }
     );
@@ -103,6 +103,7 @@ export default function Standby() {
   });
 
   const getDiasColor = (fechaInicio: Date) => {
+    if (!Number.isFinite(fechaInicio.getTime())) return { color: 'text-amber-700', dias: null };
     const dias = differenceInDays(new Date(), fechaInicio);
     if (dias > 14) return { color: 'text-red-600 bg-red-50 border-red-200', dias };
     if (dias >= 7) return { color: 'text-yellow-600 bg-yellow-50 border-yellow-200', dias };
@@ -150,28 +151,14 @@ export default function Standby() {
 
   const handleReactivarOrden = async (orden: OrdenServicio) => {
     if (!puedeGestionar) { toast.error('No tienes permiso para gestionar piezas.'); return; }
-    if (items.some(p => p.ordenId === orden.id && p.estado !== 'llego')) { toast.error('Hay piezas pendientes en esta orden. Revisa su llegada antes de reactivarla.'); return; }
-    if (!confirm(`¿Reactivar la orden ${orden.numero || orden.id}? Volverá a estado activo.`)) return;
+    if (!confirm(`¿Reactivar la orden ${orden.numero || orden.id}? Se quitará la espera de piezas; la visita debe coordinarse.`)) return;
     setReactivandoId(orden.id);
     try {
-      const usuario = userProfile?.nombre || 'Sistema';
-      const registro = crearRegistroAuditoria(
-        usuario,
-        'reactivar_orden',
-        'Reactivó la orden desde stand-by',
-        'enStandby',
-        'true',
-        'false',
-      );
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
-        enStandby: false,
-        auditoria: arrayUnion(registro),
-        updatedAt: Timestamp.now(),
-      });
-      toast.success('Orden reactivada');
+      const cambio = await reactivarOrdenPorPiezas(orden.id);
+      toast.success(cambio ? 'Espera de piezas retirada. Coordina la visita.' : 'La orden ya estaba fuera de espera de piezas.');
     } catch (err) {
       console.error('Error al reactivar orden:', err);
-      toast.error('Error al reactivar la orden');
+      toast.error(err instanceof Error ? err.message : 'Error al reactivar la orden');
     } finally {
       setReactivandoId(null);
     }
@@ -210,9 +197,15 @@ export default function Standby() {
           className={`flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${tab === 'historial' ? 'bg-primary text-white' : 'text-gray-600'}`}>
           <History size={14} /> Historial de Piezas
         </button>
+        <button onClick={() => setTab('suplidores')}
+          className={`flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-medium transition-colors ${tab === 'suplidores' ? 'bg-primary text-white' : 'text-gray-600'}`}>
+          <Truck size={14} /> Suplidores
+        </button>
       </div>
 
-      {tab === 'historial' ? (
+      {tab === 'suplidores' ? (
+        <DirectorioSuplidores puedeGestionar={puedeGestionar} />
+      ) : tab === 'historial' ? (
         <>
           <div className="flex gap-2 flex-wrap" data-tab="historial">
             {(['todos', 'retirada', 'instalada'] as const).map(t => (
@@ -292,7 +285,7 @@ export default function Standby() {
                 const desde = o.standbyDesde instanceof Date ? o.standbyDesde : null;
                 const hasta = o.standbyHasta instanceof Date ? o.standbyHasta : null;
                 const dias = desde ? differenceInDays(new Date(), desde) : 0;
-                const colorBorder = dias > 14 ? 'border-red-200' : dias >= 7 ? 'border-yellow-200' : 'border-gray-100';
+                const colorBorder = dias > 14 ? 'border-red-200' : (dias ?? 0) >= 7 ? 'border-yellow-200' : 'border-gray-100';
                 return (
                   <div
                     key={o.id}
@@ -331,10 +324,10 @@ export default function Standby() {
                       {desde && (
                         <span className={`px-2 py-0.5 rounded-full border font-medium ${
                           dias > 14 ? 'text-red-600 bg-red-50 border-red-200'
-                          : dias >= 7 ? 'text-yellow-600 bg-yellow-50 border-yellow-200'
+                          : (dias ?? 0) >= 7 ? 'text-yellow-600 bg-yellow-50 border-yellow-200'
                           : 'text-green-600 bg-green-50 border-green-200'
                         }`}>
-                          {dias} días
+                          {dias === null ? 'Revisar fecha' : `${dias} días`}
                         </span>
                       )}
                     </div>
@@ -390,7 +383,7 @@ export default function Standby() {
             const { color, dias } = getDiasColor(item.fechaInicio);
             return (
               <div key={item.id} className={`bg-white rounded-2xl shadow-sm border-2 p-5 ${
-                item.estado === 'llego' ? 'border-green-200 opacity-70' : dias > 14 ? 'border-red-200' : dias >= 7 ? 'border-yellow-200' : 'border-gray-100'
+                item.estado === 'llego' ? 'border-green-200 opacity-70' : (dias ?? 0) > 14 ? 'border-red-200' : (dias ?? 0) >= 7 ? 'border-yellow-200' : 'border-gray-100'
               }`}>
                 <div className="flex items-start justify-between mb-3">
                   <div>
@@ -406,14 +399,14 @@ export default function Standby() {
                   <p className="text-sm font-medium text-gray-900">{item.piezaFaltante}</p>
                 </div>
                 <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
-                  <span className="flex items-center gap-1"><Clock size={10} /> {formatFechaCorta(item.fechaInicio)}</span>
+                  <span className="flex items-center gap-1"><Clock size={10} /> {Number.isFinite(item.fechaInicio.getTime()) ? formatFechaCorta(item.fechaInicio) : 'Fecha sin registrar'}</span>
                   <span className={`px-2 py-0.5 rounded-full border font-medium ${color}`}>
-                    {dias} días
+                    {dias === null ? 'Revisar fecha' : `${dias} días`}
                   </span>
                 </div>
                 {puedeGestionar && item.estado !== 'llego' && <button className="text-primary underline text-sm mb-3" onClick={() => { setEditando(item); setSolicitudId(item.id); setOrdenId(item.ordenId || ''); setFoto(null); setForm({ clienteNombre: item.clienteNombre, equipoTipo: item.equipoTipo, equipoMarca: item.equipoMarca, piezaFaltante: item.piezaFaltante, tecnicoNombre: item.tecnicoNombre || '', notas: item.notas || '' }); setShowModal(true); }}>Completar detalle / foto</button>}
                 {item.fotoUrl && <img src={item.fotoUrl} alt={`Pieza solicitada: ${item.piezaFaltante}`} className="w-full h-40 object-contain mb-3" />}
-                <div className="flex gap-3 mb-3">{item.ordenId && <button className="text-primary text-sm underline" onClick={() => navigate(`/admin/ordenes/${item.ordenId}`)}>Abrir orden</button>}{item.clienteId && <button className="text-primary text-sm underline" onClick={async () => { try { navigate(await abrirChatVinculado(item.clienteId)); } catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo abrir chat'); } }}>Abrir WhatsApp</button>}</div>
+                <div className="flex gap-3 mb-3">{item.ordenId && <button className="text-primary text-sm underline" onClick={() => navigate(`/admin/ordenes/${item.ordenId}`)}>Abrir orden</button>}{item.clienteId && <button className="text-primary text-sm underline" onClick={async () => { try { navigate(await abrirChatVinculado(item.clienteId)); } catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo abrir chat'); } }}>Abrir WhatsApp</button>}{puedeGestionar && item.estado !== 'llego' && <button className="text-primary text-sm underline" onClick={() => { const o = todasOrdenes.find(x => x.id === item.ordenId); setConsultaPieza({ piezaFaltante: item.piezaFaltante, equipoTipo: item.equipoTipo, equipoMarca: item.equipoMarca, equipoModelo: o?.equipoModeloFabricante || o?.equipoModelo, fotoUrl: item.fotoUrl }); }}>Consultar a suplidor</button>}</div>
                 {item.tecnicoNombre && <p className="text-xs text-gray-500 mb-3">Técnico: {item.tecnicoNombre}</p>}
                 {item.notas && <p className="text-xs text-gray-500 italic mb-3">{item.notas}</p>}
 
@@ -443,6 +436,8 @@ export default function Standby() {
       )}
       </>
       )}
+
+      <ConsultaSuplidorModal isOpen={!!consultaPieza} onClose={() => setConsultaPieza(null)} pieza={consultaPieza} />
 
       {/* Modal registrar */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Registrar Pieza Pendiente">

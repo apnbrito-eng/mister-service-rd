@@ -1,5 +1,5 @@
 /**
- * P-023 — Gate del conduce DEBE bloquear emisión si hay pago con verificado===false
+ * P-023 — Gate del conduce DEBE bloquear emisión si hay pago con verificado!==true
  *
  * Bug original (anticipado, no histórico — preventivo post fase A de
  * SPRINT-PAGOS-CONFIRMA-MARIA, 2026-05-21):
@@ -8,7 +8,7 @@
  * (función `handleGenerar`) contiene la línea crítica que separa el flujo
  * "operaria registra pago" del flujo "admin/coord/María confirma":
  *
- *   const pagosSinVerificar = pagosPrevios.filter(p => p.verificado === false);
+ *   const pagosSinVerificar = pagosPrevios.filter(p => p.verificado !== true);
  *   if (pagosSinVerificar.length > 0) {
  *     toast.error('Hay X pago(s) sin confirmar...');
  *     return;
@@ -27,7 +27,7 @@
  * Regla:
  *   El archivo `src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx`
  *   DEBE contener TODAS estas señales:
- *     1. `.verificado === false` o `.verificado===false` (el filtro).
+ *     1. `.verificado !== true` o `.verificado!==true` (el filtro).
  *     2. `pagosSinVerificar` o nombre similar que indique "filtro de pagos sin verificar".
  *     3. `toast.error(` cercano (mismo bloque) — el bloqueo visible al usuario.
  *     4. Algún `return` en la cercanía — la salida temprana que bloquea.
@@ -49,7 +49,7 @@ import { InvariantResult, InvariantHit } from './types.js';
 
 const PATTERN_ID = 'P-023';
 const PATTERN_NAME =
-  'Gate del conduce (ProcesarFacturacionModal) bloquea emisión con pago verificado===false';
+  'Gate del conduce (ProcesarFacturacionModal) bloquea emisión con pago verificado!==true';
 const ROOT_DIR = path.resolve(process.cwd());
 
 const TARGET_FILE = 'src/components/facturacion-pendiente/ProcesarFacturacionModal.tsx';
@@ -57,10 +57,10 @@ const TARGET_FILE = 'src/components/facturacion-pendiente/ProcesarFacturacionMod
 // Patrones que DEBEN estar presentes en el archivo:
 const REQUIRED_SIGNALS: { name: string; regex: RegExp; explanation: string }[] = [
   {
-    name: 'filter verificado===false',
-    regex: /\.verificado\s*===\s*false/,
+    name: 'filter verificado!==true',
+    regex: /\.verificado\s*!==\s*true/,
     explanation:
-      'Falta el filtro `.verificado === false` que identifica pagos sin confirmar. ' +
+      'Falta el filtro `.verificado !== true` que identifica pagos sin confirmar. ' +
       'Sin él, el gate del conduce no distingue pagos verificados de no-verificados.',
   },
   {
@@ -107,6 +107,9 @@ export async function check(): Promise<InvariantResult> {
   }
 
   const hits: InvariantHit[] = [];
+  const helper = 'src/utils/pagosConciliacion.ts';
+  const conciliacion = await fs.readFile(path.join(ROOT_DIR, helper), 'utf8');
+  if (!/pago\.verificado\s*!==\s*true/.test(conciliacion)) hits.push({ file: helper, line: 1, snippet: 'Bandeja sin filtro explícito de confirmación', explanation: 'Listar también pagos legacy sin verificado: usar !== true. Nunca asumir confirmados ni ocultarlos.' });
   const lines = content.split('\n');
 
   for (const signal of REQUIRED_SIGNALS) {
@@ -125,7 +128,7 @@ export async function check(): Promise<InvariantResult> {
   // entre sí (es el bloque del gate). Si están muy dispersas, alguien las
   // desconectó.
   if (hits.length === 0) {
-    const lineWithFilter = lines.findIndex((l) => /\.verificado\s*===\s*false/.test(l));
+    const lineWithFilter = lines.findIndex((l) => /\.verificado\s*!==\s*true/.test(l));
     const lineWithPagosSinVerificar = lines.findIndex((l) => /\bpagosSinVerificar\b/.test(l));
     const lineWithToast = lines.findIndex((l) => /toast\.error\([^)]*sin\s+confirmar/i.test(l));
 
@@ -142,7 +145,7 @@ export async function check(): Promise<InvariantResult> {
           line: minL + 1,
           snippet: `Señales del gate están separadas por ${maxL - minL} líneas`,
           explanation:
-            `Las 3 señales del gate del conduce (filtro \`verificado === false\`, ` +
+            `Las 3 señales del gate del conduce (filtro \`verificado !== true\`, ` +
             `variable \`pagosSinVerificar\`, \`toast.error\` con "sin confirmar") existen ` +
             `pero están separadas por más de 50 líneas. Esto sugiere que el gate ` +
             `fue desconectado en un refactor (ej: la variable se calcula pero ya no se ` +

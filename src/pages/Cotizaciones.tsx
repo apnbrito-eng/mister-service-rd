@@ -1,11 +1,11 @@
+import { guardarCotizacionVinculada, desvincularCotizacion } from '../services/vinculoCotizacion.service';
 import { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, getDoc, Timestamp, query, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, runTransaction, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cotizacion, ItemCotizacion, EstadoCotizacion, OrdenServicio } from '../types';
 import { formatMoneda, formatFechaCorta, parseOrden, escapeHtml } from '../utils';
 import { siguienteNumeroCotizacion } from '../services/contadores.service';
-import { siguienteNumeroFactura } from '../services/contadores.service';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -15,6 +15,7 @@ import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
 import FiltroAvanzadoFinanzas from '../components/admin/FiltroAvanzadoFinanzas';
 import { Plus, FileText, Trash2, Edit, Check, Printer, X, Copy, Receipt, Boxes, Tag, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { completarConsumoConduce } from '../services/consumoConduce.service';
 import { errorCotizacion } from '../utils/validacionCotizacion';
 
 const ESTADO_COLORS: Record<EstadoCotizacion, string> = {
@@ -39,119 +40,48 @@ export default function Cotizaciones() {
   const puedeAprobar = puede(userProfile, 'cotizacionesAprobarPrecio');
   const [convirtiendoId, setConvirtiendoId] = useState<string | null>(null);
 
-  // SPRINT-134-cot: writeBatch atómico para el par crítico
-  // (facturas + cotizaciones). La factura y el flag `convertida` en la
-  // cotización deben aparecer juntos o ninguno — sin esto, una falla de red
-  // tras crear la factura dejaba la cotización como "no convertida" pero
-  // con factura emitida, causando doble facturación al reintentar.
-  //
-  // El descuento de inventario se mantiene FUERA del batch, con `try/catch`
-  // per-item, porque la regla de negocio acordada con Jorge (commit 3c42eef
-  // y comentario heredado) es "la factura prevalece sobre el stock — el admin
-  // concilia manualmente si un descuento falla". Si se metiera todo en un solo
-  // batch, una pieza con problema reventaría toda la factura, comportamiento
-  // NO deseado.
-  //
-  // El counter de FAC (`siguienteNumeroFactura`) consume su propia transacción
-  // ANTES del batch. Si el batch falla post-counter, queda un hueco numérico
-  // — consistente con SPRINT-133/134-mant y aceptado por el spec.
-  const handleConvertirAFactura = async (cot: Cotizacion) => {
-    if (!puedeFacturar) {
-      toast.error('No tienes permiso para crear facturas');
-      return;
-    }
-    if (cot.convertida) {
-      toast('Esta cotización ya fue convertida en factura', { icon: 'i' });
-      return;
-    }
-    setConvirtiendoId(cot.id);
+  const [vinculando, setVinculando] = useState<Cotizacion | null>(null);
+  const [ordenDestino, setOrdenDestino] = useState('');
+  // La emisión siempre pasa por el flujo de orden: garantía, costos y pagos.
+  const handleConvertirAFactura = (cot: Cotizacion) => {
+    if (!puedeFacturar || cot.estado !== 'aceptada' || cot.convertida) return;
+    if (cot.ordenId) navigate(`/admin/ordenes/${cot.ordenId}`);
+    else { setVinculando(cot); setOrdenDestino(''); }
+  };
+  const vincularOrden = async () => {
+    if (!vinculando || !ordenDestino || !puedeModificar) return;
+    setConvirtiendoId(vinculando.id);
     try {
-      const numero = await siguienteNumeroFactura();
-      const facturaData: Record<string, unknown> = {
-        numero,
-        clienteNombre: cot.clienteNombre,
-        items: cot.items,
-        total: cot.total,
-        estado: 'emitida',
-        fechaEmision: Timestamp.now(),
-        cotizacionId: cot.id,
-        createdAt: Timestamp.now(),
-        // Convertir cotización → factura siempre representa reparación completa.
-        // El chequeo previo (RD$2,000) se factura por otra vía (sin cotización).
-        tipoCierre: 'reparacion_completa',
-        origen: 'post-cierre' as const,
-      };
-      if (cot.clienteId) facturaData.clienteId = cot.clienteId;
-      if (cot.ordenId) facturaData.ordenId = cot.ordenId;
-
-      // Batch atómico: factura + flag `convertida` en cotización.
-      const batch = writeBatch(db);
-      const facturaRef = doc(collection(db, 'facturas'));
-      batch.set(facturaRef, facturaData);
-      batch.update(doc(db, 'cotizaciones', cot.id), {
-        convertida: true,
-        facturaId: facturaRef.id,
-        updatedAt: Timestamp.now(),
+      await runTransaction(db, async tx => {
+        const cotRef = doc(db, 'cotizaciones', vinculando.id);
+        const ordenRef = doc(db, 'ordenes_servicio', ordenDestino);
+        const [cotSnap, ordenSnap] = await Promise.all([tx.get(cotRef), tx.get(ordenRef)]);
+        const cot = cotSnap.data(); const orden = ordenSnap.data();
+        if (!cot || !orden || cot.estado !== 'aceptada' || cot.convertida || cot.facturaId || cot.ordenId) throw new Error('La cotización cambió. Recarga antes de vincular.');
+        if (orden.facturada || orden.eliminada || ['cancelado', 'cerrado', 'completado'].includes(orden.fase) || orden.estadoSimple === 'cancelado' || orden.estado === 'cancelado' || orden.cotizacionId) throw new Error('La orden ya tiene cotización/conduce o está anulada.');
+        if (cot.clienteId && orden.clienteId !== cot.clienteId) throw new Error('Selecciona una orden del mismo cliente.');
+        tx.update(cotRef, { ordenId: ordenDestino, updatedAt: Timestamp.now() });
+        tx.update(ordenRef, { cotizacionId: vinculando.id, updatedAt: Timestamp.now() });
       });
-      await batch.commit();
-
-      // Descontar inventario por items con tipoItem === 'pieza'.
-      // FUERA del batch a propósito: la factura prevalece sobre el stock
-      // (regla de negocio — admin concilia manualmente si falla).
-      const itemsPieza = cot.items.filter(i => i.tipoItem === 'pieza' && i.piezaInventarioId);
-      let piezasDescontadas = 0;
-      const usuario = userProfile?.nombre || 'Sistema';
-      const ahora = Timestamp.now();
-      for (const item of itemsPieza) {
-        try {
-          const piezaRef = doc(db, 'piezas_inventario', item.piezaInventarioId!);
-          const piezaSnap = await getDoc(piezaRef);
-          if (!piezaSnap.exists()) continue;
-          const stockActual: number = (piezaSnap.data().stockActual as number) || 0;
-          const nuevoStock = stockActual - item.cantidad;
-          // @safe-non-tx: descuento de inventario aislado por ítem a propósito.
-          // La factura ya quedó commiteada arriba; si una pieza falla, otras
-          // siguen procesándose. El admin reconcilia manualmente con el
-          // movimiento faltante (regla de negocio explícita — SPRINT-134-cot).
-          const piezaBatch = writeBatch(db);
-          piezaBatch.update(piezaRef, { stockActual: nuevoStock, updatedAt: ahora });
-          const movData: Record<string, unknown> = {
-            piezaId: item.piezaInventarioId!,
-            piezaNombre: piezaSnap.data().nombre || item.descripcion,
-            tipo: 'salida',
-            cantidad: item.cantidad,
-            motivo: 'venta_orden',
-            usuario,
-            fecha: ahora,
-          };
-          if (cot.ordenId) movData.ordenId = cot.ordenId;
-          if (numero) movData.ordenNumero = numero;
-          if (nuevoStock < 0) movData.notas = 'Venta con stock negativo — verificar reposición';
-          const movRef = doc(collection(db, 'movimientos_inventario'));
-          piezaBatch.set(movRef, movData);
-          await piezaBatch.commit();
-          piezasDescontadas++;
-        } catch (err) {
-          // No revertir la factura: el admin debe conciliar manualmente
-          console.error('Error descontando pieza', item.piezaInventarioId, err);
-        }
-      }
-
-      const sufijoInv = piezasDescontadas > 0
-        ? ` · ${piezasDescontadas} pieza(s) descontadas del inventario`
-        : '';
-      toast.success(`Factura ${numero} creada a partir de cotización ${cot.numero}${sufijoInv}`);
-    } catch (err) {
-      console.error(err);
-      toast.error('Error al convertir cotización en factura');
-    } finally {
-      setConvirtiendoId(null);
-    }
+      setVinculando(null);
+      navigate(`/admin/ordenes/${ordenDestino}`);
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo vincular.'); }
+    finally { setConvirtiendoId(null); }
   };
 
   const [loading, setLoading] = useState(true);
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
+  const [consumosPendientes, setConsumosPendientes] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let vigente = true;
+    Promise.all(cotizaciones.filter(c => c.facturaId).map(async c => {
+      try { return (await getDoc(doc(db, 'facturas', c.facturaId!))).data()?.inventarioPendiente ? c.id : null; }
+      catch { return c.id; }
+    })).then(ids => { if (vigente) setConsumosPendientes(new Set(ids.filter((id): id is string => !!id))); });
+    return () => { vigente = false; };
+  }, [cotizaciones]);
   const [showModal, setShowModal] = useState(false);
+  const [ordenIdAlEditar, setOrdenIdAlEditar] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -283,15 +213,7 @@ export default function Cotizaciones() {
     }));
   };
 
-  // SPRINT-134-cotsubmit: writeBatch atómico para crear cotización + vincularla
-  // a la orden originaria (cuando el flujo viene desde un lead). Sin batch,
-  // si la red corta entre el addDoc(cotizaciones) y el updateDoc(orden),
-  // queda una cotización huérfana sin link en la orden — la operaria no la
-  // ve listada al abrir la orden y duplica el trabajo.
-  //
-  // El branch EDIT (1 sola escritura) mantiene updateDoc directo — no es
-  // cross-collection. El branch CREATE sin orden originaria (cotización
-  // suelta) también es 1 sola escritura.
+  // La transacción valida el vínculo actual antes de crear o modificar.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const error = errorCotizacion(form.clienteNombre, form.items);
@@ -309,7 +231,7 @@ export default function Cotizaciones() {
         };
         if (form.ordenId) upd.ordenId = form.ordenId;
         if (form.clienteId) upd.clienteId = form.clienteId;
-        await updateDoc(doc(db, 'cotizaciones', editingId), upd);
+        await guardarCotizacionVinculada(upd, editingId, ordenIdAlEditar);
         toast.success('Cotización actualizada');
       } else {
         // SPRINT-DINERO-1 (2026-05-25, P-022): siempre vía contador atómico.
@@ -331,27 +253,14 @@ export default function Cotizaciones() {
         };
         if (form.ordenId) data.ordenId = form.ordenId;
         if (form.clienteId) data.clienteId = form.clienteId;
-        if (form.ordenId) {
-          // Cross-collection: cotización + vínculo en orden → writeBatch atómico
-          const batch = writeBatch(db);
-          const cotRef = doc(collection(db, 'cotizaciones'));
-          batch.set(cotRef, data);
-          batch.update(doc(db, 'ordenes_servicio', form.ordenId), {
-            cotizacionId: cotRef.id,
-            updatedAt: Timestamp.now(),
-          });
-          await batch.commit();
-        } else {
-          // Sin orden originaria: cotización suelta, una sola escritura
-          await addDoc(collection(db, 'cotizaciones'), data);
-        }
+        await guardarCotizacionVinculada(data);
         toast.success(`Cotización ${numero} creada · ${formatMoneda(total)}`);
       }
       setShowModal(false);
       setEditingId(null);
       resetForm();
-    } catch {
-      toast.error('Error al guardar');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al guardar');
     } finally {
       setSaving(false);
     }
@@ -369,16 +278,17 @@ export default function Cotizaciones() {
       notas: cot.notas || '',
       items: cot.items.length > 0 ? cot.items : [{ descripcion: '', cantidad: 1, precio: 0 }],
     });
+    setOrdenIdAlEditar(cot.ordenId || '');
     setEditingId(cot.id);
     setShowModal(true);
   };
 
   const handleChangeEstado = async (id: string, estado: EstadoCotizacion) => {
     try {
-      await updateDoc(doc(db, 'cotizaciones', id), { estado, updatedAt: Timestamp.now() });
+      await guardarCotizacionVinculada({ estado }, id);
       toast.success(`Estado: ${ESTADO_LABELS[estado]}`);
-    } catch {
-      toast.error('Error al actualizar');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al actualizar');
     }
   };
 
@@ -389,10 +299,10 @@ export default function Cotizaciones() {
     }
     if (!confirm('¿Eliminar esta cotización?')) return;
     try {
-      await deleteDoc(doc(db, 'cotizaciones', id));
+      await desvincularCotizacion(id, 'Eliminación confirmada por el usuario', true);
       toast.success('Cotización eliminada');
-    } catch {
-      toast.error('Error al eliminar');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al eliminar');
     }
   };
 
@@ -517,19 +427,39 @@ export default function Cotizaciones() {
                 ))}
                 {cot.items.length > 3 && <p className="text-xs text-gray-400 mt-1">+{cot.items.length - 3} más</p>}
               </div>
+              {cot.ordenId && !cot.convertida && puedeModificar && <button className="text-xs underline text-amber-800" onClick={async () => {
+                const motivo = window.prompt('Motivo para desvincular esta cotización y liberar la orden:');
+                if (!motivo?.trim()) return;
+                try { await desvincularCotizacion(cot.id, motivo); toast.success('Cotización desvinculada. Puedes continuar la orden.'); }
+                catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo desvincular.'); }
+              }}>Desvincular de la orden</button>}
               {/* Actions */}
               <div className="flex gap-2 mt-3 flex-wrap items-center">
                 {cot.convertida && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-medium border border-emerald-200">
-                    <Check size={11} /> Facturada
+                    <Check size={11} /> Conduce emitido
                   </span>
                 )}
-                {cot.estado !== 'aceptada' && puedeAprobar && (
+                {consumosPendientes.has(cot.id) && <p className="text-xs text-amber-800">Consumo de piezas pendiente de registrar o verificar.</p>}
+                {cot.convertida && cot.facturaId && puedeFacturar && <button className="text-xs underline" onClick={async () => {
+                  try {
+                    const factura = (await getDoc(doc(db, 'facturas', cot.facturaId!))).data();
+                    if (!factura?.inventarioPendiente) { toast('Consumo sin pendientes registrados.'); return; }
+                    if (!confirm('Hay consumo de piezas pendiente. ¿Reintentar registrarlo desde el conduce?')) return;
+                    await completarConsumoConduce(cot.facturaId!, userProfile?.nombre || '');
+                    setConsumosPendientes(prev => { const next = new Set(prev); next.delete(cot.id); return next; });
+                    toast.success('Consumo de piezas completado.');
+                  } catch (error) { toast.error(error instanceof Error ? error.message : 'Revisa Inventario.'); }
+                }}>Revisar consumo de piezas</button>}
+                {cot.estado !== 'aceptada' && !cot.convertida && puedeAprobar && (
                   <button onClick={() => handleChangeEstado(cot.id, 'aceptada')}
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-medium hover:bg-green-100">
                     <Check size={12} /> Aprobar
                   </button>
                 )}
+                {cot.estado !== 'rechazada' && !cot.convertida && puedeAprobar && <button className="text-xs text-red-700 underline" onClick={() => {
+                  if (confirm('¿Marcar cotización rechazada? Puedes desvincularla después para continuar la orden.')) void handleChangeEstado(cot.id, 'rechazada');
+                }}>Marcar rechazada</button>}
                 {cot.estado === 'aceptada' && !cot.convertida && puedeFacturar && (
                   <button
                     onClick={() => handleConvertirAFactura(cot)}
@@ -537,7 +467,7 @@ export default function Cotizaciones() {
                     className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-medium disabled:opacity-60"
                   >
                     <Receipt size={12} />
-                    {convirtiendoId === cot.id ? 'Creando...' : 'Convertir a Factura'}
+                    {convirtiendoId === cot.id ? 'Creando...' : 'Preparar conduce'}
                   </button>
                 )}
                 <button onClick={() => handlePrint(cot)}
@@ -572,6 +502,20 @@ export default function Cotizaciones() {
           ))}
         </div>
       )}
+
+      <Modal isOpen={!!vinculando} onClose={() => setVinculando(null)} title="Completar servicio para emitir conduce" size="lg">
+        <p className="text-sm mb-3">La cotización externa se conserva. Vincula la orden del servicio para revisar trabajo, costos, garantía y pagos antes de emitir.</p>
+        <p className="text-sm mb-3">Cliente de la cotización: <strong>{vinculando?.clienteNombre}</strong>. Confirma que la orden corresponde al mismo cliente.</p>
+        <select aria-label="Orden del servicio" className="w-full border rounded p-3" value={ordenDestino} onChange={e => setOrdenDestino(e.target.value)}>
+          <option value="">Seleccionar orden</option>
+          {Object.values(ordenesVinculadas).filter(o => !o.facturada && !o.cotizacionId && !o.eliminada && o.fase !== 'cancelado' && (!vinculando?.clienteId || vinculando.clienteId === o.clienteId)).map(o => <option key={o.id} value={o.id}>{o.numero} · {o.clienteNombre}</option>)}
+        </select>
+        {!puedeModificar && <p className="text-sm mt-3">Solicita a una persona con permiso de modificar cotizaciones que vincule la orden.</p>}
+        <div className="flex gap-3 mt-4">
+          <button className="btn-primary" disabled={!ordenDestino || !!convirtiendoId || !puedeModificar} onClick={vincularOrden}>Confirmar vínculo y abrir orden</button>
+          <button className="underline" onClick={() => navigate('/admin/ordenes')}>Ir a órdenes para crear el servicio</button>
+        </div>
+      </Modal>
 
       {/* Modal */}
       <Modal isOpen={showModal} onClose={() => { setShowModal(false); setEditingId(null); resetForm(); }}

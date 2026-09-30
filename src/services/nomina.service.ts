@@ -1,13 +1,14 @@
+import { comisionesDuplicadasNomina } from '../utils/comisionesDuplicadasNomina';
 import { fechaFinanciera } from '../utils/fechaFinanciera';
 import {
-  collection, addDoc, doc, getDocs, query, where, Timestamp, runTransaction,
+  collection, doc, getDocs, query, where, Timestamp, runTransaction,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import {
   Personal, Usuario, LiquidacionNomina, LiquidacionEmpleado, ComisionRegistro, OrdenServicio,
   ROLES_CON_ACCESO, DescuentoAdHoc, CuotaPrestamoAplicada,
 } from '../types';
-import { rangoQuincena } from '../utils/comisiones';
+import { rangoQuincena, calcularQuincenaActual } from '../utils/comisiones';
 import { parseOrden } from '../utils';
 import { obtenerAvancesPendientesDeQuincena } from './avances.service';
 import { obtenerPrestamosActivosTodos } from './prestamos.service';
@@ -53,22 +54,22 @@ export async function generarLiquidacion(
   quincena: string,
   generadaPor: Usuario,
 ): Promise<{ id: string; liquidacion: LiquidacionNomina }> {
-  // Idempotencia
+  if (!/^\d{4}-(0[1-9]|1[0-2])-Q[12]$/.test(quincena)) throw new Error('Quincena inválida');
+  // Lectura de compatibilidad: no reserva inserciones de clientes antiguos.
   const existeQ = await getDocs(query(
     collection(db, 'liquidaciones_nomina'),
     where('quincena', '==', quincena),
   ));
+  if (existeQ.docs.length > 1) throw new Error('Hay liquidaciones duplicadas para esta quincena; conciliar antes de continuar');
   if (!existeQ.empty) {
-    const docExistente = existeQ.docs[0];
-    const raw = docExistente.data();
-    if (raw.estado === 'cerrada') {
-      throw new Error(`La liquidación de ${quincena} ya está cerrada`);
-    }
-    // Devolver la existente abierta — el caller puede regenerar si quiere
-    return {
-      id: docExistente.id,
-      liquidacion: parseLiquidacion(docExistente.id, raw),
-    };
+    const refExistente = doc(db, 'liquidaciones_nomina', existeQ.docs[0].id);
+    return runTransaction(db, async tx => {
+      const existente = await tx.get(refExistente);
+      if (!existente.exists()) throw new Error('La liquidación existente cambió; reintenta');
+      const raw = existente.data();
+      if (raw.estado === 'cerrada') throw new Error(`La liquidación de ${quincena} ya está cerrada`);
+      return { id: existeQ.docs[0].id, liquidacion: parseLiquidacion(existeQ.docs[0].id, raw) };
+    });
   }
 
   const { inicio, fin } = rangoQuincena(quincena);
@@ -86,6 +87,7 @@ export async function generarLiquidacion(
 
   // Comisiones pendientes en el rango (filtrar client-side para evitar índice compuesto)
   const comisionesSnap = await getDocs(collection(db, 'comisiones'));
+  const duplicadas = comisionesDuplicadasNomina(comisionesSnap.docs.map(d => ({ id: d.id, datos: d.data() })), personal);
   const pendientesFecha: { id: string; tecnicoId: string }[] = [];
   const comisionesEnRango = comisionesSnap.docs
     .map(d => {
@@ -132,7 +134,6 @@ export async function generarLiquidacion(
     .filter((c): c is ComisionRegistro => c !== null)
     .filter(c =>
       c.estadoLiquidacion === 'pendiente' &&
-      c.fechaCobro >= inicio &&
       c.fechaCobro <= fin
     );
 
@@ -158,6 +159,7 @@ export async function generarLiquidacion(
     let totalComisiones = 0;
     let cantidadOrdenesConComision = 0;
     let comisionesIds: string[] = [];
+    let comisionesAtrasadas: NonNullable<LiquidacionEmpleado['comisionesAtrasadas']> = [];
     let bono = 0;
     let pct: number | undefined;
     let completadas: number | undefined;
@@ -170,8 +172,9 @@ export async function generarLiquidacion(
       // SPRINT-149 (P-006 variante reversa): `c.tecnicoId` post-c4be345 persiste auth.uid;
       // fallback `p.id` para comisiones registradas pre-migración. Sin esto, técnicos
       // nuevos no acumulan comisiones en su nómina aunque la comisión SÍ exista.
-      const comisionesT = comisionesEnRango.filter(c => resolverPersonal(c.tecnicoId) === p.id);
+      const comisionesT = comisionesEnRango.filter(c => resolverPersonal(c.tecnicoId) === p.id && !duplicadas.get(p.id)?.includes(c.id));
       comisionesIds = comisionesT.map(c => c.id);
+      comisionesAtrasadas = comisionesT.filter(c => c.fechaCobro < inicio).map(c => ({ id: c.id, fechaDevengo: c.fechaCobro.toISOString(), quincenaDevengo: calcularQuincenaActual(c.fechaCobro), quincenaLiquidacion: quincena, incorporadaPorId: generadaPor.id }));
       // Sumar comisión + descuentoPorGarantia.monto (que ya es negativo). Si la nómina del técnico
       // original ya cerró cuando se aplica el descuento, queda flotante y se recoge en la próxima
       // quincena (el filtro pendiente sigue cumpliéndose hasta que se cierre la liquidación).
@@ -242,10 +245,13 @@ export async function generarLiquidacion(
     const totalNeto = totalDevengado - totalDescuentos;
 
     const pendientesEmpleado = pendientesFecha.filter(c => resolverPersonal(c.tecnicoId) === p.id).map(c => c.id);
+    // @safe-tecnicoid-id: duplicadas se indexa por documento Personal resuelto, no auth.uid.
     const emp: LiquidacionEmpleado = {
-      estadoCierre: pendientesEmpleado.length ? 'bloqueado' : 'listo',
+      estadoCierre: pendientesEmpleado.length || duplicadas.has(p.id) ? 'bloqueado' : 'listo',
+      comisionesDuplicadas: duplicadas.get(p.id) || [],
       personalUid: p.uid || p.id,
       comisionesPendientesFecha: pendientesEmpleado,
+      comisionesAtrasadas,
       personalId: p.id,
       personalNombre: p.nombre,
       rol: p.rol,
@@ -295,23 +301,19 @@ export async function generarLiquidacion(
     totalNomina,
     empleados: serializarEmpleados(empleados),
   };
-  const ref = await addDoc(collection(db, 'liquidaciones_nomina'), data);
-  return {
-    id: ref.id,
-    liquidacion: {
-      id: ref.id,
-      quincena,
-      periodoInicio: inicio,
-      periodoFin: fin,
-      generadaPor: generadaPor.nombre,
-      generadaPorId: generadaPor.id,
-      fechaGeneracion: new Date(),
-      estado: 'abierta',
-      totalNomina,
-      empleados,
-      comisionesSinEmpleado,
-    },
-  };
+  // Nómina REAL con ID determinista: dos generadores nuevos compiten por el mismo documento.
+  const idCanonico = `nomina-${quincena}`;
+  const ref = doc(db, 'liquidaciones_nomina', idCanonico);
+  return runTransaction(db, async tx => {
+    const existente = await tx.get(ref);
+    if (existente.exists()) {
+      const raw = existente.data();
+      if (raw.estado === 'cerrada') throw new Error(`La liquidación de ${quincena} ya está cerrada`);
+      return { id: idCanonico, liquidacion: parseLiquidacion(idCanonico, raw) };
+    }
+    tx.set(ref, data);
+    return { id: idCanonico, liquidacion: parseLiquidacion(idCanonico, data) };
+  });
 }
 
 /**
@@ -324,6 +326,7 @@ export async function cerrarLiquidacion(
   liquidacionId: string,
   cerradaPor: Usuario,
 ): Promise<void> {
+  const descubiertas = await getDocs(collection(db, 'comisiones'));
   const base = db;
   const ref = doc(base, 'liquidaciones_nomina', liquidacionId);
   await runTransaction(base, async tx => {
@@ -356,6 +359,14 @@ export async function cerrarLiquidacion(
     if (operaciones.length > 400) throw new Error('La liquidación supera 400 movimientos; requiere revisión administrativa');
     const refs = operaciones.map(o => doc(base, o.coleccion, o.id));
     const documentos = await Promise.all(refs.map(r => tx.get(r)));
+    const identidades = todosEmpleados.map(e => ({ id: String(e.personalId), uid: typeof e.personalUid === 'string' ? e.personalUid : undefined }));
+    const sospechosas = comisionesDuplicadasNomina(descubiertas.docs.map(d => ({ id: d.id, datos: d.data() })), identidades);
+    const idsRevisar = [...new Set([...sospechosas.values()].flat())];
+    if (operaciones.length + idsRevisar.length > 400) throw new Error('Demasiadas referencias de comisiones; requiere conciliación');
+    const revisadas = await Promise.all(idsRevisar.map(id => tx.get(doc(base, 'comisiones', id))));
+    const duplicadas = comisionesDuplicadasNomina(revisadas.flatMap((d, i) => d.exists() ? [{ id: idsRevisar[i], datos: d.data()! }] : []), identidades);
+    for (const e of empleados) if (duplicadas.has(String(e.personalId))) { e.estadoCierre = 'bloqueado'; e.comisionesDuplicadas = duplicadas.get(String(e.personalId)); }
+    empleados = empleados.filter(e => e.estadoCierre !== 'bloqueado');
     const periodo = rangoQuincena(String(raw.quincena));
     // También los borradores legacy pueden contener una fecha inventada por el lector antiguo.
     documentos.forEach((documento, indice) => {
@@ -363,11 +374,14 @@ export async function cerrarLiquidacion(
       if (o.coleccion !== 'comisiones' || !documento.exists()) return;
       const datos = documento.data();
       const fecha = fechaFinanciera(datos.fechaCobro);
-      if (!datos.estaAnulada && (!fecha || fecha < periodo.inicio || fecha > periodo.fin)) {
+      const atraso = (o.empleado.comisionesAtrasadas as LiquidacionEmpleado['comisionesAtrasadas'] || []).find(c => c.id === o.id);
+      const atrasoValido = atraso && fecha && atraso.fechaDevengo === fecha.toISOString() && atraso.quincenaLiquidacion === raw.quincena;
+      if (!datos.estaAnulada && (!fecha || (fecha < periodo.inicio && !atrasoValido) || fecha > periodo.fin)) {
         o.empleado.estadoCierre = 'bloqueado';
         o.empleado.comisionesPendientesFecha = [...new Set([...(o.empleado.comisionesPendientesFecha as string[] || []), o.id])];
       }
     });
+    empleados.forEach(e => { if (e.cuotasPendientesRevision) e.estadoCierre = 'bloqueado'; });
     empleados = empleados.filter(e => e.estadoCierre !== 'bloqueado');
     const ahora = Timestamp.now();
     const cambios: { indice: number; datos: Record<string, unknown> }[] = [];
@@ -381,6 +395,7 @@ export async function cerrarLiquidacion(
       if (!documento.exists()) throw new Error(`${o.coleccion}/${o.id} no encontrado; cierre cancelado`);
       const d = documento.data();
       if (o.coleccion === 'comisiones') {
+        if (typeof d.tecnicoId !== 'string' || !d.tecnicoId || (d.tecnicoId !== o.empleado.personalId && d.tecnicoId !== o.empleado.personalUid)) throw new Error(`Comisión ${o.id} pertenece a otro empleado; revisar`);
         const monto = Number(d.comisionMonto) + Number(d.descuentoPorGarantia?.monto ?? 0);
         if (!Number.isFinite(monto) || d.estaAnulada) throw new Error(`Comisión ${o.id} inválida`);
         comisiones.set(o.empleado, (comisiones.get(o.empleado) || 0) + monto);
@@ -389,6 +404,7 @@ export async function cerrarLiquidacion(
           return;
         }
         if (d.estadoLiquidacion && d.estadoLiquidacion !== 'pendiente') throw new Error(`Estado de comisión ${o.id} inválido`);
+        if (d.liquidacionId) throw new Error(`Comisión ${o.id} pendiente con referencia de liquidación incoherente; revisar`);
         cambios.push({ indice, datos: { estadoLiquidacion: 'liquidada', liquidacionId,
           quincenaAsignada: raw.quincena, liquidadaEn: ahora, liquidadaPor: cerradaPor.nombre } });
       } else if (o.coleccion === 'avances') {
@@ -460,8 +476,48 @@ export async function cerrarLiquidacion(
   });
 }
 
+/** Vista previa explícita: no aplica ninguna cuota. Incluye préstamos legacy del empleado. */
+export async function prepararCuotasPendientes(personalId: string): Promise<CuotaPrestamoAplicada[]> {
+  const candidatos = await getDocs(query(collection(db, 'prestamos_empleados'), where('personalId', '==', personalId)));
+  return candidatos.docs.flatMap(c => {
+    const d = c.data();
+    if (d.personalId !== personalId || d.estado !== 'activo' || !(d.saldoPendiente > 0) || !(d.cuotasPagadas < d.cuotasTotales)) return [];
+    const monto = Math.min(Number(d.montoCuota), Number(d.saldoPendiente));
+    if (!Number.isFinite(monto) || monto <= 0) throw new Error(`Préstamo ${c.id} tiene cuota inválida`);
+    return [{ prestamoId: c.id, numeroCuota: Number(d.cuotasPagadas) + 1, monto, motivo: String(d.motivo || '') }];
+  });
+}
+
+/** Confirma exactamente la vista previa; aplicar al préstamo sigue reservado al cierre atómico. */
+export async function confirmarCuotasPendientes(liquidacionId: string, personalId: string, propuestas: CuotaPrestamoAplicada[]): Promise<void> {
+  const actuales = await prepararCuotasPendientes(personalId);
+  if (actuales.length !== propuestas.length || actuales.some(a => !propuestas.some(p => p.prestamoId === a.prestamoId && p.numeroCuota === a.numeroCuota && p.monto === a.monto && (p.motivo || '') === (a.motivo || '')))) throw new Error('Los préstamos cambiaron; volver a revisar la vista previa');
+  if (propuestas.length > 400 || new Set(propuestas.map(c => c.prestamoId)).size !== propuestas.length) throw new Error('Cuotas duplicadas o demasiadas referencias');
+  await runTransaction(db, async tx => {
+    const ref = doc(db, 'liquidaciones_nomina', liquidacionId);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error('Liquidación no encontrada');
+    const raw = snap.data();
+    const empleados = raw.empleados as Record<string, unknown>[];
+    const e = empleados.find(e => e.personalId === personalId);
+    if (raw.estado !== 'abierta' || !e || e.pagado || e.estadoCierre === 'cerrado' || !e.cuotasPendientesRevision) throw new Error('Empleado no tiene cuotas pendientes de revisión');
+    if (!(Number(e.totalDevengado) > 0) || (e.cuotasPrestamos as unknown[] || []).length) throw new Error('El devengado o las cuotas cambiaron; revisar');
+    const prestamos = await Promise.all(propuestas.map(c => tx.get(doc(db, 'prestamos_empleados', c.prestamoId))));
+    prestamos.forEach((p, i) => {
+      const d = p.data(), c = propuestas[i];
+      if (!d || d.personalId !== personalId || d.estado !== 'activo' || d.cuotasPagadas >= d.cuotasTotales || c.numeroCuota !== Number(d.cuotasPagadas) + 1 || c.monto !== Math.min(Number(d.montoCuota), Number(d.saldoPendiente)) || !(c.monto > 0) || (c.motivo || '') !== String(d.motivo || '')) throw new Error('Préstamo cambió desde la vista previa; volver a revisar');
+    });
+    const total = propuestas.reduce((s, c) => s + c.monto, 0);
+    const descuentos = Number(e.totalAvances || 0) + Number(e.totalDescuentosAdHoc || 0) + Number(e.totalAsistencia || 0) + total;
+    Object.assign(e, { cuotasPrestamos: propuestas.map((c, i) => ({ prestamoId: c.prestamoId, numeroCuota: c.numeroCuota, monto: c.monto, motivo: String(prestamos[i].data()?.motivo || '') })), totalCuotasPrestamos: total, totalDescuentos: descuentos, totalNeto: Number(e.totalDevengado) - descuentos, cuotasPendientesRevision: false, estadoCierre: (e.comisionesPendientesFecha as string[] || []).length ? 'bloqueado' : 'listo' });
+    tx.update(ref, { empleados });
+  });
+}
+
 /** Refresca conciliaciones ya resueltas, sin pagar ni reasignar registros a empleados cerrados. */
 export async function actualizarConciliacionLiquidacion(liquidacionId: string, actor: Usuario): Promise<void> {
+  // Incluye legacy sin estado; esta consulta descubre, no reserva inserciones concurrentes.
+  const descubiertas = await getDocs(collection(db, 'comisiones'));
   await runTransaction(db, async tx => {
     const ref = doc(db, 'liquidaciones_nomina', liquidacionId);
     const snap = await tx.get(ref);
@@ -469,7 +525,11 @@ export async function actualizarConciliacionLiquidacion(liquidacionId: string, a
     const raw = snap.data();
     if (raw.estado !== 'abierta') return;
     const empleados = raw.empleados as Record<string, unknown>[];
-    const huerfanas = raw.comisionesSinEmpleado as string[] || [];
+    const nuevasHuerfanas = descubiertas.docs.filter(c => { const d = c.data();
+      const propietarios = empleados.filter(e => typeof d.tecnicoId === 'string' && d.tecnicoId.trim() && (d.tecnicoId === e.personalId || (!!e.personalUid && d.tecnicoId === e.personalUid)));
+      return !d.estaAnulada && (!d.estadoLiquidacion || d.estadoLiquidacion === 'pendiente') && propietarios.length !== 1;
+    }).map(c => c.id);
+    const huerfanas = [...new Set([...(raw.comisionesSinEmpleado as string[] || []), ...nuevasHuerfanas])];
     const ids = [...new Set([...huerfanas, ...empleados.flatMap(e => e.comisionesFueraPeriodo as string[] || [])])];
     if (ids.length > 400) throw new Error('Demasiadas conciliaciones; requiere revisión');
     const snaps = await Promise.all(ids.map(id => tx.get(doc(db, 'comisiones', id))));
@@ -495,7 +555,9 @@ export async function actualizarConciliacionLiquidacion(liquidacionId: string, a
 }
 
 /** Recalcula solo comisiones del empleado bloqueado; conserva sueldo, bonos y descuentos del borrador. */
-export async function recalcularEmpleadoLiquidacion(liquidacionId: string, personalId: string): Promise<void> {
+export async function recalcularEmpleadoLiquidacion(liquidacionId: string, personalId: string, actor: Usuario): Promise<void> {
+  // Consulta de descubrimiento: una inserción posterior se recupera en otra actualización o nómina futura.
+  const candidatos = await getDocs(collection(db, 'comisiones'));
   await runTransaction(db, async tx => {
     const ref = doc(db, 'liquidaciones_nomina', liquidacionId);
     const snap = await tx.get(ref);
@@ -506,31 +568,54 @@ export async function recalcularEmpleadoLiquidacion(liquidacionId: string, perso
     const indice = empleados.findIndex(e => e.personalId === personalId);
     if (indice < 0) throw new Error('Empleado no encontrado');
     const e = empleados[indice];
-    if (e.pagado || e.estadoCierre !== 'bloqueado') throw new Error('Solo se recalcula un empleado bloqueado sin pagar');
-    const ids = [...new Set([...(e.comisionesIds as string[] || []), ...(e.comisionesPendientesFecha as string[] || [])])];
+    if (e.pagado || e.estadoCierre === 'cerrado') throw new Error('Solo se actualiza un empleado abierto sin pagar');
+    const sospechosas = comisionesDuplicadasNomina(candidatos.docs.map(c => ({ id: c.id, datos: c.data() })), empleados.map(emp => ({ id: String(emp.personalId), uid: typeof emp.personalUid === 'string' ? emp.personalUid : undefined }))).get(personalId) || [];
+    const nuevos = candidatos.docs.filter(c => { const d = c.data();
+      const duenos = empleados.filter(emp => typeof d.tecnicoId === 'string' && d.tecnicoId && (d.tecnicoId === emp.personalId || (!!emp.personalUid && d.tecnicoId === emp.personalUid)));
+      return duenos.length === 1 && duenos[0] === e && !d.estaAnulada && (!d.estadoLiquidacion || d.estadoLiquidacion === 'pendiente' || sospechosas.includes(c.id));
+    }).map(c => c.id);
+    const ids = [...new Set([...(e.comisionesIds as string[] || []), ...(e.comisionesPendientesFecha as string[] || []), ...(e.comisionesFueraPeriodo as string[] || []), ...nuevos])];
     if (ids.length > 400) throw new Error('Demasiadas comisiones; requiere revisión administrativa');
     const snaps = await Promise.all(ids.map(id => tx.get(doc(db, 'comisiones', id))));
+    const origenes = [...new Set(snaps.flatMap(c => { const d = c.data(); return d?.estadoLiquidacion === 'liquidada' && typeof d.liquidacionId === 'string' ? [d.liquidacionId] : []; }))];
+    if (ids.length + origenes.length > 400) throw new Error('Demasiadas referencias para actualizar; requiere revisión');
+    const origenSnaps = await Promise.all(origenes.map(id => tx.get(doc(db, 'liquidaciones_nomina', id))));
+    const origenDatos = new Map(origenes.map((id, i) => [id, origenSnaps[i].exists() ? origenSnaps[i].data() : undefined]));
     const { inicio, fin } = rangoQuincena(String(raw.quincena));
+    const duplicadas = comisionesDuplicadasNomina(snaps.flatMap((c, i) => c.exists() ? [{ id: ids[i], datos: c.data()! }] : []), empleados.map(emp => ({ id: String(emp.personalId), uid: typeof emp.personalUid === 'string' ? emp.personalUid : undefined }))).get(personalId) || [];
+    const atrasadas: NonNullable<LiquidacionEmpleado['comisionesAtrasadas']> = [];
+    const yaLiquidadas = [...(e.comisionesYaLiquidadas as NonNullable<LiquidacionEmpleado['comisionesYaLiquidadas']> || [])];
     const incluidos: string[] = [], pendientes: string[] = [];
-    const fueraPeriodo = [...(e.comisionesFueraPeriodo as string[] || [])];
+    const fueraPeriodo: string[] = [];
     let totalComisiones = 0;
     snaps.forEach((c, i) => {
       if (!c.exists()) throw new Error(`Comisión ${ids[i]} no encontrada; revisar conciliación`);
       const dato = c.data();
       if (typeof dato.tecnicoId !== 'string' || !dato.tecnicoId.trim() || (dato.tecnicoId !== personalId && (!e.personalUid || dato.tecnicoId !== e.personalUid))) throw new Error(`Comisión ${ids[i]} cambió de responsable; revisar`);
-      if (dato.estaAnulada) return;
-      if (dato.estadoLiquidacion && dato.estadoLiquidacion !== 'pendiente') throw new Error(`Comisión ${ids[i]} ya liquidada; revisar`);
+      if (dato.estaAnulada || dato.estadoLiquidacion === 'anulada' || duplicadas.includes(ids[i])) return;
+      if ((!dato.estadoLiquidacion || dato.estadoLiquidacion === 'pendiente') && dato.liquidacionId) throw new Error(`Comisión ${ids[i]} pendiente con referencia de liquidación incoherente; revisar`);
+      if (dato.estadoLiquidacion && dato.estadoLiquidacion !== 'pendiente') {
+        const origen = origenDatos.get(String(dato.liquidacionId));
+        const confirmado = dato.estadoLiquidacion === 'liquidada' && dato.liquidacionId !== liquidacionId && origen && Array.isArray(origen.empleados) && origen.empleados.some((emp: Record<string, unknown>) => emp.personalId === personalId && (emp.estadoCierre === 'cerrado' || (origen.estado === 'cerrada' && !emp.estadoCierre)) && (emp.comisionesIds as string[] || []).includes(ids[i]));
+        if (!confirmado) throw new Error(`Comisión ${ids[i]} ya liquidada sin evidencia coherente; revisar`);
+        if (!yaLiquidadas.some(c => c.id === ids[i])) yaLiquidadas.push({ id: ids[i], liquidacionId: String(dato.liquidacionId) });
+        return;
+      }
       const fecha = fechaFinanciera(dato.fechaCobro);
       if (!fecha) { pendientes.push(ids[i]); return; }
-      if (fecha < inicio || fecha > fin) { if (!fueraPeriodo.includes(ids[i])) fueraPeriodo.push(ids[i]); return; }
+      if (fecha > fin) { fueraPeriodo.push(ids[i]); return; }
+      if (fecha < inicio) atrasadas.push({ id: ids[i], fechaDevengo: fecha.toISOString(), quincenaDevengo: calcularQuincenaActual(fecha), quincenaLiquidacion: String(raw.quincena), incorporadaPorId: actor.id });
       const monto = Number(dato.comisionMonto) + Number(dato.descuentoPorGarantia?.monto ?? 0);
       if (!Number.isFinite(monto)) throw new Error(`Comisión ${ids[i]} con importe inválido`);
       incluidos.push(ids[i]); totalComisiones += monto;
     });
     const totalDevengado = Number(e.sueldoBase) + Number(e.bono || 0) + totalComisiones;
+    const sinCuotasCapturadas = !(e.cuotasPrestamos as unknown[] || []).length;
+    const cuotasPendientesRevision = sinCuotasCapturadas && totalDevengado <= 0 ? false
+      : e.cuotasPendientesRevision === true || (Number(e.totalDevengado) <= 0 && totalDevengado > 0 && sinCuotasCapturadas);
     const totalDescuentos = Number(e.totalAvances || 0) + Number(e.totalCuotasPrestamos || 0) + Number(e.totalDescuentosAdHoc || 0) + Number(e.totalAsistencia || 0);
     empleados[indice] = { ...e, comisionesIds: incluidos, totalComisiones, cantidadOrdenesConComision: incluidos.length,
-      comisionesFueraPeriodo: fueraPeriodo, comisionesPendientesFecha: pendientes, estadoCierre: pendientes.length ? 'bloqueado' : 'listo',
+      comisionesDuplicadas: duplicadas, comisionesYaLiquidadas: yaLiquidadas, comisionesAtrasadas: atrasadas, comisionesFueraPeriodo: fueraPeriodo, comisionesPendientesFecha: pendientes, cuotasPendientesRevision, estadoCierre: pendientes.length || duplicadas.length || cuotasPendientesRevision ? 'bloqueado' : 'listo',
       totalDevengado, totalDescuentos, totalNeto: totalDevengado - totalDescuentos };
     tx.update(ref, { empleados, totalNomina: empleados.reduce((s, emp) => s + Number(emp.totalDevengado), 0) });
   });
@@ -709,7 +794,11 @@ function serializarEmpleados(emps: LiquidacionEmpleado[]): Record<string, unknow
       totalDevengado: e.totalDevengado,
       pagado: e.pagado,
     };
+    if (e.comisionesDuplicadas) out.comisionesDuplicadas = e.comisionesDuplicadas;
     if (e.estadoCierre) out.estadoCierre = e.estadoCierre;
+    if (e.comisionesAtrasadas) out.comisionesAtrasadas = e.comisionesAtrasadas;
+    if (e.cuotasPendientesRevision !== undefined) out.cuotasPendientesRevision = e.cuotasPendientesRevision;
+    if (e.comisionesYaLiquidadas) out.comisionesYaLiquidadas = e.comisionesYaLiquidadas;
     if (e.comisionesFueraPeriodo) out.comisionesFueraPeriodo = e.comisionesFueraPeriodo;
     if (e.personalUid) out.personalUid = e.personalUid;
     if (e.comisionesPendientesFecha) out.comisionesPendientesFecha = e.comisionesPendientesFecha;
@@ -794,8 +883,12 @@ export function parseLiquidacion(id: string, raw: Record<string, unknown>): Liqu
       }));
       return {
         estadoCierre: (e.estadoCierre as LiquidacionEmpleado['estadoCierre']) || (raw.estado === 'cerrada' ? 'cerrado' : 'listo'),
+        comisionesAtrasadas: (e.comisionesAtrasadas as LiquidacionEmpleado['comisionesAtrasadas']) || [],
+        cuotasPendientesRevision: e.cuotasPendientesRevision === true,
+        comisionesYaLiquidadas: (e.comisionesYaLiquidadas as LiquidacionEmpleado['comisionesYaLiquidadas']) || [],
         comisionesFueraPeriodo: (e.comisionesFueraPeriodo as string[]) || [],
         personalUid: e.personalUid as string | undefined,
+        comisionesDuplicadas: (e.comisionesDuplicadas as string[]) || [],
         comisionesPendientesFecha: (e.comisionesPendientesFecha as string[]) || [],
         fechaCierreEmpleado: fechaFinanciera(e.fechaCierreEmpleado) || undefined,
         cerradoPorId: e.cerradoPorId as string | undefined,

@@ -24,19 +24,19 @@ vi.mock('firebase/firestore', async original => ({
     m.writes.push(...pending); return result;
   },
 }));
-import { confirmarPagoOrden } from '../../src/services/ordenes.service';
+import { confirmarPagoOrden, conciliarIdentidadFechaPago } from '../../src/services/ordenes.service';
 import { marcarOrdenReactivada } from '../../src/services/campanasMarketing.service';
 import { eliminarComisionesDeFactura } from '../../src/utils/comisiones';
 beforeEach(() => {
   m.auth.currentUser = { uid: 'uid-admin' };
-  m.data = { ordenes_servicio: {}, campanas_marketing: { fecha: new Date() }, comisiones: { estadoLiquidacion: 'pendiente', comisionMonto: 10 } };
+  m.data = { usuarios: { rol: 'administrador', activo: true }, ordenes_servicio: {}, campanas_marketing: { fecha: new Date() }, comisiones: { estadoLiquidacion: 'pendiente', comisionMonto: 10 } };
   m.writes = [];
 });
 const cliente = () => ({ id: 'cliente', ultimoContactoMarketing: new Date(), contactosMarketing: [{ campanaId: 'campana', fecha: new Date() }] }) as unknown as Cliente;
 const audit = () => m.writes.find(w => w.name === 'auditoria_admin')?.data;
 describe('escritores compatibles con identidad obligatoria', () => {
   it('confirmar pago conserva monto y agrega identidad junto a la actualización', async () => {
-    m.data.ordenes_servicio = { pagos: [{ id: 'pago', monto: 500, metodo: 'efectivo', verificado: false }] };
+    m.data.ordenes_servicio = { pagos: [{ id: 'pago', monto: 500, metodo: 'efectivo', fecha: '2026-09-29', verificado: false }] };
     expect(await confirmarPagoOrden('orden', 'pago', { id: 'perfil-personal-distinto', nombre: 'QA' })).toEqual({ ok: true });
     expect(m.writes).toHaveLength(2);
     expect(audit()).toMatchObject({ actorUid: 'uid-admin', actorId: 'uid-admin', monto: 500 });
@@ -59,4 +59,31 @@ describe('escritores compatibles con identidad obligatoria', () => {
     await expect(eliminarComisionesDeFactura({ facturaId: 'factura' })).rejects.toThrow('sesión');
     expect(m.writes).toHaveLength(0);
   });
+});
+
+it('confirmación legacy exige ID y fecha reales sin escribir ante faltantes', async () => {
+  m.data.ordenes_servicio = { pagos: [{ id: 'p', monto: 100, metodo: 'efectivo' }] };
+  expect(await confirmarPagoOrden('orden', 'p', { id: 'otro', nombre: 'QA' })).toMatchObject({ ok: false, razon: 'requiere_conciliacion' });
+  expect(m.writes).toHaveLength(0);
+  m.data.ordenes_servicio = { pagos: [{ id: 'p', monto: 100, metodo: 'efectivo', fecha: '2026-09-29' }] };
+  expect(await confirmarPagoOrden('orden', 'p', { id: 'otro', nombre: 'QA' })).toEqual({ ok: true });
+});
+it('reparación explícita mantiene importe, sigue pendiente y audita evidencia', async () => {
+  const original = { monto: 100, metodo: 'efectivo' };
+  m.data.ordenes_servicio = { pagos: [original] };
+  await conciliarIdentidadFechaPago('orden', 0, original, '2026-09-28T10:00:00-04:00', 'Comprobante bancario revisado');
+  const pago = (m.writes[0].data?.pagos as any[])[0];
+  expect(pago).toMatchObject({ monto: 100, metodo: 'efectivo', verificado: false });
+  expect(pago.id).toBeTruthy(); expect(pago.fecha.toDate().toISOString()).toBe('2026-09-28T14:00:00.000Z');
+  expect(audit()).toMatchObject({ accion: 'pago.conciliacion_identidad_fecha', actorUid: 'uid-admin', anterior: original, motivo: 'Comprobante bancario revisado' });
+});
+it('reparación rechaza snapshot cambiado, ya confirmado y perfil sin permiso', async () => {
+  const original = { monto: 100, metodo: 'efectivo' };
+  for (const actual of [{ ...original, monto: 101 }, { ...original, verificado: true }]) {
+    m.data.ordenes_servicio = { pagos: [actual] };
+    await expect(conciliarIdentidadFechaPago('orden', 0, original, '2026-09-28', 'Comprobante revisado')).rejects.toThrow('cambió');
+  }
+  m.data.usuarios = { rol: 'tecnico' }; m.data.ordenes_servicio = { pagos: [original] };
+  await expect(conciliarIdentidadFechaPago('orden', 0, original, '2026-09-28', 'Comprobante revisado')).rejects.toThrow('permiso');
+  expect(m.writes).toHaveLength(0);
 });

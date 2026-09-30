@@ -12,7 +12,8 @@ import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Edit, Key, Power, User, Shield, Eye, EyeOff, Check, KeyRound, ExternalLink, AlertTriangle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import NavegacionPersonal from '../components/personal/NavegacionPersonal';
 import toast from 'react-hot-toast';
 
 // SPRINT-PERSONAL-EDIT-UNIFY (2026-05-15): ROL_LABELS + ROL_COLORS importados desde
@@ -55,6 +56,8 @@ const COLORES_TECNICO = ['#3b82f6', '#f97316', '#14b8a6', '#a855f7', '#22c55e', 
 
 export default function GestionUsuarios() {
   const { userProfile } = useApp();
+  const [params] = useSearchParams();
+  const personalSeleccionadoId = params.get('personalId') || '';
   const esAdminEstricto = userProfile?.rol === 'administrador';
 
   const [loading, setLoading] = useState(true);
@@ -566,6 +569,7 @@ export default function GestionUsuarios() {
         </div>
       </div>
 
+      <NavegacionPersonal personal={usuarios} />
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 text-sm text-blue-900">
         <User size={14} className="mt-0.5 shrink-0" />
         <div className="flex-1">
@@ -573,7 +577,7 @@ export default function GestionUsuarios() {
           <Link to="/admin/personal" className="min-h-11 font-semibold underline hover:text-blue-700 inline-flex items-center gap-1">
             Personal <ExternalLink size={11} />
           </Link>
-          . Al crear un miembro del personal con rol distinto de "ayudante", se genera automáticamente su cuenta de acceso.
+          . Al crear un miembro del personal con rol distinto de "ayudante", puedes configurar su cuenta de acceso. Verifica que aparezca como vinculada antes de entregarle las credenciales.
         </div>
       </div>
 
@@ -591,7 +595,7 @@ export default function GestionUsuarios() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {agruparPorRol(usuarios).map(grupo => (
+              {agruparPorRol(usuarios.filter(u => !personalSeleccionadoId || u.id === personalSeleccionadoId)).map(grupo => (
                 <Fragment key={grupo.rol}>
                   <tr className="bg-primary/5 border-t border-b border-primary/10">
                     <td colSpan={6} className="px-4 py-2">

@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, Timestamp, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
-import { CitaPorConfirmar, OrdenServicio, GarantiaOrigen } from '../types';
+import { CitaPorConfirmar, OrdenServicio } from '../types';
 import { tiempoTranscurrido, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, formatMoneda, labelTipoMotor } from '../utils';
+import { parseCitaPorConfirmar } from '../utils/parseCitaPorConfirmar';
 import { useTiposEquipo } from '../hooks/useTiposEquipo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import EmptyState from '../components/EmptyState';
@@ -84,65 +85,7 @@ export default function Citas() {
     const unsub = onSnapshot(
       query(collection(db, 'citas_por_confirmar'), orderBy('createdAt', 'asc')),
       (snap) => {
-        setCitas(snap.docs.map(d => {
-          const raw = d.data();
-          return {
-            id: d.id,
-            clienteNombre: raw.clienteNombre || '',
-            telefono: raw.telefono || raw.clienteTelefono || '',
-            servicio: raw.servicio || '',
-            falla: raw.falla,
-            horarioSolicitado: raw.horarioSolicitado,
-            origen: raw.origen,
-            ordenNumero: raw.ordenNumero,
-            fotoEquipoUrl: raw.fotoEquipoUrl,
-            clienteEmail: raw.clienteEmail,
-            clienteDireccion: raw.clienteDireccion,
-            clienteReferencia: raw.clienteReferencia,
-            clienteSector: raw.clienteSector,
-            clienteLat: typeof raw.clienteLat === 'number' ? raw.clienteLat : undefined,
-            clienteLng: typeof raw.clienteLng === 'number' ? raw.clienteLng : undefined,
-            equipoTipo: raw.equipoTipo,
-            equipoMarca: raw.equipoMarca,
-            equipoModelo: raw.equipoModelo,
-            equipoTipoMotor: raw.equipoTipoMotor === 'torre' || raw.equipoTipoMotor === 'individual'
-              ? raw.equipoTipoMotor
-              : undefined,
-            citaIdProvisional: typeof raw.citaIdProvisional === 'string' && raw.citaIdProvisional.length > 0
-              ? raw.citaIdProvisional
-              : undefined,
-            comoNosConocio: typeof raw.comoNosConocio === 'string' && raw.comoNosConocio.length > 0
-              ? raw.comoNosConocio
-              : undefined,
-            calendarioId: raw.calendarioId,
-            calendarioNombre: raw.calendarioNombre,
-            fechaSolicitada: raw.fechaSolicitada?.toDate?.() || undefined,
-            horaSolicitada: raw.horaSolicitada,
-            // Garantía
-            tipo: raw.tipo,
-            esGarantia: raw.esGarantia === true,
-            referenciaFacturaId: raw.referenciaFacturaId,
-            referenciaConduce: raw.referenciaConduce,
-            referenciaOrdenId: raw.referenciaOrdenId,
-            tecnicoOriginalUid: raw.tecnicoOriginalUid,
-            tecnicoOriginalNombre: raw.tecnicoOriginalNombre,
-            descripcionProblema: raw.descripcionProblema,
-            origenGarantia: raw.origenGarantia as GarantiaOrigen | undefined,
-            whatsappAsignado: raw.whatsappAsignado,
-            whatsappAsignadoNombre: raw.whatsappAsignadoNombre,
-            telefonoNormalizado:
-              typeof raw.telefonoNormalizado === 'string' && raw.telefonoNormalizado.length > 0
-                ? raw.telefonoNormalizado
-                : undefined,
-            camposPersonalizados:
-              raw.camposPersonalizados &&
-              typeof raw.camposPersonalizados === 'object' &&
-              !Array.isArray(raw.camposPersonalizados)
-                ? (raw.camposPersonalizados as Record<string, string>)
-                : undefined,
-            createdAt: raw.createdAt?.toDate?.() || new Date(),
-          } as CitaPorConfirmar;
-        }));
+        setCitas(snap.docs.map(d => parseCitaPorConfirmar(d.id, d.data())));
         setLoading(false);
       }
     );

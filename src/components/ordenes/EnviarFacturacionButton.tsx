@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { doc, updateDoc, collection, getDocs, query, where, Timestamp, arrayUnion } from 'firebase/firestore';
+import { doc, runTransaction, collection, getDocs, query, where, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, Usuario, Personal } from '../../types';
 import { useApp } from '../../context/AppContext';
@@ -8,6 +8,8 @@ import { crearNotificacion } from '../../services/notificaciones.service';
 import { razonEnviarFacturacionDisabled } from '../../utils/tooltipsBotones';
 import { Receipt, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { validarCotizacionParaConduce } from '../../utils/cotizacionConduce';
+import { puede } from '../../utils/permisos';
 
 interface Props {
   orden: OrdenServicio;
@@ -17,8 +19,7 @@ interface Props {
 /**
  * Marca la orden como "enviada a facturación" y notifica a admin/coordinadoras.
  * Requiere:
- *  - orden con un precio definido (cualquiera de: precioFinal, precioAprobado,
- *    precioSugerido > 0, o cotizacionId vinculado, o estadoAprobacion === 'aprobado')
+ *  - cotización vinculada aceptada y de la misma orden, cuando existe
  *  - al menos un pago registrado (montoPagado > 0)
  *  - usuario con permiso `ordenesEnviarAFacturacion`
  */
@@ -29,7 +30,7 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
   const yaEnviada = !!orden.enviadaAFacturacion;
   // Solo requerimos al menos un pago registrado. El precio se infiere del pago si no existe explícito.
   const tienePago = Number(orden.montoPagado || 0) > 0;
-  const habilitado = tienePago && !yaEnviada && !orden.facturada;
+  const habilitado = puede(userProfile, 'ordenesEnviarAFacturacion') && tienePago && !yaEnviada && !orden.facturada;
 
   const handleClick = async () => {
     if (!habilitado) return;
@@ -54,13 +55,23 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
         'no',
         'sí',
       );
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
+      await runTransaction(db, async tx => {
+        const ordenRef = doc(db, 'ordenes_servicio', orden.id);
+        const actual = (await tx.get(ordenRef)).data();
+        if (!actual || actual.facturada || actual.enviadaAFacturacion) throw new Error('La orden ya fue enviada o tiene conduce.');
+        if (Number(actual.montoPagado || 0) <= 0) throw new Error('La orden requiere un pago registrado.');
+        if (actual.cotizacionId) {
+          const cot = await tx.get(doc(db, 'cotizaciones', actual.cotizacionId));
+          validarCotizacionParaConduce(cot.data(), orden.id);
+        }
+        tx.update(ordenRef, {
         enviadaAFacturacion: true,
         enviadaAFacturacionAt: ahora,
         enviadaAFacturacionPorId: usuarioId,
         enviadaAFacturacionPorNombre: usuario,
         auditoria: arrayUnion(registro),
         updatedAt: ahora,
+        });
       });
 
       // SPRINT-158d-FIX (2026-05-15): optimistic UI — confirmar al usuario apenas
@@ -105,7 +116,7 @@ export default function EnviarFacturacionButton({ orden, userProfile }: Props) {
       })();
     } catch (err) {
       console.error(err);
-      toast.error('Error al enviar a conduce');
+      toast.error(err instanceof Error ? err.message : 'Error al enviar a conduce');
       setSaving(false);
     }
   };

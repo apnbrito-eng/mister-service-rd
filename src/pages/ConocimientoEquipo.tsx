@@ -1,4 +1,5 @@
 import ImportarConocimiento from '../components/ImportarConocimiento';
+import EnlacesSeguimiento from '../components/marketing/EnlacesSeguimiento';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useCallback, useEffect, useState } from 'react';
@@ -32,6 +33,7 @@ export default function ConocimientoEquipo() {
   return <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
     <Link to={userProfile?.rol === 'tecnico' ? '/tecnico' : '/admin/dashboard'} className="min-h-11 inline-flex items-center text-sm text-primary underline py-2">Volver a mi trabajo</Link>
     <header><div className="flex items-center gap-3 text-primary"><BookOpen size={28} /><h1 className="text-2xl font-bold">Conocimiento del equipo</h1></div><p className="text-gray-600 mt-2">Lo que aprendemos trabajando, disponible para la próxima persona que lo necesite.</p></header>
+    {userProfile?.rol !== 'tecnico' && <EnlacesSeguimiento actual="/admin/conocimiento" />}
     {error && <div role="alert" className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-800">{error}<button onClick={cargar} className="ml-3 underline">Reintentar</button></div>}
     {aviso && <p role="status" className="rounded-xl bg-emerald-50 p-4 text-emerald-800">{aviso}</p>}
     {revisar && <ImportarConocimiento onGuardado={() => { void cargar(); }} />}

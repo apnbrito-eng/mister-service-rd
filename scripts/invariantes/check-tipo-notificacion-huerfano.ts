@@ -155,9 +155,20 @@ export function extraerTiposEmitidos(src: string, filePath: string): Set<string>
   const referenciaColeccion = /collection\(\s*['"]notificaciones['"]\s*\)/;
   // Conserva el alcance Admin SDK anterior; el AST evita comentarios y distingue
   // las ramas resultantes del ternario de los strings usados en su condición.
-  const emisionAdmin = referenciaColeccion.test(src) || filePath.startsWith('api/');
   const archivo = ts.createSourceFile(filePath, src, ts.ScriptTarget.Latest, true,
     filePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+  let emisionTransaccional = false;
+  const detectarTransaccion = (n: ts.Node): void => {
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression)
+      && ts.isIdentifier(n.expression.expression) && n.expression.expression.text === 'tx' && n.expression.name.text === 'set') {
+      const ref = n.arguments[0];
+      if (ref && ts.isCallExpression(ref) && ts.isIdentifier(ref.expression) && ref.expression.text === 'doc'
+        && ref.arguments[1] && ts.isStringLiteral(ref.arguments[1]) && ref.arguments[1].text === 'notificaciones') emisionTransaccional = true;
+    }
+    ts.forEachChild(n, detectarTransaccion);
+  };
+  detectarTransaccion(archivo);
+  const emisionAdmin = referenciaColeccion.test(src) || filePath.startsWith('api/') || emisionTransaccional;
   function extraerValor(valor: ts.Expression): void {
     if (ts.isStringLiteral(valor) || ts.isNoSubstitutionTemplateLiteral(valor)) {
       out.add(valor.text);

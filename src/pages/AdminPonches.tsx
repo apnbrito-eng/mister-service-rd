@@ -1,3 +1,6 @@
+import { personalIdDePonche, claveIdentidadPonche } from '../utils/identidadPonche';
+import { useSearchParams } from 'react-router-dom';
+import NavegacionPersonal from '../components/personal/NavegacionPersonal';
 import RevisionAsistencia from '../components/asistencia/RevisionAsistencia';
 import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore';
@@ -106,7 +109,9 @@ function escaparCSV(v: string | number | undefined | null): string {
 export default function AdminPonches() {
   const [desde, setDesde] = useState<string>(fechaRDHoy());
   const [hasta, setHasta] = useState<string>(fechaRDHoy());
-  const [filtroPersonal, setFiltroPersonal] = useState<string>('');
+  const [params, setParams] = useSearchParams();
+  const filtroPersonal = params.get('personalId') || '';
+  const setFiltroPersonal = (id: string) => { const next = new URLSearchParams(params); if (id) next.set('personalId', id); else next.delete('personalId'); setParams(next); };
   const [filtroRol, setFiltroRol] = useState<'' | Rol>('');
 
   const [ponches, setPonches] = useState<Ponche[]>([]);
@@ -189,12 +194,12 @@ export default function AdminPonches() {
   const filas: FilaPonche[] = useMemo(() => {
     const map = new Map<string, FilaPonche>();
     for (const p of ponches) {
-      const baseKey = p.personalId || p.personalUid;
+      const baseKey = claveIdentidadPonche(p, personalList);
       const key = esRangoMultiDia ? `${baseKey}|${p.fechaRD}` : baseKey;
       const existente = map.get(key);
       if (!existente) {
         map.set(key, {
-          personalId: p.personalId,
+          personalId: personalIdDePonche(p, personalList) || p.personalId,
           personalUid: p.personalUid,
           personalNombre: p.personalNombre,
           personalRol: p.personalRol,
@@ -216,7 +221,7 @@ export default function AdminPonches() {
       });
     }
     return arr.sort((a, b) => a.personalNombre.localeCompare(b.personalNombre, 'es'));
-  }, [ponches, esRangoMultiDia]);
+  }, [ponches, esRangoMultiDia, personalList]);
 
   // Personal activo que no ponchó (badges de ausencia).
   // Solo aplica en modo single-día y si el día es laborable.
@@ -259,10 +264,10 @@ export default function AdminPonches() {
   const filasFiltradas = useMemo(() => {
     return filas.filter((f) => {
       if (filtroRol && f.personalRol !== filtroRol) return false;
-      if (filtroPersonal && f.personalId !== filtroPersonal) return false;
+      if (filtroPersonal && personalIdDePonche(f, personalList) !== filtroPersonal) return false;
       return true;
     });
-  }, [filas, filtroRol, filtroPersonal]);
+  }, [filas, filtroRol, filtroPersonal, personalList]);
 
   const exportarCSV = () => {
     const headers = esRangoMultiDia
@@ -325,6 +330,9 @@ export default function AdminPonches() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
+      <NavegacionPersonal personal={personalList} />
+      <p className="text-sm text-gray-600 mb-3">Los ponches muestran asistencia registrada. Las ausencias y descuentos requieren revisión; solo lo aprobado se incorpora a la nómina al aplicar la revisión.</p>
+      <p className="text-xs text-gray-600 mb-2">La revisión de asistencia siguiente tiene su propio selector de empleado y utiliza las fechas del reporte.</p>
       <RevisionAsistencia desde={desde} hasta={hasta} />
       {errorPonches && <p role="alert" className="text-red-700">{errorPonches}</p>}
       {/* Header */}
@@ -432,12 +440,11 @@ export default function AdminPonches() {
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
             >
               <option value="">Todos</option>
-              {personalList
-                .filter((p) => p.activo)
+              {[...personalList]
                 .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
                 .map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.nombre} ({p.rol})
+                    {p.nombre} ({p.rol}){!p.activo ? ' · Inactivo' : ''}
                   </option>
                 ))}
             </select>

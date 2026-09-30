@@ -1,64 +1,72 @@
+import { fechaFinanciera } from '../utils/fechaFinanciera';
+import { diaCobroRD, OrdenCobrosCruda, proyectarCobrosCaja } from '../utils/movimientosCobros';
+import { ordenMetrica, cerradasDelPeriodo, identidadPersonal, fechaCierreMetrica, enPeriodo, rangoMesRD } from '../utils/metricasNegocio';
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, Personal, Factura } from '../types';
-import { formatMoneda, parseOrden } from '../utils';
+import { OrdenServicio, Personal } from '../types';
+import { formatMoneda } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 // SPRINT-149: cleanup imports legacy unused (BarChart3, isWithinInterval, format, parseISO, es)
 // detectados al stagear el archivo en el fix de operariaId. No afectan render.
 import { TrendingUp, Users, CheckCircle, XCircle, Clock, Calendar, RefreshCw, UserPlus, Award } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { calcularQuincenaActual, listarUltimasQuincenas, rangoQuincena } from '../utils/comisiones';
-import { differenceInMinutes, startOfWeek, startOfMonth, startOfDay } from 'date-fns';
+import { differenceInMinutes } from 'date-fns';
 
 export default function Rendimiento() {
+  const { userProfile } = useApp();
+  const autorizado = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  const [error, setError] = useState('');
+  const [crudas, setCrudas] = useState<OrdenCobrosCruda[]>([]);
   const [loading, setLoading] = useState(true);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
-  const [facturas, setFacturas] = useState<Factura[]>([]);
   const [filtroCoord, setFiltroCoord] = useState('');
   const [filtroFecha, setFiltroFecha] = useState<'hoy' | 'semana' | 'mes' | 'rango'>('mes');
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [fechaFin, setFechaFin] = useState('');
+  const [fechaInicio, setFechaInicio] = useState(() => diaCobroRD(new Date()).slice(0, 7) + '-01');
+  const [fechaFin, setFechaFin] = useState(() => diaCobroRD(new Date()));
 
   useEffect(() => {
-    const unsub1 = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
-      setOrdenes(snap.docs.map(d => parseOrden(d.id, d.data())));
-      setLoading(false);
-    });
-    const unsub2 = onSnapshot(collection(db, 'personal'), (snap) => {
-      setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
-    });
-    const unsub3 = onSnapshot(collection(db, 'facturas'), (snap) => {
-      setFacturas(snap.docs.map(d => ({
-        id: d.id, ...d.data(),
-        fechaEmision: d.data().fechaEmision?.toDate?.() || new Date(),
-        fechaPago: d.data().fechaPago?.toDate?.() || null,
-        createdAt: d.data().createdAt?.toDate?.() || new Date(),
-      } as Factura)));
-    });
-    return () => { unsub1(); unsub2(); unsub3(); };
-  }, []);
+    if (!autorizado) return;
+    setLoading(true); setError('');
+    const loaded = new Set<string>();
+    const listo = (key: string) => { loaded.add(key); if (loaded.size === 2) setLoading(false); };
+    const fail = () => { setError('No se pudieron cargar todas las fuentes.'); setLoading(false); };
+    const unsub1 = onSnapshot(collection(db, 'ordenes_servicio'), snap => {
+      setOrdenes(snap.docs.map(d => ordenMetrica(d.id, d.data())));
+      setCrudas(snap.docs.map(d => ({ id: d.id, datos: d.data() })));
+      listo('ordenes');
+    }, fail);
+    const unsub2 = onSnapshot(collection(db, 'personal'), snap => {
+      setPersonal(snap.docs.map(d => ({ ...d.data(), id: d.id } as Personal))); listo('personal');
+    }, fail);
+    return () => { unsub1(); unsub2(); };
+  }, [autorizado]);
 
   const dateRange = useMemo(() => {
     const now = new Date();
-    if (filtroFecha === 'hoy') return { start: startOfDay(now), end: now };
-    if (filtroFecha === 'semana') return { start: startOfWeek(now, { weekStartsOn: 1 }), end: now };
-    if (filtroFecha === 'mes') return { start: startOfMonth(now), end: now };
+    const hoyRD = diaCobroRD(now);
+    const inicioRD = fechaFinanciera(hoyRD)!;
+    const diaSemana = new Date(hoyRD + 'T12:00:00Z').getUTCDay();
+    const semanaRD = new Date(inicioRD.getTime() - ((diaSemana + 6) % 7) * 86400000);
+    if (filtroFecha === 'hoy') return { start: inicioRD, end: now };
+    if (filtroFecha === 'semana') return { start: semanaRD, end: now };
+    if (filtroFecha === 'mes') return { start: rangoMesRD(hoyRD.slice(0, 7)).inicio, end: now };
     if (filtroFecha === 'rango' && fechaInicio && fechaFin) {
-      return { start: new Date(fechaInicio), end: new Date(fechaFin + 'T23:59:59') };
+      return { start: fechaFinanciera(fechaInicio) || new Date(NaN), end: new Date((fechaFinanciera(fechaFin)?.getTime() ?? NaN) + 86400000 - 1) };
     }
-    return { start: startOfMonth(now), end: now };
+    return { start: rangoMesRD(hoyRD.slice(0, 7)).inicio, end: now };
   }, [filtroFecha, fechaInicio, fechaFin]);
 
   const ordenesFiltradas = useMemo(() => {
     return ordenes.filter(o => {
       if (o.eliminada) return false;
       const inRange = o.createdAt >= dateRange.start && o.createdAt <= dateRange.end;
-      const matchCoord = !filtroCoord || o.creadoPor === filtroCoord || o.responsableNombre === filtroCoord;
+      const matchCoord = !filtroCoord || identidadPersonal(o.operariaId || o.responsableId || o.creadoPor, personal)?.id === filtroCoord;
       return inRange && matchCoord;
     });
-  }, [ordenes, dateRange, filtroCoord]);
+  }, [ordenes, dateRange, filtroCoord, personal]);
 
   const coordinadores = useMemo(() => {
     const secretarias = personal.filter(p => (p.rol === 'secretaria' || p.rol === 'operaria') && p.activo);
@@ -83,57 +91,64 @@ export default function Rendimiento() {
     ordenesFiltradas.forEach(o => {
       const lead = o.historialFases.find(h => h.fase === 'nuevo_lead');
       const gestion = o.historialFases.find(h => h.fase === 'en_gestion');
-      if (lead && gestion) tiempos.push(differenceInMinutes(gestion.timestamp, lead.timestamp));
+      if (lead && gestion) { const minutos = differenceInMinutes(gestion.timestamp, lead.timestamp); if (Number.isFinite(minutos) && minutos >= 0) tiempos.push(minutos); }
     });
     const avgRespuesta = tiempos.length > 0 ? Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length) : 0;
 
-    const completadasSemana = ordenes.filter(o => o.fase === 'cerrado' && o.updatedAt >= startOfWeek(new Date(), { weekStartsOn: 1 })).length;
-    const completadasMes = ordenes.filter(o => o.fase === 'cerrado' && o.updatedAt >= startOfMonth(new Date())).length;
+    const completadasSemana = cerradasDelPeriodo(ordenes, personal, dateRange.start, dateRange.end, filtroCoord).length;
+    const completadasMes = cerradasDelPeriodo(ordenes, personal, dateRange.start, dateRange.end, filtroCoord).length;
 
     // By coordinator
     const byCoord: Record<string, { nombre: string; confirmadas: number; canceladas: number; reagendadas: number; nuevosClientes: number; total: number }> = {};
     coordinadores.forEach(c => {
-      byCoord[c.nombre] = { nombre: c.nombre, confirmadas: 0, canceladas: 0, reagendadas: 0, nuevosClientes: 0, total: 0 };
+      byCoord[c.id] = { nombre: c.nombre, confirmadas: 0, canceladas: 0, reagendadas: 0, nuevosClientes: 0, total: 0 };
     });
     ordenesFiltradas.forEach(o => {
-      const coord = o.creadoPor || o.responsableNombre || 'Sin asignar';
-      if (!byCoord[coord]) byCoord[coord] = { nombre: coord, confirmadas: 0, canceladas: 0, reagendadas: 0, nuevosClientes: 0, total: 0 };
+      const persona = identidadPersonal(o.operariaId || o.responsableId || o.creadoPor, personal);
+      const coord = persona?.id || 'sin-identidad';
+      if (!byCoord[coord]) byCoord[coord] = { nombre: persona?.nombre || 'Sin responsable identificable', confirmadas: 0, canceladas: 0, reagendadas: 0, nuevosClientes: 0, total: 0 };
       byCoord[coord].total++;
       if (['agendado', 'en_diagnostico', 'en_cotizacion', 'aprobado', 'trabajo_realizado', 'cerrado'].includes(o.fase)) byCoord[coord].confirmadas++;
       if (o.fase === 'cancelado') byCoord[coord].canceladas++;
       if (o.reagendada) byCoord[coord].reagendadas++;
     });
 
+    Object.entries(byCoord).forEach(([id, stats]) => { stats.nuevosClientes = new Set(ordenesFiltradas.filter(o => identidadPersonal(o.operariaId || o.responsableId || o.creadoPor, personal)?.id === id && o.clienteId && !clientesPrevios.has(o.clienteId)).map(o => o.clienteId)).size; });
+
     // By technician
     const byTecnico: Record<string, { nombre: string; pendientes: number; enProceso: number; completados: number; total: number; montoFacturado: number }> = {};
-    const tecnicos = personal.filter(p => p.rol === 'tecnico' && p.activo);
+    const tecnicos = personal.filter(p => p.rol === 'tecnico');
     tecnicos.forEach(t => {
-      byTecnico[t.nombre] = { nombre: t.nombre, pendientes: 0, enProceso: 0, completados: 0, total: 0, montoFacturado: 0 };
+      // @safe-tecnicoid-id: agrupación canónica; todas las lecturas resuelven uid/id mediante identidadPersonal única.
+      byTecnico[t.id] = { nombre: t.nombre, pendientes: 0, enProceso: 0, completados: 0, total: 0, montoFacturado: 0 };
     });
     ordenesFiltradas.forEach(o => {
-      if (!o.tecnicoNombre || !byTecnico[o.tecnicoNombre]) return;
-      byTecnico[o.tecnicoNombre].total++;
-      if (['nuevo_lead', 'en_gestion', 'aprobado', 'agendado'].includes(o.fase)) byTecnico[o.tecnicoNombre].pendientes++;
-      if (['en_diagnostico', 'en_cotizacion'].includes(o.fase)) byTecnico[o.tecnicoNombre].enProceso++;
-      if (['trabajo_realizado', 'cerrado'].includes(o.fase)) byTecnico[o.tecnicoNombre].completados++;
+      const id = identidadPersonal(o.tecnicoId, personal)?.id;
+      if (!id || !byTecnico[id]) return;
+      byTecnico[id].total++;
+      if (['nuevo_lead', 'en_gestion', 'aprobado', 'agendado'].includes(o.fase)) byTecnico[id].pendientes++;
+      if (['en_diagnostico', 'en_cotizacion'].includes(o.fase)) byTecnico[id].enProceso++;
+      if (['trabajo_realizado', 'cerrado'].includes(o.fase)) byTecnico[id].completados++;
     });
-    // Monto facturado per técnico (approximate from facturas)
-    facturas.filter(f => f.estado === 'pagada').forEach(f => {
-      // Match by clienteNombre roughly
-      const orden = ordenes.find(o => o.numero === f.ordenNumero || o.clienteNombre === f.clienteNombre);
-      if (orden?.tecnicoNombre && byTecnico[orden.tecnicoNombre]) {
-        byTecnico[orden.tecnicoNombre].montoFacturado += f.total;
-      }
+    const caja = proyectarCobrosCaja(crudas, undefined, Number.isFinite(dateRange.start.getTime()) ? diaCobroRD(dateRange.start) : '9999-01-01', Number.isFinite(dateRange.end.getTime()) ? diaCobroRD(dateRange.end) : '0001-01-01');
+    caja.movimientos.filter(m => m.confirmado).forEach(m => {
+      const orden = ordenes.find(o => o.id === m.ordenId);
+      if (!orden || (filtroCoord && identidadPersonal(orden.operariaId || orden.responsableId || orden.creadoPor, personal)?.id !== filtroCoord)) return;
+      const id = identidadPersonal(orden.tecnicoId, personal)?.id;
+      if (id && byTecnico[id]) byTecnico[id].montoFacturado += m.monto;
     });
 
     return { total, confirmadas, canceladas, reagendadas, nuevosClientes, tasaConfirmacion, avgRespuesta, completadasSemana, completadasMes, byCoord, byTecnico };
-  }, [ordenesFiltradas, ordenes, personal, facturas, coordinadores, dateRange]);
+  }, [ordenesFiltradas, ordenes, personal, crudas, coordinadores, dateRange, filtroCoord]);
 
+  if (!autorizado) return <p className="p-6">Acceso restringido a administración y coordinación.</p>;
+  if (error) return <p role="alert" className="p-6 text-red-700">{error}</p>;
+  if (!Number.isFinite(dateRange.start.getTime()) || !Number.isFinite(dateRange.end.getTime()) || dateRange.start > dateRange.end) return <div className="p-6"><p>Selecciona un rango válido.</p><button onClick={() => setFiltroFecha('mes')}>Volver al mes</button></div>;
   if (loading) return <LoadingSpinner fullPage text="Cargando rendimiento..." />;
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-primary">Rendimiento / KPIs</h1>
+      <h1 className="text-2xl font-bold text-primary">Rendimiento / KPIs</h1><p className="text-sm">Órdenes agrupadas por fecha de creación; cierres por su fecha registrada. Sin técnico identificable: {ordenesFiltradas.filter(o => !identidadPersonal(o.tecnicoId, personal)).length}. Sin fecha de creación: {ordenes.filter(o => !Number.isFinite(o.createdAt.getTime())).length}.</p>
 
       {/* Filters */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-wrap gap-3 items-center">
@@ -164,7 +179,7 @@ export default function Rendimiento() {
           <select value={filtroCoord} onChange={e => setFiltroCoord(e.target.value)}
             className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
             <option value="">Todos los coordinadores</option>
-            {coordinadores.map(c => <option key={c.id} value={c.nombre}>{c.nombre}</option>)}
+            {coordinadores.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
         </div>
       </div>
@@ -189,8 +204,8 @@ export default function Rendimiento() {
             style={{ width: `${Math.min(kpis.tasaConfirmacion, 100)}%` }} />
         </div>
         <div className="flex justify-between mt-2 text-xs text-gray-500">
-          <span>Completadas semana: {kpis.completadasSemana}</span>
-          <span>Completadas mes: {kpis.completadasMes}</span>
+          <span>Cerradas en el período: {kpis.completadasSemana}</span>
+          <span>Importes: cobros confirmados por fecha del pago</span>
         </div>
       </div>
 
@@ -201,10 +216,10 @@ export default function Rendimiento() {
           <h2 className="text-lg font-semibold text-gray-900">Rendimiento por Coordinador</h2>
         </div>
         <div className="space-y-4">
-          {Object.values(kpis.byCoord).filter(c => c.total > 0).map((stats) => {
+          {Object.entries(kpis.byCoord).filter(([, c]) => c.total > 0).map(([id, stats]) => {
             const tasa = stats.total > 0 ? (stats.confirmadas / stats.total * 100) : 0;
             return (
-              <div key={stats.nombre} className="bg-gray-50 rounded-xl p-4">
+              <div key={id} className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <span className="font-semibold text-gray-900">{stats.nombre}</span>
                   <span className="text-sm text-gray-500">{stats.total} órdenes</span>
@@ -250,10 +265,10 @@ export default function Rendimiento() {
           <h2 className="text-lg font-semibold text-gray-900">Rendimiento por Técnico</h2>
         </div>
         <div className="space-y-4">
-          {Object.values(kpis.byTecnico).map(t => {
+          {Object.entries(kpis.byTecnico).map(([id, t]) => {
             const pctCompletadas = t.total > 0 ? (t.completados / t.total * 100) : 0;
             return (
-              <div key={t.nombre} className="bg-gray-50 rounded-xl p-4">
+              <div key={id} className="bg-gray-50 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-semibold text-gray-900">{t.nombre}</span>
                   <span className="text-sm font-medium text-primary">{formatMoneda(t.montoFacturado)}</span>
@@ -298,10 +313,10 @@ function DesempenoOperariasSection({ ordenes, personal }: { ordenes: OrdenServic
       // persiste auth.uid; fallback a `op.id` para operarias pre-onboarding sin
       // doc espejo en usuarios/{uid}.
       const ordenesEnRango = ordenes.filter(o =>
-        o.operariaId === (op.uid || op.id) &&
+        identidadPersonal(o.operariaId, personal)?.id === op.id &&
         !o.eliminada &&
         ((o.fase === 'cerrado') || o.soloChequeo) &&
-        o.updatedAt >= inicio && o.updatedAt <= fin
+        enPeriodo(fechaCierreMetrica(o), inicio, fin)
       );
       const chequeos = ordenesEnRango.filter(o => o.soloChequeo).length;
       const completadas = ordenesEnRango.filter(o => o.fase === 'cerrado' && !o.soloChequeo).length;
@@ -310,7 +325,7 @@ function DesempenoOperariasSection({ ordenes, personal }: { ordenes: OrdenServic
       const bono = pct >= UMBRAL_BONO ? BONO_MONTO : 0;
       return { operaria: op, atendidas, completadas, chequeos, pct, bono };
     }).sort((a, b) => b.pct - a.pct);
-  }, [operarias, ordenes, quincena]);
+  }, [operarias, ordenes, quincena, personal]);
 
   if (!esAdminOCoord) return null;
 

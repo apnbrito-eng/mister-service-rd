@@ -42,3 +42,14 @@ Taller→standby relee la orden vinculada y la pone en espera en el mismo commit
 ## Revisión final de ciclos e identidad
 
 Se rechaza también `estado: completado` legacy sin fase. Si la solicitud estable del taller ya llegó, repetir standby muestra “La solicitud anterior ya llegó; registra una nueva pieza en Pendiente de piezas” y no cambia equipo/orden. La recepción usa ahora `recibirEquipoTaller`: relee la orden en transacción y toma cliente ID/nombre/teléfono y equipo de esa fuente; campos de nombre/teléfono aparecen de solo lectura. Acciones UI consultan `puede(userProfile, 'ordenesModificar')` y rol oficina, sin ampliar permisos de servidor.
+
+
+## Reactivación concurrente — continuación
+- Escritura actual de standby_piezas centralizada en flujoPiezasTaller.service; Ordenes/OrdenDetalle/TecnicoVista/IA son lectores. seedData solo fixtures sin vínculo orden.
+- Crear/editar/vincular/cambiar estado/llegada incrementan standbyRevision en orden dentro de su transacción. Reactivar captura revisión ANTES consulta de piezas y revalida orden/revisión/refs en transacción; no usa tx.get(query).
+- Nueva pieza concurrente invalida reactivación; nueva pieza posterior vuelve a poner la orden en espera. Piezas pendientes y orden finalizada bloquean. Repetir no duplica auditoría; actor registrado auth UID.
+- No mueve fase ni agenda visita. Orden sin piezas documentadas puede quitar espera humana explícita, sin inventar pieza.
+- Garantía de concurrencia requiere escritores compatibles: clientes antiguos, scripts directos o futuras rutas sin revisión podrían insertar sin conflicto. No se afirma exclusión backend total ni compatibilidad garantizada con APK vieja. Requiere controlar versiones/escrituras antes publicación.
+- TypeScript limpio y 18 pruebas focales pasan. Nuevos tests emulador standby-reactivar.rules.test.ts preparados; primer arranque rechazado por puerto ocupado de suite coordinator, no ejecutados aún.
+
+Verificación final reactivación: emulador Firestore 8/8 PASS (4 nuevos + 4 taller); /tmp/standby-reactivar-emulator.log. Puerto liberado.

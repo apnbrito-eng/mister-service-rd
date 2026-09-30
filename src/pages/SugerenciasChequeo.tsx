@@ -1,7 +1,12 @@
+import { ordenVigenteParaChequeo, soloChequeoDisponible } from '../utils/soloChequeoDisponible';
+import { fechaCalendarioRD } from '../utils/fechaMantenimiento';
+import { useNavigate } from 'react-router-dom';
+import { resolverChatCliente } from '../utils/resolverChatCliente';
+import { guardarSeguimientoChequeo, type SeguimientoChequeo } from '../services/seguimientoChequeo.service';
 import { useEffect, useMemo, useState } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import type { OrdenServicio, Personal, SugerenciaSoloChequeo } from '../types';
+import type { Cliente, OrdenServicio, Personal, SugerenciaSoloChequeo } from '../types';
 import {
   parseOrden,
   formatMoneda,
@@ -28,6 +33,11 @@ interface SugerenciaConOrden {
 }
 
 export default function SugerenciasChequeo() {
+  const navigate = useNavigate();
+  const [gestiones, setGestiones] = useState<Record<string, SeguimientoChequeo>>({});
+  const [seleccionada, setSeleccionada] = useState<OrdenServicio | null>(null);
+  const [gestion, setGestion] = useState<SeguimientoChequeo>({ responsableUid: '', proximaFecha: '', resultado: 'pendiente', nota: '' });
+  const [guardandoGestion, setGuardandoGestion] = useState(false);
   const { userProfile, currentUser } = useApp();
   const [loading, setLoading] = useState(true);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
@@ -48,6 +58,7 @@ export default function SugerenciasChequeo() {
     // Listener de órdenes — filtramos client-side por sugerencia pendiente
     // para no requerir índice compuesto (convención del repo).
     const unsubOrd = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
+      setGestiones(Object.fromEntries(snap.docs.filter(d => d.data().seguimientoChequeo).map(d => [d.id, d.data().seguimientoChequeo])));
       setOrdenes(snap.docs.map(d => parseOrden(d.id, d.data())));
       checkLoaded();
     });
@@ -64,11 +75,15 @@ export default function SugerenciasChequeo() {
     };
   }, []);
 
+  useEffect(() => {
+    if (seleccionada && !soloChequeoDisponible(ordenes.find(o => o.id === seleccionada.id))) setSeleccionada(null);
+  }, [ordenes, seleccionada]);
+
   // Lista de sugerencias pendientes (client-side filter + sort)
   const pendientes = useMemo<SugerenciaConOrden[]>(() => {
     const out: SugerenciaConOrden[] = [];
     for (const orden of ordenes) {
-      if (orden.eliminada) continue;
+      if (!ordenVigenteParaChequeo(orden)) continue;
       const sug = obtenerSugerenciaSoloChequeoPendiente(orden);
       if (sug) out.push({ orden, sugerencia: sug });
     }
@@ -170,6 +185,26 @@ export default function SugerenciasChequeo() {
     return whatsappLink(tel, mensaje);
   };
 
+  const hoyRD = fechaCalendarioRD(new Date());
+  const comerciales = ordenes.filter(soloChequeoDisponible).sort((a, b) => (gestiones[a.id]?.proximaFecha || '').localeCompare(gestiones[b.id]?.proximaFecha || ''));
+  const abrirChatCliente = async (orden: OrdenServicio) => {
+    try {
+      if (!orden.clienteId) throw new Error('La orden requiere vincular un cliente.');
+      const snap = await getDoc(doc(db, 'clientes', orden.clienteId));
+      if (!snap.exists() || snap.data().eliminado) throw new Error('El cliente no está disponible.');
+      const cliente = { ...snap.data(), id: snap.id } as Cliente;
+      const waId = await resolverChatCliente(cliente);
+      navigate(`/admin/inbox/${encodeURIComponent(waId)}?clienteId=${encodeURIComponent(cliente.id)}`);
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'No se pudo abrir el chat.'); }
+  };
+  const guardarGestion = async () => {
+    if (!seleccionada || guardandoGestion) return;
+    setGuardandoGestion(true);
+    try { await guardarSeguimientoChequeo(seleccionada.id, gestion); setSeleccionada(null); toast.success('Seguimiento guardado; responsable notificado.'); }
+    catch (e) { toast.error(e instanceof Error ? e.message : 'No se pudo guardar.'); }
+    finally { setGuardandoGestion(false); }
+  };
+
   if (loading) return <LoadingSpinner fullPage text="Cargando sugerencias..." />;
 
   return (
@@ -186,6 +221,36 @@ export default function SugerenciasChequeo() {
           </p>
         </div>
       </div>
+
+      <section className="space-y-3" aria-label="Seguimiento comercial de solo chequeo">
+        <h2 className="text-xl font-semibold">Seguimiento al cliente ({comerciales.length})</h2>
+        <p className="text-sm text-gray-600">Registra la próxima gestión y prepara la propuesta en el chat de la empresa. La oferta se revisa y se envía desde allí.</p>
+        {comerciales.map(orden => <article key={orden.id} className="bg-white border rounded-xl p-4 space-y-2">
+          <h3 className="font-semibold">{orden.numero} · {orden.clienteNombre}</h3>
+          <p>{gestiones[orden.id] ? `${gestiones[orden.id].resultado} · Próxima gestión: ${gestiones[orden.id].proximaFecha}` : 'Sin seguimiento programado'}</p>
+          {gestiones[orden.id]?.resultado !== 'no_interesado' && gestiones[orden.id]?.proximaFecha <= hoyRD && <p className="text-amber-800 font-semibold">Gestión pendiente para hoy o vencida</p>}
+          <p className="text-sm">Responsable: {personal.find(p => p.uid === gestiones[orden.id]?.responsableUid)?.nombre || (gestiones[orden.id]?.responsableUid === currentUser?.uid ? userProfile?.nombre : gestiones[orden.id]?.responsableUid || 'Sin asignar')}</p>
+          <p className="text-sm">{gestiones[orden.id]?.nota}</p>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-secondary" onClick={() => navigate(`/admin/ordenes/${encodeURIComponent(orden.id)}`)}>Abrir orden</button>
+            <button className="btn-secondary" onClick={() => void abrirChatCliente(orden)}>WhatsApp / preparar oferta</button>
+            <button className="btn-primary" onClick={() => { setSeleccionada(orden); setGestion(gestiones[orden.id] || { responsableUid: currentUser?.uid || '', proximaFecha: '', resultado: 'pendiente', nota: '' }); }}>Registrar seguimiento</button>
+          </div>
+        </article>)}
+      </section>
+      <Modal isOpen={!!seleccionada} onClose={() => !guardandoGestion && setSeleccionada(null)} title="Seguimiento al cliente">
+        <div className="space-y-3">
+          <label className="block">Responsable<select className="input-field" value={gestion.responsableUid} onChange={e => setGestion({ ...gestion, responsableUid: e.target.value })}>
+            <option value="">Seleccionar</option>
+            {currentUser && <option value={currentUser.uid}>Yo ({userProfile?.nombre || 'Usuario actual'})</option>}
+            {personal.filter(p => p.uid && p.uid !== currentUser?.uid && p.activo !== false && ['administrador', 'coordinadora', 'operaria', 'secretaria'].includes(p.rol)).map(p => <option key={p.id} value={p.uid}>{p.nombre}</option>)}
+          </select></label>
+          <label className="block">Próxima gestión<input className="input-field" type="date" value={gestion.proximaFecha} onChange={e => setGestion({ ...gestion, proximaFecha: e.target.value })} /></label>
+          <label className="block">Resultado<select className="input-field" value={gestion.resultado} onChange={e => setGestion({ ...gestion, resultado: e.target.value as SeguimientoChequeo['resultado'] })}><option value="pendiente">Pendiente de contacto</option><option value="contactado">Contactado</option><option value="interesado">Interesado en continuar</option><option value="no_interesado">No interesado / detener seguimiento</option></select></label>
+          <label className="block">Nota<textarea className="input-field" value={gestion.nota} onChange={e => setGestion({ ...gestion, nota: e.target.value })} /></label>
+          <button className="btn-primary" disabled={guardandoGestion} onClick={() => void guardarGestion()}>Guardar seguimiento</button>
+        </div>
+      </Modal>
 
       {pendientes.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-12 text-center text-gray-400">

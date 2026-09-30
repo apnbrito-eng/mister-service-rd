@@ -29,7 +29,7 @@
 </head>
 <body>
   <h1>Mapa Mental — Mister Service RD</h1>
-  <div class="fecha">Última actualización: 2026-09-15 · 32 módulos · 10 áreas</div>
+  <div class="fecha">Última actualización: 2026-09-29 · 38 módulos · 10 áreas</div>
 
   <h2>Diagrama</h2>
   <div class="mermaid">
@@ -39,7 +39,6 @@ graph LR
 
   subgraph area_ordenes["ORDENES"]
     ordenes_servicio["ordenes_servicio"]:::critico
-    avances["avances"]
   end
 
   subgraph area_agendamiento["AGENDAMIENTO"]
@@ -51,6 +50,7 @@ graph LR
   subgraph area_clientes["CLIENTES"]
     clientes["clientes"]:::critico
     garantias["garantias"]
+    seguimiento_chequeo["seguimiento_chequeo"]:::critico
   end
 
   subgraph area_dinero["DINERO"]
@@ -59,20 +59,25 @@ graph LR
     facturas["facturas"]:::critico
     pagos["pagos"]:::critico
     comisiones["comisiones"]:::critico
-    nomina["nomina"]
+    nomina["nomina"]:::critico
     gastos["gastos"]
+    caja["caja"]:::critico
   end
 
   subgraph area_inventario["INVENTARIO"]
     productos["productos"]
     standby_piezas["standby_piezas"]
     equipos_taller["equipos_taller"]
+    movimientos_piezas["movimientos_piezas"]:::critico
+    suplidores["suplidores"]:::critico
   end
 
   subgraph area_personal_rrhh["PERSONAL_RRHH"]
+    avances["avances"]
     personal["personal"]:::critico
     ponches["ponches"]
     cierres_dia["cierres_dia"]
+    prestamos_empleados["prestamos_empleados"]:::critico
   end
 
   subgraph area_whatsapp_crm["WHATSAPP_CRM"]
@@ -89,6 +94,7 @@ graph LR
   subgraph area_reporting["REPORTING"]
     reportes["reportes"]
     marketing_meta["marketing_meta"]
+    seguimiento_marketing["seguimiento_marketing"]:::critico
   end
 
   subgraph area_sistema["SISTEMA"]
@@ -103,7 +109,7 @@ graph LR
   ordenes_servicio --> clientes
   ordenes_servicio --> personal
   ordenes_servicio --> calendarios
-  avances --> ordenes_servicio
+  avances --> personal
   calendarios --> personal
   citas_por_confirmar --> clientes
   citas_por_confirmar --> personal
@@ -125,7 +131,11 @@ graph LR
   comisiones --> personal
   nomina --> comisiones
   nomina --> personal
+  nomina --> avances
+  nomina --> prestamos_empleados
+  nomina --> ponches
   standby_piezas --> ordenes_servicio
+  standby_piezas --> suplidores
   equipos_taller --> ordenes_servicio
   ponches --> personal
   cierres_dia --> personal
@@ -144,9 +154,23 @@ graph LR
   reportes --> personal
   reportes --> productos
   reportes --> gastos
+  reportes --> caja
+  reportes --> nomina
+  reportes --> ponches
   notificaciones --> personal
   conocimiento_equipo --> personal
   marketing_meta --> personal
+  movimientos_piezas --> ordenes_servicio
+  movimientos_piezas --> productos
+  prestamos_empleados --> personal
+  caja --> pagos
+  caja --> bancos
+  suplidores --> whatsapp_inbox
+  seguimiento_chequeo --> ordenes_servicio
+  seguimiento_chequeo --> personal
+  seguimiento_marketing --> ordenes_servicio
+  seguimiento_marketing --> caja
+  seguimiento_marketing --> whatsapp_inbox
 
   classDef critico stroke:#dc2626,stroke-width:3px
 
@@ -180,15 +204,15 @@ graph LR
           <div class="notas"><em>parseOrden() en utils/index.ts es la lectura común. Hoy 3 caminos de creación (useOrdenCreateForm, Mantenimiento, solicitudes); sprint NUCLEO-CREAR-ORDEN-CENTRAL unifica.</em></div>
         </div>
       </div>
-      <div class="modulo media" data-area="ordenes">
-        <div class="nombre">avances <span class="area">[ordenes]</span></div>
-        <div class="desc">Registro de avances/piezas usadas durante la reparación</div>
+      <div class="modulo media" data-area="personal_rrhh">
+        <div class="nombre">avances <span class="area">[personal_rrhh]</span></div>
+        <div class="desc">Adelantos de dinero a empleados; descuento vinculado a la nómina</div>
         <div class="meta">
-          <div><strong>Depende de:</strong> ordenes_servicio</div>
+          <div><strong>Depende de:</strong> personal</div>
+          <div><strong>Expone a:</strong> nomina</div>
+          <div><strong>Colecciones:</strong> avances</div>
           
-          <div><strong>Colecciones:</strong> avances, movimientos_piezas</div>
-          
-          
+          <div class="notas"><em>Corrección del mapa: avances corresponde a dinero adelantado, según avances.service.ts; piezas usadas se registran aparte.</em></div>
         </div>
       </div>
       <div class="modulo media" data-area="agendamiento">
@@ -199,7 +223,7 @@ graph LR
           <div><strong>Expone a:</strong> citas_por_confirmar</div>
           <div><strong>Colecciones:</strong> calendarios</div>
           
-          
+          <div class="notas"><em>Candidata local: calendario público asignado a técnico, solicitud conservada hasta confirmación por oficina. Identidad por UID, sin inferir por nombre.</em></div>
         </div>
       </div>
       <div class="modulo alta" data-area="agendamiento">
@@ -210,7 +234,7 @@ graph LR
           <div><strong>Expone a:</strong> ordenes_servicio</div>
           <div><strong>Colecciones:</strong> citas_por_confirmar</div>
           
-          <div class="notas"><em>Tras AGENDA-2 (e4f92bf) visibles en calendario/agenda con estilo tentativo. Tras AGENDA-3 (f9697b9) se honra el asignadoId al confirmar.</em></div>
+          <div class="notas"><em>Candidata local P042: token por intento y propietario, commit orden+vínculo valida cita vigente, liberación condicional. Callback de garantía fallido conserva formulario/vínculo, sin éxito falso. Reuso exige origen, cliente y orden activa. Sin vencimiento automático.</em></div>
         </div>
       </div>
       <div class="modulo media" data-area="agendamiento">
@@ -221,7 +245,7 @@ graph LR
           <div><strong>Expone a:</strong> ordenes_servicio</div>
           <div><strong>Colecciones:</strong> mantenimiento</div>
           
-          <div class="notas"><em>Tras AGENDA-1 (132d9b5) atado a cliente real (typeahead + telefono normalizado, tecnicoId=uid). Tras AGENDA-5 (8f6a72b) se ofrece programar al cerrar orden.</em></div>
+          <div class="notas"><em>Candidata local P039: ocurrencia de mantenimiento idempotente, cliente real, responsable activo y alertas internas. Acceso al chat existente, sin envío externo automático.</em></div>
         </div>
       </div>
       <div class="modulo alta" data-area="clientes">
@@ -248,24 +272,24 @@ graph LR
       </div>
       <div class="modulo alta" data-area="dinero">
         <div class="nombre">cotizaciones <span class="area">[dinero]</span></div>
-        <div class="desc">Cotizaciones (QT-####) previas a la aprobación; al aprobar pueden generar factura.</div>
+        <div class="desc">Cotizaciones QT externas o vinculadas a una orden; aceptación y conversión a conduce trazables.</div>
         <div class="meta">
           <div><strong>Depende de:</strong> clientes, ordenes_servicio, productos</div>
           <div><strong>Expone a:</strong> facturas</div>
           <div><strong>Colecciones:</strong> cotizaciones, precios_servicios</div>
           
-          <div class="notas"><em>Tras DINERO-1 (bec87b3) el número QT es atómico via contadores.service.ts.</em></div>
+          <div class="notas"><em>Candidata local P038: conversión idempotente y vínculo transaccional con orden/conduce; costos de comisión sólo utilizan cotización aceptada, nunca borrador/rechazada. Numeración centralizada.</em></div>
         </div>
       </div>
       <div class="modulo alta" data-area="dinero">
         <div class="nombre">facturas <span class="area">[dinero]</span></div>
-        <div class="desc">Facturas y conduces (FAC-####, CG-####). Emisión bloqueada si hay pago sin verificar.</div>
+        <div class="desc">Conduces de Garantía (CG): documentos operativos; facturación fiscal ocurre fuera de este sistema.</div>
         <div class="meta">
           <div><strong>Depende de:</strong> cotizaciones, ordenes_servicio, clientes</div>
           <div><strong>Expone a:</strong> pagos, comisiones, garantias</div>
           <div><strong>Colecciones:</strong> facturas</div>
           
-          <div class="notas"><em>ProcesarFacturacionModal: gate del conduce vs pago verificado (cazador P-023). Tras DINERO-2 (b4fc23c) recalcula montoPagado/estadoPago al cobrar.</em></div>
+          <div class="notas"><em>Candidata local: vínculo cotización/orden/conduce transaccional y único. Pagos y stock conservan sus validaciones; emisión de una orden no recalcula ni duplica devengos del cierre.</em></div>
         </div>
       </div>
       <div class="modulo alta" data-area="dinero">
@@ -287,18 +311,18 @@ graph LR
           <div><strong>Expone a:</strong> nomina</div>
           <div><strong>Colecciones:</strong> comisiones</div>
           
-          <div class="notas"><em>Dos bases de cálculo divergentes (~18% diferencia) pendientes decisión Jorge. P-021 obliga denormalización a factura.</em></div>
+          <div class="notas"><em>Candidata local P041: resolver técnico único por UID/docID, devengo de cierre con ID estable y transacción. Conduce de orden refleja devengos existentes con ajuste firmado de garantía, excluyendo anuladas. Manual persiste conduce y comisiones juntos; intención de reintento dura mientras el modal está abierto.</em></div>
         </div>
       </div>
-      <div class="modulo media" data-area="dinero">
+      <div class="modulo alta" data-area="dinero">
         <div class="nombre">nomina <span class="area">[dinero]</span></div>
-        <div class="desc">Liquidación mensual de nómina con bonos por tier (operaria, secretaria) y descuentos de préstamos.</div>
+        <div class="desc">Nómina quincenal por empleado con comisiones, bonos, asistencia, avances y cuotas</div>
         <div class="meta">
-          <div><strong>Depende de:</strong> comisiones, personal</div>
+          <div><strong>Depende de:</strong> comisiones, personal, avances, prestamos_empleados, ponches</div>
           
-          <div><strong>Colecciones:</strong> liquidaciones_nomina</div>
+          <div><strong>Colecciones:</strong> liquidaciones_nomina, comisiones, avances, prestamos_empleados, personal, ordenes_servicio</div>
           
-          <div class="notas"><em>Reglas de bonos duplicadas hoy entre Nomina.tsx y Dashboard.tsx (REPORTING-1 las centralizó en utils/kpis.ts).</em></div>
+          <div class="notas"><em>Candidata local: cierre transaccional, neto negativo bloqueado, incidencias por fecha o devengos duplicados requieren conciliación. Estado de Resultado lee snapshots cerrados por fin del período; sueldo actual es referencia/proyección.</em></div>
         </div>
       </div>
       <div class="modulo baja" data-area="dinero">
@@ -327,11 +351,11 @@ graph LR
         <div class="nombre">standby_piezas <span class="area">[inventario]</span></div>
         <div class="desc">Piezas en espera de llegada para una orden</div>
         <div class="meta">
-          <div><strong>Depende de:</strong> ordenes_servicio</div>
+          <div><strong>Depende de:</strong> ordenes_servicio, suplidores</div>
           
           <div><strong>Colecciones:</strong> standby_piezas</div>
           
-          <div class="notas"><em>No reconcilia con inventario al llegar — decisión Jorge pendiente.</em></div>
+          <div class="notas"><em>Candidata local: piezas vinculadas a orden y llegada con aviso para coordinar instalación. Reactivación humana revalida revisión del padre y piezas; no descontar inventario por inferencia.</em></div>
         </div>
       </div>
       <div class="modulo baja" data-area="inventario">
@@ -430,18 +454,18 @@ graph LR
           <div><strong>Expone a:</strong> ordenes_servicio</div>
           <div><strong>Colecciones:</strong> solicitudes_servicio</div>
           <div><strong>Integraciones:</strong> firebase_storage</div>
-          <div class="notas"><em>Tras FIX-LEADS (01df699) subidas (foto/firma/PDF) van a Storage solicitudes-publico/** con whitelist contentType y size &lt;10MB.</em></div>
+          <div class="notas"><em>Candidata local: solicitud→cliente/orden se convierte con validación transaccional y reuso trazable. Cliente existente se verifica; identidad y asignación explícitas. Adjuntos conservan permisos de Storage.</em></div>
         </div>
       </div>
       <div class="modulo media" data-area="reporting">
         <div class="nombre">reportes <span class="area">[reporting]</span></div>
         <div class="desc">Dashboards y métricas: ingresos, conduces emitidos, rendimiento técnicos, proyección de nómina. Dashboard operativo del día + Reporte avanzado para análisis comparativos.</div>
         <div class="meta">
-          <div><strong>Depende de:</strong> ordenes_servicio, facturas, pagos, comisiones, personal, productos, gastos</div>
+          <div><strong>Depende de:</strong> ordenes_servicio, facturas, pagos, comisiones, personal, productos, gastos, caja, nomina, ponches</div>
           
           <div><strong>Colecciones:</strong> recordatorios_diarios</div>
           
-          <div class="notas"><em>Tras REPORTING-1 (a4e64db) los KPIs viven en src/utils/kpis.ts (helpers compartidos). Resta anulaciones de la base de ingresos. Tras DISENO-I Fase 3 (5ca35d2, 2026-06-03) el Dashboard quedó con KPIs operativos del día solamente; los 4 widgets analíticos (Rendimiento por Técnico, Reparaciones por Tipo, Anuladas semana, Nómina proyectada del mes) se movieron a /admin/reporte-avanzado — gate admin+coord. Link a 1 clic desde Dashboard + sidebar Finanzas.</em></div>
+          <div class="notas"><em>Candidata local: período mensual/rango RD, fuentes identificables y faltantes visibles. Caja por fecha del pago separada de conduces emitidos. Resultado usa nóminas cerradas cuyo período termina en rango, sin prorrateo ni doble comisión; pérdidas visibles. Calidad del servicio y NPS no equivalen a calificación individual de secretaria.</em></div>
         </div>
       </div>
       <div class="modulo media" data-area="sistema">
@@ -507,7 +531,73 @@ graph LR
           
           
           <div><strong>Integraciones:</strong> meta_ads</div>
-          <div class="notas"><em>Sin escritura de anuncios. Token separado de WhatsApp. Instagram/Messenger y atribución a ventas pendientes.</em></div>
+          <div class="notas"><em>Lectura de anuncios sin escritura; atribución operativa se consulta en seguimiento_marketing y no implica causalidad.</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="inventario">
+        <div class="nombre">movimientos_piezas <span class="area">[inventario]</span></div>
+        <div class="desc">Consumo y movimientos de piezas de reparación</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> ordenes_servicio, productos</div>
+          
+          <div><strong>Colecciones:</strong> movimientos_piezas</div>
+          
+          <div class="notas"><em>Colección existente; no confundir con avances de dinero a empleados.</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="personal_rrhh">
+        <div class="nombre">prestamos_empleados <span class="area">[personal_rrhh]</span></div>
+        <div class="desc">Préstamos a empleados con cuotas y saldo a recuperar</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> personal</div>
+          
+          <div><strong>Colecciones:</strong> prestamos_empleados</div>
+          
+          <div class="notas"><em>Nómina relee cuotas y saldos en transacción. Distintos de adelantos; la candidata no publica permisos.</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="dinero">
+        <div class="nombre">caja <span class="area">[dinero]</span></div>
+        <div class="desc">Proyección canónica de cobros confirmados, pendientes e incidencias</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> pagos, bancos</div>
+          
+          <div><strong>Colecciones:</strong> ordenes_servicio</div>
+          
+          <div class="notas"><em>movimientosCobros.ts proyecta documentos RAW y fecha financiera RD desde orden.pagos. No es una nueva colección ni suma espejos; no inventa fechas, métodos o importes faltantes.</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="inventario">
+        <div class="nombre">suplidores <span class="area">[inventario]</span></div>
+        <div class="desc">Directorio de suplidores activos/inactivos y preparación de consultas de piezas por WhatsApp</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> whatsapp_inbox</div>
+          
+          <div><strong>Colecciones:</strong> suplidores, whatsapp_conversaciones</div>
+          
+          <div class="notas"><em>suplidores.service.ts y Standby vinculan búsqueda de pieza/foto y suplidor. Envío usa flujo existente y permisos; no envío automático agregado.</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="clientes">
+        <div class="nombre">seguimiento_chequeo <span class="area">[clientes]</span></div>
+        <div class="desc">Seguimiento de órdenes de solo chequeo con responsable, próxima gestión y avisos</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> ordenes_servicio, personal</div>
+          
+          <div><strong>Colecciones:</strong> ordenes_servicio, notificaciones, personal, usuarios</div>
+          
+          <div class="notas"><em>seguimientoChequeo.service.ts guarda gestión y aviso transaccionales. Conteos por técnico señalan revisión, no prueban fraude.</em></div>
+        </div>
+      </div>
+      <div class="modulo alta" data-area="reporting">
+        <div class="nombre">seguimiento_marketing <span class="area">[reporting]</span></div>
+        <div class="desc">Consultas, reactivaciones y cobros atribuibles con incidencias visibles</div>
+        <div class="meta">
+          <div><strong>Depende de:</strong> ordenes_servicio, caja, whatsapp_inbox</div>
+          
+          <div><strong>Colecciones:</strong> ordenes_servicio, whatsapp_conversaciones, campanas_marketing</div>
+          
+          <div class="notas"><em>Cohorte de órdenes del período y pagos del mismo período, basada en proyección canónica RAW. Atribución a anuncio no implica causalidad. Ambigüedad y fechas ausentes se muestran; no sumar vistas por origen/anuncio. Lectura puntual completa tiene límite de escala.</em></div>
         </div>
       </div></div>
 

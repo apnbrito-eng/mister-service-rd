@@ -1,3 +1,11 @@
+import { check as checkCitaIntentoPropio } from './check-cita-intento-propio.js';
+import { check as checkComisionDevengoUnico } from './check-comision-devengo-unico.js';
+import { check as checkResultadoSnapshots } from './check-resultado-snapshots.js';
+import { check as checkMantenimientoOcurrencia } from './check-mantenimiento-ocurrencia.js';
+import { check as checkCotizacionConduceUnico } from './check-cotizacion-conduce-unico.js';
+import { check as checkMetricasIdentidadFecha } from './check-metricas-identidad-fecha.js';
+import { check as checkPiezasTaller } from './check-piezas-taller.js';
+import { check as checkCajaCobros } from './check-caja-cobros.js';
 /**
  * Entry point — corre todos los cazadores en paralelo y reporta.
  *
@@ -46,6 +54,7 @@ import { check as checkCitasPublicasServidor } from './check-citas-publicas-serv
 import { check as checkContadorChats } from './check-contador-chats.js';
 import { check as checkIaCierre } from './check-ia-cierre.js';
 import { check as checkBusquedaOrden } from './check-busqueda-orden.js';
+import { check as checkNominaTardia } from './check-nomina-comisiones-tardias.js';
 import { check as checkNominaCierreAtomico } from './check-nomina-cierre-atomico.js';
 import { check as checkResultadoPerdidas } from './check-resultado-perdidas.js';
 import { check as checkFechaFinanciera } from './check-fecha-financiera.js';
@@ -61,10 +70,19 @@ const c = (color: keyof typeof COLOR, s: string) =>
 
 async function main() {
   const checks = [
+    checkCitaIntentoPropio,
+    checkCotizacionConduceUnico,
+    checkMantenimientoOcurrencia,
     checkBancosCobrosCrudos,
+    checkCajaCobros,
+  checkMetricasIdentidadFecha,
+  checkPiezasTaller,
     checkFechaFinanciera,
     checkBusquedaOrden,
     checkNominaCierreAtomico,
+  checkNominaTardia,
+    checkComisionDevengoUnico,
+    checkResultadoSnapshots,
     checkResultadoPerdidas,
     checkIaCierre,
     checkContadorChats,

@@ -1,19 +1,19 @@
+import { Link } from 'react-router-dom';
+import { resumenOperativoDia, conducesDelDiaRD } from '../utils/resumenOperativoDia';
 import RendicionEfectivo from '../components/crm/RendicionEfectivo';
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, Timestamp, query, where, getDocs } from 'firebase/firestore';
 import { cerrarDiaAtomico, entregarEfectivoOrdenes, resumirTransferencias } from '../services/cierreDia.service';
-import { proyectarCobrosCaja, type OrdenCobrosCruda } from '../utils/movimientosCobros';
+import { proyectarCobrosCaja, diaCobroRD, type OrdenCobrosCruda } from '../utils/movimientosCobros';
 import { fechaFinanciera } from '../utils/fechaFinanciera';
 import { db } from '../firebase/config';
 import { OrdenServicio, Factura, Personal } from '../types';
-import { formatMoneda, formatFecha, parseOrden, getAlertasFromOrdenes } from '../utils';
+import { formatMoneda, parseOrden, getAlertasFromOrdenes } from '../utils';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { ClipboardCheck, AlertTriangle, DollarSign, FileText, Truck, Lock, Check } from 'lucide-react';
-import { format, isSameDay } from 'date-fns';
-import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 
 export default function CierreDia() {
@@ -22,10 +22,13 @@ export default function CierreDia() {
 
   const [loading, setLoading] = useState(true);
   const [cobrosCrudos, setCobrosCrudos] = useState<OrdenCobrosCruda[]>([]);
+  const [gastosCrudos, setGastosCrudos] = useState<OrdenCobrosCruda[]>([]);
+  const [errorFuentes, setErrorFuentes] = useState('');
+  const [conducesSinFecha, setConducesSinFecha] = useState(0);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
-  const [fechaSel, setFechaSel] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [fechaSel, setFechaSel] = useState(diaCobroRD(new Date()));
   // Cierre del día actual (si existe)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [cierreExistente, setCierreExistente] = useState<any | null>(null);
@@ -37,34 +40,37 @@ export default function CierreDia() {
   const [marcandoEfectivoTec, setMarcandoEfectivoTec] = useState<string | null>(null);
 
   useEffect(() => {
-    let loaded = 0;
-    const checkLoaded = () => { loaded++; if (loaded >= 3) setLoading(false); };
+    const fuentes = new Set<string>();
+    const checkLoaded = (fuente: string) => { fuentes.add(fuente); if (fuentes.size >= 4) setLoading(false); };
+    const fallo = (fuente: string) => { setErrorFuentes(`No se pudo leer ${fuente}. Recarga antes de cerrar el día.`); checkLoaded(fuente); };
 
     const unsubOrd = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
       setCobrosCrudos(snap.docs.map(d => ({ id: d.id, datos: d.data() })));
       setOrdenes(snap.docs.map(d => parseOrden(d.id, d.data() as Record<string, unknown>)));
-      checkLoaded();
-    });
+      checkLoaded('ordenes');
+    }, () => fallo('ordenes'));
     const unsubFac = onSnapshot(collection(db, 'facturas'), (snap) => {
+      setConducesSinFecha(snap.docs.filter(d => !fechaFinanciera(d.data().fechaEmision)).length);
       setFacturas(snap.docs.map(d => {
         const raw = d.data();
         return {
           id: d.id,
           ...raw,
-          fechaEmision: raw.fechaEmision?.toDate?.() || new Date(),
+          fechaEmision: fechaFinanciera(raw.fechaEmision) || new Date(NaN),
           fechaPago: raw.fechaPago?.toDate?.() || null,
           fechaVencimiento: raw.fechaVencimiento?.toDate?.() || null,
           createdAt: raw.createdAt?.toDate?.() || new Date(),
         } as Factura;
       }));
-      checkLoaded();
-    });
+      checkLoaded('conduces');
+    }, () => fallo('conduces'));
+    const unsubGastos = onSnapshot(collection(db, 'gastos'), snap => { setGastosCrudos(snap.docs.map(d => ({ id: d.id, datos: d.data() }))); checkLoaded('gastos'); }, () => fallo('gastos'));
     getDocs(collection(db, 'personal')).then(snap => {
       setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
-      checkLoaded();
-    });
+      checkLoaded('personal');
+    }).catch(() => fallo('personal'));
 
-    return () => { unsubOrd(); unsubFac(); };
+    return () => { unsubOrd(); unsubFac(); unsubGastos(); };
   }, []);
 
   // Una respuesta tardía nunca debe sustituir el cierre de otra fecha.
@@ -90,8 +96,8 @@ export default function CierreDia() {
         setCierreExistente({
           id: d.id,
           ...raw,
-          fecha: raw.fecha?.toDate?.() || new Date(),
-          fechaCierre: raw.fechaCierre?.toDate?.() || new Date(),
+          fecha: fechaFinanciera(raw.fecha),
+          fechaCierre: fechaFinanciera(raw.fechaCierre),
         });
       }
     }).catch(err => {
@@ -106,26 +112,16 @@ export default function CierreDia() {
   const fechaInicio = useMemo(() => fechaFinanciera(fechaSel)!, [fechaSel]);
   const fechaFin = useMemo(() => new Date(fechaFinanciera(fechaSel)!.getTime() + 86400000 - 1), [fechaSel]);
 
-  // Órdenes cerradas en el día (por fecha del cierreServicio o updatedAt si fase=cerrado)
-  const ordenesCerradasHoy = useMemo(() => {
-    return ordenes.filter(o => {
-      if (o.eliminada) return false;
-      if (!['cerrado', 'trabajo_realizado'].includes(o.fase)) return false;
-      const fc = o.cierreServicio?.fechaCierre || o.updatedAt;
-      return fc && fc >= fechaInicio && fc <= fechaFin;
-    });
-  }, [ordenes, fechaInicio, fechaFin]);
-
-  const ordenesChequeoHoy = useMemo(() => {
-    return ordenesCerradasHoy.filter(o => o.soloChequeo);
-  }, [ordenesCerradasHoy]);
+  const operativo = useMemo(() => resumenOperativoDia(cobrosCrudos, gastosCrudos, fechaSel), [cobrosCrudos, gastosCrudos, fechaSel]);
+  const ordenesCerradasHoy = operativo.cerradas;
+  const ordenesChequeoHoy = operativo.chequeos;
 
   const caja = useMemo(() => proyectarCobrosCaja(cobrosCrudos, undefined, fechaSel, fechaSel), [cobrosCrudos, fechaSel]);
   const totalIngresos = caja.totalConfirmado;
 
   const facturasHoy = useMemo(() => {
-    return facturas.filter(f => f.fechaEmision && isSameDay(f.fechaEmision, fechaInicio));
-  }, [facturas, fechaInicio]);
+    return conducesDelDiaRD(facturas, fechaSel);
+  }, [facturas, fechaSel]);
 
   // Efectivo por técnico
   const efectivoPorTecnico = useMemo(() => {
@@ -184,6 +180,7 @@ export default function CierreDia() {
       toast.error('No tienes permiso para cerrar el día');
       return;
     }
+    if (loading || errorFuentes) { toast.error(errorFuentes || 'Espera a que se carguen todas las fuentes.'); return; }
     if (!currentUser?.uid) { toast.error('Inicia sesión nuevamente'); return; }
     setCerrando(true);
     try {
@@ -194,6 +191,13 @@ export default function CierreDia() {
         cerradoPor: userProfile?.nombre || 'Sistema',
         cerradoPorId: currentUser?.uid || '',
         fechaCierre: Timestamp.now(),
+        versionResumen: 2,
+        totalConducesEmitidos: facturasHoy.length,
+        conducesSinFecha,
+        ordenesCerradasDetalle: operativo.cerradas,
+        gastosDetalle: operativo.gastos,
+        totalGastosRegistrados: operativo.totalGastos,
+        incidenciasAlCerrar: [...operativo.incidencias, ...caja.incidencias.map(i => `${i.ordenNumero}: ${i.motivo}`)],
         totalOrdenesCerradas: ordenesCerradasHoy.length,
         totalChequeos: ordenesChequeoHoy.length,
         totalIngresos,
@@ -204,7 +208,8 @@ export default function CierreDia() {
       };
       const cierre = await cerrarDiaAtomico(fechaSel, data);
       setCierreExistente({ ...cierre, fecha: fechaInicio, fechaCierre: fechaFinanciera((cierre as Record<string, unknown>).fechaCierre) });
-      toast.success('Día cerrado correctamente');
+      if (cierre.creado) toast.success('Día cerrado correctamente');
+      else toast('Este día ya estaba cerrado. Se muestra el cierre original con su responsable y fecha.');
       setShowConfirmar(false);
     } catch (err) {
       console.error(err);
@@ -225,7 +230,7 @@ export default function CierreDia() {
     );
   }
 
-  const fechaTextoLargo = format(fechaInicio, "EEEE dd 'de' MMMM yyyy", { locale: es });
+  const fechaTextoLargo = new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', dateStyle: 'full' }).format(fechaInicio);
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
@@ -249,7 +254,7 @@ export default function CierreDia() {
           {cargandoCierre ? <p role="status">Consultando cierre…</p> : errorCierre ? <p role="alert" className="text-red-700">{errorCierre}. <button type="button" onClick={() => setReintentoCierre(n => n + 1)} className="underline">Reintentar consulta</button></p> : cierreExistente ? (
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-300 rounded-xl text-sm text-green-800">
               <Lock size={14} />
-              Día cerrado el {formatFecha(cierreExistente.fechaCierre)} por {cierreExistente.cerradoPor}
+              Día cerrado el {cierreExistente.fechaCierre ? new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', dateStyle: 'short', timeStyle: 'short' }).format(cierreExistente.fechaCierre) : 'fecha sin registrar'} por {cierreExistente.cerradoPor}
             </div>
           ) : (
             <button
@@ -265,11 +270,22 @@ export default function CierreDia() {
 
       {cierreExistente && <section className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2" aria-label="Resumen guardado del cierre">
         <h2 className="font-semibold">Cierre guardado (sin cambios)</h2>
-        <p>Ingresos al cerrar: {formatMoneda(cierreExistente.totalIngresos || 0)} · Efectivo: {formatMoneda(cierreExistente.efectivoTotal || 0)}</p>
+        <p>Ingresos al cerrar: {typeof cierreExistente.totalIngresos === 'number' ? formatMoneda(cierreExistente.totalIngresos) : 'Sin dato'} · Efectivo: {typeof cierreExistente.efectivoTotal === 'number' ? formatMoneda(cierreExistente.efectivoTotal) : 'Sin dato'}</p>
         <p>Órdenes cerradas: {cierreExistente.totalOrdenesCerradas ?? 'Sin dato'} · Solo chequeo: {cierreExistente.totalChequeos ?? 'Sin dato'}</p>
-        <p>Cobros actuales de la fecha: {formatMoneda(totalIngresos)} · Variación desde el cierre: {formatMoneda(totalIngresos - (cierreExistente.totalIngresos || 0))}</p>
+        <p>Cobros actuales de la fecha: {formatMoneda(totalIngresos)} · Variación desde el cierre: {typeof cierreExistente.totalIngresos === 'number' ? formatMoneda(totalIngresos - cierreExistente.totalIngresos) : 'No calculable: cierre sin dato'}</p>
         {totalIngresos !== cierreExistente.totalIngresos && <p role="alert" className="text-amber-800">Hay movimientos posteriores o correcciones que requieren conciliación. El cierre guardado se conserva. Puedes registrar la entrega de nuevos recibos en efectivo sin modificarlo.</p>}
       </section>}
+      {cierreExistente && <section className="border rounded-xl p-4 space-y-2">
+        <h2 className="font-semibold">Detalle conservado al cerrar</h2>
+        {cierreExistente.versionResumen !== 2 ? <p role="alert">Cierre histórico sin desglose completo. No se reconstruye con los datos actuales.</p> : <>
+          <p>Gastos registrados al cerrar: {formatMoneda(cierreExistente.totalGastosRegistrados)}</p>
+          {(cierreExistente.ordenesCerradasDetalle || []).map((o: { id: string; numero: string; clienteNombre: string; soloChequeo: boolean }) => <p key={o.id}><Link className="underline" to={`/admin/ordenes/${o.id}`}>{o.numero}</Link> · {o.clienteNombre} · {o.soloChequeo ? 'Solo chequeo' : 'Trabajo cerrado'}</p>)}
+          {(cierreExistente.gastosDetalle || []).map((g: { id: string; descripcion: string; monto: number }) => <p key={g.id}>{g.descripcion || g.id} · {formatMoneda(g.monto)}</p>)}
+          {(cierreExistente.incidenciasAlCerrar || []).map((i: string, n: number) => <p key={n} className="text-amber-800">{i}</p>)}
+        </>}
+      </section>}
+      {!!conducesSinFecha && <p role="alert" className="text-amber-800">{conducesSinFecha} conduces sin fecha verificable requieren conciliación; no se asignaron a hoy.</p>}
+      {errorFuentes && <p role="alert" className="text-red-700">{errorFuentes}</p>}
       <h2 className="font-semibold">Situación actual de la fecha seleccionada</h2>
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -304,6 +320,18 @@ export default function CierreDia() {
       </div>
 
       <p className="text-sm text-amber-800 bg-amber-50 rounded p-3">El ingreso cobrado del día incluye pagos confirmados. Los registros antiguos sin verificación requieren conciliación; no se presume que el precio de una orden se haya cobrado.</p>
+      <section className="border rounded-xl p-4 space-y-3">
+        <h2 className="font-semibold">Órdenes y gastos de la fecha</h2>
+        <p>Cobros confirmados: {formatMoneda(totalIngresos)} · Gastos registrados: {formatMoneda(operativo.totalGastos)}</p>
+        <p className="text-sm">Los gastos se muestran por fecha registrada. Este listado no acredita que salieron de caja o banco ni representa utilidad contable.</p>
+        <h3 className="font-semibold">Órdenes cerradas ({operativo.cerradas.length}) · Solo chequeo ({operativo.chequeos.length})</h3>
+        {operativo.cerradas.map(o => <p key={o.id}><Link className="underline" to={`/admin/ordenes/${o.id}`}>{o.numero}</Link> · {o.clienteNombre} · {o.tecnicoNombre} · {o.soloChequeo ? 'Solo chequeo' : 'Trabajo cerrado'}</p>)}
+        {!operativo.cerradas.length && <p>Sin cierres con fecha verificable para este día.</p>}
+        <h3 className="font-semibold">Gastos registrados</h3>
+        {operativo.gastos.map(g => <p key={g.id}>{g.descripcion || g.id} · {g.categoria} · {formatMoneda(g.monto)}</p>)}
+        {!operativo.gastos.length && <p>Sin gastos registrados para este día.</p>}
+        {operativo.incidencias.map((i, n) => <p role="alert" key={n} className="text-amber-800">{i}</p>)}
+      </section>
       <RendicionEfectivo ordenes={ordenes} />
 
       {/* Efectivo por técnico */}

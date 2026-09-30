@@ -3,6 +3,9 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
+  query,
+  where,
   addDoc,
   Timestamp,
   arrayUnion,
@@ -30,8 +33,6 @@ import { siguienteNumeroFactura } from '../../services/contadores.service';
 import { obtenerPagosDeOrden } from '../../services/ordenes.service';
 import { crearNotificacion } from '../../services/notificaciones.service';
 import {
-  registrarComisionPorFactura,
-  registrarComisionesPorItems,
   desglosarTotalConITBIS,
   calcularCostoPiezasDeItems,
 } from '../../utils/comisiones';
@@ -45,6 +46,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { itemsPropuestaCrm } from '../../utils/itemsPropuestaCrm';
+import { completarConsumoConduce } from '../../services/consumoConduce.service';
+import { validarCotizacionParaConduce, calcularEmisionActual, totalComisionesConduce } from '../../utils/cotizacionConduce';
 import { equipoApi } from '../../services/equipoApi';
 
 /** TTL del borrador en localStorage. 24 horas. */
@@ -248,6 +251,7 @@ export default function ProcesarFacturacionModal({
         }
         if (orden.cotizacionId) {
           const snap = await getDoc(doc(db, 'cotizaciones', orden.cotizacionId));
+          validarCotizacionParaConduce(snap.data(), orden.id);
           if (snap.exists()) {
             const cot = snap.data() as Cotizacion;
             const its = (cot.items || []).map(it => aplicarTecnicoDefault(it, orden));
@@ -410,17 +414,14 @@ export default function ProcesarFacturacionModal({
     // pago con verificado=false + admin/coord no lo confirmó → el conduce
     // queda bloqueado hasta que María lo confirme.
     //
-    // RETROCOMPAT: pagos legacy (pre-SPRINT-151) tienen verificado=undefined
-    // y NO se bloquean — se asume verificación implícita por la práctica
-    // anterior. Solo bloqueamos cuando el flag está explícitamente en false
-    // (= registrado por operaria post-fase A sin confirmación de María).
-    const pagosSinVerificar = pagosPrevios.filter(p => p.verificado === false);
+    // Legacy sin verificación requiere revisión explícita en Pagos pendientes.
+    const pagosSinVerificar = pagosPrevios.filter(p => p.verificado !== true);
     if (pagosSinVerificar.length > 0) {
       const detalle = pagosSinVerificar
         .map(p => `RD$${Number(p.monto || 0).toLocaleString('es-DO')}`)
         .join(', ');
       toast.error(
-        `Hay ${pagosSinVerificar.length} pago${pagosSinVerificar.length === 1 ? '' : 's'} sin confirmar (${detalle}). María/admin debe confirmarlo antes de emitir el conduce.`,
+        `Hay ${pagosSinVerificar.length} pago${pagosSinVerificar.length === 1 ? '' : 's'} sin confirmar (${detalle}). Supervisión debe revisarlo en Pagos pendientes y conciliar datos históricos antes de emitir el conduce.`,
       );
       return;
     }
@@ -627,6 +628,7 @@ export default function ProcesarFacturacionModal({
       if (notaTrim) facturaPayload.notaConduce = notaTrim;
 
       // Quitar undefined recursivamente
+      facturaPayload.inventarioPendiente = items.some(it => it.tipoItem === 'pieza' && !!it.piezaInventarioId);
       const facturaLimpia = Object.fromEntries(
         Object.entries(facturaPayload).filter(([, v]) => v !== undefined),
       );
@@ -638,17 +640,12 @@ export default function ProcesarFacturacionModal({
       // Lo que vive DENTRO de la tx:
       //   - tx.get(ordenRef) — optimistic locking + idempotencia (facturada===true).
       //   - tx.set(facturaRef, facturaLimpia) — crea conduce CG-XXXXX.
-      //   - tx.update(facturaRef, denormLimpio) — denormalización comisiones (si aplica).
+      //   - tx.update(facturaRef, denormLimpio) — refleja comisiones existentes.
       //   - tx.update(ordenRef, ordenUpdateLimpio) — facturada=true + arrayUnion(pagos).
       //
       // Lo que vive FUERA (PRE-tx):
       //   - siguienteNumeroFactura() — tiene runTransaction interno propio (anidación
       //     prohibida).
-      //   - registrarComisionesPorItems / registrarComisionPorFactura — helpers
-      //     externos que escriben a `comisiones`/`auditoria`. Si su tx ok pero la
-      //     nuestra aborta, queda comisión huérfana. Riesgo aceptado: alternativas
-      //     (meter helper dentro de tx; pre-validar todo) son más costosas que la
-      //     probabilidad real de fallo entre escrituras consecutivas.
       //
       // Lo que vive FUERA (POST-tx, best-effort con try/catch):
       //   - addDoc audit `emitir_garantia` — fallo log warn, no aborta.
@@ -660,146 +657,10 @@ export default function ProcesarFacturacionModal({
       // dentro del runTransaction más abajo).
       const facturaRef = doc(collection(db, 'facturas'));
 
-      // ─── Comisiones: detectar N=1 vs N>1 y construir denormalización ───
-      // Detección: si CUALQUIER item trae tecnicoId Y hay > 1 técnico distinto,
-      // es N>1. Si todos los items con tecnicoId comparten el mismo (o nadie
-      // trae) — flujo legacy N=1 vía `registrarComisionPorFactura`.
-      const tecnicoIdsDistintos = Array.from(
-        new Set(
-          items
-            .map(it => it.tecnicoId)
-            .filter((id): id is string => !!id),
-        ),
-      );
-      const algunoConTecnico = tecnicoIdsDistintos.length > 0;
-      const esNMultiple = tecnicoIdsDistintos.length > 1;
-
-      // SPRINT-155: los helpers escriben a `comisiones`/`auditoria` PRE-tx
-      // (anidación prohibida). El payload de denormalización se captura acá
-      // y se aplica dentro del runTransaction como tx.update(facturaRef, ...).
-      let denormParaTx: Record<string, unknown> | null = null;
-      try {
-        if (esNMultiple) {
-          // N>1: usar helper específico y denormalizar como agregado.
-          const result = await registrarComisionesPorItems({
-            orden,
-            facturaId: facturaRef.id,
-            facturaNumero: numero,
-            totalFactura: totalItems,
-            items: itemsLimpios as unknown as ItemCotizacion[],
-            userProfile,
-            itbisPorcentaje: itbisPct,
-          });
-        // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): una comisión que
-        // Firestore rechaza deja al técnico sin cobrar. Antes sólo iba a
-        // console.warn y la operación se veía exitosa.
-        if (result.fallidas.length > 0) {
-            toast.error(
-              `${result.fallidas.length} comisión(es) NO se registraron (${result.fallidas
-                .map(f => f.tecnicoNombre)
-                .join(', ')}). La factura sí se generó — revisá Comisiones.`,
-              { duration: 8000 },
-            );
-          }
-          // CRÍTICO: denormalizar post-call (regla CLAUDE.md línea 89).
-          // Audit fix C5: la guarda anterior `result.comisiones.length > 0`
-          // saltaba la denormalización si todos los técnicos tenían 0% pero
-          // hubo cleanup de huérfanas (preservadas/eliminadas). Eso dejaba
-          // `comisionTecnicoMonto` con valor viejo aunque la realidad post-
-          // recálculo es "sin comisiones nuevas". Ahora denormalizamos
-          // siempre que haya actividad. SPRINT-155: la denorm entra a la tx,
-          // así que si falla, toda la tx aborta (comportamiento más estricto
-          // que el try/catch interno previo, que solo logueaba).
-          const tuvoActividad =
-            result.comisiones.length > 0 ||
-            result.preservadasPorLiquidacion > 0 ||
-            result.eliminadasHuerfanas > 0;
-          if (tuvoActividad) {
-            let denorm: Record<string, unknown> | null = null;
-            if (result.comisiones.length === 1) {
-              // Caso degenerado: N>1 detectado pero terminó en 1 comisión
-              // válida (el otro técnico tenía 0% o no existía). Render legacy.
-              denorm = {
-                comisionTecnicoId: result.comisiones[0].tecnicoId,
-                comisionTecnicoNombre: result.comisiones[0].tecnicoNombre,
-                comisionTecnicoMonto: result.comisiones[0].monto,
-                comisionTecnicoPorcentaje: result.comisiones[0].porcentaje,
-                comisionRegistroId: result.comisiones[0].comisionId,
-              };
-            } else if (result.comisiones.length > 1) {
-              // N>1 real: agregado.
-              denorm = {
-                comisionTecnicoId: '',
-                comisionTecnicoNombre: 'N técnicos',
-                comisionTecnicoMonto: result.totalAgregado,
-                comisionTecnicoPorcentaje: 0,
-              };
-            } else {
-              // Caso edge: tuvoActividad === true pero comisiones.length === 0.
-              // Significa que TODAS las comisiones nuevas son 0% (técnicos sin
-              // porcentaje) y el cleanup limpió/preservó huérfanas anteriores.
-              // Decisión coordinator (audit C5): sobrescribir con shape "sin
-              // comisión" para que la factura refleje el estado real post-
-              // recálculo en lugar de mostrar el monto viejo de una emisión
-              // anterior. La auditoría detallada queda en colección comisiones.
-              console.warn(
-                '[procesar-facturacion] tuvoActividad sin comisiones nuevas, denormalizando con shape vacío',
-                {
-                  facturaId: facturaRef.id,
-                  totalAgregado: result.totalAgregado,
-                  preservadas: result.preservadasPorLiquidacion,
-                  eliminadas: result.eliminadasHuerfanas,
-                },
-              );
-              denorm = {
-                comisionTecnicoId: '',
-                comisionTecnicoNombre: '—',
-                comisionTecnicoMonto: 0,
-                comisionTecnicoPorcentaje: 0,
-              };
-            }
-            if (denorm) {
-              denormParaTx = Object.fromEntries(
-                Object.entries(denorm).filter(([, v]) => v !== undefined),
-              );
-            }
-          }
-        } else {
-          // N=1 (o 0): flujo legacy. `registrarComisionPorFactura` cubre ambos
-          // casos (con/sin tecnicoId por línea) y delega internamente si hace falta.
-          const comisionInfo = await registrarComisionPorFactura({
-            orden,
-            facturaId: facturaRef.id,
-            facturaNumero: numero,
-            totalFactura: totalItems,
-            items: itemsLimpios as unknown as ItemCotizacion[],
-            userProfile,
-            itbisPorcentaje: itbisPct,
-          });
-        // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): una comisión que
-        // Firestore rechaza deja al técnico sin cobrar. Antes sólo iba a
-        // console.warn y la operación se veía exitosa.
-        if (comisionInfo.comisionesFallidas > 0) {
-            toast.error(
-              'La comisión NO se registró. La factura sí se generó — revisá Comisiones.',
-              { duration: 8000 },
-            );
-          }
-          // Denormalizar SOLO si hay comisión efectiva (técnico válido + monto > 0).
-          if (comisionInfo && comisionInfo.comisionId && comisionInfo.tecnicoId) {
-            denormParaTx = {
-              comisionRegistroId: comisionInfo.comisionId,
-              comisionTecnicoId: comisionInfo.tecnicoId,
-              comisionTecnicoNombre: comisionInfo.tecnicoNombre,
-              comisionTecnicoPorcentaje: comisionInfo.porcentaje,
-              comisionTecnicoMonto: comisionInfo.comisionMonto,
-            };
-          }
-        }
-      } catch (err) {
-        console.error('Error registrando comisión por factura:', err);
-        toast.error('La factura se generó pero la comisión falló. Revisá Comisiones.');
-      }
+      // El devengo ocurre al terminar el trabajo. Emitir no crea ni recalcula comisiones.
+      // La consulta descubre referencias; la transacción vuelve a leerlas sin alterar su dinero.
+      const comisionesExistentes = await getDocs(query(collection(db, 'comisiones'), where('ordenId', '==', orden.id)));
+      const refsComisiones = comisionesExistentes.docs.map(d => d.ref);
 
       // Marcar la orden — payload construido PRE-tx (se aplica con tx.update).
       const registro = crearRegistroAuditoria(
@@ -891,63 +752,44 @@ export default function ProcesarFacturacionModal({
           if (!ordenSnap.exists()) {
             throw new Error('La orden ya no existe.');
           }
+          const ordenActual = ordenSnap.data()!;
+          const emisionActual = calcularEmisionActual(ordenActual, totalItems, pagoNuevoFinal);
+          if ((ordenActual.cotizacionId || '') !== (orden.cotizacionId || '')) throw new Error('La cotización de la orden cambió. Recarga el formulario.');
+          const cotRef = orden.cotizacionId ? doc(db, 'cotizaciones', orden.cotizacionId) : null;
+          if (cotRef) {
+            const cotSnap = await tx.get(cotRef);
+            validarCotizacionParaConduce(cotSnap.data(), orden.id);
+          }
+          const comisionesActuales = await Promise.all(refsComisiones.map(ref => tx.get(ref)));
+          const vigentes = comisionesActuales.filter(d => d.exists() && d.data()?.ordenId === orden.id && d.data()?.estaAnulada !== true && d.data()?.estadoLiquidacion !== 'anulada');
+          const denormParaTx: Record<string, unknown> = { comisionTecnicoMonto: totalComisionesConduce(vigentes.map(d => d.data()!)) };
+          if (vigentes.length === 1) {
+            const dato = vigentes[0].data()!;
+            Object.assign(denormParaTx, { comisionRegistroId: vigentes[0].id, comisionTecnicoId: dato.tecnicoId || '', comisionTecnicoNombre: dato.tecnicoNombre || '', comisionTecnicoPorcentaje: Number(dato.comisionPorcentaje || 0) });
+          } else if (vigentes.length > 1) denormParaTx.comisionTecnicoNombre = 'Varios técnicos';
           // Idempotencia: si otro tab/usuario ya emitió conduce, abortar limpio.
           if (ordenSnap.data()?.facturada === true) {
             throw new Error('CONDUCE_YA_EMITIDO');
           }
-          // SPRINT-DINERO-2 (2026-05-25): si se está cobrando un pago al
-          // emitir el conduce, recalcular `montoPagado` + `estadoPago`
-          // dentro de la misma transacción. Antes solo se hacía
-          // `arrayUnion(pagoNuevoFinal)` y la orden seguía mostrando el
-          // monto/estado VIEJO (pre-pago) aunque la factura saliera
-          // pagada. Síntoma: orden con "Pendiente" en agenda/listado
-          // pese a que el saldo se cobró. Reusa el mismo cálculo de
-          // RegistrarPagoModal.tsx (función calcularEstadoFromTotal).
-          let updateFinal = ordenUpdateLimpio;
-          if (pagoNuevoFinal) {
-            const data = ordenSnap.data() as Record<string, unknown>;
-            const pagosActuales: Array<Record<string, unknown>> = Array.isArray(data.pagos)
-              ? (data.pagos as Array<Record<string, unknown>>)
-              : [];
-            // Idempotencia: si el pago ya está en el array (ej. transacción
-            // reintentada por Firestore o doble submit), NO duplicar.
-            const yaExiste = pagosActuales.some(
-              p => p && (p as { id?: unknown }).id === (pagoNuevoFinal as { id?: unknown }).id,
-            );
-            const pagosNuevos = yaExiste
-              ? pagosActuales
-              : [...pagosActuales, pagoNuevoFinal as unknown as Record<string, unknown>];
-            const totalOrdenActual = Number(
-              data.precioFinal ?? data.precioAprobado ?? data.precioSugerido ?? 0,
-            );
-            const nuevoMontoPagado = pagosNuevos.reduce(
-              (acc, p) => acc + (Number((p as { monto?: unknown }).monto) || 0),
-              0,
-            );
-            const nuevoEstadoPago: 'completo' | 'parcial' | 'pendiente' =
-              totalOrdenActual > 0 && nuevoMontoPagado >= totalOrdenActual
-                ? 'completo'
-                : nuevoMontoPagado > 0
-                  ? 'parcial'
-                  : 'pendiente';
-            // Reemplazamos arrayUnion por la lista completa recalculada —
-            // misma idempotencia (yaExiste guard) + recalc síncrono.
-            updateFinal = {
-              ...ordenUpdateLimpio,
-              pagos: pagosNuevos,
-              montoPagado: nuevoMontoPagado,
-              estadoPago: nuevoEstadoPago,
-            };
-          }
+          const updateFinal = {
+            ...ordenUpdateLimpio,
+            pagos: emisionActual.pagos,
+            montoPagado: emisionActual.montoPagado,
+            estadoPago: emisionActual.estadoPago,
+          };
+          const facturaActual = { ...facturaLimpia, estado: emisionActual.estadoConduce };
+          delete (facturaActual as Record<string, unknown>).fechaPago;
+          if (emisionActual.estadoConduce === 'pagada') (facturaActual as Record<string, unknown>).fechaPago = ahora;
           // 1. Crear factura con id pre-generado.
-          tx.set(facturaRef, facturaLimpia);
-          // 2. Denormalización de comisiones (si helpers PRE-tx generaron payload).
+          tx.set(facturaRef, facturaActual);
+          // 2. Reflejar devengos existentes, sin modificarlos.
           if (denormParaTx) {
             tx.update(facturaRef, denormParaTx);
           }
           // 3. Update orden con la lista de pagos completa (no arrayUnion) +
           //    montoPagado/estadoPago recalculados + auditoria.
           tx.update(ordenRef, updateFinal);
+          if (cotRef) tx.update(cotRef, { convertida: true, facturaId: facturaRef.id, updatedAt: ahora });
         });
       } catch (txErr) {
         const msg = (txErr as Error)?.message || '';
@@ -957,7 +799,7 @@ export default function ProcesarFacturacionModal({
           return;
         }
         console.error('[procesar-facturacion] runTransaction emisión conduce falló:', txErr);
-        toast.error('Error al generar el conduce de garantía');
+        toast.error(msg || 'Error al generar el conduce de garantía');
         setGenerando(false);
         return;
       }
@@ -965,6 +807,10 @@ export default function ProcesarFacturacionModal({
       // ─── POST-tx: audit logs + notificaciones (best-effort, no bloquean) ───
 
       // Audit log de emisión de garantía (no bloquea si falla)
+      try { await completarConsumoConduce(facturaRef.id, usuario); } catch (error) { toast.error(`Conduce emitido. Consumo de piezas pendiente: ${error instanceof Error ? error.message : 'revisa Inventario'}`, { duration: 12000 }); }
+
+      if (refsComisiones.length === 0 && !orden.soloChequeo) toast.error('Conduce emitido. No hay comisión vinculada: revisa esta orden en Comisiones para conciliar el devengo.', { duration: 10000 });
+
       if (garantia) {
         try {
           await addDoc(collection(db, 'auditoria_admin'), {
@@ -1167,9 +1013,8 @@ export default function ProcesarFacturacionModal({
       } else {
         toast.success(`Conduce ${numero} generado`);
       }
-      // Suprimir warning de variable no usada (esNMultiple/algunoConTecnico ya
-      // se consumieron arriba; los dejamos referenciados para claridad).
-      void algunoConTecnico;
+      // Fin de emisión.
+
       onClose();
     } catch (err) {
       console.error(err);
@@ -1341,7 +1186,7 @@ export default function ProcesarFacturacionModal({
                         {/* SPRINT-PAGOS-CONFIRMA-MARIA fase A: badge pendiente
                             cuando un pago fue registrado por operaria pero
                             María/admin todavía no lo confirmó. */}
-                        {p.verificado === false && (
+                        {p.verificado !== true && (
                           <span className="ml-2 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
                             PENDIENTE DE CONFIRMAR
                           </span>

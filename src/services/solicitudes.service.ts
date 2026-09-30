@@ -7,6 +7,13 @@ import { db } from '../firebase/config';
 import { SolicitudServicio, EstadoSolicitud } from '../types/formularios';
 import { siguienteNumeroOrden } from './contadores.service';
 import { subirArchivoPublicoSeguro } from './subidasPublicas.service';
+import { stripUndefinedProfundo } from './firestoreStrip';
+
+// Re-export para preservar cualquier import externo del helper
+// (los tests unitarios lo importan desde el módulo estándar del servicio y
+// desde el módulo puro `./firestoreStrip`). Ver
+// `tests/unit/stripUndefinedProfundo.test.ts` para cobertura P-020.
+export { stripUndefinedProfundo };
 
 const COL = 'solicitudes_servicio';
 
@@ -85,17 +92,136 @@ export async function actualizarEstadoSolicitud(
 }
 
 /**
- * Convierte una solicitud en una orden de servicio.
- * Crea la orden en ordenes_servicio, actualiza la solicitud a estado 'convertida'.
+ * Payload de resolución de cliente para la conversión. El caller decide una
+ * de estas dos formas:
+ *
+ * - `existente`: reusar un cliente que ya está en la colección `clientes`
+ *   (encontrado por búsqueda previa por teléfono). La transacción verifica
+ *   que el doc siga existiendo antes de escribir la orden — si desapareció
+ *   (borrado por otro admin entre la búsqueda y la conversión) la
+ *   conversión falla y NO se crea orden huérfana.
+ *
+ * - `crear`: crear un cliente nuevo dentro de la misma transacción. Se
+ *   usa `telefonoNormalizado` como id del doc (convención canónica del
+ *   módulo — ver `clientes.service.ts::buscarOCrearCliente`). Si dos
+ *   admins hacen click "convertir" al mismo tiempo, el segundo hallará el
+ *   doc ya creado por el primero (optimistic-lock de Firestore) y hará
+ *   un merge que preserva los campos no vacíos existentes — nunca los
+ *   sobrescribe.
+ */
+export type ClienteConversion =
+  | { tipo: 'existente'; clienteId: string }
+  | {
+      tipo: 'crear';
+      telefonoNormalizado: string;
+      telefonoOriginal: string;
+      nombre: string;
+      email?: string;
+      direccion?: string;
+      referenciaDireccion?: string;
+      lat?: number;
+      lng?: number;
+    };
+
+/**
+ * Lista TODOS los clientes activos que comparten `telefonoNormalizado`.
+ * Usado por la UI de conversión para detectar ambigüedad (>1 candidato) y
+ * forzar selección explícita del admin. La invariante es "1 doc por telNorm"
+ * porque el id canónico ES el telNorm (ver `buscarOCrearCliente`), pero
+ * puede haber legacy pre-dedup con id auto-generado + telefonoNormalizado.
+ * `buscarClientePorTelefono` silenciosamente pica el primero — este helper
+ * expone el conteo real.
+ */
+export async function listarClientesActivosPorTelefono(
+  telefono: string,
+): Promise<Array<{ id: string; nombre: string; telefono: string; direccion: string }>> {
+  const soloDigitos = telefono.replace(/\D/g, '');
+  let telNorm = '';
+  if (soloDigitos.length === 11 && soloDigitos.startsWith('1')) telNorm = soloDigitos.slice(1);
+  else if (soloDigitos.length === 10) telNorm = soloDigitos;
+  if (!telNorm || telNorm.length !== 10) return [];
+  const q = query(collection(db, 'clientes'), where('telefonoNormalizado', '==', telNorm));
+  const snap = await getDocs(q);
+  return snap.docs
+    .filter(d => d.data().eliminado !== true)
+    .map(d => {
+      const data = d.data();
+      return {
+        id: d.id,
+        nombre: (data.nombre as string) || '',
+        telefono: (data.telefono as string) || telNorm,
+        direccion: (data.direccion as string) || '',
+      };
+    });
+}
+
+/**
+ * Convierte una solicitud en una orden de servicio de forma atómica e
+ * idempotente. El nuevo doc de la orden y el update de la solicitud van en
+ * un solo `runTransaction`, por lo que un cliente que reintente tras un
+ * timeout NO creará dos órdenes: la segunda invocación detectará
+ * `data.ordenId` dentro del callback y retornará el mismo id.
+ *
+ * Idempotencia: si la solicitud ya tiene `ordenId`, se retorna sin escribir
+ * nada. El chequeo se hace ANTES de reservar número (para no quemar
+ * counters) y también DENTRO del callback (defensivo contra race con
+ * escrituras concurrentes).
+ *
+ * NO marca la solicitud como `convertida` antes de haber escrito la orden
+ * — ambos writes viven en el mismo commit atómico.
+ *
+ * Resolución de cliente (2026-09-29 iteración 2):
+ *   - Si el caller pasa `clienteConversion`, la resolución del cliente
+ *     ocurre DENTRO de la misma transacción que la orden — la orden nunca
+ *     queda apuntando a un `clienteId` que no existe.
+ *   - `tipo: 'existente'` verifica que el doc de cliente esté vivo antes
+ *     de escribir la orden; si desapareció, throw sin crear orden.
+ *   - `tipo: 'crear'` usa `telefonoNormalizado` como id, hace `tx.get` y
+ *     - Si NO existe: `tx.set` con los datos del formulario (payload
+ *       limpio, sin `undefined`).
+ *     - Si YA existe (race con otra conversión / cliente pre-existente
+ *       encontrado tarde): NO sobrescribe campos ya poblados — solo
+ *       agrega los que están vacíos, y refresca `updatedAt`.
+ *   - Si el caller NO pasa `clienteConversion`, se usa el `clienteId` que
+ *     venga en `ordenData` tal cual (retrocompat).
+ *
+ * El caller (Solicitudes.tsx) debe garantizar que si hay más de un cliente
+ * activo con el mismo teléfono, muestre selector explícito al admin — este
+ * servicio NO adivina cuál usar.
  */
 export async function convertirAOrden(
   solicitudId: string,
-  ordenData: Record<string, unknown>
+  ordenData: Record<string, unknown>,
+  clienteConversion?: ClienteConversion,
 ): Promise<string> {
   const solicitudRef = doc(db, COL, solicitudId);
   const existente = await getDoc(solicitudRef);
   if (!existente.exists()) throw new Error('La solicitud ya no existe.');
-  if (existente.data().ordenId) return existente.data().ordenId as string;
+  const dataExistente = existente.data();
+  if (dataExistente.ordenId) return dataExistente.ordenId as string;
+  if (dataExistente.estado === 'rechazada' || dataExistente.estado === 'convertida') {
+    throw new Error(
+      `La solicitud no puede convertirse (estado actual: ${dataExistente.estado}).`,
+    );
+  }
+
+  // Validaciones fail-fast del payload cliente ANTES de reservar contador.
+  if (clienteConversion?.tipo === 'existente') {
+    if (!clienteConversion.clienteId) {
+      throw new Error('clienteId requerido para vincular cliente existente.');
+    }
+  } else if (clienteConversion?.tipo === 'crear') {
+    if (
+      !clienteConversion.telefonoNormalizado ||
+      clienteConversion.telefonoNormalizado.length !== 10
+    ) {
+      throw new Error('Teléfono inválido: se requiere un número RD de 10 dígitos ya normalizado.');
+    }
+    if (!clienteConversion.nombre?.trim()) {
+      throw new Error('Nombre requerido para crear cliente nuevo desde la solicitud.');
+    }
+  }
+
   // El contador conserva su servicio central. Un intento concurrente puede reservar
   // un número sin usar; nunca se reutiliza ni se crea una segunda orden.
   const numero = await siguienteNumeroOrden();
@@ -106,11 +232,85 @@ export async function convertirAOrden(
     const data = solicitud.data();
     if (data.ordenId) return data.ordenId as string;
     if (data.estado === 'rechazada' || data.estado === 'convertida') {
-      throw new Error('Esta solicitud no puede convertirse. Revisa su estado y vínculo con la orden.');
+      throw new Error(
+        `La solicitud no puede convertirse (estado actual: ${data.estado}).`,
+      );
     }
+
+    // === Reads del cliente (ANTES de cualquier write, requisito de tx) ===
+    let clienteRefResuelto: ReturnType<typeof doc> | null = null;
+    let clienteExistenteData: Record<string, unknown> | undefined;
+    let clienteExistenteSnap = false;
+    let clienteIdFinal: string | undefined;
+
+    if (clienteConversion?.tipo === 'existente') {
+      clienteRefResuelto = doc(db, 'clientes', clienteConversion.clienteId);
+      const snap = await tx.get(clienteRefResuelto);
+      if (!snap.exists()) {
+        throw new Error(
+          'El cliente vinculado ya no existe. Refrescá la solicitud y elegí otro cliente.',
+        );
+      }
+      clienteExistenteSnap = true;
+      clienteExistenteData = snap.data();
+      clienteIdFinal = clienteConversion.clienteId;
+    } else if (clienteConversion?.tipo === 'crear') {
+      clienteRefResuelto = doc(db, 'clientes', clienteConversion.telefonoNormalizado);
+      const snap = await tx.get(clienteRefResuelto);
+      clienteExistenteSnap = snap.exists();
+      clienteExistenteData = clienteExistenteSnap ? snap.data() : undefined;
+      clienteIdFinal = clienteConversion.telefonoNormalizado;
+    } else if (typeof ordenData.clienteId === 'string' && ordenData.clienteId) {
+      clienteIdFinal = ordenData.clienteId;
+    }
+
+    // === Writes ===
+    // Cliente primero (si toca crear/mergear en la misma tx).
+    if (clienteConversion?.tipo === 'crear' && clienteRefResuelto) {
+      const c = clienteConversion;
+      if (clienteExistenteSnap && clienteExistenteData) {
+        // Preservar: NO sobrescribir campos no vacíos. Solo agregamos lo
+        // que falta. Esto cubre el caso "dos operadores convierten al mismo
+        // tiempo": el segundo halla el doc creado por el primero y NO le
+        // pisa el nombre/dirección.
+        const updates: Record<string, unknown> = { updatedAt: Timestamp.now() };
+        if (c.nombre && !clienteExistenteData.nombre) updates.nombre = c.nombre;
+        if (c.email && !clienteExistenteData.email) updates.email = c.email;
+        if (c.direccion && !clienteExistenteData.direccion) updates.direccion = c.direccion;
+        if (c.referenciaDireccion && !clienteExistenteData.referenciaDireccion) {
+          updates.referenciaDireccion = c.referenciaDireccion;
+        }
+        if (typeof c.lat === 'number' && clienteExistenteData.lat == null) updates.lat = c.lat;
+        if (typeof c.lng === 'number' && clienteExistenteData.lng == null) updates.lng = c.lng;
+        tx.update(clienteRefResuelto, updates);
+      } else {
+        const payload: Record<string, unknown> = {
+          nombre: c.nombre,
+          telefono: c.telefonoOriginal || c.telefonoNormalizado,
+          telefonoNormalizado: c.telefonoNormalizado,
+          origen: 'solicitud_formulario',
+          createdAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        };
+        if (c.email) payload.email = c.email;
+        if (c.direccion) payload.direccion = c.direccion;
+        if (c.referenciaDireccion) payload.referenciaDireccion = c.referenciaDireccion;
+        if (typeof c.lat === 'number') payload.lat = c.lat;
+        if (typeof c.lng === 'number') payload.lng = c.lng;
+        const payloadLimpio = stripUndefinedProfundo(payload) as Record<string, unknown>;
+        tx.set(clienteRefResuelto, payloadLimpio);
+      }
+    }
+
     const ahora = Timestamp.now();
+    const ordenBase: Record<string, unknown> = { ...ordenData };
+    if (clienteIdFinal) ordenBase.clienteId = clienteIdFinal;
+    // Strip PROFUNDO de undefined (Firestore los rechaza en cualquier nivel;
+    // metadatosCita anidado puede traer undefined desde el caller cuando
+    // arma con ternarios sin filtrar).
+    const ordenLimpia = stripUndefinedProfundo(ordenBase) as Record<string, unknown>;
     tx.set(ordenRef, {
-      ...ordenData,
+      ...ordenLimpia,
       numero,
       fase: 'nuevo_lead', estadoSimple: 'pendiente', estado: 'activo',
       historialFases: [{ fase: 'nuevo_lead', timestamp: ahora, usuario: 'Sistema', nota: 'Creada desde solicitud de formulario' }],

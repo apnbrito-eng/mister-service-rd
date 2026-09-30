@@ -32,7 +32,7 @@ describe('escritores reales y reglas de identidad', () => {
   expect(await audits()).toHaveLength(0);
  });
  it('confirma el pago y su auditoría con la sesión, no con el id de perfil', async () => {
-  await sembrar('ordenes_servicio/qa-pago',{fase:'en_diagnostico',pagos:[{id:'p',monto:500,verificado:false}]});
+  await sembrar('ordenes_servicio/qa-pago',{fase:'en_diagnostico',pagos:[{id:'p',monto:500,metodo:'efectivo',fecha:'2026-09-29',verificado:false}]});
   expect(await pago('qa-pago','p',{id:'documento-personal',nombre:'QA'})).toEqual({ok:true});
   expect((await getDoc(doc(m.db,'ordenes_servicio/qa-pago'))).data()?.pagos[0]).toMatchObject({verificado:true,verificadoPorId:UID.admin,monto:500});
   expect(await audits()).toEqual([expect.objectContaining({actorUid:UID.admin,monto:500})]);

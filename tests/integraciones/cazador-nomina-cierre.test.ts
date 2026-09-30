@@ -19,3 +19,8 @@ it('detecta cerrar globalmente cuando queda gente bloqueada', () => {
  const roto = codigo.replace("estado: completa ? 'cerrada' : 'abierta'", "estado: 'cerrada'");
  expect(analizarCierreNomina(roto).status).toBe('fail');
 });
+
+it('detecta eliminar revisión de duplicados legacy', () => {
+ const roto = codigo.replaceAll('comisionesDuplicadasNomina(', 'otraFuncion(');
+ expect(analizarCierreNomina(roto).status).toBe('fail');
+});

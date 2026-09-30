@@ -14,7 +14,7 @@ Identidad por ordenId+pagoId. Todas las copias de un ID repetido dentro de una o
 
 Fecha válida cruda requerida; sin fecha se muestra incidencia sin asignar período. Se muestran dichas incidencias incluso al filtrar, con aviso. Montos requieren número finito positivo; verificado true suma confirmado, false suma pendiente, ausencia es incidencia. Efectivo y pagos sin banco u otras cuentas quedan fuera. Orden eliminada con pago queda como incidencia, excluida de totales y sin inventar reverso.
 
-Comparación: suma de registros del array verificados, con fecha/método/monto válidos sin deduplicar, frente a total validado del mismo banco/período. Ambas excluyen órdenes eliminadas. No afirma corresponder al reporte legado completo, saldo bancario real ni conciliación final.
+Corrección Claude: retirada comparación del array contra su propia proyección (no era una validación independiente). La UI muestra confirmados, pendientes e incidencias. Acepta link/otro con bancoId válido además de transferencia/tarjeta. `MetodoPago` incluye esos valores (src/types/index.ts:365); PagoOrden y API CRM actual restringen sus escritores a tres métodos, pero la lectura cruda debe tolerar otros métodos históricos válidos sin alterar escritores.
 
 ## Acceso
 
@@ -32,3 +32,10 @@ Suscripción amplia sólo para administrador/coordinadora con bancosGestionar. C
 Para QA local: `npx vite --host 127.0.0.1 --port 5238` y abrir `/tests/manual/bancos-movimientos.html`. Seleccionar cuenta001: RD$1500 confirmado, RD$1500 pendiente, 3 incidencias (2 duplicados y una sin fecha). Cuenta002: RD$1500 confirmado y cero incidencias. Enlace a orden es navegación de fixture, no carga una orden real.
 
 Pendientes: QA visual independiente y conexión real bajo cuenta autorizada sin mutaciones. No publicación, APK, cambios de datos, envío ni Git. Esta proyección no crea libro contable ni sustituye conciliación; lectura completa de órdenes puede requerir paginación/agregación posterior por volumen.
+
+
+## Permisos pendientes (documentación solamente)
+
+- `firestore.rules:517–520`: prestamos_empleados permite read a esStaff(); `esStaff` (:82–87) incluye administrador, coordinadora, secretaria, operaria, técnico y ayudante. Falta decidir/restringir lectura de información de préstamos ajenos; UI no reemplaza este control.
+- `firestore.rules:503–506`: avances permite create/update a esStaffOficina(); esa función (:90–94) incluye secretaria y operaria además de admin/coordinadora. Revisar si pueden modificar importes, estado descontado y origen liquidación o si requieren transiciones/campos protegidos.
+- No se cambiaron ni desplegaron reglas. Son pendientes de permisos independientes de la proyección bancaria; cualquier reducción requiere pruebas por rol y compatibilidad con cierre de nómina.

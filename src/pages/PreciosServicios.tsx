@@ -9,6 +9,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Plus, Edit, Search, Tag, Power, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
+import EnlacesSeguimiento from '../components/marketing/EnlacesSeguimiento';
 
 const MARCAS_SUGERIDAS = ['Whirlpool', 'Mabe', 'Frigidaire', 'General Electric', 'Genérico', 'LG', 'Samsung'];
 const CATEGORIAS_SUGERIDAS = ['Reparación', 'Mantenimiento', 'Instalación', 'Conversión', 'Otro'];
@@ -197,6 +198,8 @@ export default function PreciosServicios() {
           </button>
         )}
       </div>
+
+      <EnlacesSeguimiento actual="/admin/precios" />
 
       {/* Filtros */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 grid grid-cols-1 md:grid-cols-5 gap-3">

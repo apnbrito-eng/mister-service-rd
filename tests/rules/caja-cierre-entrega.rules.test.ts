@@ -13,7 +13,8 @@ afterAll(async () => { await entorno().cleanup(); });
 beforeEach(async () => { await resetearConPerfiles(); contexto.db=como(UID.admin);contexto.uid=UID.admin; });
 it('dos cierres concurrentes preservan un documento y el snapshot ganador', async () => {
  const [a,b]=await Promise.all([cerrarDiaAtomico('2026-09-29',{totalIngresos:100}),cerrarDiaAtomico('2026-09-29',{totalIngresos:150})]);
- expect(a).toEqual(b);
+ expect(a.totalIngresos).toEqual(b.totalIngresos);
+ expect([a.creado,b.creado].sort()).toEqual([false,true]);
  expect((await getDocs(collection(como(UID.admin),'cierres_dia'))).size).toBe(1);
  expect((await leer('cierres_dia/2026-09-29')).totalIngresos).toBe(a.totalIngresos);
 });

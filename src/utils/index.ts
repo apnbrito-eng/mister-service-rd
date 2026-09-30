@@ -759,6 +759,7 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     aprobadoPor: (raw.aprobadoPor as string) || undefined,
     fechaAprobacion: parseFirestoreDate(raw.fechaAprobacion) || undefined,
     creadoPor: (raw.creadoPor as string) || undefined,
+    creadoPorId: typeof raw.creadoPorId === 'string' && raw.creadoPorId.trim() ? raw.creadoPorId : undefined,
     trackingGPS: raw.trackingGPS ? (() => {
       const tg = raw.trackingGPS as Record<string, unknown>;
       return {
@@ -995,6 +996,11 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
           if (typeof m.citaOrigenId === 'string' && m.citaOrigenId.length > 0) {
             result.citaOrigenId = m.citaOrigenId;
           }
+          // P-009: preservar atribución escrita por citas y solicitudes al recargar.
+          for (const campo of ['calendarioId', 'calendarioNombre', 'asignadoCaptadorId', 'asignadoCaptadorNombre', 'equipoId', 'responsableAtencionId', 'solicitudId', 'formularioId', 'formularioNombre', 'empresaId', 'empresaNombre'] as const) {
+            if (typeof m[campo] === 'string' && m[campo].trim()) result[campo] = m[campo];
+          }
+          if (m.origen === 'formulario_publico' || m.origen === 'calendario_publico' || m.origen === 'oficina' || m.origen === 'solicitud_formulario' || m.origen === 'garantia') result.origen = m.origen;
           return Object.keys(result).length > 0 ? result : undefined;
         })()
       : undefined,

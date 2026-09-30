@@ -8,7 +8,7 @@ import { formatMoneda, formatFecha } from '../utils';
 import { calcularQuincenaActual, listarUltimasQuincenas } from '../utils/comisiones';
 import {
   generarLiquidacion, cerrarLiquidacion, marcarEmpleadoPagado, parseLiquidacion,
-  removerDescuentoAdHoc, recalcularEmpleadoLiquidacion, actualizarConciliacionLiquidacion,
+  removerDescuentoAdHoc, recalcularEmpleadoLiquidacion, actualizarConciliacionLiquidacion, prepararCuotasPendientes, confirmarCuotasPendientes,
 } from '../services/nomina.service';
 import { suscribirAvances } from '../services/avances.service';
 import { useApp } from '../context/AppContext';
@@ -146,10 +146,23 @@ export default function Nomina() {
   };
 
   const recalcular = async (personalId: string) => {
+    if (!liqActual || !userProfile) return;
+    setGenerando(true);
+    try { await recalcularEmpleadoLiquidacion(liqActual.id, personalId, userProfile); toast.success('Empleado recalculado; revisa su estado e importes.'); }
+    catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo recalcular'); }
+    finally { setGenerando(false); }
+  };
+
+  const revisarCuotas = async (personalId: string) => {
     if (!liqActual) return;
     setGenerando(true);
-    try { await recalcularEmpleadoLiquidacion(liqActual.id, personalId); toast.success('Empleado recalculado; revisa su estado e importes.'); }
-    catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo recalcular'); }
+    try {
+      const cuotas = await prepararCuotasPendientes(personalId);
+      const detalle = cuotas.map(c => `${c.motivo || c.prestamoId}: cuota ${c.numeroCuota}, ${formatMoneda(c.monto)}`).join('\n');
+      if (!window.confirm(`Cuotas a incorporar al borrador:\n${detalle || 'No hay cuotas activas pendientes.'}\nTotal: ${formatMoneda(cuotas.reduce((s,c)=>s+c.monto,0))}\nSe descontarán al cerrar. ¿Confirmar?`)) return;
+      await confirmarCuotasPendientes(liqActual.id, personalId, cuotas);
+      toast.success('Cuotas revisadas. Revisa el neto antes de cerrar.');
+    } catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudieron revisar las cuotas'); }
     finally { setGenerando(false); }
   };
 
@@ -300,20 +313,28 @@ export default function Nomina() {
 
       {liqActual && (
         <>
+          <p className="text-sm text-gray-600">Las cuotas conservan lo revisado al generar la nómina o confirmar su revisión. Actualizar comisiones no incorpora préstamos posteriores; estos requieren revisión administrativa antes del cierre.</p>
           {!!liqActual.comisionesSinEmpleado?.length && <div role="alert" className="rounded-xl bg-amber-50 p-4 text-sm">Comisiones sin empleado identificado: {liqActual.comisionesSinEmpleado.join(', ')}. Revisarlas en Comisiones; no se asignaron a esta nómina.</div>}
           {liqActual.empleados.some(e => e.estadoCierre === 'bloqueado') && <div role="alert" className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
-            <p>Hay empleados bloqueados por comisiones sin fecha. Sus importes son estimados y no se pueden pagar ni descontar. Los demás pueden cerrarse.</p>
+            <p>Hay empleados con fechas de comisión o cuotas pendientes de revisión. Sus importes son estimados y no se pueden pagar ni descontar. Los demás pueden cerrarse.</p>
             <a href="/admin/comisiones" className="underline">Conciliar fechas en Comisiones</a>
             {liqActual.empleados.filter(e => e.estadoCierre === 'bloqueado').map(e => <div key={e.personalId} className="mt-2 flex flex-wrap gap-2 items-center">
-              <span>{e.personalNombre}: {e.comisionesPendientesFecha?.join(', ')}</span>
-              <button type="button" disabled={generando || e.pagado} onClick={() => recalcular(e.personalId)} className="border rounded px-3 py-2">{e.pagado ? 'Pago registrado: requiere revisión manual' : 'Recalcular después de conciliar'}</button>
+              <span>{e.personalNombre}: {e.comisionesDuplicadas?.length ? `Comisiones de la misma orden requieren conciliación: ${e.comisionesDuplicadas.join(', ')}` : e.cuotasPendientesRevision ? 'Revisar cuotas tras incorporar ingresos' : e.comisionesPendientesFecha?.join(', ')}</span>
+              {e.cuotasPendientesRevision && <button type="button" disabled={generando || e.pagado} onClick={() => revisarCuotas(e.personalId)} className="border rounded px-3 py-2">Revisar cuotas pendientes</button>}
+              <button type="button" disabled={generando || e.pagado} onClick={() => recalcular(e.personalId)} className="border rounded px-3 py-2">{e.pagado ? 'Pago registrado: requiere revisión manual' : 'Actualizar comisiones'}</button>
             </div>)}
           </div>}
           {liqActual.empleados.some(e => e.comisionesFueraPeriodo?.length) && <div role="alert" className="rounded-xl bg-amber-50 p-4 text-sm">
             Comisiones conciliadas con fecha fuera de esta quincena; siguen pendientes y requieren revisar la nómina del período correspondiente:
             {liqActual.empleados.filter(e => e.comisionesFueraPeriodo?.length).map(e => <p key={e.personalId}>{e.personalNombre}: {e.comisionesFueraPeriodo?.join(', ')}</p>)}
           </div>}
-          {liqActual.estado === 'abierta' && (!!liqActual.comisionesSinEmpleado?.length || liqActual.empleados.some(e => e.comisionesFueraPeriodo?.length)) && <button type="button" disabled={generando} onClick={refrescarConciliacion} className="border rounded px-3 py-2">Actualizar conciliaciones resueltas</button>}
+          {liqActual.estado === 'abierta' && <button type="button" disabled={generando} onClick={refrescarConciliacion} className="border rounded px-3 py-2">Buscar y actualizar conciliaciones</button>}
+          {liqActual.empleados.some(e => e.comisionesAtrasadas?.length || e.comisionesYaLiquidadas?.length) && <div className="rounded-xl bg-blue-50 p-4 text-sm">
+            {liqActual.empleados.map(e => <div key={e.personalId}>
+              {e.comisionesAtrasadas?.map(c => <p key={c.id}>{e.personalNombre}: comisión {c.id}, devengada {c.fechaDevengo.slice(0,10)} ({c.quincenaDevengo}), se liquidará en {c.quincenaLiquidacion}.</p>)}
+              {e.comisionesYaLiquidadas?.map(c => <p key={c.id}>Comisión {c.id} excluida: ya liquidada en {c.liquidacionId}.</p>)}
+            </div>)}
+          </div>}
           {/* Banner estado */}
           <div className={`rounded-2xl border p-4 flex items-start gap-3 ${
             liqActual.estado === 'cerrada' ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200'
@@ -388,6 +409,7 @@ export default function Nomina() {
                                   : <span className="w-[14px]" />}
                                 <span className="font-medium text-gray-900">{emp.personalNombre} · {emp.estadoCierre}</span>
                               </button>
+                              {liqAbierta && puedeVer && <button type="button" disabled={generando} onClick={() => recalcular(emp.personalId)} className="border rounded px-2 py-1 text-xs">Actualizar comisiones</button>}
                               {liqAbierta && puedeVer && (
                                 <button
                                   type="button"

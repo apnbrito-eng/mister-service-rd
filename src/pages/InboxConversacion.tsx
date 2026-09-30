@@ -5,6 +5,7 @@ import { useAtencion } from '../context/AtencionContext';
 import { useNombresClientesInbox } from '../hooks/useNombresClientesInbox';
 import { usePreferenciasChat } from '../hooks/usePreferenciasChat';
 import NotaVoz from '../components/inbox/NotaVoz';
+import AdjuntarImagen from '../components/inbox/AdjuntarImagen';
 import AvisoRedaccion from '../components/inbox/AvisoRedaccion';
 import { equipoApi } from '../services/equipoApi';
 import type { FuenteCrm } from '../components/crm/GestionOrden';
@@ -360,6 +361,7 @@ export default function InboxConversacion() {
         wa_id: (data.wa_id as string) ?? snap.id,
         ultimoPhoneNumberId: (data.ultimoPhoneNumberId as string) ?? '',
         clienteId: data.clienteId as string | undefined,
+        bajaSolicitada: data.bajaSolicitada === true,
         ultimoMensajeEntrante: data.ultimoMensajeEntrante as WhatsAppConversacion['ultimoMensajeEntrante'],
         ultimoMensajeSaliente: data.ultimoMensajeSaliente as WhatsAppConversacion['ultimoMensajeSaliente'],
         noLeidos: typeof data.noLeidos === 'number' ? data.noLeidos : 0,
@@ -840,6 +842,7 @@ export default function InboxConversacion() {
                   momento). Con ventana CERRADA el botón ya aparece arriba
                   dentro del banner amarillo — no lo duplicamos acá. */}
 
+              {waId && <AdjuntarImagen key={`imagen-${waId}`} waId={waId} habilitado={!!currentUser && ['administrador', 'coordinadora', 'secretaria', 'operaria'].includes(userProfile?.rol || '') && conversacionActual?.wa_id === waId && ventanaAbierta && !conversacionActual?.bajaSolicitada && !enviando} motivo={conversacionActual?.bajaSolicitada ? 'El contacto solicitó dejar de recibir mensajes.' : !ventanaAbierta ? 'Fuera de la ventana de 24 horas debes elegir una plantilla; esta imagen no se envía con ella automáticamente.' : 'El envío no está disponible en este momento.'} />}
               {waId && <NotaVoz key={waId} waId={waId} disabled={!ventanaAbierta || enviando} />}
               <button
                 type="button"

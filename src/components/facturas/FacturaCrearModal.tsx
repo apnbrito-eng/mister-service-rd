@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { addDoc, collection, doc, Timestamp, serverTimestamp, runTransaction } from 'firebase/firestore';
+import { useMemo, useRef, useState } from 'react';
+import { addDoc, collection, doc, Timestamp, serverTimestamp } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 import { db } from '../../firebase/config';
 import {
@@ -90,6 +90,8 @@ export default function FacturaCrearModal({
 
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [saving, setSaving] = useState(false);
+  const enviando = useRef(false);
+  const intencion = useRef<{ id: string; numero: string; payload: Record<string, unknown>; clienteNombre: string; items: ItemCotizacion[]; total: number } | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [autocompleteOpen, setAutocompleteOpen] = useState(false);
 
@@ -120,6 +122,7 @@ export default function FacturaCrearModal({
     : false;
 
   const resetForm = () => {
+    intencion.current = null;
     setForm(INITIAL_FORM);
     setAutocompleteOpen(false);
   };
@@ -156,6 +159,7 @@ export default function FacturaCrearModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (enviando.current) return;
     const clienteNombreFinal = form.cliente?.nombre || form.clienteBusqueda.trim();
     if (!clienteNombreFinal) {
       toast.error('El nombre del cliente es requerido');
@@ -174,10 +178,11 @@ export default function FacturaCrearModal({
       return;
     }
 
+    enviando.current = true;
     setSaving(true);
     try {
       // ─── PRE-tx: contador transaccional (tiene runTransaction interno) ───
-      const numero = await siguienteNumeroFactura();
+      const numero = intencion.current?.numero || await siguienteNumeroFactura();
 
       // Snapshot defensivo del tipo de cliente al momento de emitir (security #2).
       // Si el cliente no tenía tipo definido, se persiste 'particular' (mismo
@@ -214,181 +219,18 @@ export default function FacturaCrearModal({
         Object.entries(docData).filter(([, v]) => v !== undefined),
       );
 
-      // SPRINT-157: handleSubmit envuelto en runTransaction para atomicidad
-      // cross-collection (factura + denorm comisiones). Paralelo al SPRINT-155
-      // que refactorizó el handler hermano `handleGenerar` del modal
-      // ProcesarFacturacionModal. Patrón alineado con marcarClienteEnviado
-      // (a38eb89) y marcarOrdenReactivada (800e0b4).
-      //
-      // Lo que vive DENTRO de la tx:
-      //   - tx.set(facturaRef, facturaLimpia) — crea conduce manual.
-      //   - tx.update(facturaRef, denormParaTx) — denormalización comisiones
-      //     (si registrarComisionesPorItems generó payload PRE-tx).
-      //
-      // Lo que vive FUERA (PRE-tx):
-      //   - siguienteNumeroFactura() — tiene runTransaction interno propio
-      //     (anidación prohibida).
-      //   - registrarComisionesPorItems — helper externo que escribe a
-      //     `comisiones`/`auditoria`. Tolera órdenes sintéticas
-      //     (`factura-manual-{id}`). Si su tx ok pero la nuestra aborta,
-      //     queda comisión huérfana; riesgo aceptado (alternativas más
-      //     costosas que la probabilidad real entre escrituras consecutivas).
-      //
-      // Lo que vive FUERA (POST-tx, best-effort con try/catch):
-      //   - addDoc audit `override_modalidad_precio_factura` — fallo log warn,
-      //     no aborta el flujo principal (diseño UX, era fire-and-forget).
-      //
-      // Idempotencia: NO hay orden para gatear con `facturada===true` (factura
-      // manual, no conduce de orden). El doble-click ya está bloqueado por
-      // state `saving` + el contador atómico `siguienteNumeroFactura` genera
-      // numeros únicos. No agregamos lookup por `numeroFactura` (paranoia
-      // innecesaria).
-
-      // Pre-generar la ref de factura (sin escribir aún — la escritura ocurre
-      // dentro del runTransaction más abajo).
-      const facturaRef = doc(collection(db, 'facturas'));
-
-      // ─── Comisiones por items: helper externo PRE-tx, captura denorm ───
-      // Como este flujo NO tiene una orden vinculada en Firestore, sintetizamos
-      // un objeto `OrdenServicio`-like mínimo para el helper. registrarComisionesPorItems
-      // tolera campos faltantes (los maneja como '' / undefined) y skipea el
-      // updateDoc de la orden sintética (line 438-445 en comisiones.ts).
-      //
-      // SPRINT-157: el payload de denormalización se captura acá y se aplica
-      // dentro del runTransaction como tx.update(facturaRef, denormParaTx).
-      let denormParaTx: Record<string, unknown> | null = null;
-      try {
-        const ordenSintetica = {
-          id: `factura-manual-${facturaRef.id}`,
-          numero: '', // sin orden
-          clienteNombre: clienteNombreFinal,
-          tecnicoId: undefined as string | undefined,
-          tecnicoNombre: undefined as string | undefined,
-          soloChequeo: false,
-        } as Parameters<typeof registrarComisionesPorItems>[0]['orden'];
-
-        const algunoConTecnico = form.items.some(i => !!i.tecnicoId);
-        if (algunoConTecnico) {
-          const result = await registrarComisionesPorItems({
-            orden: ordenSintetica,
-            facturaId: facturaRef.id,
-            facturaNumero: numero,
-            totalFactura: total,
-            items: form.items,
-            userProfile,
-          });
-
-          // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): una comisión que
-          // Firestore rechaza deja al técnico sin cobrar. Antes sólo iba a
-          // console.warn y la operación se veía exitosa.
-          if (result.fallidas.length > 0) {
-            toast.error(
-              `${result.fallidas.length} comisión(es) NO se registraron (${result.fallidas
-                .map(f => f.tecnicoNombre)
-                .join(', ')}). La factura sí se generó — revisá Comisiones.`,
-              { duration: 8000 },
-            );
-          }
-
-          // Denormalizar la comisión en el doc factura para que el render
-          // de Facturas.tsx pueda mostrarla sin tener que consultar la
-          // colección `comisiones`. Sin esto, el bloque N>1 muestra "—"
-          // permanentemente porque `factura.comisionTecnicoMonto` queda
-          // undefined.
-          //
-          // `registrarComisionesPorItems` NO denormaliza por sí mismo
-          // (solo escribe en `comisiones` + auditoría de la orden), así
-          // que esta responsabilidad es del caller — mismo patrón que
-          // FacturacionPendiente.tsx post-registrarComisionPorFactura.
-          //
-          // Audit fix C5: guarda anterior `result.comisiones.length > 0`
-          // saltaba la denormalización si todos los técnicos tenían 0% pero
-          // hubo cleanup de huérfanas. Ahora denormalizamos siempre que haya
-          // actividad. SPRINT-157: la denorm entra a la tx, así que si falla,
-          // toda la tx aborta (comportamiento más estricto que el try/catch
-          // interno previo, que solo logueaba).
-          const tuvoActividad =
-            result.comisiones.length > 0 ||
-            result.preservadasPorLiquidacion > 0 ||
-            result.eliminadasHuerfanas > 0;
-          if (tuvoActividad) {
-            let denorm: Record<string, unknown> | null = null;
-            if (result.comisiones.length === 1) {
-              // N=1: campos completos (compatibles con el render legacy).
-              denorm = {
-                comisionTecnicoId: result.comisiones[0].tecnicoId,
-                comisionTecnicoNombre: result.comisiones[0].tecnicoNombre,
-                comisionTecnicoMonto: result.comisiones[0].monto,
-                comisionTecnicoPorcentaje: result.comisiones[0].porcentaje,
-                comisionRegistroId: result.comisiones[0].comisionId,
-              };
-            } else if (result.comisiones.length > 1) {
-              // N>1: agregado. El render expande el desglose por técnico
-              // a partir de los items (`tecnicoId` por línea).
-              denorm = {
-                comisionTecnicoId: '',
-                comisionTecnicoNombre: 'N técnicos',
-                comisionTecnicoMonto: result.totalAgregado,
-                comisionTecnicoPorcentaje: 0,
-              };
-            } else {
-              // Caso edge: tuvoActividad === true pero comisiones.length === 0.
-              // En el flujo manual esto es muy raro (la factura recién se creó,
-              // no debería tener huérfanas previas), pero cubrimos por simetría
-              // con ProcesarFacturacionModal. Sobrescribir con shape vacío
-              // refleja el estado real post-recálculo.
-              console.warn(
-                '[factura-crear] tuvoActividad sin comisiones nuevas, denormalizando con shape vacío',
-                {
-                  facturaId: facturaRef.id,
-                  totalAgregado: result.totalAgregado,
-                  preservadas: result.preservadasPorLiquidacion,
-                  eliminadas: result.eliminadasHuerfanas,
-                },
-              );
-              denorm = {
-                comisionTecnicoId: '',
-                comisionTecnicoNombre: '—',
-                comisionTecnicoMonto: 0,
-                comisionTecnicoPorcentaje: 0,
-              };
-            }
-            if (denorm) {
-              denormParaTx = Object.fromEntries(
-                Object.entries(denorm).filter(([, v]) => v !== undefined),
-              );
-            }
-          }
-        }
-      } catch (comErr) {
-        console.error('Error registrando comisiones por items:', comErr);
-        // SPRINT-157: el helper falla PRE-tx ahora — la factura aún no se
-        // creó. Mostramos warn al usuario pero no abortamos: la tx más abajo
-        // creará el doc factura sin denorm (denormParaTx queda null). Si la
-        // tx también falla, su catch mostrará el toast.error definitivo. Si
-        // la tx ok, el toast.success se sobreescribe a este.
-        toast('Hubo problema preparando comisiones. La factura se crea igual; verificá en Comisiones.', {
-          duration: 7000,
-          icon: '!',
-        });
+      // El conduce y todos sus devengos se crean juntos: ningún fallo deja comisión huérfana.
+      if (!intencion.current) {
+        intencion.current = { id: doc(collection(db, 'facturas')).id, numero, payload: facturaLimpia,
+          clienteNombre: clienteNombreFinal, items: form.items.map(i => ({ ...i })), total };
       }
-
-      // ─── Transacción atómica: crear factura + denorm comisiones ───
-      try {
-        await runTransaction(db, async (tx) => {
-          // 1. Crear factura con id pre-generado.
-          tx.set(facturaRef, facturaLimpia);
-          // 2. Denormalización de comisiones (si helper PRE-tx generó payload).
-          if (denormParaTx) {
-            tx.update(facturaRef, denormParaTx);
-          }
-        });
-      } catch (txErr) {
-        console.error('[factura-crear] runTransaction crear conduce manual falló:', txErr);
-        toast.error('Error al crear el conduce de garantía');
-        setSaving(false);
-        return;
-      }
+      const pendiente = intencion.current;
+      const facturaRef = doc(db, 'facturas', pendiente.id);
+      await registrarComisionesPorItems({ // @safe-comision-no-denorm: conduceNuevo denormaliza factura y devengos dentro de la misma transacción (P-041).
+        orden: { id: `factura-manual-${facturaRef.id}`, numero: '', clienteNombre: pendiente.clienteNombre, soloChequeo: false } as Parameters<typeof registrarComisionesPorItems>[0]['orden'],
+        facturaId: facturaRef.id, facturaNumero: pendiente.numero, totalFactura: pendiente.total, items: pendiente.items,
+        userProfile, conduceNuevo: pendiente.payload,
+      });
 
       // ─── POST-tx: audit log override modalidad (best-effort, no bloquea) ───
       // Una entry por cada línea overrideada respecto al default que dictaba
@@ -435,8 +277,9 @@ export default function FacturaCrearModal({
       resetForm();
     } catch (err) {
       console.error(err);
-      toast.error('Error al crear el conduce de garantía');
+      toast.error('No se confirmó el conduce. Reintentar conserva el mismo número y los datos del primer intento.');
     } finally {
+      enviando.current = false;
       setSaving(false);
     }
   };

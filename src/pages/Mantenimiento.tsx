@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { resolverChatCliente } from '../utils/resolverChatCliente';
-import { fechaProgramadaRD, estadoFechaMantenimiento } from '../utils/fechaMantenimiento';
+import { fechaProgramadaRD, estadoFechaMantenimiento, sumarMesesMantenimientoRD } from '../utils/fechaMantenimiento';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, getDocs, query, orderBy, writeBatch } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, getDocs } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Mantenimiento as MantenimientoType, Personal, Cliente } from '../types';
 import { formatFechaCorta, generarTokenPortalCliente } from '../utils';
+import { generarOcurrenciaMantenimiento } from '../services/generarMantenimiento.service';
 import { siguienteNumeroOrden } from '../services/contadores.service';
 import { buscarClientePorTelefono, buscarOCrearCliente, normalizarTelefono } from '../services/clientes.service';
 import { crearNotificacion } from '../services/notificaciones.service';
@@ -13,7 +14,6 @@ import { useTiposEquipo } from '../hooks/useTiposEquipo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Plus, Calendar, Check, X, RefreshCw, Search } from 'lucide-react';
-import { addMonths } from 'date-fns';
 import toast from 'react-hot-toast';
 
 const FRECUENCIA_LABELS: Record<string, string> = {
@@ -64,6 +64,7 @@ export default function Mantenimiento() {
   const generando = useRef(new Set<string>());
   const guardandoRef = useRef(false);
   const [loading, setLoading] = useState(true);
+  const [fechasInvalidas, setFechasInvalidas] = useState(0);
   const [items, setItems] = useState<MantenimientoType[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -82,11 +83,13 @@ export default function Mantenimiento() {
 
   useEffect(() => {
     const unsub = onSnapshot(
-      query(collection(db, 'mantenimiento'), orderBy('proximaFecha', 'asc')),
+      collection(db, 'mantenimiento'),
       (snap) => {
-        setItems(snap.docs.map(d => ({
+        const validos = snap.docs.filter(d => Number.isFinite(d.data().proximaFecha?.toDate?.().getTime()));
+        setFechasInvalidas(snap.size - validos.length);
+        setItems(validos.map(d => ({
           id: d.id, ...d.data(),
-          proximaFecha: d.data().proximaFecha?.toDate?.() || new Date(),
+          proximaFecha: d.data().proximaFecha.toDate(),
         } as MantenimientoType)));
         setLoading(false);
       }
@@ -276,21 +279,9 @@ export default function Mantenimiento() {
     }
   };
 
-  // SPRINT-134 (sub-sprint Mantenimiento, 2026-05-11): cross-collection
-  // mantenimiento + ordenes_servicio envuelto en writeBatch para atomicidad.
-  // `siguienteNumeroOrden()` ya es transaccional internamente (counter), por lo
-  // que se invoca antes del batch (lectura/escritura aislada en su propia tx).
-  // El batch garantiza: o se crea la orden Y se actualiza proximaFecha, o ninguna
-  // de las dos. Si el batch falla, el número de orden ya consumido queda como
-  // hueco numérico (mismo comportamiento que SPRINT-133 — counter no se revierte).
-  //
-  // SPRINT-AGENDA-1 (2026-05-25): la orden generada ahora HEREDA el cliente
-  // real del mantenimiento (`clienteId` validado al alta) + denormaliza
-  // teléfono/dirección/lat/lng para que entre en el histórico del cliente,
-  // dispare el descuento de chequeo previo y figure en el mapa. Además
-  // sincroniza `estadoSimple` + emite notificación `orden_asignada` igual
-  // que `useOrdenCreateForm`. NO duplicamos lógica de selección de cliente
-  // — eso vive en el modal de alta.
+  // P039: creación idempotente por ocurrencia y avance en una transacción.
+  // El contador central se reserva antes: un reintento puede dejar un hueco,
+  // pero nunca duplica la orden ni adelanta dos veces el mantenimiento.
   const handleGenerarOrden = async (item: MantenimientoType) => {
     if (generando.current.has(item.id)) return;
     // Defense-in-depth: mantenimientos viejos (pre SPRINT-AGENDA-1) pueden
@@ -304,7 +295,7 @@ export default function Mantenimiento() {
       const numero = await siguienteNumeroOrden();
       const ahora = Timestamp.now();
       const meses = { mensual: 1, trimestral: 3, semestral: 6, anual: 12 }[item.frecuencia] || 3;
-      const nextDate = addMonths(item.proximaFecha, meses);
+      const nextDate = sumarMesesMantenimientoRD(item.proximaFecha, meses);
 
       // Resolver nombre del técnico desde el dropdown actual. `item.tecnicoId`
       // ya es `auth.uid` (SPRINT-AGENDA-1, P-006). Para mantenimientos
@@ -323,8 +314,7 @@ export default function Mantenimiento() {
         : undefined;
       const tecnicoNombre = tecnicoAsignado?.nombre || '';
 
-      const batch = writeBatch(db);
-      const ordenRef = doc(collection(db, 'ordenes_servicio'));
+
       const ordenPayload: Record<string, unknown> = {
         numero,
         clienteId: item.clienteId,
@@ -359,14 +349,9 @@ export default function Mantenimiento() {
       const ordenLimpia = Object.fromEntries(
         Object.entries(ordenPayload).filter(([, v]) => v !== undefined),
       );
-      batch.set(ordenRef, ordenLimpia);
-      batch.update(doc(db, 'mantenimiento', item.id), {
-        proximaFecha: Timestamp.fromDate(nextDate),
-        updatedAt: ahora,
-      });
-      await batch.commit();
-
-      toast.success(`Orden ${numero} creada`);
+      const resultado = await generarOcurrenciaMantenimiento(item.id, item.proximaFecha, nextDate, ordenLimpia, item.frecuencia);
+      toast.success(resultado.creada ? `Orden ${resultado.numero} creada` : `Esta programación ya tiene la orden ${resultado.numero}`);
+      if (!resultado.creada) return;
 
       // SPRINT-AGENDA-1: emitir notificación `orden_asignada` al técnico
       // asignado (best-effort, no rompe el flujo si falla). Patrón hermano
@@ -380,7 +365,7 @@ export default function Mantenimiento() {
             tipo: 'orden_asignada',
             titulo: `Orden asignada · ${numero}`,
             mensaje: `Mantenimiento programado de ${item.clienteNombre} (${item.equipoTipo || 'equipo'}) para el ${formatFechaCorta(item.proximaFecha)}.`,
-            ordenId: ordenRef.id,
+            ordenId: resultado.ordenId,
             ordenNumero: numero,
           });
         } catch (notifErr) {
@@ -435,6 +420,7 @@ export default function Mantenimiento() {
       </div>
 
       <p className="text-sm text-gray-600">Aviso interno el día programado (0 días de antelación). El envío de la plantilla al cliente es manual desde WhatsApp empresa.</p>
+      {fechasInvalidas > 0 && <p role="alert" className="text-amber-800">{fechasInvalidas} mantenimientos requieren corregir su fecha antes de generar una orden.</p>}
       {hoy.length > 0 && <section><h2 className="font-semibold mb-2">Hoy ({hoy.length})</h2><div className="space-y-2">{hoy.map(item => <MantenimientoCard key={item.id} item={item} onGenerar={handleGenerarOrden} onToggle={toggleActivo} onChat={abrirChat} onFicha={i => navigate(`/admin/clientes?id=${encodeURIComponent(i.clienteId)}`)} />)}</div></section>}
       {/* Vencidos */}
       {vencidos.length > 0 && (

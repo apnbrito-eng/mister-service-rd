@@ -1,6 +1,6 @@
 # Contexto del sistema — Mister Service RD
 
-_Generado automáticamente desde `docs/mapa/MAPA_MENTAL.yaml` — última actualización: 2026-09-15._
+_Generado automáticamente desde `docs/mapa/MAPA_MENTAL.yaml` — última actualización: 2026-09-29._
 
 Software de gestión para taller de reparación de electrodomésticos en República Dominicana
 
@@ -19,7 +19,7 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **REPORTING**: Dashboards y métricas — lee de todo, no escribe
 - **SISTEMA**: Cross-cutting: auditoría, notificaciones, rate limits, configuración
 
-## Módulos (32 total)
+## Módulos (38 total)
 
 ### bancos
 - **Área:** dinero · **Criticidad:** alta
@@ -38,10 +38,12 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **Notas:** parseOrden() en utils/index.ts es la lectura común. Hoy 3 caminos de creación (useOrdenCreateForm, Mantenimiento, solicitudes); sprint NUCLEO-CREAR-ORDEN-CENTRAL unifica.
 
 ### avances
-- **Área:** ordenes · **Criticidad:** media
-- **Qué hace:** Registro de avances/piezas usadas durante la reparación
-- **Depende de:** ordenes_servicio
-- **Colecciones Firestore:** avances, movimientos_piezas
+- **Área:** personal_rrhh · **Criticidad:** media
+- **Qué hace:** Adelantos de dinero a empleados; descuento vinculado a la nómina
+- **Depende de:** personal
+- **Expone a:** nomina
+- **Colecciones Firestore:** avances
+- **Notas:** Corrección del mapa: avances corresponde a dinero adelantado, según avances.service.ts; piezas usadas se registran aparte.
 
 ### calendarios
 - **Área:** agendamiento · **Criticidad:** media
@@ -49,6 +51,7 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **Depende de:** personal
 - **Expone a:** citas_por_confirmar
 - **Colecciones Firestore:** calendarios
+- **Notas:** Candidata local: calendario público asignado a técnico, solicitud conservada hasta confirmación por oficina. Identidad por UID, sin inferir por nombre.
 
 ### citas_por_confirmar
 - **Área:** agendamiento · **Criticidad:** alta
@@ -56,7 +59,7 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **Depende de:** clientes, personal, calendarios
 - **Expone a:** ordenes_servicio
 - **Colecciones Firestore:** citas_por_confirmar
-- **Notas:** Tras AGENDA-2 (e4f92bf) visibles en calendario/agenda con estilo tentativo. Tras AGENDA-3 (f9697b9) se honra el asignadoId al confirmar.
+- **Notas:** Candidata local P042: token por intento y propietario, commit orden+vínculo valida cita vigente, liberación condicional. Callback de garantía fallido conserva formulario/vínculo, sin éxito falso. Reuso exige origen, cliente y orden activa. Sin vencimiento automático.
 
 ### mantenimiento
 - **Área:** agendamiento · **Criticidad:** media
@@ -64,7 +67,7 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **Depende de:** clientes, personal
 - **Expone a:** ordenes_servicio
 - **Colecciones Firestore:** mantenimiento
-- **Notas:** Tras AGENDA-1 (132d9b5) atado a cliente real (typeahead + telefono normalizado, tecnicoId=uid). Tras AGENDA-5 (8f6a72b) se ofrece programar al cerrar orden.
+- **Notas:** Candidata local P039: ocurrencia de mantenimiento idempotente, cliente real, responsable activo y alertas internas. Acceso al chat existente, sin envío externo automático.
 
 ### clientes
 - **Área:** clientes · **Criticidad:** alta
@@ -84,19 +87,19 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 
 ### cotizaciones
 - **Área:** dinero · **Criticidad:** alta
-- **Qué hace:** Cotizaciones (QT-####) previas a la aprobación; al aprobar pueden generar factura.
+- **Qué hace:** Cotizaciones QT externas o vinculadas a una orden; aceptación y conversión a conduce trazables.
 - **Depende de:** clientes, ordenes_servicio, productos
 - **Expone a:** facturas
 - **Colecciones Firestore:** cotizaciones, precios_servicios
-- **Notas:** Tras DINERO-1 (bec87b3) el número QT es atómico via contadores.service.ts.
+- **Notas:** Candidata local P038: conversión idempotente y vínculo transaccional con orden/conduce; costos de comisión sólo utilizan cotización aceptada, nunca borrador/rechazada. Numeración centralizada.
 
 ### facturas
 - **Área:** dinero · **Criticidad:** alta
-- **Qué hace:** Facturas y conduces (FAC-####, CG-####). Emisión bloqueada si hay pago sin verificar.
+- **Qué hace:** Conduces de Garantía (CG): documentos operativos; facturación fiscal ocurre fuera de este sistema.
 - **Depende de:** cotizaciones, ordenes_servicio, clientes
 - **Expone a:** pagos, comisiones, garantias
 - **Colecciones Firestore:** facturas
-- **Notas:** ProcesarFacturacionModal: gate del conduce vs pago verificado (cazador P-023). Tras DINERO-2 (b4fc23c) recalcula montoPagado/estadoPago al cobrar.
+- **Notas:** Candidata local: vínculo cotización/orden/conduce transaccional y único. Pagos y stock conservan sus validaciones; emisión de una orden no recalcula ni duplica devengos del cierre.
 
 ### pagos
 - **Área:** dinero · **Criticidad:** alta
@@ -112,14 +115,14 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **Depende de:** ordenes_servicio, facturas, personal
 - **Expone a:** nomina
 - **Colecciones Firestore:** comisiones
-- **Notas:** Dos bases de cálculo divergentes (~18% diferencia) pendientes decisión Jorge. P-021 obliga denormalización a factura.
+- **Notas:** Candidata local P041: resolver técnico único por UID/docID, devengo de cierre con ID estable y transacción. Conduce de orden refleja devengos existentes con ajuste firmado de garantía, excluyendo anuladas. Manual persiste conduce y comisiones juntos; intención de reintento dura mientras el modal está abierto.
 
 ### nomina
-- **Área:** dinero · **Criticidad:** media
-- **Qué hace:** Liquidación mensual de nómina con bonos por tier (operaria, secretaria) y descuentos de préstamos.
-- **Depende de:** comisiones, personal
-- **Colecciones Firestore:** liquidaciones_nomina
-- **Notas:** Reglas de bonos duplicadas hoy entre Nomina.tsx y Dashboard.tsx (REPORTING-1 las centralizó en utils/kpis.ts).
+- **Área:** dinero · **Criticidad:** alta
+- **Qué hace:** Nómina quincenal por empleado con comisiones, bonos, asistencia, avances y cuotas
+- **Depende de:** comisiones, personal, avances, prestamos_empleados, ponches
+- **Colecciones Firestore:** liquidaciones_nomina, comisiones, avances, prestamos_empleados, personal, ordenes_servicio
+- **Notas:** Candidata local: cierre transaccional, neto negativo bloqueado, incidencias por fecha o devengos duplicados requieren conciliación. Estado de Resultado lee snapshots cerrados por fin del período; sueldo actual es referencia/proyección.
 
 ### gastos
 - **Área:** dinero · **Criticidad:** baja
@@ -137,9 +140,9 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 ### standby_piezas
 - **Área:** inventario · **Criticidad:** media
 - **Qué hace:** Piezas en espera de llegada para una orden
-- **Depende de:** ordenes_servicio
+- **Depende de:** ordenes_servicio, suplidores
 - **Colecciones Firestore:** standby_piezas
-- **Notas:** No reconcilia con inventario al llegar — decisión Jorge pendiente.
+- **Notas:** Candidata local: piezas vinculadas a orden y llegada con aviso para coordinar instalación. Reactivación humana revalida revisión del padre y piezas; no descontar inventario por inferencia.
 
 ### equipos_taller
 - **Área:** inventario · **Criticidad:** baja
@@ -208,14 +211,14 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **Expone a:** ordenes_servicio
 - **Colecciones Firestore:** solicitudes_servicio
 - **Integraciones externas:** firebase_storage
-- **Notas:** Tras FIX-LEADS (01df699) subidas (foto/firma/PDF) van a Storage solicitudes-publico/** con whitelist contentType y size <10MB.
+- **Notas:** Candidata local: solicitud→cliente/orden se convierte con validación transaccional y reuso trazable. Cliente existente se verifica; identidad y asignación explícitas. Adjuntos conservan permisos de Storage.
 
 ### reportes
 - **Área:** reporting · **Criticidad:** media
 - **Qué hace:** Dashboards y métricas: ingresos, conduces emitidos, rendimiento técnicos, proyección de nómina. Dashboard operativo del día + Reporte avanzado para análisis comparativos.
-- **Depende de:** ordenes_servicio, facturas, pagos, comisiones, personal, productos, gastos
+- **Depende de:** ordenes_servicio, facturas, pagos, comisiones, personal, productos, gastos, caja, nomina, ponches
 - **Colecciones Firestore:** recordatorios_diarios
-- **Notas:** Tras REPORTING-1 (a4e64db) los KPIs viven en src/utils/kpis.ts (helpers compartidos). Resta anulaciones de la base de ingresos. Tras DISENO-I Fase 3 (5ca35d2, 2026-06-03) el Dashboard quedó con KPIs operativos del día solamente; los 4 widgets analíticos (Rendimiento por Técnico, Reparaciones por Tipo, Anuladas semana, Nómina proyectada del mes) se movieron a /admin/reporte-avanzado — gate admin+coord. Link a 1 clic desde Dashboard + sidebar Finanzas.
+- **Notas:** Candidata local: período mensual/rango RD, fuentes identificables y faltantes visibles. Caja por fecha del pago separada de conduces emitidos. Resultado usa nóminas cerradas cuyo período termina en rango, sin prorrateo ni doble comisión; pérdidas visibles. Calidad del servicio y NPS no equivalen a calificación individual de secretaria.
 
 ### notificaciones
 - **Área:** sistema · **Criticidad:** media
@@ -256,7 +259,49 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - **Depende de:** personal
 - **Rutas API:** /api/marketing/resumen
 - **Integraciones externas:** meta_ads
-- **Notas:** Sin escritura de anuncios. Token separado de WhatsApp. Instagram/Messenger y atribución a ventas pendientes.
+- **Notas:** Lectura de anuncios sin escritura; atribución operativa se consulta en seguimiento_marketing y no implica causalidad.
+
+### movimientos_piezas
+- **Área:** inventario · **Criticidad:** alta
+- **Qué hace:** Consumo y movimientos de piezas de reparación
+- **Depende de:** ordenes_servicio, productos
+- **Colecciones Firestore:** movimientos_piezas
+- **Notas:** Colección existente; no confundir con avances de dinero a empleados.
+
+### prestamos_empleados
+- **Área:** personal_rrhh · **Criticidad:** alta
+- **Qué hace:** Préstamos a empleados con cuotas y saldo a recuperar
+- **Depende de:** personal
+- **Colecciones Firestore:** prestamos_empleados
+- **Notas:** Nómina relee cuotas y saldos en transacción. Distintos de adelantos; la candidata no publica permisos.
+
+### caja
+- **Área:** dinero · **Criticidad:** alta
+- **Qué hace:** Proyección canónica de cobros confirmados, pendientes e incidencias
+- **Depende de:** pagos, bancos
+- **Colecciones Firestore:** ordenes_servicio
+- **Notas:** movimientosCobros.ts proyecta documentos RAW y fecha financiera RD desde orden.pagos. No es una nueva colección ni suma espejos; no inventa fechas, métodos o importes faltantes.
+
+### suplidores
+- **Área:** inventario · **Criticidad:** alta
+- **Qué hace:** Directorio de suplidores activos/inactivos y preparación de consultas de piezas por WhatsApp
+- **Depende de:** whatsapp_inbox
+- **Colecciones Firestore:** suplidores, whatsapp_conversaciones
+- **Notas:** suplidores.service.ts y Standby vinculan búsqueda de pieza/foto y suplidor. Envío usa flujo existente y permisos; no envío automático agregado.
+
+### seguimiento_chequeo
+- **Área:** clientes · **Criticidad:** alta
+- **Qué hace:** Seguimiento de órdenes de solo chequeo con responsable, próxima gestión y avisos
+- **Depende de:** ordenes_servicio, personal
+- **Colecciones Firestore:** ordenes_servicio, notificaciones, personal, usuarios
+- **Notas:** seguimientoChequeo.service.ts guarda gestión y aviso transaccionales. Conteos por técnico señalan revisión, no prueban fraude.
+
+### seguimiento_marketing
+- **Área:** reporting · **Criticidad:** alta
+- **Qué hace:** Consultas, reactivaciones y cobros atribuibles con incidencias visibles
+- **Depende de:** ordenes_servicio, caja, whatsapp_inbox
+- **Colecciones Firestore:** ordenes_servicio, whatsapp_conversaciones, campanas_marketing
+- **Notas:** Cohorte de órdenes del período y pagos del mismo período, basada en proyección canónica RAW. Atribución a anuncio no implica causalidad. Ambigüedad y fechas ausentes se muestran; no sumar vistas por origen/anuncio. Lectura puntual completa tiene límite de escala.
 
 ## Integraciones externas
 
@@ -272,6 +317,9 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 
 ## Impacto de cambios (si tocás X, revisá Y)
 
+- Si tocás **avances**, verificá: nomina
+- Si tocás **bancos**, verificá: caja
+- Si tocás **caja**, verificá: reportes, seguimiento_marketing
 - Si tocás **calendarios**, verificá: ordenes_servicio, citas_por_confirmar
 - Si tocás **clientes**, verificá: ordenes_servicio, citas_por_confirmar, mantenimiento, garantias, cotizaciones, facturas, whatsapp_inbox, solicitudes
 - Si tocás **comisiones**, verificá: nomina, reportes
@@ -280,10 +328,13 @@ Software de gestión para taller de reparación de electrodomésticos en Repúbl
 - Si tocás **facturas**, verificá: garantias, comisiones, reportes
 - Si tocás **formularios**, verificá: solicitudes
 - Si tocás **gastos**, verificá: reportes
-- Si tocás **ordenes_servicio**, verificá: bancos, avances, garantias, cotizaciones, facturas, pagos, comisiones, standby_piezas, equipos_taller, reportes
-- Si tocás **pagos**, verificá: reportes
-- Si tocás **personal**, verificá: ordenes_servicio, calendarios, citas_por_confirmar, mantenimiento, comisiones, nomina, ponches, cierres_dia, whatsapp_inbox, reportes, notificaciones, conocimiento_equipo, marketing_meta
+- Si tocás **nomina**, verificá: reportes
+- Si tocás **ordenes_servicio**, verificá: bancos, garantias, cotizaciones, facturas, pagos, comisiones, standby_piezas, equipos_taller, reportes, movimientos_piezas, seguimiento_chequeo, seguimiento_marketing
+- Si tocás **pagos**, verificá: reportes, caja
+- Si tocás **personal**, verificá: ordenes_servicio, avances, calendarios, citas_por_confirmar, mantenimiento, comisiones, nomina, ponches, cierres_dia, whatsapp_inbox, reportes, notificaciones, conocimiento_equipo, marketing_meta, prestamos_empleados, seguimiento_chequeo
 - Si tocás **plantillas_whatsapp**, verificá: whatsapp_inbox
-- Si tocás **ponches**, verificá: cierres_dia
-- Si tocás **productos**, verificá: cotizaciones, reportes
-- Si tocás **whatsapp_inbox**, verificá: conversaciones_ia
+- Si tocás **ponches**, verificá: nomina, cierres_dia, reportes
+- Si tocás **prestamos_empleados**, verificá: nomina
+- Si tocás **productos**, verificá: cotizaciones, reportes, movimientos_piezas
+- Si tocás **suplidores**, verificá: standby_piezas
+- Si tocás **whatsapp_inbox**, verificá: conversaciones_ia, suplidores, seguimiento_marketing

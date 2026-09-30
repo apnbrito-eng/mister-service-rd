@@ -60,15 +60,15 @@ export async function cerrarDiaAtomico(dia: string, datos: Record<string, unknow
   const ref = doc(db, 'cierres_dia', dia);
   return runTransaction(db, async tx => {
     const existente = await tx.get(ref);
-    if (existente.exists()) return { id: existente.id, ...existente.data() };
+    if (existente.exists()) return { ...existente.data(), id: existente.id, creado: false };
     if (legacy.size > 1) throw new Error('Hay varios cierres históricos de este día; requiere conciliación');
     const previo = legacy.docs[0] ? await tx.get(legacy.docs[0].ref) : null;
     if (previo?.exists()) {
       // Adoptar el cierre histórico sin duplicar importes ni sobrescribirlo.
-      return { id: previo.id, ...previo.data() };
+      return { ...previo.data(), id: previo.id, creado: false };
     }
     const payload = Object.fromEntries(Object.entries({ ...datos, fecha: Timestamp.fromDate(inicio) }).filter(([, v]) => v !== undefined));
     tx.set(ref, payload);
-    return { id: ref.id, ...payload };
+    return { ...payload, id: ref.id, creado: true };
   });
 }

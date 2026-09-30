@@ -4,6 +4,8 @@ vi.mock('../../src/firebase/config', () => ({ db: {} }));
 vi.mock('../../src/services/avances.service', () => ({ obtenerAvancesPendientesDeQuincena: async () => [] }));
 vi.mock('../../src/services/prestamos.service', () => ({ obtenerPrestamosActivosTodos: async () => [] }));
 vi.mock('firebase/firestore', async original => ({ ...await original<typeof import('firebase/firestore')>(),
+ collection: (_: unknown, col: string) => col,
+ getDocs: async (col: string) => ({ docs: Object.entries(m.docs).filter(([k]) => k.startsWith(col + '/')).map(([k, v]) => ({ id: k.split('/')[1], data: () => v })) }),
  doc: (_: unknown, col: string, id: string) => `${col}/${id}`,
  runTransaction: (_: unknown, fn: any) => {
    const operacion = m.cola.then(async () => {
@@ -22,7 +24,7 @@ beforeEach(() => {
  m.fallo = ''; m.cola = Promise.resolve();
  m.docs = {
   'liquidaciones_nomina/l': { estado: 'abierta', quincena: '2026-09-Q2', empleados: [{ personalId: 'p', totalDevengado: 1000, comisionesIds: ['c'], totalComisiones: 100, avancesIds: ['a'], totalAvances: 50, cuotasPrestamos: [{ prestamoId: 'pr', numeroCuota: 1, monto: 100 }], totalCuotasPrestamos: 100 }] },
-  'comisiones/c': { estadoLiquidacion: 'pendiente', fechaCobro: '2026-09-20T12:00:00-04:00', comisionMonto: 100 },
+  'comisiones/c': { tecnicoId: 'p', estadoLiquidacion: 'pendiente', fechaCobro: '2026-09-20T12:00:00-04:00', comisionMonto: 100 },
   'avances/a': { personalId: 'p', monto: 50, descontado: false },
   'prestamos_empleados/pr': { personalId: 'p', estado: 'activo', montoTotal: 300, saldoPendiente: 300, cuotasTotales: 3, cuotasPagadas: 0, cuotasHistorial: [] },
  };

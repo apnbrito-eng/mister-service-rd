@@ -1,7 +1,8 @@
+import { finalizarConfirmacionCita } from '../utils/finalizarConfirmacionCita';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection, addDoc, doc, setDoc, Timestamp, query, onSnapshot, orderBy,
-  runTransaction, updateDoc, serverTimestamp, getDoc, getDocs, where,
+  getDoc, getDocs, where,
 } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { format, isSameDay } from 'date-fns';
@@ -23,6 +24,11 @@ import {
   generarTokenPortalCliente, parseCliente,
 } from '../utils';
 import { construirCamposDescuentoChequeo, ChequeoVigenteInfo } from '../utils/descuentoChequeo';
+import { construirMetadatosCita } from '../utils/metadatosCita';
+import {
+  escribirOrdenConVinculoCita, validarOrdenReusable, adquirirIntentoCita, liberarIntentoCita, type IntentoCita,
+  ERR_CITA_DESAPARECIO, ERR_CITA_YA_VINCULADA_PREFIX,
+} from '../utils/vinculoOrdenCita';
 
 export interface CreateFormState {
   clienteId: string;
@@ -244,22 +250,29 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
     // todavía no terminó de cargar, el lookup retorna undefined y el
     // pre-llenado lo hace el effect secundario (más abajo) cuando los
     // datos lleguen.
-    const citaConAsignado = citaPreset as typeof citaPreset & {
-      asignadoId?: string;
-      asignadoNombre?: string;
-    };
+    // 2026-09-29: `asignadoId`/`asignadoNombre` ya viven en el tipo
+    // `CitaPorConfirmar` (el parser de `Citas.tsx` los lee). Ya no hace
+    // falta castear.
     let tecnicoPrecargadoId = '';
     let tecnicoPrecargadoNombre = '';
-    if (citaConAsignado.asignadoId) {
-      const tecRes = personal.find(p => (p.uid || p.id) === citaConAsignado.asignadoId);
-      if (tecRes && tecRes.activo) {
-        tecnicoPrecargadoId = tecRes.uid || tecRes.id;
+    if (citaPreset.asignadoId) {
+      // 2026-09-29 iter3: lookup UNÍVOCO por `uid` — antes había un OR con
+      // `p.id === asignadoId` para tolerar calendarios legacy pre-c4be345,
+      // pero eso aceptaba matches ambiguos (doc-id ≠ auth-uid; en teoría no
+      // colisionan pero no hay invariante que lo garantice). Regla:
+      // 1) buscar SOLO por `p.uid === asignadoId`.
+      // 2) confirmar `activo && rol === 'tecnico' && uid` antes de pre-cargar.
+      // Si no matchea, NO adivinamos otra persona — cae al nombre como hint.
+      // Los calendarios que aún guardan `personal.id` legacy quedan con
+      // `tecnicoNombre` visible pero `tecnicoId` vacío, forzando a la oficina
+      // a elegir técnico manualmente.
+      const tecRes = personal.find(p => !!p.uid && p.uid === citaPreset.asignadoId);
+      if (tecRes && tecRes.activo && tecRes.rol === 'tecnico' && tecRes.uid) {
+        tecnicoPrecargadoId = tecRes.uid;
         tecnicoPrecargadoNombre = tecRes.nombre;
-      } else if (citaConAsignado.asignadoNombre) {
-        // Fallback: si el lookup falla (personal aún no cargado o
-        // asignadoId obsoleto), conservamos el nombre como hint visual.
-        // El uid sigue vacío para que la rule no falle silenciosamente.
-        tecnicoPrecargadoNombre = citaConAsignado.asignadoNombre;
+      } else if (citaPreset.asignadoNombre) {
+        // Fallback visual — el captador se preserva en `metadatosCita`.
+        tecnicoPrecargadoNombre = citaPreset.asignadoNombre;
       }
     }
     setForm({
@@ -333,20 +346,21 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
   // Y el form todavía no tiene tecnicoId (no pisa una edición manual de
   // la oficina). Si el lookup ya tuvo éxito en el effect principal,
   // este es no-op.
+  //
+  // 2026-09-29: espejo del filtro del effect principal — SOLO pre-carga si
+  // el asignado del calendario es rol=`tecnico`, activo y tiene `uid`. Un
+  // captador secretaria/operaria queda solo en metadatosCita.
   useEffect(() => {
     if (!citaPreset || presetAplicadoIdRef.current !== citaPreset.id) return;
-    const citaConAsignado = citaPreset as typeof citaPreset & {
-      asignadoId?: string;
-      asignadoNombre?: string;
-    };
-    if (!citaConAsignado.asignadoId) return;
+    if (!citaPreset.asignadoId) return;
     if (form.tecnicoId) return; // ya está resuelto o la coord lo eligió
     if (personal.length === 0) return; // aún cargando
-    const tecRes = personal.find(p => (p.uid || p.id) === citaConAsignado.asignadoId);
-    if (tecRes && tecRes.activo) {
+    // Espejo del filtro univocity del effect principal — SOLO match por `uid`.
+    const tecRes = personal.find(p => !!p.uid && p.uid === citaPreset.asignadoId);
+    if (tecRes && tecRes.activo && tecRes.rol === 'tecnico' && tecRes.uid) {
       setForm(f => ({
         ...f,
-        tecnicoId: tecRes.uid || tecRes.id,
+        tecnicoId: tecRes.uid!,
         tecnicoNombre: tecRes.nombre,
       }));
     }
@@ -565,6 +579,7 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
     presetAplicadoIdRef.current = null;
   };
 
+  // @safe-non-tx: cliente es contacto independiente; orden+cita se guardan atómicamente en escribirOrdenConVinculoCita (P042).
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.clienteNombre || !form.equipoTipo || !form.descripcionFalla) {
@@ -612,32 +627,29 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
     }
     setSaving(true);
 
-    // ─── Lock transaccional anti doble-confirmación ───
+    // ─── Lock transaccional anti doble-confirmación + idempotencia ───
     // Si esta llamada nace de confirmar una cita pública, marcamos la cita
     // como `procesando: true` ANTES de crear cualquier dato. Esto evita que
     // dos coordinadoras corriendo el flujo en paralelo creen dos órdenes
     // para la misma cita. Los flags son transitorios — al éxito, la cita se
     // borra (el `onAfterCreate` del caller hace `deleteDoc`); al fallo, los
     // limpiamos en el catch / finally para permitir reintentos.
+    //
+    // Idempotencia 2026-09-29 (Citas garantía): si un reintento anterior
+    // logró crear la orden pero falló el paso posterior (ej. update de la
+    // factura para vincular la garantía), la cita queda sin borrarse. En
+    // ese caso `data.ordenIdCreada` está seteado y NO debemos crear otra
+    // orden — solo re-ejecutamos `onAfterCreate` con el id existente. Esto
+    // preserva el flujo de recuperación explícita sin duplicar órdenes /
+    // quemar un número del contador nuevo / mandar notificaciones duplicadas.
     let citaLockeada = false;
+    let intentoCita: IntentoCita | null = null;
+    let ordenIdReusable: string | null = null;
     if (citaPreset) {
-      const citaRef = doc(db, 'citas_por_confirmar', citaPreset.id);
       try {
-        await runTransaction(db, async (tx) => {
-          const snap = await tx.get(citaRef);
-          if (!snap.exists()) {
-            throw new Error('CITA_NO_EXISTE');
-          }
-          const data = snap.data();
-          if (data.procesando === true) {
-            throw new Error('CITA_YA_PROCESANDO');
-          }
-          tx.update(citaRef, {
-            procesando: true,
-            procesandoPor: usuarioActual?.id || null,
-            procesandoEn: serverTimestamp(),
-          });
-        });
+        const adquirido = await adquirirIntentoCita(db, citaPreset.id, usuarioActual?.id || '', crypto.randomUUID());
+        intentoCita = adquirido;
+        ordenIdReusable = adquirido.ordenId;
         citaLockeada = true;
       } catch (errLock) {
         const msg = errLock instanceof Error ? errLock.message : '';
@@ -656,21 +668,69 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
 
     // Helper para liberar el lock si el flujo falla después del lock pero
     // antes del éxito final (deleteDoc cita). Si la cita ya fue borrada, el
-    // updateDoc fallará silencioso — eso está OK.
+    // la transacción de liberación no realiza ninguna escritura.
     const unlockCitaSiLockeada = async () => {
       if (!citaLockeada || !citaPreset) return;
       try {
-        await updateDoc(doc(db, 'citas_por_confirmar', citaPreset.id), {
-          procesando: false,
-          procesandoPor: null,
-          procesandoEn: null,
-        });
+        if (intentoCita) await liberarIntentoCita(db, citaPreset.id, intentoCita);
       } catch (unlockErr) {
         console.warn('No se pudo unlockear la cita:', unlockErr);
       }
     };
 
     try {
+      // Reintento idempotente: si la cita ya tiene `ordenIdCreada` (una pasada
+      // previa creó la orden y su vínculo — ahora atómicos — pero falló un
+      // paso posterior típicamente el update de la factura para garantía en
+      // `Citas.tsx::onAfterCreate`), NO recreamos: reejecutamos
+      // `onAfterCreate` con el id existente.
+      //
+      // Antes de reusar, VALIDAMOS que el doc de la orden exista. Si el
+      // vínculo apunta a un doc inexistente (rechazado por rules, borrado
+      // manual, réplica inconsistente), abortamos con toast — reusar un id
+      // fantasma reportaría "éxito" al usuario sin orden detrás.
+      if (ordenIdReusable) {
+        const validacion = await validarOrdenReusable(db, ordenIdReusable, { citaId: citaPreset!.id, intento: intentoCita! }).catch(err => {
+          console.error('Error validando la orden previa:', err);
+          return null;
+        });
+        if (!validacion) {
+          toast.error('No pude validar la orden previa. Reintenta o contactá soporte.');
+          await unlockCitaSiLockeada();
+          setSaving(false);
+          return;
+        }
+        if (!validacion.existe) {
+          console.error(
+            'Vínculo cita→orden apunta a doc inexistente:', ordenIdReusable,
+          );
+          toast.error(
+            `La cita referencia una orden (${ordenIdReusable}) inexistente, inactiva o de otro vínculo. Contactá soporte para reparar el vínculo antes de reintentar.`,
+          );
+          await unlockCitaSiLockeada();
+          setSaving(false);
+          return;
+        }
+        toast(
+          `Retomando confirmación de la orden ${validacion.numero || '(sin número disponible)'} ya creada; corriendo pasos posteriores.`,
+          { duration: 5000 },
+        );
+        await finalizarConfirmacionCita({
+          confirmar: onAfterCreate ? () => onAfterCreate(ordenIdReusable!, validacion.numero) : undefined,
+          liberar: unlockCitaSiLockeada,
+          pendiente: errRetry => {
+            console.error('onAfterCreate falló en reintento idempotente:', errRetry);
+            toast.error('Orden creada, confirmación pendiente. Revisa y reintenta; se conservará la misma orden.');
+          },
+          completada: () => {
+            toast.success(`Orden ${validacion.numero} confirmada`);
+            resetForm();
+          },
+        });
+        setSaving(false);
+        return;
+      }
+
       let clienteId = form.clienteId;
       let clienteTelefonoFinal = form.clienteTelefono;
       let clienteCreadoFlag = false;
@@ -796,6 +856,10 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
         responsableId: usuarioActual?.id || '',
         responsableNombre: usuarioActual?.nombre || '',
         creadoPor: usuarioActual?.nombre || 'Sistema',
+        // 2026-09-29 sprint calendarios/solicitudes — `creadoPor` es un
+        // string humano que se pisa si `personal.nombre` cambia. Persistir
+        // también el `auth.uid` verificable para auditoría.
+        ...(usuarioActual?.id ? { creadoPorId: usuarioActual.id } : {}),
         fase: faseInicial,
         estadoSimple: estadoInicial,
         estado: 'activo',
@@ -850,16 +914,14 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
         ordenData.fotoEquipoUrl = citaPreset.fotoEquipoUrl;
       }
 
-      // Metadatos de origen del lead público
+      // Metadatos de origen del lead público. 2026-09-29: preservar
+      // calendario público + técnico captador + equipo/responsable WhatsApp
+      // + origen normalizado. Antes se perdían al confirmar la cita: la
+      // orden nacía "huérfana" de su lead y no había manera de auditar si
+      // el técnico final fue el captador original o un cambio manual de
+      // la oficina.
       if (citaPreset) {
-        const meta: Record<string, unknown> = {};
-        if (citaPreset.comoNosConocio) meta.comoNosConocio = citaPreset.comoNosConocio;
-        if (citaPreset.camposPersonalizados && Object.keys(citaPreset.camposPersonalizados).length > 0) {
-          meta.camposPersonalizados = citaPreset.camposPersonalizados;
-        }
-        if (citaPreset.whatsappAsignado) meta.whatsappAsignado = citaPreset.whatsappAsignado;
-        if (citaPreset.whatsappAsignadoNombre) meta.whatsappAsignadoNombre = citaPreset.whatsappAsignadoNombre;
-        meta.citaOrigenId = citaPreset.id;
+        const meta: Record<string, unknown> = construirMetadatosCita(citaPreset);
         if (Object.keys(meta).length > 0) ordenData.metadatosCita = meta;
       }
 
@@ -916,7 +978,49 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
         Object.entries(ordenData).filter(([, v]) => v !== undefined),
       );
 
-      const nuevaRef = await addDoc(collection(db, 'ordenes_servicio'), ordenLimpia);
+      // Escritura de la orden.
+      // - Flujo con cita: escribimos orden + `ordenIdCreada` en la cita
+      //   dentro de la MISMA `runTransaction` vía `escribirOrdenConVinculoCita`.
+      //   Antes eran dos writes separados (`addDoc` + `updateDoc`); si el
+      //   segundo fallaba, un reintento generaba una orden duplicada porque
+      //   la cita no tenía cómo señalar "ya creé una". Con la tx unificada:
+      //   * si el commit falla → NI orden NI vínculo persisten (retry limpio).
+      //   * si el commit exitoso → ambos existen (retry ve `ordenIdCreada`
+      //     en el lock pre-tx y salta creación).
+      // - Flujo manual (sin cita): un `addDoc` normal — no hay vínculo que
+      //   atomizar.
+      let nuevaRef: { id: string };
+      if (citaPreset) {
+        try {
+          const res = await escribirOrdenConVinculoCita(db, {
+            ordenData: ordenLimpia,
+            citaId: citaPreset.id,
+            intento: intentoCita!,
+            usuarioId: usuarioActual?.id,
+          });
+          nuevaRef = { id: res.ordenId };
+        } catch (errAtomic) {
+          const msg = errAtomic instanceof Error ? errAtomic.message : '';
+          if (msg === ERR_CITA_DESAPARECIO) {
+            toast.error('La cita fue eliminada mientras la confirmábamos. Refrescá la lista.');
+          } else if (msg.startsWith(ERR_CITA_YA_VINCULADA_PREFIX)) {
+            const idExistente = msg.slice(ERR_CITA_YA_VINCULADA_PREFIX.length);
+            toast.error(
+              `Otra persona ya confirmó esta cita (orden ${idExistente}). Refrescá la lista para verla.`,
+            );
+          } else {
+            console.error('Falló commit atómico orden+vínculo cita:', errAtomic);
+            toast.error(
+              'No se pudo crear la orden. Ni la orden ni el vínculo quedaron guardados. Reintenta.',
+            );
+          }
+          await unlockCitaSiLockeada();
+          setSaving(false);
+          return;
+        }
+      } else {
+        nuevaRef = await addDoc(collection(db, 'ordenes_servicio'), ordenLimpia);
+      }
 
       // SPRINT-169 (2026-05-15) — Emitir notificación `orden_asignada` a los
       // destinatarios afectados por la creación de la orden. Best-effort:
@@ -1061,16 +1165,6 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
       // reintentar — el caller (Citas.tsx) puede haber NO borrado la cita
       // a propósito (ej: garantía con descuento parcialmente fallido). En
       // ese caso queremos que la cita siga siendo confirmable.
-      if (onAfterCreate) {
-        try {
-          await onAfterCreate(nuevaRef.id, numero);
-        } catch (err) {
-          console.error('onAfterCreate falló:', err);
-          toast.error('Orden creada, pero falló un paso posterior. Revisa logs.');
-          await unlockCitaSiLockeada();
-        }
-      }
-
       // Toast final con sufijo según contexto cliente.
       // SPRINT-183 (2026-05-18): si el cliente NO se creó (asociado a uno
       // existente por tel duplicado) y tampoco se agregó dirección nueva,
@@ -1082,9 +1176,18 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
         : direccionAgregadaFlag
           ? ' (dirección agregada al cliente)'
           : ' (cliente existente)';
-      toast.success(`Orden ${numero} creada${citaPreset ? ' y agendada' : ''}${sufijoCliente}`);
-
-      resetForm();
+      await finalizarConfirmacionCita({
+        confirmar: onAfterCreate ? () => onAfterCreate(nuevaRef.id, numero) : undefined,
+        liberar: unlockCitaSiLockeada,
+        pendiente: err => {
+          console.error('onAfterCreate falló:', err);
+          toast.error('Orden creada, confirmación pendiente. Revisa y reintenta; se conservará la misma orden.');
+        },
+        completada: () => {
+          toast.success(`Orden ${numero} creada${citaPreset ? ' y agendada' : ''}${sufijoCliente}`);
+          resetForm();
+        },
+      });
     } catch (err) {
       console.error(err);
       toast.error('Error al crear la orden');
