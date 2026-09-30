@@ -248,3 +248,7 @@ Nada activo en construcción ahora mismo. Pasada 51 cerrada (nocturna). 3 sprint
 ---
 
 > **Recordatorio para quien edite este archivo:** mantenelo CORTO. Esto es un índice del estado, no una copia de todo. Si una sección crece mucho, movela al archivo fuente que corresponde y dejá solo el enlace. Tachar (`~~...~~`) en vez de borrar cuando algo se completa y querés preservar el rastro por unos días.
+
+
+## 29/09/2026 — candidata integral local
+Candidata1.0.18/code19 firmada,777 pruebas generales y build web/API aprobados. Revisión conjunta Codex/Claude/CLI; resumen, evidencias y pendientes en [control de entrega](../qa/2026-09-29-candidato-integral.md). Checkpoint local049cba3 (`codex/candidata-integral-20260929`), rama e índice activos preservados. Sin publicación ni instalación. Pendientes: infraestructura real/formularios, publicación coordinada y Samsung; pagos históricos repetidos requieren evidencia. Baseline reglas remoto recuperado sololectura; P005/P013 permanecen hasta publicación real.

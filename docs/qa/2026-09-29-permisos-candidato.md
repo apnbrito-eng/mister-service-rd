@@ -37,3 +37,8 @@ Se recuperaron los contenidos actuales mediante Firebase Rules API. Ambos hashes
 - Actualizar locks únicamente como resultado del procedimiento de despliegue real exitoso. P005/P013 deben seguir visibles hasta entonces.
 
 Referencias: `docs/qa/2026-09-29-formularios-publicos-seguros.md`, `docs/qa/2026-09-29-suplidores-claude.md`. La validación de esta entrega se limita a reglas locales de suplidores, no certifica los demás módulos en producción.
+
+## CORS real — 23:14 RD
+Consultado bucket mediante GET autenticado, sin cambios: dominios oficiales tienen GET/HEAD, pero no PUT. La vía firmada nueva requiere PUT. Propuesta preservando configuración existente: `propuesta-cors-candidata.json`. Evidencia privada sin credenciales: `reglas-produccion-lectura/cors.json` en artefactos de esta fecha. Aplicarla es un cambio de infraestructura pendiente, no realizado por esta lectura.
+
+No se exige IAM signBlob por defecto: el inicializador actual usa certificado con clave privada y el SDK puede firmar localmente. Verificación de subida real sigue pendiente.

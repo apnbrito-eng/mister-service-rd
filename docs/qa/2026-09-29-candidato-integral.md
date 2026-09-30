@@ -64,3 +64,8 @@ En trabajo. Este documento no certifica que el plan completo esté terminado ni 
 2. Instalar candidata y comprobar Samsung: Atrás/IA, sesión, chat, cámara y GPS/jornada. El dispositivo está conectado; esta sesión no dispone de un controlador de interfaz Android habilitado.
 3. Plantillas empresariales y envíos reales controlados de WhatsApp requieren configuración/validación externa; ningún mensaje a clientes fue enviado.
 4. Resolver con evidencia los pagos históricos con ID repetido antes de operarlos. Confirmar si compras de piezas también están registradas como gastos de repuestos para descartar doble costo; es una pregunta sobre los registros del negocio, no un fallo demostrado.
+
+### Infraestructura comprobada a las 23:14 RD
+Lectura real del bucket: `https://www.misterservicerd.com` y `https://misterservicerd.com` sólo tienen CORS GET/HEAD. La nueva subida firmada usa PUT, por lo que falta habilitar ese método para ambos dominios antes de publicar el formulario. Propuesta exacta en `propuesta-cors-candidata.json`; conserva todas las entradas existentes y añade PUT para esos dos orígenes. No aplicada.
+
+La afirmación de que siempre hace falta IAM signBlob se corrige: `firebaseAdmin.ts` inicializa con certificado y clave privada; el SDK firma localmente en esa modalidad. signBlob corresponde a credenciales remotas sin clave. Sigue pendiente probar el flujo real de subida y verificar la configuración efectiva de Vercel sin exponer secretos.
