@@ -84,6 +84,12 @@ export async function cargarDataRango(inicio: Date, fin: Date, personal: Persona
     const categoria = typeof g.categoria === 'string' && g.categoria ? g.categoria : 'otros';
     gastos[categoria] = (gastos[categoria] || 0) + g.monto; totalGastos += g.monto;
   });
+  // Sin vínculo compra→conduce, costoPiezas y gastos.repuestos del mismo período pueden
+  // referirse a las mismas compras. No inventamos exclusión ni tocamos dinero histórico:
+  // declaramos incidencia — el contrato existente de UI oculta la utilidad como provisional.
+  if (costoPiezas > 0 && gastos.repuestos > 0) {
+    incidencias.push('Posible solapamiento: costo de piezas de conduces y gastos categoría repuestos del período pueden referirse a las mismas compras. Utilidad provisional; requiere conciliación manual antes de firmar el resultado.');
+  }
   let totalComisiones = 0;
   const comisionesSinFecha: DataMes['comisionesSinFecha'] = [];
   comisionesSnap.docs.forEach(d => {
