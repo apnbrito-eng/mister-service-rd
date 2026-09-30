@@ -20,7 +20,7 @@ No se editan las notas anteriores de otros agentes ni de Codex.
 Estado: **integrado, no huérfano**. Cualquier reporte previo que lo listara
 como "helper aislado sin caller" es incorrecto.
 
-### 2. `src/pages/SugerenciasChequeo.tsx` — feature completa
+### 2. `src/pages/SugerenciasChequeo.tsx` — funcionalidades presentes, prueba integral pendiente
 
 Verificado en el archivo actual:
 
@@ -34,25 +34,31 @@ Verificado en el archivo actual:
 - Líneas 236, 269, 340-351: botones "WhatsApp / preparar oferta" y
   "Mandar WhatsApp al técnico" con el icono renderizado.
 
-Estado: **seguimientoChequeo + WhatsApp + registro de seguimiento ya están
-implementados**. Cualquier reporte previo que los listara como pendientes
-o ausentes es incorrecto.
+Estado: **`seguimientoChequeo` + WhatsApp + registro de seguimiento están
+presentes como código integrado**. Lo que este documento acredita es la
+existencia y consumo de los símbolos, no una prueba integral E2E de la
+pantalla contra datos reales. Corrección respecto de una versión previa
+de este mismo doc que decía "feature completa" — es prematuro: la prueba
+integral (flujo humano, no solo compilación) queda pendiente.
 
 ### 3. Samsung 1.0.18
 
-Jorge confirma que la versión Samsung 1.0.18 fue **instalada esta mañana**
-(2026-09-30) en el dispositivo físico. No se accede a dispositivos ni tiendas
-externas desde este proceso; se toma como estado autoritativo lo que Jorge
-reporta desde su terminal. Cualquier reporte previo que marcara Samsung
-como pendiente de instalación queda desactualizado.
+Quien verificó la instalación del build 1.0.18 en el dispositivo Samsung
+físico fue **Codex**, no Jorge. Este proceso (Claude Code) no accede a
+dispositivos ni a tiendas externas; se limita a tomar el reporte técnico
+de Codex como estado autoritativo. Cualquier versión anterior de este
+mismo documento que atribuyera esa verificación a Jorge como fuente
+técnica está corregida acá: Jorge es el destinatario del entregable, no
+el ejecutor de la prueba en el dispositivo.
 
 ### 4. CORS PUT
 
-Jorge confirma que la política CORS PUT ya fue aplicada **después** del
-encargo previo. Cualquier reporte que la listara como abierta queda
-desactualizado. No se re-verifica desde este proceso porque implicaría
-tocar la configuración de servicios externos, lo cual está fuera del
-alcance autorizado hoy.
+La política CORS PUT fue aplicada y comprobada por **Codex** con sus
+herramientas (verificación con `curl`/inspector real contra el bucket).
+No es una afirmación de Jorge. Este proceso (Claude Code) no re-verifica
+CORS desde acá porque implicaría tocar la configuración de servicios
+externos, que está fuera del alcance autorizado hoy. Corrección respecto
+a una versión previa que atribuía la verificación técnica al usuario.
 
 ## Regla operativa que rompió la matriz previa
 

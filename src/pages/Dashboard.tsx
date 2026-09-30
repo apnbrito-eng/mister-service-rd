@@ -7,10 +7,9 @@ import {
   ChevronRight, Calendar, User,
   FileText, Receipt, BarChart3, Users, Timer
 } from 'lucide-react';
-import { differenceInDays, startOfDay, startOfWeek, startOfMonth, startOfYear, format as formatDate } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { differenceInDays, startOfDay, startOfMonth, format as formatDate } from 'date-fns';
 import {
-  OrdenServicio, StandbyPieza, Factura, Cotizacion, Personal, Gasto, FaseOrden, PiezaInventario
+  OrdenServicio, StandbyPieza, Factura, Cotizacion, Personal, FaseOrden, PiezaInventario
 } from '../types';
 import { puede } from '../utils/permisos';
 import { Link } from 'react-router-dom';
@@ -23,7 +22,16 @@ import {
   FASES_ORDENADAS, parsePiezaInventario
 } from '../utils';
 // SPRINT-REPORTING-1 (2026-05-25): helpers compartidos de KPI.
-import { ingresosFacturasPagadas, conducesEmitidosMonto, conducesEmitidosCount } from '../utils/kpis';
+// `ingresosFacturasPagadas` (documental) fue reemplazado por caja real
+// (pagos[] de órdenes) — ver `utils/cajaDashboard.ts`.
+import { conducesEmitidosMonto, conducesEmitidosCount } from '../utils/kpis';
+import {
+  resumenCajaDashboard,
+  resumenGastosDashboard,
+  type PeriodoCaja,
+  type GastoCrudo,
+} from '../utils/cajaDashboard';
+import { diaCobroRD, type OrdenCobrosCruda } from '../utils/movimientosCobros';
 import { SkeletonBox, SkeletonText, SkeletonKpiCard, SkeletonSectionBlock } from '../components/Skeleton';
 import Badge from '../components/Badge';
 import EliminarOrdenButton from '../components/ordenes/EliminarOrdenButton';
@@ -105,11 +113,30 @@ export default function Dashboard() {
   // ---- state ----
   const [loading, setLoading] = useState(true);
   const [ordenesRaw, setOrdenesRaw] = useState<OrdenServicio[]>([]);
+  // Copia cruda del mismo snapshot de ordenes_servicio para el proyector
+  // de caja (`proyectarCobrosCaja` requiere `pagos[]` con fecha/id/monto
+  // sin normalizar; `parseOrden` reemplaza fechas ausentes por `new Date()`
+  // y montos inválidos por 0, destruyendo la evidencia que dispara
+  // incidencias). No abre listener nuevo — se pobla dentro del callback
+  // existente.
+  const [cobrosCrudos, setCobrosCrudos] = useState<OrdenCobrosCruda[]>([]);
   const [verTodasOperarias, setVerTodasOperarias] = useState(false);
   const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [cotizaciones, setCotizaciones] = useState<Cotizacion[]>([]);
-  const [gastos, setGastos] = useState<Gasto[]>([]);
+  // Copia cruda del snapshot de `gastos` — mismo criterio que
+  // `cobrosCrudos`: el proyector de gastos valida fecha/monto y emite
+  // incidencias por doc inválido. Con normalización estilo `parseOrden`
+  // (fecha ausente → hoy, monto inválido → 0) se ocultarían gastos
+  // rotos y sumarían al período incorrecto. No abre listener nuevo.
+  const [gastosCrudos, setGastosCrudos] = useState<GastoCrudo[]>([]);
+  // Flag de cobertura incompleta para caja/gastos — se levanta si el
+  // `onSnapshot` correspondiente falla. La UI muestra "cobertura
+  // incompleta" para no reportar 0 como si fuera confiable. Solo se
+  // aplica a estos 2 listeners (ownership acotado); otros listeners
+  // conservan su comportamiento actual.
+  const [cajaError, setCajaError] = useState<string | null>(null);
+  const [gastosError, setGastosError] = useState<string | null>(null);
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [piezasInventario, setPiezasInventario] = useState<PiezaInventario[]>([]);
   // Comisiones pendientes para widget de nómina próxima (Fase 6)
@@ -122,11 +149,35 @@ export default function Dashboard() {
     const total = 6;
     const checkLoaded = () => { loadedCount++; if (loadedCount >= total) setLoading(false); };
 
-    const unsubOrdenes = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
-      const data = snap.docs.map(d => parseOrden(d.id, d.data()) as OrdenServicio);
-      setOrdenesRaw(data);
-      checkLoaded();
-    });
+    // Guard "primera carga OK ya contada" — impide que updates sucesivos
+    // vuelvan a incrementar `loadedCount`. La UI de "loading" solo debe
+    // reflejar carga inicial, no re-renderizar por cada snapshot.
+    let ordenesReady = false;
+    const unsubOrdenes = onSnapshot(
+      collection(db, 'ordenes_servicio'),
+      (snap) => {
+        const parsed: OrdenServicio[] = [];
+        const crudos: OrdenCobrosCruda[] = [];
+        for (const d of snap.docs) {
+          const raw = d.data();
+          parsed.push(parseOrden(d.id, raw) as OrdenServicio);
+          crudos.push({ id: d.id, datos: raw });
+        }
+        setOrdenesRaw(parsed);
+        setCobrosCrudos(crudos);
+        // Un snapshot exitoso limpia el flag de error previo.
+        setCajaError(null);
+        if (!ordenesReady) { ordenesReady = true; checkLoaded(); }
+      },
+      (err) => {
+        // Si el listener falla (permiso, red, cuota), los totales de
+        // caja quedarían en 0 sin advertencia. Marcamos error para
+        // que la UI muestre "cobertura incompleta".
+        console.error('Dashboard: listener ordenes_servicio falló', err);
+        setCajaError(err?.message || 'no se pudo leer órdenes');
+        if (!ordenesReady) { ordenesReady = true; checkLoaded(); }
+      },
+    );
 
     const unsubStandby = onSnapshot(collection(db, 'standby_piezas'), (snap) => {
       const data = snap.docs.map(d => ({
@@ -169,19 +220,21 @@ export default function Dashboard() {
       checkLoaded();
     });
 
-    const unsubGastos = onSnapshot(collection(db, 'gastos'), (snap) => {
-      const data = snap.docs.map(d => {
-        const raw = d.data();
-        return {
-          id: d.id,
-          ...raw,
-          fecha: raw.fecha?.toDate?.() || new Date(),
-          createdAt: raw.createdAt?.toDate?.() || new Date(),
-        } as Gasto;
-      });
-      setGastos(data);
-      checkLoaded();
-    });
+    let gastosReady = false;
+    const unsubGastos = onSnapshot(
+      collection(db, 'gastos'),
+      (snap) => {
+        const crudos: GastoCrudo[] = snap.docs.map(d => ({ id: d.id, datos: d.data() }));
+        setGastosCrudos(crudos);
+        setGastosError(null);
+        if (!gastosReady) { gastosReady = true; checkLoaded(); }
+      },
+      (err) => {
+        console.error('Dashboard: listener gastos falló', err);
+        setGastosError(err?.message || 'no se pudo leer gastos');
+        if (!gastosReady) { gastosReady = true; checkLoaded(); }
+      },
+    );
 
     const unsubPersonal = onSnapshot(collection(db, 'personal'), (snap) => {
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal));
@@ -324,6 +377,30 @@ export default function Dashboard() {
   }, [ordenesRaw, filtroOperariaActivo, userProfile?.id, currentUser?.uid, esCoordinadora, filtroOperariaCoord]);
 
   // ---- derived data ----
+  // Ancla estable por día RD para los cálculos de caja/gastos: cuando
+  // el día RD (`YYYY-MM-DD`) cambia (a la medianoche RD), `anchorRD`
+  // recibe una nueva referencia y los memos que dependen de él se
+  // recalculan. Sin esto, `now = new Date()` cambiaba en cada render
+  // pero no forzaba re-cálculo si el snapshot no llegaba: en la
+  // medianoche RD el Dashboard quedaba mostrando el rango del día
+  // anterior hasta la próxima llegada de datos.
+  const [hoyRD, setHoyRD] = useState<string>(() => diaCobroRD(new Date()));
+  useEffect(() => {
+    const tick = () => {
+      const nuevo = diaCobroRD(new Date());
+      setHoyRD(prev => (prev === nuevo ? prev : nuevo));
+    };
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const anchorRD = useMemo(() => {
+    // Ancla en el mediodía RD (16:00 UTC) del día RD activo — sin
+    // ambigüedad de límites, misma respuesta que si pasamos `new Date()`
+    // dentro del mismo día RD.
+    const [y, m, d] = hoyRD.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d, 16, 0, 0));
+  }, [hoyRD]);
+
   const now = new Date();
   const today = startOfDay(now);
   const tomorrow = new Date(today);
@@ -372,14 +449,16 @@ export default function Dashboard() {
   );
   void cantFacturasEmitidasMes; // disponible para refactor futuro UI
 
-  // KPI 4 - Ingresos mes — excluye anuladas vía helper compartido.
-  const facturasPagadasMes = useMemo(
-    () => facturas.filter(f => f.estado === 'pagada' && f.fechaPago && f.fechaPago >= inicioMes),
-    [facturas, inicioMes]
-  );
-  const ingresosMes = useMemo(
-    () => ingresosFacturasPagadas(facturas, inicioMes),
-    [facturas, inicioMes]
+  // KPI 4 - Ingresos del mes = caja real (pagos[] de órdenes por fecha
+  // del pago, verificados) vía `proyectarCobrosCaja`. Unifica la fuente
+  // con Facturas/Gastos/EstadoResultado/ReporteAvanzado que ya leen
+  // desde ese mismo proyector. Antes se sumaban `facturas.total` con
+  // `estado === 'pagada'` (semántica documental) y la cifra difería
+  // del resto de módulos financieros. Ver
+  // `docs/qa/2026-09-30-dashboard-caja-claude.md`.
+  const cajaMes = useMemo(
+    () => resumenCajaDashboard(cobrosCrudos, 'mes', anchorRD),
+    [cobrosCrudos, anchorRD],
   );
 
   // Órdenes atrasadas (> 1 día sin avance) — KPI hero del Dashboard.
@@ -472,28 +551,33 @@ export default function Dashboard() {
   const alertasRojas = todasAlertas.filter(a => a.tipo === 'roja');
   const alertasNaranjas = todasAlertas.filter(a => a.tipo === 'naranja');
 
-  // Ventas vs Gastos por periodo
-  const periodoRange = useMemo(() => {
-    switch (periodoVentas) {
-      case 'hoy': return { start: today, end: tomorrow };
-      case 'semana': return { start: startOfWeek(now, { locale: es }), end: tomorrow };
-      case 'mes': return { start: inicioMes, end: tomorrow };
-      case 'año': return { start: startOfYear(now), end: tomorrow };
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodoVentas, now]);
+  // Ventas vs Gastos por período — ambos ahora usan el MISMO `rangoRD`
+  // (día RD, sin fugas de TZ) y el mismo criterio de validación
+  // (fecha con `fechaFinanciera`, monto numérico finito positivo). Los
+  // gastos ya no se leen desde el estado parseado (que sustituye
+  // `fecha` ausente por `new Date()` — impuraría el período). Se leen
+  // desde `gastosCrudos` y todo doc inválido emite `IncidenciaGasto`
+  // en lugar de contribuir con cero silencioso.
+  const cajaPeriodo = useMemo(
+    () => resumenCajaDashboard(cobrosCrudos, periodoVentas as PeriodoCaja, anchorRD),
+    [cobrosCrudos, periodoVentas, anchorRD],
+  );
 
-  const ingresosPeriodo = useMemo(() => {
-    return facturas
-      .filter(f => f.estado === 'pagada' && f.fechaPago && f.fechaPago >= periodoRange.start && f.fechaPago < periodoRange.end)
-      .reduce((s, f) => s + (f.total || 0), 0);
-  }, [facturas, periodoRange]);
+  const gastosResumen = useMemo(
+    () => resumenGastosDashboard(gastosCrudos, periodoVentas as PeriodoCaja, anchorRD),
+    [gastosCrudos, periodoVentas, anchorRD],
+  );
 
-  const gastosPeriodo = useMemo(() => {
-    return gastos
-      .filter(g => g.fecha >= periodoRange.start && g.fecha < periodoRange.end)
-      .reduce((s, g) => s + (g.monto || 0), 0);
-  }, [gastos, periodoRange]);
+  const ingresosPeriodo = cajaPeriodo.totalConfirmado;
+  const gastosPeriodo = gastosResumen.total;
+
+  const hayIncidenciasPeriodo =
+    cajaPeriodo.incidencias.length > 0 ||
+    gastosResumen.incidencias.length > 0 ||
+    !!cajaError ||
+    !!gastosError;
+  const totalIncidenciasPeriodo =
+    cajaPeriodo.incidencias.length + gastosResumen.incidencias.length;
 
   const maxVentasGastos = Math.max(ingresosPeriodo, gastosPeriodo, 1);
 
@@ -707,9 +791,19 @@ export default function Dashboard() {
           onClick={() => navigate('/admin/facturas')}
         />
         <KpiCard
-          title="Ingresos del Mes"
-          value={formatMoneda(ingresosMes)}
-          subtitle={`${facturasPagadasMes.length} conduce${facturasPagadasMes.length !== 1 ? 's' : ''} pagado${facturasPagadasMes.length !== 1 ? 's' : ''}`}
+          title="Cobros confirmados"
+          value={formatMoneda(cajaMes.totalConfirmado)}
+          subtitle={
+            (cajaMes.incidencias.length > 0 || cajaError ? 'Provisional · ' : '') +
+            `${cajaMes.pagosConfirmados} pago${cajaMes.pagosConfirmados !== 1 ? 's' : ''} confirmado${cajaMes.pagosConfirmados !== 1 ? 's' : ''}` +
+            (cajaMes.pagosPendientes > 0
+              ? ` · +${formatMoneda(cajaMes.totalPendiente)} pendiente${cajaMes.pagosPendientes !== 1 ? 's' : ''}`
+              : '') +
+            (cajaMes.incidencias.length > 0
+              ? ` · ${cajaMes.incidencias.length} incidencia${cajaMes.incidencias.length !== 1 ? 's' : ''}`
+              : '') +
+            (cajaError ? ' · cobertura incompleta' : '')
+          }
           icon={<DollarSign size={22} />}
           color="bg-green-500"
           onClick={() => navigate('/admin/facturas')}
@@ -889,10 +983,10 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-4 mt-6">
-            {/* Ingresos bar */}
+            {/* Cobros confirmados bar — caja real (pagos[] verificados, fecha del pago) */}
             <div>
               <div className="flex justify-between text-sm mb-1.5">
-                <span className="text-gray-600 font-medium">Ingresos</span>
+                <span className="text-gray-600 font-medium">Cobros confirmados</span>
                 <span className="font-bold text-green-600">{formatMoneda(ingresosPeriodo)}</span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-8 overflow-hidden">
@@ -907,6 +1001,15 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
+              <p className="text-[11px] text-gray-500 mt-1">
+                {cajaPeriodo.pagosConfirmados} pago{cajaPeriodo.pagosConfirmados !== 1 ? 's' : ''} confirmado{cajaPeriodo.pagosConfirmados !== 1 ? 's' : ''}
+                {cajaPeriodo.pagosPendientes > 0 && (
+                  <> · <span className="text-amber-700">+{formatMoneda(cajaPeriodo.totalPendiente)} pendiente{cajaPeriodo.pagosPendientes !== 1 ? 's' : ''}</span></>
+                )}
+                {cajaError && (
+                  <> · <span className="text-red-700">cobertura incompleta</span></>
+                )}
+              </p>
             </div>
 
             {/* Gastos bar */}
@@ -927,24 +1030,101 @@ export default function Dashboard() {
                   )}
                 </div>
               </div>
+              {gastosError && (
+                <p className="text-[11px] text-red-700 mt-1">cobertura incompleta</p>
+              )}
             </div>
 
-            {/* Balance */}
+            {/* Balance — "provisional" cuando caja o gastos tienen
+                 incidencias (o algún listener falló). Sólo entonces se
+                 muestra el detalle expandible para no saturar el estado
+                 normal. */}
             <div className="pt-3 border-t border-gray-100 flex justify-between items-center">
-              <span className="text-sm text-gray-500 font-medium">Balance</span>
+              <span className="text-sm text-gray-500 font-medium">
+                {hayIncidenciasPeriodo ? 'Balance provisional' : 'Balance'}
+              </span>
               <span className={`text-lg font-bold ${ingresosPeriodo - gastosPeriodo >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {ingresosPeriodo - gastosPeriodo >= 0 ? '+' : ''}{formatMoneda(ingresosPeriodo - gastosPeriodo)}
               </span>
             </div>
+            {hayIncidenciasPeriodo && (
+              <details className="mt-1 rounded-lg bg-amber-50 border border-amber-200 p-3">
+                <summary className="cursor-pointer text-xs font-medium text-amber-900">
+                  Ver detalle
+                  {totalIncidenciasPeriodo > 0
+                    ? ` — ${totalIncidenciasPeriodo} incidencia${totalIncidenciasPeriodo !== 1 ? 's' : ''}`
+                    : ''}
+                  {(cajaError || gastosError) ? ' · cobertura incompleta' : ''}
+                </summary>
+                <div className="mt-2 space-y-2 text-[11px] text-amber-900">
+                  {(cajaError || gastosError) && (
+                    <p>
+                      No se pudieron cargar todos los cobros o gastos. Los totales pueden estar incompletos.
+                    </p>
+                  )}
+                  {cajaPeriodo.incidencias.length > 0 && (
+                    <div>
+                      <p className="font-medium mb-1">Cobros ({cajaPeriodo.incidencias.length})</p>
+                      <ul className="space-y-1 list-disc pl-4">
+                        {cajaPeriodo.incidencias.slice(0, 10).map(inc => (
+                          <li key={inc.clave}>
+                            <Link
+                              to={`/admin/ordenes/${inc.ordenId}`}
+                              className="text-primary-medium hover:underline font-medium"
+                            >
+                              {inc.ordenNumero}
+                            </Link>
+                            {' — '}{inc.motivo}
+                          </li>
+                        ))}
+                        {cajaPeriodo.incidencias.length > 10 && (
+                          <li className="italic text-amber-700">
+                            +{cajaPeriodo.incidencias.length - 10} más — revisar el detalle de cobros en Conduces de Garantía
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                  {gastosResumen.incidencias.length > 0 && (
+                    <div>
+                      <p className="font-medium mb-1">Gastos ({gastosResumen.incidencias.length})</p>
+                      <ul className="space-y-1 list-disc pl-4">
+                        {gastosResumen.incidencias.slice(0, 10).map(inc => (
+                          <li key={inc.clave}>
+                            <Link
+                              to="/admin/gastos"
+                              className="text-primary-medium hover:underline font-medium"
+                            >
+                              {inc.descripcion || `Gasto ${inc.gastoId.slice(-6)}`}
+                            </Link>
+                            {' — '}{inc.motivo}
+                          </li>
+                        ))}
+                        {gastosResumen.incidencias.length > 10 && (
+                          <li className="italic text-amber-700">
+                            +{gastosResumen.incidencias.length - 10} más — abrir Gastos para revisión completa
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </details>
+            )}
           </div>
         </div>
 
-        {/* 6. Balance pendiente — pareja del 5 (Plata, ingresos vs pendientes) */}
+        {/* 6. Balance pendiente — indicador documental (conduces emitidos
+             o vencidos). No es caja; caja real vive en el gráfico
+             izquierdo. */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-2 mb-1">
             <DollarSign size={20} className="text-primary-medium" />
             <h2 className="text-lg font-semibold text-gray-900">Balance Pendiente</h2>
           </div>
+          <p className="text-[11px] text-gray-500 mb-4">
+            Documental — conduces emitidos o vencidos sin pago registrado.
+          </p>
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-yellow-50 border border-yellow-100 rounded-xl p-4">
               <p className="text-xs text-yellow-700 font-medium mb-1">&lt; 30 días</p>
