@@ -18,3 +18,6 @@ it('huella detecta cambio de datos pero ignora orden de claves', () => {
   expect(huellaPago({ id: 'p', monto: 100 })).toBe(huellaPago({ monto: 100, id: 'p' }));
   expect(huellaPago(base)).not.toBe(huellaPago({ ...base, monto: 101 }));
 });
+it('IDs ausentes o vacíos no se confunden con un identificador repetido',()=>{
+ for(const id of [undefined,null,'','   ']) expect(incidenciasPago({id},[{id},{id}]).some(i=>i.startsWith('ID repetido'))).toBe(false);
+});

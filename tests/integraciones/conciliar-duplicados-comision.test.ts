@@ -51,3 +51,31 @@ it('coordinadora no puede resolver y no se elige automáticamente', async () => 
  await expect(resolverDuplicadosComision(g,'a','Evidencia revisada')).rejects.toThrow('administración');
  await expect(resolverDuplicadosComision(g,'','Evidencia revisada')).rejects.toThrow('Selecciona');
 });
+it('conserva liquidada con evidencia única cerrada y anula sólo pendiente', async () => {
+ Object.assign(m.docs['comisiones/a'],{estadoLiquidacion:'liquidada',liquidacionId:'n'});
+ m.docs['liquidaciones_nomina/n']={estado:'abierta',empleados:[{personalId:'p',estadoCierre:'cerrado',comisionesIds:['a']}]};
+ const original=structuredClone(m.docs['comisiones/a']), nomina=structuredClone(m.docs['liquidaciones_nomina/n']);
+ await resolverDuplicadosComision(await prepararDuplicadosComision('o','p'),'a','Confirmada nómina y registro original');
+ expect(m.docs['comisiones/a']).toEqual(original);expect(m.docs['liquidaciones_nomina/n']).toEqual(nomina);expect(m.docs['comisiones/b'].duplicadaDe).toBe('a');
+});
+it.each([
+ {empleados:[{personalId:'p',estadoCierre:'listo',comisionesIds:['a']}]},
+ {empleados:[{personalId:'otro',estadoCierre:'cerrado',comisionesIds:['a']}]},
+ {empleados:[{personalId:'p',estadoCierre:'cerrado',comisionesIds:[]}]},
+ {empleados:[{personalId:'p',estadoCierre:'cerrado',comisionesIds:['a']},{personalId:'otro',estadoCierre:'cerrado',comisionesIds:['a']}]},
+])('evidencia incompleta no permite anulación %j',async nomina=>{
+ Object.assign(m.docs['comisiones/a'],{estadoLiquidacion:'liquidada',liquidacionId:'n'});m.docs['liquidaciones_nomina/n']=nomina;
+ const antes=structuredClone(m.docs);
+ await expect(resolverDuplicadosComision(await prepararDuplicadosComision('o','p'),'a','Evidencia revisada')).rejects.toThrow('evidencia');expect(m.docs).toEqual(antes);
+});
+it('dos liquidadas jamás se concilian con anulación',async()=>{
+ for(const id of ['a','b']) Object.assign(m.docs['comisiones/'+id],{estadoLiquidacion:'liquidada',liquidacionId:'n'});
+ await expect(resolverDuplicadosComision(await prepararDuplicadosComision('o','p'),'a','Evidencia revisada')).rejects.toThrow('varias');
+});
+it('nómina histórica cerrada conserva evidencia sin inventar estado por empleado',async()=>{
+ Object.assign(m.docs['comisiones/a'],{estadoLiquidacion:'liquidada',liquidacionId:'n'});
+ m.docs['liquidaciones_nomina/n']={estado:'cerrada',empleados:[{personalId:'p',comisionesIds:['a']}]};
+ await resolverDuplicadosComision(await prepararDuplicadosComision('o','p'),'a','Nómina histórica y evidencia revisadas');
+ expect(m.docs['comisiones/b'].duplicadaDe).toBe('a');
+ expect((m.docs['liquidaciones_nomina/n'].empleados as any[])[0].estadoCierre).toBeUndefined();
+});

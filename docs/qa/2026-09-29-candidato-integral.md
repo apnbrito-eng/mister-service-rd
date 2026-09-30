@@ -34,7 +34,7 @@ En 390 px se observó: mantenimiento abre ruta del cliente y del Inbox; solo che
 ## Dependencias para publicar
 1. Revisar y publicar de forma coordinada API/frontend/Firestore/Storage. P005 y P013 permanecen visibles hasta despliegue real; no se falsifican locks.
 2. La huella del lock de Storage coincide con commit `808cc1ececd2425ff314f1837e6f772e3cc5fced`. Su cambio principal reemplaza subidas públicas directas por permisos firmados del servidor. Debe validarse la infraestructura real antes de cerrar la vía anterior.
-3. No se encontró contenido que coincida con la huella del lock de Firestore entre 24 revisiones locales; no se afirma tener el diff exacto contra reglas actualmente desplegadas.
+3. Baseline productivo recuperado en modo lectura a las 23:09 RD: hashes Firestore/Storage coinciden con locks. Diff completo revisado; detalle en `2026-09-29-permisos-candidato.md`. Ninguna regla publicada.
 4. WhatsApp empresarial para iniciar consultas a suplidores necesita plantilla aprobada. Inbox ya permite adjuntar manualmente JPEG/PNG con vista previa cuando la ventana está abierta; conserva identificador en reintentos. No se envían mensajes ni se afirma activación externa. La foto de la pieza no se transfiere automáticamente desde el modal.
 5. Candidato Android debe conservar `com.misterservicerd.app` y firma anterior. Nunca desinstalar ni borrar datos para resolver incompatibilidad.
 
@@ -47,4 +47,20 @@ En trabajo. Este documento no certifica que el plan completo esté terminado ni 
 - Duplicados históricos: bloquean solamente al empleado afectado. Administración puede elegir el registro válido con motivo/auditoría; ningún registro liquidado se reescribe. 8 pruebas específicas aprobadas.
 - Citas: propietario y token de intento, relectura de cita vigente y validación de orden vinculada. 2 pruebas con reglas reales en emulador y 18 focales. Fallo de postprocesado conserva formulario y no anuncia confirmación completa.
 - B1/R2/R3: vínculos de cotización y cierre concurrente corregidos, fechas RD y piezas históricas visibles; 8 pruebas en emulador. Revisión independiente encontró una carrera adicional de formulario desactualizado, asignada para corregir antes del cierre.
-- Android: preflight oficial 1.0.18/código19 aprobado; certificado coincide con la aplicación instalada. Compilación e instalación son pasos distintos; todavía no se certifica prueba física.
+- Android: candidata oficial 1.0.18/código19 compilada y firmada; certificado coincide con la aplicación instalada. 245 recursos comparados byte a byte. APK guardada en `~/.codex/artifacts/mister-service/2026-09-29/candidata-1.0.18/`. SHA256 `ae58b39af262b56e978691077311e9cf5d2b66dc6e37846d3dc598c2845cb037`. No instalada ni publicada.
+
+## Última validación — 23:10 RD
+- Suite general: **777/777 en 142 archivos**, `/tmp/mister-suite-final-r2.log`; build web/API aprobado, `/tmp/mister-build-final-r2.log`.
+- Después se reforzó únicamente el detector de pagos con ID numérico repetido: 15 focales aprobadas, TypeScript limpio. La APK r3 incluye este ajuste.
+- C1 resuelto: conserva comisión liquidada sólo con evidencia exacta en nómina cerrada y anula únicamente las pendientes. 15 focales y 3 emulador; revisión independiente GO.
+- C2 bloqueado de forma segura: ID repetido de texto o número no puede regenerarse para aparentar otro cobro. Sigue pendiente el procedimiento administrativo de resolver copias históricas con evidencia de origen; no se borran ni excluyen automáticamente.
+- B1 corregido y revisado: formulario antiguo no restaura vínculo desvinculado por otra persona. B1/R2/R3 con revisión GO.
+- Chat nativo incorpora App Check en rutas exactas de chat/estado; 13 pruebas de transporte aprobadas. No se debilitaron endpoints.
+- Lint general: 0 errores, 453 advertencias. Los archivos finales editados pasaron lint dirigido. P005/P013 continúan señalando reglas pendientes de publicación.
+- Mapa actualizado y regenerado: 38 módulos y 42 colecciones, descritos como candidata local.
+
+## Qué falta para declarar versión final operativa
+1. Verificación real y publicación coordinada de API/web/reglas: CORS, firma de subidas públicas y App Check configurados. La lectura de reglas no valida esas dependencias.
+2. Instalar candidata y comprobar Samsung: Atrás/IA, sesión, chat, cámara y GPS/jornada. El dispositivo está conectado; esta sesión no dispone de un controlador de interfaz Android habilitado.
+3. Plantillas empresariales y envíos reales controlados de WhatsApp requieren configuración/validación externa; ningún mensaje a clientes fue enviado.
+4. Resolver con evidencia los pagos históricos con ID repetido antes de operarlos. Confirmar si compras de piezas también están registradas como gastos de repuestos para descartar doble costo; es una pregunta sobre los registros del negocio, no un fallo demostrado.

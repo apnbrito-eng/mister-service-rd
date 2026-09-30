@@ -18,3 +18,11 @@ Tras conciliación administrativa auditada de los duplicados, Actualizar comisio
 ## Entrega de conciliación
 
 8 pruebas mock adicionales pasan: selección y auditoría, fallo sin parcial, dos decisiones concurrentes sólo un commit, liquidada/referencia de liquidación/liquidadaPor rechazadas, cambios de importe o grupo requieren revisión nueva, coordinadora denegada y sin selección no continúa. TypeScript y lint limpios. No se ejecutó emulador en este sublote; las pruebas de concurrencia usan cola transaccional simulada. No se promete exclusión frente a nuevas inserciones legacy posteriores a consulta.
+
+## C1: un registro liquidado y duplicados pendientes
+
+La conciliación admite conservar exactamente una comisión liquidada cuando la transacción verifica su `liquidacionId`, la nómina existente y un único empleado correspondiente al documento de Personal, cerrado y con la comisión en `comisionesIds`. Para nóminas históricas sin estado por empleado se admite el estado global `cerrada`. Ningún otro empleado puede referenciar esa comisión. La nómina y el registro liquidado permanecen intactos; sólo los pendientes duplicados se anulan con auditoría.
+
+Se rechazan dos liquidadas, elegir la pendiente, referencias incompletas, identidad ambigua, modificaciones desde la revisión y empleado abierto. La UI explica este criterio y mantiene la selección manual y el motivo obligatorio.
+
+Verificación local C1: 15/15 pruebas focales y 3/3 en Firestore emulado con reglas locales (concurrencia, evidencia incompleta y conservación de historia). TypeScript limpio. No se usaron datos reales ni se publicaron reglas. Sigue vigente el límite documentado: descubrir documentos antes de una transacción no impide que un escritor antiguo inserte un nuevo duplicado después.

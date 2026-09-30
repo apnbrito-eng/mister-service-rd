@@ -133,7 +133,7 @@ export default function PagosPendientes() {
     <div className="max-w-5xl mx-auto p-4 lg:p-6">
       {ordenCrm && <div role="dialog" aria-modal="true" aria-label="Revisar pago de la orden" className="fixed inset-0 z-50 bg-black/40 p-4 overflow-auto"><div className="bg-white rounded-xl max-w-4xl mx-auto p-4"><button className="mb-3 border rounded px-3 py-2" onClick={() => setOrdenCrm(null)}>Cerrar revisión</button><GestionOrden ordenId={ordenCrm} /></div></div>}
       {reparar && <section role="dialog" aria-label="Conciliar identidad y fecha del pago" className="border rounded-xl p-4 mb-4 bg-amber-50">
-        <p>Revisa el comprobante original. Se reparará el ID ausente/duplicado y la fecha inválida; el importe y método se conservarán. El pago seguirá pendiente de confirmación.</p>
+        <p>Revisa el comprobante original. Se reparará el ID ausente y la fecha inválida; el importe y método se conservarán. El pago seguirá pendiente de confirmación.</p>
         <label>Fecha y hora real del pago (República Dominicana)<input aria-label="Fecha real del pago" type="datetime-local" value={fechaReal} onChange={e => setFechaReal(e.target.value)} className="border p-2 block" /></label>
         <label>Evidencia y motivo<input aria-label="Motivo de conciliación" value={motivoReparacion} onChange={e => setMotivoReparacion(e.target.value)} maxLength={500} className="border p-2 block w-full" /></label>
         <button disabled={reparando} className="border p-2" onClick={() => setReparar(null)}>Cancelar</button>
@@ -259,7 +259,7 @@ export default function PagosPendientes() {
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 min-w-[140px]">
-                    {item.incidencias.some(i => i.startsWith('Identificador') || i.startsWith('Fecha')) && !orden.crmGestion && <button className="border rounded p-2" onClick={() => { setReparar(item); setFechaReal(''); setMotivoReparacion(''); }}>Conciliar ID y fecha</button>}
+                    {!item.incidencias.some(i => i.startsWith('ID repetido')) && item.incidencias.some(i => i.startsWith('Identificador') || i.startsWith('Fecha')) && !orden.crmGestion && <button className="border rounded p-2" onClick={() => { setReparar(item); setFechaReal(''); setMotivoReparacion(''); }}>Conciliar ID y fecha</button>}
                     <button
                       type="button"
                       onClick={() => handleConfirmar(item)}

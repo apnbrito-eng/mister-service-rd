@@ -969,3 +969,10 @@ Ese loop cierra el ciclo: bugs en producción → postmortem → catálogo + caz
 - P-038: crear borrador con batch reemplazaba el vínculo de cotización aceptada; eliminar dejaba orden vinculada a documento inexistente. Prevenir con lectura transaccional de ambos extremos y desvinculación auditada. Cazador `check-cotizacion-conduce-unico.ts` prohíbe batch/deleteDoc en la página. Allowlist vacía.
 - P-035: `isSameDay` local excluía conduces RD en otra zona. Usar día RD y comunicar creado/existente sin sobrescribir el snapshot ganador. Cazador `check-caja-cobros.ts`; prueba de Auckland y cierres concurrentes. Allowlist vacía.
 - P-036: orderBy createdAt excluía piezas antiguas sin campo aunque bloqueaban reactivación. Leer colección completa y ordenar local, marcar fecha desconocida. Prueba `fechas-cierre-piezas.test.ts` mantiene registro sin fecha visible.
+
+### Ampliación P-035 — 2026-09-29, C2 ID de pago duplicado
+- Referencia: `docs/qa/2026-09-29-revision-correcciones-claude.md` C2; hash del fix pendiente del commit coordinado.
+- Síntoma: reparar una copia con ID repetido podría permitir confirmar dos cobros donde existía uno.
+- Causa: asignar UUID nuevo sin distinguir copia frente a pago real independiente.
+- Prevención: bloquear todos los IDs repetidos en transacción; revisar origen, no convertir automáticamente en nuevo cobro.
+- Cazador: `scripts/invariantes/check-caja-cobros.ts`, exige guard `tieneIdPagoRepetido` en reparación. Allowlist vacía.

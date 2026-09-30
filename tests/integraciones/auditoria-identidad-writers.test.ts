@@ -87,3 +87,22 @@ it('reparación rechaza snapshot cambiado, ya confirmado y perfil sin permiso', 
   await expect(conciliarIdentidadFechaPago('orden', 0, original, '2026-09-28', 'Comprobante revisado')).rejects.toThrow('permiso');
   expect(m.writes).toHaveLength(0);
 });
+
+it('dos copias del mismo pago no admiten regenerar ID ni confirmar doble', async () => {
+ const original={id:'duplicado',monto:1000,metodo:'efectivo',fecha:'2026-09-29',verificado:false};
+ m.data.ordenes_servicio={pagos:[{...original},{...original}]};
+ await expect(conciliarIdentidadFechaPago('orden',1,original,'2026-09-29','Comprobante bancario revisado')).rejects.toThrow('ID repetido');
+ expect(await confirmarPagoOrden('orden','duplicado',{id:'uid-admin',nombre:'QA'})).toMatchObject({ok:false,razon:'requiere_conciliacion'});
+ expect(m.writes).toHaveLength(0);expect(m.data.ordenes_servicio.pagos).toEqual([original,original]);
+});
+it('ID repetido con importes diferentes tampoco se regenera sin revisar origen',async()=>{
+ const original={id:'duplicado',monto:1000,metodo:'efectivo',fecha:'2026-09-29',verificado:false};
+ m.data.ordenes_servicio={pagos:[original,{...original,monto:2000}]};
+ await expect(conciliarIdentidadFechaPago('orden',0,original,'2026-09-29','Comprobante bancario revisado')).rejects.toThrow('ID repetido');expect(m.writes).toHaveLength(0);
+});
+it.each([[123,123],['123',123]])('IDs legacy %j no se regeneran ni permiten doble cobro',async(id1,id2)=>{
+ const original={id:id1,monto:1000,metodo:'efectivo',fecha:'2026-09-29',verificado:false};
+ m.data.ordenes_servicio={pagos:[original,{...original,id:id2}]};
+ await expect(conciliarIdentidadFechaPago('orden',0,original,'2026-09-29','Comprobante bancario revisado')).rejects.toThrow('ID repetido');
+ expect(m.writes).toHaveLength(0);
+});

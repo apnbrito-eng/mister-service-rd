@@ -1,5 +1,5 @@
 import { fechaFinanciera } from '../utils/fechaFinanciera';
-import { incidenciasPago, pagosSinConfirmacion, huellaPago } from '../utils/pagosConciliacion';
+import { incidenciasPago, pagosSinConfirmacion, huellaPago, tieneIdPagoRepetido } from '../utils/pagosConciliacion';
 import { puede } from '../utils/permisos';
 import type { Usuario } from '../types';
 import {
@@ -1461,6 +1461,7 @@ export async function conciliarIdentidadFechaPago(ordenId: string, indice: numbe
     const pagos = Array.isArray(orden.data().pagos) ? orden.data().pagos as Record<string, unknown>[] : [];
     const actual = pagos[indice];
     if (!actual || actual.verificado === true || huellaPago(actual) !== huellaPago(esperado)) throw new Error('El pago cambió; recarga y vuelve a revisar antes de conciliar.');
+    if (tieneIdPagoRepetido(actual, pagos)) throw new Error('ID repetido: requiere revisión del comprobante y del origen. No se puede regenerar el identificador porque podría duplicar un cobro.');
     const idValido = typeof actual.id === 'string' && actual.id.trim() && pagos.filter(p => p?.id === actual.id).length === 1;
     const fechaValida = fechaFinanciera(actual.fecha);
     if (idValido && fechaValida) throw new Error('La identidad y fecha ya son válidas; revisa las demás incidencias.');

@@ -51,3 +51,12 @@ describe('escritores reales y reglas de identidad', () => {
   expect(await audits()).toHaveLength(0);
  });
 });
+it('copias idénticas no pueden transformarse en dos cobros confirmados',async()=>{
+ const original={id:'repetido',monto:1000,metodo:'efectivo',fecha:'2026-09-29',verificado:false};
+ await sembrar('ordenes_servicio/duplicado',{pagos:[original,{...original}]});
+ const reparar=(await import('../../src/services/ordenes.service')).conciliarIdentidadFechaPago;
+ await expect(reparar('duplicado',1,original,'2026-09-29','Comprobante revisado por administrador')).rejects.toThrow('ID repetido');
+ expect(await pago('duplicado','repetido',{id:UID.admin,nombre:'QA'})).toMatchObject({ok:false,razon:'requiere_conciliacion'});
+ expect((await getDoc(doc(m.db,'ordenes_servicio/duplicado'))).data()?.pagos).toEqual([original,original]);
+ expect(await audits()).toHaveLength(0);
+});

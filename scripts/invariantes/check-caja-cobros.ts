@@ -19,6 +19,9 @@ export function check(): InvariantResult {
     const source = readFileSync(file, 'utf8'); const match = pattern.exec(source);
     if (match) hits.push({ file, line: source.slice(0, match.index).split('\n').length, snippet: match[0], explanation });
   }
+  const servicio = 'src/services/ordenes.service.ts';
+  const reparacion = readFileSync(servicio, 'utf8').split('export async function conciliarIdentidadFechaPago')[1] || '';
+  if (!/if \(tieneIdPagoRepetido\(actual, pagos\)\) throw/.test(reparacion)) hits.push({ file: servicio, line: 1, snippet: 'conciliarIdentidadFechaPago', explanation: 'Bloquear ID repetido antes de regenerar identidad: una copia podría convertirse en otro cobro confirmado.' });
   return { patternId: PATTERN_ID, patternName: PATTERN_NAME, status: hits.length ? 'fail' : 'pass', hits };
 }
 if (import.meta.url === `file://${process.argv[1]}`) { const result = check(); console.log(JSON.stringify(result, null, 2)); process.exitCode = result.status === 'fail' ? 1 : 0; }

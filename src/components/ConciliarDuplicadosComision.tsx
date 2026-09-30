@@ -6,7 +6,7 @@ export default function ConciliarDuplicadosComision({ grupos, administrador }: {
   if (!grupos.length && !grupo) return null;
   return <section className="border border-amber-300 rounded-xl p-4 space-y-3">
     <h2 className="font-semibold">Comisiones duplicadas: revisión administrativa</h2>
-    <p>Compara importes, costos y ajustes de garantía. Ningún registro se elige automáticamente; las comisiones liquidadas requieren revisión del historial.</p>
+    <p>Compara importes, costos y ajustes de garantía. Ningún registro se elige automáticamente; si hay una comisión liquidada, sólo podrás conservar esa comisión y se verificará su nómina cerrada. Dos liquidadas requieren revisión del historial.</p>
     {grupos.map(g => <button key={`${g.ordenId}:${g.personalId}`} disabled={!administrador || ocupado} className="border rounded p-2 mr-2" onClick={async () => { setOcupado(true); setAviso(''); try { setGrupo(await prepararDuplicadosComision(g.ordenId, g.personalId)); setElegida(''); setMotivo(''); } catch(e) { setAviso((e as Error).message); } finally { setOcupado(false); } }}>Revisar {g.nombre} · orden {g.ordenId}</button>)}
     {grupo && <div>
       {grupo.registros.map(c => <label key={c.id} className="block border p-3 my-2"><input type="radio" name="comision-valida" checked={elegida === c.id} disabled={ocupado} onChange={() => setElegida(c.id)} /> Conservar {c.id} · comisión {formatMoneda(Number(c.datos.comisionMonto))} · costo piezas {formatMoneda(Number(c.datos.costoPiezas || 0))} · ajuste garantía {formatMoneda(Number((c.datos.descuentoPorGarantia as {monto?: number} | undefined)?.monto || 0))} · {String(c.datos.estadoLiquidacion || 'pendiente')}</label>)}

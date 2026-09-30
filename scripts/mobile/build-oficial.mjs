@@ -54,7 +54,9 @@ try {
     mkdirSync(destino, { recursive: true, mode: 0o700 });
     const excluidos = new Set(['.git', '.gradle', 'build', 'dist', 'dist-mobile', '.cache', '.vite', 'descargas']);
     const filtro = ruta => !(ruta.includes('/node_modules/') ? ['.git', '.gradle', '.cache'].includes(basename(ruta)) || /\/android\/build(?:\/|$)/.test(ruta) : excluidos.has(basename(ruta))) && !ruta.startsWith(join(raiz, 'android/app/src/main/assets/public')) && !basename(ruta).startsWith('.env') && !/\.(jks|keystore|apk|aab|idsig)$/.test(ruta) && !/ \d+\.[^/]+$/.test(ruta) && basename(ruta) !== 'local.properties' && basename(ruta) !== 'google-services.json';
-    for (const nombre of ['src', 'public', 'config', 'android', 'node_modules', 'package.json', 'package-lock.json', 'index.html', 'vite.mobile.config.ts', 'vite.config.ts', 'tsconfig.json', 'tsconfig.node.json', 'tailwind.config.js', 'postcss.config.js']) {
+    // Algunos componentes importan contratos puros compartidos de api/_lib.
+    // Copiar sus fuentes permite comprobar el mismo grafo que el checkout.
+    for (const nombre of ['src', 'api', 'public', 'config', 'android', 'node_modules', 'package.json', 'package-lock.json', 'index.html', 'vite.mobile.config.ts', 'vite.config.ts', 'tsconfig.json', 'tsconfig.node.json', 'tailwind.config.js', 'postcss.config.js']) {
       if (existsSync(join(raiz, nombre))) cpSync(join(raiz, nombre), join(destino, nombre), { recursive: true, filter: filtro, dereference: true });
     }
     // Snapshot actual; se adapta identidad sólo aquí. Capacitor regenera plugins desde dependencias copiadas.
@@ -82,7 +84,9 @@ try {
     const unsigned = join(destino, 'android/app/build/outputs/apk/release/app-release-unsigned.apk');
     const aligned = join(destino, 'aligned.apk'), apk = join(destino, `mister-service-rd-${version}-candidata.apk`);
     ejecutar(join(tools, 'zipalign'), ['-p', '-f', '4', unsigned, aligned]);
-    ejecutar(join(tools, 'apksigner'), ['sign', '--ks', join(firma, 'release.jks'), '--ks-key-alias', 'mister-service', '--ks-pass', `file:${join(firma, 'signing-password.txt')}`, '--key-pass', `file:${join(firma, 'signing-password.txt')}`, '--out', apk, aligned]);
+    // La clave oficial utiliza la contraseña del almacén. apksigner consume
+    // otra línea si se pasa el mismo archivo también como --key-pass.
+    ejecutar(join(tools, 'apksigner'), ['sign', '--ks', join(firma, 'release.jks'), '--ks-key-alias', 'mister-service', '--ks-pass', `file:${join(firma, 'signing-password.txt')}`, '--out', apk, aligned]);
     const verificacion = ejecutar(join(tools, 'apksigner'), ['verify', '--verbose', '--print-certs', apk]);
     verificarCertificado(verificacion);
     const identidad = ejecutar(join(tools, 'aapt'), ['dump', 'badging', apk]).split('\n')[0];

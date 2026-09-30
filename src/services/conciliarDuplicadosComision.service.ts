@@ -35,10 +35,24 @@ export async function resolverDuplicadosComision(grupo: GrupoDuplicado, conserva
     const identidades = await Promise.all(personas.docs.map(p => tx.get(doc(db, 'personal', p.id))));
     const registros = await Promise.all(grupo.registros.map(c => tx.get(doc(db, 'comisiones', c.id))));
     if (!perfil.exists() || perfil.data().rol !== 'administrador' || perfil.data().activo !== true || auth.currentUser?.uid !== uid) throw new Error('Sólo administración activa puede conciliar duplicados.');
+    const liquidadas = registros.filter(r => r.exists() && (r.data().estadoLiquidacion === 'liquidada' || r.data().liquidacionId || r.data().liquidadaEn || r.data().liquidadaPor));
+    if (liquidadas.length > 1) throw new Error('Hay varias comisiones liquidadas: requiere revisión de nóminas, sin anular historia.');
+    const liquidada = liquidadas[0];
+    const indiceLiquidada = liquidada ? registros.indexOf(liquidada) : -1;
+    const datosLiquidada = liquidada?.data();
+    if (liquidada && (grupo.registros[indiceLiquidada].id !== conservarId || datosLiquidada?.estadoLiquidacion !== 'liquidada' || typeof datosLiquidada.liquidacionId !== 'string' || !datosLiquidada.liquidacionId.trim())) throw new Error('Debes conservar exactamente la comisión liquidada con referencia de nómina válida.');
+    const nomina = datosLiquidada ? await tx.get(doc(db, 'liquidaciones_nomina', String(datosLiquidada.liquidacionId))) : null;
+    if (liquidada) {
+      const datosNomina = nomina?.data();
+      const empleados = Array.isArray(datosNomina?.empleados) ? datosNomina.empleados as Array<Record<string, unknown>> : [];
+      const responsables = empleados.filter(e => e.personalId === grupo.personalId);
+      const referencias = empleados.filter(e => Array.isArray(e.comisionesIds) && e.comisionesIds.includes(conservarId));
+      if (!nomina?.exists() || responsables.length !== 1 || referencias.length !== 1 || referencias[0] !== responsables[0] || !(responsables[0].estadoCierre === 'cerrado' || (!responsables[0].estadoCierre && datosNomina?.estado === 'cerrada'))) throw new Error('La comisión liquidada no tiene evidencia única de empleado cerrado en su nómina.');
+    }
     registros.forEach((r, i) => {
       if (!r.exists() || huella(r.data()) !== huella(grupo.registros[i].datos)) throw new Error('La comisión cambió; vuelve a revisar importes, costos y garantía.');
       const c = r.data();
-      if (c.estaAnulada || (c.estadoLiquidacion || 'pendiente') !== 'pendiente' || c.liquidacionId || c.liquidadaEn || c.liquidadaPor) throw new Error('Hay una comisión liquidada o modificada: requiere revisión administrativa de su historial.');
+      if (c.estaAnulada || (r !== liquidada && ((c.estadoLiquidacion || 'pendiente') !== 'pendiente' || c.liquidacionId || c.liquidadaEn || c.liquidadaPor))) throw new Error('Hay una comisión liquidada o modificada: requiere revisión administrativa de su historial.');
       const candidatos = identidades.flatMap((p, n) => p.exists() && (personas.docs[n].id === c.tecnicoId || (p.data().uid && p.data().uid === c.tecnicoId)) ? [personas.docs[n].id] : []);
       if (c.ordenId !== grupo.ordenId || candidatos.length !== 1 || candidatos[0] !== grupo.personalId) throw new Error('Orden o identidad diferente/ambigua; no se puede conciliar este grupo.');
     });

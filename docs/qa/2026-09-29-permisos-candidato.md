@@ -13,14 +13,14 @@ Se contrastó `src/services/suplidores.service.ts` con la propuesta de `docs/qa/
 
 ## P005/P013 pendientes
 
-No se cambiaron locks, no se desplegaron reglas y no se consultó producción.
+No se cambiaron locks ni se desplegaron reglas. A las 23:09 RD se consultó producción en modo lectura usando la sesión existente de Firebase CLI.
 
 | Archivo | Hash candidato local | Hash registrado en lock | Fecha registrada |
 |---|---|---|---|
 | firestore.rules | `6247be7ebefd36515c5e1a88793f911c17983c37717b2c20d081d4eae0f3f9eb` | `1c69d44db29c945d12d29e6360759a5e6c195b026ab86e50085bed5f183911a8` | 2026-09-27T03:43:53.390Z |
 | storage.rules | `7741e9031ddfafae7bcbf85e0671441927050af6f2c7298d0a53906301438f51` | `fd605585f7ed45cedb6a618f769b8127fd8c2216f2460b66429491b74485b289` | 2026-09-25T01:06:14.378Z |
 
-Los locks contienen hash, no el contenido anterior. Por tanto, esta revisión no afirma reconstruir un diff completo desde producción. Los siguientes cambios pendientes tienen evidencia en el código y la entrega de formularios públicos:
+Se recuperaron los contenidos actuales mediante Firebase Rules API. Ambos hashes coinciden exactamente con los locks. Copias y manifiesto están en `~/.codex/artifacts/mister-service/2026-09-29/reglas-produccion-lectura/`. El diff completo verificado contiene únicamente los siguientes cambios:
 
 1. Firestore `citas_por_confirmar`: creación directa exige staff y validación de campos. Visitantes usan `/api/publico/cita`, con contrato/controles del servidor.
 2. Firestore `solicitudes_servicio`: creación directa exige staff; formularios públicos pasan por `/api/publico/solicitud` con App Check y cuota.
@@ -30,8 +30,8 @@ Los locks contienen hash, no el contenido anterior. Por tanto, esta revisión no
 
 ## Validación previa a publicación (pendiente, no ejecutada aquí)
 
-- Recuperar baseline correspondiente a los hashes de locks y revisar el diff completo antes de autorizar despliegue. Estos locks no garantizan que no hubiera cambios fuera de banda.
-- Ejecutar suite Firestore pública y suplidores, más Storage Emulator: `publico.rules.test.ts`, `suplidores.rules.test.ts`, `publico-storage.rules.test.ts`. Las pruebas de API y subidas firmadas tienen adaptadores y no reemplazan infraestructura real.
+- Baseline y diff completo recuperados/revisados: Firestore ruleset `f606b508-5d56-49d6-a59c-854770dd0ee2`, Storage `8ffc3a84-ebf3-487a-9a1f-5ffd2a27bd66`. Revalidar que no cambien antes de publicar.
+- Suite Firestore final: 167 pruebas aprobadas; Storage: 3 aprobadas en corrida separada previa, reglas sin cambios posteriores. Las pruebas de API y subidas firmadas tienen adaptadores y no reemplazan infraestructura real.
 - Confirmar endpoints y frontend coordinados. Probar una subida autorizada controlada, CORS y firma real, MIME/tamaño inválidos y rechazo de segunda escritura, descarga posterior desde oficina. Evitar cerrar vías antiguas antes de verificar el reemplazo.
 - Verificar flujo real de crear/editar/desactivar suplidor con oficina y denegación de técnico. Hacerlo sólo bajo la autorización de publicación/prueba que corresponda.
 - Actualizar locks únicamente como resultado del procedimiento de despliegue real exitoso. P005/P013 deben seguir visibles hasta entonces.
