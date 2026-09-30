@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, getDoc, doc, Timestamp, query, orderBy, where, arrayUnion } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, Timestamp, query, orderBy, where, arrayUnion } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase/config';
-import { StandbyPieza, EstadoStandby, MovimientoPieza, OrdenServicio } from '../types';
+import { EstadoStandby, MovimientoPieza, OrdenServicio } from '../types';
 import { formatFechaCorta, formatFecha, parseOrden, crearRegistroAuditoria } from '../utils';
+import { puede } from '../utils/permisos';
 import { useApp } from '../context/AppContext';
-import { crearNotificacion } from '../services/notificaciones.service';
+import { registrarLlegadaPieza, cambiarEstadoSolicitud, guardarSolicitudPieza, abrirChatVinculado, type PiezaVinculada } from '../services/flujoPiezasTaller.service';
+import { subirFotoPieza } from '../services/piezas.service';
+import { validarArchivoPublico } from '../utils/uploads';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { differenceInDays } from 'date-fns';
@@ -29,10 +32,16 @@ const ESTADO_COLORS: Record<EstadoStandby, string> = {
 export default function Standby() {
   const navigate = useNavigate();
   const { userProfile } = useApp();
+  const puedeGestionar = puede(userProfile, 'ordenesModificar') && ['administrador', 'coordinadora', 'operaria', 'secretaria'].includes(userProfile?.rol || '');
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<StandbyPieza[]>([]);
+  const [items, setItems] = useState<PiezaVinculada[]>([]);
   const [ordenesStandby, setOrdenesStandby] = useState<OrdenServicio[]>([]);
   const [movimientos, setMovimientos] = useState<MovimientoPieza[]>([]);
+  const [ordenId, setOrdenId] = useState('');
+  const [editando, setEditando] = useState<PiezaVinculada | null>(null);
+  const [solicitudId, setSolicitudId] = useState<string>(() => crypto.randomUUID());
+  const [foto, setFoto] = useState<File | null>(null);
+  const [todasOrdenes, setTodasOrdenes] = useState<OrdenServicio[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [filtroEstado, setFiltroEstado] = useState<string>('activas');
   const [saving, setSaving] = useState(false);
@@ -46,6 +55,7 @@ export default function Standby() {
   });
 
   useEffect(() => {
+    const unsubOrdenes = onSnapshot(collection(db, 'ordenes_servicio'), snap => setTodasOrdenes(snap.docs.map(d => parseOrden(d.id, d.data())).filter(o => !o.eliminada)));
     const unsub = onSnapshot(
       query(collection(db, 'standby_piezas'), orderBy('createdAt', 'desc')),
       (snap) => {
@@ -53,7 +63,7 @@ export default function Standby() {
           id: d.id, ...d.data(),
           fechaInicio: d.data().fechaInicio?.toDate?.() || new Date(),
           createdAt: d.data().createdAt?.toDate?.() || new Date(),
-        } as StandbyPieza)));
+        } as PiezaVinculada)));
         setLoading(false);
       }
     );
@@ -83,7 +93,7 @@ export default function Standby() {
         setOrdenesStandby(lista);
       }
     );
-    return () => { unsub(); unsub2(); unsub3(); };
+    return () => { unsub(); unsub2(); unsub3(); unsubOrdenes(); };
   }, []);
 
   const filteredItems = items.filter(i => {
@@ -101,18 +111,15 @@ export default function Standby() {
 
   const handleRegistrar = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.clienteNombre || !form.piezaFaltante) {
+    if (!puedeGestionar) { toast.error('No tienes permiso para gestionar piezas.'); return; }
+    if (!ordenId || !form.clienteNombre || !form.piezaFaltante) {
       toast.error('Cliente y pieza son requeridos');
       return;
     }
     setSaving(true);
     try {
-      await addDoc(collection(db, 'standby_piezas'), {
-        ...form,
-        fechaInicio: Timestamp.now(),
-        estado: 'buscando',
-        createdAt: Timestamp.now(),
-      });
+      const fotoUrl = foto ? await subirFotoPieza(ordenId, solicitudId, foto) : editando?.fotoUrl || '';
+      await guardarSolicitudPieza(solicitudId, ordenId, { ...form, fotoUrl }, editando?.equipoTallerId || '');
       toast.success('Pieza pendiente registrada');
       setShowModal(false);
       setForm({ clienteNombre: '', equipoTipo: '', equipoMarca: '', piezaFaltante: '', tecnicoNombre: '', notas: '' });
@@ -123,54 +130,27 @@ export default function Standby() {
     }
   };
 
-  const notificarTecnicoPiezaLlego = async (item: StandbyPieza) => {
-    if (!item.ordenId) return;
-    try {
-      const snap = await getDoc(doc(db, 'ordenes_servicio', item.ordenId));
-      if (!snap.exists()) return;
-      const orden = parseOrden(snap.id, snap.data() as Record<string, unknown>) as OrdenServicio;
-      if (!orden.tecnicoId) return;
-      await crearNotificacion({
-        userId: orden.tecnicoId,
-        destinatarioNombre: orden.tecnicoNombre,
-        tipo: 'pieza_llego',
-        titulo: 'Pieza lista — puedes proceder',
-        // @safe-numero-doc: interpola orden.numero (ya generado por contadores.service); es texto de notificación, no persiste número nuevo
-        mensaje: `La pieza "${item.piezaFaltante}" para OS-${orden.numero} llegó al taller. Cliente: ${orden.clienteNombre}.`,
-        ordenId: orden.id,
-        ordenNumero: orden.numero,
-      });
-      toast.success('Técnico notificado');
-    } catch (err) {
-      console.error('Error notificando técnico:', err);
-    }
+  const handlePiezaLlego = async (item: PiezaVinculada) => {
+    if (!puedeGestionar) { toast.error('No tienes permiso para gestionar piezas.'); return; }
+    try { await registrarLlegadaPieza(item.id); toast.success('Llegada registrada. Coordinación tiene el aviso para preparar la visita.'); }
+    catch (error) { toast.error(error instanceof Error ? error.message : 'Error al registrar llegada'); }
   };
 
-  const handlePiezaLlego = async (item: StandbyPieza) => {
+  const handleCambiarEstado = async (item: PiezaVinculada, nuevoEstado: EstadoStandby) => {
+    if (!puedeGestionar) { toast.error('No tienes permiso para gestionar piezas.'); return; }
     try {
-      await updateDoc(doc(db, 'standby_piezas', item.id), { estado: 'llego' });
-      toast.success(`Pieza "${item.piezaFaltante}" marcada como llegada`);
-      if (item.estado !== 'llego') {
-        await notificarTecnicoPiezaLlego(item);
-      }
-    } catch {
-      toast.error('Error al actualizar');
-    }
-  };
-
-  const handleCambiarEstado = async (item: StandbyPieza, nuevoEstado: EstadoStandby) => {
-    try {
-      await updateDoc(doc(db, 'standby_piezas', item.id), { estado: nuevoEstado });
+      if (nuevoEstado === 'llego') { await handlePiezaLlego(item); return; }
+      await cambiarEstadoSolicitud(item.id, nuevoEstado);
       toast.success(`Estado cambiado a "${ESTADO_LABELS[nuevoEstado]}"`);
-      if (nuevoEstado === 'llego' && item.estado !== 'llego') {
-        await notificarTecnicoPiezaLlego(item);
-      }
+
     } catch {
       toast.error('Error al actualizar');
     }
   };
 
   const handleReactivarOrden = async (orden: OrdenServicio) => {
+    if (!puedeGestionar) { toast.error('No tienes permiso para gestionar piezas.'); return; }
+    if (items.some(p => p.ordenId === orden.id && p.estado !== 'llego')) { toast.error('Hay piezas pendientes en esta orden. Revisa su llegada antes de reactivarla.'); return; }
     if (!confirm(`¿Reactivar la orden ${orden.numero || orden.id}? Volverá a estado activo.`)) return;
     setReactivandoId(orden.id);
     try {
@@ -208,8 +188,8 @@ export default function Standby() {
             {items.filter(i => i.estado !== 'llego').length} piezas activas · {ordenesStandby.length} órdenes pendientes
           </p>
         </div>
-        {tab === 'piezas' && (
-          <button onClick={() => setShowModal(true)}
+        {tab === 'piezas' && puedeGestionar && (
+          <button onClick={() => { setEditando(null); setSolicitudId(crypto.randomUUID()); setOrdenId(''); setFoto(null); setShowModal(true); }}
             className="flex items-center gap-2 bg-primary hover:bg-primary-medium text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors">
             <Plus size={18} /> Registrar Pieza
           </button>
@@ -372,7 +352,7 @@ export default function Standby() {
                     <button
                       type="button"
                       onClick={(ev) => { ev.stopPropagation(); handleReactivarOrden(o); }}
-                      disabled={reactivandoId === o.id}
+                      disabled={!puedeGestionar || reactivandoId === o.id}
                       className="w-full flex items-center justify-center gap-1.5 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors disabled:opacity-60"
                     >
                       <Play size={12} />
@@ -431,10 +411,13 @@ export default function Standby() {
                     {dias} días
                   </span>
                 </div>
+                {puedeGestionar && item.estado !== 'llego' && <button className="text-primary underline text-sm mb-3" onClick={() => { setEditando(item); setSolicitudId(item.id); setOrdenId(item.ordenId || ''); setFoto(null); setForm({ clienteNombre: item.clienteNombre, equipoTipo: item.equipoTipo, equipoMarca: item.equipoMarca, piezaFaltante: item.piezaFaltante, tecnicoNombre: item.tecnicoNombre || '', notas: item.notas || '' }); setShowModal(true); }}>Completar detalle / foto</button>}
+                {item.fotoUrl && <img src={item.fotoUrl} alt={`Pieza solicitada: ${item.piezaFaltante}`} className="w-full h-40 object-contain mb-3" />}
+                <div className="flex gap-3 mb-3">{item.ordenId && <button className="text-primary text-sm underline" onClick={() => navigate(`/admin/ordenes/${item.ordenId}`)}>Abrir orden</button>}{item.clienteId && <button className="text-primary text-sm underline" onClick={async () => { try { navigate(await abrirChatVinculado(item.clienteId)); } catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo abrir chat'); } }}>Abrir WhatsApp</button>}</div>
                 {item.tecnicoNombre && <p className="text-xs text-gray-500 mb-3">Técnico: {item.tecnicoNombre}</p>}
                 {item.notas && <p className="text-xs text-gray-500 italic mb-3">{item.notas}</p>}
 
-                {item.estado !== 'llego' && (
+                {puedeGestionar && item.estado !== 'llego' && (
                   <div className="flex gap-2">
                     <select
                       value={item.estado}
@@ -464,6 +447,8 @@ export default function Standby() {
       {/* Modal registrar */}
       <Modal isOpen={showModal} onClose={() => setShowModal(false)} title="Registrar Pieza Pendiente">
         <form onSubmit={handleRegistrar} className="space-y-4">
+          <div><label className="block text-sm">Orden del cliente *</label><select required value={ordenId} onChange={e => { setOrdenId(e.target.value); const o = todasOrdenes.find(x => x.id === e.target.value); if (o) setForm(f => ({ ...f, clienteNombre: o.clienteNombre, equipoTipo: o.equipoTipo, equipoMarca: o.equipoMarca || '', tecnicoNombre: o.tecnicoNombre || '' })); }} className="w-full border rounded-lg p-2"><option value="">Seleccionar orden</option>{todasOrdenes.map(o => <option key={o.id} value={o.id}>{o.numero} · {o.clienteNombre} · {o.equipoTipo}</option>)}</select></div>
+          <div><label className="block text-sm">Foto de la pieza</label><input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => { const archivo = e.target.files?.[0]; if (!archivo) { setFoto(null); return; } const validacion = validarArchivoPublico(archivo); if (!validacion.ok) { toast.error(validacion.error); e.target.value = ''; setFoto(null); return; } setFoto(archivo); }} /></div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Cliente *</label>
             <input type="text" value={form.clienteNombre} onChange={e => setForm(f => ({ ...f, clienteNombre: e.target.value }))}

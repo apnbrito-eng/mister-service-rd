@@ -2,12 +2,13 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, addDoc, deleteDoc, doc, Timestamp, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Gasto } from '../types';
-import { formatMoneda, formatFechaCorta, parseFirestoreDate } from '../utils';
-import { ingresosConfirmados, type OrdenConCobros } from '../utils/ingresosConfirmados';
+import { formatMoneda, formatFechaCorta } from '../utils';
+import { proyectarCobrosCaja, diaCobroRD, type OrdenCobrosCruda } from '../utils/movimientosCobros';
+import { fechaFinanciera } from '../utils/fechaFinanciera';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { Plus, DollarSign, Trash2, TrendingUp, TrendingDown } from 'lucide-react';
-import { startOfMonth, startOfWeek, endOfWeek, addDays, format } from 'date-fns';
+import { startOfWeek, endOfWeek, addDays, format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
@@ -30,7 +31,7 @@ export default function Gastos() {
   const puedeEliminar = puede(userProfile, 'gastosEliminar');
   const [loading, setLoading] = useState(true);
   const [gastos, setGastos] = useState<Gasto[]>([]);
-  const [ordenes, setOrdenes] = useState<OrdenConCobros[]>([]);
+  const [ordenes, setOrdenes] = useState<OrdenCobrosCruda[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -46,46 +47,36 @@ export default function Gastos() {
       (snap) => {
         setGastos(snap.docs.map(d => ({
           id: d.id, ...d.data(),
-          fecha: d.data().fecha?.toDate?.() || new Date(),
+          fecha: fechaFinanciera(d.data().fecha) || new Date(NaN),
           createdAt: d.data().createdAt?.toDate?.() || new Date(),
         } as Gasto)));
         setLoading(false);
       }
     );
     const unsub2 = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
-      setOrdenes(snap.docs.map(d => {
-        const data = d.data();
-        return {
-          eliminada: data.eliminada === true,
-          // No asignar la fecha de hoy a pagos antiguos sin fecha comprobable.
-          pagos: (Array.isArray(data.pagos) ? data.pagos : []).filter(p => p && typeof p === 'object').map(p => ({
-            verificado: p.verificado === true,
-            monto: typeof p.monto === 'number' ? p.monto : NaN,
-            fecha: parseFirestoreDate(p.fecha) || new Date(NaN),
-          })),
-        };
-      }));
+      setOrdenes(snap.docs.map(d => ({ id: d.id, datos: d.data() })));
     });
     return () => { unsub1(); unsub2(); };
   }, []);
 
   const stats = useMemo(() => {
     const now = new Date();
-    const monthStart = startOfMonth(now);
+    const hoy = diaCobroRD(now);
+    const monthStart = fechaFinanciera(hoy.slice(0, 7) + '-01')!;
     const gastosMes = gastos.filter(g => g.fecha >= monthStart && g.fecha <= now);
     const totalGastosMes = gastosMes.reduce((s, g) => s + g.monto, 0);
-    const ingresosMes = ingresosConfirmados(ordenes, monthStart, now);
+    const ingresosMes = proyectarCobrosCaja(ordenes, undefined, diaCobroRD(monthStart), diaCobroRD(now)).totalConfirmado;
 
     // Weekly chart data
     const weeks: { label: string; gastos: number; ingresos: number }[] = [];
     for (let i = 3; i >= 0; i--) {
       const weekStart = startOfWeek(addDays(now, -7 * i), { weekStartsOn: 1 });
       const weekEnd = new Date(Math.min(endOfWeek(weekStart, { weekStartsOn: 1 }).getTime(), now.getTime()));
-      const wGastos = gastos.filter(g => g.fecha >= weekStart && g.fecha <= weekEnd).reduce((s, g) => s + g.monto, 0);
+      const wGastos = gastos.filter(g => Number.isFinite(g.fecha.getTime()) && diaCobroRD(g.fecha) >= format(weekStart, 'yyyy-MM-dd') && diaCobroRD(g.fecha) <= format(weekEnd, 'yyyy-MM-dd')).reduce((s, g) => s + g.monto, 0);
       weeks.push({
         label: `Sem ${format(weekStart, 'dd/MM', { locale: es })}`,
         gastos: wGastos,
-        ingresos: ingresosConfirmados(ordenes, weekStart, weekEnd),
+        ingresos: proyectarCobrosCaja(ordenes, undefined, format(weekStart, 'yyyy-MM-dd'), format(weekEnd, 'yyyy-MM-dd')).totalConfirmado,
       });
     }
 
@@ -100,10 +91,11 @@ export default function Gastos() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.descripcion || !form.monto) { toast.error('Completa todos los campos'); return; }
+    if (!puedeCrear || !fechaFinanciera(form.fecha) || !Number.isFinite(Number(form.monto)) || Number(form.monto) <= 0) { toast.error('Revisa la fecha, el monto y tu permiso para registrar gastos'); return; }
     setSaving(true);
     try {
       await addDoc(collection(db, 'gastos'), {
-        fecha: Timestamp.fromDate(new Date(form.fecha)),
+        fecha: Timestamp.fromDate(fechaFinanciera(form.fecha)!),
         categoria: form.categoria,
         descripcion: form.descripcion,
         monto: parseFloat(form.monto),
@@ -170,6 +162,7 @@ export default function Gastos() {
       </div>
 
       <p className="text-sm text-gray-500">Solo se incluyen pagos confirmados de órdenes, según la fecha del pago. Los pendientes y los registros antiguos sin verificación requieren conciliación.</p>
+      <p className="text-amber-700 text-sm">{proyectarCobrosCaja(ordenes).incidencias.length} pagos requieren conciliación y están excluidos de los totales.</p>
       {/* Weekly chart */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Comparativo Semanal</h2>

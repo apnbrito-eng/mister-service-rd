@@ -1,6 +1,9 @@
 import RendicionEfectivo from '../components/crm/RendicionEfectivo';
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, addDoc, updateDoc, doc, Timestamp, query, where, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, Timestamp, query, where, getDocs } from 'firebase/firestore';
+import { cerrarDiaAtomico, entregarEfectivoOrdenes, resumirTransferencias } from '../services/cierreDia.service';
+import { proyectarCobrosCaja, type OrdenCobrosCruda } from '../utils/movimientosCobros';
+import { fechaFinanciera } from '../utils/fechaFinanciera';
 import { db } from '../firebase/config';
 import { OrdenServicio, Factura, Personal } from '../types';
 import { formatMoneda, formatFecha, parseOrden, getAlertasFromOrdenes } from '../utils';
@@ -9,15 +12,16 @@ import { puede } from '../utils/permisos';
 import LoadingSpinner from '../components/LoadingSpinner';
 import Modal from '../components/Modal';
 import { ClipboardCheck, AlertTriangle, DollarSign, FileText, Truck, Lock, Check } from 'lucide-react';
-import { format, startOfDay, endOfDay, isSameDay } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 
 export default function CierreDia() {
-  const { userProfile } = useApp();
+  const { userProfile, currentUser } = useApp();
   const puedeCerrar = puede(userProfile, 'cierreDiaEjecutar');
 
   const [loading, setLoading] = useState(true);
+  const [cobrosCrudos, setCobrosCrudos] = useState<OrdenCobrosCruda[]>([]);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [personal, setPersonal] = useState<Personal[]>([]);
@@ -25,6 +29,9 @@ export default function CierreDia() {
   // Cierre del día actual (si existe)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [cierreExistente, setCierreExistente] = useState<any | null>(null);
+  const [cargandoCierre, setCargandoCierre] = useState(true);
+  const [errorCierre, setErrorCierre] = useState('');
+  const [reintentoCierre, setReintentoCierre] = useState(0);
   const [showConfirmar, setShowConfirmar] = useState(false);
   const [cerrando, setCerrando] = useState(false);
   const [marcandoEfectivoTec, setMarcandoEfectivoTec] = useState<string | null>(null);
@@ -34,6 +41,7 @@ export default function CierreDia() {
     const checkLoaded = () => { loaded++; if (loaded >= 3) setLoading(false); };
 
     const unsubOrd = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
+      setCobrosCrudos(snap.docs.map(d => ({ id: d.id, datos: d.data() })));
       setOrdenes(snap.docs.map(d => parseOrden(d.id, d.data() as Record<string, unknown>)));
       checkLoaded();
     });
@@ -59,15 +67,21 @@ export default function CierreDia() {
     return () => { unsubOrd(); unsubFac(); };
   }, []);
 
-  // Cargar cierre existente del día seleccionado
+  // Una respuesta tardía nunca debe sustituir el cierre de otra fecha.
   useEffect(() => {
-    const fechaInicio = startOfDay(new Date(fechaSel + 'T00:00:00'));
-    const fechaFin = endOfDay(new Date(fechaSel + 'T00:00:00'));
+    let vigente = true;
+    setCargandoCierre(true);
+    setErrorCierre('');
+    setCierreExistente(null);
+    const fechaInicio = fechaFinanciera(fechaSel)!;
+    const fechaFin = new Date(fechaFinanciera(fechaSel)!.getTime() + 86400000 - 1);
     getDocs(query(
       collection(db, 'cierres_dia'),
       where('fecha', '>=', Timestamp.fromDate(fechaInicio)),
       where('fecha', '<=', Timestamp.fromDate(fechaFin)),
     )).then(snap => {
+      if (!vigente) return;
+      if (snap.size > 1) throw new Error('Hay varios cierres de esta fecha; requiere conciliación');
       if (snap.empty) {
         setCierreExistente(null);
       } else {
@@ -81,13 +95,16 @@ export default function CierreDia() {
         });
       }
     }).catch(err => {
+      if (!vigente) return;
       console.error(err);
       setCierreExistente(null);
-    });
-  }, [fechaSel]);
+      setErrorCierre(err instanceof Error ? err.message : 'No se pudo consultar el cierre de esta fecha');
+    }).finally(() => { if (vigente) setCargandoCierre(false); });
+    return () => { vigente = false; };
+  }, [fechaSel, reintentoCierre]);
 
-  const fechaInicio = useMemo(() => startOfDay(new Date(fechaSel + 'T00:00:00')), [fechaSel]);
-  const fechaFin = useMemo(() => endOfDay(new Date(fechaSel + 'T00:00:00')), [fechaSel]);
+  const fechaInicio = useMemo(() => fechaFinanciera(fechaSel)!, [fechaSel]);
+  const fechaFin = useMemo(() => new Date(fechaFinanciera(fechaSel)!.getTime() + 86400000 - 1), [fechaSel]);
 
   // Órdenes cerradas en el día (por fecha del cierreServicio o updatedAt si fase=cerrado)
   const ordenesCerradasHoy = useMemo(() => {
@@ -103,7 +120,8 @@ export default function CierreDia() {
     return ordenesCerradasHoy.filter(o => o.soloChequeo);
   }, [ordenesCerradasHoy]);
 
-  const totalIngresos = useMemo(() => ordenes.filter(o => !o.eliminada).reduce((sum, o) => sum + (o.pagos || []).filter(p => p.verificado === true && p.fecha >= fechaInicio && p.fecha <= fechaFin).reduce((s, p) => s + p.monto, 0), 0), [ordenes, fechaInicio, fechaFin]);
+  const caja = useMemo(() => proyectarCobrosCaja(cobrosCrudos, undefined, fechaSel, fechaSel), [cobrosCrudos, fechaSel]);
+  const totalIngresos = caja.totalConfirmado;
 
   const facturasHoy = useMemo(() => {
     return facturas.filter(f => f.fechaEmision && isSameDay(f.fechaEmision, fechaInicio));
@@ -112,35 +130,26 @@ export default function CierreDia() {
   // Efectivo por técnico
   const efectivoPorTecnico = useMemo(() => {
     const grupos: Record<string, { tecnicoNombre: string; tecnicoId: string; ordenes: OrdenServicio[]; monto: number; entregado: boolean }> = {};
-    ordenesCerradasHoy
-      .filter(o => !o.crmGestion && o.metodoPagoCierre === 'efectivo')
-      .forEach(o => {
-        const id = o.tecnicoId || 'sin-asignar';
-        const nombre = o.tecnicoNombre || 'Sin asignar';
-        if (!grupos[id]) grupos[id] = { tecnicoId: id, tecnicoNombre: nombre, ordenes: [], monto: 0, entregado: true };
-        grupos[id].ordenes.push(o);
-        grupos[id].monto += o.soloChequeo ? (o.precioChequeo || 0) : (o.precioFinal || o.precioAprobado || 0);
-        // entregado=true sólo si TODAS las órdenes del técnico están entregadas
-        if (!o.efectivoEntregado) grupos[id].entregado = false;
-      });
+    caja.movimientos.filter(m => m.confirmado && m.metodo === 'efectivo').forEach(m => {
+      const o = ordenes.find(orden => orden.id === m.ordenId);
+      if (!o || o.crmGestion) return;
+      const id = o.tecnicoId || 'sin-asignar';
+      if (!grupos[id]) grupos[id] = { tecnicoId: id, tecnicoNombre: o.tecnicoNombre || 'Sin asignar', ordenes: [], monto: 0, entregado: true };
+      if (!grupos[id].ordenes.some(orden => orden.id === o.id)) grupos[id].ordenes.push(o);
+      grupos[id].monto += m.monto;
+      const raw = cobrosCrudos.find(orden => orden.id === o.id)?.datos;
+      const entregas = raw?.efectivoEntregas as Record<string, { monto?: number }> | undefined;
+      if (entregas?.[m.pagoId]?.monto !== m.monto) grupos[id].entregado = false;
+    });
     return Object.values(grupos).sort((a, b) => b.monto - a.monto);
-  }, [ordenesCerradasHoy]);
+  }, [caja, ordenes, cobrosCrudos]);
 
   const efectivoTotal = efectivoPorTecnico.reduce((sum, t) => sum + t.monto, 0);
 
   // Transferencias por banco
   const transferenciasPorBanco = useMemo(() => {
-    const grupos: Record<string, { banco: string; cantidad: number; monto: number }> = {};
-    ordenes.filter(o => !o.eliminada).forEach(o => {
-      (o.pagos || []).filter(p => p.metodo === 'transferencia' && p.verificado === true && p.fecha >= fechaInicio && p.fecha <= fechaFin).forEach(p => {
-        const banco = p.bancoNombre || 'Sin banco registrado';
-        if (!grupos[banco]) grupos[banco] = { banco, cantidad: 0, monto: 0 };
-        grupos[banco].cantidad++;
-        grupos[banco].monto += p.monto;
-      });
-    });
-    return Object.values(grupos).sort((a, b) => b.monto - a.monto);
-  }, [ordenes, fechaInicio, fechaFin]);
+    return Object.values(resumirTransferencias(caja.movimientos)).sort((a, b) => b.monto - a.monto);
+  }, [caja]);
 
   const transferenciasTotal = transferenciasPorBanco.reduce((sum, t) => sum + t.monto, 0);
 
@@ -156,52 +165,50 @@ export default function CierreDia() {
   const alertas = useMemo(() => getAlertasFromOrdenes(ordenes), [ordenes]);
 
   const handleMarcarEfectivoEntregado = async (tecnicoId: string, ordenesT: OrdenServicio[]) => {
+    if (!puedeCerrar || !currentUser?.uid) { toast.error('Necesitas sesión y permiso de cierre para registrar entregas'); return; }
     setMarcandoEfectivoTec(tecnicoId);
     try {
-      const usuario = userProfile?.nombre || 'Sistema';
-      const ahora = Timestamp.now();
-      await Promise.all(ordenesT.map(o =>
-        updateDoc(doc(db, 'ordenes_servicio', o.id), {
-          efectivoEntregado: true,
-          efectivoEntregadoPor: usuario,
-          efectivoEntregadoEn: ahora,
-          updatedAt: ahora,
-        }).catch(err => console.error('Error marcando efectivo en orden', o.id, err))
-      ));
+      const actor = { uid: currentUser.uid, nombre: userProfile?.nombre || '' };
+      await entregarEfectivoOrdenes(caja.movimientos.filter(m => m.confirmado && m.metodo === 'efectivo' && ordenesT.some(o => o.id === m.ordenId)), actor);
       toast.success(`Efectivo de ${ordenesT[0]?.tecnicoNombre || 'técnico'} marcado como entregado`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se registró la entrega; vuelve a intentar');
     } finally {
       setMarcandoEfectivoTec(null);
     }
   };
 
   const handleConfirmarCierre = async () => {
+    if (cargandoCierre || errorCierre) { toast.error('Espera a que se consulte correctamente el cierre de esta fecha'); return; }
     if (!puedeCerrar) {
       toast.error('No tienes permiso para cerrar el día');
       return;
     }
+    if (!currentUser?.uid) { toast.error('Inicia sesión nuevamente'); return; }
     setCerrando(true);
     try {
       const transferenciasMap: Record<string, number> = {};
-      transferenciasPorBanco.forEach(t => { transferenciasMap[t.banco] = t.monto; });
+      transferenciasPorBanco.forEach(t => { transferenciasMap[t.bancoId] = t.monto; });
       const data: Record<string, unknown> = {
         fecha: Timestamp.fromDate(fechaInicio),
         cerradoPor: userProfile?.nombre || 'Sistema',
-        cerradoPorId: userProfile?.id || '',
+        cerradoPorId: currentUser?.uid || '',
         fechaCierre: Timestamp.now(),
         totalOrdenesCerradas: ordenesCerradasHoy.length,
         totalChequeos: ordenesChequeoHoy.length,
         totalIngresos,
         efectivoTotal,
         transferenciasTotal: transferenciasMap,
+        transferenciasPorBanco: resumirTransferencias(caja.movimientos),
         ordenesActivasAlCierre: ordenesActivasHoy.map(o => o.id),
       };
-      const docRef = await addDoc(collection(db, 'cierres_dia'), data);
-      setCierreExistente({ id: docRef.id, ...data, fecha: fechaInicio, fechaCierre: new Date() });
+      const cierre = await cerrarDiaAtomico(fechaSel, data);
+      setCierreExistente({ ...cierre, fecha: fechaInicio, fechaCierre: fechaFinanciera((cierre as Record<string, unknown>).fechaCierre) });
       toast.success('Día cerrado correctamente');
       setShowConfirmar(false);
     } catch (err) {
       console.error(err);
-      toast.error('Error al cerrar el día');
+      toast.error(err instanceof Error ? err.message : 'Error al cerrar el día');
     } finally {
       setCerrando(false);
     }
@@ -222,6 +229,7 @@ export default function CierreDia() {
 
   return (
     <div className="p-6 space-y-6 max-w-[1400px] mx-auto">
+      {!!caja.incidencias.length && <p role="alert" className="text-amber-700">{caja.incidencias.length} pagos excluidos requieren conciliación. Los totales no incluyen registros inválidos.</p>}
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -234,10 +242,11 @@ export default function CierreDia() {
           <input
             type="date"
             value={fechaSel}
-            onChange={e => setFechaSel(e.target.value)}
+            disabled={cerrando}
+            onChange={e => { if (e.target.value !== fechaSel && fechaFinanciera(e.target.value)) { setCierreExistente(null); setCargandoCierre(true); setErrorCierre(''); setShowConfirmar(false); setFechaSel(e.target.value); } }}
             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
           />
-          {cierreExistente ? (
+          {cargandoCierre ? <p role="status">Consultando cierre…</p> : errorCierre ? <p role="alert" className="text-red-700">{errorCierre}. <button type="button" onClick={() => setReintentoCierre(n => n + 1)} className="underline">Reintentar consulta</button></p> : cierreExistente ? (
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-green-50 border border-green-300 rounded-xl text-sm text-green-800">
               <Lock size={14} />
               Día cerrado el {formatFecha(cierreExistente.fechaCierre)} por {cierreExistente.cerradoPor}
@@ -254,6 +263,14 @@ export default function CierreDia() {
         </div>
       </div>
 
+      {cierreExistente && <section className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-2" aria-label="Resumen guardado del cierre">
+        <h2 className="font-semibold">Cierre guardado (sin cambios)</h2>
+        <p>Ingresos al cerrar: {formatMoneda(cierreExistente.totalIngresos || 0)} · Efectivo: {formatMoneda(cierreExistente.efectivoTotal || 0)}</p>
+        <p>Órdenes cerradas: {cierreExistente.totalOrdenesCerradas ?? 'Sin dato'} · Solo chequeo: {cierreExistente.totalChequeos ?? 'Sin dato'}</p>
+        <p>Cobros actuales de la fecha: {formatMoneda(totalIngresos)} · Variación desde el cierre: {formatMoneda(totalIngresos - (cierreExistente.totalIngresos || 0))}</p>
+        {totalIngresos !== cierreExistente.totalIngresos && <p role="alert" className="text-amber-800">Hay movimientos posteriores o correcciones que requieren conciliación. El cierre guardado se conserva. Puedes registrar la entrega de nuevos recibos en efectivo sin modificarlo.</p>}
+      </section>}
+      <h2 className="font-semibold">Situación actual de la fecha seleccionada</h2>
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
@@ -280,7 +297,7 @@ export default function CierreDia() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-purple-50 rounded-lg"><FileText size={18} className="text-purple-600" /></div>
-            <span className="text-xs font-medium text-gray-500 uppercase">Facturas emitidas</span>
+            <span className="text-xs font-medium text-gray-500 uppercase">Conduces emitidos</span>
           </div>
           <p className="text-2xl font-bold text-primary">{facturasHoy.length}</p>
         </div>
@@ -335,7 +352,7 @@ export default function CierreDia() {
                         <button
                           type="button"
                           onClick={() => handleMarcarEfectivoEntregado(t.tecnicoId, t.ordenes)}
-                          disabled={marcandoEfectivoTec === t.tecnicoId || !!cierreExistente}
+                          disabled={marcandoEfectivoTec === t.tecnicoId || !currentUser?.uid}
                           className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors disabled:opacity-60"
                         >
                           {marcandoEfectivoTec === t.tecnicoId ? 'Marcando...' : 'Marcar como entregado'}
@@ -369,7 +386,7 @@ export default function CierreDia() {
               {transferenciasPorBanco.length === 0 ? (
                 <tr><td colSpan={3} className="px-5 py-8 text-center text-gray-400">Sin transferencias registradas</td></tr>
               ) : transferenciasPorBanco.map(t => (
-                <tr key={t.banco} className="border-b border-gray-50">
+                <tr key={t.bancoId} className="border-b border-gray-50">
                   <td className="px-5 py-3.5 font-medium text-gray-900">{t.banco}</td>
                   <td className="px-5 py-3.5 text-center text-gray-700">{t.cantidad}</td>
                   <td className="px-5 py-3.5 text-right font-semibold text-gray-900">{formatMoneda(t.monto)}</td>
@@ -438,7 +455,7 @@ export default function CierreDia() {
         <div className="space-y-4">
           <p className="text-sm text-gray-700">
             Vas a cerrar el día <span className="font-semibold capitalize">{fechaTextoLargo}</span>.
-            Después del cierre, este día queda registrado y no se puede marcar efectivo entregado en él.
+            El resumen queda guardado sin cambios. Después puedes registrar entregas de efectivo por recibo; cualquier diferencia con los cobros actuales requiere conciliación.
           </p>
           <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1 text-gray-700">
             <div className="flex justify-between"><span>Órdenes cerradas</span><span className="font-semibold">{ordenesCerradasHoy.length}</span></div>

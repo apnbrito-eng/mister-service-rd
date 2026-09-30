@@ -1,3 +1,6 @@
+import { fechaFinanciera } from '../utils/fechaFinanciera';
+import { useNavigate } from 'react-router-dom';
+import { proyectarCobrosCaja, diaCobroRD, type OrdenCobrosCruda } from '../utils/movimientosCobros';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, Timestamp, query, orderBy, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -17,7 +20,6 @@ import FiltroAvanzadoFinanzas, {
   type FiltroActivo,
 } from '../components/admin/FiltroAvanzadoFinanzas';
 import { Plus, FileText, Trash2, Check, Printer, DollarSign, CalendarDays, TrendingUp, Shield } from 'lucide-react';
-import { startOfMonth, startOfDay, endOfDay, startOfYear, endOfYear, isWithinInterval } from 'date-fns';
 import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
@@ -37,11 +39,14 @@ const ESTADO_LABELS: Record<EstadoFactura, string> = {
 };
 
 export default function Facturas() {
+  const navigate = useNavigate();
+  const [cobrosCrudos, setCobrosCrudos] = useState<OrdenCobrosCruda[]>([]);
   const { userProfile, currentUser } = useApp();
   const puedeCrear = puede(userProfile, 'facturasCrear');
   const puedeModificar = puede(userProfile, 'facturasModificar');
   const puedeEliminar = puede(userProfile, 'facturasEliminar');
   const [loading, setLoading] = useState(true);
+  const [emisiones, setEmisiones] = useState<Date[]>([]);
   const [facturas, setFacturas] = useState<Factura[]>([]);
   const [ordenesVinculadas, setOrdenesVinculadas] = useState<Record<string, OrdenServicio>>({});
   const [showModal, setShowModal] = useState(false);
@@ -77,6 +82,7 @@ export default function Facturas() {
     const unsub = onSnapshot(
       query(collection(db, 'facturas'), orderBy('createdAt', 'desc')),
       (snap) => {
+        setEmisiones(snap.docs.map(d => fechaFinanciera(d.data().fechaEmision)).filter((f): f is Date => !!f));
         setFacturas(snap.docs.map(d => parseFactura(d.id, d.data() as Record<string, unknown>)));
         setLoading(false);
       }
@@ -88,6 +94,7 @@ export default function Facturas() {
         map[d.id] = parseOrden(d.id, d.data() as Record<string, unknown>);
       });
       setOrdenesVinculadas(map);
+      setCobrosCrudos(snap.docs.map(d => ({ id: d.id, datos: d.data() })));
     });
 
     // Catálogos + técnicos para el FacturaCrearModal (C3b: vendedor por línea
@@ -124,34 +131,14 @@ export default function Facturas() {
   // Summary stats
   const stats = useMemo(() => {
     const now = new Date();
-    const hoyInicio = startOfDay(now);
-    const hoyFin = endOfDay(now);
-    const mesInicio = startOfMonth(now);
-    const anioInicio = startOfYear(new Date(yearSelected, 0, 1));
-    const anioFin = endOfYear(new Date(yearSelected, 0, 1));
-
-    const pagadasAnio = facturas.filter(f =>
-      f.estado === 'pagada' &&
-      f.fechaPago &&
-      isWithinInterval(f.fechaPago, { start: anioInicio, end: anioFin })
-    );
-    const totalCobradoAnual = pagadasAnio.reduce((s, f) => s + f.total, 0);
-
-    const emitidasHoy = facturas.filter(f =>
-      isWithinInterval(f.fechaEmision, { start: hoyInicio, end: hoyFin })
-    ).length;
-
-    const emitidasMes = facturas.filter(f =>
-      f.fechaEmision >= mesInicio
-    ).length;
-
-    const pagadasMes = facturas.filter(f =>
-      f.estado === 'pagada' && f.fechaPago && f.fechaPago >= mesInicio
-    );
-    const totalPagadasMes = pagadasMes.reduce((s, f) => s + f.total, 0);
-
-    return { totalCobradoAnual, emitidasHoy, emitidasMes, pagadasMesCount: pagadasMes.length, totalPagadasMes };
-  }, [facturas, yearSelected]);
+    const hoy = diaCobroRD(now);
+    const mes = hoy.slice(0, 7);
+    const totalCobradoAnual = proyectarCobrosCaja(cobrosCrudos, undefined, `${yearSelected}-01-01`, `${yearSelected}-12-31`).totalConfirmado;
+    const emitidasHoy = emisiones.filter(f => diaCobroRD(f) === hoy).length;
+    const emitidasMes = emisiones.filter(f => diaCobroRD(f).startsWith(mes) && diaCobroRD(f) <= hoy).length;
+    const cobrosMes = proyectarCobrosCaja(cobrosCrudos, undefined, mes + '-01', hoy);
+    return { totalCobradoAnual, emitidasHoy, emitidasMes, pagadasMesCount: cobrosMes.movimientos.filter(m => m.confirmado).length, totalPagadasMes: cobrosMes.totalConfirmado };
+  }, [emisiones, yearSelected, cobrosCrudos]);
 
   // Estados de la lista para los tabs (live).
   const estadosFiltro = useMemo(() => ([
@@ -163,16 +150,10 @@ export default function Facturas() {
   ]), []);
 
   // Mark as paid
-  const handleMarcarPagada = async (factura: Factura) => {
-    try {
-      await updateDoc(doc(db, 'facturas', factura.id), {
-        estado: 'pagada',
-        fechaPago: Timestamp.now(),
-      });
-      toast.success(`Conduce ${factura.numero} marcado como pagado`);
-    } catch {
-      toast.error('Error al actualizar el conduce de garantía');
-    }
+  const handleMarcarPagada = (factura: Factura) => {
+    if (!factura.ordenId || !ordenesVinculadas[factura.ordenId]) { toast.error('Conduce sin orden vinculada: requiere conciliación antes de registrar un cobro'); return; }
+    navigate(`/admin/ordenes/${encodeURIComponent(factura.ordenId)}`);
+    toast('Registra o revisa el pago en la orden. El ingreso se contará después de su confirmación.');
   };
 
   // Mark as voided — preservado para uso futuro, sin caller actual (eslint allowed via prefijo _)
@@ -483,10 +464,7 @@ export default function Facturas() {
       {/* Summary Cards (clickeables: drilldown a filtro) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total cobrado anual */}
-        <button
-          type="button"
-          onClick={() => filtroRef.current?.aplicarPreset('cobradoAnual')}
-          title="Click para filtrar por pagadas del año seleccionado"
+        <div
           className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-primary-medium hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-medium"
         >
           <div className="flex items-center justify-between mb-2">
@@ -508,7 +486,7 @@ export default function Facturas() {
             </select>
           </div>
           <p className="text-xl font-bold text-primary">{formatMoneda(stats.totalCobradoAnual)}</p>
-        </button>
+        </div>
 
         {/* Emitidas hoy */}
         <button
@@ -543,23 +521,21 @@ export default function Facturas() {
         </button>
 
         {/* Pagadas mes */}
-        <button
-          type="button"
-          onClick={() => filtroRef.current?.aplicarPreset('pagadasMes')}
-          title="Click para filtrar pagadas del mes"
+        <div
           className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 text-left hover:border-primary-medium hover:shadow-md transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary-medium"
         >
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-emerald-50 rounded-lg">
               <TrendingUp size={18} className="text-emerald-600" />
             </div>
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Pagadas Mes</span>
+            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Cobros confirmados del mes</span>
           </div>
           <p className="text-xl font-bold text-primary">{stats.pagadasMesCount}</p>
           <p className="text-xs text-gray-500 mt-0.5">{formatMoneda(stats.totalPagadasMes)}</p>
-        </button>
+        </div>
       </div>
 
+      <p className="text-sm text-gray-500">Cobros calculados desde pagos confirmados de órdenes, por fecha del pago. La lista inferior filtra conduces emitidos. {proyectarCobrosCaja(cobrosCrudos).incidencias.length} pagos requieren conciliación.</p>
       {/* Filtro avanzado */}
       <FiltroAvanzadoFinanzas
         ref={filtroRef}
@@ -648,10 +624,10 @@ export default function Facturas() {
                         {factura.estado === 'emitida' && puedeModificar && (
                           <button
                             onClick={() => handleMarcarPagada(factura)}
-                            title="Marcar como pagada"
+                            title="Registrar pago"
                             className="flex items-center gap-1 px-2 py-1.5 bg-green-50 text-green-700 rounded-lg text-xs font-medium hover:bg-green-100 transition-colors"
                           >
-                            <Check size={13} /> Pagada
+                            <Check size={13} /> Registrar pago
                           </button>
                         )}
                         {factura.garantia?.token && factura.clienteTelefono && (
