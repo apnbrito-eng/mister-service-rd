@@ -85,3 +85,16 @@ it('la secadora es independiente y utiliza su imagen propia', () => {
  expect(tree.root.findByProps({ role: 'img' }).props['aria-label']).toBe('Secadora: armado');
  expect(tree.root.findByType('img').props.src).toContain('secadora-armada-desarmada.jpg');
 });
+it('el toque no simula hover permanente y pausa/reanudación funcionan', () => {
+ vi.useFakeTimers(); movimiento.reducido = false;
+ act(() => { tree = create(React.createElement(MemoryRouter, {}, React.createElement(Portada, { config }))); });
+ act(() => tree.root.findByProps({ 'aria-label': 'Servicios por electrodoméstico' }).props.onPointerEnter({ pointerType: 'touch' }));
+ act(() => vi.advanceTimersByTime(5000));
+ expect(tree.root.findByProps({ role: 'img' }).props['aria-label']).toBe('Lavadora: desarmado');
+ act(() => tree.root.findByProps({ 'aria-label': 'Pausar diapositivas' }).props.onClick());
+ act(() => vi.advanceTimersByTime(5000));
+ expect(tree.root.findByProps({ role: 'img' }).props['aria-label']).toBe('Lavadora: desarmado');
+ act(() => tree.root.findByProps({ 'aria-label': 'Reanudar diapositivas' }).props.onClick());
+ act(() => vi.advanceTimersByTime(5000));
+ expect(tree.root.findByProps({ role: 'img' }).props['aria-label']).toBe('Nevera: armado');
+});

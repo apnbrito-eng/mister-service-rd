@@ -197,7 +197,7 @@ export default function PortadaElectrodomesticos({
             </div>
           </div>
 
-          <section className="portada-publica-diapositivas" aria-label="Servicios por electrodoméstico" aria-roledescription="carrusel" onMouseEnter={() => setPunteroEncima(true)} onMouseLeave={() => setPunteroEncima(false)} onFocusCapture={evento => { if (!evento.target.hasAttribute('data-reproduccion')) setPausado(true); }}>
+          <section className="portada-publica-diapositivas" aria-label="Servicios por electrodoméstico" aria-roledescription="carrusel" onPointerEnter={evento => { if (evento.pointerType === 'mouse') setPunteroEncima(true); }} onPointerLeave={() => setPunteroEncima(false)} onFocusCapture={evento => { if (!evento.target.hasAttribute('data-reproduccion')) setPausado(true); }}>
           <div className="portada-publica-medio">
             {mostrarPresentacion && (config.hero.modo === 'fija' && config.hero.imagenFija || config.hero.modo === 'carrusel' && config.hero.imagenesCarrusel?.length) ? <MedioHeroPublico hero={config.hero} /> : disponibles.length === 0 ? (
               <div className="portada-publica-medio-vacio" aria-hidden="true" />
