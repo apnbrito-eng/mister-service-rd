@@ -1,8 +1,9 @@
+import { obtenerAppCheckToken } from '../lib/appCheck';
 import { useState, FormEvent } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { FirebaseAppCheck } from '@capacitor-firebase/app-check';
 const autofill = registerPlugin<{ commit(): Promise<void> }>('AutofillSession');
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithCustomToken, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { useNavigate } from 'react-router-dom';
 import Logo from '../components/Logo';
@@ -14,13 +15,30 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [mostrarClave, setMostrarClave] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [recuperando, setRecuperando] = useState(false);
+  const [avisoRecuperacion, setAvisoRecuperacion] = useState('');
+  async function accesoUsuario(accion: 'entrar' | 'recuperar') {
+    const appToken = Capacitor.isNativePlatform() ? (await FirebaseAppCheck.getToken({ forceRefresh: false })).token : await obtenerAppCheckToken();
+    if (!appToken) throw new Error('No se pudo verificar la aplicación. Recarga y vuelve a intentar.');
+    const respuesta = await fetch('/api/publico/acceso', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Firebase-AppCheck': appToken }, body: JSON.stringify({ accion, usuario: email, ...(accion === 'entrar' ? { password } : {}) }), signal: AbortSignal.timeout(25000) });
+    const datos = await respuesta.json();
+    if (!respuesta.ok) throw new Error(datos.error || 'No se pudo completar el acceso.');
+    return datos as { token?: string; mensaje?: string };
+  }
+  async function recuperar() {
+    if (!email.trim()) { setErrorVisible('Escribe tu usuario o correo para recuperar el acceso.'); return; }
+    setRecuperando(true); setErrorVisible(''); setAvisoRecuperacion('');
+    try { const datos = await accesoUsuario('recuperar'); setAvisoRecuperacion(datos.mensaje || 'Solicitud recibida.'); }
+    catch (e) { setErrorVisible(e instanceof Error ? e.message : 'No se pudo solicitar la recuperación.'); }
+    finally { setRecuperando(false); }
+  }
   const [errorVisible, setErrorVisible] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
-      toast.error('Por favor ingresa tu email y contraseña');
+      toast.error('Por favor ingresa tu usuario y contraseña');
       return;
     }
     setLoading(true);
@@ -34,7 +52,12 @@ export default function Login() {
           throw Object.assign(new Error('No se pudo verificar la aplicación'), { code: 'appCheck/native-unavailable' });
         }
       }
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      if (email.includes('@')) await signInWithEmailAndPassword(auth, email.trim(), password);
+      else {
+        const datos = await accesoUsuario('entrar');
+        if (!datos.token) throw new Error('No se pudo iniciar sesión.');
+        await signInWithCustomToken(auth, datos.token);
+      }
       if (Capacitor.getPlatform() === 'android') await autofill.commit().catch(() => {});
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
       navigate('/admin/dashboard');
@@ -49,10 +72,10 @@ export default function Login() {
         'auth/app-check-token-is-invalid': 'La verificación de esta aplicación fue rechazada. Informa al administrador (APP-VERIFY).',
       };
       const err = error as { code?: string; message?: string };
-      console.error('Firebase Auth Error:', err.code, err.message);
+      console.error('Error de acceso:', err.code || 'ACCESO_RECHAZADO');
       const mensaje = err.code?.startsWith('appCheck/')
         ? 'No se pudo verificar esta aplicación con Google o Apple. No cambies tu contraseña. Comprueba la conexión y usa la versión actualizada; si continúa, informa al administrador (APP-VERIFY).'
-        : (err.code && messages[err.code]) || 'No pudimos iniciar sesión. Revisa tu conexión e intenta nuevamente.';
+        : (err.code && messages[err.code]) || (!email.includes('@') && err.message) || 'No pudimos iniciar sesión. Revisa tu conexión e intenta nuevamente.';
       setErrorVisible(mensaje);
       toast.error(mensaje);
     } finally {
@@ -83,16 +106,16 @@ export default function Login() {
             <form onSubmit={handleSubmit} autoComplete="on" className="space-y-4">
               <div>
                 <label htmlFor="correo-login" className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Correo electrónico
+                  Usuario o correo electrónico
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                   <input
                     id="correo-login"
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="usuario@misterservicerd.com"
+                    placeholder="nombre.equipo"
                     className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-[#1a5fa8] focus:border-transparent"
                     disabled={loading}
                     name="username"
@@ -151,6 +174,8 @@ export default function Login() {
                 )}
               </button>
             </form>
+            <button type="button" className="mt-3 min-h-11 underline text-brand-700" disabled={loading || recuperando} onClick={() => void recuperar()}>Recuperar acceso de gerencia o supervisión</button>
+            {avisoRecuperacion && <p role="status" className="mt-3 text-sm">{avisoRecuperacion}</p>}
           </div>
         </div>
 

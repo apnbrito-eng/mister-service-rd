@@ -1,3 +1,4 @@
+import AccesosPorUsuario from '../components/usuarios/AccesosPorUsuario';
 import { useState, useEffect, Fragment } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, setDoc, doc, Timestamp, query, orderBy, serverTimestamp, getFirestore } from 'firebase/firestore';
 import { createUserWithEmailAndPassword, sendPasswordResetEmail } from 'firebase/auth';
@@ -569,6 +570,7 @@ export default function GestionUsuarios() {
         </div>
       </div>
 
+      <AccesosPorUsuario />
       <NavegacionPersonal personal={usuarios} />
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 text-sm text-blue-900">
         <User size={14} className="mt-0.5 shrink-0" />

@@ -1,0 +1,34 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { normalizarUsuario, puedeGestionar, puedeModificar, sugerirUsuario } from '../../api/_lib/accesosUsuarios';
+import { coincidirPersona, plantillaEquipos } from '../../api/_lib/plantillaEquipos';
+const m = vi.hoisted(() => ({ acceso: vi.fn(), getUser: vi.fn(), createCustomToken: vi.fn(), verifyToken: vi.fn(), fetch: vi.fn(), docs: new Map<string, Record<string, unknown>>(), writes: [] as unknown[] }));
+vi.mock('../../api/_lib/accesoEquipo', () => ({ accesoEquipo: m.acceso, ErrorAcceso: class extends Error { constructor(public status: number, msg: string) { super(msg); } } }));
+const db = {
+ doc: (path: string) => ({ path, get: async () => ({ exists: m.docs.has(path), data: () => m.docs.get(path) }) }),
+ runTransaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({ get: async (ref: { path: string }) => ({ exists: m.docs.has(ref.path), data: () => m.docs.get(ref.path) }), set: (...args: unknown[]) => m.writes.push(args) }),
+};
+vi.mock('../../api/_lib/firebaseAdmin', () => ({ getAdminApp: () => ({}), getAdminFirestore: () => db, getAdminAuth: () => ({ getUser: m.getUser, createCustomToken: m.createCustomToken }) }));
+vi.mock('firebase-admin/app-check', () => ({ getAppCheck: () => ({ verifyToken: m.verifyToken }) }));
+import login from '../../api/publico/acceso';
+import gestion from '../../api/admin/accesos';
+function response() { const r = { codigo: 0, body: {} as Record<string, unknown>, setHeader: vi.fn(), status(n: number) { r.codigo = n; return r; }, json(b: Record<string, unknown>) { r.body = b; return r; } }; return r; }
+async function entrar(body: Record<string, unknown>, token = 'appcheck-test') { const res = response(); await login({ method: 'POST', headers: { 'x-firebase-appcheck': token }, body } as never, res as never); return res; }
+beforeEach(() => { vi.clearAllMocks(); m.docs.clear(); m.writes.length = 0; m.verifyToken.mockResolvedValue({}); m.getUser.mockResolvedValue({ uid: 'u1', email: 'fixture@example.invalid', disabled: false }); m.createCustomToken.mockResolvedValue('token-simulado'); m.fetch.mockResolvedValue({ ok: true, json: async () => ({ localId: 'u1' }) }); vi.stubGlobal('fetch', m.fetch); vi.stubEnv('VITE_FIREBASE_API_KEY', 'fixture'); m.docs.set('accesos_alias/leany.a', { uid: 'u1' }); m.docs.set('usuarios/u1', { rol: 'secretaria', activo: true }); m.acceso.mockResolvedValue({ db, uid: 'super', rol: 'coordinadora' }); });
+describe('usuarios y equipos', () => {
+ it('normaliza el acceso y conserva tildes solo en el nombre visible', () => { expect(normalizarUsuario(' Leany.A ')).toBe('leany.a'); expect(sugerirUsuario('José Alberto', 'B')).toBe('jose.alberto.b'); expect(() => normalizarUsuario('../admin')).toThrow(); });
+ it('solo administrador o supervisora autorizada gestionan accesos', () => { expect(puedeGestionar('coordinadora', false)).toBe(false); expect(puedeGestionar('secretaria', true)).toBe(false); expect(puedeGestionar('coordinadora', true)).toBe(true); });
+ it('supervisora no cambia administradores, otras supervisoras ni su propia clave', () => { expect(puedeModificar('coordinadora', 'm', 'j', 'administrador', false)).toBe(false); expect(puedeModificar('coordinadora', 'm', 'm', 'coordinadora', true)).toBe(false); expect(puedeModificar('coordinadora', 'm', 'l', 'secretaria', false)).toBe(true); });
+ it('la plantilla tiene 16 alias únicos y los equipos confirmados', () => { expect(new Set(plantillaEquipos.map(p => p.usuario)).size).toBe(16); expect(plantillaEquipos.filter(p => p.equipo === 'A')).toHaveLength(7); expect(plantillaEquipos.find(p => p.usuario === 'disnely.b')?.rol).toBe('secretaria'); });
+ it('bloquea cuentas ambiguas antes de asignar', () => { const fila = plantillaEquipos[0]; expect(() => coincidirPersona(fila, [{ nombre: 'Jorge', usuario: '' }, { nombre: 'Jorge', usuario: '' }])).toThrow('varias cuentas'); });
+ it('impide gestión a coordinadora sin autorización individual', async () => { const res = response(); await gestion({ method: 'GET' } as never, res as never); expect(res.codigo).toBe(403); });
+ it('rechaza modificar administrador desde supervisión antes de tocar Auth', async () => { m.docs.set('gestion_accesos/super', { supervisora: true }); m.docs.set('usuarios/admin', { rol: 'administrador' }); const res = response(); await gestion({ method: 'POST', body: { accion: 'clave', uid: 'admin', password: 'solo-fixture' } } as never, res as never); expect(res.codigo).toBe(403); expect(m.getUser).not.toHaveBeenCalled(); });
+});
+describe('autenticación por alias', () => {
+ it('requiere App Check antes de consultar contraseñas', async () => { m.verifyToken.mockRejectedValue(new Error('inválido')); expect((await entrar({ usuario: 'leany.a', accion: 'entrar', password: 'fixture' })).codigo).toBe(401); expect(m.fetch).not.toHaveBeenCalled(); });
+ it('entrega sesión solo después de verificar contraseña y UID con Firebase', async () => { const r = await entrar({ usuario: 'leany.a', accion: 'entrar', password: 'fixture' }); expect(r.codigo).toBe(200); expect(r.body).toEqual({ token: 'token-simulado' }); expect(m.createCustomToken).toHaveBeenCalledWith('u1'); expect(JSON.stringify(m.writes)).not.toContain('fixture'); });
+ it('no entrega token si el proveedor devuelve otro UID', async () => { m.fetch.mockResolvedValue({ ok: true, json: async () => ({ localId: 'otro' }) }); expect((await entrar({ usuario: 'leany.a', accion: 'entrar', password: 'fixture' })).codigo).toBe(401); expect(m.createCustomToken).not.toHaveBeenCalled(); });
+ it('rechaza contraseña incorrecta sin publicar el correo', async () => { m.fetch.mockResolvedValue({ ok: false, json: async () => ({ error: { message: 'INVALID_PASSWORD' } }) }); const r = await entrar({ usuario: 'leany.a', accion: 'entrar', password: 'fixture' }); expect(r.codigo).toBe(401); expect(JSON.stringify(r.body)).not.toContain('@'); });
+ it('no consulta proveedor para una cuenta inactiva', async () => { m.docs.set('usuarios/u1', { rol: 'secretaria', activo: false }); expect((await entrar({ usuario: 'leany.a', accion: 'entrar', password: 'fixture' })).codigo).toBe(401); expect(m.fetch).not.toHaveBeenCalled(); });
+ it('no envía recuperación al personal y responde sin enumerar cuentas', async () => { const r = await entrar({ usuario: 'leany.a', accion: 'recuperar' }); expect(r.codigo).toBe(200); expect(m.fetch).not.toHaveBeenCalled(); expect(r.body).toEqual((await entrar({ usuario: 'no.existe', accion: 'recuperar' })).body); });
+ it('envía recuperación solo a dirección habilitada', async () => { m.docs.set('usuarios/u1', { rol: 'administrador', activo: true }); m.docs.set('gestion_accesos/u1', { recuperacion: true }); expect((await entrar({ usuario: 'leany.a', accion: 'recuperar' })).codigo).toBe(200); expect(m.fetch.mock.calls[0][0]).toContain('sendOobCode'); expect(m.createCustomToken).not.toHaveBeenCalled(); });
+});
