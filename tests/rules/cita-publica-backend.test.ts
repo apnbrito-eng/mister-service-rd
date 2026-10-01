@@ -44,6 +44,35 @@ it('mantiene teléfonos de diez dígitos y normaliza solo prefijo1 válido', () 
  expect(validarCitaPublica({ ...datos, telefono: '+1 2125550100' }).telefonoNormalizado).toBe('2125550100');
  expect(() => validarCitaPublica({ ...datos, telefono: '+34 612345678' })).toThrow();
 });
+it('agenda general acepta las horas AM/PM que ofrece el formulario y conserva el reintento único', async () => {
+ const permiso = 'a'.repeat(64), bucket = 'demo-cita-segura.appspot.com', path = 'citas-publico/qa-foto.jpg', token = 'qa-token-foto';
+ await db.doc(`subidas_publicas_permisos/${permiso}`).set({ completo: true, bucket, path, token, destino: 'agendar' });
+ const fotoEquipoUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(path)}?alt=media&token=${token}&permiso=${permiso}`;
+ const entrada = { ...datos, equipoTipo: 'Nevera', equipoMarca: 'Samsung', equipoModelo: 'Side-by-side', fechaSolicitada: '2026-10-05', horaSolicitada: '9:00 AM', fotoEquipoUrl, clienteLat: 18.4, clienteLng: -69.9 };
+ expect((await llamar(entrada)).status).toBe(200);
+ expect((await llamar(entrada)).status).toBe(200);
+ const citas = await db.collection('citas_por_confirmar').get();
+ expect(citas.size).toBe(1);
+ expect(citas.docs[0].data()).toMatchObject({ horaSolicitada: '9:00 AM', equipoTipo: 'Nevera', fotoEquipoUrl, clienteLat: 18.4, clienteLng: -69.9 });
+});
+it('acepta bloques personalizados del servidor y horas24 legadas, pero rechaza opciones ajenas', async () => {
+ await db.doc('config_web/sitio').set({ formularioAgendar: { bloquesHora: ['De 9:00 AM a 12:00 PM'] } });
+ expect((await llamar({ ...datos, horaSolicitada: 'De 9:00 AM a 12:00 PM' })).status).toBe(200);
+ expect((await llamar({ ...datos, horaSolicitada: '09:00' })).status).toBe(200);
+ for (const horaSolicitada of ['25:00', '9:99 AM', 'texto ajeno', '9:00 AM']) {
+   const r = await llamar({ ...datos, horaSolicitada });
+   expect(r.status).toBe(400);
+   expect(r.payload.error).toContain('hora');
+ }
+ expect((await db.collection('citas_por_confirmar').get()).size).toBe(2);
+});
+it('cada horario predeterminado se admite también con configuración vacía', async () => {
+ await db.doc('config_web/sitio').set({ formularioAgendar: { bloquesHora: [] } });
+ for (const horaSolicitada of ['9:00 AM', '11:00 AM', '1:00 PM', '3:00 PM', '5:00 PM']) {
+   expect((await llamar({ ...datos, horaSolicitada })).status).toBe(200);
+ }
+ expect((await db.collection('citas_por_confirmar').get()).size).toBe(5);
+});
 it('rechaza payloads enormes, coordenadas inválidas y descripción solo prefijo', () => {
  for (const p of [{ falla: 'x'.repeat(4001) }, { clienteLat: 100 }, { fechaSolicitada: '2026-02-31' }, { falla: '[Mantenimiento] ' }, { camposPersonalizados: { x: {} } }, { fotoEquipoUrl: 'javascript:alert(1)' }]) expect(() => validarCitaPublica({ ...datos, ...p })).toThrow();
 });

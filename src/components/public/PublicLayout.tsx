@@ -1,256 +1,62 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { Phone, Mail, MapPin, Clock, Menu, X } from 'lucide-react';
+import { Phone, Mail, MapPin, Clock, Menu, X, ArrowUpRight } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
-import { useState, useEffect } from 'react';
 import { useConfigWeb } from '../../hooks/useConfigWeb';
-import { WHATSAPP_PUBLICO, obtenerWhatsAppPublico } from '../../utils/whatsappPublico';
-import { ConfigWeb } from '../../services/configWeb.service';
+import { obtenerWhatsAppPublico } from '../../utils/whatsappPublico';
+import type { ConfigWeb } from '../../services/configWeb.service';
+import './PublicWebsite.css';
 
 function PublicNav({ config }: { config: ConfigWeb }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const botonMenu = useRef<HTMLButtonElement>(null);
   const location = useLocation();
-
+  useEffect(() => { setMenuAbierto(false); }, [location.pathname, location.search]);
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [location]);
-
-  const navLinks = [
-    { to: '/', label: 'Inicio' },
-    { to: '/servicios', label: 'Servicios' },
-    { to: '/agendar', label: 'Agendar Cita' },
-  ];
-
-  const isActive = (path: string) => location.pathname === path;
-
-  return (
-    <nav style={{ top: 'calc(var(--alto-aviso-entorno, 0px) + env(safe-area-inset-top, 0px))' }} className={`fixed left-0 right-0 z-50 transition-all duration-300 ${
-      scrolled ? 'bg-white/95 backdrop-blur-md shadow-md' : 'bg-white shadow-sm'
-    }`}>
-      {/* Top bar */}
-      <div className="bg-primary text-white text-xs py-1.5 hidden md:block">
-        <div className="max-w-6xl mx-auto px-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <span className="flex items-center gap-1">
-              <Phone size={10} /> {config.contacto.telefono}
-            </span>
-            <span className="flex items-center gap-1">
-              <Mail size={10} /> {config.contacto.email}
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Clock size={10} /> {config.contacto.horario}
-          </div>
-        </div>
-      </div>
-
-      {/* Main nav */}
-      <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-3">
-          <img
-            src="/logo-compacto.png"
-            alt="Mister Service RD"
-            className="h-12 w-auto select-none"
-            draggable={false}
-          />
-          <span className="font-bold text-lg text-primary leading-tight hidden sm:inline">
-            Mister Service RD
-          </span>
-        </Link>
-
-        {/* Desktop links */}
-        <div className="hidden md:flex items-center gap-6">
-          {navLinks.map(link => (
-            <Link
-              key={link.to}
-              to={link.to}
-              className={`text-sm font-medium transition-colors ${
-                isActive(link.to)
-                  ? 'text-primary border-b-2 border-primary pb-0.5'
-                  : 'text-gray-600 hover:text-primary'
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
-          <a
-            href={obtenerWhatsAppPublico(config)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
-          >
-            <WhatsAppIcon filled={false} className="text-white" size={16} /> WhatsApp
-          </a>
-        </div>
-
-        {/* Mobile toggle */}
-        <button
-          type="button"
-          aria-label={menuOpen ? 'Cerrar menú' : 'Abrir menú'}
-          aria-expanded={menuOpen}
-          aria-controls="menu-publico-movil"
-          onClick={() => setMenuOpen(!menuOpen)}
-          className="md:hidden min-h-[48px] min-w-[48px] p-2 text-gray-700 hover:text-primary"
-        >
-          {menuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-      </div>
-
-      {/* Mobile menu */}
-      {menuOpen && (
-        <div id="menu-publico-movil" className="md:hidden bg-white border-t border-gray-100 px-4 py-4 space-y-3 shadow-lg">
-          {navLinks.map(link => (
-            <Link
-              key={link.to}
-              to={link.to}
-              className={`block text-sm font-medium py-2 px-3 rounded-lg transition-colors ${
-                isActive(link.to)
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-gray-700 hover:bg-gray-50'
-              }`}
-            >
-              {link.label}
-            </Link>
-          ))}
-          <a
-            href={obtenerWhatsAppPublico(config)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 bg-green-500 text-white px-4 py-3 rounded-xl text-sm font-semibold w-full"
-          >
-            <WhatsAppIcon filled={false} className="text-white" size={16} /> Escribir por WhatsApp
-          </a>
-        </div>
-      )}
+    if (!menuAbierto) return;
+    const cerrar = (evento: KeyboardEvent) => {
+      if (evento.key === 'Escape') { setMenuAbierto(false); botonMenu.current?.focus(); }
+    };
+    window.addEventListener('keydown', cerrar);
+    return () => window.removeEventListener('keydown', cerrar);
+  }, [menuAbierto]);
+  const enlaces = [{ to: '/', label: 'Inicio' }, { to: '/servicios', label: 'Servicios' }, { to: '/agendar', label: 'Agendar cita' }];
+  const activo = (ruta: string) => ruta === '/' ? location.pathname === '/' : location.pathname.startsWith(ruta);
+  const links = enlaces.map(enlace => <Link key={enlace.to} to={enlace.to} aria-current={activo(enlace.to) ? 'page' : undefined}>{enlace.label}</Link>);
+  return <header className="web-cabecera">
+    <nav aria-label="Navegación principal" className="web-contenedor web-navegacion">
+      <Link to="/" className="web-marca" aria-label="Mister Service RD, inicio"><img src="/logo-compacto.png" alt="" width="48" height="48" /><span>Mister Service<span className="web-marca-rd">RD</span></span></Link>
+      <div className="web-nav-escritorio">{links}<a className="web-boton web-boton-contorno" href={obtenerWhatsAppPublico(config)} target="_blank" rel="noopener noreferrer"><WhatsAppIcon size={18} /> WhatsApp</a></div>
+      <button ref={botonMenu} type="button" className="web-menu-boton min-h-[48px] min-w-[48px]" aria-label={menuAbierto ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuAbierto} aria-controls="menu-publico-movil" onClick={() => setMenuAbierto(!menuAbierto)}>{menuAbierto ? <X size={24} /> : <Menu size={24} />}</button>
     </nav>
-  );
+    {menuAbierto && <nav aria-label="Navegación móvil" id="menu-publico-movil" className="web-menu-movil">{links}<a href={obtenerWhatsAppPublico(config)} target="_blank" rel="noopener noreferrer"><WhatsAppIcon size={18} /> Escribir por WhatsApp <ArrowUpRight size={16} /></a></nav>}
+  </header>;
 }
 
 function Footer({ config }: { config: ConfigWeb }) {
-  return (
-    <footer className="bg-primary text-white">
-      <div className="max-w-6xl mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* Brand */}
-          <div>
-            <div className="flex items-center gap-3 mb-4">
-              <img
-                src="/logo-compacto.png"
-                alt="Mister Service RD"
-                className="h-12 w-auto select-none"
-                draggable={false}
-              />
-              <span className="font-bold text-xl leading-tight">Mister Service RD</span>
-            </div>
-            <p className="text-blue-200 text-sm leading-relaxed">
-              Servicio técnico profesional de electrodomésticos en República Dominicana.
-              Más de 10 años cuidando el hogar dominicano.
-            </p>
-          </div>
-
-          {/* Quick links */}
-          <div>
-            <h3 className="font-semibold text-lg mb-4">Navegación</h3>
-            <div className="space-y-2">
-              <Link to="/" className="block text-blue-200 hover:text-white text-sm transition-colors">Inicio</Link>
-              <Link to="/servicios" className="block text-blue-200 hover:text-white text-sm transition-colors">Servicios</Link>
-              <Link to="/agendar" className="block text-blue-200 hover:text-white text-sm transition-colors">Agendar Cita</Link>
-              <a href="/privacidad" className="block text-blue-200 hover:text-white text-sm">Privacidad</a>
-              <a href="/eliminacion-datos" className="block text-blue-200 hover:text-white text-sm">Eliminar mis datos</a>
-              <Link to="/login" className="block text-blue-300/50 hover:text-white text-sm transition-colors mt-4">Acceso Personal</Link>
-            </div>
-          </div>
-
-          {/* Contact */}
-          <div>
-            <h3 className="font-semibold text-lg mb-4">Contacto</h3>
-            <div className="space-y-3">
-              {(
-                <a
-                  href={obtenerWhatsAppPublico(config)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-3 bg-green-500 hover:bg-green-600 text-white text-base sm:text-lg font-semibold px-6 py-4 rounded-xl shadow-lg transition w-full mb-4"
-                  aria-label="Abrir WhatsApp para hablar con Mister Service RD"
-                >
-                  <WhatsAppIcon filled={false} className="text-white" size={24} />
-                  Hablar por WhatsApp
-                </a>
-              )}
-              <div className="flex items-start gap-2 text-sm text-blue-200">
-                <Phone size={14} className="mt-0.5 shrink-0" />
-                <div>
-                  <span className="block">+{WHATSAPP_PUBLICO}</span>
-                </div>
-              </div>
-              <div className="flex items-start gap-2 text-sm text-blue-200">
-                <Mail size={14} className="mt-0.5 shrink-0" />
-                <span>{config.contacto.email}</span>
-              </div>
-              <div className="flex items-start gap-2 text-sm text-blue-200">
-                <MapPin size={14} className="mt-0.5 shrink-0" />
-                <span>{config.contacto.direccion}</span>
-              </div>
-              <div className="flex items-start gap-2 text-sm text-blue-200">
-                <Clock size={14} className="mt-0.5 shrink-0" />
-                <span>{config.contacto.horario}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="border-t border-white/20 mt-8 pt-6 flex flex-col md:flex-row items-center justify-between gap-3">
-          <p className="text-blue-200 text-xs">
-            © {new Date().getFullYear()} Mister Service RD. Todos los derechos reservados.
-          </p>
-          <p className="text-blue-300/60 text-xs">
-            misterservicerd.com
-          </p>
+  const contacto = config.contacto;
+  return <footer className="web-pie" id="contacto">
+    <div className="web-contenedor">
+      <div className="web-pie-superior">
+        <div><Link to="/" className="web-marca"><img src="/logo-compacto.png" alt="" width="48" height="48" /><span>Mister Service RD</span></Link><p>Reparación y mantenimiento de electrodomésticos.<br />A domicilio y en taller.</p><a className="web-enlace" href={obtenerWhatsAppPublico(config)} target="_blank" rel="noopener noreferrer">Conversemos por WhatsApp <ArrowUpRight size={18} /></a></div>
+        <nav aria-label="Enlaces del pie"><h2>Explora</h2><Link to="/servicios">Nuestros servicios</Link><Link to="/agendar">Agendar una cita</Link><Link to="/login">Acceso personal</Link></nav>
+        <div className="web-contacto"><h2>Estamos para ayudarte</h2>
+          {contacto.telefono && <a href={`tel:${contacto.telefono.replace(/[^+\d]/g, '')}`}><Phone size={17} />{contacto.telefono}</a>}
+          {contacto.email && <a href={`mailto:${contacto.email}`}><Mail size={17} />{contacto.email}</a>}
+          {contacto.direccion && <p><MapPin size={17} />{contacto.direccion}</p>}
+          {contacto.horario && <p><Clock size={17} />{contacto.horario}</p>}
         </div>
       </div>
-    </footer>
-  );
+      <div className="web-pie-legal"><p>© {new Date().getFullYear()} Mister Service RD</p><div><a href="/privacidad">Privacidad</a><a href="/eliminacion-datos">Eliminar mis datos</a></div></div>
+    </div>
+  </footer>;
 }
 
 export default function PublicLayout() {
   const { config } = useConfigWeb();
   const location = useLocation();
-
-  // El form `/agendar` ya tiene su propio CTA de WhatsApp (en la pantalla
-  // post-submit y al final del form). El botón flotante tapa el botón
-  // submit en mobile y duplica la acción, así que lo ocultamos aquí.
-  // La portada escena ya presenta su acción WhatsApp junto a la selección; el flotante cubría equipos en375px.
-  const ocultarWhatsAppFlotante = location.pathname === '/agendar' || (location.pathname === '/' && config.hero?.modo === 'escena');
-
-  return (
-    <div className="min-h-screen flex flex-col">
-      <PublicNav config={config} />
-      {/* Spacer for fixed nav */}
-      <div className="h-[60px] md:h-[88px]" />
-      <main className="flex-1">
-        <Outlet />
-      </main>
-      <Footer config={config} />
-
-      {/* Floating WhatsApp button (mobile).
-          z-40 (no z-50) para no chocar con modales/banners del sistema. */}
-      {!ocultarWhatsAppFlotante && (
-        <a
-          href={obtenerWhatsAppPublico(config)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="fixed bottom-6 right-6 z-40 bg-green-500 text-white p-4 rounded-full shadow-lg hover:bg-green-600 transition-colors"
-          aria-label="WhatsApp"
-        >
-          <WhatsAppIcon filled={false} className="text-white" size={24} />
-        </a>
-      )}
-    </div>
-  );
+  useEffect(() => {
+    if (!location.hash && typeof window.scrollTo === 'function') window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, [location.pathname, location.hash]);
+  return <div className="web-publica"><a className="web-saltar" href="#contenido-publico">Ir al contenido</a><PublicNav config={config} /><main id="contenido-publico" tabIndex={-1}><Outlet /></main><Footer config={config} /></div>;
 }

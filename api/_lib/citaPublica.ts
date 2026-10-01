@@ -2,6 +2,7 @@ import { prepararRepartoCanal } from './equiposAtencion.js';
 import { validarArchivoPublico } from './subidaPublica.js';
 import { createHash } from 'node:crypto';
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
+import { CONFIG_FORMULARIO_AGENDAR_DEFAULTS } from '../../src/types/configFormularioAgendar.js';
 
 export class ErrorCitaPublica extends Error {
   constructor(public status: number, public codigo: string, mensaje: string) { super(mensaje); }
@@ -56,14 +57,16 @@ export function validarCitaPublica(entrada: unknown): Record<string, unknown> {
     if (url.protocol !== 'https:' || url.hostname !== 'firebasestorage.googleapis.com') return fallo();
     data.fotoEquipoUrl = foto;
   }
-  const fecha = texto(p.fechaSolicitada, 10), hora = texto(p.horaSolicitada, 20);
+  const fecha = texto(p.fechaSolicitada, 10), hora = texto(p.horaSolicitada, 200);
   if (fecha) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) || !Number.isFinite(Date.parse(fecha + 'T00:00:00-04:00'))) return fallo();
     const d = new Date(fecha + 'T00:00:00-04:00');
     if (new Date(d.getTime() - 4 * 3600000).toISOString().slice(0, 10) !== fecha) return fallo();
     data.fechaSolicitada = Timestamp.fromDate(d);
   }
-  if (hora) { if (!calendarioId && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora)) return fallo(); data.horaSolicitada = hora; }
+  // Los bloques públicos son etiquetas configurables (por ejemplo, "9:00 AM").
+  // Su pertenencia se valida más abajo con la configuración leída del servidor.
+  if (hora) data.horaSolicitada = hora;
   if (calendarioId) { if (!fecha || !hora) return fallo(); data.calendarioId = calendarioId; }
   if (p.camposPersonalizados !== undefined) {
     if (!p.camposPersonalizados || typeof p.camposPersonalizados !== 'object' || Array.isArray(p.camposPersonalizados)) return fallo();
@@ -111,6 +114,15 @@ export async function registrarCitaPublica(db: Firestore, entrada: unknown, ahor
       if (!Array.isArray(c.dias) || !c.dias.includes(dia) || !Array.isArray(c.horas) || !c.horas.includes(data.horaSolicitada) || fecha.toISOString().slice(0, 10) < hoy) throw new ErrorCitaPublica(400, 'horario', 'Selecciona una fecha y hora disponibles.');
       data.calendarioNombre = texto(c.nombre, 200);
       for (const campo of ['asignadoId', 'asignadoNombre']) { const v = texto(c[campo], 200); if (v) data[campo] = v; }
+    } else if (data.horaSolicitada) {
+      const configurados: unknown = web.data()?.formularioAgendar?.bloquesHora;
+      const bloques = Array.isArray(configurados) && configurados.length
+        ? configurados : CONFIG_FORMULARIO_AGENDAR_DEFAULTS.bloquesHora;
+      // Mantener compatibilidad con solicitudes antiguas en formato HH:mm.
+      const hora24 = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(data.horaSolicitada));
+      if (!hora24 && !bloques.includes(data.horaSolicitada as string)) {
+        throw new ErrorCitaPublica(400, 'horario', 'Selecciona una hora disponible en el formulario.');
+      }
     }
     const rolesValidos = ['administrador', 'coordinadora', 'secretaria', 'operaria'];
     const configurados: unknown = web.data()?.formularioAgendar?.notificarA;

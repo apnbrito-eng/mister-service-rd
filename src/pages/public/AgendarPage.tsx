@@ -1,58 +1,18 @@
 import { useEffect, useState } from 'react';
 import FormularioAgendarPublico from '../../components/public/FormularioAgendarPublico';
-import {
-  CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
-  ConfigFormularioAgendar,
-} from '../../types/configFormularioAgendar';
+import { CONFIG_FORMULARIO_AGENDAR_DEFAULTS, ConfigFormularioAgendar } from '../../types/configFormularioAgendar';
 import { suscribirConfigFormularioAgendar } from '../../services/formularioAgendar.service';
 
-/**
- * Página pública `/agendar`. Muestra:
- *  - Hero con título/subtítulo configurables desde `/admin/web`.
- *  - Formulario funcional que escribe directo a `citas_por_confirmar`.
- *  - Si admin apaga el form, muestra un mensaje de cierre con CTA a WhatsApp.
- */
+/** Solicitud pública: mantiene el envío protegido y la configuración del administrador. */
 export default function AgendarPage() {
-  const [config, setConfig] = useState<ConfigFormularioAgendar>({
-    ...CONFIG_FORMULARIO_AGENDAR_DEFAULTS,
-  });
-
-  // Suscripción ligera solo para los textos del hero — el form interno
-  // mantiene su propia suscripción para validar `habilitado` y campos.
-  useEffect(() => {
-    const unsub = suscribirConfigFormularioAgendar(setConfig);
-    return () => unsub();
-  }, []);
-
-  const titulo =
-    config.tituloHero ?? CONFIG_FORMULARIO_AGENDAR_DEFAULTS.tituloHero;
-  const subtitulo =
-    config.subtituloHero ?? CONFIG_FORMULARIO_AGENDAR_DEFAULTS.subtituloHero;
-
+  const [config, setConfig] = useState<ConfigFormularioAgendar>({ ...CONFIG_FORMULARIO_AGENDAR_DEFAULTS });
+  useEffect(() => suscribirConfigFormularioAgendar(setConfig), []);
+  const titulo = config.tituloHero ?? CONFIG_FORMULARIO_AGENDAR_DEFAULTS.tituloHero;
+  const subtitulo = config.subtituloHero ?? CONFIG_FORMULARIO_AGENDAR_DEFAULTS.subtituloHero;
   return (
-    <div>
-      {/* Hero */}
-      {/* @safe-gradient: hero marketing público — branding */}
-      <section className="bg-gradient-to-br from-primary to-primary-medium py-16 md:py-20">
-        <div className="max-w-6xl mx-auto px-4 text-center">
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
-            {titulo}
-          </h1>
-          <p className="text-blue-200 text-lg max-w-2xl mx-auto">
-            {subtitulo}
-          </p>
-        </div>
-      </section>
-
-      {/* SPRINT-DISENO-D (2026-05-31): respiro vertical extra antes/después
-          del formulario. El spec original decía pt-12 → pt-20, pero la
-          página no tenía pt-12; se interpretó como dar más aire general
-          a la sección del form. */}
-      <section className="py-16 md:py-24 bg-gray-bg">
-        <div className="max-w-3xl mx-auto px-4">
-          <FormularioAgendarPublico />
-        </div>
-      </section>
+    <div className="web-contenedor web-agenda">
+      <header className="web-intro"><h1>{titulo}</h1><p>{subtitulo}</p></header>
+      <section className="web-agenda-formulario" aria-label="Datos para solicitar una cita"><FormularioAgendarPublico /></section>
     </div>
   );
 }
