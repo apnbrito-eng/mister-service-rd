@@ -31,7 +31,6 @@ const labelClass = 'block text-sm font-medium text-gray-700 mb-1.5';
 interface FormState {
   clienteNombre: string;
   telefono: string;
-  clienteEmail: string;
   clienteDireccion: string;
   /** Lat/lng capturados por Places, "Mi ubicación" o URL pegada. */
   clienteLat?: number;
@@ -62,7 +61,6 @@ interface FormState {
 const FORM_INITIAL: FormState = {
   clienteNombre: '',
   telefono: '',
-  clienteEmail: '',
   clienteDireccion: '',
   clienteLat: undefined,
   clienteLng: undefined,
@@ -82,7 +80,6 @@ const FORM_INITIAL: FormState = {
 interface DatosMensajeWhatsApp {
   nombre: string;
   telefono: string;
-  email?: string;
   direccion?: string;
   sector?: string;
   equipoTipo: string;
@@ -139,7 +136,6 @@ function construirMensajeWhatsApp(
   // sanitizan — esas las controlamos nosotros.
   const sNombre = escaparWhatsAppMarkdown(datos.nombre);
   const sTelefono = escaparWhatsAppMarkdown(datos.telefono);
-  const sEmail = escaparWhatsAppMarkdown(datos.email);
   const sDireccion = escaparWhatsAppMarkdown(datos.direccion);
   const sSector = escaparWhatsAppMarkdown(datos.sector);
   const sEquipoTipo = escaparWhatsAppMarkdown(datos.equipoTipo);
@@ -158,7 +154,6 @@ function construirMensajeWhatsApp(
     ``,
     datos.referencia ? `*Solicitud:* ${datos.referencia}` : null,
     `*Teléfono:* ${sTelefono}`,
-    sEmail ? `*Email:* ${sEmail}` : null,
     ``,
     sDireccion ? `*Dirección:* ${sDireccion}` : null,
     sSector ? `*Sector:* ${sSector}` : null,
@@ -431,7 +426,7 @@ export default function FormularioAgendarPublico() {
       }
       const telNorm = normalizarTelefono(form.telefono);
       if (telNorm.length !== 10) {
-        toast.error('El teléfono debe tener 10 dígitos (ej: 809-555-1234)');
+        toast.error('El teléfono o WhatsApp debe tener 10 dígitos (ej: 809-555-1234)');
         return;
       }
       if (!form.equipoTipo) {
@@ -441,13 +436,6 @@ export default function FormularioAgendarPublico() {
       if (form.falla.trim().length < 10) {
         toast.error('Describe el problema con al menos 10 caracteres');
         return;
-      }
-      if (form.clienteEmail) {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(form.clienteEmail.trim())) {
-          toast.error('El email no es válido');
-          return;
-        }
       }
       // Validar fecha solo si está llena
       if (form.fechaSolicitada) {
@@ -504,7 +492,6 @@ export default function FormularioAgendarPublico() {
       const res = await enviarSolicitudCita({
         clienteNombre: nombre,
         telefono: form.telefono.trim(),
-        clienteEmail: form.clienteEmail.trim() || undefined,
         clienteDireccion: form.clienteDireccion.trim() || undefined,
         clienteLat: typeof form.clienteLat === 'number' ? form.clienteLat : undefined,
         clienteLng: typeof form.clienteLng === 'number' ? form.clienteLng : undefined,
@@ -559,7 +546,6 @@ export default function FormularioAgendarPublico() {
           razonSocial: rncDigitos ? form.razonSocial.trim() : undefined,
           foto: fotoEquipoUrl,
           telefono: form.telefono.trim(),
-          email: form.clienteEmail.trim() || undefined,
           direccion: form.clienteDireccion.trim() || undefined,
           sector: mostrarSector
             ? form.clienteSector.trim() || undefined
@@ -730,32 +716,19 @@ export default function FormularioAgendarPublico() {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className={labelClass}>
-            Teléfono <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="tel"
-            className={inputClass}
-            value={form.telefono}
-            onChange={e => update({ telefono: e.target.value })}
-            placeholder="809-555-1234"
-            required
-            autoComplete="tel"
-          />
-        </div>
-        <div>
-          <label className={labelClass}>Email</label>
-          <input
-            type="email"
-            className={inputClass}
-            value={form.clienteEmail}
-            onChange={e => update({ clienteEmail: e.target.value })}
-            placeholder="tu@email.com"
-            autoComplete="email"
-          />
-        </div>
+      <div>
+        <label className={labelClass}>
+          Teléfono o WhatsApp <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="tel"
+          className={inputClass}
+          value={form.telefono}
+          onChange={e => update({ telefono: e.target.value })}
+          placeholder="809-555-1234"
+          required
+          autoComplete="tel"
+        />
       </div>
 
       <div className={mostrarSector ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : ''}>
@@ -1122,7 +1095,7 @@ export default function FormularioAgendarPublico() {
           <Send className="w-5 h-5" />
           {submitting ? 'Enviando...' : 'Enviar solicitud'}
         </button>
-        <p className="text-sm text-gray-400 text-center mt-3">
+        <p className="text-sm text-gray-600 text-center mt-3">
           Guardaremos tu solicitud y abriremos tu WhatsApp con el resumen. Allí solo tienes que pulsar Enviar. Si no tienes WhatsApp, tu solicitud igualmente quedará registrada.
         </p>
       </div>

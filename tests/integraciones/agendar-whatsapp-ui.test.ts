@@ -65,3 +65,11 @@ it('un bloqueo de navegación conserva la confirmación y no anuncia error de gu
  expect(vista.root.findAllByType('form')).toHaveLength(0);
  expect(vista.root.findAllByType('a').some(a => a.props.href.startsWith('https://wa.me/18495646767'))).toBe(true);
 });
+
+it('no solicita ni envía correo electrónico', async () => {
+ expect(vista.root.findAllByProps({ type: 'email' })).toHaveLength(0);
+ m.enviar.mockResolvedValue({ ok: true });
+ await act(async () => { await enviar(); });
+ expect(m.enviar.mock.calls[0][0]).not.toHaveProperty('clienteEmail');
+ expect(new URL(m.abrir.mock.calls[0][0]).searchParams.get('text')).not.toContain('*Email:*');
+});
