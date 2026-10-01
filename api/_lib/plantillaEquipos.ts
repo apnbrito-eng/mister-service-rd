@@ -18,7 +18,9 @@ export const plantillaEquipos = [
   { nombre: 'Miguel', existentes: ['Miguel oriental Lavadora/Secadora/Nevera/Estufa'], usuario: 'miguel.b', equipo: 'B', rol: 'tecnico', especialidad: 'Neveras, lavadoras y secadoras' },
 ];
 export function coincidirPersona<T extends { nombre: string; usuario: string }>(fila: typeof plantillaEquipos[number], personas: T[]): T | undefined {
-  const matches = personas.filter(p => p.usuario === fila.usuario || p.nombre === fila.nombre || fila.existentes.includes(p.nombre));
+  const nombreComparable = (nombre: string) => nombre.normalize('NFC').trim().replace(/\s+/g, ' ').toLocaleLowerCase('es');
+  const nombres = new Set([fila.nombre, ...fila.existentes].map(nombreComparable));
+  const matches = personas.filter(p => p.usuario === fila.usuario || nombres.has(nombreComparable(p.nombre)));
   if (matches.length > 1) throw new Error(`Hay varias cuentas para ${fila.nombre}. Revisa las coincidencias antes de aplicar.`);
   return matches[0];
 }
