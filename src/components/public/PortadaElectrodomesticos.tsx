@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { ConfigWeb } from '../../services/configWeb.service';
 import {
   enlaceAgendar,
@@ -203,7 +203,19 @@ export default function PortadaElectrodomesticos({
               <div className="portada-publica-medio-vacio" aria-hidden="true" />
             ) : (
               <div role="img" aria-label={`${equipo}: ${desarmado ? 'desarmado' : 'armado'}`} className="portada-publica-foto-ventana">
-                {imagenesFallidas.includes(IMAGEN_EQUIPO[equipo]) ? <p>{equipo}</p> : <img src={IMAGEN_EQUIPO[equipo]} alt="" className={`portada-publica-foto-par${desarmado ? ' desarmado' : ''}`} onError={() => setImagenesFallidas(previas => [...previas, IMAGEN_EQUIPO[equipo]])} />}
+                {imagenesFallidas.includes(IMAGEN_EQUIPO[equipo]) ? <p>{equipo}</p> : <AnimatePresence initial={false}>
+                  <motion.img
+                    key={`${equipo}-${desarmado ? 'desarmado' : 'armado'}`}
+                    src={IMAGEN_EQUIPO[equipo]}
+                    alt=""
+                    className={`portada-publica-foto-par${desarmado ? ' desarmado' : ''}`}
+                    initial={{ opacity: reducido ? 1 : 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: reducido ? 0 : 0.65, ease: 'easeInOut' }}
+                    onError={() => setImagenesFallidas(previas => [...previas, IMAGEN_EQUIPO[equipo]])}
+                  />
+                </AnimatePresence>}
               </div>
             )}
           </div>

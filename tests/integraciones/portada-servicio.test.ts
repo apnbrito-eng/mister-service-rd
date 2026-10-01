@@ -83,7 +83,7 @@ it('la secadora es independiente y utiliza su imagen propia', () => {
  act(() => { tree = create(React.createElement(MemoryRouter, {}, React.createElement(Portada, { config: conSecadora }))); });
  act(() => tree.root.findAllByType('button').find(b => b.children.includes('Secadora'))!.props.onClick());
  expect(tree.root.findByProps({ role: 'img' }).props['aria-label']).toBe('Secadora: armado');
- expect(tree.root.findByType('img').props.src).toContain('secadora-armada-desarmada.jpg');
+ expect(tree.root.findAllByType('img').some(imagen => imagen.props.src.includes('secadora-armada-desarmada.jpg'))).toBe(true);
 });
 it('el toque no simula hover permanente y pausa/reanudación funcionan', () => {
  vi.useFakeTimers(); movimiento.reducido = false;
