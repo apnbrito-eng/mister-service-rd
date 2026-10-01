@@ -15,7 +15,7 @@ import { normalizarTelefono } from '../../services/clientes.service';
 import { comprimirImagen } from '../../utils/imagen';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import { useConfigWeb } from '../../hooks/useConfigWeb';
-import { leerSeleccionServicio, obtenerWhatsAppPublico, type IntencionServicio } from '../../utils/whatsappPublico';
+import { leerSeleccionServicio, obtenerWhatsAppPublico, NOMBRE_WHATSAPP_PUBLICO, type IntencionServicio } from '../../utils/whatsappPublico';
 import LoadingSpinner from '../LoadingSpinner';
 import CampoDireccionConPlaces from '../shared/CampoDireccionConPlaces';
 import { obtenerModelosDeTipo } from '../../utils/modelosEquipo';
@@ -91,6 +91,12 @@ interface DatosMensajeWhatsApp {
   falla: string;
   fechaSolicitada?: string;
   horaSolicitada?: string;
+  referencia?: string;
+  lat?: number;
+  lng?: number;
+  rnc?: string;
+  razonSocial?: string;
+  foto?: string;
 }
 
 /**
@@ -150,11 +156,16 @@ function construirMensajeWhatsApp(
   const lineas: (string | null)[] = [
     `Hola, soy *${sNombre}* y acabo de enviar una solicitud de cita por la web.`,
     ``,
+    datos.referencia ? `*Solicitud:* ${datos.referencia}` : null,
     `*Teléfono:* ${sTelefono}`,
     sEmail ? `*Email:* ${sEmail}` : null,
     ``,
     sDireccion ? `*Dirección:* ${sDireccion}` : null,
     sSector ? `*Sector:* ${sSector}` : null,
+    Number.isFinite(datos.lat) && Number.isFinite(datos.lng) ? `*Ubicación:* https://www.google.com/maps?q=${datos.lat},${datos.lng}` : null,
+    datos.rnc ? `*RNC:* ${datos.rnc}` : null,
+    datos.razonSocial ? `*Razón social:* ${escaparWhatsAppMarkdown(datos.razonSocial)}` : null,
+    datos.foto ? `*Foto del equipo:* ${datos.foto}` : null,
     ``,
     `*Equipo:* ${sEquipoTipo}${sEquipoMarca ? ' ' + sEquipoMarca : ''}${sufijoEquipo}`,
     `*Falla reportada:* ${sFalla}`,
@@ -180,17 +191,6 @@ function construirMensajeWhatsApp(
   return lineas.filter((l): l is string => l !== null).join('\n');
 }
 
-/**
- * Construye URL `wa.me` con prefijo internacional `1` para RD si el
- * número viene en 10 dígitos. Mismo patrón que `getWhatsAppUrl` en
- * `configWeb.service.ts`.
- */
-function construirUrlWhatsAppRD(numero: string, mensaje: string): string {
-  const dig = numero.replace(/\D/g, '');
-  const intl = dig.length === 10 ? `1${dig}` : dig;
-  return `https://wa.me/${intl}?text=${encodeURIComponent(mensaje)}`;
-}
-
 export default function FormularioAgendarPublico() {
   const { config: configWeb, loading: configWebLoading } = useConfigWeb();
 
@@ -204,6 +204,7 @@ export default function FormularioAgendarPublico() {
   const [form, setForm] = useState<FormState>(FORM_INITIAL);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const whatsappAbierto = useRef<string | null>(null);
   const [resultadoWhatsApp, setResultadoWhatsApp] = useState<{
     url: string;
     nombre: string;
@@ -321,6 +322,18 @@ export default function FormularioAgendarPublico() {
     }, 50);
     return () => window.clearTimeout(t);
   }, [success]);
+
+  // Navegar después de montar la confirmación: la solicitud ya está guardada.
+  // La misma pestaña evita depender de ventanas emergentes tras un await.
+  useEffect(() => {
+    if (!success || !resultadoWhatsApp || whatsappAbierto.current === resultadoWhatsApp.url) return;
+    whatsappAbierto.current = resultadoWhatsApp.url;
+    try {
+      window.location.assign(resultadoWhatsApp.url);
+    } catch {
+      // El botón permanece disponible si el navegador bloquea la apertura.
+    }
+  }, [success, resultadoWhatsApp]);
 
   // Tipos de equipo: leemos desde `config_web/sitio.tiposEquipoPublicos`
   // (lectura pública garantizada). El admin sincroniza esta lista cuando
@@ -534,36 +547,37 @@ export default function FormularioAgendarPublico() {
         return;
       }
 
-      // Con el canal público central asignado, construimos URL pre-llenada
-      // con todos los datos del form para que el agente pueda confirmar
-      // sin pedir nada extra al cliente.
-      if (res.whatsappAsignado) {
-        const mensaje = construirMensajeWhatsApp(
-          {
-            nombre,
-            telefono: form.telefono.trim(),
-            email: form.clienteEmail.trim() || undefined,
-            direccion: form.clienteDireccion.trim() || undefined,
-            sector: mostrarSector
-              ? form.clienteSector.trim() || undefined
-              : undefined,
-            equipoTipo: form.equipoTipo,
-            equipoMarca: form.equipoMarca.trim() || undefined,
-            equipoModelo: equipoModeloFinal,
-            falla: intencion ? `[${intencion}] ${form.falla.trim()}` : form.falla.trim(),
-            fechaSolicitada: form.fechaSolicitada || undefined,
-            horaSolicitada: form.horaSolicitada || undefined,
-          },
-          customConLabels,
-        );
-        const url = construirUrlWhatsAppRD(res.whatsappAsignado, mensaje);
-        setResultadoWhatsApp({
-          url,
-          nombre: res.whatsappAsignadoNombre || 'nuestro coordinador',
-        });
-      } else {
-        setResultadoWhatsApp(null);
-      }
+      // Usar siempre el canal público central, incluso si la respuesta
+      // no incluye un número. La solicitud interna ya quedó confirmada.
+      const mensaje = construirMensajeWhatsApp(
+        {
+          nombre,
+          referencia: res.citaId,
+          lat: form.clienteLat,
+          lng: form.clienteLng,
+          rnc: rncDigitos || undefined,
+          razonSocial: rncDigitos ? form.razonSocial.trim() : undefined,
+          foto: fotoEquipoUrl,
+          telefono: form.telefono.trim(),
+          email: form.clienteEmail.trim() || undefined,
+          direccion: form.clienteDireccion.trim() || undefined,
+          sector: mostrarSector
+            ? form.clienteSector.trim() || undefined
+            : undefined,
+          equipoTipo: form.equipoTipo,
+          equipoMarca: form.equipoMarca.trim() || undefined,
+          equipoModelo: equipoModeloFinal,
+          falla: intencion ? `[${intencion}] ${form.falla.trim()}` : form.falla.trim(),
+          fechaSolicitada: form.fechaSolicitada || undefined,
+          horaSolicitada: form.horaSolicitada || undefined,
+        },
+        customConLabels,
+      );
+      const url = obtenerWhatsAppPublico(configWeb, mensaje);
+      setResultadoWhatsApp({
+        url,
+        nombre: NOMBRE_WHATSAPP_PUBLICO,
+      });
 
       setSuccess(true);
       setForm(FORM_INITIAL);
@@ -624,12 +638,11 @@ export default function FormularioAgendarPublico() {
         {resultadoWhatsApp ? (
           <>
             <p className="text-gray-600 text-sm mb-8 max-w-md mx-auto">
-              Hemos registrado tu solicitud. Para agilizar la confirmación,
-              envía un mensaje de WhatsApp a{' '}
+              Tu solicitud ya está guardada en nuestro sistema. Abriremos tu WhatsApp con el resumen para{' '}
               <span className="font-semibold text-gray-800">
                 {resultadoWhatsApp.nombre}
               </span>
-              .
+              . Pulsa Enviar en WhatsApp para compartirlo con nosotros.
             </p>
             <a
               href={resultadoWhatsApp.url}
@@ -638,10 +651,10 @@ export default function FormularioAgendarPublico() {
               className="inline-flex items-center gap-3 bg-green-500 hover:bg-green-600 text-white text-lg font-semibold px-8 py-4 rounded-xl shadow-lg transition"
             >
               <WhatsAppIcon filled={false} className="text-white" size={22} />
-              Abrir WhatsApp para confirmar
+              Abrir WhatsApp con mi solicitud
             </a>
             <p className="text-xs text-gray-400 mt-6">
-              Si no tienes WhatsApp, te llamaremos al teléfono que registraste.
+              Si WhatsApp no se abre, usa el botón de arriba. Aunque no envíes el mensaje, tu solicitud ya está registrada y podemos llamarte.
             </p>
           </>
         ) : (
@@ -656,6 +669,7 @@ export default function FormularioAgendarPublico() {
             onClick={() => {
               setSuccess(false);
               setResultadoWhatsApp(null);
+              whatsappAbierto.current = null;
             }}
             className="inline-flex items-center justify-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl font-semibold text-sm hover:bg-primary-medium transition-colors"
           >
@@ -1109,7 +1123,7 @@ export default function FormularioAgendarPublico() {
           {submitting ? 'Enviando...' : 'Enviar solicitud'}
         </button>
         <p className="text-sm text-gray-400 text-center mt-3">
-          Te contactaremos en menos de 24 horas para coordinar la visita.
+          Guardaremos tu solicitud y abriremos tu WhatsApp con el resumen. Allí solo tienes que pulsar Enviar. Si no tienes WhatsApp, tu solicitud igualmente quedará registrada.
         </p>
       </div>
 

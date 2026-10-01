@@ -85,3 +85,21 @@
 @media (max-width:767px) { .web-contenedor { width:calc(100% - 40px); } .web-navegacion { min-height:72px; } .web-nav-escritorio { display:none; } .web-menu-boton { display:flex; } .web-menu-movil { display:flex; flex-direction:column; padding:8px 20px 20px; max-height:calc(100svh - 80px); overflow-y:auto; border-top:1px solid var(--web-linea); } .web-menu-movil>a { display:flex; align-items:center; gap:12px; padding:15px 8px; font-size:16px; } .web-pie { padding-top:40px; } .web-pie-superior { grid-template-columns:1fr 1fr; } .web-pie-superior>div:first-child { grid-column:1/-1; } .web-pie-superior>.web-contacto { grid-column:1/-1; } .web-pie-legal { margin-top:28px; } .web-intro { padding:44px 0 36px; } .web-intro p { font-size:16px; } .web-servicio-visual { height:180px; } .web-servicio-fallback { width:170px; height:170px; } .web-catalogo { gap:28px 18px; padding-bottom:40px; } .web-servicio h2 { font-size:19px; } .web-ayuda { align-items:flex-start; flex-direction:column; padding:36px 0 48px; } .web-detalle-hero { grid-template-columns:1fr; gap:28px; padding:32px 0 40px; } .web-detalle-imagen { height:260px; } .web-detalle-visual .web-servicio-fallback { width:260px; } .web-detalle-seccion { padding:36px 0; } .web-problemas { grid-template-columns:1fr; } .web-agenda { grid-template-columns:1fr; gap:24px; padding:28px 0 48px; } .web-agenda .web-intro { padding:0; } .web-agenda .web-intro h1 { margin-bottom:14px; } .web-acciones { gap:10px; } }
 @media (max-width:380px) { .web-catalogo { grid-template-columns:1fr; } .web-pie-superior { grid-template-columns:1fr; } }
 @media (prefers-reduced-motion:reduce) { .web-publica *, .web-publica *::before,.web-publica *::after { scroll-behavior:auto!important; animation:none!important; transition:none!important; } .web-publica .web-boton:active { transform:none; } }
+
+/* Acciones principales siempre visibles, antes de la marca y del contenido. */
+.web-accesos-superiores { padding:10px 0; border-bottom:1px solid var(--web-linea); }
+.web-accesos-superiores>.web-contenedor { display:flex; justify-content:flex-end; gap:12px; }
+.web-publica .web-boton-whatsapp { background:#08783d; color:#fff; }
+.web-accesos-superiores svg { flex-shrink:0; }
+@media (hover:hover) and (pointer:fine) { .web-publica .web-boton-whatsapp:hover { background:#066331; } }
+@media (max-width:767px) {
+  .web-accesos-superiores>.web-contenedor { width:calc(100% - 24px); display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .web-accesos-superiores .web-boton { padding:9px 10px; font-size:13px; gap:6px; border-radius:14px; min-height:52px; text-align:center; }
+  .web-navegacion { min-height:64px; }
+  .web-menu-movil { max-height:calc(100svh - 150px); }
+}
+
+@media (min-width:768px) and (max-width:1100px) {
+  .web-agenda { grid-template-columns:1fr; gap:28px; padding-top:36px; }
+  .web-agenda .web-intro { padding:0; }
+}

@@ -24,9 +24,15 @@ function PublicNav({ config }: { config: ConfigWeb }) {
   const activo = (ruta: string) => ruta === '/' ? location.pathname === '/' : location.pathname.startsWith(ruta);
   const links = enlaces.map(enlace => <Link key={enlace.to} to={enlace.to} aria-current={activo(enlace.to) ? 'page' : undefined}>{enlace.label}</Link>);
   return <header className="web-cabecera">
+    <nav aria-label="Agendar o contactar" className="web-accesos-superiores">
+      <div className="web-contenedor">
+        <Link to="/agendar" className="web-boton web-boton-primario">Agendar servicio</Link>
+        <a className="web-boton web-boton-whatsapp" href={obtenerWhatsAppPublico(config)} target="_blank" rel="noopener noreferrer"><WhatsAppIcon size={18} /><span>Escribir por WhatsApp</span></a>
+      </div>
+    </nav>
     <nav aria-label="Navegación principal" className="web-contenedor web-navegacion">
       <Link to="/" className="web-marca" aria-label="Mister Service RD, inicio"><img src="/logo-compacto.png" alt="" width="48" height="48" /><span>Mister Service<span className="web-marca-rd">RD</span></span></Link>
-      <div className="web-nav-escritorio">{links}<a className="web-boton web-boton-contorno" href={obtenerWhatsAppPublico(config)} target="_blank" rel="noopener noreferrer"><WhatsAppIcon size={18} /> WhatsApp</a></div>
+      <div className="web-nav-escritorio">{links}</div>
       <button ref={botonMenu} type="button" className="web-menu-boton min-h-[48px] min-w-[48px]" aria-label={menuAbierto ? 'Cerrar menú' : 'Abrir menú'} aria-expanded={menuAbierto} aria-controls="menu-publico-movil" onClick={() => setMenuAbierto(!menuAbierto)}>{menuAbierto ? <X size={24} /> : <Menu size={24} />}</button>
     </nav>
     {menuAbierto && <nav aria-label="Navegación móvil" id="menu-publico-movil" className="web-menu-movil">{links}<a href={obtenerWhatsAppPublico(config)} target="_blank" rel="noopener noreferrer"><WhatsAppIcon size={18} /> Escribir por WhatsApp <ArrowUpRight size={16} /></a></nav>}
