@@ -2,8 +2,7 @@
   Portada pública y home pública — rediseño blanco (01/10/2026).
   Prefijo .portada-publica (portada) y .home-publica (secciones Home).
   Codex administra .web-publica en PublicWebsite.css: no colisionar.
-  Reservado un área de medio estática que un sprint posterior
-  reemplazará por video; mientras tanto muestra el equipo seleccionado.
+  Carrusel de electrodomésticos con controles y detalle de servicios.
 */
 
 .portada-publica,
@@ -158,7 +157,7 @@
 }
 
 @media (min-width: 560px) {
-  .portada-publica-equipos { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.75rem; }
+  .portada-publica-equipos { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.75rem; }
 }
 
 .portada-publica-equipo-boton {
@@ -678,3 +677,28 @@
 .portada-presentacion { display:flex; margin-left:auto; margin-top:12px; }
 .web-publica .home-publica-cta-final-primario:focus-visible,
 .web-publica .home-publica-cta-final-secundario:focus-visible { outline:2px solid #0f3460; outline-offset:5px; }
+
+.portada-publica-diapositivas { min-width:0; width:100%; }
+.portada-publica-detalle-equipo { text-align:center; margin:8px auto 0; max-width:48ch; }
+.portada-publica-detalle-equipo h2 { font-size:24px; font-weight:700; margin-bottom:8px; }
+.portada-publica-detalle-equipo p { font-size:14px; color:#555b63; min-height:66px; }
+.portada-publica-detalle-equipo ul { display:flex; justify-content:center; flex-wrap:wrap; gap:6px 12px; margin-top:10px; font-size:13px; font-weight:600; color:#0f3460; }
+.portada-publica-diapositivas-controles { display:flex; align-items:center; justify-content:center; gap:16px; margin-top:16px; font-size:13px; }
+.portada-publica-diapositivas-controles button { display:grid; place-items:center; min-width:44px; min-height:44px; border:1px solid #a8adb4; border-radius:50%; }
+.portada-publica-secado-icono { width:65%; height:65%; stroke-width:1; color:#707782; }
+@media (max-width:959px) {
+  .portada-publica-diapositivas { grid-row:1; }
+  .portada-publica-diapositivas .portada-publica-medio { width:min(280px,100%); margin-inline:auto; }
+  .portada-publica-detalle-equipo p { min-height:66px; }
+}
+
+/* Dos fotos estáticas por equipo: el cambio no anima ni transforma las piezas. */
+.portada-publica-equipo-par { display:block; width:48px; height:48px; background-size:200% 100%; background-position:left center; background-repeat:no-repeat; }
+.portada-publica-foto-ventana { position:relative; width:100%; height:100%; overflow:hidden; display:grid; place-items:center; }
+.portada-publica-foto-par { position:absolute; width:200%; max-width:none; height:100%; left:0; top:0; }
+.portada-publica-foto-par.desarmado { width:192.3077%; height:96.1538%; left:-92.3077%; top:1.9231%; }
+.portada-publica-estado-equipo { display:block; color:#555b63; font-size:12px; margin-bottom:8px; }
+/* Mantener fuera del encuadre las piezas de la segunda mitad del sprite. */
+.portada-publica-foto-par:not(.desarmado) { clip-path:inset(0 52% 0 0); }
+
+.portada-publica-equipo-par { clip-path:inset(0 4% 0 0); }

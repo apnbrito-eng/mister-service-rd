@@ -23,3 +23,10 @@ Jorge pide que Agendar servicio y Escribir por WhatsApp aparezcan primero, tambi
 Pendiente de registrar deployment y versión verificada.
 
 Fuente: conversación 01a0f833-70e2-7e63-b204-027995df6176, solicitud de Jorge del 01/10/2026.
+
+## Ampliación: equipos armados y desarmados
+Petición posterior: diapositivas cada 3 o 5 segundos, secadora independiente negra/gris oscuro y pares armado/desarmado sin animación de piezas. Implementado intervalo de 5 segundos y cambio directo, sin fundido. Incluye lavadora blanca, nevera, aire, estufa y secadora gris oscuro, 10 vistas. Imágenes generadas con imagegen y guardadas como cinco sprites JPEG (aprox. 1.5 MB en conjunto); originales conservados fuera del proyecto en generated_images. Son ilustraciones comerciales, no despieces técnicos verificados.
+
+Controles anterior/siguiente/pausa; pausa por selección manual, foco, puntero o pestaña oculta; respeta movimiento reducido. La intención Instalación viaja a agenda y WhatsApp igual que Reparación/Mantenimiento. Conserva contenido CMS, disponibilidad y presentación opcional.
+
+Validación ampliada: 21 pruebas del flujo público PASS, build web/API PASS, lint focalizado PASS. Pruebas cubren 5 segundos exactos, pares de imágenes, cambio de equipo, pausa manual, movimiento reducido, secadora independiente e intención Instalación. Navegador local 390/1280px: secadora oscura, vista armada/desarmada y servicios visibles. Se ajustó el encuadre para ocultar restos de la otra mitad del sprite. La representación móvil no equivale a prueba física en Samsung. Samsung SM-S928U detectado conectado; control remoto Chrome bloqueado por política de la herramienta, sin eludir el bloqueo.
