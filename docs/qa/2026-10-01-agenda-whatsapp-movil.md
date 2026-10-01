@@ -4,7 +4,7 @@
 Jorge pide que Agendar servicio y Escribir por WhatsApp aparezcan primero, también en móvil, y que al enviar se guarde la solicitud interna y se abra el WhatsApp del cliente hacia la empresa.
 
 - Campo de correo retirado del formulario y del resumen por petición posterior de Jorge. Campo de contacto: «Teléfono o WhatsApp».
-- Barra superior persistente con ambas acciones antes de la marca, independiente del menú.
+- Barra persistente con ambas acciones debajo de la marca, antes de la imagen y del contenido, independiente del menú. Jorge corrigió la posición inicial por quedar demasiado arriba.
 - Formulario ancho en tabletas hasta 1100px; corrige el campo de dirección estrecho.
 - Tras respuesta satisfactoria de `/api/publico/cita`, se monta la confirmación y se navega a `wa.me/18495646767` con el resumen. Se conserva enlace manual y el guardado no depende de WhatsApp.
 - Mensaje incluye contacto, equipo, falla, fecha/hora, campos personalizados y, si fueron proporcionados, GPS, RNC/razón social y enlace de foto.

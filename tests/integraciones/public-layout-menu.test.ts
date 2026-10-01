@@ -20,11 +20,12 @@ it('menú móvil tiene nombre, área táctil y estado expandido asociado al pane
  act(() => boton.props.onClick());
  expect(tree.root.findAllByProps({ id: 'menu-publico-movil' })).toHaveLength(0);
 });
-it('muestra ambos accesos principales antes de la navegación sin abrir el menú', () => {
+it('muestra ambos accesos bajo la marca sin abrir el menú', () => {
  vi.stubGlobal('window', { addEventListener: vi.fn(), removeEventListener: vi.fn() });
  act(() => { tree = create(React.createElement(MemoryRouter, {}, React.createElement(PublicLayout))); });
  const cabecera = tree.root.findByType('header');
- const accesos = cabecera.findAllByType('nav')[0];
+ expect(cabecera.findAllByType('nav')[0].props['aria-label']).toBe('Navegación principal');
+ const accesos = cabecera.findAllByType('nav')[1];
  expect(accesos.props['aria-label']).toBe('Agendar o contactar');
  const enlaces = accesos.findAllByType('a');
  expect(enlaces[0].props.href).toBe('/agendar');

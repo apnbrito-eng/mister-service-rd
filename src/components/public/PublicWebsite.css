@@ -86,8 +86,8 @@
 @media (max-width:380px) { .web-catalogo { grid-template-columns:1fr; } .web-pie-superior { grid-template-columns:1fr; } }
 @media (prefers-reduced-motion:reduce) { .web-publica *, .web-publica *::before,.web-publica *::after { scroll-behavior:auto!important; animation:none!important; transition:none!important; } .web-publica .web-boton:active { transform:none; } }
 
-/* Acciones principales siempre visibles, antes de la marca y del contenido. */
-.web-accesos-superiores { padding:10px 0; border-bottom:1px solid var(--web-linea); }
+/* Acciones principales visibles bajo la marca y antes del contenido. */
+.web-accesos-superiores { padding:4px 0 16px; }
 .web-accesos-superiores>.web-contenedor { display:flex; justify-content:flex-end; gap:12px; }
 .web-publica .web-boton-whatsapp { background:#08783d; color:#fff; }
 .web-accesos-superiores svg { flex-shrink:0; }
