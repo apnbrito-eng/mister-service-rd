@@ -1,0 +1,9 @@
+# Publicación Apple oficial — 06/10/2026
+
+🟦 Jorge autorizó implementación y despliegue; conectó cuenta Firebase apnbrito y Samsung en esta conversación.
+
+✅ Reglas Firestore oficiales desplegadas con éxito: hash53954df54fd7b6093d7242a869323098c1a79de304fc93536d9d3b5279960452, 2026-10-06T21:39:52.848Z. Log `/tmp/apple-official-rules-deploy-authenticated.log`.
+✅ Integraciones finales1247PASS/182archivos, TypeScriptfrontend/API y cazadoresPASS. Logs `/tmp/apple-final-auth-tests.log`, `/tmp/apple-release-hooks.log`. ESLint sobre archivos productivos/fixtures del lotePASS. Fixtures Firebase/API usan tipos parciales deliberados; anotación de pruebas no modifica controles de código productivo.
+✅ APK1.0.21/code22/com.misterservicerd.app generada con GoogleServices oficial recuperado y certificado oficiald65aec5154307ec45f707402ba180d0f9a22746d7e37dda46886f4950e8ca2cd. SHA256 `f83745f05488f7700bff6a630f8b809355b68d9837864f2732fe68c527983e9d`. 257recursos empaquetados comparados byte a byte. Fuente nativa aislada en `/tmp/mister-service-apple-1.0.21-candidata/source-manifest.json`, no se afirma que corresponda byte a byte al commit web posterior. Log `/tmp/apple-native-build.log`.
+⏳ Promoción web e instalación/QA Samsung todavía pendientes de constancia. No se hicieron pagos ni cambios de datos de negocio durante las pruebas.
+— Codex
