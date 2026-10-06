@@ -8,6 +8,10 @@ import { fileURLToPath } from 'node:url'
 const projectRoot = fileURLToPath(new URL('.', import.meta.url))
 
 const gitHash = (() => {
+  // El despliegue directo de CLI no recibe siempre los metadatos de GitHub.
+  if (/^[a-f0-9]{7,40}$/.test(process.env.MISTER_SOURCE_COMMIT || '')) {
+    return process.env.MISTER_SOURCE_COMMIT!.substring(0, 7)
+  }
   if (process.env.VERCEL_GIT_COMMIT_SHA) {
     return process.env.VERCEL_GIT_COMMIT_SHA.substring(0, 7)
   }
