@@ -1,0 +1,460 @@
+<title>Progreso de Órdenes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one sticky time scrubber drives eight progress concepts, each a white panel on the app's soft blue-grey ground */
+:root{
+  color-scheme:light;
+  --bg:#F0F4F8; --card:#FFFFFF; --ink:#111827; --ink2:#4B5563; --mute:#6B7280; --line:#E5E7EB; --track:#EDF1F6;
+  --act:#0F3460; --gar:#DC2626; --late:#B45309; --ok:#15803D; --sb:#9CA3AF;
+  --p0:#C9D8EA; --p1:#9DB7D6; --p2:#7697C4; --p3:#4A6FA5; --p4:#2F4E7E; --p5:#0F3460; --p6:#15803D;
+  --f:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  --spring:cubic-bezier(.22,1,.36,1);
+}
+*{box-sizing:border-box}
+html,body{overflow-x:clip}
+body{background:var(--bg);color:var(--ink);font-family:var(--f);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px}
+h1,h2,h3{margin:0;letter-spacing:-.02em;text-wrap:balance}
+p{margin:0}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+header.top{padding-block:48px 28px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--act)}
+header.top h1{font-size:clamp(32px,5vw,52px);font-weight:800;line-height:1.05;margin-top:10px}
+header.top p{color:var(--ink2);max-width:62ch;margin-top:14px;font-size:17px}
+
+/* scrubber */
+.scrub{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:rgba(240,244,248,.96);border-bottom:1px solid var(--line)}
+.scrub .wrap{display:flex;align-items:center;gap:14px;padding-block:12px;flex-wrap:wrap}
+.clock{font-family:var(--mono);font-size:26px;font-weight:500;min-width:96px;font-variant-numeric:tabular-nums}
+.scrub input[type=range]{flex:1;min-width:180px;accent-color:var(--act);height:44px}
+.btn{min-height:44px;padding:0 18px;border-radius:8px;border:1px solid var(--act);background:var(--act);color:#fff;font:600 15px var(--f);cursor:pointer}
+.btn.sec{background:#fff;color:var(--act)}
+.btn:active{transform:scale(.97)}
+.btn:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--act);outline-offset:2px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12.5px;color:var(--ink2);width:100%}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+/* concept panels */
+main{display:grid;gap:22px;padding-block:28px 60px}
+.concept{background:var(--card);border-radius:16px;border:1px solid var(--line);overflow:hidden}
+.c-head{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;padding:22px 22px 16px;align-items:baseline}
+.c-num{font-family:var(--mono);font-size:13px;color:var(--act);font-weight:500;grid-row:span 2}
+.c-head h2{font-size:22px;font-weight:700}
+.c-head p{color:var(--ink2);font-size:15px;max-width:70ch}
+.c-body{padding:6px 22px 22px;min-width:0}
+.c-foot{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line);font-size:13.5px}
+.c-foot div{padding:14px 22px;color:var(--ink2)}
+.c-foot div+div{border-left:1px solid var(--line)}
+.c-foot b{display:block;color:var(--ink);font-size:12px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px}
+@media (max-width:760px){.c-foot{grid-template-columns:1fr}.c-foot div+div{border-left:0;border-top:1px solid var(--line)}}
+
+/* shared */
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.fill{transform-origin:left center;transition:transform .5s var(--spring)}
+.stripes{background:repeating-linear-gradient(135deg,var(--sb) 0 4px,#D1D5DB 4px 8px)!important}
+
+/* 1 segmented rows */
+.rows{display:grid}
+.orow{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.6fr) 150px;gap:16px;align-items:center;padding:12px 0;border-top:1px solid var(--line);min-height:72px}
+.orow:first-child{border-top:0}
+.who b{display:block;font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who small{color:var(--mute);font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.segs{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.seg{height:10px;border-radius:5px;background:var(--track);overflow:hidden;position:relative}
+.seg .fill{position:absolute;inset:0}
+.seg.cur{box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--act)}
+.seg.cur.late{box-shadow:0 0 0 2px #fff,0 0 0 3.5px var(--late)}
+.state{text-align:right;font-size:13px}
+.state b{display:block;font-size:14px}
+.state small{color:var(--mute)}
+@media (max-width:760px){.orow{grid-template-columns:1fr;gap:8px}.state{text-align:left}}
+
+/* 2 rail */
+.rail-wrap{display:grid;grid-template-columns:260px 1fr;gap:28px}
+.pick{display:grid;gap:6px;align-content:start}
+.pick button{min-height:48px;text-align:left;border-radius:8px;border:1px solid var(--line);background:#fff;font:500 14px var(--f);color:var(--ink);padding:8px 12px;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.pick button[aria-pressed=true]{border-color:var(--act);background:#EFF4FA}
+.rail{list-style:none;margin:0;padding:0;position:relative}
+.rail li{display:grid;grid-template-columns:28px 1fr auto;gap:14px;align-items:start;min-height:58px;position:relative}
+.rail li::before{content:"";position:absolute;left:13px;top:24px;bottom:-4px;width:2px;background:var(--line)}
+.rail li:last-child::before{display:none}
+.rail li.done::before{background:var(--act)}
+.node{width:28px;height:28px;border-radius:50%;border:2px solid var(--line);background:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;color:var(--mute);position:relative;z-index:1;transition:transform .4s var(--spring)}
+.rail li.done .node{background:var(--act);border-color:var(--act);color:#fff}
+.rail li.cur .node{border-color:var(--act);color:var(--act);transform:scale(1.12)}
+.rail li.cur .node::after{content:"";position:absolute;inset:-7px;border-radius:50%;border:2px solid var(--act);opacity:.25;animation:ping 1.8s ease-out infinite}
+.rail li.cur.late .node{border-color:var(--late);color:var(--late)}
+.rail li.cur.late .node::after{border-color:var(--late)}
+.rail.gar li.done .node{background:var(--gar);border-color:var(--gar)}
+.rail.gar li.done::before{background:var(--gar)}
+@keyframes ping{from{transform:scale(.8);opacity:.5}to{transform:scale(1.5);opacity:0}}
+.rail .lbl b{display:block;font-weight:600;font-size:15px}
+.rail .lbl small{color:var(--mute);font-size:13px}
+.rail li.todo .lbl b{color:var(--mute);font-weight:500}
+.rail .tm{font-family:var(--mono);font-size:13px;color:var(--ink2)}
+@media (max-width:760px){.rail-wrap{grid-template-columns:1fr}.pick{grid-template-columns:1fr 1fr}}
+
+/* 3 timeline */
+.tl{overflow-x:auto}
+.tl-in{min-width:720px;position:relative}
+.tl-axis{display:grid;grid-template-columns:110px 1fr;font-family:var(--mono);font-size:11.5px;color:var(--mute)}
+.tl-axis .ticks{position:relative;height:22px}
+.tl-axis .ticks span{position:absolute;transform:translateX(-50%)}
+.tl-row{display:grid;grid-template-columns:110px 1fr;align-items:center;min-height:64px;border-top:1px solid var(--line)}
+.tl-row .nm b{display:block;font-weight:600}.tl-row .nm small{color:var(--mute);font-size:12px}
+.lane{position:relative;height:40px;background:repeating-linear-gradient(90deg,transparent 0 calc(100%/11 - 1px),var(--line) calc(100%/11 - 1px) calc(100%/11))}
+.plan{position:absolute;top:2px;bottom:2px;border:1.5px dashed #9AA6B8;border-radius:8px}
+.real{position:absolute;top:8px;bottom:8px;border-radius:6px;display:flex;overflow:hidden}
+.real i{height:100%;display:block}
+.now{position:absolute;top:0;bottom:0;width:2px;background:var(--act);z-index:3;pointer-events:none}
+.now::before{content:attr(data-t);position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:11px;background:var(--act);color:#fff;padding:1px 6px;border-radius:4px;white-space:nowrap}
+
+/* 4 rings */
+.rings{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.ring{display:flex;gap:16px;align-items:center;padding:16px;border-radius:12px;background:var(--bg)}
+.ring svg{flex:none}
+.ring circle{fill:none;stroke-linecap:round}
+.ring .arc{transition:stroke-dashoffset .6s var(--spring)}
+.ring b{display:block;font-size:17px}
+.ring small{display:block;color:var(--ink2);font-size:13px}
+@media (max-width:760px){.rings{grid-template-columns:1fr}}
+
+/* 5 stacked */
+.stack{display:flex;height:44px;border-radius:10px;overflow:hidden;gap:2px;background:#fff}
+.stack div{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;transition:flex-grow .5s var(--spring);min-width:0;overflow:hidden}
+.stack-k{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px;font-size:13.5px;color:var(--ink2)}
+.stack-k span{display:inline-flex;gap:7px;align-items:center}
+.stack-k i{width:10px;height:10px;border-radius:3px}
+.big{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+.big strong{font-size:40px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.big span{color:var(--ink2)}
+
+/* 6 board */
+.board{display:grid;grid-template-columns:repeat(7,minmax(130px,1fr));gap:10px;overflow-x:auto;padding-bottom:6px}
+.col{background:var(--bg);border-radius:12px;padding:10px;min-height:180px;display:flex;flex-direction:column;gap:8px}
+.col h3{font-size:13px;font-weight:700;display:flex;justify-content:space-between;align-items:center}
+.col h3 span{font-family:var(--mono);font-weight:500;color:var(--mute)}
+.col h3::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--c);margin-right:6px}
+.col h3 em{font-style:normal;flex:1}
+.tk{background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:12.5px;animation:pop .45s var(--spring)}
+.tk b{display:block;font-size:13px}
+.tk small{color:var(--mute)}
+.tk.gar{border-left:3px solid var(--gar)}
+.tk.late{border-color:var(--late)}
+.tk.sb{background:#F3F4F6}
+@keyframes pop{from{transform:translateY(6px);opacity:.4}to{transform:none;opacity:1}}
+
+/* 7 live */
+.live{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.act{border-radius:22px;background:#0B1220;color:#fff;padding:18px 20px;display:grid;gap:12px}
+.act .row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.act .av{width:40px;height:40px;border-radius:50%;background:var(--act);display:grid;place-items:center;font-weight:700;flex:none;border:2px solid #fff}
+.act small{color:#9CA3AF;font-size:13px}
+.act .eta{font-size:26px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.road{position:relative;height:8px;border-radius:8px;background:#253047}
+.road .fill{position:absolute;inset:0;border-radius:8px;background:#7FA7FF}
+.road .van{position:absolute;top:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:#fff;border:4px solid #7FA7FF;transition:left .5s var(--spring)}
+.mile{display:flex;justify-content:space-between;font-size:12px;color:#9CA3AF}
+.mile span.on{color:#fff;font-weight:600}
+.act.light{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.act.light small,.act.light .mile{color:var(--mute)}
+.act.light .mile span.on{color:var(--ink)}
+.act.light .road{background:var(--track)}
+.act.light .road .fill{background:var(--act)}
+.act.light .road .van{border-color:var(--act)}
+@media (max-width:760px){.live{grid-template-columns:1fr}}
+
+/* 8 dual */
+.dual .orow{grid-template-columns:minmax(0,1fr) minmax(0,1.8fr) 130px}
+.bar2{display:grid;gap:5px}
+.bar2 .b{height:12px;border-radius:6px;background:var(--track);position:relative;overflow:hidden}
+.bar2 .b.money{height:6px}
+.bar2 .b .fill{position:absolute;inset:0;border-radius:6px}
+.bar2 .lbls{display:flex;justify-content:space-between;font-size:11.5px;color:var(--mute)}
+@media (max-width:760px){.dual .orow{grid-template-columns:1fr}}
+
+/* reco */
+.reco{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.reco div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px}
+.reco b{display:block;font-size:16px;margin-bottom:4px}
+.reco p{color:var(--ink2);font-size:14.5px}
+@media (max-width:760px){.reco{grid-template-columns:1fr}}
+table.map{width:100%;border-collapse:collapse;font-size:14px}
+table.map th,table.map td{text-align:left;padding:10px 12px;border-top:1px solid var(--line);vertical-align:top}
+table.map th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);border-top:0}
+table.map code{font-family:var(--mono);font-size:12.5px;background:var(--bg);padding:1px 6px;border-radius:4px}
+.tbl{overflow-x:auto}
+.new{color:var(--late);font-weight:600}
+footer{color:var(--mute);font-size:13px;padding-block:0 40px}
+
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<header class="top wrap">
+  <p class="eyebrow">Mister Service · Rediseño de estados</p>
+  <h1>Ocho formas de ver en qué va cada orden del día</h1>
+  <p>Mueve la hora o dale a «Reproducir día» y mira cómo avanzan las mismas ocho órdenes de ejemplo en cada concepto. Las garantías van siempre en rojo.</p>
+</header>
+
+<div class="scrub" role="region" aria-label="Control de la hora del día">
+  <div class="wrap">
+    <span class="clock" id="clock">11:20</span>
+    <label for="t" class="mono" style="position:absolute;left:-9999px">Hora del día</label>
+    <input type="range" id="t" min="480" max="1110" step="5" value="680">
+    <button class="btn" id="play" type="button">Reproducir día</button>
+    <button class="btn sec" id="reset" type="button">11:20</button>
+    <div class="legend" id="legend"></div>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section class="concept" id="c1">
+    <div class="c-head"><span class="c-num">01</span><h2>Barra segmentada</h2><p>Siete tramos, uno por paso. El tramo actual se va llenando y lleva un contorno; si la orden pasa de su hora planificada, el contorno cambia a ámbar.</p></div>
+    <div class="c-body"><div class="rows" id="segRows"></div></div>
+    <div class="c-foot"><div><b>Dónde</b>Lista de Órdenes y Agenda</div><div><b>A favor</b>Se lee en un segundo, cabe en una fila de 72 px</div><div><b>En contra</b>Siete tramos son muchos en pantallas muy estrechas</div></div>
+  </section>
+
+  <section class="concept" id="c2">
+    <div class="c-head"><span class="c-num">02</span><h2>Riel de estaciones</h2><p>Como un recorrido de metro, en vertical. Cada estación guarda la hora real en que se cumplió, así el detalle de la orden cuenta su propia historia.</p></div>
+    <div class="c-body"><div class="rail-wrap"><div class="pick" id="pick"></div><ol class="rail" id="rail"></ol></div></div>
+    <div class="c-foot"><div><b>Dónde</b>Detalle de la orden y vista del técnico</div><div><b>A favor</b>Muestra horas reales y quién hizo cada paso</div><div><b>En contra</b>Ocupa alto; no sirve para listas</div></div>
+  </section>
+
+  <section class="concept" id="c3">
+    <div class="c-head"><span class="c-num">03</span><h2>Línea del día: plan contra real</h2><p>Una fila por técnico. El recuadro punteado es lo que se agendó; la barra de color es lo que pasó de verdad. La línea azul es la hora actual.</p></div>
+    <div class="c-body"><div class="tl"><div class="tl-in" id="tl"></div></div></div>
+    <div class="c-foot"><div><b>Dónde</b>Pantalla de secretaria y Agenda</div><div><b>A favor</b>Los retrasos y los huecos se ven solos</div><div><b>En contra</b>Necesita ancho; en móvil se desplaza de lado</div></div>
+  </section>
+
+  <section class="concept" id="c4">
+    <div class="c-head"><span class="c-num">04</span><h2>Anillos por técnico</h2><p>Al estilo de los anillos de actividad del iPhone. El anillo de afuera son las visitas cerradas; el de adentro, lo cobrado contra lo esperado.</p></div>
+    <div class="c-body"><div class="rings" id="rings"></div></div>
+    <div class="c-foot"><div><b>Dónde</b>Pantalla Hoy y Rendimiento</div><div><b>A favor</b>Motiva al técnico y resume el día</div><div><b>En contra</b>No dice en qué paso va cada orden</div></div>
+  </section>
+
+  <section class="concept" id="c5">
+    <div class="c-head"><span class="c-num">05</span><h2>Barra apilada del día</h2><p>Todas las órdenes del día en una sola barra, repartidas por paso. A medida que avanza el día, la barra se corre hacia el verde.</p></div>
+    <div class="c-body"><div class="big"><strong id="bigPct">0%</strong><span id="bigTxt"></span></div><div class="stack" id="stack"></div><div class="stack-k" id="stackK"></div></div>
+    <div class="c-foot"><div><b>Dónde</b>Encabezado de Hoy y del Dashboard</div><div><b>A favor</b>Una sola mirada para todo el día</div><div><b>En contra</b>Para el detalle hay que tocar y abrir</div></div>
+  </section>
+
+  <section class="concept" id="c6">
+    <div class="c-head"><span class="c-num">06</span><h2>Tablero por pasos</h2><p>Una columna por paso y las órdenes se mueven solas de izquierda a derecha según avanzan. Las garantías llevan franja roja; las atrasadas, borde ámbar.</p></div>
+    <div class="c-body"><div class="board" id="board"></div></div>
+    <div class="c-foot"><div><b>Dónde</b>Monitor de la oficina y web</div><div><b>A favor</b>Ves dónde se acumulan las órdenes</div><div><b>En contra</b>En el teléfono se ve una columna a la vez</div></div>
+  </section>
+
+  <section class="concept" id="c7">
+    <div class="c-head"><span class="c-num">07</span><h2>Seguimiento en vivo</h2><p>Una tarjeta tipo «Actividad en vivo» del iPhone: la van avanza por la barra mientras se acerca. La versión clara es la que ve el cliente en su enlace.</p></div>
+    <div class="c-body"><div class="live" id="live"></div></div>
+    <div class="c-foot"><div><b>Dónde</b>Portal del cliente y app del técnico</div><div><b>A favor</b>Baja las llamadas de «¿por dónde viene?»</div><div><b>En contra</b>Depende de que el GPS esté reportando</div></div>
+  </section>
+
+  <section class="concept dual" id="c8">
+    <div class="c-head"><span class="c-num">08</span><h2>Barra doble: trabajo y cobro</h2><p>Arriba el avance del servicio; abajo, fina, el dinero. Así una orden terminada pero sin cobrar no se ve como lista.</p></div>
+    <div class="c-body"><div class="rows" id="dualRows"></div></div>
+    <div class="c-foot"><div><b>Dónde</b>Cierre del día y Pagos pendientes</div><div><b>A favor</b>Evita órdenes cerradas con dinero en la calle</div><div><b>En contra</b>Dos barras por fila piden más atención</div></div>
+  </section>
+
+  <section class="concept">
+    <div class="c-head"><span class="c-num">→</span><h2>Mi recomendación: combinarlos por pantalla</h2><p>No hace falta escoger uno solo. Cada pantalla tiene una pregunta distinta y cada concepto responde una.</p></div>
+    <div class="c-body">
+      <div class="reco">
+        <div><b>Hoy y Dashboard → 05 + 04</b><p>Barra apilada arriba para el día completo, anillos por técnico debajo.</p></div>
+        <div><b>Órdenes y Agenda → 01</b><p>Barra segmentada en cada fila, con el contorno ámbar para atrasos.</p></div>
+        <div><b>Detalle de la orden → 02 + 08</b><p>Riel con horas reales y, al final, la barra de cobro.</p></div>
+        <div><b>Cliente y técnico → 07</b><p>Seguimiento en vivo en el enlace del cliente y en la ruta del técnico.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="concept">
+    <div class="c-head"><span class="c-num">i</span><h2>Cómo encajan con las fases que ya existen</h2><p>Los siete pasos salen de las fases actuales de la orden. Solo dos pasos son nuevos y necesitan una marca de hora.</p></div>
+    <div class="c-body tbl">
+      <table class="map">
+        <thead><tr><th>Paso visible</th><th>De dónde sale</th></tr></thead>
+        <tbody>
+          <tr><td>Agendada</td><td><code>fase: agendado</code></td></tr>
+          <tr><td>En camino</td><td><span class="new">Nuevo.</span> Botón «Salí» del técnico o inicio de jornada GPS hacia la cita</td></tr>
+          <tr><td>En sitio</td><td><span class="new">Nuevo.</span> Botón «Llegué» o geocerca de la dirección</td></tr>
+          <tr><td>Diagnóstico</td><td><code>en_diagnostico</code> · <code>en_cotizacion</code> · <code>aprobado</code> (en mantenimiento se llama «Revisión»)</td></tr>
+          <tr><td>Trabajando</td><td>Desde que se aprueba hasta <code>trabajo_realizado</code></td></tr>
+          <tr><td>Cobrada</td><td><code>EstadoPagoOrden: completo</code> (parcial se ve en la barra de cobro)</td></tr>
+          <tr><td>Cerrada</td><td><code>fase: cerrado</code></td></tr>
+          <tr><td>Garantía</td><td><code>garantia_reclamada</code> o tipo garantía: toda la barra en rojo, no cobra</td></tr>
+          <tr><td>Stand‑by</td><td>Ítem en Stand‑by abierto: el tramo actual se raya en gris y se detiene</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<footer class="wrap">Clientes, horas y montos son datos de ejemplo.</footer>
+
+<script>
+(function(){
+const STEPS=['Agendada','En camino','En sitio','Diagnóstico','Trabajando','Cobrada','Cerrada'];
+const COL=['--p0','--p1','--p2','--p3','--p4','--p5','--p6'].map(v=>`var(${v})`);
+const h=(s)=>{const [a,b]=s.split(':').map(Number);return a*60+b};
+const fmt=m=>{m=Math.round(m);return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`};
+const TECH=[{n:'Miguel',v:'VAN‑02'},{n:'Albert',v:'VAN‑01'},{n:'Víctor',v:'VAN‑03'}];
+// t: inicio de cada paso desde "En camino" (Agendada es todo lo anterior)
+const O=[
+ {id:'OS‑2481',c:'Ana Rodríguez',e:'Lavadora Samsung',z:'Pedro Brand',tec:0,tipo:'rep',plan:['9:00','10:00'],t:['8:20','8:55','9:05','9:35','10:05','10:15'],m:6800},
+ {id:'OS‑2482',c:'Luis Peña',e:'Nevera LG',z:'Los Prados',tec:1,tipo:'rep',plan:['10:00','11:00'],t:['9:30','10:00','10:10','10:40','11:50','12:00'],m:4500},
+ {id:'OS‑2483',c:'Carmen Vidal',e:'Aire 12k BTU',z:'Naco',tec:2,tipo:'gar',plan:['11:00','12:00'],t:['10:30','11:00','11:10','11:30','12:05','12:10'],m:0},
+ {id:'OS‑2484',c:'José Medina',e:'Estufa Mabe',z:'Arroyo Hondo',tec:0,tipo:'man',plan:['12:00','13:00'],t:['11:15','11:55','12:05','12:30','13:10','13:20'],m:3200},
+ {id:'OS‑2485',c:'Rosa Fermín',e:'Secadora Whirlpool',z:'Bella Vista',tec:0,tipo:'rep',plan:['14:00','15:00'],t:['13:30','14:00','14:10',null,null,null],sb:'14:40',m:5200,anticipo:.5},
+ {id:'OS‑2486',c:'Pedro Guzmán',e:'Nevera Frigidaire',z:'Los Alcarrizos',tec:1,tipo:'rep',plan:['14:00','15:00'],t:['13:20','14:00','14:10','14:40','15:30','15:40'],m:5600},
+ {id:'OS‑2487',c:'Mirador Norte',e:'Lavadora LG',z:'Mirador Norte',tec:2,tipo:'rep',plan:['14:00','15:00'],t:['13:25','14:00','14:10','14:35','15:20','15:30'],m:3900},
+ {id:'OS‑2488',c:'Oficina Piantini',e:'Mantenimiento 2 aires',z:'Piantini',tec:2,tipo:'man',plan:['16:00','18:00'],t:['15:40','16:05','16:10','16:35','17:45','17:55'],m:7000},
+];
+O.forEach(o=>{o.ts=o.t.map(x=>x?h(x):null);o.p0=h(o.plan[0]);o.p1=h(o.plan[1]);o.sbm=o.sb?h(o.sb):null;});
+const stepName=(o,i)=>i===3&&o.tipo==='man'?'Revisión':i===5&&o.tipo==='gar'?'Sin cobro':STEPS[i];
+
+function st(o,now){
+  // returns {s, f (fraction of current step), sb, late, since}
+  let s=0, since=null, next=o.ts[0];
+  for(let i=0;i<6;i++){ if(o.ts[i]!=null && now>=o.ts[i]){ s=i+1; since=o.ts[i]; next=o.ts[i+1]??null; } }
+  const sb = o.sbm!=null && now>=o.sbm;
+  let f;
+  if(s===6) f=1;
+  else if(sb) f=.5;
+  else if(s===0) f=Math.max(0,Math.min(1,(now-480)/Math.max(1,o.ts[0]-480)))*0.9;
+  else { const end = next ?? (since+40); f=Math.max(0.05,Math.min(.95,(now-since)/Math.max(1,end-since))); }
+  const late = !sb && s<6 && s>0 && now>o.p1 ? Math.round(now-o.p1) : 0;
+  return {s,f,sb,late,since};
+}
+const pctOrder=(r)=>r.s===6?1:(r.s+r.f)/7;
+const color=(o,i)=>o.tipo==='gar'?'var(--gar)':COL[i];
+function cobro(o,r){ if(o.tipo==='gar') return {f:1,txt:'Garantía · sin cobro'}; if(r.s>=5) return {f:1,txt:`Cobrado RD$${o.m.toLocaleString('en-US')}`}; if(o.anticipo) return {f:o.anticipo,txt:`Anticipo RD$${(o.m*o.anticipo).toLocaleString('en-US')} de ${o.m.toLocaleString('en-US')}`}; return {f:0,txt:`Por cobrar RD$${o.m.toLocaleString('en-US')}`}; }
+const stateTxt=(o,r)=>{ if(r.sb) return ['Stand‑by · pieza','desde '+o.sb]; const n=stepName(o,r.s); return [n, r.s===0?`cita ${o.plan[0]}`:r.s===6?`a las ${fmt(o.ts[5])}`:`desde ${fmt(r.since)}`]; };
+
+// legend
+document.getElementById('legend').innerHTML = STEPS.map((s,i)=>`<span><i style="background:${COL[i]}"></i>${s}</span>`).join('')+
+ `<span><i style="background:var(--gar)"></i>Garantía</span><span><i class="stripes"></i>Stand‑by</span><span><i style="background:#fff;box-shadow:0 0 0 2px var(--late)"></i>Atrasada</span>`;
+
+// picker for rail
+let sel=1;
+const pick=document.getElementById('pick');
+pick.innerHTML=O.slice(0,6).map((o,i)=>`<button type="button" data-i="${i}" aria-pressed="${i===sel}"><span>${o.id} · ${o.e}</span>${o.tipo==='gar'?'<span class="chip" style="background:#FDE3E3;color:#B91C1C">Garantía</span>':''}</button>`).join('');
+pick.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;sel=+b.dataset.i;[...pick.children].forEach(x=>x.setAttribute('aria-pressed',x===b));render(now);});
+
+function chipFor(o,r){
+  if(r.sb) return `<span class="chip" style="background:#F3F4F6;color:#374151">Stand‑by</span>`;
+  if(o.tipo==='gar') return `<span class="chip" style="background:#FDE3E3;color:#B91C1C">Garantía</span>`;
+  if(r.late) return `<span class="chip" style="background:#FEF3C7;color:#92400E">+${r.late} min</span>`;
+  return '';
+}
+
+function render(now){
+  document.getElementById('clock').textContent=fmt(now);
+  const R=O.map(o=>st(o,now));
+
+  // 1
+  document.getElementById('segRows').innerHTML=O.map((o,k)=>{const r=R[k];
+    const segs=STEPS.map((_,i)=>{const fill=i<r.s?1:i===r.s?r.f:0; const cur=i===r.s&&r.s<6;
+      const bg=r.sb&&i===r.s?'':`background:${color(o,i)}`;
+      return `<div class="seg${cur?' cur':''}${cur&&r.late?' late':''}" title="${stepName(o,i)}"><i class="fill${r.sb&&i===r.s?' stripes':''}" style="${bg};transform:scaleX(${fill})"></i></div>`}).join('');
+    const [a,b]=stateTxt(o,r);
+    return `<div class="orow"><div class="who"><b>${o.c}</b><small>${o.id} · ${o.e} · ${TECH[o.tec].n}</small></div><div class="segs" aria-label="Paso ${r.s+1} de 7: ${a}">${segs}</div><div class="state"><b>${a} ${chipFor(o,r)}</b><small>${b}</small></div></div>`;}).join('');
+
+  // 2
+  const o=O[sel], r=R[sel];
+  const rail=document.getElementById('rail'); rail.className='rail'+(o.tipo==='gar'?' gar':'');
+  rail.innerHTML=STEPS.map((_,i)=>{const done=i<r.s||r.s===6, cur=i===r.s&&r.s<6;
+    let tm=i===0?`cita ${o.plan[0]}`:(o.ts[i-1]!=null&&now>=o.ts[i-1]?fmt(o.ts[i-1]):'—');
+    let sub=i===0?`${TECH[o.tec].n} · ${TECH[o.tec].v}`:i===1?o.z:i===3?(o.tipo==='man'?'Cotizado antes de la visita':'Cotiza en sitio'):i===5?cobro(o,r).txt:'';
+    if(cur&&r.sb){sub='Esperando pieza desde '+o.sb}
+    if(cur&&r.late){sub=(sub?sub+' · ':'')+`atrasada ${r.late} min`}
+    return `<li class="${done?'done':cur?'cur':'todo'}${cur&&r.late?' late':''}"><span class="node">${done?'✓':i+1}</span><div class="lbl"><b>${stepName(o,i)}</b><small>${sub}</small></div><span class="tm">${tm}</span></li>`}).join('');
+
+  // 3 timeline 8:00-19:00
+  const X=m=>((m-480)/660*100);
+  let tl=`<div class="tl-axis"><span></span><div class="ticks">${Array.from({length:12},(_,i)=>`<span style="left:${i/11*100}%">${i+8}</span>`).join('')}</div></div>`;
+  TECH.forEach((t,ti)=>{
+    const os=O.filter(o=>o.tec===ti);
+    tl+=`<div class="tl-row"><div class="nm"><b>${t.n}</b><small>${t.v}</small></div><div class="lane">`+
+      os.map(o=>{const k=O.indexOf(o), rr=R[k];
+        let seg='';
+        const start=o.ts[0]; if(now>start){
+          const end=Math.min(now, rr.s===6?o.ts[5]:now);
+          const parts=[];
+          for(let i=0;i<5;i++){const a=o.ts[i], b=(o.ts[i+1]??(o.sbm&&i===2?o.sbm:null)); if(a==null||now<a)break; parts.push({a,b:Math.min(b??end,end),c:color(o,i+1)});}
+          if(o.sbm&&now>o.sbm) parts.push({a:o.sbm,b:now,c:'sb'});
+          const tot=end-start;
+          seg=`<div class="real" style="left:${X(start)}%;width:${X(end)-X(start)}%">`+parts.map(p=>`<i class="${p.c==='sb'?'stripes':''}" style="width:${(p.b-p.a)/tot*100}%;${p.c==='sb'?'':'background:'+p.c}"></i>`).join('')+`</div>`;
+        }
+        return `<div class="plan" style="left:${X(o.p0)}%;width:${X(o.p1)-X(o.p0)}%;${o.tipo==='gar'?'border-color:var(--gar)':''}" title="${o.id} plan ${o.plan.join('–')}"></div>${seg}`;}).join('')+
+      `</div></div>`;});
+  tl+=`<div class="now" style="left:calc(110px + (100% - 110px) * ${X(now)/100})" data-t="${fmt(now)}"></div>`;
+  document.getElementById('tl').innerHTML=tl;
+
+  // 4 rings
+  document.getElementById('rings').innerHTML=TECH.map((t,ti)=>{
+    const os=O.filter(o=>o.tec===ti), rs=os.map(o=>R[O.indexOf(o)]);
+    const done=rs.filter(x=>x.s===6).length, tot=os.length;
+    const esperado=os.reduce((a,o)=>a+o.m,0)||1;
+    const cobrado=os.reduce((a,o,i)=>a+o.m*cobro(o,rs[i]).f*(o.tipo==='gar'?0:1),0);
+    const C1=2*Math.PI*40, C2=2*Math.PI*28;
+    const f1=done/tot, f2=cobrado/esperado;
+    return `<div class="ring"><svg width="96" height="96" viewBox="0 0 96 96" aria-hidden="true"><g transform="rotate(-90 48 48)">
+      <circle cx="48" cy="48" r="40" stroke="var(--track)" stroke-width="10"/><circle class="arc" cx="48" cy="48" r="40" stroke="var(--act)" stroke-width="10" stroke-dasharray="${C1}" stroke-dashoffset="${C1*(1-f1)}"/>
+      <circle cx="48" cy="48" r="28" stroke="var(--track)" stroke-width="10"/><circle class="arc" cx="48" cy="48" r="28" stroke="var(--ok)" stroke-width="10" stroke-dasharray="${C2}" stroke-dashoffset="${C2*(1-f2)}"/></g></svg>
+      <div><b>${t.n} · ${t.v}</b><small><span style="color:var(--act);font-weight:700">${done}/${tot}</span> visitas cerradas</small><small><span style="color:var(--ok);font-weight:700">RD$${Math.round(cobrado).toLocaleString('en-US')}</span> de ${esperado.toLocaleString('en-US')}</small></div></div>`;}).join('');
+
+  // 5 stacked
+  const cnt=Array(7).fill(0); let sbN=0, garN=0;
+  R.forEach((r,k)=>{ if(r.sb) sbN++; else cnt[r.s]++; if(O[k].tipo==='gar'&&r.s<6) garN++; });
+  const pct=Math.round(R.reduce((a,r)=>a+pctOrder(r),0)/R.length*100);
+  document.getElementById('bigPct').textContent=pct+'%';
+  document.getElementById('bigTxt').textContent=`del día completado · ${cnt[6]} de ${O.length} órdenes cerradas`;
+  document.getElementById('stack').innerHTML=cnt.map((n,i)=>`<div style="flex-grow:${n};flex-basis:0;background:${COL[i]};${i<2?'color:#0F3460':''}" title="${STEPS[i]}: ${n}">${n||''}</div>`).join('')+`<div class="stripes" style="flex-grow:${sbN};flex-basis:0;color:#111827">${sbN||''}</div>`;
+  document.getElementById('stackK').innerHTML=cnt.map((n,i)=>`<span><i style="background:${COL[i]}"></i>${STEPS[i]} <b>${n}</b></span>`).join('')+`<span><i class="stripes"></i>Stand‑by <b>${sbN}</b></span>`+(garN?`<span style="color:var(--gar);font-weight:600"><i style="background:var(--gar)"></i>${garN} garantía abierta</span>`:'');
+
+  // 6 board
+  document.getElementById('board').innerHTML=STEPS.map((s,i)=>{
+    const items=O.map((o,k)=>({o,r:R[k]})).filter(x=>x.r.s===i);
+    return `<div class="col" style="--c:${COL[i]}"><h3><em>${s}</em><span>${items.length}</span></h3>`+items.map(({o,r})=>`<div class="tk${o.tipo==='gar'?' gar':''}${r.late?' late':''}${r.sb?' sb':''}"><b>${o.e}</b><small>${o.z} · ${TECH[o.tec].n}</small>${r.sb?'<div><small>Stand‑by: pieza</small></div>':''}${r.late?`<div><small style="color:var(--late);font-weight:600">+${r.late} min</small></div>`:''}</div>`).join('')+`</div>`;}).join('');
+
+  // 7 live: pick an order en camino, else next upcoming, else last
+  let k7=R.findIndex(r=>r.s===1); if(k7<0) k7=R.findIndex(r=>r.s===0); if(k7<0) k7=O.length-1;
+  const o7=O[k7], r7=R[k7];
+  let fr = r7.s===0?0: r7.s===1?Math.min(1,(now-o7.ts[0])/(o7.ts[1]-o7.ts[0])):1;
+  const eta = r7.s<=1? Math.max(0,Math.round(o7.ts[1]-now)) : 0;
+  const head = r7.s===0?`Sale a las ${fmt(o7.ts[0])}`: r7.s===1?`Llega en ${eta} min`:`Llegó a las ${fmt(o7.ts[1])}`;
+  const miles=['Agendada','En camino','En sitio','Listo'];
+  const mi = r7.s===0?0:r7.s===1?1:r7.s<6?2:3;
+  const card=(cls,title,sub)=>`<div class="act ${cls}"><div class="row"><div style="display:flex;gap:12px;align-items:center"><span class="av">${TECH[o7.tec].n[0]}</span><div><b>${title}</b><br><small>${sub}</small></div></div><span class="eta">${r7.s<=1?fmt(o7.ts[1]):'✓'}</span></div>
+     <div class="eta" style="font-size:20px">${head}</div>
+     <div class="road"><i class="fill" style="transform:scaleX(${fr})"></i><span class="van" style="left:${fr*100}%"></span></div>
+     <div class="mile">${miles.map((m,i)=>`<span class="${i===mi?'on':''}">${m}</span>`).join('')}</div></div>`;
+  document.getElementById('live').innerHTML=card('',`${TECH[o7.tec].n} · ${TECH[o7.tec].v}`,`${o7.id} · ${o7.e} · ${o7.z}`)+card('light','Tu técnico de Mister Service',`${TECH[o7.tec].n} va hacia ${o7.z}`);
+
+  // 8 dual
+  document.getElementById('dualRows').innerHTML=O.map((o,k)=>{const r=R[k], cb=cobro(o,r), p=pctOrder(r);
+    return `<div class="orow"><div class="who"><b>${o.c}</b><small>${o.id} · ${o.e}</small></div><div class="bar2">
+      <div class="b"><i class="fill${r.sb?' stripes':''}" style="${r.sb?'':'background:'+(o.tipo==='gar'?'var(--gar)':'var(--act)')};transform:scaleX(${p})"></i></div>
+      <div class="b money"><i class="fill" style="background:${o.tipo==='gar'?'#FCA5A5':'var(--ok)'};transform:scaleX(${cb.f})"></i></div>
+      <div class="lbls"><span>${r.sb?'Stand‑by':stepName(o,r.s)} · ${Math.round(p*100)}%</span><span>${cb.txt}</span></div></div>
+      <div class="state">${r.s>=4&&cb.f<1&&o.tipo!=='gar'?'<span class="chip" style="background:#FEF3C7;color:#92400E">Falta cobrar</span>':chipFor(o,r)}</div></div>`;}).join('');
+}
+
+const range=document.getElementById('t'); let now=+range.value;
+range.addEventListener('input',()=>{now=+range.value;render(now);});
+const play=document.getElementById('play'); let timer=null;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+play.addEventListener('click',()=>{
+  if(timer){clearInterval(timer);timer=null;play.textContent='Reproducir día';return;}
+  if(now>=1110) now=480;
+  play.textContent='Pausar';
+  timer=setInterval(()=>{now+=5; if(now>=1110){now=1110;clearInterval(timer);timer=null;play.textContent='Reproducir día';} range.value=now; render(now);}, reduce?400:120);
+});
+document.getElementById('reset').addEventListener('click',()=>{now=680;range.value=now;render(now);});
+render(now);
+})();
+</script>

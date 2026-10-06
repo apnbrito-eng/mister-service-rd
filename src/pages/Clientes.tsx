@@ -1,3 +1,5 @@
+import { tieneCoord } from '../utils/geo';
+import { cargarGoogleMaps } from '../utils/cargarGoogleMaps';
 import { motion } from 'motion/react';
 import { useMovimientoReducido } from '../hooks/useMovimientoReducido';
 import { obtenerTransicionMovimiento, DESPLAZAMIENTO_PANEL } from '../utils/motion';
@@ -130,28 +132,9 @@ export default function Clientes() {
       });
     };
 
-    if (window.google?.maps?.places) {
-      initAC();
-      return;
-    }
-
-    if (!document.getElementById('google-places-script')) {
-      const script = document.createElement('script');
-      script.id = 'google-places-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}&libraries=places&language=es`;
-      script.async = true;
-      script.defer = true;
-      script.onload = initAC;
-      document.head.appendChild(script);
-    } else {
-      const interval = setInterval(() => {
-        if (window.google?.maps?.places) {
-          clearInterval(interval);
-          initAC();
-        }
-      }, 100);
-      return () => clearInterval(interval);
-    }
+    let cancelado = false;
+    void cargarGoogleMaps().then(ok => { if (ok && !cancelado) initAC(); });
+    return () => { cancelado = true; };
   }, [showModal]);
 
   useEffect(() => {
@@ -198,15 +181,16 @@ export default function Clientes() {
     }
   }, [clientes, searchParams, setSearchParams, seleccionar]);
 
+  const clienteHistorialId = selectedCliente?.id;
   useEffect(() => {
-    if (!selectedCliente) return;
+    if (!clienteHistorialId) return;
     let vigente = true;
     setHistorialOrdenes([]);
     setHistorialLoading(true);
     setHistorialError(false);
     getDocs(query(
       collection(db, 'ordenes_servicio'),
-      where('clienteId', '==', selectedCliente.id)
+      where('clienteId', '==', clienteHistorialId)
     )).then(snap => {
       if (!vigente) return;
       const ordenes = snap.docs.map(d => ({
@@ -221,7 +205,7 @@ export default function Clientes() {
     }).catch(() => { if (vigente) setHistorialError(true); })
       .finally(() => { if (vigente) setHistorialLoading(false); });
     return () => { vigente = false; };
-  }, [selectedCliente?.id]);
+  }, [clienteHistorialId]);
 
   // Filtra mergedos (SPRINT-185 soft-delete) ANTES de aplicar búsqueda.
   // Los clientes con `eliminado === true` fueron consolidados con otro
@@ -241,11 +225,7 @@ export default function Clientes() {
 
   /** Subset con coords válidas — los que efectivamente se renderizan en el mapa. */
   const clientesConCoords = useMemo(
-    () => clientesFiltrados.filter(c =>
-      typeof c.lat === 'number' && typeof c.lng === 'number' &&
-      !isNaN(c.lat) && !isNaN(c.lng) &&
-      c.lat !== 0 && c.lng !== 0
-    ),
+    () => clientesFiltrados.filter(tieneCoord),
     [clientesFiltrados],
   );
 
@@ -273,6 +253,8 @@ export default function Clientes() {
     const c = clientes.find(cl => cl.id === id);
     if (!c) return;
     setSelectedCliente(c);
+    setDetalleVisible(true);
+    seleccionar({ clienteId: c.id, telefono: c.telefono, nombre: c.nombre });
     setTab('lista');
   };
 
@@ -507,7 +489,7 @@ export default function Clientes() {
 
       {tab === 'reactivacion' && puedeVerReactivacion && userProfile && (
         <TabReactivacion
-          clientes={clientes}
+          clientes={clientesVisibles}
           userProfile={userProfile}
           filtrosDrawerOpen={filtrosDrawerOpen}
           onCloseFiltrosDrawer={() => setFiltrosDrawerOpen(false)}

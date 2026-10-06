@@ -1,8 +1,15 @@
+import PiezasDiagnostico from '../components/ordenes/PiezasDiagnostico';
+import ContactoOrden from '../components/ordenes/ContactoOrden';
+import ActividadOrden from '../components/ordenes/ActividadOrden';
+import EfectivoOrdenPanel from '../components/ordenes/EfectivoOrdenPanel';
+import ConfirmacionChequeo from '../components/ordenes/ConfirmacionChequeo';
+import { gestionarPresupuestoOrden } from '../services/presupuestoOrden.service';
+import RespuestaPresupuesto from '../components/ordenes/RespuestaPresupuesto';
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { collection, doc, getDocs, onSnapshot, query, updateDoc, where, Timestamp, arrayUnion } from 'firebase/firestore';
+import { collection, doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { OrdenServicio, FaseOrden, MetodoPago, Personal, StandbyPieza } from '../types';
+import { OrdenServicio, FaseOrden, MetodoPago, StandbyPieza } from '../types';
 import { formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente, calcularExpiracionTokenPortal } from '../utils';
 import { METODO_PAGO_LABELS } from '../utils/factura';
 import ModalSugerirSoloChequeo from '../components/cierre/ModalSugerirSoloChequeo';
@@ -35,7 +42,6 @@ import { generarTrackingToken } from '../services/gps.service';
 import { whatsappUrl } from '../utils/whatsapp';
 import { coordsFromLatLng, googleMapsViewUrl } from '../utils/maps';
 import BotonComoLlegar from '../components/shared/BotonComoLlegar';
-import { crearNotificacion } from '../services/notificaciones.service';
 import { buscarChequeoVigentePorCliente, obtenerPagosDeOrden } from '../services/ordenes.service';
 import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
 import { format } from 'date-fns';
@@ -79,11 +85,11 @@ export default function OrdenDetalle() {
   // Pre-fill approval input
   useEffect(() => {
     if (orden?.precioSugerido !== undefined && orden.estadoAprobacion !== 'aprobado') {
-      setPrecioAprobacion(String(orden.precioSugerido));
+      setPrecioAprobacion(String(orden.presupuestoEstado === 'cambio_solicitado' ? orden.presupuestoMontoPropuesto ?? orden.precioSugerido : orden.precioSugerido));
     } else {
       setPrecioAprobacion('');
     }
-  }, [orden?.precioSugerido, orden?.estadoAprobacion]);
+  }, [orden?.precioSugerido, orden?.estadoAprobacion, orden?.presupuestoEstado, orden?.presupuestoMontoPropuesto]);
 
   // SPRINT-178: buscar chequeo previo vigente al cargar la orden pendiente.
   useEffect(() => {
@@ -152,111 +158,9 @@ export default function OrdenDetalle() {
 
     setAprobandoPrecio(true);
     try {
-      const usuario = userProfile?.nombre || 'Admin';
-      const notaAuditoria = detalleDescuento
-        ? `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')} — ${detalleDescuento}`
-        : `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')}`;
-      const registroAuditoria = crearRegistroAuditoria(
-        usuario,
-        'precio_sugerido',
-        notaAuditoria,
-        'precioFinal',
-        orden.precioSugerido !== undefined ? `RD$ ${orden.precioSugerido.toLocaleString('es-DO')}` : '',
-        `RD$ ${precio.toLocaleString('es-DO')}`
-      );
-      // SPRINT-173: tras aprobar precio sugerido, avanzar fase a 'aprobado' y mantener
-      // sincronía con `estadoSimple`/`estado`/`historialFases` (sub-regla CLAUDE.md
-      // "registros sincronizados"). Antes el handler dejaba la orden en fase previa
-      // con precioAprobado/estadoAprobacion seteados — inconsistencia visible en
-      // pipeline visual de /admin/ordenes y en filtros por fase.
-      // Patrón tomado de SPRINT-161 (4015fe1) en ProcesarFacturacionModal:
-      // shape `{ fase, timestamp, usuario, nota }`, array reemplazado completo
-      // (no `arrayUnion`), single `ahora` para evitar drift de timestamps.
-      const ahora = Timestamp.now();
-      const nuevoHistorialFases = [
-        ...(orden.historialFases || []).map((h) => ({
-          fase: h.fase,
-          timestamp: h.timestamp instanceof Date ? Timestamp.fromDate(h.timestamp) : h.timestamp,
-          usuario: h.usuario || '',
-          ...(h.nota ? { nota: h.nota } : {}),
-        })),
-        {
-          fase: 'aprobado' as FaseOrden,
-          timestamp: ahora,
-          usuario,
-          nota: `Precio aprobado: RD$ ${precio.toLocaleString('es-DO')}`,
-        },
-      ];
-      await updateDoc(doc(db, 'ordenes_servicio', id), {
-        precioAprobado: precio,
-        precioFinal: precio,
-        estadoAprobacion: 'aprobado',
-        aprobadoPor: usuario,
-        fechaAprobacion: ahora,
-        // SPRINT-173: avanzar fase + estados duplicados + append a historial.
-        fase: 'aprobado',
-        estadoSimple: 'pendiente',
-        estado: 'activo',
-        historialFases: nuevoHistorialFases,
-        auditoria: arrayUnion(registroAuditoria),
-        // SPRINT-178: descuento por chequeo previo (opcional).
-        ...camposDescuento,
-        updatedAt: ahora,
-      });
-      // SPRINT-174: notif `precio_aprobado` al técnico + admins/coords
-      // (autoexclusión del aprobador). Patrón canónico SPRINT-169
-      // (`5823955`): try/catch independiente por destinatario, `p.uid`
-      // siempre (P-007). Sin state local de personal, query inline a
-      // `personal` filtrando `activo=true && rol in [administrador, coordinadora]`.
-      if (orden.tecnicoId && orden.tecnicoId !== currentUser?.uid) {
-        try {
-          await crearNotificacion({
-            userId: orden.tecnicoId,
-            destinatarioNombre: orden.tecnicoNombre,
-            tipo: 'precio_aprobado',
-            titulo: `Precio aprobado · ${orden.numero || 'orden'}`,
-            mensaje: `Precio aprobado: RD$${precio.toLocaleString('es-DO')}. Cliente: ${orden.clienteNombre}. Puedes marcar el trabajo como realizado.`,
-            ordenId: orden.id,
-            ordenNumero: orden.numero,
-          });
-        } catch (notifErr) {
-          console.error('[SPRINT-174] precio_aprobado a técnico falló:', notifErr);
-        }
-      }
-      try {
-        const qStaff = query(
-          collection(db, 'personal'),
-          where('activo', '==', true),
-          where('rol', 'in', ['administrador', 'coordinadora']),
-        );
-        const snapStaff = await getDocs(qStaff);
-        const destinatariosStaff = snapStaff.docs
-          .map(d => ({ id: d.id, ...d.data() } as Personal))
-          .filter(
-            p =>
-              !!p.uid &&
-              p.uid !== currentUser?.uid &&
-              p.uid !== orden.tecnicoId,
-          );
-        for (const destino of destinatariosStaff) {
-          try {
-            await crearNotificacion({
-              userId: destino.uid!,
-              destinatarioNombre: destino.nombre,
-              tipo: 'precio_aprobado',
-              titulo: `Precio aprobado · ${orden.numero || 'orden'}`,
-              mensaje: `Precio RD$${precio.toLocaleString('es-DO')} aprobado en orden ${orden.numero || ''}. Cliente: ${orden.clienteNombre}. Técnico: ${orden.tecnicoNombre || 'sin asignar'}.`,
-              ordenId: orden.id,
-              ordenNumero: orden.numero,
-            });
-          } catch (err) {
-            console.error('[SPRINT-174] precio_aprobado a staff falló para', destino.uid, err);
-          }
-        }
-      } catch (errStaff) {
-        console.error('[SPRINT-174] precio_aprobado fallo enumerando staff:', errStaff);
-      }
-      toast.success('✅ Precio aprobado');
+      if (!userProfile || !currentUser) throw new Error('Inicia sesión nuevamente.');
+      await gestionarPresupuestoOrden({ orden: orden, usuario: userProfile, uid: currentUser.uid, accion: 'aprobar', monto: precio, camposDescuento, detalleDescuento });
+      toast.success('Presupuesto aprobado. Falta confirmar con el cliente.');
     } catch (err) {
       console.error(err);
       toast.error('Error al aprobar el precio');
@@ -499,6 +403,7 @@ export default function OrdenDetalle() {
   };
 
   const handleConfirmarChequeo = async () => {
+    if (!esAdminOCoord(userProfile)) { toast.error('Solo coordinación puede definir el importe del chequeo.'); return; }
     if (!id || !orden) return;
     const precio = Number(chequeoForm.precio);
     if (isNaN(precio) || precio <= 0) {
@@ -537,6 +442,7 @@ export default function OrdenDetalle() {
       );
       const updateData: Record<string, unknown> = {
         soloChequeo: true,
+        chequeoConfirmacionEstado: 'pendiente',
         precioChequeo: precio,
         motivoChequeo: chequeoForm.motivo.trim(),
         fase: 'cerrado',
@@ -597,13 +503,13 @@ export default function OrdenDetalle() {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl font-bold text-primary">{orden.numero || 'Orden'}</h1>
+            <h1 className="text-h1 font-bold text-ms-texto">{orden.clienteNombre || 'Cliente sin nombre'}</h1>
             <Badge fase={orden.fase} />
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${estadoSimpleColor(orden.estadoSimple)}`}>
               {estadoSimpleLabel(orden.estadoSimple)}
             </span>
           </div>
-          <p className="text-gray-500 text-sm">Creada {tiempoTranscurrido(orden.createdAt)}</p>
+          <p className="text-ms-texto-2 text-caption">{orden.numero || 'Orden'} · Creada {tiempoTranscurrido(orden.createdAt)}</p>
         </div>
       </div>
 
@@ -1179,9 +1085,19 @@ export default function OrdenDetalle() {
             </div>
           )}
 
+      {userProfile && ['administrador','coordinadora','operaria','secretaria'].includes(userProfile.rol) && <>
+        <ContactoOrden ordenId={orden.id} telefono={orden.clienteTelefono} nombre={orden.clienteNombre} />
+        <PiezasDiagnostico ordenId={orden.id} puedeEditar={esAdminOCoord(userProfile)} />
+      </>}
+      <ActividadOrden ordenId={orden.id} />
+      <EfectivoOrdenPanel ordenId={orden.id} />
+      <ConfirmacionChequeo key={`chequeo-${orden.id}`} orden={orden} />
+      {!orden.soloChequeo && <RespuestaPresupuesto key={orden.id} orden={orden} />}
           {/* Aprobación de precio (solo quien tenga el permiso cotizacionesAprobarPrecio) */}
-          {orden.precioSugerido !== undefined &&
+          {!orden.soloChequeo && orden.precioSugerido !== undefined &&
            orden.estadoAprobacion !== 'aprobado' &&
+           orden.presupuestoEstado !== 'pendiente_cliente' &&
+           esAdminOCoord(userProfile) &&
            puede(userProfile, 'cotizacionesAprobarPrecio') && (
             <div className="bg-yellow-50 rounded-2xl shadow-sm border-2 border-yellow-200 p-6">
               <h3 className="text-sm font-semibold text-yellow-800 uppercase mb-3 flex items-center gap-1">
@@ -1189,7 +1105,7 @@ export default function OrdenDetalle() {
               </h3>
               <p className="text-xs text-yellow-700 mb-3">
                 El técnico sugirió <strong>RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong>.
-                Puedes modificar el precio antes de aprobar.
+                Total del servicio con piezas incluidas. Aprobar permite presentarlo al cliente; todavía no habilita la reparación.
               </p>
 
               {/* SPRINT-178: widget chequeo previo vigente / vencido */}

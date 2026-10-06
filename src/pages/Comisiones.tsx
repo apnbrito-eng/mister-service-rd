@@ -1,3 +1,4 @@
+import { fechaElegibleComision, quincenaCobroRD, POLITICA_COBRO_COMISION } from '../utils/comisionCobro';
 import ConciliarDuplicadosComision from '../components/ConciliarDuplicadosComision';
 import { comisionesDuplicadasNomina } from '../utils/comisionesDuplicadasNomina';
 import ConciliarFechaComisionFormulario from '../components/ConciliarFechaComisionFormulario';
@@ -38,7 +39,14 @@ export default function Comisiones() {
     finally { setGuardandoConciliacion(false); }
   };
   const [loading, setLoading] = useState(true);
-  const [comisiones, setComisiones] = useState<ComisionVista[]>([]);
+  const [comisionesGuardadas, setComisiones] = useState<ComisionVista[]>([]);
+  const [ordenesCobro, setOrdenesCobro] = useState<Map<string, Record<string, unknown>>>(new Map());
+  const comisiones = useMemo(() => comisionesGuardadas.map(c => {
+    if (c.estadoLiquidacion !== 'pendiente') return c;
+    const fecha = fechaElegibleComision(c as unknown as Record<string, unknown>, ordenesCobro, POLITICA_COBRO_COMISION);
+    return fecha ? { ...c, fechaCobro: fecha, quincenaAsignada: quincenaCobroRD(fecha) }
+      : { ...c, estadoLiquidacion: 'retenida_por_cobro' as const };
+  }), [comisionesGuardadas, ordenesCobro]);
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [modoFiltro, setModoFiltro] = useState<'quincena' | 'rango'>('quincena');
   const [filtroQuincena, setFiltroQuincena] = useState<string>(calcularQuincenaActual(new Date()));
@@ -48,7 +56,7 @@ export default function Comisiones() {
   const [fechaDesde, setFechaDesde] = useState<string>(primerDiaMes.toISOString().slice(0, 10));
   const [fechaHasta, setFechaHasta] = useState<string>(hoy.toISOString().slice(0, 10));
   const [filtroTecnico, setFiltroTecnico] = useState<string>('');
-  const [filtroEstado, setFiltroEstado] = useState<'pendiente' | 'liquidada' | 'todas'>('pendiente');
+  const [filtroEstado, setFiltroEstado] = useState<'retenida_por_cobro' | 'pendiente' | 'liquidada' | 'todas'>('pendiente');
   const [vista, setVista] = useState<'detallado' | 'por_tecnico'>('detallado');
   const [mostrarCosto, setMostrarCosto] = useState(true);
   const [tecnicosExpandidos, setTecnicosExpandidos] = useState<Set<string>>(new Set());
@@ -103,6 +111,7 @@ export default function Comisiones() {
             comisionPorcentaje: raw.comisionPorcentaje || 0,
             comisionMonto: raw.comisionMonto || 0,
             estadoLiquidacion: raw.estadoLiquidacion || 'pendiente',
+            cobroLiberadoEn: fechaFinanciera(raw.cobroLiberadoEn) || undefined,
             quincenaAsignada: raw.quincenaAsignada,
             liquidadaEn: raw.liquidadaEn?.toDate?.() || undefined,
             liquidadaPor: raw.liquidadaPor,
@@ -119,7 +128,9 @@ export default function Comisiones() {
     getDocs(collection(db, 'personal')).then(snap => {
       setPersonal(snap.docs.map(d => ({ id: d.id, ...d.data() } as Personal)));
     });
-    return () => unsub();
+    // @safe-listener-sin-where: misma pantalla limitada a administrador/coordinadora.
+    const unsubOrdenes = onSnapshot(collection(db, 'ordenes_servicio'), snap => setOrdenesCobro(new Map(snap.docs.map(d => [d.id, d.data()]))), () => setOrdenesCobro(new Map()));
+    return () => { unsub(); unsubOrdenes(); };
   }, [userProfile?.rol]);
 
   const gruposDuplicados = useMemo(() => {
@@ -138,7 +149,7 @@ export default function Comisiones() {
     }
     return comisiones.filter((c): c is ComisionRegistro & { estaAnulada: boolean } => {
       if (!c.fechaCobro || c.estaAnulada) return false;
-      if (modoFiltro === 'quincena') {
+      if (modoFiltro === 'quincena' && filtroEstado !== 'retenida_por_cobro') {
         if (filtroQuincena && c.quincenaAsignada !== filtroQuincena) return false;
       } else {
         const t = c.fechaCobro.getTime();
@@ -337,9 +348,10 @@ export default function Comisiones() {
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Estado</label>
-            <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value as 'pendiente' | 'liquidada' | 'todas')}
+            <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value as 'retenida_por_cobro' | 'pendiente' | 'liquidada' | 'todas')}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
               <option value="pendiente">Pendientes</option>
+              <option value="retenida_por_cobro">Retenidas por cobro</option>
               <option value="liquidada">Liquidadas</option>
               <option value="todas">Todas</option>
             </select>
@@ -472,7 +484,7 @@ export default function Comisiones() {
                       </td>
                       <td className="px-3 py-3 text-center">
                         <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${c.estadoLiquidacion === 'liquidada' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                          {c.estadoLiquidacion === 'liquidada' ? 'Liquidada' : 'Pendiente'}
+                          {c.estadoLiquidacion === 'liquidada' ? 'Liquidada' : c.estadoLiquidacion === 'retenida_por_cobro' ? 'Retenida por cobro' : 'Pendiente'}
                         </span>
                       </td>
                     </tr>

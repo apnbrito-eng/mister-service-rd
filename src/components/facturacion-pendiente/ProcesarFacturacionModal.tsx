@@ -753,6 +753,7 @@ export default function ProcesarFacturacionModal({
             throw new Error('La orden ya no existe.');
           }
           const ordenActual = ordenSnap.data()!;
+          if (pagoNuevoFinal && (ordenActual.flujoEfectivo === 'confirmacion_tecnico' || Object.keys(ordenActual.efectivoAceptaciones || {}).length || Object.keys(ordenActual.efectivoEntregas || {}).length)) throw new Error('Esta orden tiene efectivo bajo responsabilidad. Registra el abono desde Registrar pago en la orden y vuelve a emitir el conduce sin agregar otro pago aquí.');
           const emisionActual = calcularEmisionActual(ordenActual, totalItems, pagoNuevoFinal);
           if ((ordenActual.cotizacionId || '') !== (orden.cotizacionId || '')) throw new Error('La cotización de la orden cambió. Recarga el formulario.');
           const cotRef = orden.cotizacionId ? doc(db, 'cotizaciones', orden.cotizacionId) : null;

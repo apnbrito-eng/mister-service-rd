@@ -1,3 +1,4 @@
+import BarraFase from '../components/progreso/BarraFase';
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -641,7 +642,7 @@ export default function Dashboard() {
   // que el usuario perciba la pantalla "armándose", no "esperando".
   if (loading) {
     return (
-      <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
+      <div className="apple-dashboard p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
         {/* Header */}
         <div className="space-y-2">
           <SkeletonText className="w-40 h-7" />
@@ -672,11 +673,11 @@ export default function Dashboard() {
 
   // ---- render ----
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
+    <div className="apple-dashboard p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       {/* Watermark sutil con el logo del brand */}
       <div
         aria-hidden="true"
-        className="fixed bottom-8 right-8 opacity-5 pointer-events-none z-0"
+        className="hidden"
         style={{
           backgroundImage: 'url(/logo-compacto.png)',
           backgroundSize: 'contain',
@@ -690,7 +691,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-primary">Dashboard</h1>
+          <h1 className="text-h1 font-bold text-ms-texto">{now.getHours() < 12 ? "Buenos días" : now.getHours() < 19 ? "Buenas tardes" : "Buenas noches"}, {userProfile?.nombre?.split(" ")[0] || "equipo"}</h1>
           <p className="text-gray-500 text-sm">
             {now.toLocaleDateString('es-DO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
@@ -1317,12 +1318,12 @@ export default function Dashboard() {
             <p className="text-sm">Sin citas programadas para hoy</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <div className="apple-agenda-list">
             {agendaHoy.map(orden => (
-              <div
+              <button type="button"
                 key={orden.id}
                 onClick={() => navigate(`/admin/ordenes/${orden.id}`)}
-                className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 cursor-pointer border border-gray-100 transition-colors"
+                className="apple-order-row flex items-center gap-3 text-left w-full"
               >
                 <div className="text-center bg-primary/10 rounded-lg px-2.5 py-1.5 min-w-[56px]">
                   <span className="text-sm font-bold text-primary">
@@ -1332,6 +1333,7 @@ export default function Dashboard() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">{orden.clienteNombre}</p>
                   <p className="text-xs text-gray-500 truncate">{orden.equipoTipo} {orden.equipoMarca ? `· ${orden.equipoMarca}` : ''}</p>
+                  <BarraFase fase={orden.fase} garantia={orden.esGarantia === true}/>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <Badge fase={orden.fase} />
@@ -1342,7 +1344,7 @@ export default function Dashboard() {
                     </div>
                   )}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}

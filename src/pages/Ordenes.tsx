@@ -1,3 +1,6 @@
+import BarraFase from '../components/progreso/BarraFase';
+import { gestionarPresupuestoOrden } from '../services/presupuestoOrden.service';
+import { cargarGoogleMaps } from '../utils/cargarGoogleMaps';
 import { coincideBusquedaOrden } from '../utils/buscarOrden';
 import { equipoApi } from '../services/equipoApi';
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -7,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
-import { OrdenServicio, EstadoOrdenSimple, Cliente, Personal, FaseOrden } from '../types';
+import { OrdenServicio, EstadoOrdenSimple, Cliente, Personal } from '../types';
 import {
   formatFecha, formatHora,
   parseOrden,
@@ -35,7 +38,6 @@ import OrdenEditForm from '../components/ordenes/OrdenEditForm';
 import type { EditFormState } from '../components/ordenes/OrdenEditForm';
 import OrdenCreateModal from '../components/ordenes/OrdenCreateModal';
 import OrdenesTablero from '../components/ordenes/OrdenesTablero';
-import { crearNotificacion } from '../services/notificaciones.service';
 import { buscarChequeoVigentePorCliente } from '../services/ordenes.service';
 import { useOrdenCreateForm } from '../hooks/useOrdenCreateForm';
 import {
@@ -169,11 +171,11 @@ export default function Ordenes() {
   // Pre-fill approval input when selecting an order with suggested price
   useEffect(() => {
     if (selectedOrden?.precioSugerido !== undefined && selectedOrden.estadoAprobacion !== 'aprobado') {
-      setPrecioAprobacion(String(selectedOrden.precioSugerido));
+      setPrecioAprobacion(String(selectedOrden.presupuestoEstado === 'cambio_solicitado' ? selectedOrden.presupuestoMontoPropuesto ?? selectedOrden.precioSugerido : selectedOrden.precioSugerido));
     } else {
       setPrecioAprobacion('');
     }
-  }, [selectedOrden?.id, selectedOrden?.precioSugerido, selectedOrden?.estadoAprobacion]);
+  }, [selectedOrden?.id, selectedOrden?.precioSugerido, selectedOrden?.estadoAprobacion, selectedOrden?.presupuestoEstado, selectedOrden?.presupuestoMontoPropuesto]);
 
   // SPRINT-178: al seleccionar una orden con precioSugerido pendiente, buscar
   // chequeo previo vigente del mismo cliente/equipo. No bloquea el render —
@@ -251,104 +253,9 @@ export default function Ordenes() {
 
     setAprobandoPrecio(true);
     try {
-      const usuario = userProfile?.nombre || 'Admin';
-      const notaAuditoria = detalleDescuento
-        ? `Aprobo precio: RD$ ${precio.toLocaleString('es-DO')} — ${detalleDescuento}`
-        : `Aprobo precio: RD$ ${precio.toLocaleString('es-DO')}`;
-      const registroAuditoria = crearRegistroAuditoria(
-        usuario,
-        'precio_sugerido',
-        notaAuditoria,
-        'precioFinal',
-        selectedOrden.precioSugerido !== undefined ? `RD$ ${selectedOrden.precioSugerido.toLocaleString('es-DO')}` : '',
-        `RD$ ${precio.toLocaleString('es-DO')}`
-      );
-      // SPRINT-173: tras aprobar precio sugerido, avanzar fase a 'aprobado' y mantener
-      // sincronía con `estadoSimple`/`estado`/`historialFases` (sub-regla CLAUDE.md
-      // "registros sincronizados"). Tercer handler idéntico descubierto por el cazador
-      // P-011 durante el SPRINT-173 (los dos primeros: AgendaDia + OrdenDetalle).
-      // Patrón tomado de SPRINT-161 (4015fe1) en ProcesarFacturacionModal:
-      // shape `{ fase, timestamp, usuario, nota }`, array reemplazado completo
-      // (no `arrayUnion`), single `ahora` para evitar drift de timestamps.
-      const ahora = Timestamp.now();
-      const nuevoHistorialFases = [
-        ...(selectedOrden.historialFases || []).map((h) => ({
-          fase: h.fase,
-          timestamp: h.timestamp instanceof Date ? Timestamp.fromDate(h.timestamp) : h.timestamp,
-          usuario: h.usuario || '',
-          ...(h.nota ? { nota: h.nota } : {}),
-        })),
-        {
-          fase: 'aprobado' as FaseOrden,
-          timestamp: ahora,
-          usuario,
-          nota: `Precio aprobado: RD$ ${precio.toLocaleString('es-DO')}`,
-        },
-      ];
-      await updateDoc(doc(db, 'ordenes_servicio', selectedOrden.id), {
-        precioAprobado: precio,
-        precioFinal: precio,
-        estadoAprobacion: 'aprobado',
-        aprobadoPor: usuario,
-        fechaAprobacion: ahora,
-        // SPRINT-173: avanzar fase + estados duplicados + append a historial.
-        fase: 'aprobado',
-        estadoSimple: 'pendiente',
-        estado: 'activo',
-        historialFases: nuevoHistorialFases,
-        auditoria: arrayUnion(registroAuditoria),
-        // SPRINT-178: 6 campos opcionales del descuento por chequeo previo
-        // (vacío si no se aplicó descuento — Firestore no recibe undefined).
-        ...camposDescuento,
-        updatedAt: ahora,
-      });
-      // SPRINT-174: notif `precio_aprobado` al técnico + admins/coords
-      // (autoexclusión del aprobador). Patrón canónico SPRINT-169
-      // (`5823955`): try/catch independiente por destinatario, `p.uid`
-      // siempre (P-007).
-      if (selectedOrden.tecnicoId && selectedOrden.tecnicoId !== currentUser?.uid) {
-        try {
-          await crearNotificacion({
-            userId: selectedOrden.tecnicoId,
-            destinatarioNombre: selectedOrden.tecnicoNombre,
-            tipo: 'precio_aprobado',
-            titulo: `Precio aprobado · ${selectedOrden.numero || 'orden'}`,
-            mensaje: `Precio aprobado: RD$${precio.toLocaleString('es-DO')}. Cliente: ${selectedOrden.clienteNombre}. Puedes marcar el trabajo como realizado.`,
-            ordenId: selectedOrden.id,
-            ordenNumero: selectedOrden.numero,
-          });
-        } catch (notifErr) {
-          console.error('[SPRINT-174] precio_aprobado a técnico falló:', notifErr);
-        }
-      }
-      try {
-        const destinatariosStaff = personal.filter(
-          p =>
-            !!p.uid &&
-            p.activo &&
-            (p.rol === 'administrador' || p.rol === 'coordinadora') &&
-            p.uid !== currentUser?.uid &&
-            p.uid !== selectedOrden.tecnicoId,
-        );
-        for (const destino of destinatariosStaff) {
-          try {
-            await crearNotificacion({
-              userId: destino.uid!,
-              destinatarioNombre: destino.nombre,
-              tipo: 'precio_aprobado',
-              titulo: `Precio aprobado · ${selectedOrden.numero || 'orden'}`,
-              mensaje: `Precio RD$${precio.toLocaleString('es-DO')} aprobado en orden ${selectedOrden.numero || ''}. Cliente: ${selectedOrden.clienteNombre}. Técnico: ${selectedOrden.tecnicoNombre || 'sin asignar'}.`,
-              ordenId: selectedOrden.id,
-              ordenNumero: selectedOrden.numero,
-            });
-          } catch (err) {
-            console.error('[SPRINT-174] precio_aprobado a staff falló para', destino.uid, err);
-          }
-        }
-      } catch (errStaff) {
-        console.error('[SPRINT-174] precio_aprobado fallo enumerando staff:', errStaff);
-      }
-      toast.success('\u{2705} Precio aprobado');
+      if (!userProfile || !currentUser) throw new Error('Inicia sesión nuevamente.');
+      await gestionarPresupuestoOrden({ orden: selectedOrden, usuario: userProfile, uid: currentUser.uid, accion: 'aprobar', monto: precio, camposDescuento, detalleDescuento });
+      toast.success('Presupuesto aprobado. Falta confirmar con el cliente.');
     } catch (err) {
       console.error(err);
       toast.error('Error al aprobar el precio');
@@ -409,29 +316,9 @@ export default function Ordenes() {
       });
     };
 
-    if (window.google?.maps?.places) {
-      initAC();
-      return;
-    }
-
-    if (!document.getElementById('google-places-script')) {
-      const script = document.createElement('script');
-      script.id = 'google-places-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}&libraries=places&language=es`;
-      script.async = true;
-      script.defer = true;
-      script.onload = initAC;
-      document.head.appendChild(script);
-    } else {
-      // Script ya existe, esperar a que cargue
-      const interval = setInterval(() => {
-        if (window.google?.maps?.places) {
-          clearInterval(interval);
-          initAC();
-        }
-      }, 100);
-      return () => clearInterval(interval);
-    }
+    let cancelado = false;
+    void cargarGoogleMaps().then(ok => { if (ok && !cancelado) initAC(); });
+    return () => { cancelado = true; };
   }, [showEditInDetail]);
 
   const handleUsarMiUbicacionEdit = () => {
@@ -991,7 +878,10 @@ export default function Ordenes() {
                   <span className="text-sm font-semibold text-primary">
                     {orden.fechaCita ? formatHora(orden.fechaCita) : '--:--'}
                   </span>
-                  <Badge fase={orden.fase} />
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <BarraFase fase={orden.fase} garantia={orden.esGarantia === true}/><Badge fase={orden.fase} apariencia="apple" />
+                    {orden.esGarantia === true && orden.fase !== 'garantia_reclamada' && <Badge label="Garantía" estado="garantia" apariencia="apple" />}
+                  </div>
                 </div>
                 <p className="text-sm font-medium text-gray-900 truncate">{orden.clienteNombre}</p>
                 <p className="text-xs text-gray-500 truncate">

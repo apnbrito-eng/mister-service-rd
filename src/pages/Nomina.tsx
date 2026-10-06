@@ -1,3 +1,4 @@
+import { fechaPagoNomina } from '../utils/corteNomina';
 import { fechaFinanciera } from '../utils/fechaFinanciera';
 import RevisionAsistencia from '../components/asistencia/RevisionAsistencia';
 import { useState, useEffect, useMemo, Fragment } from 'react';
@@ -32,6 +33,9 @@ export default function Nomina() {
   const [comisionesAll, setComisionesAll] = useState<(Omit<ComisionRegistro, 'fechaCobro'> & { fechaCobro: Date | null })[]>([]);
   const [avancesAll, setAvancesAll] = useState<AvanceEmpleado[]>([]);
   const [filtroQuincena, setFiltroQuincena] = useState<string>(calcularQuincenaActual(new Date()));
+  const [cortePreparacion, setCortePreparacion] = useState('');
+  const [pagoProgramado, setPagoProgramado] = useState('');
+  useEffect(() => { setCortePreparacion(''); setPagoProgramado(''); }, [filtroQuincena]);
   const [generando, setGenerando] = useState(false);
   const [cerrando, setCerrando] = useState(false);
   const [empleadosExpandidos, setEmpleadosExpandidos] = useState<Set<string>>(new Set());
@@ -84,6 +88,7 @@ export default function Nomina() {
           comisionPorcentaje: raw.comisionPorcentaje || 0,
           comisionMonto: raw.comisionMonto || 0,
           estadoLiquidacion: raw.estadoLiquidacion || 'pendiente',
+          cobroLiberadoEn: raw.cobroLiberadoEn?.toDate?.() || undefined,
           quincenaAsignada: raw.quincenaAsignada,
           createdAt: raw.createdAt?.toDate?.() || new Date(),
         } as Omit<ComisionRegistro, 'fechaCobro'> & { fechaCobro: Date | null };
@@ -112,7 +117,10 @@ export default function Nomina() {
     if (!userProfile) return;
     setGenerando(true);
     try {
-      await generarLiquidacion(filtroQuincena, userProfile);
+      await generarLiquidacion(filtroQuincena, userProfile, {
+        corteComisiones: cortePreparacion ? new Date(`${cortePreparacion}:00-04:00`) : undefined,
+        fechaPagoProgramada: pagoProgramado || fechaPagoNomina(filtroQuincena),
+      });
       toast.success(`Liquidación de ${filtroQuincena} generada`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al generar liquidación';
@@ -311,6 +319,16 @@ export default function Nomina() {
         </div>
       </div>
 
+      {!liqActual && <section className="rounded-xl border bg-white p-4 space-y-3">
+        <h2 className="font-semibold">Preparación y pago de nómina</h2>
+        <p className="text-sm text-gray-600">El corte habitual es al final del día 14 o 29. Para adelantarlo por feriado, indica fecha y hora en horario dominicano. Las comisiones posteriores quedan pendientes para la próxima nómina; sueldo y comisiones se pagan juntos.</p>
+        <div className="flex flex-wrap gap-4">
+          <label className="text-sm">Corte anticipado de comisiones (opcional)<input type="datetime-local" value={cortePreparacion} onChange={e => setCortePreparacion(e.target.value)} className="block border rounded p-2" /></label>
+          <label className="text-sm">Fecha programada de pago<input type="date" value={pagoProgramado || fechaPagoNomina(filtroQuincena)} onChange={e => setPagoProgramado(e.target.value)} className="block border rounded p-2" /></label>
+        </div>
+      </section>}
+      {liqActual && <p className="text-sm text-gray-600">Corte de comisiones: {(liqActual.corteComisiones || liqActual.periodoFin).toLocaleString('es-DO', { timeZone: 'America/Santo_Domingo' })} · Pago programado: {liqActual.fechaPagoProgramada || 'No registrado (nómina anterior)'}. La fecha programada no confirma el pago.</p>}
+
       {liqActual && (
         <>
           <p className="text-sm text-gray-600">Las cuotas conservan lo revisado al generar la nómina o confirmar su revisión. Actualizar comisiones no incorpora préstamos posteriores; estos requieren revisión administrativa antes del cierre.</p>
@@ -319,13 +337,13 @@ export default function Nomina() {
             <p>Hay empleados con fechas de comisión o cuotas pendientes de revisión. Sus importes son estimados y no se pueden pagar ni descontar. Los demás pueden cerrarse.</p>
             <a href="/admin/comisiones" className="underline">Conciliar fechas en Comisiones</a>
             {liqActual.empleados.filter(e => e.estadoCierre === 'bloqueado').map(e => <div key={e.personalId} className="mt-2 flex flex-wrap gap-2 items-center">
-              <span>{e.personalNombre}: {e.comisionesDuplicadas?.length ? `Comisiones de la misma orden requieren conciliación: ${e.comisionesDuplicadas.join(', ')}` : e.cuotasPendientesRevision ? 'Revisar cuotas tras incorporar ingresos' : e.comisionesPendientesFecha?.join(', ')}</span>
+              <span>{e.personalNombre}: {e.comisionesDuplicadas?.length ? `Comisiones de la misma orden requieren conciliación: ${e.comisionesDuplicadas.join(', ')}` : e.cuotasPendientesRevision ? 'Revisar cuotas tras incorporar ingresos' : e.comisionesFueraPeriodo?.length ? `Fuera del corte: ${e.comisionesFueraPeriodo.join(', ')}` : e.comisionesPendientesFecha?.join(', ')}</span>
               {e.cuotasPendientesRevision && <button type="button" disabled={generando || e.pagado} onClick={() => revisarCuotas(e.personalId)} className="border rounded px-3 py-2">Revisar cuotas pendientes</button>}
               <button type="button" disabled={generando || e.pagado} onClick={() => recalcular(e.personalId)} className="border rounded px-3 py-2">{e.pagado ? 'Pago registrado: requiere revisión manual' : 'Actualizar comisiones'}</button>
             </div>)}
           </div>}
           {liqActual.empleados.some(e => e.comisionesFueraPeriodo?.length) && <div role="alert" className="rounded-xl bg-amber-50 p-4 text-sm">
-            Comisiones conciliadas con fecha fuera de esta quincena; siguen pendientes y requieren revisar la nómina del período correspondiente:
+            Comisiones con fecha fuera del corte de esta nómina; siguen pendientes y requieren revisar la nómina del período correspondiente:
             {liqActual.empleados.filter(e => e.comisionesFueraPeriodo?.length).map(e => <p key={e.personalId}>{e.personalNombre}: {e.comisionesFueraPeriodo?.join(', ')}</p>)}
           </div>}
           {liqActual.estado === 'abierta' && <button type="button" disabled={generando} onClick={refrescarConciliacion} className="border rounded px-3 py-2">Buscar y actualizar conciliaciones</button>}

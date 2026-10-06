@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Dobles de Firebase/API deliberadamente parciales; solo fixtures de pruebas. */
 import { beforeEach, expect, it, vi } from 'vitest';
 const m = vi.hoisted(() => ({ docs: {} as Record<string, any> }));
 vi.mock('../../src/firebase/config', () => ({ db: {} }));
@@ -20,9 +21,11 @@ const nomina = () => m.docs['liquidaciones_nomina/l'];
 beforeEach(() => { m.docs = {
  'personal/p1': { uid: 'u1', rol: 'tecnico', nombre: 'Sano', activo: true, sueldoBase: 1000 },
  'personal/p2': { uid: 'u2', rol: 'tecnico', nombre: 'Conciliar', activo: true, sueldoBase: 1000 },
- 'comisiones/c1': { tecnicoId: 'u1', comisionMonto: 100, fechaCobro: '2026-09-20T12:00:00-04:00', estadoLiquidacion: 'pendiente', descuentoPorGarantia: { monto: -20 } },
- 'comisiones/c2': { tecnicoId: 'p2', comisionMonto: 200, estadoLiquidacion: 'pendiente' },
- }; });
+ 'comisiones/c1': { ordenId: 'c1', precioFinal: 10000, tecnicoId: 'u1', comisionMonto: 100, fechaCobro: '2026-09-20T12:00:00-04:00', estadoLiquidacion: 'pendiente', descuentoPorGarantia: { monto: -20 } },
+ 'comisiones/c2': { ordenId: 'c2', precioFinal: 10000, tecnicoId: 'p2', comisionMonto: 200, estadoLiquidacion: 'pendiente' },
+ };
+ for (const id of ['c1', 'c2', 'tardia', 'nueva', 'sinfecha', 'os2']) m.docs[`ordenes_servicio/${id}`] = { fase: 'cerrado', precioFinal: 10000, pagos: [{ id: `p-${id}`, monto: 10000, verificado: true, verificadoAt: '2026-08-01T12:00:00-04:00' }] };
+});
 it('cierra y paga sano, concilia otro y completa sin modificar primer pago', async () => {
  await generarLiquidacion('2026-09-Q2', actor);
  expect(nomina().empleados.map((e: any) => e.estadoCierre)).toEqual(['listo', 'bloqueado']);
@@ -78,6 +81,8 @@ it('fecha conciliada fuera de período antes del primer cierre no se paga allí'
  m.docs['comisiones/c2'].fechaCobro = '2026-10-20T12:00:00-04:00';
  await cerrarLiquidacion('l',actor);
  expect(nomina().empleados[1].estadoCierre).toBe('bloqueado');
+ expect(nomina().empleados[1].comisionesFueraPeriodo).toContain('c2');
+ expect(nomina().empleados[1].comisionesPendientesFecha || []).not.toContain('c2');
  expect(m.docs['comisiones/c2'].estadoLiquidacion).toBe('pendiente');
 });
 
@@ -121,7 +126,7 @@ it('huérfana sin técnico no se atribuye a empleado legacy sin UID', async () =
 it('H1: actualización explícita recupera comisión creada después del borrador', async () => {
  delete m.docs['comisiones/c2'];
  await generarLiquidacion('2026-09-Q2',actor);
- m.docs['comisiones/tardia']={tecnicoId:'u1',comisionMonto:30,fechaCobro:'2026-09-22T12:00:00-04:00',estadoLiquidacion:'pendiente'};
+ m.docs['comisiones/tardia']={ordenId:'tardia',precioFinal:10000,tecnicoId:'u1',comisionMonto:30,fechaCobro:'2026-09-22T12:00:00-04:00',estadoLiquidacion:'pendiente'};
  await generarLiquidacion('2026-09-Q2',actor);
  await recalcularEmpleadoLiquidacion('l','p1',actor);
  expect(nomina().empleados[0].comisionesIds).toContain('tardia');
@@ -141,6 +146,7 @@ it('segundo borrador retira comisión pagada en otra nómina solo con evidencia 
  await generarLiquidacion('2026-09-Q2',actor);
  m.docs['liquidaciones_nomina/otra'] = structuredClone(nomina());
  m.docs['liquidaciones_nomina/otra'].quincena = '2026-10-Q1';
+ m.docs['liquidaciones_nomina/otra'].corteComisiones = '2026-10-15T03:59:59.999Z';
  await recalcularEmpleadoLiquidacion('otra','p1',actor);
  await cerrarLiquidacion('l',actor);
  await expect(cerrarLiquidacion('otra',actor)).rejects.toThrow();
@@ -177,7 +183,7 @@ it('revisa cuotas explícitamente al incorporar comisión después de devengo ce
  delete m.docs['comisiones/c1']; delete m.docs['comisiones/c2']; m.docs['personal/p1'].sueldoBase=0;
  await generarLiquidacion('2026-09-Q2',actor);
  m.docs['prestamos_empleados/pr']={personalId:'p1',estado:'activo',montoCuota:100,montoTotal:300,saldoPendiente:300,cuotasPagadas:0,cuotasTotales:3,cuotasHistorial:[]};
- m.docs['comisiones/tardia']={tecnicoId:'p1',comisionMonto:3000,fechaCobro:'2026-09-20T12:00:00-04:00'};
+ m.docs['comisiones/tardia']={ordenId:'tardia',precioFinal:10000,tecnicoId:'p1',comisionMonto:3000,fechaCobro:'2026-09-20T12:00:00-04:00'};
  await recalcularEmpleadoLiquidacion('l','p1',actor);
  expect(nomina().empleados[0]).toMatchObject({totalDevengado:3000,estadoCierre:'bloqueado',cuotasPendientesRevision:true});
  await cerrarLiquidacion('l',actor);
@@ -191,7 +197,7 @@ it('revisa cuotas explícitamente al incorporar comisión después de devengo ce
 });
 it('descubre huérfana nueva y permite cerrar empleado sano', async () => {
  await generarLiquidacion('2026-09-Q2',actor);
- m.docs['comisiones/nueva']={tecnicoId:'inactivo',comisionMonto:30,fechaCobro:'2026-09-20T12:00:00-04:00'};
+ m.docs['comisiones/nueva']={ordenId:'nueva',precioFinal:10000,tecnicoId:'inactivo',comisionMonto:30,fechaCobro:'2026-09-20T12:00:00-04:00'};
  await actualizarConciliacionLiquidacion('l',actor);
  expect(nomina().comisionesSinEmpleado).toContain('nueva');
  await cerrarLiquidacion('l',actor);
@@ -211,11 +217,11 @@ it('confirmar cuotas rechaza vista previa incompleta o modificada', async () => 
 it('anular comisión que elevó devengo libera revisión de cuotas sin ocultar otra fecha pendiente', async () => {
  delete m.docs['comisiones/c1']; delete m.docs['comisiones/c2']; m.docs['personal/p1'].sueldoBase=0;
  await generarLiquidacion('2026-09-Q2',actor);
- m.docs['comisiones/tardia']={tecnicoId:'p1',comisionMonto:3000,fechaCobro:'2026-09-20T12:00:00-04:00'};
+ m.docs['comisiones/tardia']={ordenId:'tardia',precioFinal:10000,tecnicoId:'p1',comisionMonto:3000,fechaCobro:'2026-09-20T12:00:00-04:00'};
  await recalcularEmpleadoLiquidacion('l','p1',actor);
  expect(nomina().empleados[0].cuotasPendientesRevision).toBe(true);
  m.docs['comisiones/tardia'].estaAnulada=true;
- m.docs['comisiones/sinfecha']={tecnicoId:'p1',comisionMonto:30};
+ m.docs['comisiones/sinfecha']={ordenId:'sinfecha',precioFinal:10000,tecnicoId:'p1',comisionMonto:30};
  await recalcularEmpleadoLiquidacion('l','p1',actor);
  expect(nomina().empleados[0]).toMatchObject({totalDevengado:0,cuotasPendientesRevision:false,estadoCierre:'bloqueado',comisionesPendientesFecha:['sinfecha']});
  m.docs['comisiones/sinfecha'].estaAnulada=true;
@@ -236,7 +242,7 @@ it('cambiar motivo requiere nueva vista previa y conserva motivo confirmado real
 });
 
 it('duplicados legacy bloquean sólo afectado, no suman y permiten cerrar sano', async () => {
- m.docs['comisiones/c2'] = { ordenId: 'os2', tecnicoId: 'u2', comisionMonto: 200, fechaCobro: '2026-09-20', estadoLiquidacion: 'pendiente' };
+ m.docs['comisiones/c2'] = { ordenId: 'os2', precioFinal: 10000, tecnicoId: 'u2', comisionMonto: 200, fechaCobro: '2026-09-20', estadoLiquidacion: 'pendiente' };
  m.docs['comisiones/duplicada'] = { ...m.docs['comisiones/c2'], tecnicoId: 'p2' };
  await generarLiquidacion('2026-09-Q2', actor);
  expect(nomina().empleados[1]).toMatchObject({ estadoCierre: 'bloqueado', totalComisiones: 0, comisionesDuplicadas: ['c2', 'duplicada'] });
@@ -251,11 +257,63 @@ it('duplicados legacy bloquean sólo afectado, no suman y permiten cerrar sano',
  expect(nomina().empleados[1]).toMatchObject({ estadoCierre: 'listo', totalComisiones: 200, comisionesDuplicadas: [] });
 });
 it('duplicado descubierto después del borrador bloquea cierre del afectado', async () => {
- m.docs['comisiones/c2'] = { ordenId: 'os2', tecnicoId: 'u2', comisionMonto: 200, fechaCobro: '2026-09-20', estadoLiquidacion: 'pendiente' };
+ m.docs['comisiones/c2'] = { ordenId: 'os2', precioFinal: 10000, tecnicoId: 'u2', comisionMonto: 200, fechaCobro: '2026-09-20', estadoLiquidacion: 'pendiente' };
  await generarLiquidacion('2026-09-Q2', actor);
  m.docs['comisiones/duplicada'] = { ...m.docs['comisiones/c2'] };
  await cerrarLiquidacion('l', actor);
  expect(nomina().empleados[1]).toMatchObject({ estadoCierre: 'bloqueado', comisionesDuplicadas: ['c2', 'duplicada'] });
  expect(nomina().empleados[0].estadoCierre).toBe('cerrado');
+ expect(m.docs['comisiones/c2'].estadoLiquidacion).toBe('pendiente');
+});
+
+it('anticipo no entra en nómina y recalcular retira comisión si deja de estar cobrada', async () => {
+ delete m.docs['comisiones/c2'];
+ m.docs['ordenes_servicio/c1'].pagos[0].monto = 5000;
+ await generarLiquidacion('2026-09-Q2', actor);
+ expect(nomina().empleados[0].totalComisiones).toBe(0);
+ m.docs['ordenes_servicio/c1'].pagos.push({ id: 'saldo', monto: 5000, verificado: true, verificadoAt: '2026-09-23T12:00:00-04:00' });
+ await recalcularEmpleadoLiquidacion('l', 'p1', actor);
+ expect(nomina().empleados[0].totalComisiones).toBe(80);
+ m.docs['ordenes_servicio/c1'].pagos[1].verificado = false;
+ await recalcularEmpleadoLiquidacion('l', 'p1', actor);
+ expect(nomina().empleados[0].comisionesIds).toEqual([]);
+ expect(nomina().empleados[0].totalComisiones).toBe(0);
+});
+it('saldo verificado en octubre no entra a nómina septiembre aunque comisión legacy sea de septiembre', async () => {
+ delete m.docs['comisiones/c2'];
+ m.docs['ordenes_servicio/c1'].pagos = [
+  { id: 'anticipo', monto: 5000, verificado: true, verificadoAt: '2026-09-20T12:00:00-04:00' },
+  { id: 'saldo', monto: 5000, verificado: true, verificadoAt: '2026-10-03T12:00:00-04:00' },
+ ];
+ await generarLiquidacion('2026-09-Q2', actor);
+ expect(nomina().empleados[0].totalComisiones).toBe(0);
+ delete m.docs['liquidaciones_nomina/l'];
+ await generarLiquidacion('2026-10-Q1', actor);
+ expect(nomina().empleados[0].totalComisiones).toBe(80);
+ expect(m.docs['comisiones/c1'].fechaCobro).toBe('2026-09-20T12:00:00-04:00');
+});
+it('legacy sin fecha de verificación no se hace pagable por inferencia', async () => {
+ delete m.docs['comisiones/c2'];
+ delete m.docs['ordenes_servicio/c1'].pagos[0].verificadoAt;
+ await generarLiquidacion('2026-09-Q2', actor);
+ expect(nomina().empleados[0]).toMatchObject({ totalComisiones: 0, estadoCierre: 'bloqueado', comisionesPendientesFecha: ['c1'] });
+});
+
+it('recalcular respeta el corte adelantado y no incorpora cobros posteriores', async () => {
+ m.docs['comisiones/c2'].fechaCobro='2026-09-27T12:00:00-04:00';
+ await generarLiquidacion('2026-09-Q2',actor,{corteComisiones:new Date('2026-09-26T23:59:00-04:00'),fechaPagoProgramada:'2026-09-28'});
+ await recalcularEmpleadoLiquidacion('l','p2',actor);
+ expect(nomina().empleados[1].comisionesIds).toEqual([]);
+ expect(nomina().empleados[1].totalComisiones).toBe(0);
+ expect(m.docs['comisiones/c2'].estadoLiquidacion).toBe('pendiente');
+});
+it('cierre no paga una comisión incluida manualmente después del corte', async () => {
+ m.docs['comisiones/c2'].fechaCobro='2026-09-27T12:00:00-04:00';
+ await generarLiquidacion('2026-09-Q2',actor,{corteComisiones:new Date('2026-09-26T23:59:00-04:00'),fechaPagoProgramada:'2026-09-28'});
+ Object.assign(nomina().empleados[1],{comisionesIds:['c2'],totalComisiones:200,totalDevengado:700,estadoCierre:'listo'});
+ await cerrarLiquidacion('l',actor);
+ expect(nomina().empleados[1].estadoCierre).toBe('bloqueado');
+ expect(nomina().empleados[1].comisionesFueraPeriodo).toContain('c2');
+ expect(nomina().empleados[1].comisionesPendientesFecha || []).not.toContain('c2');
  expect(m.docs['comisiones/c2'].estadoLiquidacion).toBe('pendiente');
 });

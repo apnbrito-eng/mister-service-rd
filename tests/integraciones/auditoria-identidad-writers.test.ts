@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Dobles de Firebase/API deliberadamente parciales; solo fixtures de pruebas. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Cliente } from '../../src/types';
 const m = vi.hoisted(() => ({
@@ -29,7 +30,7 @@ import { marcarOrdenReactivada } from '../../src/services/campanasMarketing.serv
 import { eliminarComisionesDeFactura } from '../../src/utils/comisiones';
 beforeEach(() => {
   m.auth.currentUser = { uid: 'uid-admin' };
-  m.data = { usuarios: { rol: 'administrador', activo: true }, ordenes_servicio: {}, campanas_marketing: { fecha: new Date() }, comisiones: { estadoLiquidacion: 'pendiente', comisionMonto: 10 } };
+  m.data = { usuarios: { rol: 'administrador', activo: true }, ordenes_servicio: {}, campanas_marketing: { fecha: new Date() }, comisiones: { ordenId: 'orden', estadoLiquidacion: 'pendiente', comisionMonto: 10 } };
   m.writes = [];
 });
 const cliente = () => ({ id: 'cliente', ultimoContactoMarketing: new Date(), contactosMarketing: [{ campanaId: 'campana', fecha: new Date() }] }) as unknown as Cliente;
@@ -105,4 +106,12 @@ it.each([[123,123],['123',123]])('IDs legacy %j no se regeneran ni permiten dobl
  m.data.ordenes_servicio={pagos:[original,{...original,id:id2}]};
  await expect(conciliarIdentidadFechaPago('orden',0,original,'2026-09-29','Comprobante bancario revisado')).rejects.toThrow('ID repetido');
  expect(m.writes).toHaveLength(0);
+});
+
+it('confirmación legacy libera comisión y pago en la misma transacción', async () => {
+  m.data.ordenes_servicio = { fase: 'cerrado', precioFinal: 1000, pagos: [{ id: 'pago', monto: 1000, metodo: 'transferencia', fecha: '2026-10-03', verificado: false }] };
+  m.data.comisiones = { ordenId: 'orden', precioFinal: 1000, estadoLiquidacion: 'retenida_por_cobro', comisionMonto: 100 };
+  expect(await confirmarPagoOrden('orden', 'pago', { id: 'uid-admin', nombre: 'QA' })).toEqual({ ok: true });
+  expect(m.writes.find(w => w.name === 'comisiones')?.data).toMatchObject({ estadoLiquidacion: 'pendiente' });
+  expect(m.writes.find(w => w.name === 'ordenes_servicio')?.data?.pagos).toMatchObject([{ verificado: true }]);
 });

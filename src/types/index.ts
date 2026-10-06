@@ -438,6 +438,15 @@ export interface OrdenServicio {
   precioAprobado?: number;
   precioFinal?: number;
   estadoAprobacion?: 'pendiente' | 'aprobado';
+  /** Presupuesto revisado por oficina; aprobado legacy habilita técnico solo tras aceptación. */
+  presupuestoEstado?: 'pendiente_cliente' | 'cambio_solicitado' | 'aceptado';
+  presupuestoMontoPropuesto?: number;
+  presupuestoCambioMotivo?: string;
+  presupuestoAceptadoPor?: string;
+  presupuestoAceptadoEn?: Date;
+  chequeoConfirmacionEstado?: 'pendiente' | 'confirmado';
+  chequeoConfirmadoPor?: string;
+  chequeoConfirmadoEn?: Date;
   aprobadoPor?: string;
   fechaAprobacion?: Date;
   historialFases: HistorialFase[];
@@ -671,6 +680,10 @@ export interface OrdenServicio {
    * `agendado` para permitir reagendar sin retroceder en el pipeline. Al
    * reagendar exitosamente se limpia (`limpiarVisitaFallida()`).
    */
+  /** Cancelación de la visita, sin cancelar la orden. Se limpia al reagendar. */
+  visitaCancelada?: { motivo: string; actorUid: string; actorNombre: string; fecha: Date; fechaCita: Date | null; tecnicoId: string | null } | null;
+  /** Inicio del traslado, separado del inicio del chequeo. */
+  salidaTecnico?: { uid: string; fecha: Date } | null;
   visitaFallida?: {
     /** Texto libre crudo del técnico (mínimo 10 chars al persistir). */
     detalleCliente: string;
@@ -800,7 +813,9 @@ export interface ComisionRegistro {
   itbisMonto?: number;
   facturaId?: string;
   facturaNumero?: string;
-  estadoLiquidacion: 'pendiente' | 'liquidada';
+  estadoLiquidacion: 'retenida_por_cobro' | 'pendiente' | 'liquidada';
+  /** Momento en que se acreditó el cobro total verificado para liberar la comisión. */
+  cobroLiberadoEn?: Date;
   quincenaAsignada?: string;
   liquidadaEn?: Date;
   liquidadaPor?: string;
@@ -972,6 +987,8 @@ export interface CuotaPrestamo {
 }
 
 export interface LiquidacionNomina {
+  corteComisiones?: Date;
+  fechaPagoProgramada?: string;
   comisionesSinEmpleado?: string[];
   id: string;
   quincena: string;

@@ -1,15 +1,31 @@
 import { beforeAll, afterAll, beforeEach, expect, it, vi } from 'vitest';
+import { initializeApp, deleteApp, type App } from 'firebase-admin/app';
+import { getFirestore, type Firestore as AdminFirestore } from 'firebase-admin/firestore';
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { doc, getDoc, getDocs, collection } from 'firebase/firestore';
 import { iniciarEntorno, entorno, resetearConPerfiles, sembrar, como, UID } from './helpers';
-const contexto = vi.hoisted(() => ({ db: undefined as unknown, uid: 'uid-admin' }));
+const contexto = vi.hoisted(() => ({ db: undefined as unknown, uid: 'uid-admin', admin: undefined as AdminFirestore | undefined }));
 vi.mock('../../src/firebase/config', () => ({ get db() { return contexto.db; }, auth: { get currentUser() { return { uid: contexto.uid }; } } }));
+vi.mock('../../api/_lib/accesoEquipo.js', () => {
+ class ErrorAcceso extends Error { constructor(public status: number, message: string) { super(message); } }
+ return { ErrorAcceso, accesoEquipo: async () => ({ db: contexto.admin, uid: contexto.uid }) };
+});
+vi.mock('../../src/services/equipoApi', () => ({ equipoApi: async (_ruta: string, body: object) => {
+ const { default: handler } = await import('../../api/ordenes/efectivo');
+ let status = 200; let result: Record<string, unknown> = {};
+ const response = { setHeader() {}, status(s: number) { status=s; return response; }, json(r: Record<string, unknown>) { result=r; return response; } };
+ await handler({ method:'POST', body } as VercelRequest, response as unknown as VercelResponse);
+ if (status >= 400) throw new Error(String(result.error));
+ return result;
+} }));
+let adminApp: App;
 import { cerrarDiaAtomico, entregarEfectivoOrdenes } from '../../src/services/cierreDia.service';
 import { proyectarCobrosCaja } from '../../src/utils/movimientosCobros';
 const actor = { uid: UID.admin, nombre: 'QA admin' };
 const pago = (id: string, monto: number) => ({ id, monto, fecha:'2026-09-29', metodo:'efectivo', verificado:true });
 const leer = async (ruta: string) => (await getDoc(doc(como(UID.admin), ruta))).data()!;
-beforeAll(async () => { await iniciarEntorno(); });
-afterAll(async () => { await entorno().cleanup(); });
+beforeAll(async () => { await iniciarEntorno(); process.env.FIRESTORE_EMULATOR_HOST='127.0.0.1:8080'; adminApp=initializeApp({projectId:'demo-mister-service-rules'}, 'efectivo-rules'); contexto.admin=getFirestore(adminApp); });
+afterAll(async () => { await contexto.admin?.terminate(); if (adminApp) { await deleteApp(adminApp); await entorno().cleanup(); } });
 beforeEach(async () => { await resetearConPerfiles(); contexto.db=como(UID.admin);contexto.uid=UID.admin; });
 it('dos cierres concurrentes preservan un documento y el snapshot ganador', async () => {
  const [a,b]=await Promise.all([cerrarDiaAtomico('2026-09-29',{totalIngresos:100}),cerrarDiaAtomico('2026-09-29',{totalIngresos:150})]);
@@ -26,7 +42,7 @@ it('entrega concurrente es idempotente y admite recibo posterior sin alterar cie
  await Promise.all([entregarEfectivoOrdenes(movimientos,actor),entregarEfectivoOrdenes(movimientos,actor)]);
  const primera=await leer('ordenes_servicio/o');
  expect(Object.keys(primera.efectivoEntregas)).toEqual(['p1']);
- expect(primera.efectivoEntregas.p1).toMatchObject({monto:100,entregadoPor:UID.admin,entregadoPorNombre:'QA admin'});
+ expect(primera.efectivoEntregas.p1).toMatchObject({monto:100,entregadoPor:UID.admin,entregadoPorNombre:'QA administrador'});
  const actual={...primera,pagos:[pago('p1',100),pago('p2',50)]};
  await sembrar('ordenes_servicio/o',actual);
  await entregarEfectivoOrdenes(proyectarCobrosCaja([{id:'o',datos:actual}]).movimientos,actor);

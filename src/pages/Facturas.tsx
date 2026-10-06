@@ -347,10 +347,11 @@ export default function Facturas() {
   // SPRINT-SEC-XSS-IMPRESION (2026-09-09): todo dato de Firestore que se
   // interpole acá va por `escapeHtml`. Ver nota en `utils/index.ts`.
   const handlePrint = (factura: Factura) => {
+    const tituloConduce = factura.tipoCierre === 'solo_chequeo' ? 'Conduce' : 'Conduce de Garantía';
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(`
-      <html><head><title>Conduce de Garantía ${escapeHtml(factura.numero)}</title>
+      <html><head><title>${tituloConduce} ${escapeHtml(factura.numero)}</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: Arial, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
@@ -386,7 +387,7 @@ export default function Facturas() {
           <p class="company">Santo Domingo, República Dominicana</p>
         </div>
         <div class="factura-info">
-          <p style="font-size:14px;font-weight:700;color:#0f3460;letter-spacing:2px;margin:0 0 4px;">CONDUCE DE GARANTÍA</p>
+          <p style="font-size:14px;font-weight:700;color:#0f3460;letter-spacing:2px;margin:0 0 4px;">${tituloConduce.toUpperCase()}</p>
           <p class="factura-num">${escapeHtml(factura.numero)}</p>
           <span class="estado estado-${escapeHtml(factura.estado)}">${escapeHtml(ESTADO_LABELS[factura.estado])}</span>
         </div>

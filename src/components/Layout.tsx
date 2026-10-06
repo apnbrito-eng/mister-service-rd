@@ -22,9 +22,20 @@ export default function Layout() {
   const panelMovil = useRef<HTMLDivElement>(null);
   useEffect(() => {
     panelMovil.current?.toggleAttribute('inert', !mobileSidebarOpen);
-    const cerrar = (event: KeyboardEvent) => { if (event.key === 'Escape') setMobileSidebarOpen(false); };
+    const focoAnterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (mobileSidebarOpen) panelMovil.current?.querySelector<HTMLElement>('button,a[href]')?.focus();
+    const cerrar = (event: KeyboardEvent) => {
+      if (!mobileSidebarOpen) return;
+      if (event.key === 'Escape') setMobileSidebarOpen(false);
+      if (event.key === 'Tab') {
+        const controles = Array.from(panelMovil.current?.querySelectorAll<HTMLElement>('button:not([disabled]),a[href],input:not([disabled])') ?? []).filter(el=>el.getClientRects().length>0);
+        const primero=controles[0],ultimo=controles[controles.length-1];
+        if(event.shiftKey && document.activeElement===primero){event.preventDefault();ultimo?.focus();}
+        else if(!event.shiftKey && document.activeElement===ultimo){event.preventDefault();primero?.focus();}
+      }
+    };
     window.addEventListener('keydown', cerrar);
-    return () => window.removeEventListener('keydown', cerrar);
+    return () => { window.removeEventListener('keydown', cerrar); if(mobileSidebarOpen) focoAnterior?.focus(); };
   }, [mobileSidebarOpen]);
 
   return (
@@ -48,6 +59,9 @@ export default function Layout() {
         initial={false}
         animate={{ x: reducido ? 0 : mobileSidebarOpen ? 0 : '-100%', opacity: mobileSidebarOpen ? 1 : 0 }}
         transition={obtenerTransicionMovimiento(reducido)}
+        role={mobileSidebarOpen ? 'dialog' : undefined}
+        aria-modal={mobileSidebarOpen ? true : undefined}
+        aria-label="Menú de módulos"
         aria-hidden={!mobileSidebarOpen}
         style={{ pointerEvents: mobileSidebarOpen ? 'auto' : 'none', top: 'calc(var(--alto-aviso-entorno, 0px) + env(safe-area-inset-top, 0px))', bottom: 'env(safe-area-inset-bottom, 0px)' }}
         className="fixed inset-y-0 left-0 z-50 lg:hidden"

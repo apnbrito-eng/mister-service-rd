@@ -1,3 +1,9 @@
+import ConfirmacionChequeo from './ConfirmacionChequeo';
+import EfectivoOrdenPanel from './EfectivoOrdenPanel';
+import PiezasDiagnostico from './PiezasDiagnostico';
+import ContactoOrden from './ContactoOrden';
+import ActividadOrden from './ActividadOrden';
+import RespuestaPresupuesto from './RespuestaPresupuesto';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Phone, MapPin, Edit2, AlertTriangle, XCircle, Package, RotateCcw, TrendingUp, Camera, CheckCircle2, Shield, FileSignature, Bell } from 'lucide-react';
@@ -14,12 +20,13 @@ import { whatsappUrl } from '../../utils/whatsapp';
 import { coordsFromLatLng, googleMapsViewUrl } from '../../utils/maps';
 import BotonComoLlegar from '../shared/BotonComoLlegar';
 import FotoEquipoDisplay from '../shared/FotoEquipoDisplay';
-import { puede } from '../../utils/permisos';
+import { puede, esAdminOCoord } from '../../utils/permisos';
 import Badge from '../Badge';
 import EliminarOrdenButton from './EliminarOrdenButton';
 import FaseStepper from './FaseStepper';
 import CancelarOrdenModal from './CancelarOrdenModal';
 import ReagendarModal from './ReagendarModal';
+import CancelarVisitaModal from './CancelarVisitaModal';
 import RegistrarPagoModal from './RegistrarPagoModal';
 import EnviarFacturacionButton from './EnviarFacturacionButton';
 import EnviarPortalButton from './EnviarPortalButton';
@@ -74,6 +81,7 @@ export default function OrdenDetailModal({
   const puedeRegistrarPago = puede(userProfile, 'pagosRegistrar');
   const puedeEnviarAFacturacion = puede(userProfile, 'ordenesEnviarAFacturacion');
   const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showCancelarVisita, setShowCancelarVisita] = useState(false);
   const [showReagendarModal, setShowReagendarModal] = useState(false);
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [reactivandoChequeo, setReactivandoChequeo] = useState(false);
@@ -81,6 +89,7 @@ export default function OrdenDetailModal({
   // sin reagendar (ej: ya hizo follow-up por WhatsApp y no necesita más
   // acción). El botón "Marcar resuelto" en el banner llama este handler.
   const [limpiandoAviso, setLimpiandoAviso] = useState(false);
+  const visitaCancelada = orden.visitaCancelada;
   const conStandby = tieneStandby(orden, standbyItems);
   const tienePiezaPendiente = standbyItems.some(s => s.ordenId === orden.id && s.estado !== 'llego');
   const mostrarBannerReagendar = orden.fase === 'aprobado' && tienePiezaPendiente && !orden.eliminada;
@@ -153,6 +162,10 @@ export default function OrdenDetailModal({
   };
   return (
     <div className="space-y-6">
+      <ContactoOrden ordenId={orden.id} telefono={orden.clienteTelefono} nombre={orden.clienteNombre} />
+      <ActividadOrden ordenId={orden.id} />
+      <EfectivoOrdenPanel ordenId={orden.id} />
+      <PiezasDiagnostico puedeEditar={esAdminOCoord(userProfile)} ordenId={orden.id} />
       {/* SPRINT-181 (2026-05-18): badge "Solo chequeo" en el header del modal.
           Antes solo se veía en la card del listado y en la fila expandida de
           /admin/facturas — la coordinadora abría el modal y solo inferia por
@@ -164,10 +177,17 @@ export default function OrdenDetailModal({
         </div>
       )}
 
+      {visitaCancelada && !orden.eliminada && orden.fase !== 'cerrado' && orden.fase !== 'cancelado' && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 space-y-2">
+          <h4 className="font-semibold">Visita cancelada · orden conservada</h4>
+          <p className="text-sm">{visitaCancelada.motivo}</p>
+          {puedeModificar && <button type="button" onClick={() => setShowReagendarModal(true)} className="rounded bg-primary text-white px-3 py-2 text-sm">Reagendar visita</button>}
+        </div>
+      )}
       {/* SPRINT-177: banner "Visita fallida" cuando el técnico avisó a oficina.
           Necesita coordinación (reagendar, llamar, cancelar). Botones rápidos
-          que reusan flujos existentes: ReagendarModal + CancelarOrdenModal.
-          Al confirmar reagendar, `onSuccess` limpia `visitaFallida` automáticamente.
+          que usan ReagendarModal y CancelarVisitaModal.
+          El servidor limpia la incidencia en la misma transacción de reagendamiento.
           Si oficina ya coordinó por otro canal (WhatsApp manual), "Marcar resuelto"
           limpia sin reagendar. */}
       {orden.visitaFallida && !orden.eliminada && orden.fase !== 'cancelado' && orden.fase !== 'cerrado' && (
@@ -227,10 +247,10 @@ export default function OrdenDetailModal({
             {puedeModificar && (
               <button
                 type="button"
-                onClick={() => setShowCancelModal(true)}
+                onClick={() => setShowCancelarVisita(true)}
                 className="text-xs px-3 py-1.5 rounded bg-red-100 hover:bg-red-200 text-red-700 font-medium border border-red-300"
               >
-                Cancelar orden
+                Cancelar visita
               </button>
             )}
             {puedeModificar && (
@@ -500,24 +520,11 @@ export default function OrdenDetailModal({
           }
         }}
       />
+      <CancelarVisitaModal isOpen={showCancelarVisita} onClose={() => setShowCancelarVisita(false)} orden={orden} />
       <ReagendarModal
         isOpen={showReagendarModal}
         onClose={() => setShowReagendarModal(false)}
         orden={orden}
-        onSuccess={async () => {
-          // SPRINT-177: si la orden estaba marcada como visita fallida y se
-          // reagenda exitosamente, limpiar el banner para que vuelva a su
-          // estado normal. Best-effort: si el limpiado falla, la orden ya
-          // está reagendada (operación principal) — el banner queda hasta
-          // que oficina haga "Marcar resuelto" manualmente.
-          if (orden.visitaFallida) {
-            try {
-              await limpiarVisitaFallida(orden.id);
-            } catch (err) {
-              console.warn('[OrdenDetailModal] limpiarVisitaFallida post-reagendar:', err);
-            }
-          }
-        }}
       />
 
       {/* Client Info */}
@@ -716,9 +723,13 @@ export default function OrdenDetailModal({
         </div>
       )}
 
+      <ConfirmacionChequeo key={`chequeo-${orden.id}`} orden={orden} />
+      {!orden.soloChequeo && <RespuestaPresupuesto key={orden.id} orden={orden} />}
       {/* Aprobacion de precio (gated por permiso cotizacionesAprobarPrecio) */}
-      {orden.precioSugerido !== undefined &&
+      {!orden.soloChequeo && orden.precioSugerido !== undefined &&
        orden.estadoAprobacion !== 'aprobado' &&
+           orden.presupuestoEstado !== 'pendiente_cliente' &&
+           esAdminOCoord(userProfile) &&
        puede(userProfile, 'cotizacionesAprobarPrecio') && (
         <div className="bg-yellow-50 rounded-xl p-4 border-2 border-yellow-200">
           <h3 className="text-sm font-semibold text-yellow-800 uppercase tracking-wide mb-2 flex items-center gap-1">
@@ -726,7 +737,7 @@ export default function OrdenDetailModal({
           </h3>
           <p className="text-xs text-yellow-700 mb-3">
             El tecnico sugirio <strong>RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</strong>.
-            Puedes modificar el precio antes de aprobar.
+            Total del servicio con piezas incluidas. Aprobar permite presentarlo al cliente; todavía no habilita la reparación.
           </p>
 
           {/* SPRINT-178: widget chequeo previo vigente / vencido */}

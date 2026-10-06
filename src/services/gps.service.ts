@@ -1,4 +1,6 @@
-import { doc, getDoc, setDoc, Timestamp, collection, onSnapshot, query, where } from 'firebase/firestore';
+import { parseUbicacionMapa } from '../utils/parseUbicacionMapa';
+import { kmLineaRecta } from '../utils/geo';
+import { doc, getDoc, setDoc, Timestamp, collection, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../firebase/config';
 import { ConfigGPS, UbicacionVehiculo } from '../types';
 
@@ -34,49 +36,27 @@ export async function guardarUbicacionVehiculo(ubicacion: UbicacionVehiculo): Pr
 /** Suscribe a actualizaciones en tiempo real de un vehículo */
 export function suscribirUbicacionVehiculo(
   vehiculoId: string,
-  callback: (ubicacion: UbicacionVehiculo | null) => void
+  callback: (ubicacion: UbicacionVehiculo | null) => void,
+  onError?: (error: Error) => void,
 ): () => void {
   const ref = doc(db, UBICACIONES_COLLECTION, vehiculoId);
   return onSnapshot(ref, (snap) => {
     if (!snap.exists()) { callback(null); return; }
-    const raw = snap.data();
-    callback({
-      vehiculoId: raw.vehiculoId || vehiculoId,
-      tecnicoId: raw.tecnicoId || '',
-      tecnicoNombre: raw.tecnicoNombre,
-      lat: raw.lat || 0,
-      lng: raw.lng || 0,
-      velocidad: raw.velocidad || 0,
-      rumbo: raw.rumbo || 0,
-      timestamp: raw.timestamp?.toDate?.() || new Date(),
-      enMovimiento: raw.enMovimiento || false,
-      direccionAproximada: raw.direccionAproximada,
-    });
-  });
+    callback(parseUbicacionMapa(vehiculoId, snap.data()));
+  }, error => { callback(null); onError?.(error); });
 }
 
-/** Suscribe a TODAS las ubicaciones de vehículos (para el panel GPS en vivo) */
+/** Flota de oficina: las reglas impiden esta consulta a técnicos y ayudantes.
+ * La pantalla debe comprobar el rol antes de suscribirse. */
 export function suscribirTodasUbicaciones(
-  callback: (ubicaciones: UbicacionVehiculo[]) => void
+  callback: (ubicaciones: UbicacionVehiculo[]) => void,
+  onError?: (error: Error) => void,
 ): () => void {
   return onSnapshot(collection(db, UBICACIONES_COLLECTION), (snap) => {
-    const ubicaciones = snap.docs.map(d => {
-      const raw = d.data();
-      return {
-        vehiculoId: raw.vehiculoId || d.id,
-        tecnicoId: raw.tecnicoId || '',
-        tecnicoNombre: raw.tecnicoNombre,
-        lat: raw.lat || 0,
-        lng: raw.lng || 0,
-        velocidad: raw.velocidad || 0,
-        rumbo: raw.rumbo || 0,
-        timestamp: raw.timestamp?.toDate?.() || new Date(),
-        enMovimiento: raw.enMovimiento || false,
-        direccionAproximada: raw.direccionAproximada,
-      } as UbicacionVehiculo;
-    });
+    const ubicaciones = snap.docs.map(d => parseUbicacionMapa(d.id, d.data()))
+      .filter((u): u is UbicacionVehiculo => u !== null);
     callback(ubicaciones);
-  });
+  }, error => { callback([]); onError?.(error); });
 }
 
 /**
@@ -115,16 +95,12 @@ export async function obtenerUbicacionAPI(vehiculoId: string): Promise<Ubicacion
     }
 
     const data = await response.json();
-    return {
-      vehiculoId: data.vehiculoId || vehiculoId,
-      tecnicoId: '',
-      lat: data.lat || 0,
-      lng: data.lng || 0,
-      velocidad: data.velocidad || 0,
-      rumbo: data.rumbo || 0,
-      timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
-      enMovimiento: data.enMovimiento || false,
-    };
+    if (!data || typeof data !== 'object') return null;
+    return parseUbicacionMapa(vehiculoId, {
+      ...data,
+      timestamp: typeof data.timestamp === 'string' || typeof data.timestamp === 'number'
+        ? new Date(data.timestamp) : new Date(NaN),
+    });
   } catch (error) {
     console.error('GPS API error:', error);
     return null;
@@ -137,13 +113,7 @@ export function calcularETA(
   latCliente: number, lngCliente: number,
   velocidad: number
 ): { distanciaKm: number; minutosEstimados: number } {
-  const R = 6371;
-  const dLat = (latCliente - latVehiculo) * Math.PI / 180;
-  const dLon = (lngCliente - lngVehiculo) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(latVehiculo * Math.PI / 180) * Math.cos(latCliente * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const distanciaKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distanciaKm = kmLineaRecta({ lat: latVehiculo, lng: lngVehiculo }, { lat: latCliente, lng: lngCliente });
   const velocidadEfectiva = velocidad > 10 ? velocidad : 30;
   const minutosEstimados = Math.round((distanciaKm / velocidadEfectiva) * 60);
   return { distanciaKm, minutosEstimados };
@@ -160,14 +130,4 @@ export function generarTrackingToken(): string {
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
-}
-
-/** Busca orden por tracking token (para la página pública) */
-export async function buscarOrdenPorToken(token: string): Promise<{ id: string; data: Record<string, unknown> } | null> {
-  const { getDocs, query, collection, where } = await import('firebase/firestore');
-  const q = query(collection(db, 'ordenes_servicio'), where('trackingGPS.token', '==', token));
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  const d = snap.docs[0];
-  return { id: d.id, data: d.data() };
 }

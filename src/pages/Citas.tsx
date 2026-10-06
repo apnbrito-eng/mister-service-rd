@@ -1,3 +1,4 @@
+import { cargarGoogleMaps } from '../utils/cargarGoogleMaps';
 import { useAtencion } from '../context/AtencionContext';
 import { mismoTelefono } from '../navigation/clienteSeleccionado';
 import { useState, useEffect, useRef } from 'react';
@@ -314,31 +315,9 @@ export default function Citas() {
       });
     };
 
-    if (window.google?.maps?.places) {
-      initAC();
-      return;
-    }
-
-    // Sin configuración, conservar la entrada manual y no cargar una clave inválida.
-    if (!import.meta.env.VITE_GOOGLE_MAPS_KEY?.trim()) return;
-
-    if (!document.getElementById('google-places-script')) {
-      const script = document.createElement('script');
-      script.id = 'google-places-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}&libraries=places&language=es`;
-      script.async = true;
-      script.defer = true;
-      script.onload = initAC;
-      document.head.appendChild(script);
-    } else {
-      const interval = setInterval(() => {
-        if (window.google?.maps?.places) {
-          clearInterval(interval);
-          initAC();
-        }
-      }, 100);
-      return () => clearInterval(interval);
-    }
+    let cancelado = false;
+    void cargarGoogleMaps().then(ok => { if (ok && !cancelado) initAC(); });
+    return () => { cancelado = true; };
   }, [showModal]);
 
   useEffect(() => {

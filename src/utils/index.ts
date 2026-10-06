@@ -758,6 +758,14 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     estadoAprobacion: (raw.estadoAprobacion as 'pendiente' | 'aprobado') || undefined,
     aprobadoPor: (raw.aprobadoPor as string) || undefined,
     fechaAprobacion: parseFirestoreDate(raw.fechaAprobacion) || undefined,
+    presupuestoEstado: raw.presupuestoEstado as OrdenServicio['presupuestoEstado'],
+    presupuestoMontoPropuesto: typeof raw.presupuestoMontoPropuesto === 'number' ? raw.presupuestoMontoPropuesto : undefined,
+    presupuestoCambioMotivo: typeof raw.presupuestoCambioMotivo === 'string' ? raw.presupuestoCambioMotivo : undefined,
+    presupuestoAceptadoPor: typeof raw.presupuestoAceptadoPor === 'string' ? raw.presupuestoAceptadoPor : undefined,
+    presupuestoAceptadoEn: parseFirestoreDate(raw.presupuestoAceptadoEn) || undefined,
+    chequeoConfirmacionEstado: raw.chequeoConfirmacionEstado as OrdenServicio['chequeoConfirmacionEstado'],
+    chequeoConfirmadoPor: typeof raw.chequeoConfirmadoPor === 'string' ? raw.chequeoConfirmadoPor : undefined,
+    chequeoConfirmadoEn: parseFirestoreDate(raw.chequeoConfirmadoEn) || undefined,
     creadoPor: (raw.creadoPor as string) || undefined,
     creadoPorId: typeof raw.creadoPorId === 'string' && raw.creadoPorId.trim() ? raw.creadoPorId : undefined,
     trackingGPS: raw.trackingGPS ? (() => {
@@ -1098,6 +1106,19 @@ export function parseOrden(id: string, raw: Record<string, unknown>): OrdenServi
     // parser omite el campo, el banner en OrdenDetailModal nunca renderiza
     // aunque Firestore tenga el doc. Conversión defensiva de Timestamp→Date
     // en reportadoAt (mismo patrón que firmaClienteAt).
+    visitaCancelada: raw.visitaCancelada && typeof raw.visitaCancelada === 'object' && !Array.isArray(raw.visitaCancelada)
+      ? (() => {
+          const v = raw.visitaCancelada as Record<string, unknown>;
+          const fecha = parseFirestoreDate(v.fecha);
+          if (typeof v.motivo !== 'string' || typeof v.actorUid !== 'string' || !fecha) return undefined;
+          return { motivo: v.motivo, actorUid: v.actorUid, actorNombre: typeof v.actorNombre === 'string' ? v.actorNombre : '', fecha, fechaCita: parseFirestoreDate(v.fechaCita), tecnicoId: typeof v.tecnicoId === 'string' ? v.tecnicoId : null };
+        })() : undefined,
+    salidaTecnico: raw.salidaTecnico && typeof raw.salidaTecnico === 'object' && !Array.isArray(raw.salidaTecnico)
+      ? (() => {
+          const v = raw.salidaTecnico as Record<string, unknown>;
+          const fecha = parseFirestoreDate(v.fecha);
+          return typeof v.uid === 'string' && fecha ? { uid: v.uid, fecha } : undefined;
+        })() : undefined,
     visitaFallida: raw.visitaFallida && typeof raw.visitaFallida === 'object' && !Array.isArray(raw.visitaFallida)
       ? (() => {
           const vf = raw.visitaFallida as Record<string, unknown>;

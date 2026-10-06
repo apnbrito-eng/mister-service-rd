@@ -1,3 +1,5 @@
+import { validarPreparacionNomina, corteGuardadoNomina, type PreparacionNomina } from '../utils/corteNomina';
+import { comisionConCobroCompleto, fechaElegibleComision, leerOrdenesDeComisiones, POLITICA_COBRO_COMISION } from '../utils/comisionCobro';
 import { comisionesDuplicadasNomina } from '../utils/comisionesDuplicadasNomina';
 import { fechaFinanciera } from '../utils/fechaFinanciera';
 import {
@@ -53,6 +55,7 @@ export function rangoMesCalendario(quincena: string): { inicio: Date; fin: Date 
 export async function generarLiquidacion(
   quincena: string,
   generadaPor: Usuario,
+  preparacion: PreparacionNomina = {},
 ): Promise<{ id: string; liquidacion: LiquidacionNomina }> {
   if (!/^\d{4}-(0[1-9]|1[0-2])-Q[12]$/.test(quincena)) throw new Error('Quincena inválida');
   // Lectura de compatibilidad: no reserva inserciones de clientes antiguos.
@@ -73,6 +76,7 @@ export async function generarLiquidacion(
   }
 
   const { inicio, fin } = rangoQuincena(quincena);
+  const calendario = validarPreparacionNomina(quincena, inicio, fin, preparacion);
 
   // Personal activo con rol con acceso, incluidos ayudantes.
   const personalSnap = await getDocs(collection(db, 'personal'));
@@ -85,6 +89,8 @@ export async function generarLiquidacion(
     return candidatos.length === 1 ? candidatos[0].id : undefined;
   };
 
+  const ordenesSnap = await getDocs(collection(db, 'ordenes_servicio'));
+  const ordenesDatos = new Map(ordenesSnap.docs.map(d => [d.id, d.data()]));
   // Comisiones pendientes en el rango (filtrar client-side para evitar índice compuesto)
   const comisionesSnap = await getDocs(collection(db, 'comisiones'));
   const duplicadas = comisionesDuplicadasNomina(comisionesSnap.docs.map(d => ({ id: d.id, datos: d.data() })), personal);
@@ -92,11 +98,15 @@ export async function generarLiquidacion(
   const comisionesEnRango = comisionesSnap.docs
     .map(d => {
       const raw = d.data();
-      const fecha = fechaFinanciera(raw.fechaCobro);
-      if (!raw.estaAnulada && (!raw.estadoLiquidacion || raw.estadoLiquidacion === 'pendiente') && !fecha) {
+      const cobroElegible = comisionConCobroCompleto(raw, ordenesDatos, POLITICA_COBRO_COMISION);
+      const fecha = fechaElegibleComision(raw, ordenesDatos, POLITICA_COBRO_COMISION);
+      // Preservar conciliación de huérfanas/sin fecha aun cuando no sean cobrables.
+      const faltaEvidencia = !fechaFinanciera(raw.fechaCobro) || !raw.ordenId ||
+        (!String(raw.ordenId).startsWith('factura-manual-') && (!ordenesDatos.has(String(raw.ordenId)) || typeof raw.precioFinal !== 'number'));
+      if (!raw.estaAnulada && (!raw.estadoLiquidacion || raw.estadoLiquidacion === 'pendiente') && (faltaEvidencia || (cobroElegible && !fecha))) {
         pendientesFecha.push({ id: d.id, tecnicoId: String(raw.tecnicoId || '') });
       }
-      if (raw.estaAnulada || !fecha) return null;
+      if (raw.estaAnulada || !cobroElegible || !fecha) return null;
       const desc = raw.descuentoPorGarantia as Record<string, unknown> | undefined;
       const comision: ComisionRegistro = {
         id: d.id,
@@ -111,7 +121,8 @@ export async function generarLiquidacion(
         basePendienteComision: (raw.basePendienteComision as number) || 0,
         comisionPorcentaje: (raw.comisionPorcentaje as number) || 0,
         comisionMonto: (raw.comisionMonto as number) || 0,
-        estadoLiquidacion: (raw.estadoLiquidacion as 'pendiente' | 'liquidada') || 'pendiente',
+        estadoLiquidacion: (raw.estadoLiquidacion as ComisionRegistro['estadoLiquidacion']) || 'pendiente',
+        cobroLiberadoEn: fechaFinanciera(raw.cobroLiberadoEn) || undefined,
         quincenaAsignada: raw.quincenaAsignada as string | undefined,
         createdAt: raw.createdAt?.toDate?.() || new Date(),
       };
@@ -134,11 +145,10 @@ export async function generarLiquidacion(
     .filter((c): c is ComisionRegistro => c !== null)
     .filter(c =>
       c.estadoLiquidacion === 'pendiente' &&
-      c.fechaCobro <= fin
+      c.fechaCobro <= calendario.corteComisiones
     );
 
-  // Órdenes para desempeño operaria y secretaria
-  const ordenesSnap = await getDocs(collection(db, 'ordenes_servicio'));
+  // Órdenes ya leídas para desempeño operaria y secretaria
   const ordenes = ordenesSnap.docs.map(d => parseOrden(d.id, d.data() as Record<string, unknown>) as OrdenServicio);
 
   // Avances pendientes asignados a esta quincena
@@ -294,6 +304,8 @@ export async function generarLiquidacion(
     quincena,
     periodoInicio: Timestamp.fromDate(inicio),
     periodoFin: Timestamp.fromDate(fin),
+    corteComisiones: calendario.corteComisiones.toISOString(),
+    fechaPagoProgramada: calendario.fechaPagoProgramada,
     generadaPor: generadaPor.nombre,
     generadaPorId: generadaPor.id,
     fechaGeneracion: Timestamp.now(),
@@ -359,6 +371,7 @@ export async function cerrarLiquidacion(
     if (operaciones.length > 400) throw new Error('La liquidación supera 400 movimientos; requiere revisión administrativa');
     const refs = operaciones.map(o => doc(base, o.coleccion, o.id));
     const documentos = await Promise.all(refs.map(r => tx.get(r)));
+    const ordenesCobro = await leerOrdenesDeComisiones(documentos.flatMap((d, i) => operaciones[i].coleccion === 'comisiones' && d.exists() ? [d.data()] : []), async id => (await tx.get(doc(base, 'ordenes_servicio', id))).data());
     const identidades = todosEmpleados.map(e => ({ id: String(e.personalId), uid: typeof e.personalUid === 'string' ? e.personalUid : undefined }));
     const sospechosas = comisionesDuplicadasNomina(descubiertas.docs.map(d => ({ id: d.id, datos: d.data() })), identidades);
     const idsRevisar = [...new Set([...sospechosas.values()].flat())];
@@ -368,17 +381,22 @@ export async function cerrarLiquidacion(
     for (const e of empleados) if (duplicadas.has(String(e.personalId))) { e.estadoCierre = 'bloqueado'; e.comisionesDuplicadas = duplicadas.get(String(e.personalId)); }
     empleados = empleados.filter(e => e.estadoCierre !== 'bloqueado');
     const periodo = rangoQuincena(String(raw.quincena));
+    const corteComisiones = corteGuardadoNomina(raw, periodo.inicio, periodo.fin);
     // También los borradores legacy pueden contener una fecha inventada por el lector antiguo.
     documentos.forEach((documento, indice) => {
       const o = operaciones[indice];
       if (o.coleccion !== 'comisiones' || !documento.exists()) return;
       const datos = documento.data();
-      const fecha = fechaFinanciera(datos.fechaCobro);
+      if (datos.estadoLiquidacion !== 'liquidada' && !datos.estaAnulada && !comisionConCobroCompleto(datos, ordenesCobro, POLITICA_COBRO_COMISION)) throw new Error(`Comisión ${o.id}: falta trabajo terminado o cobro completo confirmado. Recalcula la nómina antes de cerrar`);
+      const fecha = datos.estadoLiquidacion === 'liquidada' ? fechaFinanciera(datos.fechaCobro) : fechaElegibleComision(datos, ordenesCobro, POLITICA_COBRO_COMISION);
       const atraso = (o.empleado.comisionesAtrasadas as LiquidacionEmpleado['comisionesAtrasadas'] || []).find(c => c.id === o.id);
       const atrasoValido = atraso && fecha && atraso.fechaDevengo === fecha.toISOString() && atraso.quincenaLiquidacion === raw.quincena;
-      if (!datos.estaAnulada && (!fecha || (fecha < periodo.inicio && !atrasoValido) || fecha > periodo.fin)) {
+      if (!datos.estaAnulada && (!fecha || (fecha < periodo.inicio && !atrasoValido) || fecha > corteComisiones)) {
         o.empleado.estadoCierre = 'bloqueado';
-        o.empleado.comisionesPendientesFecha = [...new Set([...(o.empleado.comisionesPendientesFecha as string[] || []), o.id])];
+        const campo = fecha ? 'comisionesFueraPeriodo' : 'comisionesPendientesFecha';
+        const anterior = fecha ? 'comisionesPendientesFecha' : 'comisionesFueraPeriodo';
+        o.empleado[anterior] = (o.empleado[anterior] as string[] || []).filter(id => id !== o.id);
+        o.empleado[campo] = [...new Set([...(o.empleado[campo] as string[] || []), o.id])];
       }
     });
     empleados.forEach(e => { if (e.cuotasPendientesRevision) e.estadoCierre = 'bloqueado'; });
@@ -403,6 +421,7 @@ export async function cerrarLiquidacion(
           if (d.liquidacionId !== liquidacionId) throw new Error(`Comisión ${o.id} ya liquidada: requiere conciliación`);
           return;
         }
+        if (!comisionConCobroCompleto(d, ordenesCobro, POLITICA_COBRO_COMISION)) throw new Error(`Comisión ${o.id}: falta trabajo terminado o cobro completo confirmado. Recalcula la nómina antes de cerrar`);
         if (d.estadoLiquidacion && d.estadoLiquidacion !== 'pendiente') throw new Error(`Estado de comisión ${o.id} inválido`);
         if (d.liquidacionId) throw new Error(`Comisión ${o.id} pendiente con referencia de liquidación incoherente; revisar`);
         cambios.push({ indice, datos: { estadoLiquidacion: 'liquidada', liquidacionId,
@@ -577,11 +596,13 @@ export async function recalcularEmpleadoLiquidacion(liquidacionId: string, perso
     const ids = [...new Set([...(e.comisionesIds as string[] || []), ...(e.comisionesPendientesFecha as string[] || []), ...(e.comisionesFueraPeriodo as string[] || []), ...nuevos])];
     if (ids.length > 400) throw new Error('Demasiadas comisiones; requiere revisión administrativa');
     const snaps = await Promise.all(ids.map(id => tx.get(doc(db, 'comisiones', id))));
+    const ordenesCobro = await leerOrdenesDeComisiones(snaps.flatMap(s => s.exists() ? [s.data()] : []), async id => (await tx.get(doc(db, 'ordenes_servicio', id))).data());
     const origenes = [...new Set(snaps.flatMap(c => { const d = c.data(); return d?.estadoLiquidacion === 'liquidada' && typeof d.liquidacionId === 'string' ? [d.liquidacionId] : []; }))];
     if (ids.length + origenes.length > 400) throw new Error('Demasiadas referencias para actualizar; requiere revisión');
     const origenSnaps = await Promise.all(origenes.map(id => tx.get(doc(db, 'liquidaciones_nomina', id))));
     const origenDatos = new Map(origenes.map((id, i) => [id, origenSnaps[i].exists() ? origenSnaps[i].data() : undefined]));
     const { inicio, fin } = rangoQuincena(String(raw.quincena));
+    const corteComisiones = corteGuardadoNomina(raw, inicio, fin);
     const duplicadas = comisionesDuplicadasNomina(snaps.flatMap((c, i) => c.exists() ? [{ id: ids[i], datos: c.data()! }] : []), empleados.map(emp => ({ id: String(emp.personalId), uid: typeof emp.personalUid === 'string' ? emp.personalUid : undefined }))).get(personalId) || [];
     const atrasadas: NonNullable<LiquidacionEmpleado['comisionesAtrasadas']> = [];
     const yaLiquidadas = [...(e.comisionesYaLiquidadas as NonNullable<LiquidacionEmpleado['comisionesYaLiquidadas']> || [])];
@@ -594,6 +615,7 @@ export async function recalcularEmpleadoLiquidacion(liquidacionId: string, perso
       if (typeof dato.tecnicoId !== 'string' || !dato.tecnicoId.trim() || (dato.tecnicoId !== personalId && (!e.personalUid || dato.tecnicoId !== e.personalUid))) throw new Error(`Comisión ${ids[i]} cambió de responsable; revisar`);
       if (dato.estaAnulada || dato.estadoLiquidacion === 'anulada' || duplicadas.includes(ids[i])) return;
       if ((!dato.estadoLiquidacion || dato.estadoLiquidacion === 'pendiente') && dato.liquidacionId) throw new Error(`Comisión ${ids[i]} pendiente con referencia de liquidación incoherente; revisar`);
+      if (dato.estadoLiquidacion === 'retenida_por_cobro') return;
       if (dato.estadoLiquidacion && dato.estadoLiquidacion !== 'pendiente') {
         const origen = origenDatos.get(String(dato.liquidacionId));
         const confirmado = dato.estadoLiquidacion === 'liquidada' && dato.liquidacionId !== liquidacionId && origen && Array.isArray(origen.empleados) && origen.empleados.some((emp: Record<string, unknown>) => emp.personalId === personalId && (emp.estadoCierre === 'cerrado' || (origen.estado === 'cerrada' && !emp.estadoCierre)) && (emp.comisionesIds as string[] || []).includes(ids[i]));
@@ -601,9 +623,10 @@ export async function recalcularEmpleadoLiquidacion(liquidacionId: string, perso
         if (!yaLiquidadas.some(c => c.id === ids[i])) yaLiquidadas.push({ id: ids[i], liquidacionId: String(dato.liquidacionId) });
         return;
       }
-      const fecha = fechaFinanciera(dato.fechaCobro);
+      if (!comisionConCobroCompleto(dato, ordenesCobro, POLITICA_COBRO_COMISION)) return;
+      const fecha = fechaElegibleComision(dato, ordenesCobro, POLITICA_COBRO_COMISION);
       if (!fecha) { pendientes.push(ids[i]); return; }
-      if (fecha > fin) { fueraPeriodo.push(ids[i]); return; }
+      if (fecha > corteComisiones) { fueraPeriodo.push(ids[i]); return; }
       if (fecha < inicio) atrasadas.push({ id: ids[i], fechaDevengo: fecha.toISOString(), quincenaDevengo: calcularQuincenaActual(fecha), quincenaLiquidacion: String(raw.quincena), incorporadaPorId: actor.id });
       const monto = Number(dato.comisionMonto) + Number(dato.descuentoPorGarantia?.monto ?? 0);
       if (!Number.isFinite(monto)) throw new Error(`Comisión ${ids[i]} con importe inválido`);
@@ -851,6 +874,8 @@ export function parseLiquidacion(id: string, raw: Record<string, unknown>): Liqu
     id,
     comisionesSinEmpleado: (raw.comisionesSinEmpleado as string[]) || [],
     quincena: (raw.quincena as string) || '',
+    corteComisiones: fechaFinanciera(raw.corteComisiones) || undefined,
+    fechaPagoProgramada: typeof raw.fechaPagoProgramada === 'string' ? raw.fechaPagoProgramada : undefined,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     periodoInicio: (raw.periodoInicio as any)?.toDate?.() || new Date(),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

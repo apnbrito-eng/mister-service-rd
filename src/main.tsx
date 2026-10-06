@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { iniciarRuntimeMovil } from './mobile/runtime';
 import './index.css';
+import './styles/apple.css';
 import { iniciarViewport } from './mobile/viewport';
 iniciarViewport();
 

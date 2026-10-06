@@ -10,7 +10,7 @@ interface UbicacionResponse {
   lng: number;
   velocidad: number;
   rumbo: number;
-  timestamp: string;
+  timestamp: string | null;
   enMovimiento: boolean;
 }
 
@@ -281,8 +281,15 @@ function buildHeaders(apiKey: string, proveedor: string): Record<string, string>
   return headers;
 }
 
+/** Una señal sin fecha no demuestra ubicación actual del vehículo. */
+function fechaProveedor(valor: unknown, segundos = false): string | null {
+  if (valor === undefined || valor === null || valor === '') return null;
+  const fecha = segundos ? new Date(Number(valor) * 1000) : new Date(String(valor));
+  return Number.isFinite(fecha.getTime()) ? fecha.toISOString() : null;
+}
+
 /** Normaliza la respuesta de cada proveedor al formato estándar */
-function normalizarRespuesta(
+export function normalizarRespuesta(
   data: Record<string, unknown>,
   proveedor: Proveedor,
   vehiculoId: string
@@ -299,7 +306,7 @@ function normalizarRespuesta(
         lng: Number(pos?.x) || 0,
         velocidad: Number(d.speed) || 0,
         rumbo: Number(d.course) || 0,
-        timestamp: d.time ? new Date(Number(d.time) * 1000).toISOString() : new Date().toISOString(),
+        timestamp: fechaProveedor(d.time, true),
         enMovimiento: Number(d.speed) > 0,
       };
     case 'Samsara':
@@ -309,19 +316,19 @@ function normalizarRespuesta(
         lng: Number(location?.longitude) || 0,
         velocidad: Number(d.speedMilesPerHour) * 1.60934 || 0,
         rumbo: Number(d.heading) || 0,
-        timestamp: d.time ? new Date(String(d.time)).toISOString() : new Date().toISOString(),
+        timestamp: fechaProveedor(d.time),
         enMovimiento: Number(d.speedMilesPerHour) > 0,
       };
     case 'Traccar': {
       // Traccar devuelve un array de positions — tomar la primera
-      const item = Array.isArray(data) ? (data[0] as Record<string, unknown>) : d;
+      const item = Array.isArray(data) ? ((data[0] ?? {}) as Record<string, unknown>) : d;
       return {
         vehiculoId,
         lat: Number(item.latitude) || 0,
         lng: Number(item.longitude) || 0,
         velocidad: Number(item.speed) * 1.852 || 0, // nudos → km/h
         rumbo: Number(item.course) || 0,
-        timestamp: item.deviceTime ? new Date(String(item.deviceTime)).toISOString() : new Date().toISOString(),
+        timestamp: fechaProveedor(item.deviceTime),
         enMovimiento: Number(item.speed) > 0,
       };
     }
@@ -332,7 +339,7 @@ function normalizarRespuesta(
         lng: Number(d.lng) || 0,
         velocidad: Number(d.speed || d.velocidad) || 0,
         rumbo: Number(d.heading || d.rumbo) || 0,
-        timestamp: d.timestamp ? new Date(String(d.timestamp)).toISOString() : new Date().toISOString(),
+        timestamp: fechaProveedor(d.timestamp),
         enMovimiento: Number(d.speed || d.velocidad) > 0,
       };
   }

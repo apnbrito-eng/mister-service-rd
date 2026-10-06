@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Dobles de Firebase/API deliberadamente parciales; solo fixtures de pruebas. */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const fake = vi.hoisted(() => ({
   data: new Map<string, any>(),
@@ -38,6 +39,7 @@ vi.mock("../../api/_lib/accesoEquipo.js", () => {
     },
   });
   const db = {
+    doc: (path: string) => ({ path }),
     collection,
     runTransaction: async (callback: any) => {
       const pending: (() => void)[] = [];
@@ -359,4 +361,17 @@ describe("CRM endpoint: permisos, transacciones e idempotencia", () => {
     expect(r.body.orden.pagos).toBeUndefined();
     expect(r.body.eventos).toEqual([]);
   });
+});
+
+it('CRM libera comisión retenida al confirmar saldo final y preserva identidad al reintentar', async () => {
+  const orden = fake.data.get('ordenes_servicio/orden1');
+  orden.fase = 'cerrado';
+  orden.pagos = [{ ...pago, id: 'anticipo', monto: 4000, verificado: true }, { ...pago, id: 'saldo', monto: 4000 }];
+  fake.data.set('comisiones/orden_orden1', { ordenId: 'orden1', precioFinal: 8000, estadoLiquidacion: 'retenida_por_cobro', comisionMonto: 700 });
+  const solicitud = base('confirmar_pago', { pagoId: 'saldo' });
+  expect((await llamar(solicitud)).status).toBe(200);
+  const liberada = fake.data.get('comisiones/orden_orden1');
+  expect(liberada).toMatchObject({ estadoLiquidacion: 'pendiente', comisionMonto: 700 });
+  await llamar(solicitud);
+  expect(fake.data.get('comisiones/orden_orden1')).toEqual(liberada);
 });

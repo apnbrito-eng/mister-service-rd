@@ -18,6 +18,16 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe('consulta GPS sin acceso a credenciales privadas', () => {
+  it('no convierte una ubicación sin fecha en una señal reciente', async () => {
+    m.fetch.mockResolvedValue({ ok: true, json: async () => ({ lat: 18, lng: -69 }) });
+    const ubicacion = await obtenerUbicacionAPI('vehiculo-prueba');
+    expect(ubicacion).not.toBeNull();
+    expect(Number.isNaN(ubicacion!.timestamp.getTime())).toBe(true);
+  });
+  it('descarta coordenadas inválidas del proveedor', async () => {
+    m.fetch.mockResolvedValue({ ok: true, json: async () => ({ lat: 99, lng: -69 }) });
+    expect(await obtenerUbicacionAPI('vehiculo-prueba')).toBeNull();
+  });
   it('obtiene ubicación vía servidor aunque el cliente no pueda leer la configuración', async () => {
     m.fetch.mockResolvedValue({ ok: true, json: async () => ({ lat: 18, lng: -69, velocidad: 20 }) });
     expect(await obtenerUbicacionAPI('vehiculo-prueba')).toMatchObject({ lat: 18, lng: -69, velocidad: 20 });

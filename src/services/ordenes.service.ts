@@ -1,3 +1,5 @@
+import { prepararLiberacionComision, POLITICA_COBRO_COMISION } from '../utils/comisionCobro';
+import { equipoApi } from './equipoApi';
 import { fechaFinanciera } from '../utils/fechaFinanciera';
 import { incidenciasPago, pagosSinConfirmacion, huellaPago, tieneIdPagoRepetido } from '../utils/pagosConciliacion';
 import { puede } from '../utils/permisos';
@@ -436,6 +438,7 @@ export async function resolverSugerenciaSoloChequeo(
       // soloChequeo + precioFinal + estadoAprobacion. El técnico solo
       // podrá cerrar después de esto (rule R4 chequea ordenAprobada()).
       updates.soloChequeo = true;
+      updates.chequeoConfirmacionEstado = 'pendiente';
       updates.precioFinal = sugerencia.montoChequeo;
       updates.precioChequeo = sugerencia.montoChequeo;
       updates.tipoCierre = 'solo_chequeo';
@@ -1278,13 +1281,17 @@ export async function confirmarPagoOrden(
   const auditoriaRef = doc(collection(db, 'auditoria_admin'));
 
   try {
-    return await runTransaction(db, async (tx) => {
+    const resultado = await runTransaction(db, async (tx) => {
       const perfil = await tx.get(doc(db, 'usuarios', actorUid));
       if (!perfil.exists() || perfil.data().activo === false || !puede({ ...perfil.data(), id: actorUid } as Usuario, 'pagosVerificar')) return { ok: false, razon: 'sin_permiso' as const };
       const snap = await tx.get(ordenRef);
       if (!snap.exists()) return { ok: false, razon: 'orden_no_existe' as const };
       const data = snap.data() as Record<string, unknown>;
+      if (!['administrador', 'coordinadora'].includes(String(perfil.data().rol)) || data.flujoEfectivo === 'confirmacion_tecnico' || Object.keys((data.efectivoAceptaciones || {}) as object).length || Object.keys((data.efectivoEntregas || {}) as object).length) return { servidor: true as const };
 
+      const comisionRef = doc(db, 'comisiones', `orden_${encodeURIComponent(ordenId)}`);
+      const comision = await tx.get(comisionRef);
+      if (comision.exists() && comision.data().ordenId !== ordenId) throw new Error('Comisión asociada a otra orden; requiere revisión');
       const pagosActuales = Array.isArray(data.pagos)
         ? (data.pagos as Array<Record<string, unknown>>)
         : [];
@@ -1316,15 +1323,18 @@ export async function confirmarPagoOrden(
         pagos: nuevosPagos,
         updatedAt: serverTimestamp(),
       };
+      const liberacion = prepararLiberacionComision(comision.data(), { ...data, pagos: nuevosPagos }, ahora, ahora.toDate(), POLITICA_COBRO_COMISION);
+      if (liberacion) tx.update(comisionRef, liberacion);
       tx.update(ordenRef, stripUndefined(ordenUpdate));
 
       // Audit log dentro de la misma transacción (P-003).
       const auditPayload: Record<string, unknown> = {
         accion: 'pago.confirmado',
+        comisionLiberada: !!liberacion,
         ordenId,
         pagoId,
         actorId: actorUid,
-        actorUid: actorUid,
+        actorUid,
         actorNombre: confirmadoPor.nombre,
         monto: typeof pagoActual.monto === 'number' ? pagoActual.monto : 0,
         metodo: pagoActual.metodo ?? null,
@@ -1334,6 +1344,8 @@ export async function confirmarPagoOrden(
 
       return { ok: true };
     });
+    if ('servidor' in resultado) return await equipoApi<ConfirmarPagoResult>('/api/ordenes/efectivo', { accion: 'verificar', ordenId, pagoId });
+    return resultado;
   } catch (err) {
      
     console.error('[confirmarPagoOrden] error:', err);

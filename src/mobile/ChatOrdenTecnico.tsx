@@ -1,3 +1,4 @@
+import { registrarActividadOrden } from '../services/actividadOrden.service';
 import { useEffect, useRef, useState } from 'react';
 import { equipoApi } from '../services/equipoApi';
 import { enviarTexto } from '../services/whatsapp.service';
@@ -13,7 +14,7 @@ export default function ChatOrdenTecnico({ ordenId, puedeEnviar = false }: { ord
     return () => { cancelado = true; clearInterval(timer); };
   }, [abierto, ordenId]);
   return <div className="w-full">
-    <button type="button" className="min-h-11 rounded-xl border border-blue-200 bg-white px-3 text-blue-700" onClick={() => setAbierto(!abierto)}>{abierto ? 'Cerrar conversación' : 'WhatsApp de esta orden'}</button>
+    <button type="button" className="min-h-11 rounded-xl border border-blue-200 bg-white px-3 text-blue-700" onClick={() => { if(!abierto) void registrarActividadOrden(ordenId,'whatsapp').catch(()=>setError('No se pudo registrar la apertura del chat.')); setAbierto(!abierto); }}>{abierto ? 'Cerrar conversación' : 'WhatsApp de esta orden'}</button>
     {abierto && <section className="mt-2 rounded-xl border bg-white p-3" aria-label="Chat oficial de la orden">
       <p className="text-xs text-slate-500">Mensajes vinculados a esta orden. El cliente recibe desde el número oficial.</p>
       <div className="my-3 max-h-64 space-y-2 overflow-auto">{datos?.mensajes.map(m => <div key={m.id} className={`rounded-lg p-2 text-sm ${m.entrada ? 'bg-slate-100' : 'bg-blue-50'}`}><p className="text-xs font-medium">{m.autor} · {m.estado}</p><p className="whitespace-pre-wrap break-words">{m.texto}</p></div>)}</div>

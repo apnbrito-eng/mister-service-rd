@@ -88,6 +88,7 @@ export function equiposPresentesEnBase(clientes: Cliente[]): string[] {
 
 /** Aplica todos los filtros (AND) sobre un cliente individual. */
 export function aplicaFiltros(c: Cliente, f: FiltrosClientes): boolean {
+  if (c.eliminado === true) return false;
   // Zona
   if (f.zonas.length > 0) {
     if (!c.zona || !f.zonas.includes(c.zona)) return false;

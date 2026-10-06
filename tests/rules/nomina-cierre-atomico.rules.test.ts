@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Dobles de Firebase/API deliberadamente parciales; solo fixtures de pruebas. */
 import { beforeAll, afterAll, beforeEach, expect, it, vi } from 'vitest';
 import { doc, getDoc } from 'firebase/firestore';
 import { iniciarEntorno, entorno, resetearConPerfiles, sembrar, como, UID } from './helpers';
@@ -5,12 +6,19 @@ const contexto = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock('../../src/firebase/config', () => ({ get db() { return contexto.db; } }));
 import { cerrarLiquidacion } from '../../src/services/nomina.service';
 const actor = { id: UID.admin, nombre: 'QA' } as any;
+// Estos escenarios prueban nómina después de trabajo terminado y cobro verificado.
+async function sembrarComisionCobrada(ruta: string, datos: Record<string, unknown>) {
+ const ordenId = ruta.split('/')[1];
+ await sembrar(`ordenes_servicio/${ordenId}`, { fase: 'cerrado', precioFinal: 10000, pagos: [{ id: 'qa-pago', monto: 10000, verificado: true, verificadoAt: '2026-09-01T12:00:00-04:00' }] });
+ await sembrar(ruta, { ...datos, ordenId, precioFinal: 10000 });
+}
+
 beforeAll(async () => { await iniciarEntorno(); });
 afterAll(async () => { await entorno().cleanup(); });
 beforeEach(async () => {
  await resetearConPerfiles(); contexto.db = como(UID.admin);
  await sembrar('liquidaciones_nomina/l', { estado: 'abierta', quincena: '2026-09-Q2', empleados: [{ personalId: 'p', totalDevengado: 1000, comisionesIds: ['c'], totalComisiones: 100, avancesIds: ['a'], totalAvances: 50, cuotasPrestamos: [{ prestamoId: 'pr', numeroCuota: 1, monto: 100 }], totalCuotasPrestamos: 100 }] });
- await sembrar('comisiones/c', { tecnicoId: 'p', estadoLiquidacion: 'pendiente', fechaCobro: '2026-09-20T12:00:00-04:00', comisionMonto: 100 });
+ await sembrarComisionCobrada('comisiones/c', { tecnicoId: 'p', estadoLiquidacion: 'pendiente', fechaCobro: '2026-09-20T12:00:00-04:00', comisionMonto: 100 });
  await sembrar('avances/a', { personalId: 'p', monto: 50, descontado: false });
  await sembrar('prestamos_empleados/pr', { personalId: 'p', estado: 'activo', montoTotal: 300, saldoPendiente: 300, cuotasTotales: 3, cuotasPagadas: 0, cuotasHistorial: [] });
 });
@@ -41,11 +49,11 @@ it('cierre parcial conserva bloqueado y permite completar luego sin repetir cuot
  const liq = await leer('liquidaciones_nomina/l');
  liq.empleados.push({ personalId:'p2', estadoCierre:'bloqueado', comisionesPendientesFecha:['c2'], totalDevengado:100, sueldoBase:100, comisionesIds:[],totalComisiones:0,pagado:false });
  await sembrar('liquidaciones_nomina/l',liq);
- await sembrar('comisiones/c2',{tecnicoId:'p2',estadoLiquidacion:'pendiente',comisionMonto:20});
+ await sembrarComisionCobrada('comisiones/c2',{tecnicoId:'p2',estadoLiquidacion:'pendiente',comisionMonto:20});
  await cerrarLiquidacion('l',actor);
  expect((await leer('liquidaciones_nomina/l')).estado).toBe('abierta');
  expect((await leer('prestamos_empleados/pr')).cuotasPagadas).toBe(1);
- await sembrar('comisiones/c2',{tecnicoId:'p2',estadoLiquidacion:'pendiente',comisionMonto:20,fechaCobro:'2026-09-20T12:00:00-04:00'});
+ await sembrarComisionCobrada('comisiones/c2',{tecnicoId:'p2',estadoLiquidacion:'pendiente',comisionMonto:20,fechaCobro:'2026-09-20T12:00:00-04:00'});
  const { recalcularEmpleadoLiquidacion } = await import('../../src/services/nomina.service');
  await recalcularEmpleadoLiquidacion('l','p2',actor);
  await cerrarLiquidacion('l',actor);
@@ -61,7 +69,7 @@ it('generación simultánea converge en documento real único y recupera tardía
  expect(a.id).toBe('nomina-2026-09-Q2'); expect(b.id).toBe(a.id);
  await cerrarLiquidacion(a.id,actor);
  // Inserción posterior al snapshot y cierre: conserva devengo real; no reabre empleado.
- await sembrar('comisiones/tardia',{tecnicoId:'p',estadoLiquidacion:'pendiente',comisionMonto:35,fechaCobro:'2026-09-20T12:00:00-04:00'});
+ await sembrarComisionCobrada('comisiones/tardia',{tecnicoId:'p',estadoLiquidacion:'pendiente',comisionMonto:35,fechaCobro:'2026-09-20T12:00:00-04:00'});
  const siguiente = await generarLiquidacion('2026-10-Q1',actor);
  expect(siguiente.liquidacion.empleados[0].comisionesIds).toEqual(['tardia']);
  expect(siguiente.liquidacion.empleados[0].comisionesAtrasadas?.[0]).toMatchObject({quincenaDevengo:'2026-09-Q2',quincenaLiquidacion:'2026-10-Q1'});
@@ -79,7 +87,7 @@ it('devengo nuevo exige revisar préstamo y cierre descuenta la cuota una sola v
  await sembrar('prestamos_empleados/pr',{personalId:'p',estado:'activo',montoTotal:300,montoCuota:100,saldoPendiente:300,cuotasPagadas:0,cuotasTotales:3,cuotasHistorial:[],motivo:'Préstamo QA'});
  const { generarLiquidacion, recalcularEmpleadoLiquidacion, prepararCuotasPendientes, confirmarCuotasPendientes } = await import('../../src/services/nomina.service');
  const liq = await generarLiquidacion('2026-09-Q2',actor);
- await sembrar('comisiones/tardia',{tecnicoId:'p',comisionMonto:3000,fechaCobro:'2026-09-20T12:00:00-04:00',estadoLiquidacion:'pendiente'});
+ await sembrarComisionCobrada('comisiones/tardia',{tecnicoId:'p',comisionMonto:3000,fechaCobro:'2026-09-20T12:00:00-04:00',estadoLiquidacion:'pendiente'});
  await recalcularEmpleadoLiquidacion(liq.id,'p',actor);
  expect((await leer('liquidaciones_nomina/'+liq.id)).empleados[0].cuotasPendientesRevision).toBe(true);
  const vista = await prepararCuotasPendientes('p');
@@ -88,4 +96,11 @@ it('devengo nuevo exige revisar préstamo y cierre descuenta la cuota una sola v
  await cerrarLiquidacion(liq.id,actor); await cerrarLiquidacion(liq.id,actor);
  expect((await leer('prestamos_empleados/pr')).cuotasPagadas).toBe(1);
  expect((await leer('liquidaciones_nomina/'+liq.id)).empleados[0].totalNeto).toBe(2900);
+});
+
+it('pago parcial no permite liquidar comisión aunque esté en el borrador', async () => {
+ await sembrar('ordenes_servicio/c', { fase: 'cerrado', precioFinal: 10000, pagos: [{ id:'anticipo', monto:5000, verificado:true, verificadoAt:'2026-09-20T12:00:00-04:00' }] });
+ await expect(cerrarLiquidacion('l',actor)).rejects.toThrow('cobro completo');
+ expect((await leer('comisiones/c')).estadoLiquidacion).toBe('pendiente');
+ expect((await leer('prestamos_empleados/pr')).cuotasPagadas).toBe(0);
 });

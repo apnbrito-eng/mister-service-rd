@@ -1,3 +1,9 @@
+import { fechaFinanciera } from '../utils/fechaFinanciera';
+import { fechaElegibleComision, quincenaCobroRD, POLITICA_COBRO_COMISION } from '../utils/comisionCobro';
+import EfectivoOrdenPanel from '../components/ordenes/EfectivoOrdenPanel';
+import PiezasDiagnostico from '../components/ordenes/PiezasDiagnostico';
+import ActividadOrden from '../components/ordenes/ActividadOrden';
+import { registrarActividadOrden } from '../services/actividadOrden.service';
 import { tieneAprobacionCierre } from '../utils/aprobacionCierre';
 import { esOrdenAsignada } from '../utils/asignacionTecnico';
 import { puede } from '../utils/permisos';
@@ -20,7 +26,6 @@ import { crearNotificacion } from '../services/notificaciones.service';
 import { marcarVisitaFallida } from '../services/ordenes.service';
 import { calcularQuincenaActual, rangoQuincena } from '../utils/comisiones';
 import { ComisionRegistro } from '../types';
-import { whatsappUrl, mensajesWhatsApp } from '../utils/whatsapp';
 import BotonComoLlegar from '../components/shared/BotonComoLlegar';
 import { useApp } from '../context/AppContext';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -34,11 +39,10 @@ import BannerSiguientePaso from '../components/ordenes/BannerSiguientePaso';
 import NotificacionesPanel from '../components/NotificacionesPanel';
 import { guardarUbicacionVehiculo } from '../services/gps.service';
 import {
-  MapPin, Clock, Phone, CheckCircle, LogOut, Navigation,
-  User, Bell, StickyNote, Eye, History,
+  MapPin, Clock, CheckCircle, LogOut, Navigation,
+  Bell, StickyNote, Eye, History,
   ClipboardCheck, Pause, Play, Calendar, Wrench, DollarSign
 } from 'lucide-react';
-import WhatsAppIcon from '../components/icons/WhatsAppIcon';
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { signOut } from 'firebase/auth';
@@ -87,6 +91,8 @@ type VistaTab = 'hoy' | 'semana' | 'mes' | 'rango';
 export default function TecnicoVista() {
   const { userProfile, currentUser } = useApp();
   const navigate = useNavigate();
+  const actividad = (id: string, accion: Parameters<typeof registrarActividadOrden>[1]) => registrarActividadOrden(id, accion).catch(() => { toast.error('No se pudo registrar la acción. Revisa tu conexión.'); });
+  const abrirOrden = (orden: OrdenServicio) => { setSelectedOrden(orden); void actividad(orden.id, 'abrir'); };
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
@@ -96,6 +102,7 @@ export default function TecnicoVista() {
   const [rangoHasta, setRangoHasta] = useState('');
   const [rangoAplicado, setRangoAplicado] = useState<{ desde: string; hasta: string } | null>(null);
   const [selectedOrden, setSelectedOrden] = useState<OrdenServicio | null>(null);
+  useEffect(() => { setSelectedOrden(prev => prev ? ordenes.find(o => o.id === prev.id) || null : null); }, [ordenes]);
   const ordenSolicitada = searchParams.get('orden');
   useEffect(() => {
     if (!ordenSolicitada || loading || !currentUser || !userProfile) return;
@@ -116,7 +123,16 @@ export default function TecnicoVista() {
   const [nuevaCitaBadge, setNuevaCitaBadge] = useState(false);
   const [previousCount, setPreviousCount] = useState<number | null>(null);
   const [compartiendoGPS, setCompartiendoGPS] = useState(false);
-  const [comisionesQuincena, setComisionesQuincena] = useState<ComisionRegistro[]>([]);
+  const [comisionesRegistradas, setComisionesQuincena] = useState<ComisionRegistro[]>([]);
+  const comisionesQuincena = useMemo(() => {
+    const porOrden = new Map(ordenes.map(o => [o.id, o as unknown as Record<string, unknown>]));
+    const quincena = calcularQuincenaActual(new Date());
+    return comisionesRegistradas.flatMap(c => {
+      if (c.estadoLiquidacion === 'liquidada') return c.quincenaAsignada === quincena ? [c] : [];
+      const fecha = fechaElegibleComision(c as unknown as Record<string, unknown>, porOrden, POLITICA_COBRO_COMISION);
+      return fecha && quincenaCobroRD(fecha) === quincena ? [{ ...c, fechaCobro: fecha, quincenaAsignada: quincena }] : [];
+    });
+  }, [comisionesRegistradas, ordenes]);
   const [mostrarDetalleGanancias, setMostrarDetalleGanancias] = useState(false);
   const [standbyItems, setStandbyItems] = useState<StandbyPieza[]>([]);
   const [empresaConfig, setEmpresaConfig] = useState<ConfigEmpresa>({ ...CONFIG_EMPRESA_DEFAULT });
@@ -199,7 +215,6 @@ export default function TecnicoVista() {
     // comparación legacy `c.tecnicoId === userProfile.id` ya no aplica
     // porque la query filtra por auth.uid directamente).
     if (currentUser?.uid) {
-      const quincena = calcularQuincenaActual(new Date());
       const qComisiones = query(
         collection(db, 'comisiones'),
         where('tecnicoId', '==', currentUser.uid),
@@ -208,6 +223,8 @@ export default function TecnicoVista() {
         const items = snap.docs
           .map(d => {
             const raw = d.data();
+            const fechaCobro = fechaFinanciera(raw.fechaCobro);
+            if (!fechaCobro) return null;
             const desc = raw.descuentoPorGarantia as Record<string, unknown> | undefined;
             const comision: ComisionRegistro = {
               id: d.id,
@@ -216,13 +233,14 @@ export default function TecnicoVista() {
               ordenId: (raw.ordenId as string) || '',
               ordenNumero: (raw.ordenNumero as string) || '',
               clienteNombre: (raw.clienteNombre as string) || '',
-              fechaCobro: raw.fechaCobro?.toDate?.() || new Date(),
+              fechaCobro,
               precioFinal: (raw.precioFinal as number) || 0,
               costoPiezas: (raw.costoPiezas as number) || 0,
               basePendienteComision: (raw.basePendienteComision as number) || 0,
               comisionPorcentaje: (raw.comisionPorcentaje as number) || 0,
               comisionMonto: (raw.comisionMonto as number) || 0,
-              estadoLiquidacion: (raw.estadoLiquidacion as 'pendiente' | 'liquidada') || 'pendiente',
+              estadoLiquidacion: (raw.estadoLiquidacion as ComisionRegistro['estadoLiquidacion']) || 'pendiente',
+              cobroLiberadoEn: fechaFinanciera(raw.cobroLiberadoEn) || undefined,
               quincenaAsignada: raw.quincenaAsignada as string | undefined,
               createdAt: raw.createdAt?.toDate?.() || new Date(),
             };
@@ -242,9 +260,7 @@ export default function TecnicoVista() {
             }
             return comision;
           })
-          // SPRINT-179: query ya filtra por tecnicoId == auth.uid. Solo
-          // mantenemos el filtro client-side de quincena.
-          .filter(c => c.quincenaAsignada === quincena);
+          .filter((c): c is ComisionRegistro => c !== null && c.estadoLiquidacion !== 'retenida_por_cobro');
         setComisionesQuincena(items);
       });
     }
@@ -265,9 +281,9 @@ export default function TecnicoVista() {
     // Verificar si hay alguna orden asignada al técnico con tracking habilitado
     // @safe-userprofile-id: filtro UI local de "ordenes mías", no escribe a Firestore.
     const tieneTrackingActivo = ordenes.some(o =>
-      (o.tecnicoId === userProfile.id || o.tecnicoNombre === userProfile.nombre) &&
-      o.trackingGPS?.habilitado &&
-      !['cerrado', 'cancelado', 'trabajo_realizado'].includes(o.fase)
+      esOrdenAsignada(o, currentUser?.uid, userProfile.id) &&
+      (o.trackingGPS?.habilitado || o.salidaTecnico) &&
+      !o.visitaCancelada && !o.visitaFallida && !o.enStandby && !['cerrado', 'cancelado', 'trabajo_realizado'].includes(o.fase)
     );
 
     if (!tieneTrackingActivo) {
@@ -317,7 +333,7 @@ export default function TecnicoVista() {
       setCompartiendoGPS(false);
     };
     // @safe-userprofile-id: deps array de useEffect, no es write.
-  }, [ordenes, userProfile?.id, userProfile?.nombre]);
+  }, [ordenes, userProfile?.id, userProfile?.nombre, currentUser?.uid]);
 
   const esOrdenMia = (orden: OrdenServicio): boolean => {
     if (!userProfile) return false;
@@ -675,7 +691,7 @@ export default function TecnicoVista() {
       const ahora = Timestamp.now();
       const usuario = userProfile?.nombre || 'Técnico';
       const detalleHasta = standbyForm.hasta
-        ? ` · estimada reactivación ${standbyForm.hasta}`
+        ? ` · espera estimada ${standbyForm.hasta} días`
         : '';
       const registroAuditoria = crearRegistroAuditoria(
         usuario,
@@ -694,7 +710,7 @@ export default function TecnicoVista() {
         updatedAt: ahora,
       };
       if (standbyForm.hasta) {
-        const dt = new Date(`${standbyForm.hasta}T00:00:00`);
+        const dt = new Date(); dt.setDate(dt.getDate() + Number(standbyForm.hasta));
         if (!isNaN(dt.getTime())) payload.standbyHasta = Timestamp.fromDate(dt);
       }
       if (standbyForm.notas.trim()) payload.standbyNotas = standbyForm.notas.trim();
@@ -793,7 +809,7 @@ export default function TecnicoVista() {
     <div className="tecnico-ui min-h-screen bg-[#f0f4f8]">
       <PanelMovil uid={currentUser?.uid} />
       {/* Header */}
-      <div className="bg-primary px-4 py-3 sticky top-0 z-20 shadow-md">
+      <div className="apple-tecnico-header bg-primary px-4 py-3 sticky top-0 z-20">
         <div className="flex flex-wrap items-center justify-between gap-3 max-w-4xl mx-auto">
           {/* SPRINT-DISENO-TECNICO-FASE-1 (2026-05-30): saludo compactado en
               el header en una sola línea junto al logo. Antes vivía como
@@ -802,7 +818,7 @@ export default function TecnicoVista() {
           <div className="flex items-center gap-2 min-w-0 flex-1 basis-40">
             <Logo size="sm" white />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white truncate leading-tight">
+              <p className="text-h2 font-semibold text-white truncate leading-tight">
                 {nombreCorto}
               </p>
               <p className="text-xs text-white/70 leading-tight whitespace-nowrap">
@@ -1018,9 +1034,8 @@ export default function TecnicoVista() {
                         <FotoEquipoDisplay url={orden.fotoEquipoUrl} size="sm" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-base font-semibold text-gray-900">
-                          {formatearEquipoLabel(orden)}
-                        </h3>
+                        <h3 className="text-base font-semibold text-gray-900">{orden.clienteNombre}</h3>
+                        <p className="font-semibold text-gray-900">{formatearEquipoLabel(orden)}</p>
                         {orden.descripcionFalla && (
                           <p className="text-xs text-gray-600 mt-1"><strong>Falla:</strong> {orden.descripcionFalla}</p>
                         )}
@@ -1042,38 +1057,8 @@ export default function TecnicoVista() {
                           ubicacion={ubi ? { lat: ubi.lat, lng: ubi.lng } : null}
                           size="lg"
                           variant="block"
+                          onNavigate={() => void actividad(orden.id, 'ubicacion')}
                         />
-                      </div>
-                    )}
-
-                    {/* Cliente */}
-                    <div className="mt-3 flex items-center gap-2 flex-wrap">
-                      <User size={14} className="text-gray-400" />
-                      <span className="text-sm font-medium text-gray-800">{orden.clienteNombre}</span>
-                      {permisos.puedeContactarCliente && orden.clienteTelefono && (
-                        <a
-                          href={whatsappUrl(
-                            orden.clienteTelefono,
-                            `Hola ${orden.clienteNombre.trim().split(/\s+/)[0] || ''}, te escribimos de Mister Service RD.`,
-                          )}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          className="ml-auto inline-flex items-center gap-1.5 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-semibold min-h-[40px]"
-                          title={`Enviar WhatsApp a ${orden.clienteNombre}`}
-                        >
-                          <WhatsAppIcon filled={false} className="text-white" size={14} /> WhatsApp
-                        </a>
-                      )}
-                    </div>
-
-                    {/* Teléfono condicional */}
-                    {orden.clienteTelefono && (
-                      <div className="mt-1 flex items-center gap-2">
-                        <Phone size={12} className="text-gray-400" />
-                        <span className={`text-xs ${permisos.verTelefonoCliente ? 'text-gray-700' : 'text-gray-400 italic'}`}>
-                          {getTelefonoMostrado(orden.clienteTelefono)}
-                        </span>
                       </div>
                     )}
 
@@ -1086,13 +1071,6 @@ export default function TecnicoVista() {
                         </span>
                       </div>
                     )}
-                    {orden.precioSugerido !== undefined && orden.precioSugerido !== null && (
-                      <div className="mt-1 bg-green-50 rounded-lg p-2 text-xs text-green-800 border border-green-100">
-                        <span className="font-medium inline-flex items-center gap-1"><DollarSign size={11} /> Mi precio:</span>
-                        <span className="ml-1 font-bold">RD$ {Number(orden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}</span>
-                      </div>
-                    )}
-
                     {/* Estado de aprobación de precio */}
                     {orden.precioSugerido !== undefined && (
                       orden.estadoAprobacion === 'aprobado' && orden.precioFinal !== undefined ? (
@@ -1144,16 +1122,16 @@ export default function TecnicoVista() {
                           >
                             <Play size={12} /> {reactivandoId === orden.id ? 'Reactivando...' : '▶ Reactivar'}
                           </button>
-                          <button onClick={() => setSelectedOrden(orden)}
+                          <button onClick={() => abrirOrden(orden)}
                             className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg text-sm font-medium ml-auto">
-                            <Eye size={12} /> Ver detalle
+                            <Eye size={12} /> Abrir orden
                           </button>
                         </div>
                       </div>
                     )}
 
                     {/* Banner de estado de sugerencia "solo chequeo" (sprint R4 endurecida) */}
-                    {!completado && !orden.enStandby && (() => {
+                    {!completado && !orden.enStandby && !orden.visitaCancelada && (() => {
                       const ultimaSug = obtenerUltimaSugerenciaSoloChequeo(orden);
                       // Si está aprobada y la orden ya tiene soloChequeo:true, no mostramos
                       // (el cierre normal seguirá su flujo). Si rechazada o pendiente, sí.
@@ -1168,10 +1146,10 @@ export default function TecnicoVista() {
                       );
                     })()}
 
+                    {orden.visitaCancelada && <div className="mt-3 p-3 bg-amber-50 rounded"><p>Visita cancelada: {orden.visitaCancelada.motivo}</p><button onClick={() => abrirOrden(orden)}>Abrir orden</button></div>}
                     {/* Actions (orden activa, no en stand-by) */}
-                    {!completado && !orden.enStandby && (
+                    {!completado && !orden.enStandby && !orden.visitaCancelada && (
                       <div className="mt-4 flex flex-wrap gap-2">
-                        <ChatOrdenTecnico ordenId={orden.id} puedeEnviar={puede(userProfile, 'tecnicoPuedeContactarCliente')} />
                         {/* Iniciar chequeo (foto + GPS, solo el día de la cita) */}
                         <IniciarChequeoButton orden={orden} userProfile={userProfile} size="sm" />
                         {permisos.puedeMarcarCompletado && (() => {
@@ -1256,7 +1234,7 @@ export default function TecnicoVista() {
                           </button>
                         )}
                         {permisos.verUbicacionGPS && ubi && (
-                          <a href={googleMapsLink(ubi.lat, ubi.lng)} target="_blank" rel="noreferrer"
+                          <a onClick={() => void actividad(orden.id,'ubicacion')} href={googleMapsLink(ubi.lat, ubi.lng)} target="_blank" rel="noreferrer"
                             className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg text-sm font-medium">
                             <Navigation size={12} /> Ver en Maps
                           </a>
@@ -1271,16 +1249,9 @@ export default function TecnicoVista() {
                             {capturandoGpsOrdenId === orden.id ? 'Capturando...' : 'Capturar GPS'}
                           </button>
                         )}
-                        {permisos.puedeContactarCliente && orden.clienteTelefono && (
-                          <a href={whatsappUrl(orden.clienteTelefono, mensajesWhatsApp.recordatorioCita(orden.clienteNombre, format(orden.fechaCita || new Date(), "dd/MM/yyyy"), formatHora(orden.fechaCita)))}
-                            target="_blank" rel="noreferrer"
-                            className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-4 py-3 rounded-lg text-sm font-medium">
-                            <WhatsAppIcon filled={false} className="text-white" size={12} /> WhatsApp
-                          </a>
-                        )}
-                        <button onClick={() => setSelectedOrden(orden)}
+                        <button onClick={() => abrirOrden(orden)}
                           className="flex items-center gap-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg text-sm font-medium ml-auto">
-                          <Eye size={12} /> Ver detalle
+                          <Eye size={12} /> Abrir orden
                         </button>
                       </div>
                     )}
@@ -1309,7 +1280,8 @@ export default function TecnicoVista() {
           const { inicio, fin } = rangoQuincena(quincena);
           const esQ1 = quincena.endsWith('Q1');
           const diaPago = esQ1 ? 15 : 30;
-          const rangoTxt = `${format(inicio, "d 'de' MMMM", { locale: es })} — ${format(fin, "d 'de' MMMM", { locale: es })}`;
+          const formatoRango = new Intl.DateTimeFormat('es-DO', { timeZone: 'America/Santo_Domingo', day: 'numeric', month: 'long' });
+          const rangoTxt = `${formatoRango.format(inicio)} — ${formatoRango.format(fin)}`;
           const nOrdenes = comisionesQuincena.length;
           return (
             <div className="bg-emerald-600 rounded-2xl shadow-sm overflow-hidden text-white">
@@ -1533,7 +1505,11 @@ export default function TecnicoVista() {
       {/* Modal detalle */}
       {selectedOrden && !showWizardCierre && !showNotaModal && (
         <Modal isOpen={true} onClose={() => setSelectedOrden(null)} title={`Detalle · ${selectedOrden.numero || ''}`} size="md">
+          <div className="space-y-2 mb-3"><ChatOrdenTecnico ordenId={selectedOrden.id} puedeEnviar={puede(userProfile, 'tecnicoPuedeContactarCliente')} />{permisos.puedeContactarCliente && selectedOrden.clienteTelefono && <a className="block p-3 rounded border" href={`tel:${selectedOrden.clienteTelefono.replace(/[^+0-9]/g,'')}`} onClick={() => void actividad(selectedOrden.id,'llamar')}>Llamar al cliente</a>}{!selectedOrden.visitaCancelada && !selectedOrden.visitaFallida && !selectedOrden.enStandby && !['cerrado','cancelado','trabajo_realizado'].includes(selectedOrden.fase) && <button className="p-3 rounded bg-blue-700 text-white" onClick={async () => { try { await registrarActividadOrden(selectedOrden.id,'salida'); toast.success('Salida registrada. Mantén activa la ubicación durante el traslado.'); } catch(e) { toast.error(e instanceof Error?e.message:'No se pudo registrar salida'); } }}>Voy hacia el cliente</button>}</div>
           <details className="border rounded p-3 mb-3"><summary>Instrucciones de oficina</summary><GestionOrden key={selectedOrden.id} ordenId={selectedOrden.id} /></details>
+          <ActividadOrden ordenId={selectedOrden.id} />
+          <EfectivoOrdenPanel ordenId={selectedOrden.id} />
+          {selectedOrden.inicioChequeo && !['cerrado','cancelado','trabajo_realizado'].includes(selectedOrden.fase) && <PiezasDiagnostico key={selectedOrden.id} ordenId={selectedOrden.id} tecnico />}
           <div className="space-y-3 text-sm">
             <div>
               <p className="text-xs text-gray-500">Hora</p>
@@ -1586,15 +1562,6 @@ export default function TecnicoVista() {
                 <div className="bg-blue-50 rounded-lg p-2 border border-blue-100">
                   <p className="text-xs text-blue-800 whitespace-pre-line">{selectedOrden.notasTecnico}</p>
                 </div>
-              </div>
-            )}
-
-            {selectedOrden.precioSugerido !== undefined && selectedOrden.precioSugerido !== null && (
-              <div className="pt-2">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-1 inline-flex items-center gap-1"><DollarSign size={11} /> Mi Precio Sugerido</p>
-                <p className="text-sm font-bold text-green-700 bg-green-50 rounded-lg p-2 border border-green-200">
-                  RD$ {Number(selectedOrden.precioSugerido).toLocaleString('es-DO', { minimumFractionDigits: 2 })}
-                </p>
               </div>
             )}
 
@@ -1671,7 +1638,7 @@ export default function TecnicoVista() {
               onChange={e => setStandbyForm(f => ({ ...f, motivo: e.target.value }))}
               className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
             >
-              <option value="Esperando pieza">Esperando pieza</option>
+              <option value="Esperando pieza">Esperando pieza</option><option value="Tarjeta en reparación">Tarjeta en reparación</option>
               <option value="Cliente no disponible">Cliente no disponible</option>
               <option value="Otro">Otro</option>
             </select>
@@ -1679,14 +1646,9 @@ export default function TecnicoVista() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Fecha estimada de reactivación
+              Días estimados de espera
             </label>
-            <input
-              type="date"
-              value={standbyForm.hasta}
-              onChange={e => setStandbyForm(f => ({ ...f, hasta: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
-            />
+            <select aria-label="Días estimados de espera" value={standbyForm.hasta} onChange={e => setStandbyForm(f => ({ ...f, hasta:e.target.value }))} className="w-full px-3 py-2 border rounded-lg"><option value="">Seleccionar días</option>{Array.from({ length:30 }, (_,i) => <option key={i+1} value={i+1}>{i+1} {i===0?'día':'días'}</option>)}</select>
             <p className="text-xs text-gray-400 mt-1">Opcional. Útil para recordar cuándo retomar la orden.</p>
           </div>
 

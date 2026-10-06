@@ -1,3 +1,4 @@
+import { gestionarPresupuestoOrden } from '../services/presupuestoOrden.service';
 import { useState, useEffect, useMemo } from 'react';
 import { visitaEnProgreso } from '../utils/estadoAgenda';
 import { collection, onSnapshot, doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
@@ -17,7 +18,6 @@ import Modal from '../components/Modal';
 import { useApp } from '../context/AppContext';
 import { puede } from '../utils/permisos';
 import { suscribirConfigEmpresa, CONFIG_EMPRESA_DEFAULT, ConfigEmpresa, PRECIO_CHEQUEO_DEFAULT_FALLBACK } from '../services/configEmpresa.service';
-import { crearNotificacion } from '../services/notificaciones.service';
 import { buscarChequeoVigentePorCliente } from '../services/ordenes.service';
 import {
   calcularDescuentoChequeo,
@@ -67,7 +67,7 @@ export default function AgendaDia() {
   const precioChequeoSugerido =
     empresaConfig.precioChequeoDefault ?? PRECIO_CHEQUEO_DEFAULT_FALLBACK;
 
-  const puedeAprobar = puede(userProfile, 'cotizacionesAprobarPrecio');
+  const puedeAprobar = esAdminOCoord && puede(userProfile, 'cotizacionesAprobarPrecio');
 
   // Modal solo chequeo (oficina)
   const [showChequeoModal, setShowChequeoModal] = useState(false);
@@ -146,6 +146,7 @@ export default function AgendaDia() {
   };
 
   const handleConfirmarChequeo = async () => {
+    if (!esAdminOCoord) { toast.error('Solo coordinación puede definir el importe del chequeo.'); return; }
     if (!ordenChequeo) return;
     const precio = Number(chequeoForm.precio);
     if (isNaN(precio) || precio <= 0) {
@@ -217,6 +218,7 @@ export default function AgendaDia() {
 
       const updateData: Record<string, unknown> = {
         soloChequeo: true,
+        chequeoConfirmacionEstado: 'pendiente',
         tipoCierre: 'solo_chequeo',
         precioChequeo: precio,
         precioFinal: precio,
@@ -282,7 +284,7 @@ export default function AgendaDia() {
 
   const handleAprobarPrecioInline = async (orden: OrdenServicio) => {
     if (orden.precioSugerido === undefined) return;
-    const precioBase = Number(orden.precioSugerido);
+    const precioBase = Number(orden.presupuestoEstado === 'cambio_solicitado' ? orden.presupuestoMontoPropuesto : orden.precioSugerido);
     if (isNaN(precioBase) || precioBase <= 0) {
       toast.error('Precio sugerido inválido');
       return;
@@ -321,109 +323,9 @@ export default function AgendaDia() {
 
     setAprobandoId(orden.id);
     try {
-      const usuario = userProfile?.nombre || 'Admin';
-      const notaAuditoria = detalleDescuento
-        ? `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')} — ${detalleDescuento}`
-        : `Aprobó precio: RD$ ${precio.toLocaleString('es-DO')}`;
-      const registroAuditoria = crearRegistroAuditoria(
-        usuario,
-        'precio_sugerido',
-        notaAuditoria,
-        'precioFinal',
-        '',
-        `RD$ ${precio.toLocaleString('es-DO')}`
-      );
-      // SPRINT-173: tras aprobar precio sugerido, avanzar fase a 'aprobado' y mantener
-      // sincronía con `estadoSimple`/`estado`/`historialFases` (sub-regla CLAUDE.md
-      // "registros sincronizados"). Antes el handler dejaba la orden en fase previa
-      // con precioAprobado/estadoAprobacion seteados — inconsistencia visible en
-      // pipeline visual de /admin/ordenes y en filtros por fase.
-      // Patrón tomado de SPRINT-161 (4015fe1) en ProcesarFacturacionModal:
-      // shape `{ fase, timestamp, usuario, nota }`, array reemplazado completo
-      // (no `arrayUnion`), single `ahora` para evitar drift de timestamps.
-      const ahora = Timestamp.now();
-      const nuevoHistorialFases = [
-        ...(orden.historialFases || []).map((h) => ({
-          fase: h.fase,
-          timestamp: h.timestamp instanceof Date ? Timestamp.fromDate(h.timestamp) : h.timestamp,
-          usuario: h.usuario || '',
-          ...(h.nota ? { nota: h.nota } : {}),
-        })),
-        {
-          fase: 'aprobado' as FaseOrden,
-          timestamp: ahora,
-          usuario,
-          nota: `Precio aprobado: RD$ ${precio.toLocaleString('es-DO')}`,
-        },
-      ];
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), {
-        precioAprobado: precio,
-        precioFinal: precio,
-        estadoAprobacion: 'aprobado',
-        aprobadoPor: usuario,
-        fechaAprobacion: ahora,
-        // SPRINT-173: avanzar fase + estados duplicados + append a historial.
-        fase: 'aprobado',
-        estadoSimple: 'pendiente',
-        estado: 'activo',
-        historialFases: nuevoHistorialFases,
-        auditoria: arrayUnion(registroAuditoria),
-        // SPRINT-178: descuento por chequeo previo (silencioso, sólo si vigente).
-        ...camposDescuento,
-        updatedAt: ahora,
-      });
-      // SPRINT-178: toast informativo si se aplicó descuento silencioso
-      if (detalleDescuento) {
-        toast.success(`Descuento aplicado: ${detalleDescuento}`, { duration: 6000 });
-      }
-      // SPRINT-174: notif `precio_aprobado` al técnico + admins/coords
-      // (autoexclusión del aprobador). Patrón canónico SPRINT-169
-      // (`5823955`): try/catch independiente por destinatario, `p.uid`
-      // siempre (P-007), filtrar `p.uid &&` para excluir empleados sin
-      // Auth. No bloquea el flujo si falla.
-      if (orden.tecnicoId && orden.tecnicoId !== currentUser?.uid) {
-        try {
-          await crearNotificacion({
-            userId: orden.tecnicoId,
-            destinatarioNombre: orden.tecnicoNombre,
-            tipo: 'precio_aprobado',
-            titulo: `Precio aprobado · ${orden.numero || 'orden'}`,
-            mensaje: `Precio aprobado: RD$${precio.toLocaleString('es-DO')}. Cliente: ${orden.clienteNombre}. Puedes marcar el trabajo como realizado.`,
-            ordenId: orden.id,
-            ordenNumero: orden.numero,
-          });
-        } catch (notifErr) {
-          console.error('[SPRINT-174] precio_aprobado a técnico falló:', notifErr);
-        }
-      }
-      try {
-        const destinatariosStaff = personal.filter(
-          p =>
-            !!p.uid &&
-            p.activo &&
-            (p.rol === 'administrador' || p.rol === 'coordinadora') &&
-            p.uid !== currentUser?.uid &&
-            p.uid !== orden.tecnicoId,
-        );
-        for (const destino of destinatariosStaff) {
-          try {
-            await crearNotificacion({
-              userId: destino.uid!,
-              destinatarioNombre: destino.nombre,
-              tipo: 'precio_aprobado',
-              titulo: `Precio aprobado · ${orden.numero || 'orden'}`,
-              mensaje: `Precio RD$${precio.toLocaleString('es-DO')} aprobado en orden ${orden.numero || ''}. Cliente: ${orden.clienteNombre}. Técnico: ${orden.tecnicoNombre || 'sin asignar'}.`,
-              ordenId: orden.id,
-              ordenNumero: orden.numero,
-            });
-          } catch (err) {
-            console.error('[SPRINT-174] precio_aprobado a staff falló para', destino.uid, err);
-          }
-        }
-      } catch (errStaff) {
-        console.error('[SPRINT-174] precio_aprobado fallo enumerando staff:', errStaff);
-      }
-      toast.success('Precio aprobado');
+      if (!userProfile || !currentUser) throw new Error('Inicia sesión nuevamente.');
+      await gestionarPresupuestoOrden({ orden: orden, usuario: userProfile, uid: currentUser.uid, accion: 'aprobar', monto: precio, camposDescuento, detalleDescuento });
+      toast.success('Presupuesto aprobado. Falta confirmar con el cliente.');
     } catch (err) {
       console.error(err);
       toast.error('Error al aprobar el precio');
@@ -968,6 +870,7 @@ function TecnicoColumn({
           const necesitaAprobacionPrecio = puedeAprobar &&
             o.precioSugerido !== undefined &&
             o.estadoAprobacion !== 'aprobado' &&
+            o.presupuestoEstado !== 'pendiente_cliente' &&
             !['cerrado', 'cancelado'].includes(o.fase);
           return (
             <div
@@ -1055,10 +958,10 @@ function TecnicoColumn({
                       onClick={() => onAprobarPrecio(o)}
                       disabled={aprobandoId === o.id}
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500 hover:bg-green-600 text-white text-[10px] font-semibold disabled:opacity-60"
-                      title={`Aprobar RD$${Number(o.precioSugerido || 0).toLocaleString('es-DO')}`}
+                      title={`Aprobar RD$${Number((o.presupuestoEstado === 'cambio_solicitado' ? o.presupuestoMontoPropuesto : o.precioSugerido) || 0).toLocaleString('es-DO')}`}
                     >
                       <DollarIcon size={10} />
-                      {aprobandoId === o.id ? 'Aprobando...' : `Aprobar RD$${Number(o.precioSugerido || 0).toLocaleString('es-DO')}`}
+                      {aprobandoId === o.id ? 'Aprobando...' : `Aprobar RD$${Number((o.presupuestoEstado === 'cambio_solicitado' ? o.presupuestoMontoPropuesto : o.precioSugerido) || 0).toLocaleString('es-DO')}`}
                     </button>
                   )}
                   {puedeAccionarChequeo && (

@@ -1,0 +1,29 @@
+/* Presentación Apple compartida: conserva permisos, cálculos y handlers. */
+.service-ui,.tecnico-ui{background:var(--ms-fondo);color:var(--ms-texto)}
+.service-ui .service-main{background:var(--ms-fondo)}
+:where(.service-ui,.tecnico-ui,.keyboard-dialog) :is(h1,h2,h3){color:var(--ms-texto)}
+:where(.service-ui,.tecnico-ui,.keyboard-dialog) h2{font-size:20px;line-height:28px;letter-spacing:-.01em}
+:where(.service-ui,.tecnico-ui,.keyboard-dialog) :is(.bg-white.rounded-xl,.bg-white.rounded-2xl){border-radius:12px;border-color:var(--ms-borde);box-shadow:none}
+:where(.service-ui,.tecnico-ui,.keyboard-dialog) :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea){border-radius:8px;color:var(--ms-texto)}
+:where(.service-ui,.tecnico-ui,.keyboard-dialog) :is(button,summary){transition:none}
+:where(.service-ui,.tecnico-ui,.keyboard-dialog) :is(.text-gray-400,.text-gray-500,.text-slate-400,.text-slate-500){color:var(--ms-texto-2)}
+.service-ui .glass-sidebar{background:var(--ms-superficie);border-right:1px solid var(--ms-borde)}
+.service-ui .glass-toolbar{background:var(--ms-superficie);border-bottom:1px solid var(--ms-borde)}
+.service-ui .service-page{padding:24px}
+.mobile-navigation{margin:0 12px calc(12px + env(safe-area-inset-bottom,0px));border-radius:24px;background:var(--ms-superficie);border-color:var(--ms-borde);box-shadow:var(--ms-elevacion);min-height:56px}
+.mobile-navigation-item{min-height:48px;border-radius:16px;color:var(--ms-texto-2);font-weight:500}
+.mobile-navigation-item.is-active{background:transparent;color:var(--ms-accion)}
+.mobile-navigation-item svg{width:24px;height:24px}
+.keyboard-dialog [role=dialog]{border-radius:16px;box-shadow:var(--ms-elevacion)}
+.apple-agenda-list{border:1px solid var(--ms-borde);border-radius:12px;overflow:hidden;background:white}
+.apple-order-row{min-height:72px;padding:12px 16px;background:white;border:0}
+.apple-order-row+.apple-order-row{border-top:1px solid var(--ms-borde)}
+.apple-order-row .text-sm.font-medium{font-size:16px;line-height:24px;font-weight:600}
+.apple-order-row .bg-primary\/10{background:transparent;color:var(--ms-texto-2);width:48px;min-width:48px;padding:0}
+.apple-order-row .bg-primary\/10 span{font-weight:500;color:var(--ms-texto-2);font-variant-numeric:tabular-nums}
+.apple-order-row:hover{background:var(--ms-accion-50)}
+.apple-tecnico-header :is(h1,h2,h3){color:white}
+@media(max-width:639px){.service-ui .service-page{padding:16px}.apple-order-row{flex-wrap:wrap}.apple-order-row>.flex-col{margin-left:60px}.keyboard-dialog [role=dialog]{border-radius:16px 16px 0 0}.keyboard-dialog{align-items:flex-end;padding-bottom:env(safe-area-inset-bottom,0px)!important}}
+@media(prefers-reduced-motion:reduce){:where(.service-ui,.tecnico-ui,.keyboard-dialog) button:not(:disabled):active{scale:1}}
+
+.apple-phase-bar{display:flex;gap:4px;height:4px;max-width:240px;width:100%;min-width:70px;margin-top:8px}.apple-phase-bar>span{flex:1;border-radius:9999px}

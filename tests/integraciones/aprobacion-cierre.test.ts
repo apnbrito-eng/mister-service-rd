@@ -16,3 +16,13 @@ describe('autorización del cierre técnico', () => {
     expect(tieneAprobacionCierre({ estadoAprobacion: 'aprobado', propuestaCrmRevision: 2, propuestaCrmAprobada: 2 })).toBe(true);
   });
 });
+
+it('bloquea aprobación inconsistente mientras el presupuesto no fue aceptado', () => {
+  for (const presupuestoEstado of ['cambio_solicitado', 'pendiente_cliente', 'rechazado'])
+    expect(tieneAprobacionCierre({ estadoAprobacion: 'aprobado', presupuestoEstado })).toBe(false);
+  expect(tieneAprobacionCierre({ estadoAprobacion: 'aprobado', presupuestoEstado: 'aceptado' })).toBe(true);
+});
+it('conserva solo chequeo aprobado aunque quede el presupuesto de reparación anterior', () => {
+  expect(tieneAprobacionCierre({ estadoAprobacion: 'aprobado', soloChequeo: true, presupuestoEstado: 'cambio_solicitado' })).toBe(true);
+  expect(tieneAprobacionCierre({ estadoAprobacion: 'pendiente', soloChequeo: true })).toBe(false);
+});

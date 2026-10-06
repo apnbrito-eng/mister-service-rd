@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Dobles de Firebase/API deliberadamente parciales; solo fixtures de pruebas. */
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -130,7 +131,7 @@ it('oculta la edición de ubicación para técnicos y rechaza coordenadas invál
   await act(async () => { r = create(React.createElement(PanelCliente360, { waId: '8095550100', ubicacionesRecibidas: [{ ...recibidas[0], lat: Infinity }, { ...recibidas[0], id: 'otra', lng: 181 }] })); });
   await act(async () => boton('Cambiar ubicación').props.onClick());
   expect(r.root.findAllByProps({name:'ubicacionRecibida'})).toHaveLength(0);
-  expect(texto()).toContain('Latitud');
+  expect(texto()).toContain('Pega la ubicación');
   expect(m.guardar).not.toHaveBeenCalled();
 });
 it('descarta la ubicación elegida al cambiar de cliente', async () => {
@@ -152,4 +153,11 @@ it('referencia de cliente exige identidad de teléfono exacta y excluye eliminad
 it('sin cliente ofrece registro separado y no permite crear orden antes',async()=>{
  m.cliente.mockResolvedValue(null);m.ordenes.mockResolvedValue([]);await montar();
  expect(texto()).toContain('Crear cliente');expect(texto()).not.toContain('Crear cliente y orden');expect(boton('+ Crear orden')).toBeUndefined();
+});
+
+it('crea la orden desde la ficha con el cliente actual', async () => {
+ const crear = vi.fn();
+ await act(async () => { r = create(React.createElement(PanelCliente360, {waId:'8095550100',onCrearOrden:crear})); });
+ await act(async () => boton('+ Crear orden').props.onClick());
+ expect(crear).toHaveBeenCalledWith({tipo:'cliente-existente',cliente});
 });

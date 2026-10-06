@@ -161,7 +161,7 @@ export default function OrdenesTablero({ ordenes, standbyItems, onSelect }: Prop
         const ordenAct = { ...orden, fase: 'cerrado' as FaseOrden };
         const res = await registrarComisionPorOrden(ordenAct, userProfile);
         if (res.creada) {
-          toast.success(`Comisión registrada: RD$ ${(res.comisionMonto || 0).toLocaleString('es-DO')}`);
+          toast.success(`Comisión ${res.retenida ? 'retenida hasta pago completo confirmado' : 'registrada'}: RD$ ${(res.comisionMonto || 0).toLocaleString('es-DO')}`);
         } else if (res.razon === 'error interno') {
           // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): `registrarComisionPorOrden`
           // captura sus propios errores y NUNCA lanza, así que el catch de abajo

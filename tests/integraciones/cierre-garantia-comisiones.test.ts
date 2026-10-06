@@ -58,3 +58,12 @@ describe('Cálculos de cierre y comisiones sin escrituras', () => {
   }
  });
 });
+it('quincena y límites RD no dependen de la zona horaria del servidor', () => {
+  expect(calcularQuincenaActual(new Date('2026-10-15T02:00:00Z'))).toBe('2026-10-Q1');
+  expect(calcularQuincenaActual(new Date('2026-10-15T04:00:00Z'))).toBe('2026-10-Q2');
+  const q1 = rangoQuincena('2026-10-Q1');
+  expect(q1.inicio.toISOString()).toBe('2026-09-30T04:00:00.000Z');
+  expect(q1.fin.toISOString()).toBe('2026-10-15T03:59:59.999Z');
+  const febrero = rangoQuincena('2026-02-Q2');
+  expect(febrero.fin.toISOString()).toBe('2026-03-01T03:59:59.999Z');
+});

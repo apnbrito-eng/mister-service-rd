@@ -1,3 +1,4 @@
+import { cobroCompletoParaComision, prepararLiberacionComision, POLITICA_COBRO_COMISION, quincenaCobroRD } from './comisionCobro';
 import { planificarAjusteGarantia } from './ajusteGarantia';
 import {
   collection, addDoc, doc, getDoc, getDocs, query, where, Timestamp, arrayUnion,
@@ -92,66 +93,34 @@ export function calcularCostoPiezasDeItems(items: ItemCotizacion[] | undefined):
  * El corte real RD: del 30 al 14 → Q1 del mes siguiente; del 15 al 29 → Q2 del mes actual.
  */
 export function calcularQuincenaActual(fecha: Date): string {
-  const d = fecha.getDate();
-  let year = fecha.getFullYear();
-  let month = fecha.getMonth() + 1; // 1-indexed
-  let q: 'Q1' | 'Q2';
-  if (d >= 1 && d <= 14) {
-    q = 'Q1';
-  } else if (d >= 15 && d <= 29) {
-    q = 'Q2';
-  } else {
-    // 30 o 31 → Q1 del mes siguiente
-    q = 'Q1';
-    month += 1;
-    if (month > 12) { month = 1; year += 1; }
-  }
-  const mm = String(month).padStart(2, '0');
-  return `${year}-${mm}-${q}`;
+  return quincenaCobroRD(fecha);
 }
 
 /** Devuelve { inicio, fin } como Date para una quincena dada (`YYYY-MM-Q1` o `Q2`). */
 export function rangoQuincena(quincena: string): { inicio: Date; fin: Date } {
+  if (!/^\d{4}-(0[1-9]|1[0-2])-Q[12]$/.test(quincena)) throw new Error('Quincena inválida');
   const [yStr, mStr, qStr] = quincena.split('-');
-  const y = Number(yStr);
-  const m = Number(mStr);
+  const y = Number(yStr), m = Number(mStr);
+  // RD UTC-04: límites independientes de la zona horaria del teléfono o servidor.
   if (qStr === 'Q1') {
-    // Q1 cubre días 30-31 del mes anterior + 1-14 de este mes (ambos pertenecen a Q1 de este YYYY-MM)
-    // Febrero no tiene día 30: en marzo Q1 comienza el día 1.
-    // Construir '30 de febrero' directamente saltaba al 1/2 de marzo.
-    const diasMesAnterior = new Date(y, m - 1, 0).getDate();
-    const inicio = diasMesAnterior >= 30
-      ? new Date(y, m - 2, 30, 0, 0, 0)
-      : new Date(y, m - 1, 1, 0, 0, 0);
-    const fin = new Date(y, m - 1, 14, 23, 59, 59, 999);
-    return { inicio, fin };
+    const diasMesAnterior = new Date(Date.UTC(y, m - 1, 0)).getUTCDate();
+    const inicio = diasMesAnterior >= 30 ? new Date(Date.UTC(y, m - 2, 30, 4)) : new Date(Date.UTC(y, m - 1, 1, 4));
+    return { inicio, fin: new Date(Date.UTC(y, m - 1, 15, 4) - 1) };
   }
-  // Q2 cubre 15-29 del mes (o hasta el último día si febrero no bisiesto, 28
-  // días). Sin este clamp, `new Date(y, 1, 29)` para feb no bisiesto hace
-  // rollover a 1 de marzo, incluyendo un día extra en el rango. Fix #77.
-  const ultimoDia = new Date(y, m, 0).getDate();
+  const ultimoDia = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const diaFin = Math.min(29, ultimoDia);
-  const inicio = new Date(y, m - 1, 15, 0, 0, 0);
-  const fin = new Date(y, m - 1, diaFin, 23, 59, 59, 999);
-  return { inicio, fin };
+  return { inicio: new Date(Date.UTC(y, m - 1, 15, 4)), fin: new Date(Date.UTC(y, m - 1, diaFin + 1, 4) - 1) };
 }
 
 /** Lista las últimas N quincenas en orden descendente, partiendo de la actual. */
 export function listarUltimasQuincenas(n: number = 12): string[] {
   const out: string[] = [];
-  const hoy = new Date();
-  // Empezar por la quincena actual y retroceder
-  const cursor = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
-  let actual = calcularQuincenaActual(cursor);
-  out.push(actual);
-  // Saltos de 15 días aprox para enumerar
-  while (out.length < n) {
-    cursor.setDate(cursor.getDate() - 15);
-    const q = calcularQuincenaActual(cursor);
-    if (q !== actual && !out.includes(q)) {
-      out.push(q);
-      actual = q;
-    }
+  const actual = quincenaCobroRD(new Date()).split('-');
+  let anio = Number(actual[0]), mes = Number(actual[1]), q = actual[2];
+  for (let i = 0; i < n; i++) {
+    out.push(`${anio}-${String(mes).padStart(2, '0')}-${q}`);
+    if (q === 'Q2') q = 'Q1';
+    else { q = 'Q2'; mes--; if (mes < 1) { mes = 12; anio--; } }
   }
   return out;
 }
@@ -581,15 +550,15 @@ export async function registrarComisionPorFactura(args: {
 }
 
 /**
- * Registra la comisión del trabajo terminado al cerrar la orden, independientemente del cobro.
- * Política confirmada por Jorge el 28/09/2026. fechaCobro es un nombre legacy: aquí representa el devengo.
+ * Calcula la comisión al terminar; queda retenida hasta completar el cobro verificado.
+ * Jorge, 03/10/2026: solo entra a quincena con trabajo terminado y pago final confirmado.
  * Idempotente: si ya existe un ComisionRegistro con `ordenId`, no inserta otro.
  * Maneja errores internos sin propagar (caller no debe revertir nada).
  */
 export async function registrarComisionPorOrden(
   orden: OrdenServicio,
   userProfile: Usuario | null,
-): Promise<{ creada: boolean; razon?: string; comisionMonto?: number }> {
+): Promise<{ creada: boolean; razon?: string; comisionMonto?: number; retenida?: boolean; liberada?: boolean }> {
   try {
     if (orden.fase !== 'cerrado' && orden.fase !== 'trabajo_realizado') {
       return { creada: false, razon: 'orden no está cerrada' };
@@ -627,8 +596,14 @@ export async function registrarComisionPorOrden(
       const existente = await tx.get(canonica);
       const antiguas = await Promise.all(legacy.docs.filter(d => d.id !== canonica.id).map(d => tx.get(doc(db, 'comisiones', d.id))));
       if (!actual.exists()) throw new Error('La orden ya no existe.');
-      if (existente.exists() || antiguas.some(d => d.exists())) return { creada: false, razon: 'comisión ya registrada' };
       const o = actual.data();
+      if (existente.exists()) {
+        const ahora = Timestamp.now();
+        const cambio = prepararLiberacionComision(existente.data(), o, ahora, ahora.toDate(), POLITICA_COBRO_COMISION);
+        if (cambio) tx.update(canonica, cambio);
+        return { creada: false, liberada: !!cambio, razon: cambio ? 'comisión liberada por cobro confirmado' : 'comisión ya registrada' };
+      }
+      if (antiguas.some(d => d.exists())) return { creada: false, razon: 'comisión ya registrada' };
       if (o.eliminada || !['cerrado', 'trabajo_realizado'].includes(o.fase) || o.soloChequeo) throw new Error('La orden no tiene trabajo terminado comisionable.');
       if (o.tecnicoId !== orden.tecnicoId || o.precioFinal !== orden.precioFinal || o.cotizacionId !== orden.cotizacionId || o.facturaId !== orden.facturaId) throw new Error('La orden cambió; recarga antes de calcular comisión.');
       if (typeof o.precioFinal !== 'number' || !Number.isFinite(o.precioFinal) || o.precioFinal <= 0) throw new Error('Precio final inválido.');
@@ -652,16 +627,17 @@ export async function registrarComisionPorOrden(
       const base = Math.max(0, o.precioFinal - costoPiezas);
       const comisionMonto = Math.round(base * (porcentaje / 100) * 100) / 100;
       const ahora = Timestamp.now();
+      const retenida = !cobroCompletoParaComision(o, POLITICA_COBRO_COMISION);
       const data = {
         tecnicoId: p.uid || p.id, tecnicoNombre: p.nombre || orden.tecnicoNombre || 'Sin nombre',
         ordenId: orden.id, ordenNumero: o.numero || '', clienteNombre: o.clienteNombre || '',
         fechaCobro: ahora, precioFinal: o.precioFinal, costoPiezas, basePendienteComision: base,
-        comisionPorcentaje: porcentaje, comisionMonto, estadoLiquidacion: 'pendiente',
-        quincenaAsignada: calcularQuincenaActual(ahora.toDate()), createdAt: ahora,
+        comisionPorcentaje: porcentaje, comisionMonto, estadoLiquidacion: retenida ? 'retenida_por_cobro' : 'pendiente',
+        ...(!retenida ? { quincenaAsignada: quincenaCobroRD(ahora.toDate()), cobroLiberadoEn: ahora } : {}), createdAt: ahora,
       };
       tx.set(canonica, data);
-      tx.update(ordenRef, { auditoria: arrayUnion(crearRegistroAuditoria(userProfile?.nombre || 'Sistema', 'cierre', `Comisión registrada RD$ ${comisionMonto}`, 'comision', '', canonica.id)), updatedAt: ahora });
-      return { creada: true, comisionMonto };
+      tx.update(ordenRef, { auditoria: arrayUnion(crearRegistroAuditoria(userProfile?.nombre || 'Sistema', 'cierre', `Comisión ${retenida ? 'retenida hasta cobro total confirmado' : 'disponible para quincena'} RD$ ${comisionMonto}`, 'comision', '', canonica.id)), updatedAt: ahora });
+      return { creada: true, comisionMonto, retenida };
     });
   } catch (err) {
     console.error('Error registrando comisión:', err);

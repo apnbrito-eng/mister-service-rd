@@ -140,9 +140,10 @@ function PanelCliente({ waId, onCrearOrden, fuenteCrm, alUsarFuente, controlesCh
     <div hidden={vistaOrden} className="space-y-4">
       {cliente ? <FichaClienteCabecera ubicacionesRecibidas={ubicacionesRecibidas} cliente={{ ...cliente.data, id: cliente.id }} onGuardar={data => {setCliente({ id: cliente.id, data });notificarCliente.current?.(data);}} />
         : <section><h2 className="font-semibold text-slate-900">Cliente no registrado</h2><p className="text-sm text-slate-600">{waId}</p>{puede(userProfile,'clientesCrear') && (creandoCliente ? <CrearClienteDesdeChat waId={waId} onCancelar={()=>setCreandoCliente(false)} onGuardar={data=>{setCliente({id:data.id,data});setCreandoCliente(false);notificarCliente.current?.(data);}}/> : <button type="button" className="min-h-11 text-sm underline" onClick={()=>setCreandoCliente(true)}>Crear cliente</button>)}</section>}
+      {cliente && <button type="button" className="w-full min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-white" onClick={crearOrden}>+ Crear orden</button>}
       {conversacionExiste && <AtencionChat waId={waId} />}
       <section aria-label="Órdenes activas" className="rounded-xl border border-stone-200 bg-white p-3">
-        <div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Órdenes activas ({activas.length})</h3>{cliente && <button type="button" className="min-h-11 text-sm font-medium text-emerald-800" onClick={crearOrden}>+ Crear orden</button>}</div>
+        <div className="mb-2 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">Órdenes activas ({activas.length})</h3></div>
         <OrdenesTab loading={false} activas={activas} cerradas={[]} userProfile={userProfile} onClickOrden={abrirOrden} onIrReprogramaciones={() => navigate('/admin/reprogramaciones')} />
       </section>
       <div>

@@ -8,6 +8,7 @@ interface Props {
   className?: string;
   /** Texto del botón. Default: "Cómo llegar". */
   label?: string;
+  onNavigate?: () => void;
 }
 
 const SIZE_CLASSES: Record<NonNullable<Props['size']>, string> = {
@@ -36,6 +37,7 @@ export default function BotonComoLlegar({
   variant = 'inline',
   className = '',
   label = 'Cómo llegar',
+  onNavigate,
 }: Props) {
   const url = googleMapsDirectionsUrl(ubicacion);
   const blockClass = variant === 'block' ? 'w-full justify-center' : '';
@@ -61,7 +63,7 @@ export default function BotonComoLlegar({
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      onClick={(e) => e.stopPropagation()}
+      onClick={(e) => { e.stopPropagation(); onNavigate?.(); }}
       className={`inline-flex items-center ${SIZE_CLASSES[size]} bg-blue-500 hover:bg-blue-600 text-white font-medium rounded-lg transition-colors ${blockClass} ${className}`}
       title="Abrir Google Maps con direcciones"
       aria-label="Cómo llegar a la ubicación con Google Maps"

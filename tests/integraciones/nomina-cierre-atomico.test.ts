@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Dobles de Firebase/API deliberadamente parciales; solo fixtures de pruebas. */
 import { beforeEach, expect, it, vi } from 'vitest';
 const m = vi.hoisted(() => ({ docs: {} as Record<string, any>, fallo: '', cola: Promise.resolve() }));
 vi.mock('../../src/firebase/config', () => ({ db: {} }));
@@ -24,7 +25,8 @@ beforeEach(() => {
  m.fallo = ''; m.cola = Promise.resolve();
  m.docs = {
   'liquidaciones_nomina/l': { estado: 'abierta', quincena: '2026-09-Q2', empleados: [{ personalId: 'p', totalDevengado: 1000, comisionesIds: ['c'], totalComisiones: 100, avancesIds: ['a'], totalAvances: 50, cuotasPrestamos: [{ prestamoId: 'pr', numeroCuota: 1, monto: 100 }], totalCuotasPrestamos: 100 }] },
-  'comisiones/c': { tecnicoId: 'p', estadoLiquidacion: 'pendiente', fechaCobro: '2026-09-20T12:00:00-04:00', comisionMonto: 100 },
+  'comisiones/c': { ordenId: 'o1', precioFinal: 1000, tecnicoId: 'p', estadoLiquidacion: 'pendiente', fechaCobro: '2026-09-20T12:00:00-04:00', comisionMonto: 100 },
+  'ordenes_servicio/o1': { fase: 'cerrado', precioFinal: 1000, pagos: [{ id: 'p1', monto: 1000, verificado: true, verificadoAt: '2026-08-01T12:00:00-04:00' }] },
   'avances/a': { personalId: 'p', monto: 50, descontado: false },
   'prestamos_empleados/pr': { personalId: 'p', estado: 'activo', montoTotal: 300, saldoPendiente: 300, cuotasTotales: 3, cuotasPagadas: 0, cuotasHistorial: [] },
  };
@@ -116,4 +118,28 @@ it('impide ocultar descuentos de asistencia con agregado menor que detalle', asy
  e.descuentosAsistencia = [{ monto: 1200 }]; e.totalAsistencia = 0;
  await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('no coincide');
  expect(m.docs['avances/a'].descontado).toBe(false);
+});
+
+it.each(['anticipo', 'sin_verificar', 'reabierta'])('cierre relee orden y bloquea comisión legacy pendiente con %s', async caso => {
+ const o = m.docs['ordenes_servicio/o1'];
+ if (caso === 'anticipo') o.pagos[0].monto = 500;
+ if (caso === 'sin_verificar') o.pagos[0].verificado = false;
+ if (caso === 'reabierta') o.fase = 'agendado';
+ const antes = structuredClone(m.docs);
+ await expect(cerrarLiquidacion('l', actor)).rejects.toThrow('cobro completo confirmado');
+ expect(m.docs).toEqual(antes);
+});
+it('nómina ya cerrada conserva histórico aunque la orden cambie después', async () => {
+ await cerrarLiquidacion('l', actor);
+ m.docs['ordenes_servicio/o1'].pagos = [];
+ const antes = structuredClone(m.docs);
+ await cerrarLiquidacion('l', actor);
+ expect(m.docs).toEqual(antes);
+});
+it('cierre parcial legacy respeta comisión ya liquidada en la misma nómina sin fechas nuevas', async () => {
+ Object.assign(m.docs['comisiones/c'], { estadoLiquidacion: 'liquidada', liquidacionId: 'l' });
+ delete m.docs['ordenes_servicio/o1'].pagos[0].verificadoAt;
+ await cerrarLiquidacion('l', actor);
+ expect(m.docs['liquidaciones_nomina/l'].estado).toBe('cerrada');
+ expect(m.docs['comisiones/c'].liquidacionId).toBe('l');
 });

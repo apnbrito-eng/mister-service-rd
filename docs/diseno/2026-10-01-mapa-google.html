@@ -1,0 +1,599 @@
+<title>Mapa Mister Service</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one-screen map app in the Google Maps idiom — full-bleed map, floating search + chips, left place panel (bottom sheet on phones), layers + zoom controls */
+:root{
+  color-scheme:light;
+  --ink:#1F2937; --ink2:#4B5563; --mute:#6B7280; --line:#E5E7EB; --bg:#FFFFFF; --soft:#F3F4F6;
+  --act:#0F3460; --act50:#EFF4FA; --act100:#DCE7F2; --blue:#1A73E8;
+  --ok:#15803D; --warn:#B45309; --warnbg:#FEF3C7; --gar:#DC2626;
+  --land:#F5F3EF; --land2:#EEEBE5; --water:#AADAFF; --park:#CDE9C4; --road:#FFFFFF; --casing:#DADCE0; --hwy:#FDE293; --hwycase:#F2C14B;
+  --f:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+  --sh:0 1px 2px rgba(60,64,67,.3),0 2px 6px 2px rgba(60,64,67,.15);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:hidden}
+body{font-family:var(--f);color:var(--ink);font-size:14px;line-height:1.4;-webkit-font-smoothing:antialiased;background:var(--land)}
+button,input,select{font-family:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.app{position:relative;height:100%;width:100%}
+#map{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab;background:var(--land)}
+#map.drag{cursor:grabbing}
+
+/* search + chips */
+.top{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:12px;right:12px;z-index:20;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.search{pointer-events:auto;width:min(392px,100%);display:flex;align-items:center;gap:4px;background:#fff;border-radius:24px;box-shadow:var(--sh);height:48px;padding:0 6px 0 16px;position:relative}
+.search input{border:0;outline:0;flex:1;min-width:0;font-size:15px;height:100%;background:transparent;color:var(--ink)}
+.search .ib{width:40px;height:40px;border-radius:50%;border:0;background:transparent;display:grid;place-items:center;cursor:pointer;color:var(--ink2)}
+.search .ib:hover{background:var(--soft)}
+.brand{width:28px;height:28px;border-radius:8px;background:var(--act);color:#fff;font-weight:800;font-size:11px;display:grid;place-items:center;flex:none;margin-right:4px}
+.sugg{position:absolute;top:52px;left:0;right:0;background:#fff;border-radius:16px;box-shadow:var(--sh);padding:6px 0;max-height:60vh;overflow:auto}
+.sugg button{display:flex;gap:12px;align-items:center;width:100%;border:0;background:transparent;text-align:left;padding:8px 16px;min-height:52px;cursor:pointer}
+.sugg button:hover,.sugg button.on{background:var(--soft)}
+.sugg .i{width:32px;height:32px;border-radius:50%;background:var(--soft);display:grid;place-items:center;flex:none;color:var(--ink2)}
+.sugg b{display:block;font-weight:600}
+.sugg small{color:var(--mute);font-size:12.5px}
+.chips{pointer-events:auto;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;max-width:100%}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:18px;background:#fff;border:0;box-shadow:var(--sh);font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer;white-space:nowrap}
+.chip[aria-pressed=true]{background:var(--act100);color:var(--act)}
+.chip svg{width:16px;height:16px}
+
+/* panel */
+.panel{position:absolute;z-index:15;left:0;top:0;bottom:0;width:408px;background:#fff;box-shadow:var(--sh);display:flex;flex-direction:column;transition:transform .35s cubic-bezier(.22,1,.36,1)}
+.panel.closed{transform:translateX(-100%)}
+.panel .pin{height:136px;flex:none}
+.pbody{overflow:auto;flex:1;padding:4px 0 24px}
+.toggle{position:absolute;top:50%;right:-23px;width:23px;height:48px;border:0;border-radius:0 8px 8px 0;background:#fff;box-shadow:2px 0 4px rgba(60,64,67,.2);cursor:pointer;display:grid;place-items:center;color:var(--ink2)}
+.sec{padding:14px 20px;border-bottom:1px solid var(--line)}
+.sec:last-child{border-bottom:0}
+.sec h2{font-size:22px;font-weight:700;margin:0;letter-spacing:-.02em}
+.sec h3{font-size:15px;font-weight:700;margin:0 0 8px}
+.muted{color:var(--mute);font-size:13px}
+.row{display:flex;gap:10px;align-items:center}
+.acts{display:flex;gap:6px;justify-content:space-between;padding:6px 12px 14px;border-bottom:1px solid var(--line)}
+.act{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;border:0;background:transparent;cursor:pointer;font-size:12px;font-weight:600;color:var(--act);min-height:64px;padding:4px 0;border-radius:12px}
+.act:hover{background:var(--soft)}
+.act span{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);color:var(--act)}
+.act.pri span{background:var(--act);border-color:var(--act);color:#fff}
+.act svg{width:18px;height:18px}
+.li{display:flex;gap:14px;align-items:flex-start;padding:10px 20px;font-size:14px}
+.li svg{width:20px;height:20px;flex:none;color:var(--act);margin-top:1px}
+.li small{display:block;color:var(--mute);font-size:12.5px}
+.tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block;flex:none}
+.listbtn{display:flex;gap:12px;align-items:center;width:100%;border:0;background:transparent;text-align:left;padding:12px 20px;cursor:pointer;border-bottom:1px solid var(--line);min-height:64px}
+.listbtn:hover{background:var(--soft)}
+.listbtn b{display:block;font-weight:600;font-size:14.5px}
+.listbtn small{display:block;color:var(--mute);font-size:12.5px}
+.listbtn .r{margin-left:auto;text-align:right;font-size:12.5px;color:var(--ink2);white-space:nowrap}
+.av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:13px;flex:none}
+.back{border:0;background:transparent;width:40px;height:40px;border-radius:50%;cursor:pointer;display:grid;place-items:center;color:var(--ink2);margin:-6px 0 0 -10px}
+.back:hover{background:var(--soft)}
+/* route timeline */
+.seg{display:flex;background:var(--soft);border-radius:20px;padding:3px;gap:2px;margin-top:10px}
+.seg button{flex:1;min-height:36px;border:0;border-radius:18px;background:transparent;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer}
+.seg button[aria-pressed=true]{background:#fff;color:var(--act);box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.tl{list-style:none;margin:0;padding:6px 20px 0}
+.stop{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:start;padding:8px 0}
+.stop .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px}
+.stop b{font-weight:600}
+.stop small{display:block;color:var(--mute);font-size:12.5px}
+.stop .h{font-family:var(--mono);font-size:12.5px;color:var(--ink2)}
+.leg{display:grid;grid-template-columns:28px 1fr;gap:12px;align-items:center;color:var(--ink2);font-size:12.5px;min-height:34px}
+.leg i{width:3px;height:30px;margin:0 auto;border-radius:2px;background:repeating-linear-gradient(180deg,var(--blue) 0 5px,transparent 5px 9px)}
+.leg span{display:inline-flex;gap:6px;align-items:center}
+.leg svg{width:16px;height:16px}
+.stop.done .n{opacity:.45}
+.stop.done b{color:var(--mute)}
+.save{margin:8px 20px 0;padding:10px 12px;border-radius:12px;background:#E8F0FE;color:#174EA6;font-size:13px}
+.btn{min-height:40px;padding:0 16px;border-radius:20px;border:1px solid var(--line);background:#fff;color:var(--act);font-weight:600;font-size:13.5px;cursor:pointer}
+.btn.pri{background:var(--act);border-color:var(--act);color:#fff}
+
+/* controls */
+.ctrl{position:absolute;right:12px;bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:12;display:flex;flex-direction:column;gap:8px;align-items:flex-end}
+.cbtn{width:40px;height:40px;border-radius:8px;background:#fff;border:0;box-shadow:var(--sh);cursor:pointer;display:grid;place-items:center;color:var(--ink2)}
+.zoom{display:flex;flex-direction:column;background:#fff;border-radius:8px;box-shadow:var(--sh);overflow:hidden}
+.zoom button{width:40px;height:40px;border:0;background:#fff;cursor:pointer;font-size:20px;color:var(--ink2)}
+.zoom button+button{border-top:1px solid var(--line)}
+.layers{position:absolute;left:424px;bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:12;transition:left .35s cubic-bezier(.22,1,.36,1)}
+.panel.closed ~ .layers{left:12px}
+.lbtn{width:76px;height:76px;border-radius:10px;border:2px solid #fff;box-shadow:var(--sh);cursor:pointer;padding:0;overflow:hidden;position:relative;background:#6A8F5B}
+.lbtn span{position:absolute;left:0;right:0;bottom:4px;color:#fff;font-size:11.5px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.lpop{position:absolute;bottom:86px;left:0;width:300px;background:#fff;border-radius:12px;box-shadow:var(--sh);padding:14px}
+.lpop h4{margin:0 0 8px;font-size:13px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.mt{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.mt button{border:2px solid transparent;border-radius:10px;background:var(--soft);padding:8px 4px;cursor:pointer;font-size:12px;font-weight:600;color:var(--ink2);display:flex;flex-direction:column;align-items:center;gap:6px}
+.mt button i{width:44px;height:30px;border-radius:6px;display:block}
+.mt button[aria-pressed=true]{border-color:var(--blue);color:var(--blue)}
+.cap{display:flex;align-items:center;gap:10px;min-height:40px;font-size:14px;cursor:pointer}
+.cap input{width:18px;height:18px;accent-color:var(--act)}
+.legend{position:absolute;right:64px;bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:11;background:#fff;border-radius:10px;box-shadow:var(--sh);padding:8px 12px;font-size:12px;display:flex;gap:12px;flex-wrap:wrap;max-width:min(520px,calc(100% - 520px))}
+.legend span{display:inline-flex;align-items:center;gap:6px;color:var(--ink2)}
+.clock{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:12px;z-index:21;background:#fff;border-radius:20px;box-shadow:var(--sh);height:40px;padding:0 14px;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+.clock b{font-family:var(--mono);font-weight:500}
+.scale{position:absolute;right:64px;top:calc(60px + env(safe-area-inset-top,0px));z-index:11;font-size:11px;color:var(--ink2);background:rgba(255,255,255,.85);padding:2px 6px;border-radius:4px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:#202124;color:#fff;padding:12px 18px;border-radius:8px;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:60;max-width:calc(100% - 32px)}
+.toast.on{opacity:1;transform:translateX(-50%)}
+.tbtn{margin-left:14px;border:0;background:none;color:#8AB4F8;font:inherit;font-weight:700;cursor:pointer;min-height:32px;padding:0 4px}
+.mini{display:block;width:96px;height:5px;border-radius:3px;background:#E2E8F0;overflow:hidden;margin-top:5px}.mini i{display:block;height:100%}
+.cand.bl{opacity:.6;cursor:not-allowed}
+.warnbox{margin:10px 20px;padding:10px 12px;border-radius:12px;background:var(--warnbg);color:#92400E;font-size:13.5px;font-weight:600}
+.warnbox.red{background:#FDE3E3;color:#B91C1C}
+.sumbox{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--soft);font-size:13.5px;font-weight:600}
+.btn.pri{background:var(--act);color:#fff;border-color:var(--act)}
+.btn.big{width:100%;min-height:48px;margin-top:14px;font-size:15px;border-radius:24px}
+.btn.mot[aria-pressed=true]{background:var(--act50);border-color:var(--act)}
+.err{color:#B91C1C;font-size:13px;font-weight:600;margin:8px 0 0}
+details.blq summary{padding:12px 20px;cursor:pointer;font-size:13.5px;font-weight:600;color:var(--ink2);min-height:44px;display:flex;align-items:center}
+.att{background:#FFFBEB}.sug{border:1px solid #FCD34D;background:#fff;border-radius:12px;padding:10px 12px;margin-top:8px}.sug p{margin:0 0 8px;font-size:13.5px}
+.ghost{position:fixed;z-index:80;pointer-events:none;background:#202124;color:#fff;font-size:13px;font-weight:600;padding:8px 12px;border-radius:8px;transform:translate(14px,14px);box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.droptgt{outline:2px dashed var(--act);outline-offset:-4px;background:var(--act50)!important}
+
+@media (min-width:761px){
+  .top{left:424px;transition:left .35s cubic-bezier(.22,1,.36,1)}
+  .panel.closed ~ .top{left:12px}
+  .panel .ph{height:68px;flex:none;display:flex;flex-direction:column;justify-content:center;padding:0 20px;border-bottom:1px solid var(--line)}.ph b{font-size:17px}.ph span{font-size:12.5px;color:var(--mute)}
+}
+@media (max-width:760px){
+  .panel{top:auto;width:100%;height:46%;border-radius:16px 16px 0 0;transition:height .35s cubic-bezier(.22,1,.36,1)}
+  .panel.closed{transform:none;height:96px}
+  .panel.tall{height:84%}
+  .panel .ph{display:none}
+  .grab{display:block!important}
+  .toggle{display:none}
+  .layers{left:12px!important;bottom:auto;top:calc(116px + env(safe-area-inset-top,0px))}
+  .lbtn{width:52px;height:52px}
+  .lbtn span{font-size:10px}
+  .lpop{bottom:auto;top:60px}
+  .ctrl{bottom:auto;top:calc(116px + env(safe-area-inset-top,0px))}
+  .legend,.scale{display:none}
+  .clock{display:none}
+}
+.grab{display:none;border:0;background:transparent;width:100%;height:28px;cursor:pointer;flex:none}
+.grab i{display:block;width:36px;height:4px;border-radius:2px;background:#DADCE0;margin:10px auto 0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <svg id="map" role="img" aria-label="Mapa de Santo Domingo con clientes, citas y vans"></svg>
+
+  <aside class="panel" id="panel" aria-label="Panel de información">
+    <div class="ph"><b>Mapa</b><span>Clientes, citas, rutas y vans · jueves 1 oct</span></div>
+    <button class="grab" id="grab" type="button" aria-label="Expandir panel"><i></i></button>
+    <div class="pbody" id="pbody"></div>
+    <button class="toggle" id="toggle" type="button" aria-label="Ocultar panel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 6l-6 6 6 6"/></svg></button>
+  </aside>
+
+  <div class="top">
+    <div class="search" role="search">
+      <span class="brand" aria-hidden="true">MS</span>
+      <label for="q" style="position:absolute;left:-9999px">Buscar</label>
+      <input id="q" autocomplete="off" placeholder="Buscar cliente, orden, sector o dirección" aria-autocomplete="list" aria-controls="sugg">
+      <button class="ib" type="button" id="clear" aria-label="Limpiar búsqueda" hidden><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      <button class="ib" type="button" id="goRoute" aria-label="Rutas de hoy"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1A73E8" stroke-width="2"><path d="M12 2l9 10-9 10-9-10z"/><path d="M9 14v-2a2 2 0 012-2h4M13 8l2 2-2 2"/></svg></button>
+      <div class="sugg" id="sugg" role="listbox" hidden></div>
+    </div>
+    <div class="chips" id="chips" role="group" aria-label="Mostrar en el mapa"></div>
+  </div>
+
+  <div class="clock" aria-live="off"><span>Hoy</span><b id="clock">11:20</b><button class="ib" type="button" id="play" aria-label="Avanzar el día" style="width:28px;height:28px;border:0;background:var(--soft);border-radius:50%;cursor:pointer">▶</button></div>
+
+  <div class="layers">
+    <button class="lbtn" id="lbtn" type="button" aria-expanded="false" aria-controls="lpop"><svg viewBox="0 0 76 76" width="100%" height="100%"><rect width="76" height="76" fill="#5E7F4E"/><path d="M0 50 Q30 40 76 56 V76 H0z" fill="#3E6A8A"/><path d="M10 0 L30 76" stroke="#C9C2A8" stroke-width="3"/><path d="M0 30 L76 22" stroke="#C9C2A8" stroke-width="2"/></svg><span>Capas</span></button>
+    <div class="lpop" id="lpop" hidden>
+      <h4>Tipo de mapa</h4>
+      <div class="mt" id="mt">
+        <button type="button" data-t="mapa" aria-pressed="true"><i style="background:linear-gradient(135deg,#F5F3EF 50%,#AADAFF 50%)"></i>Mapa</button>
+        <button type="button" data-t="satelite" aria-pressed="false"><i style="background:linear-gradient(135deg,#55704A,#2F4B5F)"></i>Satélite</button>
+        <button type="button" data-t="trafico" aria-pressed="false"><i style="background:linear-gradient(90deg,#1E8E3E 33%,#F9AB00 33% 66%,#D93025 66%)"></i>Tráfico</button>
+      </div>
+      <h4>Detalles del mapa</h4>
+      <label class="cap"><input type="checkbox" id="cCal">Calor de clientes</label>
+      <label class="cap"><input type="checkbox" id="cZon">Zonas de cada técnico</label>
+      <label class="cap"><input type="checkbox" id="cNom" checked>Nombres de calles</label>
+    </div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+  <div class="scale" id="scale"></div>
+  <div class="ctrl">
+    <button class="cbtn" type="button" id="me" aria-label="Centrar en la oficina"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1A73E8" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+    <div class="zoom"><button type="button" id="zin" aria-label="Acercar">+</button><button type="button" id="zout" aria-label="Alejar">−</button></div>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script>
+(function(){
+/* ============ DATOS DE EJEMPLO ============ */
+let seed=5; const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646}; const ri=(a,b)=>Math.floor(a+rnd()*(b-a+1));
+const SEC={'Los Prados':[18.478,-69.951],'Naco':[18.474,-69.928],'Piantini':[18.467,-69.937],'Bella Vista':[18.455,-69.941],'Gazcue':[18.465,-69.902],'Zona Colonial':[18.473,-69.884],'Arroyo Hondo':[18.503,-69.943],'Mirador Norte':[18.445,-69.958],'Cristo Rey':[18.493,-69.928],'Los Ríos':[18.497,-69.965],'Herrera':[18.474,-70.003],'Los Alcarrizos':[18.516,-70.012],'Pedro Brand':[18.566,-70.093],'Haina':[18.416,-70.033],'Manoguayabo':[18.487,-70.040],'Villa Mella':[18.555,-69.912],'Sabana Perdida':[18.540,-69.870],'Los Mina':[18.496,-69.857],'Ensanche Ozama':[18.482,-69.875],'Charles de Gaulle':[18.513,-69.846],'San Isidro':[18.502,-69.775],'Villa Faro':[18.480,-69.822]};
+const PESO={'Naco':46,'Arroyo Hondo':44,'Los Prados':40,'Piantini':38,'Herrera':36,'Bella Vista':34,'Villa Mella':32,'Los Alcarrizos':30,'Los Mina':30,'Mirador Norte':26,'Manoguayabo':24,'Ensanche Ozama':24,'Gazcue':22,'Charles de Gaulle':22,'Cristo Rey':20,'Los Ríos':18,'Villa Faro':18,'Sabana Perdida':16,'Pedro Brand':14,'San Isidro':14,'Haina':12,'Zona Colonial':10};
+const CALLES=['Calle 3ra','Calle Interior A','Av. Principal','Calle 7','Calle Respaldo 2','Calle El Sol','Calle 14','Calle Los Pinos','Calle Duarte','Calle Primera'];
+const NOM=['Ana','Luis','Carmen','José','Rosa','Pedro','Marta','Juan','Elena','Rafael','Sonia','Héctor','Iris','Daniel','Paola','Tomás','Yahaira','Leonela','Génesis','Berkys','Altagracia','Keyton','Eneris','Diomir','Albania','Santty'];
+const APE=['Rodríguez','Peña','Vidal','Medina','Fermín','Guzmán','López','Castillo','Santos','Díaz','Báez','Tavárez','Núñez','Ortiz','Encarnación','Almonte'];
+const EQ=['Lavadora','Nevera','Aire','Estufa','Secadora'];
+const MARCA={Lavadora:['Samsung','LG','Whirlpool'],Nevera:['LG','Frigidaire','Samsung'],Aire:['Gree','LG','Midea'],Estufa:['Mabe','Frigidaire'],Secadora:['Whirlpool','Mabe']};
+const CL=[]; let cid=1;
+Object.entries(PESO).forEach(([s,n])=>{const [la,lo]=SEC[s];const frio=['Pedro Brand','Haina','San Isidro','Sabana Perdida','Zona Colonial','Mirador Norte'].includes(s);
+  for(let k=0;k<n;k++){const r=rnd();const meses=frio?(r<.2?ri(0,5):ri(8,30)):(r<.35?ri(0,2):r<.55?ri(3,5):r<.75?ri(6,11):ri(12,30));const eq=EQ[ri(0,4)];
+    CL.push({id:'C'+cid++,n:`${NOM[ri(0,NOM.length-1)]} ${APE[ri(0,APE.length-1)]}`,s,la:la+(rnd()-.5)*.014,lo:lo+(rnd()-.5)*.016,meses,serv:ri(1,8),eq,marca:MARCA[eq][ri(0,MARCA[eq].length-1)],tel:`809-555-0${ri(100,999)}`,dir:`${CALLES[ri(0,CALLES.length-1)]} #${ri(2,80)}, ${s}`,wa:rnd()<.88});}});
+const TEC=[
+ {n:'Yoniel',eq:'A',c:'#0F3460',zs:['Naco','Los Prados','Piantini','Cristo Rey']},
+ {n:'Reyes Guzmán',eq:'A',c:'#7C3AED',zs:['Herrera','Manoguayabo','Los Alcarrizos','Haina']},
+ {n:'Diorky',eq:'A',c:'#0E7490',zs:['Arroyo Hondo','Los Ríos','Cristo Rey']},
+ {n:'Albert Brito',eq:'A',c:'#BE185D',zs:['Piantini','Bella Vista','Naco','Gazcue']},
+ {n:'Wilfredo',eq:'A',c:'#A16207',zs:['Mirador Norte','Bella Vista','Herrera']},
+ {n:'Wilmer',eq:'B',c:'#4D7C0F',zs:['Gazcue','Zona Colonial','Naco']},
+ {n:'Franklin',eq:'B',c:'#C2410C',zs:['Los Mina','Ensanche Ozama','Villa Faro']},
+ {n:'Yunior',eq:'B',c:'#4338CA',zs:['Villa Mella','Sabana Perdida','Charles de Gaulle']},
+ {n:'José Alberto',eq:'B',c:'#0369A1',zs:['Pedro Brand','Los Alcarrizos','Manoguayabo']},
+ {n:'Miguel',eq:'B',c:'#475569',zs:['San Isidro','Villa Faro','Ensanche Ozama','Los Mina']}
+];
+const OFICINA=[18.4715,-69.9325]; // oficina de ejemplo (Naco)
+// citas de hoy: 3-5 por técnico, en sus zonas, horas fijas
+const CITAS=[]; let os=2481;
+TEC.forEach((t,ti)=>{const n=[4,4,3,4,3,3,4,4,3,5][ti];const hs=[9,10,11,13,14,15,16].sort(()=>rnd()-.5).slice(0,n).sort((a,b)=>a-b);
+  hs.forEach((h,k)=>{const cands=CL.filter(c=>t.zs.includes(c.s));const c=cands[ri(0,cands.length-1)];
+    CITAS.push({id:'OS-'+(os++),t:ti,h,c,gar:(ti===2&&k===1)||(ti===6&&k===2),falla:['No enfría','No centrifuga','Bota agua','No prende','Hace ruido','Mantenimiento'][ri(0,5)]});});});
+// especialidades reales (equiposOperacion.ts)
+const REP=[['nevera','lavadora','secadora','estufa','aire'],['lavadora','secadora'],['lavadora','secadora'],['aire'],['estufa'],['nevera'],['estufa'],['lavadora','secadora'],['lavadora','secadora'],['nevera','lavadora','secadora']];
+TEC.forEach((t,i)=>{t.rep=REP[i];});TEC[3].mant=['lavadora','secadora','estufa'];TEC[5].contr=true;
+const ESPK={Lavadora:'lavadora',Nevera:'nevera',Aire:'aire',Estufa:'estufa',Secadora:'secadora'};
+// que cada cita sea de algo que su técnico repara
+CITAS.forEach(x=>{const t=TEC[x.t];if(!t.rep.includes(ESPK[x.c.eq])){const e=t.rep[x.id.charCodeAt(5)%t.rep.length];x.c={...x.c,eq:Object.keys(ESPK).find(k=>ESPK[k]===e)};}});
+// Reyes se demora en su primera cita (para ver el atraso y la sugerencia)
+(()=>{const r=CITAS.filter(x=>x.t===1).sort((a,b)=>a.h-b.h);[9,13,15,16].forEach((h,i)=>{if(r[i])r[i].h=h;});r[0].dur=280;r[0].falla='No centrifuga';})();
+(()=>{const d=CITAS.filter(x=>x.t===2).sort((a,b)=>a.h-b.h);[9,10,17].forEach((h,i)=>{if(d[i])d[i].h=h;});})();
+// ruta y tiempos
+const kmR=(a,b)=>{const R=6371,t=x=>x*Math.PI/180;const dA=t(b[0]-a[0]),dO=t(b[1]-a[1]);const h=Math.sin(dA/2)**2+Math.cos(t(a[0]))*Math.cos(t(b[0]))*Math.sin(dO/2)**2;return 2*R*Math.asin(Math.sqrt(h))*1.35;};
+const minViaje=(km)=>Math.round(km/22*60+4);
+const citasDe=ti=>CITAS.filter(x=>x.t===ti).sort((a,b)=>a.h-b.h);
+const pos=c=>[c.la,c.lo];
+
+/* ============ CALLES (aprox.) ============ */
+const HWY=[
+ ['Autopista Duarte',[[18.488,-69.965],[18.497,-69.985],[18.505,-69.995],[18.516,-70.012],[18.532,-70.040],[18.545,-70.060],[18.566,-70.093],[18.59,-70.125]]],
+ ['Autopista 30 de Mayo',[[18.448,-69.945],[18.440,-69.965],[18.432,-69.990],[18.424,-70.010],[18.418,-70.030],[18.410,-70.070],[18.405,-70.12]]],
+ ['Av. Las Américas',[[18.474,-69.878],[18.482,-69.862],[18.481,-69.840],[18.480,-69.820],[18.486,-69.790],[18.478,-69.760],[18.468,-69.73]]],
+ ['Av. John F. Kennedy',[[18.497,-70.000],[18.492,-69.975],[18.488,-69.958],[18.486,-69.935],[18.485,-69.915],[18.484,-69.900]]],
+];
+const AVS=[
+ ['Av. 27 de Febrero',[[18.484,-70.030],[18.478,-70.000],[18.474,-69.975],[18.471,-69.950],[18.470,-69.930],[18.469,-69.910],[18.473,-69.890]]],
+ ['Av. Winston Churchill',[[18.507,-69.941],[18.488,-69.939],[18.470,-69.937],[18.450,-69.938]]],
+ ['Av. Abraham Lincoln',[[18.500,-69.929],[18.480,-69.929],[18.460,-69.928],[18.448,-69.929]]],
+ ['Av. Máximo Gómez',[[18.507,-69.915],[18.486,-69.914],[18.465,-69.912],[18.456,-69.910]]],
+ ['Av. Núñez de Cáceres',[[18.498,-69.953],[18.475,-69.950],[18.452,-69.948]]],
+ ['Av. Luperón',[[18.496,-69.967],[18.470,-69.966],[18.444,-69.966]]],
+ ['Av. George Washington',[[18.448,-69.945],[18.452,-69.930],[18.457,-69.915],[18.462,-69.900],[18.468,-69.886]]],
+ ['Av. Independencia',[[18.452,-69.946],[18.458,-69.925],[18.463,-69.905],[18.469,-69.889]]],
+ ['Av. Hermanas Mirabal',[[18.502,-69.906],[18.525,-69.908],[18.555,-69.912],[18.590,-69.918]]],
+ ['Av. Jacobo Majluta',[[18.553,-69.975],[18.560,-69.940],[18.558,-69.905],[18.548,-69.865]]],
+ ['Av. San Vicente de Paúl',[[18.482,-69.866],[18.505,-69.862],[18.535,-69.860]]],
+ ['Av. Charles de Gaulle',[[18.490,-69.848],[18.515,-69.845],[18.548,-69.840]]],
+ ['Carretera Mella',[[18.496,-69.858],[18.503,-69.825],[18.507,-69.790],[18.512,-69.755]]],
+ ['Av. Prolongación 27 de Febrero',[[18.484,-70.030],[18.488,-70.050],[18.492,-70.080]]],
+ ['Av. Ecológica',[[18.486,-69.800],[18.510,-69.795],[18.535,-69.780]]],
+ ['Av. Tiradentes',[[18.495,-69.922],[18.470,-69.922]]],
+ ['Av. Bolívar',[[18.468,-69.935],[18.466,-69.910],[18.469,-69.893]]],
+ ['Av. Sarasota',[[18.457,-69.965],[18.455,-69.940]]],
+];
+const PARKS=[['Parque Mirador Sur',[[18.447,-69.968],[18.444,-69.948],[18.439,-69.948],[18.441,-69.970]]],['Jardín Botánico',[[18.499,-69.959],[18.499,-69.947],[18.489,-69.947],[18.489,-69.959]]],['Parque Mirador Norte',[[18.556,-69.945],[18.556,-69.925],[18.546,-69.925],[18.546,-69.945]]],['Parque del Este',[[18.486,-69.852],[18.486,-69.838],[18.478,-69.838],[18.478,-69.852]]]];
+const COAST=[[18.432,-70.14],[18.418,-70.06],[18.412,-70.03],[18.428,-69.99],[18.440,-69.96],[18.447,-69.94],[18.453,-69.92],[18.461,-69.90],[18.468,-69.884],[18.466,-69.86],[18.462,-69.83],[18.458,-69.79],[18.452,-69.74],[18.448,-69.70]];
+const OZAMA=[[18.468,-69.884],[18.480,-69.880],[18.495,-69.884],[18.512,-69.892],[18.530,-69.895],[18.548,-69.899],[18.570,-69.902],[18.60,-69.905]];
+const ISABELA=[[18.500,-69.995],[18.507,-69.975],[18.506,-69.955],[18.502,-69.935],[18.497,-69.915],[18.490,-69.895],[18.486,-69.884]];
+// calles menores (textura) alrededor de los sectores
+const MINOR=[]; Object.values(SEC).forEach(([la,lo])=>{for(let i=0;i<9;i++){const a=rnd()*Math.PI,l=.006+rnd()*.01,cx=la+(rnd()-.5)*.02,cy=lo+(rnd()-.5)*.024;MINOR.push([[cx-Math.sin(a)*l/2,cy-Math.cos(a)*l/2],[cx+Math.sin(a)*l/2,cy+Math.cos(a)*l/2]]);}});
+
+/* ============ PROYECCIÓN Y VISTA ============ */
+const LON=[-70.14,-69.70], LAT=[18.38,18.62]; const W=1600, H=Math.round(W*(LAT[1]-LAT[0])/((LON[1]-LON[0])*Math.cos(18.5*Math.PI/180)));
+const P=(la,lo)=>[(lo-LON[0])/(LON[1]-LON[0])*W,(LAT[1]-la)/(LAT[1]-LAT[0])*H];
+const svg=document.getElementById('map');
+let view={x:0,y:0,k:1}; // k = zoom; x,y = top-left in world units
+function fit(){const r=svg.getBoundingClientRect();const pw=innerWidth>760&&!panelClosed?408:0;const w=r.width-pw,h=r.height;const k=Math.min(w/ (W*.62), h/(H*.62));view.k=k;const [cx,cy]=P(18.488,-69.93);view.x=cx-(pw+w/2)/k;view.y=cy-(h/2)/k;}
+function setVB(){const r=svg.getBoundingClientRect();svg.setAttribute('viewBox',`${view.x} ${view.y} ${r.width/view.k} ${r.height/view.k}`);}
+function zoomAt(f,sx,sy){const r=svg.getBoundingClientRect();const nk=Math.max(.35,Math.min(14,view.k*f));const wx=view.x+sx/view.k, wy=view.y+sy/view.k;view.k=nk;view.x=wx-sx/nk;view.y=wy-sy/nk;draw();}
+function flyTo(la,lo,k){const r=svg.getBoundingClientRect();const pw=innerWidth>760&&!panelClosed?408:0;const [x,y]=P(la,lo);view.k=k||Math.max(view.k,3.2);const vis=innerWidth>760?r.height:r.height*.54;view.x=x-(pw+(r.width-pw)/2)/view.k;view.y=y-(vis/2)/view.k;draw();}
+
+/* ============ ESTADO ============ */
+let capa={clientes:true,citas:true,rutas:false,gps:true,frios:false,garantias:false};
+let tipo='mapa', calor=false, zonasTec=false, nombres=true, panelClosed=false;
+let vista={t:'inicio'}; const hist=[];
+let ahora=11*60+20, rutaTec=null, rutaModo='agenda';
+const ANT=m=>m<3?['#15803D','Activo · menos de 3 meses']:m<6?['#4A6FA5','3 a 6 meses']:m<12?['#B45309','6 a 12 meses']:['#64748B','Frío · más de 12 meses'];
+const hh=h=>h<12?`${h}:00 AM`:h===12?'12:00 PM':`${h-12}:00 PM`;
+const fmtMin=m=>{const h=Math.floor(m/60),mm=Math.round(m%60);return `${h>12?h-12:h}:${String(mm).padStart(2,'0')} ${h>=12?'PM':'AM'}`;};
+
+/* ============ DIBUJO ============ */
+const pl=pts=>pts.map(p=>P(...p).map(v=>v.toFixed(1)).join(',')).join(' ');
+function roadPath(pts){return 'M'+pts.map(p=>P(...p).map(v=>v.toFixed(1)).join(',')).join(' L');}
+function draw(){
+  setVB(); const k=view.k; const u=1/k; // 1 px de pantalla en unidades de mundo
+  const sat=tipo==='satelite', tr=tipo==='trafico';
+  let g='';
+  // tierra / mar
+  const coastW=COAST.map(p=>P(...p)); const sea=`M${coastW[0][0]-2000},${H+2000} L${coastW.map(p=>p.join(',')).join(' L')} L${coastW[coastW.length-1][0]+2000},${coastW[coastW.length-1][1]} L${W+2000},${H+2000} Z`;
+  g+=`<rect x="-2000" y="-2000" width="${W+4000}" height="${H+4000}" fill="${sat?'#4F6B45':'var(--land)'}"/>`;
+  if(sat){for(let i=0;i<160;i++){const x=(i*97)%W,y=(i*53)%H;g+=`<circle cx="${x}" cy="${y}" r="${30+(i%7)*12}" fill="${i%3?'#5D7A50':'#6B7F5A'}" opacity=".5"/>`;} Object.values(SEC).forEach(([la,lo])=>{const [x,y]=P(la,lo);g+=`<circle cx="${x}" cy="${y}" r="38" fill="#8C8577" opacity=".55"/>`;});}
+  g+=`<path d="${sea}" fill="${sat?'#24435A':'var(--water)'}"/>`;
+  PARKS.forEach(([n,pts])=>{g+=`<polygon points="${pl(pts)}" fill="${sat?'#3D5A35':'var(--park)'}"/>`;});
+  [OZAMA,ISABELA].forEach((r,i)=>{g+=`<path d="${roadPath(r)}" fill="none" stroke="${sat?'#24435A':'var(--water)'}" stroke-width="${(i?5:8)}" stroke-linecap="round" stroke-linejoin="round"/>`;});
+  // calles
+  const show=k>1.6;
+  if(show) MINOR.forEach(s=>{g+=`<path d="${roadPath(s)}" stroke="${sat?'#9C9583':'#fff'}" stroke-width="${Math.max(1.2*u,0.9)}" fill="none"/>`;});
+  const traf=(i)=>['#1E8E3E','#F9AB00','#D93025','#1E8E3E'][i%4];
+  AVS.forEach(([n,pts],i)=>{g+=`<path d="${roadPath(pts)}" stroke="${sat?'#B8B09A':'var(--casing)'}" stroke-width="${Math.max(5*u,2.4)}" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="${roadPath(pts)}" stroke="${tr?traf(i):sat?'#D8D0B8':'var(--road)'}" stroke-width="${Math.max(3.4*u,1.6)}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;});
+  HWY.forEach(([n,pts],i)=>{g+=`<path d="${roadPath(pts)}" stroke="${sat?'#C9B98A':'var(--hwycase)'}" stroke-width="${Math.max(7*u,3.2)}" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="${roadPath(pts)}" stroke="${tr?traf(i+1):sat?'#E8D9A5':'var(--hwy)'}" stroke-width="${Math.max(5*u,2.4)}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;});
+  // zonas de técnicos
+  if(zonasTec){TEC.forEach((t,ti)=>{if(!filtTec(ti))return;t.zs.forEach(z=>{const [x,y]=P(...SEC[z]);g+=`<circle cx="${x}" cy="${y}" r="${38}" fill="${t.c}" fill-opacity=".08" stroke="${t.c}" stroke-opacity=".5" stroke-width="${1.5*u}" stroke-dasharray="${5*u} ${4*u}"/>`;});});}
+  // calor
+  if(calor){g+=`<defs><radialGradient id="hg"><stop offset="0" stop-color="#E25B1E" stop-opacity=".45"/><stop offset=".55" stop-color="#F59E0B" stop-opacity=".16"/><stop offset="1" stop-color="#F59E0B" stop-opacity="0"/></radialGradient></defs><g style="mix-blend-mode:multiply">`;
+    cliVis().forEach(c=>{const [x,y]=P(c.la,c.lo);g+=`<circle cx="${x}" cy="${y}" r="22" fill="url(#hg)"/>`;});g+=`</g>`;}
+  // nombres de calles
+  if(nombres&&!sat&&k>1.1){[...HWY,...AVS].forEach(([n,pts],i)=>{if(k<2.4&&i>7)return;const a=P(...pts[Math.floor(pts.length/2)-1]||pts[0]),b=P(...pts[Math.floor(pts.length/2)]);let ang=Math.atan2(b[1]-a[1],b[0]-a[0])*180/Math.PI;if(ang>90)ang-=180;if(ang<-90)ang+=180;const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;g+=`<text x="${mx}" y="${my}" transform="rotate(${ang} ${mx} ${my})" font-size="${10.5*u}" fill="#5F6368" text-anchor="middle" dy="${3.5*u}" paint-order="stroke" stroke="#fff" stroke-width="${3*u}" font-weight="500">${n}</text>`;});}
+  // sectores
+  Object.entries(SEC).forEach(([s,[la,lo]])=>{const [x,y]=P(la,lo);if(k<.9&&PESO[s]<30)return;g+=`<text x="${x}" y="${y-14*u}" font-size="${(k>2.5?13:11.5)*u}" font-weight="700" fill="${sat?'#fff':'#3C4043'}" text-anchor="middle" paint-order="stroke" stroke="${sat?'rgba(0,0,0,.6)':'rgba(255,255,255,.9)'}" stroke-width="${3*u}" letter-spacing="${.3*u}">${s}</text>`;});
+  // oficina
+  {const [x,y]=P(...OFICINA);g+=`<g><circle cx="${x}" cy="${y}" r="${11*u}" fill="var(--act)" stroke="#fff" stroke-width="${2.5*u}"/><text x="${x}" y="${y+4*u}" font-size="${10*u}" font-weight="800" fill="#fff" text-anchor="middle">MS</text></g>`;}
+  // clientes
+  if((capa.clientes||capa.frios)&&!['ruta','reasignar','confirmar','repartir'].includes(vista.t)){
+    const cs=cliVis(); const cell=k<2.6?46/k:0;
+    if(cell){const grid={};cs.forEach(c=>{const [x,y]=P(c.la,c.lo);const key=Math.floor(x/cell)+'_'+Math.floor(y/cell);(grid[key]=grid[key]||[]).push([x,y,c]);});
+      Object.values(grid).forEach(arr=>{const x=arr.reduce((a,p)=>a+p[0],0)/arr.length,y=arr.reduce((a,p)=>a+p[1],0)/arr.length;if(arr.length===1){const c=arr[0][2];g+=cliDot(c,x,y,u);return;}
+        const r=(13+Math.min(12,Math.sqrt(arr.length)*2.2))*u;const fr=arr.filter(p=>p[2].meses>=12).length/arr.length;
+        g+=`<g class="hit" data-cl="${x},${y}" style="cursor:pointer"><circle cx="${x}" cy="${y}" r="${r+3*u}" fill="${capa.frios&&!capa.clientes?'#64748B':'#1A73E8'}" opacity=".18"/><circle cx="${x}" cy="${y}" r="${r}" fill="${capa.frios&&!capa.clientes?'#64748B':'#1A73E8'}" stroke="#fff" stroke-width="${2*u}"/><text x="${x}" y="${y+4*u}" font-size="${11.5*u}" font-weight="700" fill="#fff" text-anchor="middle">${arr.length}</text></g>`;});}
+    else cs.forEach(c=>{const [x,y]=P(c.la,c.lo);g+=cliDot(c,x,y,u);});
+  }
+  // rutas
+  const rts=rutasVisibles();
+  rts.forEach(ti=>{const cs=citasRuta(ti);const pts=[OFICINA,...cs.map(x=>pos(x.c))].map(p=>P(...p));const t=TEC[ti];const sel=rutaTec===ti;
+    g+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${sel?'#1967D2':t.c}" stroke-opacity="${sel?1:.7}" stroke-width="${(sel?7:4)*u}" stroke-linecap="round" stroke-linejoin="round"/>`;
+    if(sel) g+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="#8AB4F8" stroke-width="${3*u}" stroke-linecap="round" stroke-linejoin="round"/>`;});
+  const enRe=vista.t==='reasignar'||vista.t==='confirmar';const xr=enRe?CITAS.find(z=>z.id===vista.id):null;
+  if(vista.t==='confirmar'){const t=TEC[vista.ti];const nuevo=[...citasDe(vista.ti),xr].sort((a,b)=>a.h-b.h);const pts=[OFICINA,...nuevo.map(z=>pos(z.c))].map(p=>P(...p));
+    const viejo=[OFICINA,...citasDe(xr.t).filter(z=>z!==xr).map(z=>pos(z.c))].map(p=>P(...p));
+    g+=`<polyline points="${viejo.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${TEC[xr.t].c}" stroke-opacity=".35" stroke-width="${4*u}" stroke-linecap="round"/>`;
+    g+=`<polyline points="${pts.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${t.c}" stroke-width="${5*u}" stroke-dasharray="${10*u} ${7*u}" stroke-linecap="round"/>`;}
+  // citas
+  if(capa.citas||capa.garantias||rts.length||enRe){
+    CITAS.forEach(x=>{if(enRe){if(x!==xr&&x.t!==xr.t&&!(vista.t==='confirmar'&&x.t===vista.ti))return;}else{if(!filtTec(x.t))return;if(capa.garantias&&!capa.citas&&!x.gar&&!rts.includes(x.t))return;if(!capa.citas&&!capa.garantias&&!rts.includes(x.t))return;}
+      const [px_,py]=P(...pos(x.c));const t=TEC[x.t];const n=citasRuta(x.t).indexOf(x)+1;const done=estadoCita(x)==='hecha';const col=x.gar?'var(--gar)':t.c;const s=((vista.t==='cita'||enRe)&&vista.id===x.id)?1.35:1;
+      g+=`<g class="hit" data-cita="${x.id}" style="cursor:pointer" opacity="${done?.55:1}" transform="translate(${px_} ${py}) scale(${u*s})"><path d="M0 0 C-3 -9 -13 -14 -13 -24 A13 13 0 1 1 13 -24 C13 -14 3 -9 0 0Z" fill="${col}" stroke="#fff" stroke-width="2"/><text x="0" y="-19.5" font-size="11.5" font-weight="800" fill="#fff" text-anchor="middle">${done?'✓':n}</text></g>`;});
+  }
+  // vans GPS
+  if(capa.gps||enRe){TEC.forEach((t,ti)=>{if(!enRe&&!filtTec(ti))return;const v=vanPos(ti);if(!v)return;const [x,y]=P(...v.p);const d=diaDe(ti);const C=2*Math.PI*17,fr=d.total?d.done/d.total:0;
+    const dim=enRe&&vista.t==='confirmar'&&ti!==vista.ti&&ti!==xr.t;
+    g+=`<g class="hit van" data-van="${ti}" data-drop="${ti}" style="cursor:pointer" opacity="${dim?.35:1}" transform="translate(${x} ${y}) scale(${u})"><circle r="17" fill="#fff" stroke="#E2E8F0" stroke-width="4"/><circle r="17" fill="none" stroke="${d.atrasado?'var(--warn)':'var(--ok)'}" stroke-width="4" stroke-linecap="round" stroke-dasharray="${C*fr} ${C}" transform="rotate(-90)"/><circle r="12" fill="${t.c}"/><text y="4.5" font-size="12.5" font-weight="800" fill="#fff" text-anchor="middle">${t.n[0]}</text>
+    <g transform="translate(0 30)"><rect x="-${t.n.length*3.6+22}" y="-9" width="${t.n.length*7.2+44}" height="18" rx="9" fill="#fff" stroke="${d.atrasado?'var(--warn)':'#E2E8F0'}"/><text y="4" font-size="11" font-weight="700" fill="${d.atrasado?'#92400E':'#202124'}" text-anchor="middle">${t.n} · ${d.done}/${d.total}</text></g></g>`;});}
+  svg.innerHTML=g;
+  // escala
+  const kmPorPx=((LON[1]-LON[0])*111*Math.cos(18.5*Math.PI/180))/W/k; const target=[0.2,0.5,1,2,5,10].find(v=>v/kmPorPx>60)||10; document.getElementById('scale').innerHTML=`<span style="display:inline-block;width:${Math.round(target/kmPorPx)}px;border:1.5px solid #5F6368;border-top:0;height:6px;vertical-align:middle;margin-right:6px"></span>${target<1?target*1000+' m':target+' km'}`;
+  legend();
+}
+function cliDot(c,x,y,u){const [col]=ANT(c.meses);const sel=vista.t==='cliente'&&vista.id===c.id;return `<g class="hit" data-cli="${c.id}" style="cursor:pointer"><circle cx="${x}" cy="${y}" r="${(sel?9:6)*u}" fill="${col}" stroke="#fff" stroke-width="${(sel?3:1.6)*u}"/></g>`;}
+let filtroTec=null,teamF=null; const filtTec=ti=>(filtroTec===null||filtroTec===ti)&&(teamF===null||TEC[ti].eq===teamF);
+function cliVis(){return CL.filter(c=>(capa.clientes)||(capa.frios&&c.meses>=12)).filter(c=>!capa.frios||capa.clientes||c.meses>=12);}
+function rutasVisibles(){if(vista.t==='ruta')return[vista.ti];if(capa.rutas)return TEC.map((_,i)=>i).filter(filtTec);return[];}
+function citasRuta(ti){const cs=citasDe(ti);if(rutaModo==='corta'&&vista.t==='ruta'&&vista.ti===ti){return sugerirOrden(ti);}return cs;}
+function estadoCita(x){const r=tiempos(x.t);const s=r.find(z=>z.x===x);if(!s)return'';return ahora>=s.fin?'hecha':ahora>=s.lleg?'en_sitio':ahora>=s.sale?'en_camino':'pendiente';}
+function tiempos(ti){return tiemposLista(citasRuta(ti));}
+function tiemposLista(cs){let prev=OFICINA,libre=8*60+30;return cs.map(x=>{const km=kmR(prev,pos(x.c)),m=minViaje(km);const cita=x.h*60;const sale=Math.max(libre,cita-m-5);const lleg=sale+m;const fin=Math.max(lleg,cita)+(x.dur||55);prev=pos(x.c);libre=fin;return {x,km,m,sale,lleg,fin,tarde:Math.max(0,lleg-cita)};});}
+function vanPos(ti){const ts=tiempos(ti);let prev=OFICINA;for(const s of ts){if(ahora<s.sale)return{p:prev,estado:prev===OFICINA?`En oficina · sale ${fmtMin(s.sale)}`:`Libre · sale ${fmtMin(s.sale)}`};if(ahora<s.lleg){const f=(ahora-s.sale)/(s.lleg-s.sale);const a=prev,b=pos(s.x.c);return{p:[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f],estado:`Va a ${s.x.c.s}`,eta:Math.round(s.lleg-ahora),x:s.x};}if(ahora<s.fin)return{p:pos(s.x.c),estado:`En sitio · ${s.x.c.s}`,x:s.x};prev=pos(s.x.c);}return{p:prev,estado:'Terminó'};}
+function sugerirOrden(ti){const rest=[...citasDe(ti)],out=[];let prev=OFICINA;while(rest.length){let bi=0,bd=1e9;rest.forEach((x,i)=>{const d=kmR(prev,pos(x.c));if(d<bd){bd=d;bi=i;}});const x=rest.splice(bi,1)[0];out.push(x);prev=pos(x.c);}return out;} // en la app: Routes API respetando la hora de cada cita
+function puede(ti,x){const e=ESPK[x.c.eq];return TEC[ti].rep.includes(e)||(x.falla==='Mantenimiento'&&(TEC[ti].mant||[]).includes(e));}
+const plural={Lavadora:'lavadoras',Nevera:'neveras',Aire:'aires',Estufa:'estufas',Secadora:'secadoras'};
+function diaDe(ti){const ts=tiempos(ti);return{ts,done:ts.filter(s=>ahora>=s.fin).length,total:ts.length,atrasoMin:Math.max(0,...ts.filter(s=>ahora<s.fin).map(s=>s.tarde)),get atrasado(){return this.atrasoMin>10;}};}
+function candidatos(x){const out=[];
+  TEC.forEach((t,ti)=>{if(ti===x.t)return;const suyas=citasDe(ti);const bloq=[],av=[];
+    const ch=suyas.find(y=>estadoCita(y)!=='hecha'&&Math.abs(y.h-x.h)<1);if(ch)bloq.push(`Tiene otra cita a las ${hh(ch.h)} (${ch.c.n})`);
+    if(suyas.length>=7)bloq.push('Ya tiene 7 citas (el máximo)');
+    const antes=tiemposLista(suyas),desp=tiemposLista([...suyas,x].sort((a,b)=>a.h-b.h));const s=desp.find(z=>z.x===x);
+    const lleg=Math.max(s.lleg,ahora+s.m),tarde=Math.max(0,Math.round(lleg-x.h*60));
+    const ok=puede(ti,x),otro=t.eq!==TEC[x.t].eq;
+    if(!ok)av.push(`No repara ${plural[x.c.eq]}`);
+    if(otro)av.push(`Es del equipo ${t.eq}: la orden pasa a ${t.eq==='A'?'Wila':'Yohana'}`);
+    if(t.contr)av.push('Es contratista');
+    if(tarde>10)av.push(`Llegaría ${tarde} min tarde`);
+    const tA=new Set(antes.filter(z=>z.tarde>10).map(z=>z.x.id));const ret=desp.filter(z=>z.x!==x&&z.tarde>10&&!tA.has(z.x.id)).length;if(ret)av.push(`Retrasaría ${ret} de sus otras citas`);
+    const kmx=Math.max(0,desp.reduce((a,z)=>a+z.km,0)-antes.reduce((a,z)=>a+z.km,0));
+    const d=diaDe(ti);const nivel=bloq.length?'bloq':av.length?'aviso':'ok';
+    const punt=(bloq.length?1e4:0)+tarde*2+kmx*1.5+suyas.length*4+(ok?0:80)+(otro?12:0)+ret*25;
+    out.push({ti,t,bloq,av,lleg,tarde,kmx,ret,n:suyas.length,d,nivel,punt,res:`${tarde>10?`Llega ${fmtMin(lleg)} (${tarde} min tarde)`:`Llega ${fmtMin(lleg)}, a tiempo`} · +${kmx.toFixed(1)} km · ${suyas.length} cita${suyas.length===1?'':'s'} hoy`});});
+  return out.sort((a,b)=>a.punt-b.punt||a.t.n.localeCompare(b.t.n));}
+function validar(x,c){const est=estadoCita(x);const b=[],a=[];
+  if(est==='hecha')b.push('El trabajo de esta cita ya se hizo');
+  else if(est==='en_sitio')b.push('El técnico ya está en la casa del cliente. Termina o cancela la visita primero');
+  if(c)b.push(...c.bloq);
+  if(est==='en_camino')a.push(`${TEC[x.t].n} ya va en camino. Avísale antes de cambiarla`);
+  if(x.h*60<ahora&&est==='pendiente')a.push(`La hora de esta cita (${hh(x.h)}) ya pasó`);
+  if(c)a.push(...c.av);
+  return{puede:!b.length,b:[...new Set(b)],a:[...new Set(a)],motivo:a.length>0};}
+function sugerencias(){const out=[],usados=new Set();
+  TEC.forEach((t,ti)=>{if(!filtTec(ti))return;tiempos(ti).forEach(s=>{if(estadoCita(s.x)!=='pendiente'||s.tarde<30)return;
+    const c=candidatos(s.x).find(c=>c.nivel==='ok'&&c.t.eq===t.eq&&!usados.has(c.ti));if(!c)return;usados.add(c.ti);out.push({x:s.x,de:ti,c,tarde:s.tarde});});});
+  return out.sort((a,b)=>b.tarde-a.tarde);}
+function planRepartir(ti){const orig=new Map(CITAS.map(x=>[x,x.t]));const plan=[];
+  citasDe(ti).filter(x=>estadoCita(x)==='pendiente').forEach(x=>{const c=candidatos(x).find(c=>c.nivel!=='bloq'&&!c.av.some(a=>a.startsWith('No repara')));
+    if(c){plan.push({x,c});x.t=c.ti;}else plan.push({x,c:null});});
+  CITAS.forEach(x=>{x.t=orig.get(x);});return plan;}
+function legend(){const L=document.getElementById('legend');let h='';if(capa.clientes||capa.frios)h+=`<span><i class="dot" style="background:#15803D"></i>Activo</span><span><i class="dot" style="background:#4A6FA5"></i>3–6 m</span><span><i class="dot" style="background:#B45309"></i>6–12 m</span><span><i class="dot" style="background:#64748B"></i>Frío</span>`;if(capa.citas||capa.rutas||vista.t==='ruta')h+=`<span><i class="dot" style="background:#0F3460"></i>Cita (color del técnico, número = orden)</span>`;if(capa.citas||capa.garantias)h+=`<span><i class="dot" style="background:var(--gar)"></i>Garantía</span>`;L.innerHTML=h;L.hidden=!h;}
+
+/* ============ PANEL ============ */
+const I={dir:'<path d="M12 2l9 10-9 10-9-10z"/><path d="M9 14v-2a2 2 0 012-2h4M13 8l2 2-2 2"/>',wa:'<path d="M4 20l1.5-4A8 8 0 1112 20a8 8 0 01-4-1z"/>',tel:'<path d="M5 3h4l2 5-3 2a11 11 0 006 6l2-3 5 2v4a2 2 0 01-2 2A17 17 0 013 5a2 2 0 012-2z"/>',add:'<path d="M12 5v14M5 12h14"/>',pin:'<path d="M12 22s7-6.5 7-12a7 7 0 10-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>',clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',tool:'<path d="M14.5 6.5a4 4 0 005 5L12 19a2.1 2.1 0 01-3-3l7.5-7.5a4 4 0 00-2-2z"/>',user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',car:'<path d="M5 16h14M6 16l1.5-5h9L18 16M7 19v-3M17 19v-3"/><circle cx="8" cy="16.5" r="1"/><circle cx="16" cy="16.5" r="1"/>',share:'<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 11l7.6-4.5M8.2 13l7.6 4.5"/>',back:'<path d="M15 6l-6 6 6 6"/>',edit:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',swap:'<path d="M7 7h11l-3-3M17 17H6l3 3"/>',van:'<path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z"/><circle cx="6" cy="17" r="1.6"/><circle cx="16" cy="17" r="1.6"/>'};
+const ic=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">${I[k]}</svg>`;
+const pb=document.getElementById('pbody');
+function go(v){hist.push(vista);vista=v;render();}
+function back(){vista=hist.pop()||{t:'inicio'};render();}
+const backBtn=()=>`<button class="back" type="button" data-back aria-label="Atrás">${ic('back')}</button>`;
+function render(){
+  if(vista.t==='inicio') pb.innerHTML=inicio();
+  if(vista.t==='cliente') pb.innerHTML=fichaCliente(CL.find(c=>c.id===vista.id));
+  if(vista.t==='cita') pb.innerHTML=fichaCita(CITAS.find(x=>x.id===vista.id));
+  if(vista.t==='ruta') pb.innerHTML=ruta(vista.ti);
+  if(vista.t==='grupo') pb.innerHTML=grupo(vista.ids);
+  if(vista.t==='van') pb.innerHTML=van(vista.ti);
+  if(vista.t==='reasignar') pb.innerHTML=vReasignar(CITAS.find(x=>x.id===vista.id));
+  if(vista.t==='confirmar') pb.innerHTML=vConfirmar(CITAS.find(x=>x.id===vista.id),vista.ti);
+  if(vista.t==='repartir') pb.innerHTML=vRepartir(vista.ti);
+  pb.scrollTop=0; draw();
+}
+const MOTIVOS=['Va atrasado','Queda más cerca','Sabe de ese equipo','El cliente lo pidió','Avería de la van'];let motivo='';
+function filaCand(c,attr){const bl=c.nivel==='bloq';const ico=bl?'🔒':c.nivel==='ok'?'<b style="color:var(--ok)">✓</b>':'<b style="color:var(--warn)">!</b>';
+  return `<button class="listbtn cand ${bl?'bl':''}" type="button" ${bl?'disabled':''} ${attr}="${c.ti}"><span class="av" style="background:${c.t.c}">${c.t.n[0]}</span><div style="min-width:0"><b>${c.t.n} <span class="muted" style="font-weight:500">· Equipo ${c.t.eq}</span></b><small>${bl?c.bloq[0]:c.res}</small>${!bl&&c.av.length?`<small style="color:var(--warn);font-weight:600">${c.av[0]}${c.av.length>1?` (+${c.av.length-1})`:''}</small>`:''}<span class="mini" aria-label="${c.d.done} de ${c.d.total} citas hechas"><i style="width:${c.d.total?c.d.done/c.d.total*100:0}%;background:${c.d.atrasado?'var(--warn)':'var(--ok)'}"></i></span></div><div class="r" style="font-size:18px">${ico}</div></button>`;}
+function vReasignar(x){const cs=candidatos(x);const disp=cs.filter(c=>c.nivel!=='bloq'),bl=cs.filter(c=>c.nivel==='bloq');const v=validar(x,null);
+  return `<div class="sec">${backBtn()}<h2 style="font-size:20px">¿A quién se la pasamos?</h2><p class="muted" style="margin-top:4px">${x.c.n} · ${hh(x.h)} · hoy la tiene ${TEC[x.t].n}. Primero los que llegan a tiempo y quedan más cerca, según cómo va su día ahora.</p></div>
+  ${!v.puede?`<div class="warnbox red">${v.b[0]}</div>`:''}
+  ${v.puede?(disp.length?disp.map(c=>filaCand(c,'data-elegir')).join(''):'<div class="warnbox">Nadie puede tomarla a esa hora. Llama al cliente para cambiar la hora.</div>'):''}
+  ${v.puede&&bl.length?`<details class="blq"><summary>Ver ${bl.length} que no pueden</summary>${bl.map(c=>filaCand(c,'data-x')).join('')}</details>`:''}`;}
+function vConfirmar(x,ti){const c=candidatos(x).find(c=>c.ti===ti);const v=validar(x,c);
+  return `<div class="sec">${backBtn()}<h2 style="font-size:20px">Pasar a ${c.t.n}</h2><p class="muted" style="margin-top:4px">${x.c.n} · ${x.c.eq} · ${hh(x.h)} · hoy la tiene ${TEC[x.t].n}</p><div class="sumbox">${c.res}</div><p class="muted" style="margin-top:6px">En el mapa: la línea punteada es cómo quedaría su ruta.</p></div>
+  ${v.b.length?`<div class="warnbox red" role="alert">${v.b.map(b=>`No se puede: ${b}`).join('<br>')}</div>`:''}
+  ${v.a.length?`<div class="warnbox">${v.a.join('<br>')}</div>`:''}
+  ${v.puede?`<div class="sec"><h3>Motivo ${v.motivo?'(obligatorio)':'(opcional)'}</h3><div class="row" style="flex-wrap:wrap;gap:8px">${MOTIVOS.map(m=>`<button class="btn mot" type="button" data-mot="${m}" aria-pressed="${motivo===m}">${m}</button>`).join('')}</div><p id="merr" class="err" hidden>Elige el motivo del cambio.</p>
+  <button class="btn pri big" type="button" data-confirmar="${ti}" data-req="${v.motivo}">Confirmar: pasar a ${c.t.n}</button><p class="muted" style="margin-top:8px">Tendrás 10 segundos para deshacer. No se le envía nada al cliente.</p></div>`:''}`;}
+function vRepartir(ti){const t=TEC[ti],plan=planRepartir(ti);const ok=plan.filter(p=>p.c);
+  return `<div class="sec">${backBtn()}<h2 style="font-size:20px">Repartir el día de ${t.n}</h2><p class="muted" style="margin-top:4px">Para cuando no puede seguir (avería, enfermedad). Le quedan ${plan.length} cita${plan.length===1?'':'s'} sin empezar.</p></div>
+  ${plan.map(p=>`<div class="listbtn" style="cursor:default"><span class="av" style="background:${p.c?p.c.t.c:'#94A3B8'}">${p.c?p.c.t.n[0]:'?'}</span><div><b>${hh(p.x.h)} · ${p.x.c.n}</b><small>${p.c?`Pasa a ${p.c.t.n} · ${p.c.res}`:'Nadie libre a esa hora: llamar al cliente para cambiar la hora'}</small>${p.c&&p.c.av.length?`<small style="color:var(--warn);font-weight:600">${p.c.av.join(' · ')}</small>`:''}</div></div>`).join('')}
+  <div class="sec">${ok.length?`<button class="btn pri big" type="button" data-repconf="${ti}">Pasar ${ok.length} cita${ok.length===1?'':'s'}</button>`:'<p class="muted">No hay citas que se puedan pasar.</p>'}</div>`;}
+function inicio(){
+  const rows=TEC.map((t,ti)=>{const ts=tiempos(ti);const km=ts.reduce((a,s)=>a+s.km,0);const done=ts.filter(s=>ahora>=s.fin).length;const v=vanPos(ti);
+    if(!filtTec(ti))return '';const d=diaDe(ti);
+    return `<button class="listbtn" type="button" data-ruta="${ti}" data-drop="${ti}"><span class="av" style="background:${t.c}">${t.n[0]}</span><div><b>${t.n}</b><small>Equipo ${t.eq} · ${v.estado}${v.eta?` · llega en ${v.eta} min`:''}</small>${d.atrasado?`<small style="color:var(--warn);font-weight:600">Va ${d.atrasoMin} min atrasado</small>`:''}<span class="mini"><i style="width:${ts.length?done/ts.length*100:0}%;background:${d.atrasado?'var(--warn)':'var(--ok)'}"></i></span></div><div class="r">${done}/${ts.length} citas<br><span class="mono">${Math.round(km)} km</span></div></button>`;}).join('');
+  const sg=sugerencias();
+  const at=sg.length?`<div class="sec att"><h3>Requiere atención</h3>${sg.map(s=>`<div class="sug"><p><b>${TEC[s.de].n}</b> llegaría <b>${s.tarde} min tarde</b> a ${s.x.c.n} (${hh(s.x.h)}). <b>${s.c.t.n}</b> puede llegar a tiempo (${fmtMin(s.c.lleg)}).</p><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn pri" type="button" data-sug="${s.x.id}" data-sugti="${s.c.ti}">Pasar a ${s.c.t.n}</button><button class="btn" type="button" data-reasignar="${s.x.id}">Ver opciones</button></div></div>`).join('')}</div>`:'';
+  const fr=CL.filter(c=>c.meses>=12).length;
+  return `<div class="sec"><h2>Hoy en la calle</h2><p class="muted" style="margin-top:4px">${CITAS.length} citas · ${TEC.length} técnicos · toca uno para ver su ruta. En la computadora puedes arrastrar una cita del mapa y soltarla sobre un técnico.</p></div>${at}${rows}
+  <div class="sec"><h3>Atajos</h3><div class="row" style="flex-wrap:wrap;gap:8px"><button class="btn" type="button" data-capa="frios">Ver ${fr} clientes fríos</button><button class="btn" type="button" data-capa="garantias">Ver garantías de hoy</button><button class="btn" type="button" data-capa="gps">Ver vans en vivo</button></div></div>`;
+}
+function fichaCliente(c){
+  const [col,txt]=ANT(c.meses); const prox=CITAS.find(x=>x.c===c);
+  const cerca=TEC.map((t,ti)=>{const cs=citasDe(ti);const d=Math.min(...cs.map(x=>kmR(pos(x.c),pos(c))));return{t,ti,d};}).sort((a,b)=>a.d-b.d)[0];
+  return `<div class="sec">${backBtn()}<h2>${c.n}</h2><p class="muted" style="margin-top:2px">${c.s} · Cliente</p><div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><span class="tag" style="background:${col}1A;color:${col}"><i class="dot" style="background:${col}"></i>${txt}</span><span class="tag" style="background:var(--soft);color:var(--ink2)">${c.serv} servicios</span></div></div>
+  <div class="acts"><button class="act pri" type="button" data-a="orden"><span>${ic('add')}</span>Nueva orden</button><button class="act" type="button" data-a="dir"><span>${ic('dir')}</span>Cómo llegar</button>${c.wa?`<button class="act" type="button" data-a="wa"><span>${ic('wa')}</span>WhatsApp</button>`:''}<button class="act" type="button" data-a="tel"><span>${ic('tel')}</span>Llamar</button><button class="act" type="button" data-a="share"><span>${ic('share')}</span>Compartir</button></div>
+  <div class="li">${ic('pin')}<div>${c.dir}<small>Ubicación guardada · <button type="button" data-a="mover" style="border:0;background:none;color:var(--blue);padding:0;font:inherit;cursor:pointer">Corregir en el mapa</button></small></div></div>
+  <div class="li">${ic('tel')}<div class="mono">${c.tel}</div></div>
+  <div class="li">${ic('tool')}<div>${c.eq} ${c.marca}<small>Último servicio hace ${c.meses} ${c.meses===1?'mes':'meses'}</small></div></div>
+  ${prox?`<div class="li">${ic('clock')}<div>Cita hoy ${hh(prox.h)} con ${TEC[prox.t].n}<small><button type="button" data-cita-open="${prox.id}" style="border:0;background:none;color:var(--blue);padding:0;font:inherit;cursor:pointer">Ver cita ${prox.id}</button></small></div></div>`:''}
+  ${cerca&&cerca.d<4&&!prox?`<div class="save"><b>${cerca.t.n}</b> pasa hoy a ${cerca.d.toFixed(1)} km de este cliente. ${c.meses>=12?'Es buen momento para ofrecerle un mantenimiento.':''}</div>`:''}`;
+}
+function fichaCita(x){
+  const t=TEC[x.t],c=x.c,ts=tiempos(x.t).find(s=>s.x===x),est=estadoCita(x);
+  const estTxt={hecha:['c-ok','Terminada'],en_sitio:['c-a','En sitio'],en_camino:['c-w','En camino'],pendiente:['c-n','Agendada']}[est]||['c-n',''];
+  const tagC={'c-ok':'background:#DCFCE7;color:#166534','c-a':'background:var(--act50);color:var(--act)','c-w':'background:var(--warnbg);color:#92400E','c-n':'background:var(--soft);color:var(--ink2)'}[estTxt[0]];
+  return `<div class="sec">${backBtn()}<p class="muted mono">${x.id}</p><h2>${c.n}</h2><p class="muted" style="margin-top:2px">${c.eq} ${c.marca} · ${x.falla}</p><div class="row" style="margin-top:8px;gap:8px;flex-wrap:wrap"><span class="tag" style="${tagC}">${estTxt[1]}</span>${x.gar?'<span class="tag" style="background:#FDE3E3;color:#B91C1C">Garantía</span>':''}${ts.tarde?`<span class="tag" style="background:var(--warnbg);color:#92400E">Llega ${ts.tarde} min tarde</span>`:''}</div></div>
+  <div class="acts"><button class="act pri" type="button" data-ruta="${x.t}"><span>${ic('car')}</span>Ver ruta</button><button class="act" type="button" data-a="wa"><span>${ic('wa')}</span>Avisar</button><button class="act" type="button" data-a="editar"><span>${ic('edit')}</span>Editar</button><button class="act" type="button" data-reasignar="${x.id}"><span>${ic('swap')}</span>Reasignar</button></div>
+  <div class="li">${ic('clock')}<div>${hh(x.h)} · llega ${fmtMin(ts.lleg)}<small>Sale ${fmtMin(ts.sale)} · ${Math.round(ts.km)} km · ${ts.m} min de viaje</small></div></div>
+  <div class="li">${ic('user')}<div>${t.n} · Equipo ${t.eq}<small>Cita ${citasRuta(x.t).indexOf(x)+1} de ${citasDe(x.t).length} de su día</small></div></div>
+  <div class="li">${ic('pin')}<div>${c.dir}</div></div>`;
+}
+function ruta(ti){
+  const t=TEC[ti],ts=tiempos(ti);const km=ts.reduce((a,s)=>a+s.km,0),min=ts.reduce((a,s)=>a+s.m,0);
+  let h=`<div class="sec">${backBtn()}<div class="row"><span class="av" style="background:${t.c}">${t.n[0]}</span><div><h2 style="font-size:20px">Ruta de ${t.n}</h2><p class="muted">Equipo ${t.eq} · ${ts.length} citas</p></div></div>
+  <p style="margin-top:12px;font-size:20px;font-weight:700;color:var(--ok)">${Math.floor(min/60)} h ${min%60} min <span style="color:var(--mute);font-size:15px;font-weight:500">(${Math.round(km)} km)</span></p><p class="muted">Tiempo de manejo estimado con el tráfico de hoy</p>
+  <div class="seg" role="group" aria-label="Orden de la ruta"><button type="button" data-rm="agenda" aria-pressed="${rutaModo==='agenda'}">Orden de la agenda</button><button type="button" data-rm="corta" aria-pressed="${rutaModo==='corta'}">Sugerir más corta</button></div></div>`;
+  if(rutaModo==='corta'){const kmA=(()=>{let p=OFICINA,k=0;citasDe(ti).forEach(x=>{k+=kmR(p,pos(x.c));p=pos(x.c);});return k;})();const ah=kmA-km,tard=ts.filter(s=>s.tarde>10).length;
+    h+=ah<0.5?`<div class="save">El orden de la agenda ya es el más corto. No hay nada que ahorrar.</div>`:`<div class="save">Ahorra ${ah.toFixed(1)} km.${tard?` Pero llegaría tarde a ${tard} cita${tard>1?'s':''}: habría que llamar a ${tard>1?'esos clientes':'ese cliente'} para cambiar la hora antes de usar este orden.`:' Todas las citas se cumplen a su hora.'}</div>`;}
+  h+=`<ol class="tl"><li class="stop"><span class="n" style="background:var(--act)">MS</span><div><b>Oficina</b><small>Salida</small></div><span class="h">${fmtMin(ts[0]?.sale??510)}</span></li>`;
+  ts.forEach((s,i)=>{const est=estadoCita(s.x);h+=`<li class="leg"><i></i><span>${ic('car')} ${s.m} min · ${s.km.toFixed(1)} km${est==='en_camino'?' · <b style="color:var(--warn)">en camino ahora</b>':''}</span></li>
+    <li class="stop ${est==='hecha'?'done':''}"><span class="n" style="background:${s.x.gar?'var(--gar)':t.c}">${est==='hecha'?'✓':i+1}</span><div><button type="button" data-cita-open="${s.x.id}" style="border:0;background:none;padding:0;text-align:left;cursor:pointer;font:inherit;color:inherit"><b>${s.x.c.n}</b></button><small>${s.x.c.eq} · ${s.x.c.s}${s.x.gar?' · garantía':''}</small>${s.tarde?`<small style="color:var(--warn);font-weight:600">Llega ${s.tarde} min después de la hora</small>`:''}</div><span class="h">${hh(s.x.h)}</span></li>`;});
+  h+=`</ol><div class="sec" style="border-top:1px solid var(--line);margin-top:8px"><div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn pri" type="button" data-a="enviarRuta">Enviar ruta al técnico</button><button class="btn" type="button" data-a="gmaps">Abrir en Google Maps</button><button class="btn" type="button" data-repartir="${ti}">Repartir su día</button></div></div>`;
+  return h;
+}
+function grupo(ids){const cs=ids.map(id=>CL.find(c=>c.id===id));const fr=cs.filter(c=>c.meses>=12).length;
+  return `<div class="sec">${backBtn()}<h2>${cs.length} clientes aquí</h2><p class="muted">${fr} fríos · acerca el mapa para separarlos</p></div>`+cs.slice(0,30).map(c=>{const [col,t]=ANT(c.meses);return `<button class="listbtn" type="button" data-cli-open="${c.id}"><i class="dot" style="background:${col};width:12px;height:12px"></i><div><b>${c.n}</b><small>${c.eq} · ${c.s} · ${t}</small></div></button>`;}).join('');}
+function van(ti){const t=TEC[ti],v=vanPos(ti);return `<div class="sec">${backBtn()}<div class="row"><span class="av" style="background:${t.c}">${ic('van').replace('<svg','<svg width="18" height="18"')}</span><div><h2 style="font-size:20px">${t.n}</h2><p class="muted">VAN · Equipo ${t.eq}</p></div></div><p style="margin-top:12px;font-size:16px;font-weight:600">${v.estado}${v.eta?` · llega en ${v.eta} min`:''}</p><p class="muted">Última señal hace 1 min · 32 km/h</p></div>
+  <div class="acts"><button class="act pri" type="button" data-ruta="${ti}"><span>${ic('car')}</span>Ver ruta</button><button class="act" type="button" data-a="tel"><span>${ic('tel')}</span>Llamar</button><button class="act" type="button" data-repartir="${ti}"><span>${ic('swap')}</span>Repartir</button></div>${v.x?`<div class="li">${ic('pin')}<div>Próxima: ${v.x.c.n}<small>${v.x.c.dir} · ${hh(v.x.h)}</small></div></div>`:''}`;}
+
+/* ============ CHIPS ============ */
+const CH=[['clientes','Clientes','user'],['citas','Citas de hoy','clock'],['rutas','Rutas','car'],['gps','Vans en vivo','van'],['frios','Clientes fríos','user'],['garantias','Garantías','tool']];
+function chips(){document.getElementById('chips').innerHTML=CH.map(([k,t,i])=>`<button class="chip" type="button" data-chip="${k}" aria-pressed="${capa[k]}">${ic(i)}${t}</button>`).join('')+`<label class="chip" style="gap:4px"><span style="position:absolute;left:-9999px">Técnico</span><select id="ftec" style="border:0;background:transparent;font:inherit;font-weight:600;color:inherit;height:30px"><option value="">Todos los técnicos</option><option value="A">Equipo A · Wila</option><option value="B">Equipo B · Yohana</option>${TEC.map((t,i)=>`<option value="${i}">${t.n}</option>`).join('')}</select></label>`;
+  const f=document.getElementById('ftec');f.value=filtroTec===null?'':String(filtroTec);f.onchange=e=>{const v=e.target.value;filtroTec=v===''?null:(v==='A'||v==='B')?null:+v;if(v==='A'||v==='B'){teamF=v;}else teamF=null;draw();};}
+
+/* ============ EVENTOS ============ */
+function toast(m,acc){const e=document.getElementById('toast');e.textContent=m;if(acc){const b=document.createElement('button');b.type='button';b.className='tbtn';b.textContent=acc.t;b.onclick=()=>{acc.f();e.classList.remove('on');};e.append(b);}e.style.pointerEvents=acc?'auto':'none';e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),acc?10000:3000);}
+function aplicar(movs,txt){const antes=movs.map(([x])=>[x,x.t]);movs.forEach(([x,ti])=>{x.t=ti;});hist.length=0;vista=movs.length===1?{t:'cita',id:movs[0][0].id}:{t:'inicio'};motivo='';render();
+  toast(txt,{t:'Deshacer',f:()=>{antes.forEach(([x,ti])=>{x.t=ti;});hist.length=0;vista=movs.length===1?{t:'cita',id:movs[0][0].id}:{t:'inicio'};render();toast('Se deshizo el cambio.');}});}
+document.getElementById('chips').addEventListener('click',e=>{const b=e.target.closest('[data-chip]');if(!b)return;const k=b.dataset.chip;capa[k]=!capa[k];if(k==='frios'&&capa.frios)capa.clientes=false;if(k==='clientes'&&capa.clientes)capa.frios=false;chips();draw();if(k==='gps'&&capa.gps)toast('Las vans se mueven según la hora. Usa ▶ para avanzar el día.');});
+pb.addEventListener('click',e=>{
+  if(e.target.closest('[data-back]')){back();return;}
+  const r=e.target.closest('[data-ruta]');if(r){rutaTec=+r.dataset.ruta;go({t:'ruta',ti:+r.dataset.ruta});const cs=citasDe(+r.dataset.ruta);const la=cs.reduce((a,x)=>a+x.c.la,OFICINA[0])/(cs.length+1),lo=cs.reduce((a,x)=>a+x.c.lo,OFICINA[1])/(cs.length+1);flyTo(la,lo,2.2);return;}
+  const co=e.target.closest('[data-cita-open]');if(co){const x=CITAS.find(z=>z.id===co.dataset.citaOpen);go({t:'cita',id:x.id});flyTo(x.c.la,x.c.lo);return;}
+  const cl=e.target.closest('[data-cli-open]');if(cl){const c=CL.find(z=>z.id===cl.dataset.cliOpen);go({t:'cliente',id:c.id});flyTo(c.la,c.lo,5);return;}
+  const ra=e.target.closest('[data-reasignar]');if(ra){motivo='';go({t:'reasignar',id:ra.dataset.reasignar});return;}
+  const el_=e.target.closest('[data-elegir]');if(el_){motivo='';go({t:'confirmar',id:vista.id,ti:+el_.dataset.elegir});return;}
+  const sg=e.target.closest('[data-sug]');if(sg){motivo='Va atrasado';go({t:'confirmar',id:sg.dataset.sug,ti:+sg.dataset.sugti});return;}
+  const mo=e.target.closest('[data-mot]');if(mo){motivo=mo.dataset.mot;pb.querySelectorAll('[data-mot]').forEach(b=>b.setAttribute('aria-pressed',b===mo));document.getElementById('merr').hidden=true;return;}
+  const cf=e.target.closest('[data-confirmar]');if(cf){if(cf.dataset.req==='true'&&!motivo){document.getElementById('merr').hidden=false;return;}cf.disabled=true;cf.textContent='Guardando…';const x=CITAS.find(z=>z.id===vista.id),ti=+cf.dataset.confirmar;
+    setTimeout(()=>aplicar([[x,ti]],`Listo: ${x.id} ahora es de ${TEC[ti].n}. Avísale por WhatsApp.`),450);return;}
+  const rp=e.target.closest('[data-repartir]');if(rp){go({t:'repartir',ti:+rp.dataset.repartir});return;}
+  const rc=e.target.closest('[data-repconf]');if(rc){const plan=planRepartir(+rc.dataset.repconf).filter(p=>p.c);aplicar(plan.map(p=>[p.x,p.c.ti]),`Se pasaron ${plan.length} citas de ${TEC[+rc.dataset.repconf].n}.`);return;}
+  const rm=e.target.closest('[data-rm]');if(rm){rutaModo=rm.dataset.rm;render();return;}
+  const cp=e.target.closest('[data-capa]');if(cp){capa[cp.dataset.capa]=true;if(cp.dataset.capa==='frios')capa.clientes=false;chips();draw();return;}
+  const a=e.target.closest('[data-a]');if(a){const m={orden:'Abriría «Nueva orden» con el cliente y su ubicación ya puestos.',dir:'Abriría Google Maps con la ruta desde la oficina o desde la van.',wa:'Abriría la conversación en Conversaciones con un texto listo (no se envía solo).',tel:'Mostraría el número para llamar.',share:'Copiaría el enlace de ubicación para enviárselo al técnico.',mover:'Podrías arrastrar el pin para corregir la ubicación y guardarla en la ficha.',editar:'Abriría el mismo formulario de edición que hoy usa Mapa de Rutas.',reasignar:'Mostraría los técnicos de la misma especialidad libres a esa hora, el más cercano primero.',enviarRuta:'Enviaría al técnico por WhatsApp su lista de citas en orden con los enlaces de cada dirección.',gmaps:'Abriría Google Maps con todas las paradas en orden (hasta 10).'}[a.dataset.a];toast(m);}
+});
+// mapa: click, arrastre, zoom
+let drag=null,moved=false;
+let arr=null;const ghost=document.createElement('div');ghost.className='ghost';ghost.hidden=true;document.body.append(ghost);
+function dropList(x){const cs=candidatos(x);return `<div class="sec"><h2 style="font-size:20px">Suelta sobre un técnico</h2><p class="muted" style="margin-top:4px">${x.c.n} · ${hh(x.h)}. Los primeros llegan a tiempo y quedan más cerca. Suelta fuera para cancelar.</p></div>`+cs.map(c=>filaCand(c,'data-drop')).join('');}
+svg.addEventListener('pointerdown',e=>{const ct=e.target.closest&&e.target.closest('[data-cita]');
+  if(ct&&e.pointerType==='mouse'&&innerWidth>760){const x=CITAS.find(z=>z.id===ct.dataset.cita);if(['pendiente','en_camino'].includes(estadoCita(x))){arr={x,sx:e.clientX,sy:e.clientY,on:false};svg.setPointerCapture(e.pointerId);return;}}
+  drag={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};moved=false;svg.setPointerCapture(e.pointerId);svg.classList.add('drag');});
+svg.addEventListener('pointermove',e=>{if(!arr)return;if(!arr.on&&Math.abs(e.clientX-arr.sx)+Math.abs(e.clientY-arr.sy)>6){arr.on=true;ghost.textContent=`${arr.x.id} · ${arr.x.c.n}`;ghost.hidden=false;pb.innerHTML=dropList(arr.x);if(panelClosed)document.getElementById('toggle').click();}
+  if(!arr.on)return;ghost.style.left=e.clientX+'px';ghost.style.top=e.clientY+'px';document.querySelectorAll('.droptgt').forEach(d=>d.classList.remove('droptgt'));const t=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-drop]');if(t&&!t.disabled)t.classList.add('droptgt');},true);
+svg.addEventListener('pointerup',e=>{if(!arr)return;const a=arr;arr=null;ghost.hidden=true;e.stopImmediatePropagation();
+  if(!a.on){go({t:'cita',id:a.x.id});return;}
+  const t=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-drop]');const ti=t&&!t.disabled?+t.dataset.drop:null;
+  if(ti===null||ti===a.x.t){render();toast(ti===a.x.t?'Esa cita ya es de ese técnico.':'Se canceló: suelta la cita sobre un técnico disponible.');return;}
+  motivo='';hist.push(vista);vista={t:'confirmar',id:a.x.id,ti};render();},true);
+svg.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>4)moved=true;view.x=drag.vx-dx/view.k;view.y=drag.vy-dy/view.k;setVB();});
+svg.addEventListener('pointerup',e=>{svg.classList.remove('drag');const d=drag;drag=null;if(moved){draw();return;}
+  const el=document.elementFromPoint(e.clientX,e.clientY)?.closest('.hit');if(!el){if(vista.t!=='inicio'){hist.length=0;vista={t:'inicio'};render();}return;}
+  if(el.dataset.cita){go({t:'cita',id:el.dataset.cita});}
+  else if(el.dataset.cli){go({t:'cliente',id:el.dataset.cli});}
+  else if(el.dataset.van){go({t:'van',ti:+el.dataset.van});}
+  else if(el.dataset.cl){const [x,y]=el.dataset.cl.split(',').map(Number);const cell=46/view.k;const ids=cliVis().filter(c=>{const [cx,cy]=P(c.la,c.lo);return Math.abs(cx-x)<cell&&Math.abs(cy-y)<cell;}).map(c=>c.id);const r=svg.getBoundingClientRect();zoomAt(2,e.clientX-r.left,e.clientY-r.top);go({t:'grupo',ids});}
+});
+svg.addEventListener('wheel',e=>{e.preventDefault();const r=svg.getBoundingClientRect();zoomAt(e.deltaY<0?1.2:1/1.2,e.clientX-r.left,e.clientY-r.top);},{passive:false});
+document.getElementById('zin').onclick=()=>{const r=svg.getBoundingClientRect();zoomAt(1.4,r.width/2,r.height/2);};
+document.getElementById('zout').onclick=()=>{const r=svg.getBoundingClientRect();zoomAt(1/1.4,r.width/2,r.height/2);};
+document.getElementById('me').onclick=()=>flyTo(...OFICINA,2.6);
+// panel
+const panel=document.getElementById('panel');
+document.getElementById('toggle').onclick=()=>{panelClosed=!panelClosed;panel.classList.toggle('closed',panelClosed);document.getElementById('toggle').setAttribute('aria-label',panelClosed?'Mostrar panel':'Ocultar panel');document.getElementById('toggle').innerHTML=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="${panelClosed?'M9 6l6 6-6 6':'M15 6l-6 6 6 6'}"/></svg>`;setTimeout(draw,360);};
+document.getElementById('grab').onclick=()=>{if(panel.classList.contains('tall')){panel.classList.remove('tall');panel.classList.add('closed');}else if(panel.classList.contains('closed')){panel.classList.remove('closed');}else panel.classList.add('tall');};
+// capas
+const lbtn=document.getElementById('lbtn'),lpop=document.getElementById('lpop');
+lbtn.onclick=()=>{lpop.hidden=!lpop.hidden;lbtn.setAttribute('aria-expanded',String(!lpop.hidden));};
+document.getElementById('mt').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;tipo=b.dataset.t;document.querySelectorAll('#mt button').forEach(x=>x.setAttribute('aria-pressed',x===b));draw();});
+document.getElementById('cCal').onchange=e=>{calor=e.target.checked;draw();};
+document.getElementById('cZon').onchange=e=>{zonasTec=e.target.checked;draw();};
+document.getElementById('cNom').onchange=e=>{nombres=e.target.checked;draw();};
+addEventListener('keydown',e=>{if(e.key==='Escape'){if(!lpop.hidden){lpop.hidden=true;return;}if(!sugg.hidden){sugg.hidden=true;return;}if(vista.t!=='inicio')back();}});
+// búsqueda
+const q=document.getElementById('q'),sugg=document.getElementById('sugg'),clr=document.getElementById('clear');
+function buscar(){const v=q.value.trim().toLowerCase();clr.hidden=!v;if(!v){sugg.hidden=true;return;}
+  const res=[...Object.keys(SEC).filter(s=>s.toLowerCase().includes(v)).slice(0,3).map(s=>({k:'sec',s,t:s,d:`Sector · ${CL.filter(c=>c.s===s).length} clientes`,i:'pin'})),
+    ...CITAS.filter(x=>x.id.toLowerCase().includes(v)||x.c.n.toLowerCase().includes(v)).slice(0,4).map(x=>({k:'cita',id:x.id,t:`${x.id} · ${x.c.n}`,d:`Cita hoy ${hh(x.h)} · ${TEC[x.t].n}`,i:'clock'})),
+    ...CL.filter(c=>c.n.toLowerCase().includes(v)||c.tel.includes(v)||c.dir.toLowerCase().includes(v)).slice(0,6).map(c=>({k:'cli',id:c.id,t:c.n,d:`${c.dir}`,i:'user'})),
+    ...TEC.map((t,i)=>({t,i})).filter(o=>o.t.n.toLowerCase().includes(v)).map(o=>({k:'tec',i:o.i,t:`Ruta de ${o.t.n}`,d:`Equipo ${o.t.eq}`,i2:1,i:'car',ti:o.i}))];
+  sugg.innerHTML=res.length?res.map((r,j)=>`<button type="button" role="option" data-j="${j}"><span class="i">${ic(r.i)}</span><div><b>${r.t}</b><small>${r.d}</small></div></button>`).join(''):'<div style="padding:14px 16px" class="muted">Sin resultados. Prueba con el nombre, el teléfono, el número de orden o el sector.</div>';
+  sugg.hidden=false; sugg._res=res;}
+q.addEventListener('input',buscar);q.addEventListener('focus',buscar);
+clr.onclick=()=>{q.value='';buscar();q.focus();};
+sugg.addEventListener('click',e=>{const b=e.target.closest('[data-j]');if(!b)return;const r=sugg._res[+b.dataset.j];sugg.hidden=true;q.value=r.t;
+  if(r.k==='sec'){flyTo(...SEC[r.s],3.4);}
+  if(r.k==='cli'){const c=CL.find(z=>z.id===r.id);go({t:'cliente',id:c.id});flyTo(c.la,c.lo,5);}
+  if(r.k==='cita'){const x=CITAS.find(z=>z.id===r.id);go({t:'cita',id:x.id});flyTo(x.c.la,x.c.lo,4);}
+  if(r.k==='tec'){rutaTec=r.ti;go({t:'ruta',ti:r.ti});flyTo(...OFICINA,1.8);}});
+document.getElementById('goRoute').onclick=()=>{hist.length=0;vista={t:'inicio'};render();capa.rutas=true;chips();draw();toast('Rutas de hoy de todos los técnicos. Toca uno en el panel para ver su recorrido.');};
+// reloj
+let timer=null;const clk=document.getElementById('clock');
+document.getElementById('play').onclick=e=>{if(timer){clearInterval(timer);timer=null;e.target.textContent='▶';return;}e.target.textContent='❚❚';capa.gps=true;chips();timer=setInterval(()=>{ahora+=4;if(ahora>18*60){ahora=8*60+30;}clk.textContent=fmtMin(ahora);render();},matchMedia('(prefers-reduced-motion: reduce)').matches?800:220);};
+addEventListener('resize',()=>{draw();});
+chips(); fit(); render();
+})();
+</script>

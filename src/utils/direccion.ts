@@ -1,3 +1,5 @@
+import { tieneCoord } from './geo';
+import { cargarGoogleMaps } from './cargarGoogleMaps';
 /**
  * Utilidades para parsear direcciones y coordenadas desde distintos formatos
  * (URL de Google Maps, texto plano "lat,lng", "share location" de WhatsApp, etc.)
@@ -21,32 +23,26 @@ export interface Coords {
  */
 export function detectarCoordenadasURL(texto: string): Coords | null {
   if (!texto) return null;
-  const t = texto.trim();
-
-  // Formato: ?q=lat,lng
-  const mQ = t.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
-  if (mQ) return { lat: parseFloat(mQ[1]), lng: parseFloat(mQ[2]) };
-
-  // Formato: ?ll=lat,lng (Apple Maps, Waze)
-  const mLl = t.match(/[?&]ll=(-?\d+\.\d+),(-?\d+\.\d+)/);
-  if (mLl) return { lat: parseFloat(mLl[1]), lng: parseFloat(mLl[2]) };
-
-  // Formato: /maps/@lat,lng
-  const mAt = t.match(/maps\/[^@]*@(-?\d+\.\d+),(-?\d+\.\d+)/);
-  if (mAt) return { lat: parseFloat(mAt[1]), lng: parseFloat(mAt[2]) };
-
-  // Formato: /maps/place/.../@lat,lng
-  const mPlace = t.match(/\/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-  if (mPlace) return { lat: parseFloat(mPlace[1]), lng: parseFloat(mPlace[2]) };
-
-  // Texto plano "lat,lng" (ej: compartir ubicación WhatsApp)
-  const mPuro = t.match(/^(-?\d{1,3}\.\d+),\s*(-?\d{1,3}\.\d+)$/);
-  if (mPuro) return { lat: parseFloat(mPuro[1]), lng: parseFloat(mPuro[2]) };
-
-  // "lat: X, lng: Y"
-  const mLatLng = t.match(/lat[:\s]+(-?\d+\.\d+).*?lng[:\s]+(-?\d+\.\d+)/i);
-  if (mLatLng) return { lat: parseFloat(mLatLng[1]), lng: parseFloat(mLatLng[2]) };
-
+  let t = texto.trim();
+  try { t = decodeURIComponent(t); } catch { /* Conservar texto si no está codificado correctamente. */ }
+  const numero = '([+-]?\\d{1,3}(?:\\.\\d+)?)';
+  const par = `${numero}\\s*[,;]\\s*${numero}`;
+  // El pin del lugar tiene prioridad sobre el centro de la cámara (@lat,lng).
+  const patrones = [
+    new RegExp(`!3d${numero}!4d${numero}`),
+    new RegExp(`[?&](?:q|query|ll|destination|center)=${par}`, 'i'),
+    new RegExp(`geo:${par}`, 'i'),
+    new RegExp(`lat(?:itud|itude)?[:=\\s]+${numero}.*?(?:lng|lon|longitud|longitude)[:=\\s]+${numero}`, 'i'),
+    new RegExp(`^\\(?${par}\\)?$`),
+    new RegExp(`/@${par}`),
+  ];
+  for (const patron of patrones) {
+    const m = t.match(patron);
+    if (m) {
+      const punto = { lat: Number(m[1]), lng: Number(m[2]) };
+      return tieneCoord(punto) ? punto : null;
+    }
+  }
   return null;
 }
 
@@ -55,11 +51,13 @@ export function detectarCoordenadasURL(texto: string): Coords | null {
  * Toma solo los primeros 3 componentes para evitar strings excesivamente largos.
  */
 export async function reverseGeocode(lat: number, lng: number): Promise<string | null> {
+  if (!tieneCoord({ lat, lng })) return null;
   try {
     const resp = await fetch(
       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&accept-language=es`,
-      { headers: { 'Accept-Language': 'es' } },
+      { headers: { 'Accept-Language': 'es' }, signal: AbortSignal.timeout(5000) },
     );
+    if (!resp.ok) return null;
     const data = await resp.json();
     const raw = (data?.display_name || '').toString();
     if (!raw) return null;
@@ -73,39 +71,7 @@ export async function reverseGeocode(lat: number, lng: number): Promise<string |
  * Carga el script de Google Places (una sola vez). Resuelve cuando `window.google.maps.places`
  * está disponible. Si ya está cargado, resuelve inmediatamente.
  */
-export function cargarGooglePlaces(apiKey: string | undefined): Promise<boolean> {
-  return new Promise(resolve => {
-    const w = window as unknown as { google?: { maps?: { places?: unknown } } };
-    if (w.google?.maps?.places) {
-      resolve(true);
-      return;
-    }
-    if (!apiKey) {
-      resolve(false);
-      return;
-    }
-    const existing = document.getElementById('google-places-script');
-    if (existing) {
-      // Ya se está cargando, esperar
-      const check = setInterval(() => {
-        if (w.google?.maps?.places) {
-          clearInterval(check);
-          resolve(true);
-        }
-      }, 100);
-      setTimeout(() => {
-        clearInterval(check);
-        resolve(!!w.google?.maps?.places);
-      }, 10000);
-      return;
-    }
-    const script = document.createElement('script');
-    script.id = 'google-places-script';
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&language=es`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve(!!w.google?.maps?.places);
-    script.onerror = () => resolve(false);
-    document.head.appendChild(script);
-  });
+export async function cargarGooglePlaces(apiKey: string | undefined): Promise<boolean> {
+  if (!await cargarGoogleMaps(apiKey)) return false;
+  return Boolean(window.google?.maps?.places);
 }

@@ -1,5 +1,6 @@
+import { equipoApi } from '../../services/equipoApi';
 import GestionOrden from '../crm/GestionOrden';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, doc, getDocs, query, where, Timestamp, arrayUnion, runTransaction } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { OrdenServicio, Usuario, Banco, PagoOrden, EstadoPagoOrden, Personal } from '../../types';
@@ -26,7 +27,7 @@ interface Props {
 type Metodo = 'efectivo' | 'transferencia' | 'tarjeta';
 
 function genId(): string {
-  return `pago_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  return `pago_${crypto.randomUUID()}`;
 }
 
 function formatearMonto(n: number): string {
@@ -42,6 +43,8 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
   const [referencia, setReferencia] = useState('');
   const [notas, setNotas] = useState('');
   const [saving, setSaving] = useState(false);
+  const guardando = useRef(false);
+  const operacionPago = useRef<{ firma: string; id: string } | null>(null);
 
   // Cargar bancos en tiempo real
   useEffect(() => {
@@ -53,7 +56,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
   // Reset al abrir
   useEffect(() => {
     if (isOpen && orden) {
-      const total = Number(orden.precioFinal || orden.precioAprobado || orden.precioSugerido || 0);
+      const total = Number(orden.soloChequeo ? orden.precioChequeo ?? orden.precioFinal ?? 0 : orden.precioFinal || orden.precioAprobado || orden.precioSugerido || 0);
       const pagado = Number(orden.montoPagado || 0);
       const pendiente = Math.max(0, total - pagado);
       setMonto(pendiente > 0 ? String(pendiente) : '');
@@ -69,11 +72,12 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
   // siguen escribiendo al array `data.pagos` dentro de runTransaction.
   const pagosPrevios = useMemo<PagoOrden[]>(() => obtenerPagosDeOrden(orden), [orden]);
 
-  const total = Number(orden?.precioFinal || orden?.precioAprobado || orden?.precioSugerido || 0);
+  const total = Number(orden?.soloChequeo ? orden.precioChequeo ?? orden.precioFinal ?? 0 : orden?.precioFinal || orden?.precioAprobado || orden?.precioSugerido || 0);
   const montoYaPagado = Number(orden?.montoPagado || 0);
   const pendiente = Math.max(0, total - montoYaPagado);
 
   const handleClose = () => {
+    operacionPago.current = null;
     setSaving(false);
     onClose();
   };
@@ -86,6 +90,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
 
   const handleGuardar = async () => {
     if (!orden) return;
+    if ((orden as OrdenServicio & { chequeoConfirmacionEstado?: string }).chequeoConfirmacionEstado === 'pendiente') { toast.error('Confirma primero el servicio de solo chequeo con el cliente'); return; }
     const m = Number(monto);
     if (!m || m <= 0) {
       toast.error('Ingresa un monto válido');
@@ -96,6 +101,8 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
       return;
     }
 
+    if (guardando.current) return;
+    guardando.current = true;
     setSaving(true);
     try {
       const usuario = userProfile?.nombre || 'Sistema';
@@ -105,12 +112,13 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
       // siempre es auth.uid").
       const usuarioId = currentUser?.uid || '';
       const ahora = new Date();
-      const ahoraTimestamp = Timestamp.fromDate(ahora);
 
       // Generamos el pagoId UNA sola vez, antes de la transacción.
       // Si Firestore reintenta la transacción internamente o el usuario
       // hace doble-click con lag de red, el mismo pagoId previene duplicados.
-      const pagoId = genId();
+      const firma = JSON.stringify([orden.id, m, metodo, bancoId, referencia, notas]);
+      if (operacionPago.current?.firma !== firma) operacionPago.current = { firma, id: genId() };
+      const pagoId = operacionPago.current.id;
 
       // Construir el pago en memoria (sin serializar la fecha aún —
       // dependemos de la transacción para confirmar que se persiste).
@@ -138,96 +146,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
       }
       if (notas.trim()) pago.notas = notas.trim();
 
-      // SPRINT-PAGOS-CONFIRMA-MARIA fase A (2026-05-21): los pagos nuevos
-      // nacen con verificado=false EXPLÍCITO (no undefined). Esto permite
-      // que ProcesarFacturacionModal bloquee la emisión del conduce hasta
-      // que María/admin confirme. Pagos legacy (pre-SPRINT-151) tienen
-      // verificado=undefined y NO se bloquean (se asume verificación
-      // implícita por la práctica anterior — la spec del sprint cubre
-      // este caso de retrocompat).
-      // Stripping undefined antes del write (convención del repo).
-      const pagoSerializado: Record<string, unknown> = {
-        id: pago.id,
-        metodo: pago.metodo,
-        monto: pago.monto,
-        fecha: ahoraTimestamp,
-        registradoPorId: pago.registradoPorId,
-        registradoPorNombre: pago.registradoPorNombre,
-        verificado: false,
-      };
-      if (pago.recibidoPorId !== undefined) pagoSerializado.recibidoPorId = pago.recibidoPorId;
-      if (pago.recibidoPorNombre !== undefined) pagoSerializado.recibidoPorNombre = pago.recibidoPorNombre;
-      if (pago.bancoId !== undefined) pagoSerializado.bancoId = pago.bancoId;
-      if (pago.bancoNombre !== undefined) pagoSerializado.bancoNombre = pago.bancoNombre;
-      if (pago.referencia !== undefined) pagoSerializado.referencia = pago.referencia;
-      if (pago.notas !== undefined) pagoSerializado.notas = pago.notas;
-
-      const ordenRef = doc(db, 'ordenes_servicio', orden.id);
-
-      // Transacción: read → check idempotencia → compute → write.
-      // Esto cierra la race condition entre 2 operarias registrando pagos
-      // simultáneamente sobre la misma orden (last-write-wins en `pagos[]`).
-      const resultado = await runTransaction(db, async (tx) => {
-        const snap = await tx.get(ordenRef);
-        if (!snap.exists()) {
-          throw new Error('La orden ya no existe');
-        }
-        const data = snap.data() as Record<string, unknown>;
-        const pagosActuales: Array<Record<string, unknown>> = Array.isArray(data.pagos)
-          ? (data.pagos as Array<Record<string, unknown>>)
-          : [];
-
-        // Idempotencia: si Firestore reintenta el callback de la transacción,
-        // o si el botón se clickeó 2 veces y el segundo click llega después
-        // de que el primero ya escribió, este check evita registrar duplicados.
-        const yaExiste = pagosActuales.some(p => p && p.id === pagoId);
-        if (yaExiste) {
-          return { duplicado: true as const };
-        }
-
-        const pagosNuevos = [...pagosActuales, pagoSerializado];
-        const totalOrdenActual = Number(
-          data.precioFinal ?? data.precioAprobado ?? data.precioSugerido ?? 0,
-        );
-        // Recalculamos `montoPagado` desde la SUMA real de pagosNuevos, no
-        // sumando el monto del input al state local (que podría estar stale).
-        const nuevoMontoPagado = pagosNuevos.reduce(
-          (acc, p) => acc + (Number(p.monto) || 0),
-          0,
-        );
-        const nuevoEstadoPago = calcularEstadoFromTotal(nuevoMontoPagado, totalOrdenActual);
-        const montoPagadoPrevio = pagosActuales.reduce(
-          (acc, p) => acc + (Number(p.monto) || 0),
-          0,
-        );
-
-        const registro = crearRegistroAuditoria(
-          usuario,
-          'editar',
-          `Pago registrado — ${metodo} ${formatearMonto(m)}${
-            pago.bancoNombre ? ` a ${pago.bancoNombre}` : ''
-          }`,
-          'pagos',
-          formatearMonto(montoPagadoPrevio),
-          formatearMonto(nuevoMontoPagado),
-        );
-
-        const updates: Record<string, unknown> = {
-          pagos: pagosNuevos,
-          montoPagado: nuevoMontoPagado,
-          estadoPago: nuevoEstadoPago,
-          auditoria: arrayUnion(registro),
-          updatedAt: Timestamp.now(),
-        };
-        // Strip undefined defensivamente (el objeto está armado a mano,
-        // pero respetamos la convención del repo).
-        const updatesLimpios = Object.fromEntries(
-          Object.entries(updates).filter(([, v]) => v !== undefined),
-        );
-
-        tx.update(ordenRef, updatesLimpios);
-        return { duplicado: false as const, nuevoMontoPagado };
-      });
+      const resultado = await equipoApi<{ duplicado: boolean; nuevoMontoPagado?: number; receptorUid?: string; receptorNombre?: string }>('/api/ordenes/efectivo', { accion: 'registrar', ordenId: orden.id, pagoId, monto: m, metodo, bancoId, referencia, notas });
 
       if (resultado.duplicado) {
         // El pago ya estaba registrado — no avisamos al usuario como error,
@@ -284,9 +203,9 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
       handleClose();
     } catch (err) {
       console.error(err);
-      toast.error('Error al registrar el pago');
+      toast.error(err instanceof Error ? err.message : 'Error al registrar el pago');
       setSaving(false);
-    }
+    } finally { guardando.current = false; }
   };
 
   const handleEliminarPago = async (pago: PagoOrden) => {
@@ -333,6 +252,7 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
           return { yaEliminado: true as const };
         }
 
+        if ((data.efectivoAceptaciones as Record<string, unknown> | undefined)?.[pagoIdAEliminar] || (data.efectivoEntregas as Record<string, unknown> | undefined)?.[pagoIdAEliminar]) throw new Error('Este efectivo tiene una recepción registrada y requiere conciliación; no se puede borrar.');
         const pagosNuevos = pagosActuales.filter(p => p && p.id !== pagoIdAEliminar);
         const totalOrdenActual = Number(
           data.precioFinal ?? data.precioAprobado ?? data.precioSugerido ?? 0,

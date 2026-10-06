@@ -1,0 +1,492 @@
+<title>Agenda por Llenar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: capacity board — summary; occupancy (week grid or month calendar); appointment map by zone; day detail + zone-aware waitlist; specialty strip; alerts */
+:root{
+  color-scheme:light;
+  --bg:#F0F4F8; --card:#FFFFFF; --ink:#111827; --ink2:#4B5563; --mute:#6B7280; --line:#E5E7EB; --track:#EDF1F6;
+  --act:#0F3460; --act50:#EFF4FA; --act100:#DCE7F2;
+  --warn:#B45309; --warnbg:#FEF3C7; --ok:#15803D; --gar:#DC2626;
+  --l1:#C9D8EA; --l2:#7697C4; --l3:#2F4E7E; --l4:#0F3460;
+  --teamA:#0F3460; --teamB:#0E7490;
+  --sea:#DCEAF5; --land:#F7F9FB; --river:#A9C7E2;
+  --f:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{overflow-x:clip}
+body{background:var(--bg);color:var(--ink);font-family:var(--f);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;letter-spacing:-.02em}
+p{margin:0}
+button,select{font-family:inherit}
+:focus-visible{outline:2px solid var(--act);outline-offset:2px}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:16px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+.top{background:#fff;border-bottom:1px solid var(--line);position:sticky;top:env(safe-area-inset-top,0px);z-index:20}
+.top .wrap{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:64px;padding-block:10px}
+.top h1{font-size:20px;font-weight:800}
+.top .sub{color:var(--mute);font-size:13px}
+.ctrls{display:flex;gap:10px;flex-wrap:wrap;margin-left:auto}
+.seg{display:flex;background:var(--track);border-radius:9px;padding:3px}
+.seg button{min-height:40px;padding:0 14px;border:0;border-radius:7px;background:transparent;font-weight:600;font-size:13.5px;color:var(--ink2);cursor:pointer;white-space:nowrap}
+.seg button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(15,23,42,.1)}
+select{min-height:40px;border:1px solid #CBD2DC;border-radius:8px;padding:0 10px;font-size:14px;background:#fff;color:var(--ink)}
+
+main{display:grid;gap:18px;padding-block:20px 50px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;min-width:0}
+.pad{padding:18px}
+.idea{display:flex;gap:12px;align-items:baseline;margin-bottom:12px;flex-wrap:wrap}
+.idea .n{font-family:var(--mono);font-size:12.5px;color:var(--act);font-weight:500}
+.idea h2{font-size:19px;font-weight:700}
+.idea .r{margin-left:auto}
+.idea p{color:var(--ink2);font-size:14.5px;width:100%;max-width:84ch}
+
+.kpis{display:grid;grid-template-columns:repeat(4,1fr)}
+.kpi{padding:16px 18px}
+.kpi+.kpi{border-left:1px solid var(--line)}
+.kpi small{display:block;color:var(--mute);font-size:12.5px;font-weight:500}
+.kpi strong{display:block;font-size:28px;font-weight:800;letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1.15;margin-top:2px}
+.kpi span{font-size:12.5px;color:var(--ink2)}
+.kpi.w strong{color:var(--warn)}
+@media (max-width:760px){.kpis{grid-template-columns:1fr 1fr}.kpi:nth-child(3){border-left:0}.kpi:nth-child(n+3){border-top:1px solid var(--line)}}
+
+/* week grid */
+.gridwrap{overflow-x:auto}
+table.heat{border-collapse:separate;border-spacing:4px;min-width:760px;width:100%}
+.heat th{font-size:12px;font-weight:600;color:var(--mute);text-align:center;padding:4px 2px;white-space:nowrap}
+.heat th b{display:block;color:var(--ink);font-size:14px}
+.heat td.who{white-space:nowrap;padding-right:8px;position:sticky;left:0;background:#fff;z-index:1}
+.heat td.who b{display:block;font-size:14px;font-weight:600}
+.heat td.who small{color:var(--mute);font-size:12px}
+.heat .team{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--act);padding:12px 0 2px;text-align:left;background:#fff}
+.cell{width:100%;min-width:72px;height:52px;border-radius:10px;border:1px solid transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-weight:700;font-size:15px;font-variant-numeric:tabular-nums}
+.cell small{font-size:10.5px;font-weight:600;opacity:.9}
+.cell[aria-pressed=true]{outline:3px solid var(--ink);outline-offset:1px}
+.c0{background:#fff;border:1.5px dashed var(--warn);color:var(--warn)}
+.c1{background:var(--warnbg);color:#92400E}
+.c2{background:var(--l1);color:var(--act)}
+.c3{background:var(--l2);color:#fff}
+.c4{background:var(--l4);color:#fff}
+.cx{background:#F3F4F6;color:var(--mute);cursor:default}
+.bar{height:8px;border-radius:4px;background:var(--track);overflow:hidden;margin:4px 6px 0}
+.bar i{display:block;height:100%;background:var(--act)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12.5px;color:var(--ink2);margin-top:12px}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:16px;height:12px;border-radius:4px;display:inline-block}
+.weeknav{display:flex;gap:8px;align-items:center}
+.weeknav button{min-height:40px;min-width:40px;border-radius:8px;border:1px solid #CBD2DC;background:#fff;cursor:pointer;font-size:16px}
+.weeknav span{font-size:13.5px;color:var(--ink2);min-width:150px;text-align:center}
+
+/* month */
+.month{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.month .dh{font-size:12px;font-weight:600;color:var(--mute);text-align:center;padding-bottom:2px}
+.md{min-height:96px;border-radius:12px;border:1px solid var(--line);padding:8px 10px;display:flex;flex-direction:column;gap:5px;background:#fff;cursor:pointer;text-align:left;font:inherit;color:inherit;min-width:0}
+.md:hover{border-color:#B7CCE5}
+.md .d{display:flex;justify-content:space-between;align-items:baseline;font-weight:700}
+.md .d small{font-weight:600;font-size:11.5px;color:var(--mute)}
+.md .n{font-size:13px;font-variant-numeric:tabular-nums;color:var(--ink2)}
+.md .n b{color:var(--ink);font-size:16px}
+.md .bar{margin:0}
+.md .v{font-size:11.5px;font-weight:700;color:var(--warn)}
+.md.past{background:#F8FAFC;color:var(--mute);cursor:default}
+.md.past .n b{color:var(--mute)}
+.md.empty{border:none;background:transparent;cursor:default}
+.md.low{border-color:#F3C77E;background:#FFFBEB}
+.md.today{box-shadow:inset 0 0 0 2px var(--act)}
+.mlist{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;font-size:13.5px;color:var(--ink2);align-items:center}
+
+/* map */
+.mapgrid{display:grid;grid-template-columns:1.6fr 1fr;gap:18px;align-items:start}
+@media (max-width:1000px){.mapgrid{grid-template-columns:1fr}}
+.mapbox{position:relative;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--land)}
+.mapbox svg{display:block;width:100%;height:auto}
+.maptools{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.ztable{width:100%;border-collapse:collapse;font-size:14px}
+.ztable th{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--mute);text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+.ztable td{padding:9px 6px;border-bottom:1px solid var(--line)}
+.ztable td.r,.ztable th.r{text-align:right}
+.ztable tr[data-z]{cursor:pointer}
+.ztable tr[data-z]:hover{background:#F8FAFC}
+.ztable tr.sel{background:var(--act50)}
+.mini{display:inline-block;height:6px;border-radius:3px;background:var(--act);vertical-align:middle}
+.note{font-size:13px;color:var(--ink2);margin-top:10px}
+
+/* detail */
+.two{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;align-items:start}
+@media (max-width:980px){.two{grid-template-columns:1fr}}
+.dayhead{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.av{width:42px;height:42px;border-radius:50%;background:var(--act);color:#fff;display:grid;place-items:center;font-weight:700;flex:none}
+.dayhead b{display:block;font-size:17px}.dayhead small{color:var(--ink2);font-size:13px}
+.slots{display:grid;gap:6px}
+.slot{display:grid;grid-template-columns:78px 1fr auto;gap:12px;align-items:center;min-height:52px;padding:8px 12px;border-radius:10px;border:1px solid var(--line)}
+.slot .h{font-family:var(--mono);font-size:13px;color:var(--ink2);white-space:nowrap}
+.slot b{font-weight:600}
+.slot small{display:block;color:var(--mute);font-size:12.5px}
+.slot.free{border-style:dashed;border-color:#D6A458;background:#FFFBEB}
+.slot.free b{color:#92400E}
+.slot.lunch{background:#F3F4F6;border-color:#F3F4F6;min-height:36px}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:4px 9px;border-radius:999px;white-space:nowrap}
+.c-a{background:var(--act50);color:var(--act)}.c-w{background:var(--warnbg);color:#92400E}.c-ok{background:#DCFCE7;color:#166534}.c-r{background:#FDE3E3;color:#B91C1C}.c-n{background:#F3F4F6;color:#374151}
+.btn{min-height:40px;padding:0 14px;border-radius:8px;border:1px solid var(--act);background:var(--act);color:#fff;font-weight:600;font-size:13.5px;cursor:pointer;white-space:nowrap}
+.btn:active{transform:scale(.97)}
+.wl{display:grid;gap:8px}
+.wi{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;padding:12px 14px;border:1px solid var(--line);border-radius:12px}
+.wi b{font-weight:600}
+.wi small{display:block;color:var(--ink2);font-size:13px}
+.wi .sug{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--ink2);border-top:1px dashed var(--line);padding-top:8px}
+.wi.done{opacity:.55}
+.spec{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.sp{border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.sp b{display:block;font-size:13.5px}
+.sp strong{display:block;font-size:24px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:2px}
+.sp small{color:var(--ink2);font-size:12.5px}
+.sp.low strong{color:var(--warn)}
+.rules{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.rules div{border:1px solid var(--line);border-radius:12px;padding:14px}
+.rules b{display:block;margin-bottom:4px}
+.rules p{color:var(--ink2);font-size:14px}
+.rules .live{font-size:13px;margin-top:8px;color:var(--warn);font-weight:600}
+@media (max-width:900px){.rules{grid-template-columns:1fr}}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:12px 18px;border-radius:10px;font-size:14px;opacity:0;transition:.3s;pointer-events:none;z-index:50;max-width:calc(100% - 32px)}
+.toast.on{opacity:1;transform:translateX(-50%)}
+footer{color:var(--mute);font-size:12.5px;padding-bottom:30px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="top">
+  <div class="wrap">
+    <div><h1>Agenda por llenar</h1><div class="sub">Meta 5 citas por técnico al día (sábado 3) · máximo 7</div></div>
+    <div class="ctrls">
+      <div class="seg" id="team" role="group" aria-label="Equipo">
+        <button type="button" data-t="all" aria-pressed="true">Todos</button>
+        <button type="button" data-t="A" aria-pressed="false">Equipo A · Wila</button>
+        <button type="button" data-t="B" aria-pressed="false">Equipo B · Yohana</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+  <section class="card kpis" id="kpis" aria-label="Resumen"></section>
+
+  <section class="card pad">
+    <div class="idea"><span class="n">IDEA 1</span><h2 id="occTitle">Ocupación de la semana</h2>
+      <div class="r seg" id="vista" role="group" aria-label="Vista"><button type="button" data-v="semana" aria-pressed="true">Semana</button><button type="button" data-v="mes" aria-pressed="false">Mes</button></div>
+      <p id="occDesc"></p></div>
+    <div id="occ"></div>
+  </section>
+
+  <section class="card pad">
+    <div class="idea"><span class="n">IDEA 2</span><h2>Mapa de citas por zona</h2>
+      <p>Dónde se concentran las citas del período y qué técnico trabaja cada zona. Sirve para dos cosas: darle a cada técnico su zona y, al agendar, ofrecer el hueco del técnico que ya va a estar cerca.</p></div>
+    <div class="maptools">
+      <div class="seg" id="modo" role="group" aria-label="Modo del mapa">
+        <button type="button" data-m="calor" aria-pressed="true">Concentración</button>
+        <button type="button" data-m="zonas" aria-pressed="false">Por zona</button>
+        <button type="button" data-m="ruta" aria-pressed="false">Ruta del día</button>
+      </div>
+      <label class="sr" for="rango" style="position:absolute;left:-9999px">Período</label>
+      <select id="rango"><option value="semana">Esta semana</option><option value="mes">Todo octubre</option><option value="manana">Mañana</option></select>
+      <label for="tecSel" style="position:absolute;left:-9999px">Técnico</label>
+      <select id="tecSel"></select>
+    </div>
+    <div class="mapgrid">
+      <div><div class="mapbox"><svg id="map" viewBox="0 0 900 560" role="img" aria-label="Mapa esquemático de Santo Domingo con las citas"></svg></div>
+        <div class="legend" id="mapLegend"></div>
+        <p class="note">Mapa esquemático para el concepto. En la app se dibuja con el mismo Leaflet de Clientes (calor, agrupado y zonas).</p></div>
+      <div><table class="ztable" id="ztable"></table><p class="note" id="znote"></p></div>
+    </div>
+  </section>
+
+  <div class="two">
+    <section class="card pad">
+      <div class="idea"><span class="n">IDEA 3</span><h2>El día del técnico, hora por hora</h2>
+        <p>Toca una casilla de la semana o un día del mes. Las horas libres sugieren al cliente en espera que queda más cerca de sus otras citas de ese día.</p></div>
+      <div id="day"></div>
+    </section>
+    <section class="card pad">
+      <div class="idea"><span class="n">IDEA 4</span><h2>Lista para rellenar huecos</h2>
+        <p>Primero se llenan los días vacíos; entre dos opciones parecidas gana el técnico que ya va a estar en la zona.</p></div>
+      <div class="wl" id="wl"></div>
+    </section>
+  </div>
+
+  <section class="card pad">
+    <div class="idea"><span class="n">IDEA 5</span><h2>Huecos por tipo de equipo</h2>
+      <p>Para la secretaria en el chat: horas libres mañana y pasado, y la primera disponible.</p></div>
+    <div class="spec" id="spec"></div>
+  </section>
+
+  <section class="card pad">
+    <div class="idea"><span class="n">IDEA 6</span><h2>Avisos automáticos</h2><p>Se suman a «Requiere atención» del Centro de operaciones.</p></div>
+    <div class="rules" id="rules"></div>
+  </section>
+</main>
+<footer class="wrap">Técnicos y equipos reales; clientes, horas, zonas y cantidades son de ejemplo.</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+let seed=11; const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646}; const ri=(a,b)=>Math.floor(a+rnd()*(b-a+1));
+const SK={nevera:'Nevera',lavadora:'Lavadora',secadora:'Secadora',estufa:'Estufa',aire:'Aire'};
+/* Sectores (lat, lng aproximados) */
+const Z={
+ 'Los Prados':[18.478,-69.951],'Naco':[18.474,-69.928],'Piantini':[18.467,-69.937],'Bella Vista':[18.455,-69.941],'Gazcue':[18.465,-69.902],
+ 'Zona Colonial':[18.473,-69.884],'Arroyo Hondo':[18.503,-69.943],'Mirador Norte':[18.445,-69.958],'Cristo Rey':[18.493,-69.928],'Los Ríos':[18.497,-69.965],
+ 'Herrera':[18.474,-70.003],'Los Alcarrizos':[18.516,-70.012],'Pedro Brand':[18.566,-70.093],'Haina':[18.416,-70.033],'Manoguayabo':[18.487,-70.040],
+ 'Villa Mella':[18.555,-69.912],'Sabana Perdida':[18.540,-69.870],'Los Mina':[18.496,-69.857],'Ensanche Ozama':[18.482,-69.875],'Charles de Gaulle':[18.513,-69.846],'San Isidro':[18.502,-69.775],'Villa Faro':[18.480,-69.822]
+};
+const T=[
+ ['Yoniel','A',['nevera','lavadora','secadora','estufa','aire'],['Los Prados','Naco','Piantini','Cristo Rey','Arroyo Hondo']],
+ ['Reyes Guzmán','A',['lavadora','secadora'],['Herrera','Manoguayabo','Los Alcarrizos','Haina']],
+ ['Diorky','A',['lavadora','secadora'],['Arroyo Hondo','Los Ríos','Cristo Rey','Villa Mella']],
+ ['Albert Brito','A',['aire','lavadora','secadora','estufa'],['Piantini','Naco','Bella Vista','Gazcue']],
+ ['Wilfredo','A',['estufa'],['Herrera','Mirador Norte','Bella Vista','Los Prados']],
+ ['Wilmer','B',['nevera'],['Gazcue','Zona Colonial','Naco','Los Mina'],1],
+ ['Franklin','B',['estufa'],['Los Mina','Ensanche Ozama','Villa Faro','Charles de Gaulle']],
+ ['Yunior','B',['lavadora','secadora'],['Villa Mella','Sabana Perdida','Charles de Gaulle']],
+ ['José Alberto','B',['lavadora','secadora'],['Pedro Brand','Los Alcarrizos','Manoguayabo']],
+ ['Miguel','B',['nevera','lavadora','secadora'],['Los Mina','San Isidro','Villa Faro','Ensanche Ozama','Pedro Brand']]
+].map(([n,eq,sk,zs,c],i)=>({i,n,eq,sk,zs,contr:!!c}));
+/* Días hábiles de octubre 2026 desde el viernes 2 (hoy: jueves 1, 3:00 PM) */
+const MES=[]; for(let d=1;d<=31;d++){const dt=new Date(2026,9,d);if(dt.getDay()!==0)MES.push(dt);}
+const HOY=new Date(2026,9,1);
+const FUT=MES.filter(d=>d>HOY); // días con agenda futura
+const DN=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const fmtD=d=>`${DN[d.getDay()]} ${d.getDate()} oct`;
+const isSat=d=>d.getDay()===6;
+const HOURS=[9,10,11,12,13,14,15,16,17];
+const hoursFor=d=>isSat(d)?[9,10,11,12,13,14]:HOURS;
+const lunchFor=(t,d)=>isSat(d)?null:(t.i%2?12:13);
+const META=d=>isSat(d)?3:5;
+const offDay=(t,d)=>t.n==='Wilmer'&&isSat(d);
+const NOMBRES=['Cinthia P.','Juana R.','Elvis R.','Marianny O.','Santty P.','Susi S.','Yahaira D.','Leonela P.','Rosalba O.','Carmen E.','Albania B.','Génesis M.','Keyton M.','Diomir C.','Eneris R.','Berkys M.','Altagracia R.','Jassel P.','Samanta L.','Carolina M.','Rosa O.'];
+const BOOK={}; const key=(t,di)=>t.i+'-'+di;
+T.forEach(t=>FUT.forEach((d,di)=>{
+  BOOK[key(t,di)]={}; if(offDay(t,d)) return;
+  const fade=di<8?[5,3,5,4,3,2,1,1][di]:di<14?ri(0,2):ri(0,1);
+  let n=Math.max(0,Math.min(7,fade+(di<8?ri(-2,2):0)));
+  if((t.n==='Wilfredo'&&di===2)||(t.n==='Franklin'&&(di===0||di===3))||(t.n==='Diorky'&&di===4)||(t.n==='Wilmer'&&di===2)) n=0;
+  if(t.n==='Miguel'&&di===0) n=7;
+  const hs=hoursFor(d).filter(h=>h!==lunchFor(t,d));
+  [...hs].sort(()=>rnd()-.5).slice(0,Math.min(n,hs.length)).sort((a,b)=>a-b).forEach(h=>{
+    const s=t.sk[ri(0,t.sk.length-1)];
+    // 85% en sus zonas, 15% fuera (para que se vean rutas cruzadas)
+    const z=rnd()<.85?t.zs[ri(0,t.zs.length-1)]:Object.keys(Z)[ri(0,Object.keys(Z).length-1)];
+    BOOK[key(t,di)][h]={c:NOMBRES[ri(0,NOMBRES.length-1)],e:SK[s],z,man:t.n==='Albert Brito'&&s!=='aire'};
+  });
+}));
+const WL=[
+ {id:1,c:'Paola Encarnación',e:'nevera',z:'Gazcue',o:'Solicitud web',tag:['c-a','Nueva'],desde:'hace 2 h'},
+ {id:2,c:'Iris Núñez',e:'lavadora',z:'Herrera',o:'Pieza llegó (bomba)',tag:['c-ok','Pieza lista'],desde:'hoy'},
+ {id:3,c:'Clínica Naco',e:'aire',z:'Naco',o:'Mantenimiento mensual',tag:['c-n','Toca el 5 oct'],desde:'contrato',noAntes:2},
+ {id:4,c:'Juan Castillo',e:'lavadora',z:'Herrera',o:'Garantía: vuelve a botar agua',tag:['c-r','Garantía'],desde:'ayer'},
+ {id:5,c:'Restaurante Gazcue',e:'estufa',z:'Gazcue',o:'Mantenimiento mensual',tag:['c-n','Toca el 6 oct'],desde:'contrato',noAntes:3},
+ {id:6,c:'Sonia Báez',e:'secadora',z:'Villa Mella',o:'Pidió «lo antes posible»',tag:['c-w','Sin contactar'],desde:'hace 3 h'},
+ {id:7,c:'Daniel Ortiz',e:'nevera',z:'Los Prados',o:'Pieza llegó (termostato)',tag:['c-ok','Pieza lista'],desde:'hoy'},
+ {id:8,c:'Marta López',e:'estufa',z:'Naco',o:'Cotización aceptada',tag:['c-a','Aceptada'],desde:'ayer'},
+ {id:9,c:'Héctor Tavárez',e:'lavadora',z:'Pedro Brand',o:'Solicitud web',tag:['c-a','Nueva'],desde:'hace 40 min'},
+ {id:10,c:'Iglesia Los Mina',e:'aire',z:'Los Mina',o:'Mantenimiento trimestral',tag:['c-n','Toca el 8 oct'],desde:'contrato',noAntes:5},
+];
+
+let team='all', vista='semana', wk=0, sel=null, modo='calor', rango='semana', tecMapa='', selZona=null;
+const inT=t=>team==='all'||t.eq===team;
+const cnt=(t,di)=>Object.keys(BOOK[key(t,di)]).length;
+const free=(t,di)=>offDay(t,FUT[di])?[]:hoursFor(FUT[di]).filter(h=>h!==lunchFor(t,FUT[di])&&!BOOK[key(t,di)][h]);
+const hh=h=>h<12?`${h}:00 AM`:h===12?'12:00 PM':`${h-12}:00 PM`;
+const cls=(n,d)=>n===0?'c0':n<=2?'c1':n<META(d)?'c2':n===META(d)?'c3':'c4';
+const lbl=(n,d)=>n===0?'Vacío':n<META(d)?`faltan ${META(d)-n}`:n===META(d)?'en meta':'lleno';
+const km=(a,b)=>{const R=6371,toR=x=>x*Math.PI/180;const dLa=toR(b[0]-a[0]),dLo=toR(b[1]-a[1]);const h=Math.sin(dLa/2)**2+Math.cos(toR(a[0]))*Math.cos(toR(b[0]))*Math.sin(dLo/2)**2;return 2*R*Math.asin(Math.sqrt(h))*1.3;}; // ×1.3 ≈ por calle
+const weekIdx=()=>{const out=[];for(let i=wk;i<FUT.length&&out.length<8;i++)out.push(i);return out;};
+const citasDe=(t,di)=>Object.entries(BOOK[key(t,di)]).map(([h,c])=>({h:+h,...c}));
+
+/* Sugerencias: día vacío primero, luego cercanía a sus otras citas del día, luego especialista */
+let RES=new Set();
+function mejorHueco(w){
+  let best=null;
+  T.filter(t=>inT(t)&&t.sk.includes(w.e)).forEach(t=>FUT.forEach((d,di)=>{
+    if(di>12||offDay(t,d)||(w.noAntes!=null&&di<w.noAntes)) return;
+    const f=free(t,di).filter(h=>!RES.has(t.i+'-'+di+'-'+h)); if(!f.length||cnt(t,di)>=7) return;
+    const cs=citasDe(t,di); const ref=cs.length?cs.map(c=>Z[c.z]):t.zs.map(z=>Z[z]);
+    const dist=Math.min(...ref.map(p=>km(p,Z[w.z])));
+    const score=cnt(t,di)*10+di*4+(t.sk.length-1)*3+dist*1.5;
+    // hora: la más pegada a una cita cercana
+    let h=f[0]; if(cs.length){const near=cs.reduce((a,c)=>km(Z[c.z],Z[w.z])<km(Z[a.z],Z[w.z])?c:a);h=f.reduce((a,x)=>Math.abs(x-near.h)<Math.abs(a-near.h)?x:a);}
+    if(!best||score<best.score) best={t,di,h,score,dist};
+  }));
+  if(best) RES.add(best.t.i+'-'+best.di+'-'+best.h);
+  return best;
+}
+
+function render(){
+  const TT=T.filter(inT); RES=new Set();
+  // KPIs (semana visible)
+  const W=weekIdx(); let libres=0,vacios=0,citas=0,meta=0;
+  TT.forEach(t=>W.forEach(di=>{if(offDay(t,FUT[di]))return;const n=cnt(t,di);citas+=n;meta+=META(FUT[di]);libres+=Math.max(0,META(FUT[di])-n);if(n===0)vacios++;}));
+  let mesC=0,mesM=0,mesV=0; TT.forEach(t=>FUT.forEach((d,di)=>{if(offDay(t,d))return;mesC+=cnt(t,di);mesM+=META(d);if(!cnt(t,di))mesV++;}));
+  const man=TT.filter(t=>cnt(t,0)<=1&&!offDay(t,FUT[0]));
+  document.getElementById('kpis').innerHTML=[
+    ['Citas en los próximos 8 días',citas,`de ${meta} de meta · ${Math.round(citas/meta*100)}%`],
+    ['Resto de octubre',`${Math.round(mesC/mesM*100)}%`,`${mesC} citas de ${mesM} posibles`,Math.round(mesC/mesM*100)<60?'w':''],
+    ['Días vacíos (8 días)',vacios,`${mesV} en todo octubre`,vacios?'w':''],
+    ['Mañana con 0–1 citas',man.length,man.length?man.map(t=>t.n).join(', '):'todos tienen trabajo',man.length?'w':'']
+  ].map(([a,b,c,k])=>`<div class="kpi ${k||''}"><small>${a}</small><strong>${b}</strong><span>${c}</span></div>`).join('');
+
+  /* ---- Ocupación: semana o mes ---- */
+  const occ=document.getElementById('occ');
+  if(vista==='semana'){
+    document.getElementById('occTitle').textContent='Ocupación por técnico y día';
+    document.getElementById('occDesc').innerHTML='Cada casilla: citas contra la meta. Las punteadas en ámbar son días <b>vacíos</b>. Toca una para ver sus horas libres.';
+    let h=`<div class="weeknav" style="margin-bottom:8px"><button type="button" id="prev" aria-label="Días anteriores" ${wk===0?'disabled':''}>‹</button><span>${fmtD(FUT[W[0]])} – ${fmtD(FUT[W[W.length-1]])}</span><button type="button" id="next" aria-label="Días siguientes" ${wk+8>=FUT.length?'disabled':''}>›</button></div><div class="gridwrap"><table class="heat"><thead><tr><th></th>${W.map(di=>`<th>${DN[FUT[di].getDay()]}<b>${FUT[di].getDate()}</b></th>`).join('')}</tr></thead><tbody>`;
+    ['A','B'].filter(e=>team==='all'||team===e).forEach(e=>{
+      h+=`<tr><td class="team" colspan="${W.length+1}">Equipo ${e} · ${e==='A'?'Wila y Leany':'Yohana y Disnely'}</td></tr>`;
+      T.filter(t=>t.eq===e).forEach(t=>{
+        h+=`<tr><td class="who"><b>${t.n}</b><small>${t.contr?'Contratista · ':''}${t.zs.slice(0,2).join(', ')}</small></td>`+W.map(di=>{
+          const d=FUT[di]; if(offDay(t,d)) return `<td><div class="cell cx">—</div></td>`;
+          const n=cnt(t,di),p=sel&&sel.t===t.i&&sel.di===di;
+          return `<td><button type="button" class="cell ${cls(n,d)}" data-t="${t.i}" data-di="${di}" aria-pressed="${p}" aria-label="${t.n}, ${fmtD(d)}: ${n} citas, ${lbl(n,d)}">${n}<small>${lbl(n,d)}</small></button></td>`;}).join('')+`</tr>`;
+      });
+    });
+    h+=`<tr><td class="who"><b>Ocupación</b><small>del filtro</small></td>${W.map(di=>{const ts=TT.filter(t=>!offDay(t,FUT[di]));const n=ts.reduce((a,t)=>a+cnt(t,di),0),m=ts.reduce((a)=>a+META(FUT[di]),0);const p=Math.round(n/m*100);return `<td style="text-align:center;font-size:12.5px;font-weight:600;${p<60?'color:var(--warn)':''}">${p}%<div class="bar"><i style="width:${Math.min(100,p)}%;${p<60?'background:var(--warn)':''}"></i></div></td>`}).join('')}</tr></tbody></table></div>
+    <div class="legend"><span><i style="border:1.5px dashed var(--warn);background:#fff"></i>Vacío</span><span><i style="background:var(--warnbg)"></i>Bajo (1–2)</span><span><i style="background:var(--l1)"></i>Casi</span><span><i style="background:var(--l2)"></i>En meta</span><span><i style="background:var(--l4)"></i>Lleno (6–7)</span><span><i style="background:#F3F4F6"></i>No trabaja</span></div>`;
+    occ.innerHTML=h;
+    document.getElementById('prev').onclick=()=>{wk=Math.max(0,wk-6);render();};
+    document.getElementById('next').onclick=()=>{wk=Math.min(FUT.length-8,wk+6);render();};
+  } else {
+    document.getElementById('occTitle').textContent='Ocupación de octubre';
+    document.getElementById('occDesc').innerHTML='Cada día muestra citas contra la meta de todos los técnicos del filtro. Los días con menos del 60 % salen en ámbar y dicen cuántos técnicos están vacíos. Toca un día para abrir esa semana.';
+    let h=`<div class="month">${['Lun','Mar','Mié','Jue','Vie','Sáb'].map(x=>`<div class="dh">${x}</div>`).join('')}`;
+    const first=MES[0]; const lead=(first.getDay()+6)%7; for(let i=0;i<lead;i++) h+=`<div class="md empty"></div>`;
+    MES.forEach(d=>{
+      const di=FUT.findIndex(x=>x.getTime()===d.getTime());
+      if(di<0){h+=`<div class="md past${d.getTime()===HOY.getTime()?' today':''}"><div class="d">${d.getDate()}<small>${d.getTime()===HOY.getTime()?'hoy':'pasado'}</small></div></div>`;return;}
+      const ts=TT.filter(t=>!offDay(t,d)); const n=ts.reduce((a,t)=>a+cnt(t,di),0), m=ts.length*META(d), p=Math.round(n/m*100), v=ts.filter(t=>!cnt(t,di)).length;
+      h+=`<button type="button" class="md ${p<60?'low':''}" data-di="${di}" aria-label="${fmtD(d)}: ${n} de ${m} citas, ${v} técnicos sin citas"><div class="d">${d.getDate()}<small>${p}%</small></div><div class="n"><b>${n}</b> / ${m}</div><div class="bar"><i style="width:${Math.min(100,p)}%;${p<60?'background:var(--warn)':''}"></i></div>${v?`<div class="v">${v} sin citas</div>`:''}</button>`;
+    });
+    h+=`</div>`;
+    const vac=TT.map(t=>({t,v:FUT.filter((d,di)=>!offDay(t,d)&&!cnt(t,di)).length})).sort((a,b)=>b.v-a.v).slice(0,5);
+    h+=`<div class="mlist"><b style="color:var(--ink)">Más días vacíos en octubre:</b>${vac.map(x=>`<span class="chip c-w">${x.t.n} · ${x.v}</span>`).join('')}</div>`;
+    occ.innerHTML=h;
+    occ.querySelectorAll('.md[data-di]').forEach(b=>b.onclick=()=>{const di=+b.dataset.di;wk=Math.max(0,Math.min(FUT.length-8,di));vista='semana';setPressed('vista','v','semana');const t=TT.find(t=>!offDay(t,FUT[di])&&!cnt(t,di))||TT[0];sel={t:t.i,di};render();});
+  }
+
+  /* ---- Mapa ---- */
+  renderMapa(TT);
+
+  /* ---- Día ---- */
+  if(!sel||!inT(T[sel.t])){let f=null;for(const t of TT){for(const di of W){if(!offDay(t,FUT[di])&&!cnt(t,di)){f={t:t.i,di};break;}}if(f)break;} sel=f||{t:TT[0].i,di:W[0]};}
+  const t=T[sel.t],di=sel.di,d=FUT[di],cs=citasDe(t,di);
+  const cand=WL.filter(w=>!w.done&&t.sk.includes(w.e)&&(w.noAntes==null||di>=w.noAntes)).map(w=>({w,dist:Math.min(...(cs.length?cs.map(c=>km(Z[c.z],Z[w.z])):t.zs.map(z=>km(Z[z],Z[w.z]))))})).sort((a,b)=>a.dist-b.dist);
+  let dh=`<div class="dayhead"><span class="av">${t.n[0]}</span><div><b>${t.n} · ${fmtD(d)}</b><small>Equipo ${t.eq} · ${cs.length} de ${META(d)} citas · ${free(t,di).length} horas libres · zonas: ${[...new Set(cs.map(c=>c.z))].join(', ')||t.zs.slice(0,2).join(', ')}</small></div></div><div class="slots">`;
+  let k=0;
+  hoursFor(d).forEach(H=>{
+    if(H===lunchFor(t,d)){dh+=`<div class="slot lunch"><span class="h">${hh(H)}</span><small>Almuerzo</small><span></span></div>`;return;}
+    const c=BOOK[key(t,di)][H];
+    if(c) dh+=`<div class="slot"><span class="h">${hh(H)}</span><div><b>${c.e}${c.man?' · mantenimiento':''}</b><small>${c.c} · ${c.z}</small></div><span class="chip c-a">Agendada</span></div>`;
+    else{const x=cand[k++];dh+=`<div class="slot free"><span class="h">${hh(H)}</span><div><b>Libre</b><small>${x?`Sugerencia: ${x.w.c} · ${SK[x.w.e]} · ${x.w.z} (a ${Math.round(x.dist)} km)`:'Sin clientes en espera para su especialidad'}</small></div>${x?`<button class="btn" type="button" data-fill="${x.w.id}" data-h="${H}">Agendar</button>`:'<span></span>'}</div>`;}
+  });
+  document.getElementById('day').innerHTML=dh+'</div>';
+
+  /* ---- Lista ---- */
+  RES=new Set();
+  document.getElementById('wl').innerHTML=WL.map(w=>{const s=w.done?null:mejorHueco(w);return `<div class="wi ${w.done?'done':''}"><div><b>${w.c}</b> <span class="chip ${w.tag[0]}">${w.tag[1]}</span><small>${SK[w.e]} · ${w.z} · ${w.o}</small></div><span class="mono" style="font-size:12px;color:var(--mute)">${w.done?'agendado':w.desde}</span>
+    <div class="sug">${w.done?`Agendado con ${w.done}`:s?`Mejor hueco: <b style="color:var(--ink)">${s.t.n} · ${fmtD(FUT[s.di])} · ${hh(s.h)}</b> <span>${cnt(s.t,s.di)?`a ${Math.round(s.dist)} km de sus otras citas`:'día vacío'}</span><button class="btn" type="button" data-wl="${w.id}" data-slot="${s.t.i}-${s.di}-${s.h}" style="margin-left:auto">Ofrecer por WhatsApp</button>`:'No hay huecos de su especialidad en las próximas 2 semanas'}</div></div>`}).join('');
+
+  /* ---- Especialidad ---- */
+  document.getElementById('spec').innerHTML=Object.keys(SK).map(s=>{
+    let near=0,first=null; [0,1].forEach(di=>TT.filter(t=>t.sk.includes(s)&&!offDay(t,FUT[di])).forEach(t=>{const f=free(t,di);near+=f.length;if(f.length&&!first)first={t,di,h:f[0]};}));
+    return `<div class="sp ${near<3?'low':''}"><b>${SK[s]}s</b><strong>${near}</strong><small>horas libres mañana y pasado<br>${first?`Primera: ${fmtD(FUT[first.di])} ${hh(first.h)} · ${first.t.n}`:'Sin técnico en este filtro'}</small></div>`;
+  }).join('');
+
+  /* ---- Avisos (con datos del ejemplo) ---- */
+  const cruzadas=[]; TT.forEach(t=>W.slice(0,3).forEach(di=>{const cs=citasDe(t,di);if(cs.length<2)return;let mx=0,par=null;cs.forEach(a=>cs.forEach(b=>{const k=km(Z[a.z],Z[b.z]);if(k>mx){mx=k;par=[a.z,b.z];}}));if(mx>25)cruzadas.push(`${t.n} el ${fmtD(FUT[di])}: ${par[0]} y ${par[1]} (${Math.round(mx)} km)`);}));
+  const flojos=['A','B'].filter(e=>team==='all'||team===e).map(e=>{const ts=T.filter(t=>t.eq===e);let n=0,m=0;ts.forEach(t=>[0,1,2].forEach(di=>{if(offDay(t,FUT[di]))return;n+=cnt(t,di);m+=META(FUT[di]);}));return {e,p:Math.round(n/m*100)};}).filter(x=>x.p<60);
+  const zonasSin=[]; const dem={}; WL.filter(w=>!w.done).forEach(w=>{dem[w.z]=(dem[w.z]||0)+1;}); Object.keys(dem).forEach(z=>{const quien=T.filter(t=>t.zs.includes(z));if(!quien.length)zonasSin.push(z);});
+  document.getElementById('rules').innerHTML=[
+    ['Mañana sin citas','A las 2:00 PM, si un técnico tiene 0 o 1 cita para mañana, avisa a la operaria de su equipo con la lista de espera que le sirve.',man.length?`Ahora: ${man.map(t=>t.n).join(', ')}`:''],
+    ['Semana floja','Si un equipo está por debajo del 60 % de su meta en los próximos 3 días, el resumen se pone ámbar y sugiere llamar mantenimientos que tocan.',flojos.map(x=>`Equipo ${x.e} al ${x.p}%`).join(' · ')],
+    ['Ruta cruzada','Si un técnico tiene el mismo día citas a más de 25 km entre sí, sugiere cambiar una con un técnico que trabaje esa zona.',cruzadas.slice(0,2).join(' · ')],
+    ['Zona sin dueño','Si llegan pedidos de una zona que ningún técnico tiene asignada, avisa para decidir quién la cubre.',zonasSin.length?`Ahora: ${zonasSin.join(', ')}`:''],
+    ['Técnico sobrecargado','Más de 7 citas o dos citas a la misma hora se marcan al agendar, con la opción de pasarle una a otro técnico de la misma especialidad.',''],
+    ['Mes por debajo','El lunes de cada semana, si las próximas 2 semanas están por debajo del 40 %, sugiere una campaña de mantenimiento a clientes de esas zonas.',''],
+  ].map(([a,b,c])=>`<div><b>${a}</b><p>${b}</p>${c?`<p class="live">${c}</p>`:''}</div>`).join('');
+}
+
+/* ---------- MAPA ---------- */
+const LON=[-70.12,-69.75], LAT=[18.40,18.59];
+const px=([la,lo])=>[ (lo-LON[0])/(LON[1]-LON[0])*900, (LAT[1]-la)/(LAT[1]-LAT[0])*560 ];
+function renderMapa(TT){
+  const tecOpts=TT.map(t=>`<option value="${t.i}" ${String(t.i)===tecMapa?'selected':''}>${t.n}</option>`).join('');
+  const ts=document.getElementById('tecSel'); ts.innerHTML=`<option value="">Todos los técnicos</option>`+tecOpts; if(tecMapa&&!TT.some(t=>String(t.i)===tecMapa)) tecMapa='';
+  ts.value=tecMapa; ts.disabled=false;
+  const R=document.getElementById('rango'); R.value=rango; R.disabled=modo==='ruta';
+  const dis=rango==='manana'||modo==='ruta'?[0]:rango==='semana'?weekIdx():FUT.map((_,i)=>i);
+  const TS=TT.filter(t=>!tecMapa||String(t.i)===tecMapa);
+  const pts=[]; TS.forEach(t=>dis.forEach(di=>citasDe(t,di).forEach(c=>pts.push({t,di,...c}))));
+  // tierra/mar
+  const coast=[[18.430,-70.12],[18.418,-70.06],[18.412,-70.03],[18.428,-69.99],[18.440,-69.96],[18.452,-69.93],[18.461,-69.90],[18.470,-69.882],[18.466,-69.86],[18.462,-69.83],[18.458,-69.79],[18.452,-69.75]].map(px);
+  const sea=`M0,560 L${coast.map(p=>p.join(',')).join(' L')} L900,${coast[coast.length-1][1]} L900,560 Z`;
+  const ozama=[[18.470,-69.882],[18.485,-69.880],[18.50,-69.888],[18.52,-69.895],[18.545,-69.900],[18.59,-69.905]].map(px);
+  const isabela=[[18.497,-69.990],[18.505,-69.960],[18.500,-69.930],[18.494,-69.905],[18.488,-69.885]].map(px);
+  let g=`<rect width="900" height="560" fill="var(--land)"/><path d="${sea}" fill="var(--sea)"/>`+
+    `<polyline points="${ozama.map(p=>p.join(',')).join(' ')}" fill="none" stroke="var(--river)" stroke-width="5" stroke-linecap="round"/>`+
+    `<polyline points="${isabela.map(p=>p.join(',')).join(' ')}" fill="none" stroke="var(--river)" stroke-width="4" stroke-linecap="round"/>`+
+    `<text x="610" y="540" font-size="13" fill="#7FA3C4" font-style="italic">Mar Caribe</text><text x="${ozama[3][0]+8}" y="${ozama[3][1]}" font-size="11" fill="#7FA3C4">Río Ozama</text>`;
+  const byZ={}; pts.forEach(p=>{(byZ[p.z]=byZ[p.z]||[]).push(p);});
+  if(modo==='calor'){
+    g+=`<defs><radialGradient id="hg"><stop offset="0" stop-color="#E25B1E" stop-opacity=".55"/><stop offset=".5" stop-color="#F59E0B" stop-opacity=".25"/><stop offset="1" stop-color="#F59E0B" stop-opacity="0"/></radialGradient></defs><g style="mix-blend-mode:multiply">`;
+    pts.forEach((p,i)=>{const [x,y]=px(Z[p.z]);const jx=((i*37)%23)-11,jy=((i*53)%19)-9;g+=`<circle cx="${x+jx}" cy="${y+jy}" r="${dis.length>8?26:34}" fill="url(#hg)"/>`;});
+    g+=`</g>`;
+  }
+  if(modo==='zonas'){
+    Object.entries(byZ).forEach(([z,arr])=>{const [x,y]=px(Z[z]);const a=arr.filter(p=>p.t.eq==='A').length,b=arr.length-a;const r=8+Math.sqrt(arr.length)*(dis.length>8?3.2:5.5);
+      const fa=a/arr.length; // pastel de 2 colores
+      const ang=fa*2*Math.PI, x2=x+r*Math.sin(ang), y2=y-r*Math.cos(ang), large=fa>.5?1:0;
+      g+= fa===1||fa===0?`<circle cx="${x}" cy="${y}" r="${r}" fill="${fa===1?'var(--teamA)':'var(--teamB)'}" fill-opacity=".88" stroke="#fff" stroke-width="2"/>`:
+        `<circle cx="${x}" cy="${y}" r="${r}" fill="var(--teamB)" fill-opacity=".88" stroke="#fff" stroke-width="2"/><path d="M${x},${y} L${x},${y-r} A${r},${r} 0 ${large} 1 ${x2},${y2} Z" fill="var(--teamA)" fill-opacity=".92"/>`;
+      g+=`<text x="${x}" y="${y+4}" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">${arr.length}</text>`;
+      if(selZona===z) g+=`<circle cx="${x}" cy="${y}" r="${r+5}" fill="none" stroke="var(--ink)" stroke-width="2.5"/>`;
+    });
+  }
+  if(modo==='ruta'){
+    const rutas=(tecMapa?TS:TS.slice(0,4));
+    const palette=['#0F3460','#0E7490','#B45309','#7C3AED','#15803D','#BE185D','#4A6FA5','#0369A1','#A16207','#475569'];
+    rutas.forEach((t,ri_)=>{const cs=citasDe(t,0).sort((a,b)=>a.h-b.h); if(!cs.length) return; const col=palette[t.i%palette.length];
+      const P=cs.map(c=>px(Z[c.z])); let tot=0; for(let i=1;i<cs.length;i++) tot+=km(Z[cs[i-1].z],Z[cs[i].z]);
+      g+=`<polyline points="${P.map(p=>p.join(',')).join(' ')}" fill="none" stroke="${col}" stroke-width="3" stroke-dasharray="6 5" stroke-linecap="round" opacity=".9"/>`;
+      P.forEach((p,i)=>{g+=`<circle cx="${p[0]+ri_*3}" cy="${p[1]+ri_*3}" r="11" fill="${col}" stroke="#fff" stroke-width="2"/><text x="${p[0]+ri_*3}" y="${p[1]+ri_*3+4}" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">${i+1}</text>`;});
+      g+=`<text x="${P[0][0]+14}" y="${P[0][1]-12}" font-size="12" font-weight="700" fill="${col}">${t.n} · ${Math.round(tot)} km</text>`;
+    });
+  }
+  // sector labels
+  Object.entries(Z).forEach(([z,c])=>{const [x,y]=px(c);const has=byZ[z];g+=`<circle cx="${x}" cy="${y}" r="2.5" fill="${has?'#334155':'#94A3B8'}"/><text x="${x+6}" y="${y-6}" font-size="10.5" fill="${has?'#334155':'#94A3B8'}" font-weight="${has?600:500}">${z}</text>`;});
+  document.getElementById('map').innerHTML=g;
+  document.getElementById('mapLegend').innerHTML=modo==='calor'?`<span><i style="background:radial-gradient(#E25B1E,#F59E0B00)"></i>Más citas = más intenso</span><span>${pts.length} citas en el período</span>`:
+    modo==='zonas'?`<span><i style="background:var(--teamA)"></i>Equipo A</span><span><i style="background:var(--teamB)"></i>Equipo B</span><span>Tamaño = cantidad de citas</span>`:
+    `<span>Ruta de mañana (${fmtD(FUT[0])}) en orden de hora · ${tecMapa?'':'primeros 4 técnicos del filtro; elige uno para ver solo el suyo'}</span>`;
+  // tabla de zonas
+  const rows=Object.entries(byZ).map(([z,arr])=>{const porT={};arr.forEach(p=>porT[p.t.n]=(porT[p.t.n]||0)+1);const top=Object.entries(porT).sort((a,b)=>b[1]-a[1]);const espera=WL.filter(w=>!w.done&&w.z===z).length;return {z,n:arr.length,tec:top.length,top:top[0],espera};}).sort((a,b)=>b.n-a.n);
+  const mx=rows[0]?.n||1;
+  document.getElementById('ztable').innerHTML=`<thead><tr><th>Zona</th><th class="r">Citas</th><th class="r">Técnicos</th><th>Quién más va</th><th class="r">En espera</th></tr></thead><tbody>`+
+    rows.slice(0,10).map(r=>`<tr data-z="${r.z}" class="${selZona===r.z?'sel':''}"><td><b>${r.z}</b><br><span class="mini" style="width:${Math.round(r.n/mx*90)}px"></span></td><td class="r mono">${r.n}</td><td class="r mono" style="${r.tec>=3?'color:var(--warn);font-weight:700':''}">${r.tec}</td><td>${r.top[0]} <span style="color:var(--mute)">(${r.top[1]})</span></td><td class="r mono">${r.espera||''}</td></tr>`).join('')+`</tbody>`;
+  const disp=rows.filter(r=>r.tec>=3).slice(0,2);
+  document.getElementById('znote').innerHTML=rows.length?(disp.length?`<b>Idea:</b> ${disp.map(r=>`${r.z} la visitan ${r.tec} técnicos distintos`).join(' y ')}. Asignar cada zona a un técnico principal ahorra viajes; ${disp[0].top[0]} ya es quien más va a ${disp[0].z}.`:'Cada zona la cubren 1 o 2 técnicos: buena repartición.'):'Sin citas en el período.';
+  document.querySelectorAll('#ztable tr[data-z]').forEach(tr=>tr.onclick=()=>{selZona=selZona===tr.dataset.z?null:tr.dataset.z;if(modo!=='zonas'){modo='zonas';setPressed('modo','m','zonas');}renderMapa(T.filter(inT));});
+}
+
+function setPressed(id,attr,val){document.querySelectorAll(`#${id} button`).forEach(b=>b.setAttribute('aria-pressed',b.dataset[attr]===val));}
+function toast(m){const e=document.getElementById('toast');e.textContent=m;e.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('on'),2800);}
+function book(w,t,di,H){BOOK[key(t,di)][H]={c:w.c,e:SK[w.e],z:w.z,man:false};w.done=`${t.n} · ${fmtD(FUT[di])} ${hh(H)}`;render();toast(`Ejemplo: ${w.c} quedó con ${w.done}. En la app se envía la propuesta por WhatsApp y el cliente confirma.`);}
+document.getElementById('occ').addEventListener('click',e=>{const b=e.target.closest('button.cell');if(!b)return;sel={t:+b.dataset.t,di:+b.dataset.di};render();document.getElementById('day').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'nearest'});});
+document.getElementById('day').addEventListener('click',e=>{const b=e.target.closest('[data-fill]');if(!b)return;book(WL.find(x=>x.id==b.dataset.fill),T[sel.t],sel.di,+b.dataset.h);});
+document.getElementById('wl').addEventListener('click',e=>{const b=e.target.closest('[data-wl]');if(!b)return;const w=WL.find(x=>x.id==b.dataset.wl);const [ti,di,h]=b.dataset.slot.split('-').map(Number);sel={t:ti,di};book(w,T[ti],di,h);});
+document.getElementById('team').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;team=b.dataset.t;setPressed('team','t',team);sel=null;render();});
+document.getElementById('vista').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;vista=b.dataset.v;setPressed('vista','v',vista);render();});
+document.getElementById('modo').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;modo=b.dataset.m;setPressed('modo','m',modo);renderMapa(T.filter(inT));});
+document.getElementById('rango').addEventListener('change',e=>{rango=e.target.value;renderMapa(T.filter(inT));});
+document.getElementById('tecSel').addEventListener('change',e=>{tecMapa=e.target.value;renderMapa(T.filter(inT));});
+render();
+})();
+</script>

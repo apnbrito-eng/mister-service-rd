@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Dobles de Firebase/API deliberadamente parciales; solo fixtures de pruebas. */
 import {beforeEach,expect,it,vi} from 'vitest';
 const m=vi.hoisted(()=>({data:{} as Record<string,any[]>,raw:{} as any,writes:[] as any[]}));
 vi.mock('../../src/firebase/config',()=>({db:{}}));
@@ -13,7 +14,8 @@ import {generarLiquidacion,agregarDescuentoAdHoc,removerDescuentoAdHoc} from '..
 beforeEach(()=>{m.data={};m.raw={};m.writes=[];});
 it('incluye sueldo individual del ayudante sin comisión y suma comisión del técnico',async()=>{
  m.data.personal=[{id:'ay',uid:'uid-ay',nombre:'Ayudante QA',rol:'ayudante',activo:true,sueldoBase:18000},{id:'tec',uid:'uid-tec',nombre:'Técnico QA',rol:'tecnico',activo:true,sueldoBase:16000}];
- m.data.comisiones=[{id:'c1',tecnicoId:'uid-tec',fechaCobro:{toDate:()=>new Date('2026-09-20T12:00:00-04:00')},comisionMonto:1500},{id:'c2',tecnicoId:'uid-ay',fechaCobro:{toDate:()=>new Date('2026-09-20T12:00:00-04:00')},comisionMonto:700}];
+ m.data.comisiones=[{id:'c1',ordenId:'o1',precioFinal:10000,tecnicoId:'uid-tec',fechaCobro:{toDate:()=>new Date('2026-09-20T12:00:00-04:00')},comisionMonto:1500},{id:'c2',ordenId:'o2',precioFinal:10000,tecnicoId:'uid-ay',fechaCobro:{toDate:()=>new Date('2026-09-20T12:00:00-04:00')},comisionMonto:700}];
+ m.data.ordenes_servicio=['o1','o2'].map(id=>({id,fase:'cerrado',precioFinal:10000,pagos:[{id:'p',monto:10000,verificado:true,verificadoAt:'2026-09-20T12:00:00-04:00'}]}));
  await generarLiquidacion('2026-09-Q2',{id:'admin',nombre:'QA'} as any);
  expect(m.writes[0].empleados.find((e:any)=>e.personalId==='ay')).toMatchObject({sueldoBase:9000,totalComisiones:0,totalDevengado:9000});
  expect(m.writes[0].empleados.find((e:any)=>e.personalId==='tec')).toMatchObject({sueldoBase:8000,totalComisiones:1500,totalDevengado:9500});
@@ -37,4 +39,17 @@ it('anulada sin fecha no bloquea ni suma a nómina', async () => {
  m.data.comisiones = [{ id: 'anulada', comisionMonto: 1500, estaAnulada: true }];
  await generarLiquidacion('2026-09-Q2', { id: 'admin', nombre: 'QA' } as any);
  expect(m.writes[0].totalNomina).toBe(0);
+});
+
+it('preparación febrero 26 paga 28 y reserva comisiones posteriores para la siguiente nómina', async () => {
+ m.data.personal=[{id:'tec',uid:'uid-tec',nombre:'Técnico QA',rol:'tecnico',activo:true,sueldoBase:16000}];
+ m.data.comisiones=['2026-02-26T22:00:00-04:00','2026-02-27T10:00:00-04:00'].map((fecha,i)=>({id:`c${i}`,ordenId:`o${i}`,precioFinal:10000,tecnicoId:'uid-tec',fechaCobro:{toDate:()=>new Date(fecha)},comisionMonto:1500}));
+ m.data.ordenes_servicio=m.data.comisiones.map((c:any)=>({id:c.ordenId,fase:'cerrado',precioFinal:10000,pagos:[{id:'p',monto:10000,verificado:true,verificadoAt:c.fechaCobro.toDate().toISOString()}]}));
+ await generarLiquidacion('2026-02-Q2',{id:'admin',nombre:'QA'} as any,{corteComisiones:new Date('2026-02-26T23:59:00-04:00'),fechaPagoProgramada:'2026-02-28'});
+ expect(m.writes[0].fechaPagoProgramada).toBe('2026-02-28');
+ expect(m.writes[0].corteComisiones).toBe('2026-02-27T03:59:00.000Z');
+ expect(m.writes[0].empleados[0]).toMatchObject({sueldoBase:8000,totalComisiones:1500,comisionesIds:['c0']});
+ m.data.comisiones=m.data.comisiones.filter((c:any)=>c.id==='c1');m.writes=[];
+ await generarLiquidacion('2026-03-Q1',{id:'admin',nombre:'QA'} as any);
+ expect(m.writes[0].empleados[0]).toMatchObject({totalComisiones:1500,comisionesIds:['c1']});
 });

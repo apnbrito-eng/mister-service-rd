@@ -12,6 +12,23 @@ vi.mock('firebase/firestore', async original => ({ ...await original<typeof impo
  m.cola=run.then(()=>undefined,()=>undefined); return run;
  },
 }));
+vi.mock('../../api/_lib/accesoEquipo.js', () => {
+ class ErrorAcceso extends Error { constructor(public status: number, message: string) { super(message); } }
+ const ref = (path: string) => ({ path, id: path.split('/').pop()! });
+ const db = { doc: ref, collection: (path: string) => ({ doc: () => ref(`${path}/audit-${Object.keys(m.docs).length}`) }), runTransaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+  const writes: [string, Record<string, unknown>][]=[];
+  const result=await fn({get:async (r:{path:string;id:string})=>({ref:r,id:r.id,exists:r.path==='usuarios/qa-uid'||!!m.docs[r.path],data:()=>r.path==='usuarios/qa-uid'?{rol:'administrador',nombre:'QA'}:m.docs[r.path]}),update:(r:{path:string},d:Record<string,unknown>)=>writes.push([r.path,d]),create:(r:{path:string},d:Record<string,unknown>)=>writes.push([r.path,d])});
+  if(m.fallo)throw new Error('fallo simulado');
+  writes.forEach(([r,d])=>{m.docs[r]={...m.docs[r],...d};});return result;
+ }};
+ return { ErrorAcceso, accesoEquipo:async()=>({db,uid:'qa-uid'}) };
+});
+vi.mock('../../src/services/equipoApi',()=>({equipoApi:async(_url:string,body:object)=>{
+ const {default:handler}=await import('../../api/ordenes/efectivo');let status=200;let result:Record<string,unknown>={};
+ const response={setHeader(){},status(s:number){status=s;return response;},json(r:Record<string,unknown>){result=r;return response;}};
+ await handler({method:'POST',body} as import('@vercel/node').VercelRequest,response as unknown as import('@vercel/node').VercelResponse);
+ if(status>=400)throw new Error(String(result.error));return result;
+}}));
 import { proyectarCobrosCaja } from '../../src/utils/movimientosCobros';
 import { cerrarDiaAtomico, entregarEfectivoOrdenes } from '../../src/services/cierreDia.service';
 beforeEach(()=>{ m.docs={};m.fallo=false;m.cola=Promise.resolve(); });

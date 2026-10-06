@@ -1,8 +1,7 @@
+import { equipoApi } from './equipoApi';
 import { collection, doc, getDocs, query, runTransaction, Timestamp, where } from 'firebase/firestore';
 import { auth, db } from '../firebase/config';
-import { proyectarCobrosCaja, type MovimientoCobro } from '../utils/movimientosCobros';
-import { puede } from '../utils/permisos';
-import type { Usuario } from '../types';
+import { type MovimientoCobro } from '../utils/movimientosCobros';
 import { fechaFinanciera } from '../utils/fechaFinanciera';
 
 export interface ActorEntrega { uid: string; nombre: string }
@@ -23,31 +22,7 @@ export function resumirTransferencias(movimientos: MovimientoCobro[]) {
 /** Un fallo aborta todas las entregas; nunca comunicar éxito parcial. */
 export async function entregarEfectivoOrdenes(movimientos: MovimientoCobro[], actor: ActorEntrega) {
   if (!actor.uid?.trim() || auth.currentUser?.uid !== actor.uid) throw new Error('Inicia sesión nuevamente para registrar la entrega');
-  const ids = [...new Set(movimientos.map(m => m.ordenId))];
-  if (!ids.length || ids.length > 400) throw new Error('Selecciona entre 1 y 400 órdenes');
-  await runTransaction(db, async tx => {
-    const perfil = await tx.get(doc(db, 'usuarios', actor.uid));
-    if (!perfil.exists() || !puede({ ...perfil.data(), id: actor.uid } as Usuario, 'cierreDiaEjecutar')) throw new Error('No tienes permiso para registrar entregas de efectivo');
-    const refs = ids.map(id => doc(db, 'ordenes_servicio', id));
-    const snaps = await Promise.all(refs.map(ref => tx.get(ref)));
-    const ahora = Timestamp.now();
-    const payloads = snaps.map(snap => {
-      if (!snap.exists() || snap.data().eliminada === true) throw new Error('Una orden ya no está disponible; actualiza y vuelve a revisar');
-      const raw = snap.data();
-      const entregas = (raw.efectivoEntregas || {}) as Record<string, unknown>;
-      if (raw.efectivoEntregado === true && !Object.keys(entregas).length) throw new Error('Entrega histórica sin detalle de pagos: requiere conciliación');
-      const actuales = proyectarCobrosCaja([{ id: snap.id, datos: raw }]).movimientos;
-      const nuevos = { ...entregas };
-      movimientos.filter(m => m.ordenId === snap.id).forEach(m => {
-        const actual = actuales.find(p => p.pagoId === m.pagoId);
-        if (!actual || actual.monto !== m.monto || actual.fecha.getTime() !== m.fecha.getTime() || !actual.confirmado || actual.metodo !== 'efectivo') throw new Error('El pago cambió; actualiza y revisa antes de entregar');
-        if (nuevos[m.pagoId] && (nuevos[m.pagoId] as { monto?: number }).monto !== m.monto) throw new Error('El importe entregado difiere del pago; requiere conciliación');
-        if (!nuevos[m.pagoId]) nuevos[m.pagoId] = { monto: m.monto, entregadoEn: ahora, entregadoPor: actor.uid, entregadoPorNombre: actor.nombre };
-      });
-      return { efectivoEntregas: nuevos, updatedAt: ahora };
-    });
-    refs.forEach((ref, i) => tx.update(ref, payloads[i]));
-  });
+  await equipoApi('/api/ordenes/efectivo', { accion: 'entregar_lote', movimientos: movimientos.map(m => ({ ordenId: m.ordenId, pagoId: m.pagoId, monto: m.monto })) });
 }
 
 /** ID por día: dos cierres concurrentes convergen sin sobrescribir el primero. */

@@ -1,12 +1,17 @@
+import { tokensRediseno } from './src/styles/tailwind.tokens.js';
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  safelist: ['text-h1', 'text-h2', 'text-body', 'text-caption', 'text-micro'],
   theme: {
     extend: {
+      boxShadow: tokensRediseno.boxShadow,
       colors: {
+        ...tokensRediseno.colors,
         primary: {
           DEFAULT: '#0f3460',
           medium: '#1a5fa8',

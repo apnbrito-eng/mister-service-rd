@@ -2,7 +2,7 @@ import { useMovimientoReducido } from '../hooks/useMovimientoReducido';
 import AvisosMoviles from '../mobile/AvisosMoviles';
 import { desactivarNotificacionesMoviles } from '../mobile/notificaciones';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronDown, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, LogOut, Search } from 'lucide-react';
 import { obtenerAreas, type SidebarItem } from '../navigation/areas';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/config';
@@ -51,6 +51,7 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
   const navId = useId();
   const claveExpansion = `ms:sidebar:expansion:v1:${currentUser?.uid ?? 'sin-sesion'}`;
   const [expansion, setExpansion] = useState<Record<string, boolean>>({});
+  const [busqueda, setBusqueda] = useState('');
   const perfilActual = useRef(userProfile);
   perfilActual.current = userProfile;
   useEffect(() => {
@@ -236,8 +237,8 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
     `flex items-center gap-3 px-4 py-2.5 mx-2 rounded-lg min-h-11 text-sm relative group ${
       isActive
-        ? 'bg-white/90 text-blue-700 shadow-sm font-semibold'
-        : 'text-slate-600 hover:bg-white/70 hover:text-slate-950'
+        ? 'bg-ms-accion-50 text-ms-accion font-semibold'
+        : 'text-ms-texto-2 hover:bg-ms-pista hover:text-ms-texto'
     }`;
 
   // Render de un item (usado tanto colapsado como expandido dentro de secciones)
@@ -288,13 +289,13 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
         transition={obtenerTransicionMovimiento(reducido)} style={{ transition: 'none' }}
         onClick={onToggle}
         aria-label={collapsed ? 'Expandir menú' : 'Cerrar o reducir menú'}
-        className="absolute right-2 top-2 z-10 bg-brand-600 text-white rounded-full w-11 h-11 flex items-center justify-center shadow-lg hover:bg-brand-500"
+        className="absolute right-2 top-2 z-10 bg-ms-accion text-white rounded-full w-11 h-11 flex items-center justify-center"
       >
         {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
       </motion.button>
 
       {/* Logo */}
-      <div className={`p-4 pt-16 border-b border-white/70 ${collapsed ? 'flex justify-center' : ''}`}>
+      <div className={`p-4 pt-16 border-b border-ms-borde ${collapsed ? 'flex justify-center' : ''}`}>
         {collapsed ? (
           <Logo size="sm" compact />
         ) : (
@@ -304,20 +305,21 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
 
       {/* User info */}
       {!collapsed && userProfile && (
-        <div className="px-4 py-3 border-b border-white/10">
+        <div className="px-4 py-3 border-b border-ms-borde">
           <div className="text-slate-900 font-semibold text-sm truncate">{userProfile.nombre}</div>
           <div className="text-slate-600 text-xs capitalize">{userProfile.rol}</div>
         </div>
       )}
 
+      {!collapsed && <label className="flex items-center gap-2 mx-4 my-3 px-3 border border-ms-control rounded-lg bg-white text-ms-texto-2"><Search size={18} aria-hidden="true"/><input aria-label="Buscar módulo" value={busqueda} onChange={e=>setBusqueda(e.target.value)} placeholder="Buscar módulo" className="w-full min-w-0 py-2 border-0 bg-transparent text-body"/></label>}
       {/* Nav items */}
       <nav className="flex-1 overflow-y-auto py-2">
         {estructura.map(node => {
-          if (node.kind === 'item') return node.item.show ? renderItem(node.item) : null;
-          const items = node.section.items.filter(item => item.show);
+          if (node.kind === 'item') return node.item.show && node.item.label.toLocaleLowerCase('es').includes(busqueda.toLocaleLowerCase('es')) ? renderItem(node.item) : null;
+          const items = node.section.items.filter(item => item.show && `${node.section.label} ${item.label}`.toLocaleLowerCase('es').includes(busqueda.toLocaleLowerCase('es')));
           if (!items.length) return null;
           // Todos los destinos visibles inicialmente; cambiar de ruta abre su sección.
-          const abierta = expansion[node.section.id] !== false;
+          const abierta = !!busqueda || expansion[node.section.id] !== false;
           const badge = items.reduce((sum, item) => sum + (item.badge ?? 0), 0);
           if (collapsed) return <div key={node.section.id}>{items.map(item => renderItem(item))}</div>;
           const panelId = `${navId}-${node.section.id}`;

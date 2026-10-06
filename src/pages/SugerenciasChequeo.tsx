@@ -1,3 +1,4 @@
+import { esAdminOCoord } from '../utils/permisos';
 import { ordenVigenteParaChequeo, soloChequeoDisponible } from '../utils/soloChequeoDisponible';
 import { fechaCalendarioRD } from '../utils/fechaMantenimiento';
 import { useNavigate } from 'react-router-dom';
@@ -107,6 +108,7 @@ export default function SugerenciasChequeo() {
       toast.error('No se identificó al usuario');
       return;
     }
+    if (!esAdminOCoord(userProfile)) { toast.error('Solo coordinación puede aprobar el importe.'); return; }
     setTrabajando(item.sugerencia.id);
     try {
       await resolverSugerenciaSoloChequeoConNotif(

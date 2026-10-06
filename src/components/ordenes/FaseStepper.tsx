@@ -130,7 +130,7 @@ export default function FaseStepper({
         const ordenAct = { ...orden, fase: 'cerrado' as FaseOrden };
         const res = await registrarComisionPorOrden(ordenAct, userProfile);
         if (res.creada) {
-          toast.success(`Comisión registrada: RD$ ${(res.comisionMonto || 0).toLocaleString('es-DO')}`);
+          toast.success(`Comisión ${res.retenida ? 'retenida hasta pago completo confirmado' : 'registrada'}: RD$ ${(res.comisionMonto || 0).toLocaleString('es-DO')}`);
         } else if (res.razon === 'error interno') {
           // SPRINT-FIX-COMISIONES-SILENCIOSAS (2026-09-09): el helper captura
           // sus errores internamente y no lanza — el catch de abajo era código

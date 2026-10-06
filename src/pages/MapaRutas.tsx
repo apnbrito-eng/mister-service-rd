@@ -1,3 +1,5 @@
+import { previewReasignacion, confirmarReasignacion } from '../services/reasignacion.service';
+import { cargarGoogleMaps } from '../utils/cargarGoogleMaps';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { collection, onSnapshot, getDocs, doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -353,7 +355,7 @@ export default function MapaRutas() {
         o.fase !== 'cancelado' &&
         o.fase !== 'cerrado'
       )
-      .map(o => o.fechaCita ? format(o.fechaCita, 'HH:00') : '');
+      .map(o => o.fechaCita ? format(o.fechaCita, 'HH:mm') : '');
   }, [editingOrden, editForm.tecnicoId, editForm.tecnicoNombre, editForm.fechaCita, ordenes]);
 
   const abrirEditarDesdePin = (ordenId: string) => {
@@ -379,7 +381,7 @@ export default function MapaRutas() {
       tecnicoNombre: o.tecnicoNombre || '',
       duracionMin: o.duracionMin || 60,
       fechaCita: o.fechaCita ? format(o.fechaCita, 'yyyy-MM-dd') : '',
-      horaInicio: o.fechaCita ? format(o.fechaCita, 'HH:00') : '',
+      horaInicio: o.fechaCita ? format(o.fechaCita, 'HH:mm') : '',
       notas: o.notas || '',
     });
     setEditFotoFile(null);
@@ -425,24 +427,9 @@ export default function MapaRutas() {
       });
     };
 
-    if (window.google?.maps?.places) {
-      initAC();
-      return;
-    }
-    if (!document.getElementById('google-places-script')) {
-      const script = document.createElement('script');
-      script.id = 'google-places-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}&libraries=places&language=es`;
-      script.async = true;
-      script.defer = true;
-      script.onload = initAC;
-      document.head.appendChild(script);
-    } else {
-      const interval = setInterval(() => {
-        if (window.google?.maps?.places) { clearInterval(interval); initAC(); }
-      }, 100);
-      return () => clearInterval(interval);
-    }
+    let cancelado = false;
+    void cargarGoogleMaps().then(ok => { if (ok && !cancelado) initAC(); });
+    return () => { cancelado = true; };
   }, [editingOrden]);
 
   const handleEditDireccionChange = (texto: string) => {
@@ -499,8 +486,25 @@ export default function MapaRutas() {
     );
   };
 
+  const ultimoPuntero = useRef<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!draggingOrdenId) return;
+    const mover = (event: MouseEvent | TouchEvent) => {
+      const punto = 'touches' in event ? event.touches[0] ?? event.changedTouches[0] : event;
+      if (punto) ultimoPuntero.current = { x: punto.clientX, y: punto.clientY };
+    };
+    document.addEventListener('mousemove', mover, true);
+    document.addEventListener('touchmove', mover, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('mousemove', mover, true);
+      document.removeEventListener('touchmove', mover, true);
+      document.body.classList.remove('cursor-grabbing');
+    };
+  }, [draggingOrdenId]);
+
   const handlePinDragStart = (ordenId: string) => {
     if (!puedeReasignar) return;
+    ultimoPuntero.current = null;
     setDraggingOrdenId(ordenId);
     document.body.classList.add('cursor-grabbing');
   };
@@ -518,8 +522,9 @@ export default function MapaRutas() {
     }
 
     let tecnicoIdDestino: string | null = null;
-    if (originalEvent) {
-      const el = document.elementFromPoint(originalEvent.clientX, originalEvent.clientY);
+    const puntero = originalEvent ? { x: originalEvent.clientX, y: originalEvent.clientY } : ultimoPuntero.current;
+    if (puntero) {
+      const el = document.elementFromPoint(puntero.x, puntero.y);
       const tecnicoCard = el?.closest<HTMLElement>('[data-tecnico-id]');
       tecnicoIdDestino = tecnicoCard?.getAttribute('data-tecnico-id') || null;
     }
@@ -540,8 +545,9 @@ export default function MapaRutas() {
       !o.eliminada &&
       o.tecnicoId === tecnicoId &&
       o.fechaCita &&
-      o.fechaCita.getTime() === orden.fechaCita!.getTime() &&
-      !['cerrado', 'cancelado'].includes(o.fase)
+      o.fechaCita.getTime() < orden.fechaCita!.getTime() + (orden.duracionMin || 60) * 60000 &&
+      orden.fechaCita!.getTime() < o.fechaCita.getTime() + (o.duracionMin || 60) * 60000 &&
+      !o.enStandby && !['cerrado', 'cancelado', 'trabajo_realizado'].includes(o.fase)
     ) || null;
   };
 
@@ -557,39 +563,24 @@ export default function MapaRutas() {
     }
     setSavingReasignar(true);
     try {
-      const usuario = userProfile?.nombre || 'Sistema';
-      const ahora = Timestamp.now();
-      const registro = crearRegistroAuditoria(
-        usuario, 'editar',
-        motivoReasignar.trim()
-          ? `Reasignación desde mapa — ${motivoReasignar.trim()}`
-          : 'Reasignación desde mapa',
-        'tecnico',
-        orden.tecnicoNombre || '',
-        destino.nombre,
-      );
-      const payload: Record<string, unknown> = {
-        // SPRINT-132 + P-006: persistir auth.uid (no doc id de personal/) para que las rules
-        // técnico-gateadas (tecnicoId == request.auth.uid) acepten writes del nuevo dueño.
-        tecnicoId: destino.uid || destino.id,
-        tecnicoNombre: destino.nombre,
-        auditoria: arrayUnion(registro),
-        updatedAt: ahora,
-      };
-      if (destino.operariaId) {
-        payload.operariaId = destino.operariaId;
-        payload.operariaNombre = destino.operariaNombre || null;
-      } else {
-        payload.operariaId = null;
-        payload.operariaNombre = null;
+      const preview = await previewReasignacion({
+        ordenId: orden.id,
+        esperado: { tecnicoId: orden.tecnicoId || null, fase: orden.fase,
+          fechaCitaMs: orden.fechaCita?.getTime() ?? null },
+        destinoUid: destino.uid || destino.id,
+        origen: 'mapa', motivo: motivoReasignar.trim(),
+      });
+      if (preview.conflictos.length) throw new Error('El técnico tiene otra cita en ese horario. Revisa la agenda antes de moverla.');
+      if (preview.requiereMotivoCambioGrupo && !motivoReasignar.trim()) {
+        throw new Error('Indica el motivo para cambiar la orden de equipo.');
       }
-      await updateDoc(doc(db, 'ordenes_servicio', orden.id), payload);
+      await confirmarReasignacion(preview.previewId, { motivo: motivoReasignar.trim() });
       toast.success(`Orden reasignada a ${destino.nombre}`);
       setConfirmacionReasignar(null);
       setMotivoReasignar('');
     } catch (err) {
       console.error(err);
-      toast.error('Error al reasignar la orden');
+      toast.error(err instanceof Error ? err.message : 'No se pudo reasignar la orden');
     } finally {
       setSavingReasignar(false);
     }
@@ -870,7 +861,7 @@ export default function MapaRutas() {
                         <div className="text-sm">
                           <p className="font-semibold">{u.tecnicoNombre || 'Técnico'}</p>
                           <p>{Math.round(u.velocidad)} km/h · {u.enMovimiento ? 'En movimiento' : 'Detenido'}</p>
-                          <p className="text-xs text-gray-500">{formatDistanceToNow(u.timestamp, { locale: es, addSuffix: true })}</p>
+                          <p className="text-xs text-gray-500">{Number.isFinite(u.timestamp.getTime()) && u.timestamp.getTime() <= Date.now() ? formatDistanceToNow(u.timestamp, { locale: es, addSuffix: true }) : 'fecha de señal no válida'}</p>
                         </div>
                       </Popup>
                     </Marker>
@@ -885,12 +876,12 @@ export default function MapaRutas() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Satellite size={16} className="text-primary-medium" />
-                <span className="text-sm font-semibold">Técnicos activos ({ubicacionesLive.length})</span>
+                <span className="text-sm font-semibold">Ubicaciones recibidas ({ubicacionesLive.length})</span>
               </div>
               <div className="space-y-2">
                 {ubicacionesLive.map(u => {
                   const minutosSinSeñal = Math.floor((Date.now() - u.timestamp.getTime()) / 60000);
-                  const sinSeñal = minutosSinSeñal > 5;
+                  const sinSeñal = !Number.isFinite(minutosSinSeñal) || minutosSinSeñal < 0 || minutosSinSeñal > 5;
                   const ordenEnCurso = ordenes.find(o => o.tecnicoId === u.tecnicoId && o.estado === 'activo');
                   return (
                     <div key={u.vehiculoId} className={`rounded-lg p-3 border ${sinSeñal ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200'}`}>
@@ -904,7 +895,7 @@ export default function MapaRutas() {
                           <p className="text-xs text-gray-500">
                             {sinSeñal ? (
                               <span className="flex items-center gap-1 text-yellow-700">
-                                <WifiOff size={10} /> Sin señal ({minutosSinSeñal} min)
+                                <WifiOff size={10} /> Sin señal válida{Number.isFinite(minutosSinSeñal) && minutosSinSeñal >= 0 ? ` (${minutosSinSeñal} min)` : ''}
                               </span>
                             ) : u.enMovimiento ? (
                               <span className="text-green-600 inline-flex items-center gap-1"><Navigation size={10} /> En movimiento · {Math.round(u.velocidad)} km/h</span>
@@ -917,7 +908,7 @@ export default function MapaRutas() {
                       {ordenEnCurso && (
                         <p className="text-[10px] text-gray-500 mt-1">Orden: {ordenEnCurso.numero} · {ordenEnCurso.clienteNombre}</p>
                       )}
-                      <p className="text-[10px] text-gray-400 mt-0.5">Actualizado {formatDistanceToNow(u.timestamp, { locale: es, addSuffix: true })}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5">Actualizado {Number.isFinite(u.timestamp.getTime()) && u.timestamp.getTime() <= Date.now() ? formatDistanceToNow(u.timestamp, { locale: es, addSuffix: true }) : 'fecha de señal no válida'}</p>
                     </div>
                   );
                 })}
@@ -1006,6 +997,29 @@ export default function MapaRutas() {
                         >
                           <Edit2 size={11} /> Editar orden
                         </button>
+                      )}
+                      {puedeReasignar && (
+                        <label className="mt-2 block text-xs font-medium text-gray-700">
+                          Pasar a otro técnico
+                          <select
+                            aria-label={`Reasignar a ${m.clienteNombre}`}
+                            defaultValue=""
+                            className="mt-1 min-h-[44px] w-full rounded-lg border border-gray-300 bg-white px-2 text-sm"
+                            onChange={event => {
+                              const tecnicoDestinoId = event.target.value;
+                              event.target.value = '';
+                              const orden = ordenes.find(o => o.id === m.id);
+                              if (!orden || !tecnicoDestinoId) return;
+                              setMotivoReasignar('');
+                              setConfirmacionReasignar({ orden, tecnicoDestinoId });
+                            }}
+                          >
+                            <option value="">Seleccionar técnico</option>
+                            {personal.filter(p => p.rol === 'tecnico' && p.activo !== false && (p.uid || p.id) !== m.tecnicoId).map(p => (
+                              <option key={p.id} value={p.uid || p.id}>{p.nombre}</option>
+                            ))}
+                          </select>
+                        </label>
                       )}
                       {(() => {
                         const ordenCompleta = ordenes.find(o => o.id === m.id);
@@ -1240,16 +1254,17 @@ export default function MapaRutas() {
                     <p className="font-semibold">Conflicto de horario</p>
                     <p className="text-xs mt-0.5">
                       {destino?.nombre} ya tiene {conflicto.numero} ({conflicto.clienteNombre})
-                      {conflicto.fechaCita ? ` el ${formatFecha(conflicto.fechaCita)}` : ''}. ¿Continuar igual?
+                      {conflicto.fechaCita ? ` el ${formatFecha(conflicto.fechaCita)}` : ''}. Elige otro técnico u horario.
                     </p>
                   </div>
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Motivo del cambio (opcional)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Motivo del cambio (obligatorio entre equipos)</label>
                 <textarea
                   rows={2}
+                  maxLength={300}
                   value={motivoReasignar}
                   onChange={e => setMotivoReasignar(e.target.value)}
                   placeholder="Ej: balanceo de carga, zona del nuevo técnico, etc."
@@ -1269,7 +1284,7 @@ export default function MapaRutas() {
                 <button
                   type="button"
                   onClick={handleConfirmarReasignar}
-                  disabled={savingReasignar}
+                  disabled={savingReasignar || !!conflicto}
                   className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60"
                 >
                   {savingReasignar ? 'Guardando...' : 'Confirmar reasignación'}

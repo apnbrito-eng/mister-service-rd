@@ -239,6 +239,7 @@ service cloud.firestore {
     // Si el campo no existe (orden vieja o recién creada), evalúa false.
     function ordenAprobada() {
       return resource.data.get('estadoAprobacion', '') == 'aprobado' &&
+        (resource.data.get('soloChequeo', false) == true || resource.data.get('presupuestoEstado', '') == '' || resource.data.get('presupuestoEstado', '') == 'aceptado') &&
         (resource.data.get('propuestaCrmRevision', null) == null || resource.data.get('propuestaCrmRevision', null) == resource.data.get('propuestaCrmAprobada', null));
     }
 
@@ -271,11 +272,27 @@ service cloud.firestore {
       allow write: if esStaffOficina();
     }
 
-    // Ubicaciones GPS de vehículos — read público para tracking del
-    // cliente (/tracking/:token usa esto vía proxy serverless o directo).
+    // GPS privado. El portal público no consume esta colección; conserva su proxy.
+    function usuarioMapaActivo() {
+      return userExists() && userData().get('activo', true) != false
+        && userData().get('eliminado', false) != true;
+    }
+    function gpsPropio(d) {
+      return esTecnico() && d.get('tecnicoId', '') is string && (
+        d.tecnicoId == request.auth.uid || (
+          exists(/databases/$(database)/documents/personal/$(d.tecnicoId)) &&
+          get(/databases/$(database)/documents/personal/$(d.tecnicoId)).data.get('uid', '') == request.auth.uid
+        )
+      );
+    }
     match /ubicaciones_vehiculos/{docId} {
-      allow read: if true;
-      allow write: if esStaff();
+      allow read: if usuarioMapaActivo() && (esStaffOficina() || gpsPropio(resource.data));
+      allow create: if usuarioMapaActivo() && (esStaffOficina() || gpsPropio(request.resource.data));
+      allow update: if usuarioMapaActivo() && (esStaffOficina() || (
+        gpsPropio(resource.data) && gpsPropio(request.resource.data)
+        && request.resource.data.tecnicoId == resource.data.tecnicoId
+      ));
+      allow delete: if usuarioMapaActivo() && esAdminOCoord();
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -348,6 +365,30 @@ service cloud.firestore {
     // Órdenes de servicio — el corazón del sistema.
     // Read: staff + público condicional (tracking GPS activo).
     // Write: staff oficina + técnico/ayudante para sus órdenes.
+    function presupuestoOrdenValido() {
+      let antes = resource.data.get('presupuestoEstado', '');
+      let despues = request.resource.data.get('presupuestoEstado', '');
+      let cambios = request.resource.data.diff(resource.data).affectedKeys();
+      let campos = ['presupuestoEstado','presupuestoMontoPropuesto','presupuestoCambioMotivo','presupuestoAceptadoPor','presupuestoAceptadoEn','precioAprobado','precioFinal','estadoAprobacion','aprobadoPor','fechaAprobacion'];
+      let oficinaAsignada = esAdminOCoord() || ((esOperaria() || esSecretaria()) && (resource.data.get('operariaId','') == request.auth.uid || resource.data.get('responsableId','') == request.auth.uid));
+      return (antes == '' && despues == '') || !cambios.hasAny(campos) ||
+        (esAdminOCoord() && request.resource.data.get('soloChequeo',false) == true && request.resource.data.get('chequeoConfirmacionEstado','') == 'pendiente' && request.resource.data.get('precioFinal',0) == request.resource.data.get('precioChequeo',-1)) ||
+        (esAdminOCoord() && request.resource.data.get('precioFinal',0) > 0 && request.resource.data.get('precioFinal',0) == request.resource.data.get('precioAprobado',-1) && despues == 'pendiente_cliente' && request.resource.data.get('estadoAprobacion','') == 'pendiente') ||
+        (oficinaAsignada && antes == 'pendiente_cliente' && despues == 'aceptado' && request.resource.data.get('estadoAprobacion','') == 'aprobado' && request.resource.data.get('presupuestoAceptadoPor','') == request.auth.uid && request.resource.data.get('precioFinal',0) == resource.data.get('precioFinal',0) && request.resource.data.get('precioAprobado',0) == resource.data.get('precioAprobado',0) && !cambios.hasAny(['aprobadoPor','fechaAprobacion','presupuestoMontoPropuesto','presupuestoCambioMotivo'])) ||
+        (oficinaAsignada && antes == 'pendiente_cliente' && despues == 'cambio_solicitado' && request.resource.data.get('estadoAprobacion','') == 'pendiente' && request.resource.data.get('presupuestoMontoPropuesto',0) > 0 && !cambios.hasAny(['precioFinal','precioAprobado','aprobadoPor','fechaAprobacion','presupuestoAceptadoPor','presupuestoAceptadoEn']));
+    }
+
+    function tecnicoAsignadoActividad(docId) {
+      let tecnico = get(/databases/$(database)/documents/ordenes_servicio/$(docId)).data.get('tecnicoId','');
+      return tecnico == request.auth.uid || (tecnico != '' && exists(/databases/$(database)/documents/personal/$(tecnico)) && get(/databases/$(database)/documents/personal/$(tecnico)).data.get('uid','') == request.auth.uid);
+    }
+    function confirmacionChequeoValida() {
+      let cambios = request.resource.data.diff(resource.data).affectedKeys();
+      let asignada = resource.data.get('operariaId','') == request.auth.uid || resource.data.get('responsableId','') == request.auth.uid;
+      return !cambios.hasAny(['chequeoConfirmacionEstado','chequeoConfirmadoPor','chequeoConfirmadoEn']) || esAdminOCoord() ||
+        ((esOperaria() || esSecretaria()) && asignada && resource.data.get('soloChequeo',false) == true && resource.data.get('chequeoConfirmacionEstado','') == 'pendiente' && request.resource.data.get('chequeoConfirmacionEstado','') == 'confirmado' && request.resource.data.get('chequeoConfirmadoPor','') == request.auth.uid && !cambios.hasAny(['precioChequeo','precioFinal','soloChequeo']));
+    }
+
     match /ordenes_servicio/{docId} {
       // SPRINT-FIX-RULES-ORDENES-PUBLICAS (2026-09-09) — auditoría hallazgo #2.
       //
@@ -379,9 +420,18 @@ service cloud.firestore {
       // produccion — hay que migrarla al endpoint serverless
       // `api/portal-cliente/[token].ts`, que devuelve campos filtrados y es
       // el camino correcto (sprint aparte).
+      match /interno/{detalleId} {
+        allow read: if esStaffOficina();
+        // Costos y fotos se validan por pieza en el endpoint autenticado.
+        allow write: if false;
+      }
+      match /actividad/{eventoId} {
+        allow read: if esStaffOficina() || (esTecnico() && tecnicoAsignadoActividad(docId));
+        allow write: if false;
+      }
       allow read: if esStaff();
 
-      allow create: if esStaffOficina();
+      allow create: if esStaffOficina() && !request.resource.data.keys().hasAny(['efectivoAceptaciones','efectivoEntregas','flujoEfectivo','salidaTecnico','visitaCancelada']) && request.resource.data.get('presupuestoEstado','') == '';
 
       // Update: oficina total; técnico/ayudante solo si es la orden
       // que tienen asignada.
@@ -409,7 +459,7 @@ service cloud.firestore {
       //     oficina: ahora requiere flujo sugerencia → aprobación.
       // La oficina (esStaffOficina) corto-circuita TODA la rama y no
       // tiene ninguna de estas restricciones.
-      allow update: if (resource.data.get('crmGestion', false) != true || request.resource.data.get('facturada', false) != true || resource.data.get('facturada', false) == true || revisionCrmVigente(docId, resource.data)) && (resource.data.get('crmGestion', false) != true || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagos', 'montoPagado', 'montoReportado', 'crmGestion'])) &&
+      allow update: if !request.resource.data.diff(resource.data).affectedKeys().hasAny(['efectivoAceptaciones','efectivoEntregas','flujoEfectivo','salidaTecnico','visitaCancelada']) && (!(resource.data.get('flujoEfectivo','') == 'confirmacion_tecnico' || resource.data.get('efectivoAceptaciones',{}).size() > 0 || resource.data.get('efectivoEntregas',{}).size() > 0) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagos'])) && presupuestoOrdenValido() && confirmacionChequeoValida() && (resource.data.get('crmGestion', false) != true || request.resource.data.get('facturada', false) != true || resource.data.get('facturada', false) == true || revisionCrmVigente(docId, resource.data)) && (resource.data.get('crmGestion', false) != true || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagos', 'montoPagado', 'montoReportado', 'crmGestion'])) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['propuestaCrmRevision', 'propuestaCrmAprobada']) &&
         (resource.data.get('propuestaCrmRevision', null) == null || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['estadoAprobacion', 'precioAprobado', 'precioFinal', 'aprobadoPor', 'fechaAprobacion'])) && (esStaffOficina() ||
         (
@@ -417,6 +467,8 @@ service cloud.firestore {
             (esTecnico() && resource.data.tecnicoId == request.auth.uid) ||
             (esAyudante() && resource.data.ayudanteId == request.auth.uid)
           ) &&
+          (resource.data.get('visitaCancelada',null) == null || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['fase','inicioChequeo','finChequeo','enStandby'])) &&
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagos','montoPagado','montoReportado']) &&
           noTocaCamposAprobacion() &&
           noTocaAsignacion() &&
           noTocaSoloChequeo() &&

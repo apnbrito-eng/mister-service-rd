@@ -1,3 +1,5 @@
+import { leerComisionRetenida, liberarComisionPorCobro } from '../_lib/comisionCobro.js';
+import { POLITICA_COBRO_COMISION } from '../../src/utils/comisionCobro.js';
 import { operariaDeTecnico } from '../_lib/equipoResponsable.js';
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
@@ -148,6 +150,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         tx.get(crm),
         tx.get(eventoRef),
       ]);
+      const comisionRetenida = ['pago', 'confirmar_pago', 'entrega_efectivo'].includes(action) ? await leerComisionRetenida(tx, db, ordenId) : null;
+
       exigir(
         snap.exists && !snap.data()?.eliminada,
         "Orden no disponible.",
@@ -600,6 +604,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           registradoPorNombre: nombre,
           verificado: false,
           crm: true,
+          ...(body.metodo === "efectivo" ? { requiereAceptacionEfectivo: true } : {}),
           fuente: source,
         };
         const nuevos = [...pagos, pago];
@@ -607,6 +612,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           pagos: nuevos,
           montoPagado: balanceCrm(nuevos, totalAcordado(o)).confirmados,
           montoReportado: nuevos.reduce((s, p) => s + Number(p.monto), 0),
+          ...(body.metodo === "efectivo" ? { flujoEfectivo: "confirmacion_tecnico" } : {}),
           crmGestion: true,
         };
         detalle = {
@@ -662,6 +668,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           tx.create(crm.collection("recibos").doc(p.id), recibo);
           detalle = { pagoId: p.id, referencia, monto: p.monto };
         } else {
+          exigir(p.requiereAceptacionEfectivo !== true, "Recibe este efectivo desde el panel de responsabilidad de la orden.", 409);
           const monto = centavos(body.monto) / 100;
           exigir(
             p.crm === true,
@@ -795,8 +802,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               ? "parcial"
               : "pendiente";
       }
+      const comisionLiberada = comisionRetenida ? liberarComisionPorCobro(tx, comisionRetenida, { ...o, ...cambio }, ahora, POLITICA_COBRO_COMISION) : false;
+      if (comisionLiberada) detalle = { ...detalle, comisionLiberada: true };
       if (Object.keys(cambio).length)
         tx.update(ref, { ...cambio, updatedAt: FieldValue.serverTimestamp() });
+      if (action === "pago" && body.metodo === "efectivo" && Array.isArray(cambio.pagos)) {
+        const pago = cambio.pagos.find((p: { id: string }) => p.id === body.operacionId);
+        if (pago) tx.create(db.collection("notificaciones").doc(`efectivo-${ordenId}-${pago.id}`), { userId: pago.recibidoPorId, destinatarioNombre: pago.recibidoPorNombre || 'Técnico', tipo: 'pago_registrado', titulo: 'Confirma el efectivo recibido', mensaje: `Oficina registró RD$${pago.monto} en efectivo. Confirma la recepción en la orden.`, ordenId, leida: false, createdAt: ahora });
+      }
       tx.set(
         crm,
         {
@@ -823,6 +836,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       tx.create(db.collection("auditoria_admin").doc(), {
         accion: `crm.${action}`,
+        comisionLiberada,
         ordenId,
         actorId: uid,
         operacionId: body.operacionId,

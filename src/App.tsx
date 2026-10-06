@@ -29,6 +29,12 @@ const Citas = lazy(() => import('./pages/Citas'));
 const Calendario = lazy(() => import('./pages/Calendario'));
 const Standby = lazy(() => import('./pages/Standby'));
 const MapaRutas = lazy(() => import('./pages/MapaRutas'));
+// Mapa de operaciones unificado (reemplaza /admin/mapa; el anterior queda
+// accesible en /admin/mapa-rutas-anterior para QA de paridad).
+const Mapa = lazy(() => import('./pages/Mapa'));
+// Centro de operaciones — vista única con resumen operativo, atención por
+// prioridad y jornada por técnico. Reutiliza useMapaDatos y sus permisos.
+const Operaciones = lazy(() => import('./pages/Operaciones'));
 const ClientesResponsables = lazy(() => import('./pages/ClientesResponsables'));
 const Clientes = lazy(() => import('./pages/Clientes'));
 const Cotizaciones = lazy(() => import('./pages/Cotizaciones'));
@@ -223,6 +229,8 @@ function AppRoutes() {
       <Route path="/tracking/:token" element={<TrackingCliente />} />
       <Route path="/f/:slug" element={<FormularioPublico />} />
       <Route path="/garantia/:token" element={<GarantiaCliente />} />
+      {/* Alias top-level requerido por Jorge: /mapa redirige al módulo admin. */}
+      <Route path="/mapa" element={<Navigate to="/admin/mapa" replace />} />
       <Route path="/cliente/:token" element={<PortalCliente />} />
 
       {/* ═══════════════════════════════════════════════
@@ -258,7 +266,9 @@ function AppRoutes() {
         <Route path="agenda-dia" element={<PermisoRoute permiso="ordenesVer"><AgendaDia /></PermisoRoute>} />
         <Route path="calendarios" element={<Calendarios />} />
         <Route path="standby" element={<Standby />} />
-        <Route path="mapa" element={<MapaRutas />} />
+        <Route path="mapa" element={<Mapa />} />
+        <Route path="mapa-rutas-anterior" element={<MapaRutas />} />
+        <Route path="operaciones" element={<PermisoRoute permiso="ordenesVer"><Operaciones /></PermisoRoute>} />
         <Route path="clientes-responsables" element={<ClientesResponsables />} />
         <Route path="clientes" element={<Clientes />} />
         <Route path="cotizaciones" element={<PermisoRoute permiso="cotizacionesVer"><Cotizaciones /></PermisoRoute>} />

@@ -1,0 +1,69 @@
+/*
+ * Mister Service — tokens del rediseño (01/10/2026)
+ * Importado por src/index.css. Valores de ESPEC-VISUAL-APPLE-2026-10-06.md §3.
+ * No reemplaza clases existentes por sí solo: los componentes nuevos consumen estas variables
+ * vía tailwind.tokens.js.
+ */
+:root {
+  /* Base (DESIGN.md §2.1) */
+  --ms-fondo: #f0f4f8;
+  --ms-superficie: #ffffff;
+  --ms-texto: #111827;
+  --ms-texto-2: #4b5563;
+  --ms-texto-micro: #6b7280;
+  --ms-borde: #e5e7eb;
+  --ms-borde-control: #6b7280;
+  --ms-pista: #edf1f6;            /* fondo de barras y anillos vacíos */
+
+  /* Alias de acción: mismo azul de primary; no cambia la marca existente. */
+  --ms-accion: #0f3460;           /* 12,50:1 sobre blanco */
+  --ms-accion-50: #eff4fa;
+  --ms-accion-100: #dce7f2;
+  --ms-marca: #4a6fa5;            /* color del logo; no usar para texto pequeño */
+
+  /* Semánticos */
+  --ms-exito: #15803d;
+  --ms-advertencia: #b45309;      /* atrasos, saldo bajo, >14 días en stand-by */
+  --ms-peligro: #b91c1c;          /* acciones destructivas */
+  --ms-garantia: #dc2626;         /* decisión de Jorge 01/10: garantías SIEMPRE en rojo (mapa, barras, chips) */
+  --ms-standby: #9ca3af;          /* rayado gris: orden detenida por pieza */
+
+  /* Rampa de progreso de la visita (7 pasos). Secuencial desde la paleta brand de tailwind.config.js */
+  --ms-paso-0: #c9d8ea;           /* Agendada */
+  --ms-paso-1: #9db7d6;           /* En camino */
+  --ms-paso-2: #7697c4;           /* En sitio */
+  --ms-paso-3: #4a6fa5;           /* Diagnóstico / Revisión */
+  --ms-paso-4: #2f4e7e;           /* Trabajando */
+  --ms-paso-5: #0f3460;           /* Cobro */
+  --ms-paso-6: #15803d;           /* Cerrada */
+
+  /* Elevación única (DESIGN.md §2.3) */
+  --ms-elevacion: 0 8px 24px rgb(15 23 42 / 0.12);
+}
+
+/* Patrón de stand-by: no depende solo del color (rayado + etiqueta de texto) */
+.ms-rayado-standby {
+  background: repeating-linear-gradient(135deg, var(--ms-standby) 0 4px, #d1d5db 4px 8px);
+}
+
+/* Chips opacos: contraste AA y etiqueta visible (§3.3). */
+:root {
+  --ms-chip-agendada-fondo: #dce7f2;
+  --ms-chip-camino-fondo: #c9d8ea;
+  --ms-chip-sitio-fondo: #9db7d6;
+  --ms-chip-atraso-fondo: #fef3c7;
+  --ms-chip-atraso-texto: #92400e;
+  --ms-chip-neutro-fondo: #e5e7eb;
+  --ms-chip-neutro-texto: #374151;
+  --ms-radio-control: 8px;
+  --ms-radio-tarjeta: 12px;
+  --ms-radio-hoja: 16px;
+  --ms-radio-tabbar: 24px;
+  --ms-espacio-1: 4px;
+  --ms-espacio-2: 8px;
+  --ms-espacio-3: 12px;
+  --ms-espacio-4: 16px;
+  --ms-espacio-6: 24px;
+  --ms-espacio-8: 32px;
+  --ms-espacio-12: 48px;
+}

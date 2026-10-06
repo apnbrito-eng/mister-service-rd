@@ -97,16 +97,14 @@ describe('solicitudes_servicio · formularios dinámicos /f/:slug', () => {
 });
 
 describe('ubicaciones_vehiculos · GPS de los técnicos', () => {
-  it('HUECO CONOCIDO (hallazgo #6) — cualquiera sin sesión lee la ubicación en vivo', async () => {
-    // `allow read: if true` sobre toda la colección. Expone la posición en
-    // tiempo real de TODOS los vehículos de la empresa a cualquier persona
-    // que sepa el id del documento, sin token ni relación con una orden.
-    // Es un tema de privacidad de los técnicos, no solo de datos de negocio.
-    // Cuando se acote a staff o a token de orden, este test pasa a assertFails.
+  it('GPS en vivo requiere sesión autorizada', async () => {
     await sembrar('ubicaciones_vehiculos/veh-1', {
-      vehiculoId: 'veh-1', tecnicoNombre: 'QA tecnico', lat: 18.48, lng: -69.93,
+      vehiculoId: 'veh-1', tecnicoId: UID.tecnico, lat: 18.48, lng: -69.93,
     });
-    await assertSucceeds(getDoc(doc(anonimo(), 'ubicaciones_vehiculos/veh-1')));
+    await assertFails(getDoc(doc(anonimo(), 'ubicaciones_vehiculos/veh-1')));
+    await assertSucceeds(getDoc(doc(como(UID.admin), 'ubicaciones_vehiculos/veh-1')));
+    await assertSucceeds(getDoc(doc(como(UID.tecnico), 'ubicaciones_vehiculos/veh-1')));
+    await assertFails(getDoc(doc(como(UID.tecnicoOtro), 'ubicaciones_vehiculos/veh-1')));
   });
 
   it('escribir sí requiere staff', async () => {
@@ -114,8 +112,9 @@ describe('ubicaciones_vehiculos · GPS de los técnicos', () => {
       setDoc(doc(anonimo(), 'ubicaciones_vehiculos/veh-2'), { lat: 0, lng: 0 }),
     );
     await assertSucceeds(
-      setDoc(doc(como(UID.tecnico), 'ubicaciones_vehiculos/veh-2'), { lat: 18.4, lng: -69.9 }),
+      setDoc(doc(como(UID.tecnico), 'ubicaciones_vehiculos/veh-2'), { lat: 18.4, lng: -69.9, tecnicoId: UID.tecnico }),
     );
+    await assertFails(setDoc(doc(como(UID.tecnicoOtro), 'ubicaciones_vehiculos/veh-2'), { tecnicoId: UID.tecnicoOtro }));
   });
 });
 

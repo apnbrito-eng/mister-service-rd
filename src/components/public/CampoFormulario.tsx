@@ -1,3 +1,4 @@
+import { cargarGoogleMaps } from '../../utils/cargarGoogleMaps';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { CampoFormulario as CampoType } from '../../types/formularios';
 import { MapPin } from 'lucide-react';
@@ -59,28 +60,9 @@ export default function CampoFormulario({ campo, value, onChange, error }: Props
       });
     };
 
-    if (window.google?.maps?.places) {
-      initAC();
-      return;
-    }
-
-    if (!document.getElementById('google-places-script')) {
-      const script = document.createElement('script');
-      script.id = 'google-places-script';
-      script.src = `https://maps.googleapis.com/maps/api/js?key=${import.meta.env.VITE_GOOGLE_MAPS_KEY}&libraries=places&language=es`;
-      script.async = true;
-      script.defer = true;
-      script.onload = initAC;
-      document.head.appendChild(script);
-    } else {
-      const interval = setInterval(() => {
-        if (window.google?.maps?.places) {
-          clearInterval(interval);
-          initAC();
-        }
-      }, 100);
-      return () => clearInterval(interval);
-    }
+    let cancelado = false;
+    void cargarGoogleMaps().then(ok => { if (ok && !cancelado) initAC(); });
+    return () => { cancelado = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campo.tipo]);
 

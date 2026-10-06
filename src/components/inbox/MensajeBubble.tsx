@@ -357,10 +357,10 @@ export default function MensajeBubble({ mensaje, onCopiarAOrden, onUsarUbicacion
         </button>
       )}
       <div
-        className={`max-w-[75%] rounded-2xl px-3 py-2 shadow-sm ${
+        className={`max-w-[78%] rounded-[15px] px-3 py-2 ${
           esSaliente
-            ? 'bg-[#d9fdd3] text-slate-900 rounded-br-sm'
-            : 'bg-white text-gray-900 border border-gray-200 rounded-bl-sm'
+            ? 'bg-[#D9F7CF] text-slate-900 rounded-br-[5px]'
+            : 'bg-white text-gray-900 border border-gray-200 rounded-bl-[5px]'
         }`}
       >
         {esSaliente ? (
