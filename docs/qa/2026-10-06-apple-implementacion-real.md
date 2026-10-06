@@ -38,3 +38,7 @@
 
 ⏳ **Pendiente:** permiso Firebase oficial, reglas/commit y publicación coordinada. No hay APK nueva ni comprobación Samsung.
 — Codex
+
+## Bloqueo resuelto y publicación realizada
+✅ Acceso oficial conectado; reglas desplegadas y APK1.0.21 publicada/instalada. Web oficial4788804. Los pendientes de acceso/promoción anteriores quedaron resueltos. Constancia: `2026-10-06-apple-publicacion-oficial.md`.
+— Codex

@@ -231,3 +231,32 @@ La compilación y APK corresponden a una fase posterior autorizada. Esta entrega
 
 ## Avance de implementación — 28/09/2026
 Tras cerrar la fase documental, Jorge autorizó corregir y publicar. Se inició la base común (fuente, acción azul oscuro, tacto, foco, lectura y movimiento reducido), Modal y ajustes de Citas/Precios/filtros de Órdenes. Véase `docs/diseno/REVISION-GLOBAL-2026-09-28.md` para evidencia y límites. Las fases anteriores siguen como guía: este avance no certifica su finalización completa.
+
+## Web pública blanca — 01/10/2026
+Dirección confirmada por Jorge: fondo blanco liso, fotografía protagonista y tipografía legible inspirada en Samsung. Implementada en las rutas públicas existentes; administración y técnico conservan sus estilos.
+- Fondo #fff; texto #17191c; secundario #555b63; acciones #0f3460. Plus Jakarta Sans existente con fallback de sistema, sin fuentes nuevas.
+- Navegación blanca sticky, menú móvil accesible, controles de 48px, foco azul, movimiento reducido.
+- Portada: equipo visible al entrar, selección equipo/intención conservada en agenda. Material CMS fijo/carrusel accesible con «Ver presentación del servicio»; carrusel manual.
+- Catálogo y detalle proceden de servicios habilitados del CMS. Imágenes rotas usan respaldo local. Sin precio, estadísticas o certificaciones nuevas: textos CMS siguen bajo control del negocio.
+- Los videos y el desarme automático de entrada se integrarán después por instrucción expresa del usuario.
+- Evidencia y límites: docs/qa/2026-10-01-web-blanca.md. Impeccable se usó desde repositorio oficial temporal; el detector advirtió únicamente familia tipográfica común. Se conserva por coherencia con el sistema existente y las referencias del usuario.
+
+## Convenciones de negocio
+
+Reglas de color específicas del dominio de Mister Service RD. No son opiniones estéticas: son decisiones de negocio que condicionan el significado del color en toda la interfaz y no deben romperse en rediseños futuros.
+
+### Rojo de garantía — `#DC2626`
+
+**Uso exclusivo:** órdenes de servicio bajo garantía. Aplica a:
+
+- Marcadores de garantía en el mapa de operaciones (ver `src/components/mapa/marcadores.ts`: `garantia: '#dc2626'`).
+- Badges, bordes, iconos de estado y cualquier otro indicador visual de garantía en la interfaz de admin y la vista del técnico.
+
+**Prohibido** usar `#DC2626` para cualquier otro propósito: ni para acciones destructivas, ni para estados de error, ni para facturas vencidas, ni para botones peligrosos, ni para efectos decorativos. Para "acción destructiva" o "peligro" conservar el `#b91c1c` ya documentado en §2.1.
+
+**Razón del negocio.** Las operarias y los técnicos deben identificar visualmente una orden de garantía al instante — en el mapa, en la lista de órdenes, en la ficha. Si otros usos del "rojo intenso" compiten con esa señal, el canal de comunicación se degrada y las garantías se pierden en el ruido operacional (origen de la convención: QA review #16, confirmado en el comentario de `marcadores.ts`).
+
+**Deuda detectada al redactar esta regla (02/10/2026):** dos usos actuales de `#DC2626` en código fuente violan la convención y deben migrarse en un sprint propio antes de poder enforce la regla con cazador:
+
+- `src/pages/Facturas.tsx:378` — `.estado-vencida { color: #dc2626 }`. Migrar a `#b91c1c`.
+- `src/utils/heroGradient.ts:18` — gradient `rojo-energy` termina en `#dc2626`. Reemplazar por `#b91c1c` o `#991b1b`.
