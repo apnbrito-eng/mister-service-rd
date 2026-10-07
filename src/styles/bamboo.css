@@ -694,6 +694,207 @@
 }
 
 /* ============================================================
+   KPI cards (lote 2+ para módulos operativos/financieros)
+   ============================================================ */
+
+.ms-bamboo .b-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.ms-bamboo .b-kpi {
+  background: var(--b-paper);
+  border: 1px solid var(--b-line);
+  border-radius: var(--b-r-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ms-bamboo .b-kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--b-muted);
+}
+
+.ms-bamboo .b-kpi-valor {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--b-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.ms-bamboo .b-kpi-sub {
+  font-size: 12px;
+  color: var(--b-muted);
+}
+
+.ms-bamboo .b-kpi.b-kpi-warn {
+  background: var(--b-warning-soft);
+  border-color: #f5d79b;
+}
+
+.ms-bamboo .b-kpi.b-kpi-warn .b-kpi-label,
+.ms-bamboo .b-kpi.b-kpi-warn .b-kpi-sub {
+  color: var(--b-warning);
+}
+
+.ms-bamboo .b-kpi.b-kpi-warn .b-kpi-valor {
+  color: var(--b-warning);
+}
+
+.ms-bamboo .b-kpi.b-kpi-ok {
+  background: var(--b-soft);
+  border-color: var(--b-green-soft);
+}
+
+.ms-bamboo .b-kpi.b-kpi-ok .b-kpi-label,
+.ms-bamboo .b-kpi.b-kpi-ok .b-kpi-sub {
+  color: var(--b-green);
+}
+
+.ms-bamboo .b-kpi.b-kpi-ok .b-kpi-valor {
+  color: var(--b-green);
+}
+
+.ms-bamboo .b-kpi.b-kpi-info {
+  background: var(--b-info-soft);
+  border-color: #c2d3ea;
+}
+
+.ms-bamboo .b-kpi.b-kpi-info .b-kpi-label,
+.ms-bamboo .b-kpi.b-kpi-info .b-kpi-sub {
+  color: var(--b-info);
+}
+
+.ms-bamboo .b-kpi.b-kpi-info .b-kpi-valor {
+  color: var(--b-info);
+}
+
+/* ============================================================
+   Tabla simple reutilizable
+   ============================================================ */
+
+.ms-bamboo .b-tabla-wrap {
+  background: var(--b-paper);
+  border: 1px solid var(--b-line);
+  border-radius: var(--b-r-md);
+  overflow: hidden;
+}
+
+.ms-bamboo .b-tabla-wrap > .b-tabla-scroll {
+  overflow-x: auto;
+}
+
+.ms-bamboo table.b-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.ms-bamboo table.b-tabla thead tr {
+  background: var(--b-pista);
+  border-bottom: 1px solid var(--b-line);
+}
+
+.ms-bamboo table.b-tabla th {
+  text-align: left;
+  padding: 12px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--b-muted);
+  text-transform: uppercase;
+}
+
+.ms-bamboo table.b-tabla th.b-th-right,
+.ms-bamboo table.b-tabla td.b-td-right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ms-bamboo table.b-tabla th.b-th-center,
+.ms-bamboo table.b-tabla td.b-td-center {
+  text-align: center;
+}
+
+.ms-bamboo table.b-tabla tbody tr {
+  border-top: 1px solid var(--b-line);
+}
+
+.ms-bamboo table.b-tabla tbody tr:first-child {
+  border-top: 0;
+}
+
+.ms-bamboo table.b-tabla tbody tr:hover {
+  background: var(--b-pista);
+}
+
+.ms-bamboo table.b-tabla td {
+  padding: 12px 14px;
+  color: var(--b-ink);
+  vertical-align: middle;
+}
+
+.ms-bamboo table.b-tabla td.b-td-muted {
+  color: var(--b-muted);
+  font-size: 13px;
+}
+
+.ms-bamboo .b-tabla-vacia {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--b-muted);
+  font-size: 14px;
+}
+
+.ms-bamboo .b-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.ms-bamboo .b-page-header h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--b-ink);
+}
+
+.ms-bamboo .b-page-header .b-page-sub {
+  margin: 4px 0 0;
+  color: var(--b-muted);
+  font-size: 14px;
+}
+
+.ms-bamboo .b-page-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--b-r-md);
+  background: var(--b-soft);
+  color: var(--b-green);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.ms-bamboo .b-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ============================================================
    Barra de cumplimiento (empleado)
    ============================================================ */
 

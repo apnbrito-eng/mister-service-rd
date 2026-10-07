@@ -1,3 +1,13 @@
+/**
+ * Rediseño visual BambooHR — Lote 2 (Avances a Empleados).
+ *
+ * Mantiene la lógica previa intacta (crearAvance, suscribirAvances,
+ * eliminarAvance, filtros, cálculo de totales, etc). Sólo se reemplaza la
+ * presentación por los primitivos `.ms-bamboo`. No se tocan servicios,
+ * reglas financieras ni Firestore rules.
+ *
+ * Autor: Claude Code — 2026-10-07.
+ */
 import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -153,274 +163,319 @@ export default function Avances() {
 
   if (!puedeGestionar) {
     return (
-      <div className="p-6">
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
-          <p className="text-amber-800 font-medium">No tienes permisos para ver avances.</p>
+      <div className="ms-bamboo p-4 md:p-6">
+        <div className="b-callout b-callout-warn">
+          No tenés permisos para ver avances a empleados.
         </div>
       </div>
     );
   }
 
+  const avancesPendientes = avances.filter(a => !a.descontado).length;
+  const avancesDescontados = avances.filter(a => a.descontado).length;
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-            <Wallet size={20} className="text-primary" />
+    <div className="ms-bamboo p-4 md:p-6">
+      <div className="b-stack">
+        <header className="b-page-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="b-page-icon" aria-hidden="true">
+              <Wallet size={22} />
+            </div>
+            <div>
+              <h1>Avances a empleados</h1>
+              <p className="b-page-sub">
+                Préstamos y adelantos que se descuentan automáticamente en la liquidación de nómina.
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-primary">Avances a Empleados</h1>
-            <p className="text-gray-500 text-sm">
-              Préstamos/adelantos que se descuentan automáticamente de la nómina.
-            </p>
+          <button
+            type="button"
+            className="b-btn is-primary"
+            onClick={() => setShowModal(true)}
+          >
+            <Plus size={16} aria-hidden="true" /> Registrar avance
+          </button>
+        </header>
+
+        <div className="b-kpi-grid">
+          <div className="b-kpi b-kpi-warn">
+            <span className="b-kpi-label">Pendientes de descontar</span>
+            <span className="b-kpi-valor">{formatMoneda(totales.pendientes)}</span>
+            <span className="b-kpi-sub">
+              {avancesPendientes} avance{avancesPendientes === 1 ? '' : 's'}
+            </span>
           </div>
-        </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium"
-        >
-          <Plus size={16} /> Registrar avance
-        </button>
-      </div>
-
-      {/* Totales */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-amber-50 rounded-2xl shadow-sm border border-amber-200 p-4">
-          <p className="text-xs font-medium text-amber-700 uppercase">Pendientes de descontar</p>
-          <p className="text-xl font-bold text-amber-900 mt-1">{formatMoneda(totales.pendientes)}</p>
-          <p className="text-[11px] text-amber-700 mt-0.5">{avances.filter(a => !a.descontado).length} avance(s)</p>
-        </div>
-        <div className="bg-green-50 rounded-2xl shadow-sm border border-green-200 p-4">
-          <p className="text-xs font-medium text-green-700 uppercase">Ya descontados</p>
-          <p className="text-xl font-bold text-green-900 mt-1">{formatMoneda(totales.descontados)}</p>
-          <p className="text-[11px] text-green-700 mt-0.5">{avances.filter(a => a.descontado).length} avance(s)</p>
-        </div>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-          <p className="text-xs font-medium text-gray-500 uppercase">Filtro actual</p>
-          <p className="text-xl font-bold text-primary mt-1">{formatMoneda(totales.totalFiltro)}</p>
-          <p className="text-[11px] text-gray-500 mt-0.5">{totales.cantidad} avance(s)</p>
-        </div>
-      </div>
-
-      {/* Resumen por empleado (pendientes) */}
-      {pendientesPorEmpleado.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-          <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">
-            Pendientes por empleado (a descontar en próxima nómina)
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {pendientesPorEmpleado.map(p => (
-              <div
-                key={p.id}
-                className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs flex items-center gap-2"
-              >
-                <AlertTriangle size={12} className="text-amber-600" />
-                <span className="font-medium text-amber-900">{p.nombre}</span>
-                <span className="text-amber-700">·</span>
-                <span className="font-bold text-amber-900">{formatMoneda(p.total)}</span>
-                <span className="text-amber-700">({p.cantidad})</span>
-              </div>
-            ))}
+          <div className="b-kpi b-kpi-ok">
+            <span className="b-kpi-label">Ya descontados</span>
+            <span className="b-kpi-valor">{formatMoneda(totales.descontados)}</span>
+            <span className="b-kpi-sub">
+              {avancesDescontados} avance{avancesDescontados === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div className="b-kpi b-kpi-info">
+            <span className="b-kpi-label">Filtro actual</span>
+            <span className="b-kpi-valor">{formatMoneda(totales.totalFiltro)}</span>
+            <span className="b-kpi-sub">
+              {totales.cantidad} avance{totales.cantidad === 1 ? '' : 's'} visible{totales.cantidad === 1 ? '' : 's'}
+            </span>
           </div>
         </div>
-      )}
 
-      {/* Filtros */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Quincena</label>
-          <select
-            value={filtroQuincena}
-            onChange={e => setFiltroQuincena(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
-          >
-            <option value="">Todas las quincenas</option>
-            {quincenasDisponibles.map(q => <option key={q} value={q}>{q}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Empleado</label>
-          <select
-            value={filtroPersonal}
-            onChange={e => setFiltroPersonal(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
-          >
-            <option value="">Todos</option>
-            {empleados.map(e => <option key={e.id} value={e.id}>{e.nombre}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Estado</label>
-          <select
-            value={filtroEstado}
-            onChange={e => setFiltroEstado(e.target.value as 'pendientes' | 'descontados' | 'todos')}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
-          >
-            <option value="pendientes">Pendientes</option>
-            <option value="descontados">Ya descontados</option>
-            <option value="todos">Todos</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Tabla */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Fecha</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Empleado</th>
-                <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Monto</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Motivo</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase hidden md:table-cell">Método</th>
-                <th className="text-left px-3 py-3 text-xs font-semibold text-gray-500 uppercase hidden lg:table-cell">Quincena</th>
-                <th className="text-center px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Estado</th>
-                <th className="text-right px-3 py-3 text-xs font-semibold text-gray-500 uppercase">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {avancesFiltrados.length === 0 ? (
-                <tr><td colSpan={8} className="py-12 text-center text-gray-400">Sin avances para los filtros seleccionados</td></tr>
-              ) : avancesFiltrados.map(a => (
-                <tr key={a.id} className="hover:bg-gray-50">
-                  <td className="px-3 py-3 text-xs text-gray-600">{formatFecha(a.fecha)}</td>
-                  <td className="px-3 py-3 text-gray-700 font-medium">{a.personalNombre}</td>
-                  <td className="px-3 py-3 text-right font-bold text-orange-600">{formatMoneda(a.monto)}</td>
-                  <td className="px-3 py-3 text-gray-600 text-xs">{a.motivo}</td>
-                  <td className="px-3 py-3 hidden md:table-cell text-xs text-gray-500 capitalize">{a.metodoPago || '—'}</td>
-                  <td className="px-3 py-3 hidden lg:table-cell text-xs text-gray-500 font-mono">{a.quincenaAsignada}</td>
-                  <td className="px-3 py-3 text-center">
-                    {a.descontado ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-                        <Check size={10} /> Descontado
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                        Pendiente
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 text-right">
-                    {!a.descontado && (
-                      <button
-                        onClick={() => handleEliminar(a)}
-                        title="Eliminar"
-                        className="p-1.5 hover:bg-red-50 rounded text-red-500"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </td>
-                </tr>
+        {pendientesPorEmpleado.length > 0 && (
+          <section>
+            <h3 className="b-h3">Pendientes por empleado (próxima nómina)</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {pendientesPorEmpleado.map(p => (
+                <div
+                  key={p.id}
+                  className="b-callout b-callout-warn"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 12px',
+                    fontSize: 13,
+                  }}
+                >
+                  <AlertTriangle size={14} aria-hidden="true" />
+                  <strong style={{ fontWeight: 600 }}>{p.nombre}</strong>
+                  <span>·</span>
+                  <strong style={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+                    {formatMoneda(p.total)}
+                  </strong>
+                  <span>({p.cantidad})</span>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </section>
+        )}
+
+        <section>
+          <h3 className="b-h3">Filtros</h3>
+          <div className="b-fields">
+            <div className="b-field">
+              <label className="b-field-label">Quincena</label>
+              <select
+                className="b-input"
+                value={filtroQuincena}
+                onChange={e => setFiltroQuincena(e.target.value)}
+              >
+                <option value="">Todas las quincenas</option>
+                {quincenasDisponibles.map(q => (
+                  <option key={q} value={q}>{q}</option>
+                ))}
+              </select>
+            </div>
+            <div className="b-field">
+              <label className="b-field-label">Empleado</label>
+              <select
+                className="b-input"
+                value={filtroPersonal}
+                onChange={e => setFiltroPersonal(e.target.value)}
+              >
+                <option value="">Todos</option>
+                {empleados.map(e => (
+                  <option key={e.id} value={e.id}>{e.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div className="b-field">
+              <label className="b-field-label">Estado</label>
+              <select
+                className="b-input"
+                value={filtroEstado}
+                onChange={e => setFiltroEstado(e.target.value as 'pendientes' | 'descontados' | 'todos')}
+              >
+                <option value="pendientes">Pendientes</option>
+                <option value="descontados">Ya descontados</option>
+                <option value="todos">Todos</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section className="b-tabla-wrap">
+          <div className="b-tabla-scroll">
+            <table className="b-tabla">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Empleado</th>
+                  <th className="b-th-right">Monto</th>
+                  <th>Motivo</th>
+                  <th>Método</th>
+                  <th>Quincena</th>
+                  <th className="b-th-center">Estado</th>
+                  <th className="b-th-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {avancesFiltrados.length === 0 ? (
+                  <tr>
+                    <td colSpan={8}>
+                      <div className="b-tabla-vacia">
+                        Sin avances para los filtros seleccionados.
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  avancesFiltrados.map(a => (
+                    <tr key={a.id}>
+                      <td className="b-td-muted">{formatFecha(a.fecha)}</td>
+                      <td>
+                        <strong style={{ fontWeight: 600 }}>{a.personalNombre}</strong>
+                      </td>
+                      <td className="b-td-right" style={{ fontWeight: 700 }}>
+                        {formatMoneda(a.monto)}
+                      </td>
+                      <td className="b-td-muted">{a.motivo}</td>
+                      <td className="b-td-muted" style={{ textTransform: 'capitalize' }}>
+                        {a.metodoPago || '—'}
+                      </td>
+                      <td className="b-td-muted" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                        {a.quincenaAsignada}
+                      </td>
+                      <td className="b-td-center">
+                        {a.descontado ? (
+                          <span className="b-chip b-chip-ok">
+                            <Check size={10} aria-hidden="true" style={{ marginRight: 4 }} />
+                            Descontado
+                          </span>
+                        ) : (
+                          <span className="b-chip b-chip-warn">Pendiente</span>
+                        )}
+                      </td>
+                      <td className="b-td-right">
+                        {!a.descontado && (
+                          <button
+                            type="button"
+                            className="b-btn is-ghost is-danger"
+                            onClick={() => handleEliminar(a)}
+                            title={`Eliminar avance de ${a.personalNombre}`}
+                            aria-label={`Eliminar avance de ${a.personalNombre}`}
+                            style={{ minHeight: 36, padding: '6px 10px' }}
+                          >
+                            <Trash2 size={14} aria-hidden="true" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
 
-      {/* Modal registrar */}
       <Modal
         isOpen={showModal}
         onClose={() => { setShowModal(false); resetForm(); }}
         title="Registrar avance a empleado"
         size="md"
       >
-        <form onSubmit={handleGuardar} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Empleado *</label>
-            <select
-              value={form.personalId}
-              onChange={e => setForm(f => ({ ...f, personalId: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
-            >
-              <option value="">— Selecciona empleado —</option>
-              {empleados.map(e => (
-                <option key={e.id} value={e.id}>{e.nombre} ({e.rol})</option>
-              ))}
-            </select>
-          </div>
+        <div className="ms-bamboo">
+          <form onSubmit={handleGuardar} className="b-stack" style={{ gap: 16 }}>
+            <div className="b-field b-full">
+              <label className="b-field-label">Empleado *</label>
+              <select
+                className="b-input"
+                value={form.personalId}
+                onChange={e => setForm(f => ({ ...f, personalId: e.target.value }))}
+              >
+                <option value="">— Seleccioná empleado —</option>
+                {empleados.map(e => (
+                  <option key={e.id} value={e.id}>{e.nombre} · {e.rol}</option>
+                ))}
+              </select>
+            </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Monto *</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">RD$</span>
+            <div className="b-fields">
+              <div className="b-field">
+                <label className="b-field-label">Monto · RD$ *</label>
                 <input
                   type="number"
                   min="0"
                   step="any"
+                  className="b-input"
                   value={form.monto}
                   onChange={e => setForm(f => ({ ...f, monto: e.target.value }))}
                   placeholder="0"
-                  className="w-full pl-12 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
+                  inputMode="decimal"
                 />
               </div>
+              <div className="b-field">
+                <label className="b-field-label">Método</label>
+                <select
+                  className="b-input"
+                  value={form.metodoPago}
+                  onChange={e => setForm(f => ({ ...f, metodoPago: e.target.value as 'efectivo' | 'transferencia' | 'tarjeta' }))}
+                >
+                  <option value="efectivo">Efectivo</option>
+                  <option value="transferencia">Transferencia</option>
+                  <option value="tarjeta">Tarjeta</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Método</label>
+
+            <div className="b-field b-full">
+              <label className="b-field-label">Motivo *</label>
+              <input
+                type="text"
+                className="b-input"
+                value={form.motivo}
+                onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
+                placeholder="Ej: adelanto para piezas, emergencia médica…"
+                maxLength={200}
+              />
+            </div>
+
+            <div className="b-field b-full">
+              <label className="b-field-label">Descontar en quincena</label>
               <select
-                value={form.metodoPago}
-                onChange={e => setForm(f => ({ ...f, metodoPago: e.target.value as 'efectivo' | 'transferencia' | 'tarjeta' }))}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
+                className="b-input"
+                value={form.quincenaAsignada}
+                onChange={e => setForm(f => ({ ...f, quincenaAsignada: e.target.value }))}
               >
-                <option value="efectivo">Efectivo</option>
-                <option value="transferencia">Transferencia</option>
-                <option value="tarjeta">Tarjeta</option>
+                {quincenasDisponibles.map(q => (
+                  <option key={q} value={q}>{q}</option>
+                ))}
               </select>
+              <p className="b-help">
+                El avance se descontará automáticamente de la liquidación de esta quincena.
+              </p>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Motivo *</label>
-            <input
-              type="text"
-              value={form.motivo}
-              onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))}
-              placeholder="Ej: adelanto para piezas, emergencia médica, etc."
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
-            />
-          </div>
+            <div className="b-field b-full">
+              <label className="b-field-label">Notas <span style={{ color: 'var(--b-muted)', fontWeight: 400 }}>(opcional)</span></label>
+              <textarea
+                rows={2}
+                className="b-input"
+                value={form.notas}
+                onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
+              />
+            </div>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Descontar en quincena
-            </label>
-            <select
-              value={form.quincenaAsignada}
-              onChange={e => setForm(f => ({ ...f, quincenaAsignada: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium"
-            >
-              {quincenasDisponibles.map(q => <option key={q} value={q}>{q}</option>)}
-            </select>
-            <p className="text-[11px] text-gray-500 mt-1">
-              El avance se descontará automáticamente de la liquidación de esta quincena.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Notas <span className="text-gray-400">(opcional)</span>
-            </label>
-            <textarea
-              rows={2}
-              value={form.notas}
-              onChange={e => setForm(f => ({ ...f, notas: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-medium"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
-            <button type="button" onClick={() => { setShowModal(false); resetForm(); }}
-              className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg">
-              Cancelar
-            </button>
-            <button type="submit" disabled={saving}
-              className="px-5 py-2 bg-primary hover:bg-primary-medium text-white rounded-lg text-sm font-medium disabled:opacity-60">
-              {saving ? 'Guardando...' : 'Registrar avance'}
-            </button>
-          </div>
-        </form>
+            <div className="b-footer">
+              <button
+                type="button"
+                className="b-btn is-ghost"
+                onClick={() => { setShowModal(false); resetForm(); }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="b-btn is-primary"
+                disabled={saving}
+              >
+                <Check size={14} aria-hidden="true" />
+                {saving ? 'Guardando…' : 'Registrar avance'}
+              </button>
+            </div>
+          </form>
+        </div>
       </Modal>
     </div>
   );
