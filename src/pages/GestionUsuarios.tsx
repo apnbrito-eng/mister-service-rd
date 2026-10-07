@@ -62,6 +62,7 @@ export default function GestionUsuarios() {
   const esAdminEstricto = userProfile?.rol === 'administrador';
 
   const [loading, setLoading] = useState(true);
+  const [revisionAccesos, setRevisionAccesos] = useState(0);
   const [usuarios, setUsuarios] = useState<Personal[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -240,6 +241,7 @@ export default function GestionUsuarios() {
         }
       }
 
+      setRevisionAccesos(r => r + 1);
       toast.success('Usuario actualizado');
     } else {
       // Create Firebase Auth user using a secondary app to not kick out admin.
@@ -570,7 +572,7 @@ export default function GestionUsuarios() {
         </div>
       </div>
 
-      <AccesosPorUsuario />
+      <AccesosPorUsuario revision={JSON.stringify([revisionAccesos, usuarios])} onPermisos={id => { const persona = usuarios.find(u => u.id === id); if (persona) openEdit(persona); }} />
       <NavegacionPersonal personal={usuarios} />
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex items-start gap-2 text-sm text-blue-900">
         <User size={14} className="mt-0.5 shrink-0" />
@@ -583,7 +585,8 @@ export default function GestionUsuarios() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      <details className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <summary className="cursor-pointer p-4 font-semibold">Gestión detallada de fichas y permisos</summary>
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -672,7 +675,7 @@ export default function GestionUsuarios() {
             </tbody>
           </table>
         </div>
-      </div>
+      </details>
 
       {/* Modal Crear/Editar */}
       <Modal

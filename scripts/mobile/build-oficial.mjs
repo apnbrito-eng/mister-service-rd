@@ -18,7 +18,7 @@ const firma = process.env.MISTER_SIGNING_DIR || join(home, '.codex/private/miste
 const google = valor('--google-services');
 const salida = valor('--output');
 const certificado = 'd65aec5154307ec45f707402ba180d0f9a22746d7e37dda46886f4950e8ca2cd';
-const version = '1.0.23', codigo = 24, paquete = 'com.misterservicerd.app';
+const version = '1.0.24', codigo = 25, paquete = 'com.misterservicerd.app';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const ejecutar = (bin, argumentos, cwd = raiz, env = entorno) => execFileSync(bin, argumentos, { cwd, env, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 32 * 1024 * 1024 }).toString();
 const entorno = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('VITE_')));

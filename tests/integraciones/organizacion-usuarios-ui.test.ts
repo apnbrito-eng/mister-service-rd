@@ -1,0 +1,34 @@
+import { grupoPersona } from '../../src/components/usuarios/organizacionUsuarios';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { createElement } from 'react';
+import { expect, it, vi } from 'vitest';
+import AccesosPorUsuario, { type Persona } from '../../src/components/usuarios/AccesosPorUsuario';
+const m = vi.hoisted(() => ({ api: vi.fn() }));
+vi.mock('../../src/services/equipoApi', () => ({ equipoApi: m.api }));
+const persona: Persona = { personalId: 'p', uid: 'u', nombre: 'Prueba', equipo: 'A', rol: 'tecnico', activo: true, usuario: 'prueba', especialidad: '', version: 0, supervisora: false, recuperacion: false, email: '' };
+it('el rol no mueve a otro equipo y sin equipo no implica Dirección', () => {
+ expect(grupoPersona(persona)).toBe('A');
+ expect(grupoPersona({ ...persona, rol: 'operaria' })).toBe('A');
+ expect(grupoPersona({ ...persona, equipo: '' })).toBe('Sin equipo');
+ expect(grupoPersona({ ...persona, equipo: '', rol: 'administrador' })).toBe('Dirección');
+});
+it('refresca columnas tras cambios y separa desactivados incluidos perfiles sin acceso', async () => {
+ let actual = persona;
+ m.api.mockImplementation(async () => ({ administrador: false, actor: 'otro', plantilla: [], personas: [actual, { ...persona, personalId: 'inactivo', uid: '', nombre: 'Desactivado', activo: false }] }));
+ let vista!: ReactTestRenderer;
+ await act(async () => { vista = create(createElement(AccesosPorUsuario, { revision: '1' })); });
+ expect(vista.root.findByProps({ 'aria-label': 'Equipo A' }).findAllByType('article')).toHaveLength(1);
+ expect(vista.root.findByProps({ 'aria-label': 'Equipo B' }).findAllByType('article')).toHaveLength(0);
+ const inactive = vista.root.findByType('details');
+ expect(inactive.props.open).toBeUndefined();
+ expect(inactive.findAllByType('article')).toHaveLength(1);
+ actual = { ...persona, equipo: 'B' };
+ await act(async () => { vista.update(createElement(AccesosPorUsuario, { revision: '2' })); });
+ expect(vista.root.findByProps({ 'aria-label': 'Equipo A' }).findAllByType('article')).toHaveLength(0);
+ expect(vista.root.findByProps({ 'aria-label': 'Equipo B' }).findAllByType('article')).toHaveLength(1);
+ actual = { ...actual, activo: false };
+ await act(async () => { vista.update(createElement(AccesosPorUsuario, { revision: '3' })); });
+ expect(vista.root.findByProps({ 'aria-label': 'Equipo B' }).findAllByType('article')).toHaveLength(0);
+ expect(vista.root.findByType('details').findAllByType('article')).toHaveLength(2);
+ await act(async () => vista.unmount());
+});
