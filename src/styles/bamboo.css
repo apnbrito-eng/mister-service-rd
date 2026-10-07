@@ -628,6 +628,35 @@
   color: var(--b-muted);
 }
 
+/* Desplegable "sin acceso vinculado" dentro de cada columna de equipo */
+.ms-bamboo .b-sinacceso {
+  margin-top: 6px;
+  border-top: 1px dashed var(--b-line);
+  padding-top: 10px;
+}
+
+.ms-bamboo .b-sinacceso > summary {
+  min-height: 40px;
+  padding: 6px 8px;
+  border-radius: var(--b-r-sm);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--b-muted);
+  display: flex;
+  align-items: center;
+}
+
+.ms-bamboo .b-sinacceso > summary:hover {
+  background: var(--b-pista);
+  color: var(--b-ink);
+}
+
+.ms-bamboo .b-sinacceso[open] > summary {
+  color: var(--b-ink);
+  margin-bottom: 6px;
+}
+
 /* ============================================================
    Referencias y emergencia
    ============================================================ */

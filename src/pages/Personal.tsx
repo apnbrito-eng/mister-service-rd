@@ -408,37 +408,64 @@ function ListaEquipos({
         {columnas.map((col) => {
           const items = grupos[col] || [];
           if (col === 'Sin equipo' && !items.length && equipoFiltro === 'todos') return null;
+          // SPRINT-DISENO-BAMBOO-LOTE-1b (2026-10-07): separar vinculados de "sin
+          // acceso" para que las fichas históricas sin uid Auth no se mezclen con
+          // las cuentas activas de login. No se reactivan ni borran — se agrupan en
+          // un desplegable al pie de la columna. Pendiente dejado por Codex en
+          // docs/entregas/CLAUDE-CONTINUACION-2026-10-07.md.
+          const conAcceso = items.filter((p) => !!p.uid);
+          const sinAcceso = items.filter((p) => !p.uid);
+          const renderTarjeta = (p: Personal) => {
+            const a = acceso?.personas.find((x) => x.personalId === p.id);
+            return (
+              <button
+                key={p.id}
+                type="button"
+                className="b-persona-card"
+                onClick={() => onSeleccionar(p.id)}
+              >
+                <AvatarBamboo persona={p} />
+                <div className="b-persona-main">
+                  <strong>{p.nombre}</strong>
+                  <span>
+                    {ROL_LABELS[p.rol]}
+                    {a?.usuario ? ` · ${a.usuario}` : ''}
+                  </span>
+                </div>
+                {p.uid ? (
+                  <span className="b-chip b-chip-ok">Acceso</span>
+                ) : (
+                  <span className="b-chip b-chip-off">Sin acceso</span>
+                )}
+              </button>
+            );
+          };
           return (
             <div key={col} className="b-equipo-col">
               <h3>
-                {col} · {items.length}
+                {col} · {conAcceso.length}
+                {sinAcceso.length > 0 && (
+                  <span style={{ color: 'var(--b-muted)', fontWeight: 400 }}>
+                    {' '}+ {sinAcceso.length} sin acceso
+                  </span>
+                )}
               </h3>
-              {items.length === 0 && <p className="b-help">Sin personas activas en este grupo.</p>}
-              {items.map((p) => {
-                const a = acceso?.personas.find((x) => x.personalId === p.id);
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    className="b-persona-card"
-                    onClick={() => onSeleccionar(p.id)}
-                  >
-                    <AvatarBamboo persona={p} />
-                    <div className="b-persona-main">
-                      <strong>{p.nombre}</strong>
-                      <span>
-                        {ROL_LABELS[p.rol]}
-                        {a?.usuario ? ` · ${a.usuario}` : ''}
-                      </span>
-                    </div>
-                    {p.uid ? (
-                      <span className="b-chip b-chip-ok">Acceso</span>
-                    ) : (
-                      <span className="b-chip b-chip-off">Sin acceso</span>
-                    )}
-                  </button>
-                );
-              })}
+              {conAcceso.length === 0 && sinAcceso.length === 0 && (
+                <p className="b-help">Sin personas activas en este grupo.</p>
+              )}
+              {conAcceso.map(renderTarjeta)}
+              {sinAcceso.length > 0 && (
+                <details className="b-sinacceso">
+                  <summary>
+                    Sin acceso vinculado · {sinAcceso.length}
+                  </summary>
+                  <p className="b-help" style={{ marginBottom: 8 }}>
+                    Fichas activas laboralmente pero sin cuenta de acceso Auth.
+                    Se conservan por historial; para habilitar el login abrí la ficha → pestaña Cuenta y permisos.
+                  </p>
+                  {sinAcceso.map(renderTarjeta)}
+                </details>
+              )}
             </div>
           );
         })}
