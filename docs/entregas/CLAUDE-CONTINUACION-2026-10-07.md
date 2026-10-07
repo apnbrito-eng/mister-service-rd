@@ -4,7 +4,7 @@ Lee primero AGENTS.md del cerebro compartido, Estado actual, diario y pendientes
 
 ## Base y responsabilidad
 Tu lote inicial: 0806ba782afc5034b2d6ea324965d07da700aa05 (rediseno-bamboohr).
-Correcciones funcionales de Codex: f4878bf9ba392abacc0ccde1b603f8523eb38240, rama codex/personal-bamboo-publicacion. Integra esta rama sin sobrescribir cambios ajenos. El commit posterior añade APK 1.0.25/código 26 y documentos; consulta HEAD remoto de esa rama.
+Base vigente: integra origin/codex/mapa-unificado sin sobrescribir cambios ajenos. Incluye las correcciones de Personal f4878bf y el mapa unificado cc5472f; entrega web/Android 25ba9c1 con APK oficial 1.0.26/código 27. Consulta docs/entregas/MAPA-UNIFICADO-2026-10-07.md para el cierre verificado de esta publicación.
 Codex conserva y usa la firma oficial. Entrega cada lote terminado con SHA, archivos, pruebas, riesgos y preview. No declaremos publicado hasta verificar web y APK del mismo código funcional. No publiques por tu cuenta una web que adelante la APK.
 
 ## Mantener las correcciones
@@ -43,4 +43,12 @@ Integraciones finales: 185 archivos/1263 pruebas aprobadas también después de 
 ⏳ Prueba visual Samsung pendiente: teléfono bloqueado, KeyguardServiceDelegate showing=true. No afirmar probado el flujo físico completo.
 ⏳ Claude: en UI hay 23 fichas de personal activas y 20 desactivadas; 16 cuentas activas distribuidas 2 dirección + 7 A + 7 B. Siete fichas históricas SIN ACCESO siguen en listado activo (una dirección/seis sin equipo). Verificar organización de estado laboral versus acceso y ordenar estos registros sin borrar historial ni reactivar cuentas. No se modificó ese dato real.
 ⏳ Carga directa de documentos privados y reglas financieras nuevas aún pendientes; no considerar todo el módulo funcionalmente terminado.
+— Codex
+
+
+## Cierre de publicación — Codex 07/10/2026
+✅ Vercel Production AJAPcDYVe277atEohBGcQuqjtCzs READY. Web oficial version.json: commit25ba9c1. Descarga APK1.0.26 verificada SHA256 12ee4881776dff770bc1e82e1d2b6d3f138ce5a78223efba7ecda64544e6bdee contra manifiesto. Samsung actualizado: install Success, versionName1.0.26/versionCode27.
+✅ Chrome producción: enlace /admin/mapa-rutas-anterior?vista=mapa#citas abre /admin/mapa?vista=mapa#citas; menú muestra solo Mapa de operaciones; vista Google Maps y selector Zona de citas disponibles. Evidencia visual /tmp/mapa-unificado-produccion.png. Sin citas en el rango observado: no se afirmó recorrido real de una orden ni se modificó una.
+⏳ Prueba visual física Samsung pendiente de desbloqueo; instalación confirmada, flujo completo no probado físicamente.
+**Siguiente paso — Claude:** integrar origin/codex/mapa-unificado, leer MAPA-UNIFICADO-2026-10-07.md y CLAUDE-CONTINUACION-2026-10-07.md; continuar Personal/rediseño preservando correcciones y privacidad. Reglas financieras nuevas siguen en planificación, resolver pendientes antes de automatizar.
 — Codex
