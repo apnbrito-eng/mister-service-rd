@@ -55,8 +55,10 @@ import type { Personal, Rol, PermisosSistema } from '../types';
 import { permisosDefaultDeRol, puede, esAdminOCoord } from '../utils/permisos';
 import { ROL_LABELS, ROL_SELECT_ORDEN, ROLES_CON_COMISION, comisionDefaultPorNivel } from '../utils/personal';
 import { useApp } from '../context/AppContext';
+import AltaPersonalBamboo from '../components/personal/AltaPersonalBamboo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { detectarCoordenadasURL } from '../utils/direccion';
+import { limpiarActualizacion } from '../utils/actualizacionPersonal';
 import { equipoApi } from '../services/equipoApi';
 import { sugerirUsuario } from '../../api/_lib/accesosUsuarios';
 
@@ -124,7 +126,7 @@ function equipoDePersona(p: Personal, acceso?: PersonaAcceso | null): EquipoFilt
 
 function urlAbrirMapa(ubi: Personal['ubicacionCasa']): string | null {
   if (!ubi) return null;
-  if (typeof ubi.lat === 'number' && typeof ubi.lng === 'number') {
+  if (typeof ubi.lat === 'number' && typeof ubi.lng === 'number' && Number.isFinite(ubi.lat) && Number.isFinite(ubi.lng) && Math.abs(ubi.lat) <= 90 && Math.abs(ubi.lng) <= 180) {
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${ubi.lat},${ubi.lng}`)}`;
   }
   if (ubi.enlace && /^https?:\/\//.test(ubi.enlace)) {
@@ -133,11 +135,11 @@ function urlAbrirMapa(ubi: Personal['ubicacionCasa']): string | null {
       const u = new URL(ubi.enlace);
       const host = u.hostname.toLowerCase();
       const esMaps =
-        /^(?:www\.)?google\.[a-z.]+$/.test(host) ||
+        (u.protocol === 'https:' && ['google.com', 'www.google.com', 'google.com.do', 'www.google.com.do'].includes(host) && u.pathname.startsWith('/maps')) ||
         host === 'maps.google.com' ||
         host === 'maps.app.goo.gl' ||
-        host === 'goo.gl';
-      if (esMaps) return ubi.enlace;
+        (u.protocol === 'https:' && host === 'goo.gl' && u.pathname.startsWith('/maps'));
+      if (u.protocol === 'https:' && esMaps) return ubi.enlace;
     } catch {
       /* enlace inválido */
     }
@@ -179,6 +181,14 @@ function limpiarUndefined<T extends object>(obj: T): T {
 
 // ────────────────────────────────────────────────────────────────────────
 // Componente raíz
+const CAMPOS_PRIVADOS = new Set(['cedula', 'telefonoFlota', 'whatsapp', 'emailContacto', 'correoRecuperacion', 'direccion', 'ubicacionCasa', 'fechaIngreso', 'fotoUrl', 'licenciaNumero', 'licenciaVencimiento', 'referenciasPersonales', 'contactosEmergencia']);
+async function actualizarFicha(referencia: ReturnType<typeof doc>, datos: Record<string, unknown>) {
+  const publico = Object.fromEntries(Object.entries(datos).filter(([k]) => !CAMPOS_PRIVADOS.has(k)));
+  const privado = Object.fromEntries(Object.entries(datos).filter(([k]) => CAMPOS_PRIVADOS.has(k)));
+  if (Object.keys(privado).length) await setDoc(doc(db, 'personal_privado', referencia.id), privado, { merge: true });
+  if (Object.keys(publico).length) await updateDoc(referencia, publico);
+}
+
 // ────────────────────────────────────────────────────────────────────────
 
 export default function PersonalUnificado() {
@@ -187,7 +197,15 @@ export default function PersonalUnificado() {
   const esAdmin = userProfile?.rol === 'administrador';
   const esAdminCoord = esAdminOCoord(userProfile);
 
-  const [personal, setPersonal] = useState<Personal[]>([]);
+  const [personalBase, setPersonal] = useState<Personal[]>([]);
+  const [datosPrivados, setDatosPrivados] = useState<Record<string, Partial<Personal>>>({});
+  const personal = useMemo(() => personalBase.map(p => ({ ...p, ...(datosPrivados[p.id] ?? {}) })), [personalBase, datosPrivados]);
+  useEffect(() => {
+    if (!esAdminCoord) { setDatosPrivados({}); return; }
+    return onSnapshot(collection(db, 'personal_privado'), snap => {
+      setDatosPrivados(Object.fromEntries(snap.docs.map(d => [d.id, d.data()])));
+    }, () => { setDatosPrivados({}); toast.error('No se pudieron cargar los datos privados del personal.'); });
+  }, [esAdminCoord]);
   const [acceso, setAcceso] = useState<DatosAcceso | null>(null);
   const [accesoError, setAccesoError] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -328,6 +346,7 @@ export default function PersonalUnificado() {
             </div>
           )}
 
+          {!personaSel && esAdminCoord && <AltaPersonalBamboo onCreado={id => { seleccionar(id); void refrescarAcceso(); }} />}
           {!personaSel ? (
             <ListaEquipos
               grupos={grupos}
@@ -529,8 +548,8 @@ function FichaUnificada({
                 <MessageCircle size={14} aria-hidden="true" /> WhatsApp
               </a>
             )}
-            {emailLink(persona.email) && (
-              <a className="b-link-btn" href={emailLink(persona.email)!}>
+            {emailLink(persona.emailContacto) && (
+              <a className="b-link-btn" href={emailLink(persona.emailContacto)!}>
                 <Mail size={14} aria-hidden="true" /> Correo
               </a>
             )}
@@ -622,18 +641,14 @@ function TabDatos({ persona, esAdminCoord }: { persona: Personal; esAdminCoord: 
     telefono: p.telefono ?? '',
     telefonoFlota: p.telefonoFlota ?? '',
     whatsapp: p.whatsapp ?? '',
-    email: p.email ?? '',
+    email: p.emailContacto ?? '',
     direccion: p.direccion ?? '',
     ubicacionEnlace: p.ubicacionCasa?.enlace ?? '',
   }));
   const [estado, setEstado] = useState<SaveState>({ guardando: false, mensaje: '' });
 
   const coords = useMemo(() => detectarCoordenadasURL(form.ubicacionEnlace), [form.ubicacionEnlace]);
-  const mapaUrl = coords
-    ? `https://www.google.com/maps/search/?api=1&query=${coords.lat},${coords.lng}`
-    : form.ubicacionEnlace.trim() && /(?:maps\.app\.goo\.gl|goo\.gl\/maps|google\.[a-z.]+\/maps|maps\.google\.com)/.test(form.ubicacionEnlace)
-    ? form.ubicacionEnlace.trim()
-    : null;
+  const mapaUrl = urlAbrirMapa({ enlace: form.ubicacionEnlace.trim(), ...(coords ?? {}) });
   const enlaceInvalido = !!form.ubicacionEnlace.trim() && !mapaUrl;
 
   async function guardar(e: FormEvent) {
@@ -641,6 +656,7 @@ function TabDatos({ persona, esAdminCoord }: { persona: Personal; esAdminCoord: 
     if (!esAdminCoord) return;
     setEstado({ guardando: true, mensaje: '' });
     try {
+      if (enlaceInvalido) throw new Error('Pega una ubicación válida de Google Maps.');
       const ubicacion = form.ubicacionEnlace.trim()
         ? limpiarUndefined({
             enlace: form.ubicacionEnlace.trim(),
@@ -648,14 +664,14 @@ function TabDatos({ persona, esAdminCoord }: { persona: Personal; esAdminCoord: 
             lng: coords?.lng,
           })
         : null;
-      await updateDoc(
+      await actualizarFicha(
         doc(db, 'personal', persona.id),
-        limpiarUndefined({
+        limpiarActualizacion({
           cedula: form.cedula.trim() || undefined,
           telefono: form.telefono.trim() || undefined,
           telefonoFlota: form.telefonoFlota.trim() || undefined,
           whatsapp: form.whatsapp.trim() || undefined,
-          email: form.email.trim().toLowerCase() || undefined,
+          emailContacto: form.email.trim().toLowerCase() || undefined,
           direccion: form.direccion.trim() || undefined,
           ubicacionCasa: ubicacion ?? undefined,
         }),
@@ -841,9 +857,9 @@ function TabTrabajo({
       const rolCambio = form.rol !== persona.rol;
       // 1. Guardar en personal/{id}
       const operariaNombre = operariasDisponibles.find((o) => o.id === form.operariaId)?.nombre;
-      await updateDoc(
+      await actualizarFicha(
         doc(db, 'personal', persona.id),
-        limpiarUndefined({
+        limpiarActualizacion({
           rol: form.rol,
           especialidad: form.especialidad.trim() || undefined,
           fechaIngreso: form.fechaIngreso || undefined,
@@ -1010,10 +1026,10 @@ function TabNomina({ persona, esAdminCoord }: { persona: Personal; esAdminCoord:
     if (!esAdminCoord) return;
     setEstado({ guardando: true, mensaje: '' });
     try {
-      await updateDoc(
+      await actualizarFicha(
         doc(db, 'personal', persona.id),
-        limpiarUndefined({
-          sueldoBase: form.sueldoBase > 0 ? Number(form.sueldoBase) : undefined,
+        limpiarActualizacion({
+          sueldoBase: Number(form.sueldoBase),
           nivel: esTecnico ? form.nivel : undefined,
           comisionPorcentaje:
             esTecnico && form.comisionPorcentaje >= 0 ? Number(form.comisionPorcentaje) : undefined,
@@ -1241,7 +1257,7 @@ function TabCuenta({
     if (!esAdminCoord) return;
     setEstado({ guardando: true, mensaje: '' });
     try {
-      const data: Record<string, unknown> = limpiarUndefined({
+      const data: Record<string, unknown> = limpiarActualizacion({
         correoRecuperacion: form.correoRecuperacion.trim() || undefined,
         permisosPersonalizados: form.permisosPersonalizados,
         iaHabilitada: form.iaHabilitada === true,
@@ -1249,7 +1265,7 @@ function TabCuenta({
       if (form.permisosPersonalizados) {
         data.permisosSistema = form.permisosSistema;
       }
-      await updateDoc(doc(db, 'personal', persona.id), data);
+      await actualizarFicha(doc(db, 'personal', persona.id), data);
       if (persona.uid && persona.uid !== 'existing') {
         try {
           const sync: Record<string, unknown> = { iaHabilitada: form.iaHabilitada === true };
@@ -1393,7 +1409,7 @@ function TabCuenta({
       } finally {
         await deleteApp(secondaryApp);
       }
-      await updateDoc(doc(db, 'personal', persona.id), { uid: cred.user.uid });
+      await actualizarFicha(doc(db, 'personal', persona.id), { uid: cred.user.uid });
       toast.success(`Acceso creado para ${persona.nombre}`);
       await onRefrescarAcceso();
       setClaveNueva('');
@@ -1801,9 +1817,9 @@ function TabDocumentos({ persona, esAdminCoord }: { persona: Personal; esAdminCo
     if (!esAdminCoord) return;
     setEstado({ guardando: true, mensaje: '' });
     try {
-      await updateDoc(
+      await actualizarFicha(
         doc(db, 'personal', persona.id),
-        limpiarUndefined({
+        limpiarActualizacion({
           fotoUrl: form.fotoUrl.trim() || undefined,
           licenciaNumero: form.licenciaNumero.trim() || undefined,
           licenciaVencimiento: form.licenciaVencimiento || undefined,
@@ -1947,7 +1963,7 @@ function TabReferencias({ persona, esAdminCoord }: { persona: Personal; esAdminC
           telefono: c.telefono.trim() || undefined,
         }),
       );
-      await updateDoc(doc(db, 'personal', persona.id), {
+      await actualizarFicha(doc(db, 'personal', persona.id), {
         referenciasPersonales: refsLimpias,
         contactosEmergencia: emergenciasLimpias,
       });

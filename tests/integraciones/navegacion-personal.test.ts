@@ -16,7 +16,8 @@ it('navega con Personal.id conservando homónimos y sin sustituir por auth uid',
   m.rol = 'administrador'; m.personalVer = true;
   const v = await abrir('p-1');
   const enlaces = v.root.findAllByType('a');
-  expect(enlaces.find(a => a.props.href.startsWith('/admin/usuarios'))?.props.href).toBe('/admin/usuarios?personalId=p-1');
+  expect(enlaces.find(a => a.props.href.startsWith('/admin/personal'))?.props.href).toBe('/admin/personal?personalId=p-1');
+  expect(enlaces.some(a => a.props.href.startsWith('/admin/usuarios'))).toBe(false);
   expect(enlaces.find(a => a.props.href.startsWith('/admin/ponches'))?.props.href).toBe('/admin/ponches?personalId=p-1');
   expect(v.root.findByType('select').props.value).toBe('p-1');
   await act(async () => v.unmount());

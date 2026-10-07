@@ -502,6 +502,11 @@ service cloud.firestore {
     }
 
     // Personal (empleados)
+    // Domicilios, identificación y referencias nunca se entregan al listado de staff.
+    match /personal_privado/{docId} {
+      allow read, write: if esAdminOCoord();
+    }
+
     match /personal/{docId} {
       // Staff puede leer la lista (para asignación de técnicos, etc.)
       allow read: if esStaff();

@@ -1591,6 +1591,7 @@ export interface Personal {
   rol: Rol;
   telefono?: string;
   email?: string;
+  emailContacto?: string;
   uid?: string;
   especialidad?: string;
   zona?: string;
