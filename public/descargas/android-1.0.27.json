@@ -1,0 +1,9 @@
+{
+  "version": "1.0.27",
+  "versionCode": 28,
+  "package": "com.misterservicerd.app",
+  "sourceCommit": "06630c2ee26e07eb57d790a7975c09c64f53cf83",
+  "apkSha256": "c5f370aa2528c9ad443bc716948165904ee23c4a297b98b47a723e36a3f6d0b7",
+  "verifiedAssets": 252,
+  "certificateSha256": "d65aec5154307ec45f707402ba180d0f9a22746d7e37dda46886f4950e8ca2cd"
+}
