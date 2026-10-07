@@ -65,7 +65,6 @@ const pagosPendientesCount = counts.pagosPendientesCount ?? 0;
       { to: '/admin/operaciones', icon: LayoutDashboard, label: 'Centro de operaciones', show: p('ordenesVer') },
       { to: '/admin/calendario', icon: Calendar, label: 'Calendario', show: p('ordenesVer') },
       { to: '/admin/mapa', icon: Map, label: 'Mapa de operaciones', show: p('ordenesVer') },
-      { to: '/admin/mapa-rutas-anterior', icon: Map, label: 'Mapa de Rutas (anterior)', show: p('ordenesVer') },
       { to: '/admin/reprogramaciones', icon: RefreshCw, label: 'Reprogramaciones', badge: reprogramacionesCount, show: esAdminOCoord },
       { to: '/admin/sugerencias-chequeo', icon: ClipboardCheck, label: 'Sugerencias chequeo', badge: sugerenciasChequeoCount, show: esAdminOCoord },
       { to: '/admin/standby', icon: Clock, label: 'Pendiente de piezas', badge: standbyCount + ordenesStandbyCount, show: p('ordenesVer') },

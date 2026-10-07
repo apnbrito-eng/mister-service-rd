@@ -7,6 +7,7 @@
  * Fechas se formatean con `componentesRD` para no depender de la zona del
  * dispositivo.
  */
+import SugerenciaRecorrido from './SugerenciaRecorrido';
 import { ArrowLeft, ExternalLink, Send, Zap, Trash2 } from 'lucide-react';
 import type { Personal } from '../../types';
 import type { DiaTecnico } from '../../utils/mapaOperaciones';
@@ -126,6 +127,8 @@ export default function FichaRuta({
             <li className="rounded-md bg-gray-50 px-2 py-1 text-xs text-gray-600">Sin citas este día.</li>
           )}
         </ol>
+
+        <SugerenciaRecorrido key={`${tecnico.id}:${diaSeleccionado.getTime()}`} paradas={paradas} origen={origenOficina} />
 
         <section className="mt-3 rounded-md border border-gray-200 bg-white p-2">
           <div className="flex items-center gap-2">

@@ -32,6 +32,7 @@ import {
   type Senal,
   type Tramo,
 } from '../utils/mapaOperaciones';
+import { zonaDeOrden } from '../utils/zonas';
 import { equipoDeOperaria } from '../utils/equiposOperacion';
 import { tieneCoord, type LatLng } from '../utils/geo';
 import {
@@ -199,7 +200,7 @@ export default function Mapa({ fixture, modoDemo, calendariosDemo }: Props) {
   const setEstado = useCallback((parche: Partial<EstadoFiltros>) => {
     setEstadoRaw(prev => ({ ...prev, ...parche }));
     if ('modo' in parche) setAlturaMovil('cerrada');
-    if ('desde' in parche || 'hasta' in parche || 'equipo' in parche || 'tecnicoId' in parche) setVista({ modo: 'inicio' });
+    if ('desde' in parche || 'hasta' in parche || 'equipo' in parche || 'tecnicoId' in parche || 'zona' in parche) setVista({ modo: 'inicio' });
   }, []);
   const rangoActivo = useMemo(() => rangoRD(estado.desde, estado.hasta), [estado.desde, estado.hasta]);
   const rangoInvalido = rangoActivo === null;
@@ -296,8 +297,11 @@ export default function Mapa({ fixture, modoDemo, calendariosDemo }: Props) {
   const gpsMap = useMemo(() => gpsPorTecnico(datos.gps, canonicalizar), [datos.gps, canonicalizar]);
 
   const citas = useMemo(
-    () => citasFromOrdenes(datos.ordenes, clientesIndex, standbyIndex, ahora, canonicalizar),
-    [datos.ordenes, clientesIndex, standbyIndex, ahora, canonicalizar],
+    () => citasFromOrdenes(
+      datos.ordenes.filter(o => !estado.zona || zonaDeOrden(o, clientesIndex.get(o.clienteId)) === estado.zona),
+      clientesIndex, standbyIndex, ahora, canonicalizar,
+    ),
+    [datos.ordenes, clientesIndex, standbyIndex, ahora, canonicalizar, estado.zona],
   );
 
   const citasFiltradas = useMemo(() => {
@@ -1187,9 +1191,6 @@ export default function Mapa({ fixture, modoDemo, calendariosDemo }: Props) {
       )}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-gray-200 bg-white px-3 py-1 text-xs text-gray-500">
-        <Link to="/admin/mapa-rutas-anterior" className="inline-flex min-h-[44px] items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 hover:bg-gray-50">
-          <ArrowLeft size={12} /> Mapa anterior
-        </Link>
         {permisos.clientesVer && <Link className="inline-flex min-h-[44px] items-center text-brand-700 underline" to="/admin/clientes">Clientes y reactivación</Link>}
         <span className="ml-auto">Día activo: {etiquetaDiaRD(diaActivo, ahora)}</span>
       </div>

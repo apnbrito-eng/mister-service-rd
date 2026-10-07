@@ -29,8 +29,7 @@ const Citas = lazy(() => import('./pages/Citas'));
 const Calendario = lazy(() => import('./pages/Calendario'));
 const Standby = lazy(() => import('./pages/Standby'));
 const MapaRutas = lazy(() => import('./pages/MapaRutas'));
-// Mapa de operaciones unificado (reemplaza /admin/mapa; el anterior queda
-// accesible en /admin/mapa-rutas-anterior para QA de paridad).
+// Mapa único; la ruta anterior conserva compatibilidad y redirige aquí.
 const Mapa = lazy(() => import('./pages/Mapa'));
 // Centro de operaciones — vista única con resumen operativo, atención por
 // prioridad y jornada por técnico. Reutiliza useMapaDatos y sus permisos.

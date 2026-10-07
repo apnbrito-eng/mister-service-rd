@@ -12,7 +12,7 @@ import {
   Calendar, ChevronLeft, ChevronRight, Map, List as ListIcon,
   CalendarDays, Satellite, TrafficCone, UserCheck, SlidersHorizontal, CalendarRange, Users,
 } from 'lucide-react';
-import type { Personal } from '../../types';
+import { ZONAS_RD, type Personal } from '../../types';
 import {
   componentesRD, desplazarRangoRD, fechaEnRD, rangoAtajoRD,
 } from '../../utils/mapaFechas';
@@ -27,6 +27,7 @@ export interface EstadoFiltros {
   hasta: Date;
   equipo: EquipoFiltro;
   tecnicoId: string;
+  zona?: string;
   modo: ModoVista;
   capaClientes: boolean;
   capaGps: boolean;
@@ -247,6 +248,14 @@ export default function BarraFiltros({
               </select>
             </label>
           </div>
+
+          <label className="flex flex-col gap-1 text-xs text-gray-600">
+            Zona de citas
+            <select aria-label="Zona de citas" value={estado.zona ?? ''} onChange={e => setEstado({ zona: e.target.value })} className="min-h-[44px] rounded-md border border-gray-300 bg-white px-2 text-sm">
+              <option value="">Todas las zonas</option>
+              {ZONAS_RD.map(z => <option key={z} value={z}>{z}</option>)}
+            </select>
+          </label>
 
           {/* Capas */}
           <div className="flex flex-wrap gap-2">

@@ -7,7 +7,7 @@ const areas = (rol: Usuario['rol']) => obtenerAreas(profile(rol)).flatMap(n => n
 describe('áreas de trabajo', () => {
  it('mantiene todos los destinos actuales sin duplicarlos al mover nómina y recursos', () => {
   const actual = obtenerAreas(profile('administrador')).flatMap(n=>n.kind==='section'?n.section.items:[n.item]).filter(i=>i.show).map(i=>i.to);
-  const paths='dashboard ordenes agenda-dia operaciones calendario mapa mapa-rutas-anterior reprogramaciones sugerencias-chequeo standby taller mantenimiento historial-anuladas calendarios inbox clientes-responsables clientes solicitudes citas empresas-aliadas cotizaciones pagos-pendientes facturacion-pendiente facturas cierre-dia gastos bancos estado-resultado reporte-avanzado personal ponches nomina comisiones avances prestamos rendimiento metricas-mensuales marketing feedback web formularios configuracion-marketing precios inventario conocimiento asistente asistente/historial configuracion'.split(' ').map(s=>'/admin/'+s).concat('/ponche');
+  const paths='dashboard ordenes agenda-dia operaciones calendario mapa reprogramaciones sugerencias-chequeo standby taller mantenimiento historial-anuladas calendarios inbox clientes-responsables clientes solicitudes citas empresas-aliadas cotizaciones pagos-pendientes facturacion-pendiente facturas cierre-dia gastos bancos estado-resultado reporte-avanzado personal ponches nomina comisiones avances prestamos rendimiento metricas-mensuales marketing feedback web formularios configuracion-marketing precios inventario conocimiento asistente asistente/historial configuracion'.split(' ').map(s=>'/admin/'+s).concat('/ponche');
   expect(actual.sort()).toEqual(paths.sort());
   expect(new Set(actual).size).toBe(actual.length);
  });

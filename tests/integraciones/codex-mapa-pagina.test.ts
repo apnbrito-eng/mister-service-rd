@@ -114,3 +114,11 @@ it('la ficha abierta desde la lista de mañana conserva ese día al repartir', a
   await act(async () => ficha.onRepartirDia());
   expect(tree.root.findAllByType(PanelRepartir)[0].props.movimientos).toHaveLength(1);
 });
+
+it('filtra citas por zona y recupera el rango al quitar el filtro', async () => {
+  await montar();
+  await act(async () => tree.root.findByType(BarraFiltros).props.setEstado({ capaGps: false, zona: 'Punta Cana' }));
+  expect(tree.root.findByType(MapaGoogle).props.encuadre.puntos).toHaveLength(0);
+  await act(async () => tree.root.findByType(BarraFiltros).props.setEstado({ zona: '' }));
+  expect(tree.root.findByType(MapaGoogle).props.encuadre.puntos.length).toBeGreaterThan(0);
+});
