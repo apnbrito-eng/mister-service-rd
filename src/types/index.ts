@@ -1608,6 +1608,45 @@ export interface Personal {
   operariaNombre?: string;
   /** Habilita el chat flotante del Asistente IA para este miembro del personal. Bloqueado para tecnico/ayudante. */
   iaHabilitada?: boolean;
+
+  // ────────────────────────────────────────────────────────────────
+  // SPRINT-DISENO-BAMBOO (2026-10-07): ficha única inspirada en BambooHR.
+  // Todos los campos siguientes son OPCIONALES para preservar la retrocompat
+  // con documentos existentes en `personal/`. Firestore rules permiten write
+  // libre a admin/coord sobre esta colección (sin hasOnly whitelist), así que
+  // añadir campos no requiere cambio de rules. Autor: Claude Code.
+  // ────────────────────────────────────────────────────────────────
+  /** Cédula o identificación del empleado. */
+  cedula?: string;
+  /** Teléfono de la flota (celular empresa), independiente del teléfono personal. */
+  telefonoFlota?: string;
+  /** Número de WhatsApp personal (puede diferir del teléfono). */
+  whatsapp?: string;
+  /** Correo de recuperación de la cuenta, independiente del correo de acceso. */
+  correoRecuperacion?: string;
+  /** Dirección escrita completa (calle, número, sector, referencia). */
+  direccion?: string;
+  /** Ubicación de la casa pegada desde WhatsApp o Google Maps. */
+  ubicacionCasa?: {
+    /** Enlace crudo pegado por el usuario. */
+    enlace?: string;
+    /** Latitud resuelta (si se pudo). */
+    lat?: number;
+    /** Longitud resuelta (si se pudo). */
+    lng?: number;
+  };
+  /** Fecha de ingreso al equipo, formato ISO `yyyy-mm-dd`. */
+  fechaIngreso?: string;
+  /** URL pública (Storage) de la foto del empleado. Si no está, se usan iniciales. */
+  fotoUrl?: string;
+  /** Número de licencia de conducir. */
+  licenciaNumero?: string;
+  /** Vencimiento de licencia, formato ISO `yyyy-mm-dd`. */
+  licenciaVencimiento?: string;
+  /** Tres referencias personales (nombre, relación, teléfono). */
+  referenciasPersonales?: Array<{ nombre?: string; relacion?: string; telefono?: string }>;
+  /** Contactos de emergencia (principal + alternativo). */
+  contactosEmergencia?: Array<{ nombre?: string; parentesco?: string; telefono?: string }>;
 }
 
 export interface Producto {

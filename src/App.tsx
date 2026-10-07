@@ -43,7 +43,11 @@ const EquiposTaller = lazy(() => import('./pages/EquiposTaller'));
 const Rendimiento = lazy(() => import('./pages/Rendimiento'));
 const Mantenimiento = lazy(() => import('./pages/Mantenimiento'));
 const Gastos = lazy(() => import('./pages/Gastos'));
-const PersonalPage = lazy(() => import('./pages/PersonalPage'));
+// SPRINT-DISENO-BAMBOO (2026-10-07): Personal + Usuarios + Permisos unificados
+// en una sola página con 6 pestañas estilo BambooHR. Reemplaza las antiguas
+// `PersonalPage.tsx` y `GestionUsuarios.tsx`. La ruta `/admin/usuarios` redirige
+// a `/admin/personal` para preservar bookmarks.
+const Personal = lazy(() => import('./pages/Personal'));
 const Configuracion = lazy(() => import('./pages/Configuracion'));
 const CierreDia = lazy(() => import('./pages/CierreDia'));
 const PreciosServicios = lazy(() => import('./pages/PreciosServicios'));
@@ -60,7 +64,6 @@ const FormularioPublico = lazy(() => import('./pages/public/FormularioPublico'))
 const TecnicoVista = lazy(() => import('./pages/TecnicoVista'));
 const Calendarios = lazy(() => import('./pages/Calendarios'));
 const CitaPublica = lazy(() => import('./pages/CitaPublica'));
-const GestionUsuarios = lazy(() => import('./pages/GestionUsuarios'));
 const TrackingCliente = lazy(() => import('./pages/TrackingCliente'));
 const AgendaDia = lazy(() => import('./pages/AgendaDia'));
 const MetricasMensuales = lazy(() => import('./pages/MetricasMensuales'));
@@ -289,8 +292,9 @@ function AppRoutes() {
         <Route path="reporte-avanzado" element={<RolRoute roles={['administrador', 'coordinadora']}><ReporteAvanzado /></RolRoute>} />
         <Route path="mantenimiento" element={<Mantenimiento />} />
         <Route path="gastos" element={<PermisoRoute permiso="gastosVer"><Gastos /></PermisoRoute>} />
-        <Route path="personal" element={<PermisoRoute permiso="personalVer"><PersonalPage /></PermisoRoute>} />
-        <Route path="usuarios" element={<RolRoute roles={['administrador', 'coordinadora']}><GestionUsuarios /></RolRoute>} />
+        <Route path="personal" element={<PermisoRoute permiso="personalVer"><Personal /></PermisoRoute>} />
+        {/* Legacy — Usuarios y Permisos ahora es una pestaña dentro de Personal. */}
+        <Route path="usuarios" element={<Navigate to="/admin/personal" replace />} />
         <Route path="web" element={<RolRoute roles={['administrador']}><ConfiguracionWeb /></RolRoute>} />
         <Route path="empresas-aliadas" element={<RolRoute roles={['administrador']}><EmpresasAliadas /></RolRoute>} />
         <Route path="formularios" element={<RolRoute roles={['administrador']}><Formularios /></RolRoute>} />
@@ -317,10 +321,10 @@ function AppRoutes() {
         <Route path="avances" element={<PermisoRoute permiso="avancesGestionar"><Avances /></PermisoRoute>} />
         <Route path="prestamos" element={<RolRoute roles={['administrador', 'coordinadora']}><Prestamos /></RolRoute>} />
         <Route path="estado-resultado" element={<RolRoute roles={['administrador', 'coordinadora']}><EstadoResultado /></RolRoute>} />
-        {/* SPRINT-117c1: /admin/configuracion/usuarios es legacy — redirigir
-            a la canónica /admin/usuarios para preservar bookmarks viejos.
-            Antes era una segunda ruta activa al mismo componente. */}
-        <Route path="configuracion/usuarios" element={<Navigate to="/admin/usuarios" replace />} />
+        {/* SPRINT-117c1 + SPRINT-DISENO-BAMBOO (2026-10-07): bookmarks viejos
+            siguen funcionando. `/admin/usuarios` ya redirige a `/admin/personal`
+            donde vive la pestaña de Cuenta y permisos. */}
+        <Route path="configuracion/usuarios" element={<Navigate to="/admin/personal" replace />} />
         <Route path="ponches" element={<RolRoute roles={['administrador', 'coordinadora']}><AdminPonches /></RolRoute>} />
         <Route path="feedback" element={<RolRoute roles={['administrador', 'coordinadora']}><Feedback /></RolRoute>} />
         <Route path="sugerencias-chequeo" element={<RolRoute roles={['administrador', 'coordinadora']}><SugerenciasChequeo /></RolRoute>} />

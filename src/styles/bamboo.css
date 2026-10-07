@@ -1,0 +1,779 @@
+/*
+ * Rediseño visual BambooHR — Lote 1 (Personal unificado).
+ *
+ * Tokens y clases scoped al root `.ms-bamboo`. Mantener el resto del sistema
+ * intacto; aplicar la clase sólo en los módulos ya rediseñados mientras Jorge y
+ * Codex avanzan en paralelo con otros módulos. En lotes siguientes la clase
+ * se irá propagando a los demás módulos.
+ *
+ * Referencia aprobada por Jorge el 2026-10-07: concepto `personal-concepto-bamboo.html`.
+ * Autor: Claude Code.
+ */
+
+.ms-bamboo {
+  /* Superficies */
+  --b-bg: #f5f7f2;
+  --b-paper: #ffffff;
+  --b-soft: #edf4e4;
+  --b-pista: #f0f3ec;
+
+  /* Tinta */
+  --b-ink: #263529;
+  --b-ink-2: #4a584c;
+  --b-muted: #617063;
+  --b-line: #dce5da;
+  --b-line-fuerte: #c5d1c2;
+
+  /* Verde BambooHR adaptado a Mister Service */
+  --b-green: #3f622c;
+  --b-green-hover: #345124;
+  --b-green-on: #ffffff;
+  --b-green-soft: #d6e4c3;
+
+  /* Estados accesorios (reutilizados del resto del sistema) */
+  --b-danger: #b91c1c;
+  --b-danger-soft: #fdecec;
+  --b-warning: #b45309;
+  --b-warning-soft: #fef3c7;
+  --b-info: #0f3460;
+  --b-info-soft: #e7eef7;
+
+  /* Radios */
+  --b-r-xs: 6px;
+  --b-r-sm: 8px;
+  --b-r-md: 12px;
+  --b-r-lg: 16px;
+  --b-r-pill: 9999px;
+
+  /* Espaciado interno coherente con el resto del sistema */
+  --b-gap-1: 4px;
+  --b-gap-2: 8px;
+  --b-gap-3: 12px;
+  --b-gap-4: 16px;
+  --b-gap-5: 20px;
+  --b-gap-6: 24px;
+  --b-gap-8: 32px;
+
+  color: var(--b-ink);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  background: var(--b-bg);
+}
+
+/* Resetea algunas clases Tailwind heredadas sin romper el chrome global del Layout */
+.ms-bamboo *,
+.ms-bamboo *::before,
+.ms-bamboo *::after {
+  box-sizing: border-box;
+}
+
+/* ============================================================
+   Shell: header + sidebar interno + workspace
+   ============================================================ */
+
+.ms-bamboo .b-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 0;
+  min-height: calc(100vh - 200px);
+  background: var(--b-bg);
+  border-radius: var(--b-r-lg);
+  overflow: hidden;
+  border: 1px solid var(--b-line);
+}
+
+.ms-bamboo .b-side {
+  background: var(--b-paper);
+  padding: 18px 10px;
+  border-right: 1px solid var(--b-line);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ms-bamboo .b-side small {
+  display: block;
+  padding: 14px 12px 6px;
+  color: var(--b-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ms-bamboo .b-side-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  justify-content: flex-start;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--b-ink);
+  border-radius: var(--b-r-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+}
+
+.ms-bamboo .b-side-link:hover {
+  background: var(--b-pista);
+}
+
+.ms-bamboo .b-side-link[aria-current='page'],
+.ms-bamboo .b-side-link.is-active {
+  background: var(--b-soft);
+  color: var(--b-green);
+  font-weight: 600;
+}
+
+.ms-bamboo .b-side-link .b-side-count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 2px 6px;
+  border-radius: var(--b-r-pill);
+  background: var(--b-pista);
+  color: var(--b-muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.ms-bamboo .b-side-link.is-active .b-side-count {
+  background: var(--b-green);
+  color: var(--b-green-on);
+}
+
+.ms-bamboo .b-workspace {
+  padding: 22px 24px;
+  min-width: 0;
+  background: var(--b-bg);
+}
+
+.ms-bamboo .b-crumb {
+  font-size: 12px;
+  color: var(--b-muted);
+  margin-bottom: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* ============================================================
+   Profile card (cabecera de ficha)
+   ============================================================ */
+
+.ms-bamboo .b-profile {
+  background: var(--b-paper);
+  padding: 22px;
+  border: 1px solid var(--b-line);
+  border-radius: var(--b-r-md);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.ms-bamboo .b-avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: var(--b-r-pill);
+  background: var(--b-soft);
+  color: var(--b-green);
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  font-weight: 600;
+  overflow: hidden;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+}
+
+.ms-bamboo .b-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ms-bamboo .b-profile-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.ms-bamboo .b-profile-main h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--b-ink);
+}
+
+.ms-bamboo .b-profile-main p {
+  margin: 4px 0 0;
+  color: var(--b-muted);
+  font-size: 14px;
+}
+
+.ms-bamboo .b-profile-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+/* ============================================================
+   Botones
+   ============================================================ */
+
+.ms-bamboo .b-btn,
+.ms-bamboo .b-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 10px 14px;
+  border: 1px solid var(--b-line);
+  background: var(--b-paper);
+  color: var(--b-ink);
+  border-radius: var(--b-r-sm);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+
+.ms-bamboo .b-btn:hover:not(:disabled),
+.ms-bamboo .b-link-btn:hover {
+  background: var(--b-pista);
+  border-color: var(--b-line-fuerte);
+}
+
+.ms-bamboo .b-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ms-bamboo .b-btn:focus-visible,
+.ms-bamboo .b-link-btn:focus-visible {
+  outline: 2px solid var(--b-green);
+  outline-offset: 2px;
+}
+
+.ms-bamboo .b-btn.is-primary {
+  background: var(--b-green);
+  color: var(--b-green-on);
+  border-color: var(--b-green);
+}
+
+.ms-bamboo .b-btn.is-primary:hover:not(:disabled) {
+  background: var(--b-green-hover);
+  border-color: var(--b-green-hover);
+}
+
+.ms-bamboo .b-btn.is-danger {
+  color: var(--b-danger);
+  border-color: var(--b-danger);
+  background: var(--b-paper);
+}
+
+.ms-bamboo .b-btn.is-danger:hover:not(:disabled) {
+  background: var(--b-danger-soft);
+}
+
+.ms-bamboo .b-btn.is-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+
+.ms-bamboo .b-btn.is-ghost:hover:not(:disabled) {
+  background: var(--b-pista);
+}
+
+/* ============================================================
+   Tabs
+   ============================================================ */
+
+.ms-bamboo .b-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--b-line);
+  margin: 18px 0 0;
+}
+
+.ms-bamboo .b-tabs button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--b-muted);
+  border-radius: var(--b-r-sm) var(--b-r-sm) 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ms-bamboo .b-tabs button:hover {
+  color: var(--b-ink);
+  background: var(--b-pista);
+}
+
+.ms-bamboo .b-tabs button[aria-selected='true'] {
+  background: var(--b-paper);
+  color: var(--b-green);
+  box-shadow: inset 0 -3px 0 var(--b-green);
+  font-weight: 600;
+}
+
+.ms-bamboo .b-tabs button:focus-visible {
+  outline: 2px solid var(--b-green);
+  outline-offset: -2px;
+}
+
+/* ============================================================
+   Panel + grupos
+   ============================================================ */
+
+.ms-bamboo .b-panel {
+  padding: 22px;
+  background: var(--b-paper);
+  border: 1px solid var(--b-line);
+  border-top: 0;
+  border-radius: 0 0 var(--b-r-md) var(--b-r-md);
+}
+
+.ms-bamboo .b-panel + .b-panel {
+  margin-top: 12px;
+  border-top: 1px solid var(--b-line);
+  border-radius: var(--b-r-md);
+}
+
+.ms-bamboo .b-group {
+  padding-top: 20px;
+  margin-top: 20px;
+  border-top: 1px solid var(--b-line);
+}
+
+.ms-bamboo h3.b-h3 {
+  font-size: 17px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  color: var(--b-ink);
+  letter-spacing: -0.01em;
+}
+
+/* ============================================================
+   Formularios
+   ============================================================ */
+
+.ms-bamboo .b-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.ms-bamboo .b-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ms-bamboo .b-field.b-full {
+  grid-column: 1 / -1;
+}
+
+.ms-bamboo .b-field label,
+.ms-bamboo label.b-field-label {
+  font-size: 13px;
+  color: var(--b-muted);
+  font-weight: 500;
+}
+
+.ms-bamboo .b-field :is(input, select, textarea),
+.ms-bamboo input.b-input,
+.ms-bamboo select.b-input,
+.ms-bamboo textarea.b-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--b-line);
+  border-radius: var(--b-r-sm);
+  background: var(--b-paper);
+  color: var(--b-ink);
+  font-size: 16px;
+  font-family: inherit;
+}
+
+.ms-bamboo .b-field :is(input, select, textarea):focus-visible,
+.ms-bamboo input.b-input:focus-visible,
+.ms-bamboo select.b-input:focus-visible,
+.ms-bamboo textarea.b-input:focus-visible {
+  outline: 2px solid var(--b-green);
+  outline-offset: 1px;
+  border-color: var(--b-green);
+}
+
+.ms-bamboo textarea.b-input {
+  resize: vertical;
+  min-height: 88px;
+}
+
+.ms-bamboo .b-field input[readonly] {
+  background: var(--b-pista);
+  color: var(--b-ink-2);
+  cursor: default;
+}
+
+.ms-bamboo .b-help {
+  font-size: 12px;
+  color: var(--b-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.ms-bamboo .b-callout {
+  background: var(--b-soft);
+  border: 1px solid var(--b-green-soft);
+  color: var(--b-ink);
+  padding: 12px 14px;
+  border-radius: var(--b-r-sm);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ms-bamboo .b-callout.b-callout-warn {
+  background: var(--b-warning-soft);
+  border-color: #f5d79b;
+  color: var(--b-warning);
+}
+
+.ms-bamboo .b-callout.b-callout-info {
+  background: var(--b-info-soft);
+  border-color: #c2d3ea;
+  color: var(--b-info);
+}
+
+.ms-bamboo .b-callout.b-callout-danger {
+  background: var(--b-danger-soft);
+  border-color: #f2c6c6;
+  color: var(--b-danger);
+}
+
+/* ============================================================
+   Switches / checkboxes agrupados
+   ============================================================ */
+
+.ms-bamboo .b-switches {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+.ms-bamboo .b-switches label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  color: var(--b-ink);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: var(--b-r-xs);
+}
+
+.ms-bamboo .b-switches label:hover {
+  background: var(--b-pista);
+}
+
+.ms-bamboo .b-switches input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  accent-color: var(--b-green);
+}
+
+/* ============================================================
+   Ubicación de la casa
+   ============================================================ */
+
+.ms-bamboo .b-location {
+  background: var(--b-soft);
+  padding: 14px 16px;
+  border-radius: var(--b-r-sm);
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ms-bamboo .b-location strong {
+  display: block;
+  color: var(--b-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ms-bamboo .b-location p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--b-muted);
+}
+
+/* ============================================================
+   Lista de equipos (cards)
+   ============================================================ */
+
+.ms-bamboo .b-equipo-cols {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 12px;
+}
+
+.ms-bamboo .b-equipo-col {
+  background: var(--b-paper);
+  border: 1px solid var(--b-line);
+  border-radius: var(--b-r-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ms-bamboo .b-equipo-col h3 {
+  font-size: 14px;
+  color: var(--b-muted);
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ms-bamboo .b-persona-card {
+  background: var(--b-pista);
+  border: 1px solid transparent;
+  border-radius: var(--b-r-sm);
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  min-height: 64px;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+.ms-bamboo .b-persona-card:hover,
+.ms-bamboo .b-persona-card.is-selected {
+  background: var(--b-soft);
+  border-color: var(--b-green-soft);
+}
+
+.ms-bamboo .b-persona-card .b-avatar {
+  width: 40px;
+  height: 40px;
+  font-size: 14px;
+}
+
+.ms-bamboo .b-persona-card .b-persona-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.ms-bamboo .b-persona-card .b-persona-main strong {
+  display: block;
+  font-size: 14px;
+  color: var(--b-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ms-bamboo .b-persona-card .b-persona-main span {
+  font-size: 12px;
+  color: var(--b-muted);
+}
+
+.ms-bamboo .b-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: var(--b-r-pill);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ms-bamboo .b-chip-ok {
+  background: var(--b-green-soft);
+  color: var(--b-green);
+}
+
+.ms-bamboo .b-chip-warn {
+  background: var(--b-warning-soft);
+  color: var(--b-warning);
+}
+
+.ms-bamboo .b-chip-off {
+  background: var(--b-pista);
+  color: var(--b-muted);
+}
+
+/* ============================================================
+   Referencias y emergencia
+   ============================================================ */
+
+.ms-bamboo .b-ref-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+/* ============================================================
+   Documentos (slots)
+   ============================================================ */
+
+.ms-bamboo .b-doc-slot {
+  background: var(--b-pista);
+  border: 1px dashed var(--b-line-fuerte);
+  padding: 14px;
+  border-radius: var(--b-r-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--b-muted);
+  min-height: 110px;
+  justify-content: center;
+  text-align: center;
+  font-size: 13px;
+}
+
+.ms-bamboo .b-doc-slot strong {
+  color: var(--b-ink);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+/* ============================================================
+   Barra de cumplimiento (empleado)
+   ============================================================ */
+
+.ms-bamboo .b-meter {
+  height: 10px;
+  background: var(--b-line);
+  border-radius: var(--b-r-pill);
+  overflow: hidden;
+}
+
+.ms-bamboo .b-meter span {
+  display: block;
+  background: var(--b-green);
+  height: 100%;
+}
+
+/* ============================================================
+   Footer de ficha (acciones principales)
+   ============================================================ */
+
+.ms-bamboo .b-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--b-line);
+}
+
+.ms-bamboo .b-footer-status {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--b-muted);
+}
+
+/* ============================================================
+   Breakpoint móvil
+   ============================================================ */
+
+@media (max-width: 900px) {
+  .ms-bamboo .b-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .ms-bamboo .b-side {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-right: 0;
+    border-bottom: 1px solid var(--b-line);
+    padding: 12px;
+  }
+
+  .ms-bamboo .b-side-link {
+    width: auto;
+    flex: 1 0 auto;
+  }
+
+  .ms-bamboo .b-side small {
+    width: 100%;
+    padding: 4px 6px 0;
+  }
+
+  .ms-bamboo .b-workspace {
+    padding: 16px;
+  }
+
+  .ms-bamboo .b-profile {
+    padding: 16px;
+  }
+
+  .ms-bamboo .b-panel {
+    padding: 16px;
+  }
+
+  .ms-bamboo .b-fields,
+  .ms-bamboo .b-switches,
+  .ms-bamboo .b-ref-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ms-bamboo .b-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .ms-bamboo .b-tabs button {
+    white-space: nowrap;
+  }
+}
+
+/* ============================================================
+   Preferencias de accesibilidad
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-bamboo .b-btn,
+  .ms-bamboo .b-persona-card,
+  .ms-bamboo .b-tabs button {
+    transition: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .ms-bamboo {
+    --b-line: #8a9a8c;
+    --b-line-fuerte: #5a6b5c;
+    --b-muted: #3f4f41;
+  }
+}

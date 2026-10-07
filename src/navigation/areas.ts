@@ -2,7 +2,7 @@ import {
   LayoutDashboard, ClipboardList, Calendar, Map,
   Users, UserCog, FileText, Settings, Wrench,
   TrendingUp, DollarSign, Bell, Clock, 
-  Receipt, ShoppingBag, CalendarDays, Shield, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
+  Receipt, ShoppingBag, CalendarDays, Globe, Building2, Inbox, ClipboardCheck, Tag, Boxes, Wallet, XCircle,
   CalendarCheck, Sparkles, History, Star, RefreshCw, Banknote,
   MessageSquare, BarChart3, BookOpen,
 } from 'lucide-react';
@@ -86,8 +86,10 @@ const pagosPendientesCount = counts.pagosPendientesCount ?? 0;
       { to: '/admin/reporte-avanzado', icon: BarChart3, label: 'Reporte avanzado', show: esAdminOCoord },
     ] } },
     { kind: 'section', section: { id: 'v2_equipo', label: 'Equipo', icon: UserCog, defaultExpanded: false, items: [
-      { to: '/admin/personal', icon: UserCog, label: 'Personal', show: p('personalVer') },
-      { to: '/admin/usuarios', icon: Shield, label: 'Usuarios & Permisos', show: esAdminOCoord },
+      // SPRINT-DISENO-BAMBOO (2026-10-07): Personal + Usuarios & Permisos
+      // unificados en una sola página con ficha BambooHR. `/admin/usuarios`
+      // redirige acá para preservar bookmarks.
+      { to: '/admin/personal', icon: UserCog, label: 'Personal y permisos', show: p('personalVer') || esAdminOCoord },
       { to: '/admin/ponches', icon: ClipboardCheck, label: 'Reporte de Ponches', show: esAdminOCoord },
       { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: esAdminOCoord },
       { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: esAdminOCoord },
