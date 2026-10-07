@@ -29,3 +29,28 @@ it('coincidencia ambigua bloquea el lote completo antes de cambios', async () =>
  expect(m.api.mock.calls.filter(c => c[1])).toHaveLength(0); expect(vista.root.findByProps({ role: 'status' }).children.join('')).toContain('varias cuentas');
  await act(async () => vista.unmount());
 });
+it('reactiva responsables antes de guardar integrantes tras limpieza y deja extras bloqueados', async () => {
+ const inactivas = personas.map(p => ({ ...p, activo: ['id-jorge', 'id-maria'].includes(p.uid) }));
+ m.api.mockImplementation(async (_ruta, body) => body ? { ok: true, uid: body.uid || `nuevo-${body.usuario}` } : { personas: [...inactivas, { ...inactivas[0], nombre: 'Extra fuera de plantilla', usuario: 'extra', uid: 'extra', equipo: '', activo: false }] });
+ let vista!: ReactTestRenderer;
+ await act(async () => { vista = create(createElement(AltaEquipos, { personas: inactivas, plantillaEquipos, onComplete: vi.fn().mockResolvedValue(undefined) })); });
+ await act(async () => { vista.root.findByProps({ type: 'password' }).props.onChange({ target: { value: 'CLAVE-EXCLUSIVA-FIXTURE' } }); vista.root.findByProps({ type: 'checkbox' }).props.onChange({ target: { checked: true } }); });
+ await act(async () => { vista.root.findByType('button').props.onClick(); });
+ const cuerpos = m.api.mock.calls.map(c => c[1]).filter(Boolean);
+ expect(cuerpos.filter(c => c.accion === 'restaurar')).toHaveLength(11);
+ for (const [lider, miembro] of [['id-wila.a', 'leany.a'], ['id-yohana.b', 'disnely.b']]) {
+  expect(cuerpos.findIndex(c => c.accion === 'restaurar' && c.uid === lider)).toBeLessThan(cuerpos.findIndex(c => c.accion === 'guardar' && c.usuario === miembro));
+ }
+ expect(cuerpos.some(c => c.uid === 'extra')).toBe(false);
+ await act(async () => vista.unmount());
+});
+it('otra operaria activa en el equipo bloquea antes de cambiar cuentas', async () => {
+ m.api.mockResolvedValue({ personas: [...personas, { ...personas[2], nombre: 'Otra responsable', usuario: 'otra.a', uid: 'otra', equipo: 'A', activo: true }] });
+ let vista!: ReactTestRenderer;
+ await act(async () => { vista = create(createElement(AltaEquipos, { personas, plantillaEquipos, onComplete: vi.fn().mockResolvedValue(undefined) })); });
+ await act(async () => { vista.root.findByProps({ type: 'password' }).props.onChange({ target: { value: 'CLAVE-EXCLUSIVA-FIXTURE' } }); vista.root.findByProps({ type: 'checkbox' }).props.onChange({ target: { checked: true } }); });
+ await act(async () => { vista.root.findByType('button').props.onClick(); });
+ expect(m.api.mock.calls.filter(c => c[1])).toHaveLength(0);
+ expect(vista.root.findByProps({ role: 'status' }).children.join('')).toContain('otra responsable activa');
+ await act(async () => vista.unmount());
+});
