@@ -30,7 +30,7 @@ export default function EditarUbicacionCliente({ cliente, isOpen, onClose, onGua
     if (!p || !coordenadasClienteValidas(String(p.lat), String(p.lng))) {
       // No permitir que se guarde accidentalmente la ubicación anterior.
       setLat(''); setLng('');
-      setError(texto.trim() ? 'No encontramos coordenadas todavía. Para un enlace corto de Google Maps, pulsa Obtener ubicación del enlace.' : '');
+      setError(texto.trim() ? 'No encontramos coordenadas todavía. El enlace corto de Google Maps se resolverá automáticamente.' : '');
       return;
     }
     setLat(String(p.lat)); setLng(String(p.lng)); setError('');
@@ -47,6 +47,12 @@ export default function EditarUbicacionCliente({ cliente, isOpen, onClose, onGua
     } catch { if (solicitud.current === turno) setError('No pudimos obtener la ubicación. Reintenta o copia el enlace completo desde Google Maps.'); }
     finally { if (solicitud.current === turno) setResolviendo(false); }
   }
+  const resolverActual = useRef(resolverCorto); resolverActual.current = resolverCorto;
+  useEffect(() => {
+    if (!/https:\/\/(?:maps\.app\.goo\.gl|goo\.gl\/maps)\//.test(enlace) || detectarCoordenadasURL(enlace)) return;
+    const timer = setTimeout(() => { void resolverActual.current(); }, 400);
+    return () => clearTimeout(timer);
+  }, [enlace]);
   async function guardar(e: React.FormEvent) {
     e.preventDefault(); if (bloqueado.current || resolviendo) return;
     if (!coords) { setError('Pega una ubicación válida antes de guardar.'); return; }

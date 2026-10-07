@@ -2,7 +2,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-const m = vi.hoisted(() => ({ cliente: vi.fn(), ordenes: vi.fn(), facturas: vi.fn(), guardar: vi.fn(), documento: vi.fn(), rol: 'administrador', navigate: vi.fn() }));
+const m = vi.hoisted(() => ({ cliente: vi.fn(), ordenes: vi.fn(), facturas: vi.fn(), guardar: vi.fn(), documento: vi.fn(), rol: 'administrador', navigate: vi.fn(), expediente:vi.fn() }));
 vi.mock('../../src/services/clientes.service', () => ({ buscarClientePorTelefono: m.cliente, actualizarCliente: m.guardar, normalizarTelefono:(v:string)=> /^1?\d{10}$/.test(v)?v.replace(/^1(?=\d{10}$)/,''):'' }));
 vi.mock('../../src/services/ordenes.service', () => ({ obtenerTodasOrdenesPorTelefono: m.ordenes }));
 vi.mock('../../src/firebase/config', () => ({ db: {} }));
@@ -11,11 +11,12 @@ vi.mock('react-router-dom', () => ({ useNavigate: () => m.navigate }));
 vi.mock('../../src/context/AppContext', () => ({ useApp: () => ({ userProfile: { rol: m.rol } }) }));
 vi.mock('../../src/components/Modal', () => ({default: ({isOpen,children}:any) => isOpen ? React.createElement('div',null,children) : null}));
 vi.mock('../../src/components/inbox/AtencionChat', () => ({ default: () => null }));
-vi.mock('../../src/components/inbox/ExpedienteCliente', () => ({ default: () => React.createElement('textarea', { defaultValue: 'Nota pendiente' }) }));
+vi.mock('../../src/components/inbox/ExpedienteCliente', () => ({ default: (props:any) => {m.expediente(props);return React.createElement('textarea', { defaultValue: 'Nota pendiente' });} }));
 vi.mock('../../src/components/crm/GestionOrden', () => ({ default: ({ ordenId }: { ordenId: string }) => React.createElement('article', null, ordenId) }));
 vi.mock('../../src/components/ordenes/TimelineUnificadoOrden', () => ({ default: () => null }));
 vi.mock('../../src/components/ordenes/EnviarFacturacionButton', () => ({ default: () => null }));
 vi.mock('../../src/components/ordenes/MiniMapaCliente', () => ({ default: (props: { lat: number; lng: number }) => React.createElement('div', { 'data-mapa-cliente': true, ...props }) }));
+import CrearClienteDesdeChat from '../../src/components/inbox/CrearClienteDesdeChat';
 import PanelCliente360 from '../../src/components/inbox/PanelCliente360';
 import {resolverClienteFicha} from '../../src/components/inbox/resolverClienteFicha';
 let r: any;
@@ -160,4 +161,19 @@ it('crea la orden desde la ficha con el cliente actual', async () => {
  await act(async () => { r = create(React.createElement(PanelCliente360, {waId:'8095550100',onCrearOrden:crear})); });
  await act(async () => boton('+ Crear orden').props.onClick());
  expect(crear).toHaveBeenCalledWith({tipo:'cliente-existente',cliente});
+});
+
+it('abre directamente el expediente del mensaje y permanece allí al limpiar la selección guardada',async()=>{
+ const fuente={accion:'expediente' as const,wamid:'mensaje-qa',tipo:'text' as const,texto:'Nota que debe conservarse',nonce:1};
+ await act(async()=>{r=create(React.createElement(PanelCliente360,{waId:'8095550100',fuenteCrm:fuente}));});
+ expect(texto()).toContain('Guardar mensaje en el expediente');expect(m.expediente.mock.lastCall[0].fuente).toEqual(fuente);
+ await act(async()=>r.update(React.createElement(PanelCliente360,{waId:'8095550100',fuenteCrm:null})));
+ expect(texto()).toContain('Guardar mensaje en el expediente');expect(m.expediente.mock.lastCall[0].fuente).toBeNull();
+});
+it('permite crear expediente sin cliente y conserva el mensaje al registrar el cliente',async()=>{
+ m.cliente.mockResolvedValue(null);const fuente={accion:'expediente' as const,wamid:'mensaje-qa',tipo:'text' as const,texto:'Nota conservada',nonce:1};const usado=vi.fn();
+ await act(async()=>{r=create(React.createElement(PanelCliente360,{waId:'8095550100',fuenteCrm:fuente,alUsarFuente:usado}));});
+ expect(texto()).toContain('Crear expediente del cliente');await act(async()=>boton('Crear expediente del cliente').props.onClick());
+ const form=r.root.findByType(CrearClienteDesdeChat);expect(form.props.paraExpediente).toBe(true);
+ await act(async()=>form.props.onGuardar(cliente));expect(m.expediente.mock.lastCall[0].fuente).toEqual(fuente);expect(usado).not.toHaveBeenCalled();
 });

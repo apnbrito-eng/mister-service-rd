@@ -44,3 +44,12 @@ it('descarta resolución atrasada si se pega otra ubicación',async()=>{
  await act(async()=>tree.root.findByType('form').props.onSubmit({preventDefault(){}}));
  expect(m.guardar).toHaveBeenCalledWith('qa',{lat:18.5,lng:-69.5,zona:''});
 });
+it('al editar resuelve el location corto sin pulsar otro botón',async()=>{
+ vi.useFakeTimers();try{
+ m.resolver.mockResolvedValue({enlace:'https://www.google.com/maps/?q=19.4,-70.2'});
+ act(()=>{tree=create(React.createElement(Editor,{cliente,isOpen:true,onClose:vi.fn(),onGuardar:vi.fn()}));});
+ act(()=>tree.root.findByType('input').props.onChange({target:{value:'https://maps.app.goo.gl/ejemplo'}}));
+ await act(async()=>{await vi.advanceTimersByTimeAsync(450);});
+ await act(async()=>tree.root.findByType('form').props.onSubmit({preventDefault(){}}));expect(m.guardar).toHaveBeenCalledWith('qa',{lat:19.4,lng:-70.2,zona:''});
+ }finally{vi.useRealTimers();}
+});

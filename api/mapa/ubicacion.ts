@@ -8,7 +8,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const acceso = await accesoEquipo(req);
     if (!['administrador','coordinadora','operaria','secretaria'].includes(acceso.rol)) return res.status(403).json({error:'No tienes acceso a la ubicación del cliente.'});
     const perfil = (await acceso.db.collection('usuarios').doc(acceso.uid).get()).data();
-    if (perfil?.permisosPersonalizados && perfil.permisosSistema?.clientesModificar !== true) return res.status(403).json({error:'No tienes permiso para modificar clientes.'});
+    if (perfil?.permisosPersonalizados && perfil.permisosSistema?.clientesModificar !== true && perfil.permisosSistema?.clientesCrear !== true) return res.status(403).json({error:'No tienes permiso para registrar o modificar clientes.'});
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     if (typeof body?.enlace !== 'string') return res.status(400).json({error:'Pega un enlace de Google Maps.'});
     return res.status(200).json({enlace:await resolverEnlaceMapa(body.enlace)});

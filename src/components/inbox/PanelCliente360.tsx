@@ -52,6 +52,7 @@ function PanelCliente({ waId, onCrearOrden, fuenteCrm, alUsarFuente, controlesCh
   const [intento, setIntento] = useState(0);
   const [seleccion, setSeleccion] = useState('');
   const [vistaOrden, setVistaOrden] = useState(false);
+  const [vistaExpediente,setVistaExpediente]=useState(false);
   const [abiertas, setAbiertas] = useState<Partial<Record<Seccion, boolean>>>({});
   const [visitadas, setVisitadas] = useState<Partial<Record<Seccion, boolean>>>({});
   const [facturas, setFacturas] = useState<Factura[]>([]);
@@ -59,12 +60,15 @@ function PanelCliente({ waId, onCrearOrden, fuenteCrm, alUsarFuente, controlesCh
   const [intentoFacturas, setIntentoFacturas] = useState(0);
   const scroll = useRef<HTMLDivElement>(null);
   const scrollFicha = useRef(0);
+  const expedienteDirecto=useRef<HTMLElement>(null);
+  useEffect(()=>{if(vistaExpediente && cliente && !cargando)requestAnimationFrame(()=>expedienteDirecto.current?.scrollIntoView?.({block:'start'}));},[vistaExpediente,cliente,cargando]);
   const activarSeccion = (seccion: Seccion, abierta: boolean) => {
     setAbiertas(prev => ({ ...prev, [seccion]: abierta }));
     if (abierta) setVisitadas(prev => ({ ...prev, [seccion]: true }));
   };
   const abrirOrden = (id: string) => {
     scrollFicha.current = scroll.current?.scrollTop ?? 0;
+    setVistaExpediente(false);
     setSeleccion(id);
     setVistaOrden(true);
     scroll.current?.scrollTo({ top: 0 });
@@ -77,8 +81,10 @@ function PanelCliente({ waId, onCrearOrden, fuenteCrm, alUsarFuente, controlesCh
     if (!fuenteCrm) return;
     if (fuenteCrm.accion === 'expediente') {
       setVistaOrden(false);
+      setVistaExpediente(true);
       activarSeccion('expediente', true);
     } else {
+      setVistaExpediente(false);
       setVistaOrden(true);
     }
     scroll.current?.scrollTo({ top: 0 });
@@ -139,7 +145,8 @@ function PanelCliente({ waId, onCrearOrden, fuenteCrm, alUsarFuente, controlesCh
   return <div ref={scroll} className="h-full min-h-0 overflow-y-auto overscroll-contain bg-stone-50 p-4">
     <div hidden={vistaOrden} className="space-y-4">
       {cliente ? <FichaClienteCabecera ubicacionesRecibidas={ubicacionesRecibidas} cliente={{ ...cliente.data, id: cliente.id }} onGuardar={data => {setCliente({ id: cliente.id, data });notificarCliente.current?.(data);}} />
-        : <section><h2 className="font-semibold text-slate-900">Cliente no registrado</h2><p className="text-sm text-slate-600">{waId}</p>{puede(userProfile,'clientesCrear') && (creandoCliente ? <CrearClienteDesdeChat waId={waId} onCancelar={()=>setCreandoCliente(false)} onGuardar={data=>{setCliente({id:data.id,data});setCreandoCliente(false);notificarCliente.current?.(data);}}/> : <button type="button" className="min-h-11 text-sm underline" onClick={()=>setCreandoCliente(true)}>Crear cliente</button>)}</section>}
+        : <section><h2 className="font-semibold text-slate-900">Cliente no registrado</h2><p className="text-sm text-slate-600">{waId}</p>{puede(userProfile,'clientesCrear') && (creandoCliente ? <CrearClienteDesdeChat waId={waId} ubicacionesRecibidas={ubicacionesRecibidas} paraExpediente={fuenteCrm?.accion==='expediente'} onCancelar={()=>setCreandoCliente(false)} onGuardar={data=>{setCliente({id:data.id,data});setCreandoCliente(false);if(fuenteCrm?.accion==='expediente')activarSeccion('expediente',true);notificarCliente.current?.(data);}}/> : <button type="button" className="min-h-11 text-sm underline" onClick={()=>setCreandoCliente(true)}>{fuenteCrm?.accion==='expediente'?'Crear expediente del cliente':'Crear cliente'}</button>)}</section>}
+      {vistaExpediente && <section ref={expedienteDirecto} className="rounded-xl border bg-white p-3"><h2 className="font-semibold">Guardar mensaje en el expediente</h2>{cliente ? <ExpedienteCliente key={cliente.id} clienteId={cliente.id} fuente={fuenteCrm?.accion==='expediente'?fuenteCrm:null} alUsarFuente={alUsarFuente}/> : <p>El mensaje seleccionado se conserva. Crea el expediente del cliente arriba para guardarlo.</p>}<button type="button" className="min-h-11 underline" onClick={()=>{setVistaExpediente(false);alUsarFuente?.();}}>Volver a la ficha del cliente</button></section>}
       {cliente && <button type="button" className="w-full min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-white" onClick={crearOrden}>+ Crear orden</button>}
       {conversacionExiste && <AtencionChat waId={waId} />}
       <section aria-label="Órdenes activas" className="rounded-xl border border-stone-200 bg-white p-3">
@@ -147,7 +154,7 @@ function PanelCliente({ waId, onCrearOrden, fuenteCrm, alUsarFuente, controlesCh
         <OrdenesTab loading={false} activas={activas} cerradas={[]} userProfile={userProfile} onClickOrden={abrirOrden} onIrReprogramaciones={() => navigate('/admin/reprogramaciones')} />
       </section>
       <div>
-        {seccion('expediente', 'Notas y archivos', cliente ? <ExpedienteCliente clienteId={cliente.id} fuente={fuenteCrm?.accion === 'expediente' ? fuenteCrm : null} alUsarFuente={alUsarFuente} /> : <p className="text-sm">Registra al cliente para crear su expediente.</p>)}
+        {!vistaExpediente && seccion('expediente', 'Notas y archivos', cliente ? <ExpedienteCliente clienteId={cliente.id} fuente={fuenteCrm?.accion === 'expediente' ? fuenteCrm : null} alUsarFuente={alUsarFuente} /> : <p className="text-sm">Registra al cliente para crear su expediente.</p>)}
         {seccion('anteriores', `Órdenes anteriores (${anteriores.length})`, anteriores.length ? <ul className="space-y-2">{anteriores.map(o => <li key={o.id}><ItemOrden orden={o} userProfile={userProfile} onClick={() => abrirOrden(o.id)} /></li>)}</ul> : <p className="text-sm text-slate-600">Sin órdenes anteriores.</p>)}
         {seccion('garantias', 'Garantías', contenidoFacturas(<GarantiasTab loading={estadoFacturas !== 'listo'} facturas={facturas.filter(f => !!f.garantia)} onClickOrden={abrirOrden} />))}
         {seccion('facturas', 'Facturas', contenidoFacturas(<FacturasTab loading={estadoFacturas !== 'listo'} facturas={facturas} onClickFactura={id => navigate(`/admin/facturas?id=${encodeURIComponent(id)}`)} />))}
