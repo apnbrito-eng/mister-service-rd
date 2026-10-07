@@ -35,4 +35,12 @@ Hay dos versiones: Mapa de operaciones (src/pages/Mapa.tsx, /admin/mapa) y Mapa 
 - Portal del cliente: progreso sin costos internos; evaluación final separada de atención y técnico, ligada a orden y participantes. Revisar código existente antes de ampliar.
 
 ## Evidencia Codex
-Integraciones: 185 archivos/1263 pruebas aprobadas antes de añadir formulario de alta; formulario luego validado con build y lint, endpoint ya existente. Build web/mobile y reglas privadas en emulador aprobados. Invariantes P001–P025 sin hallazgos. APK 1.0.25 oficial, 255 recursos comparados byte a byte, manifiesto en public/descargas/android-1.0.25.json. Ver publicación/instalación y límites actuales en cerebro compartido; no asumir probado lo que figure pendiente.
+Integraciones finales: 185 archivos/1263 pruebas aprobadas también después de añadir formulario de alta; build y lint aprobados. Alta real sin probar para no crear empleados de prueba en producción. Build web/mobile y reglas privadas en emulador aprobados. Invariantes P001–P025 sin hallazgos. APK 1.0.25 oficial, 255 recursos comparados byte a byte, manifiesto en public/descargas/android-1.0.25.json. Ver publicación/instalación y límites actuales en cerebro compartido; no asumir probado lo que figure pendiente.
+
+
+## Resultado de publicación — Codex 07/10/2026
+✅ Vercel Production DD3LePXRRLYNd8ZW7mjWdyKZZHX8 READY, www.misterservicerd.com/version.json commit bf78195. APK publicada 1.0.25/code26 descargada y hash verificado contra manifiesto. Samsung R5CWC2EWGJN: adb install -r Success; dumpsys confirma versionCode26/versionName1.0.25. Ficha María Teresa abre en producción con seis pestañas y sesión Jorge, sin modificar datos reales.
+⏳ Prueba visual Samsung pendiente: teléfono bloqueado, KeyguardServiceDelegate showing=true. No afirmar probado el flujo físico completo.
+⏳ Claude: en UI hay 23 fichas de personal activas y 20 desactivadas; 16 cuentas activas distribuidas 2 dirección + 7 A + 7 B. Siete fichas históricas SIN ACCESO siguen en listado activo (una dirección/seis sin equipo). Verificar organización de estado laboral versus acceso y ordenar estos registros sin borrar historial ni reactivar cuentas. No se modificó ese dato real.
+⏳ Carga directa de documentos privados y reglas financieras nuevas aún pendientes; no considerar todo el módulo funcionalmente terminado.
+— Codex
