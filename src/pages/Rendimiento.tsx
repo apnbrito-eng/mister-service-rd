@@ -1,22 +1,58 @@
+/**
+ * Rediseño visual BambooHR — Lote 3 (Rendimiento / KPIs).
+ *
+ * Preserva TODOS los cálculos previos: tasa de confirmación, tiempos de
+ * respuesta, agrupaciones por coordinador y por técnico, proyección de cobros
+ * por período y bono operarias heredado (RD$5.000 fijo si desempeño ≥70%).
+ * Las reglas financieras pendientes de Jorge (meta mensual ventas cobradas,
+ * devoluciones, cambios durante el mes, cierre de nómina) NO se activan en
+ * este lote: queda un callout documental señalando la revisión pendiente del
+ * cálculo heredado que cuenta no-canceladas como completadas.
+ *
+ * Autor: Claude Code — 2026-10-07.
+ */
 import { fechaFinanciera } from '../utils/fechaFinanciera';
-import { diaCobroRD, OrdenCobrosCruda, proyectarCobrosCaja } from '../utils/movimientosCobros';
-import { ordenMetrica, cerradasDelPeriodo, identidadPersonal, fechaCierreMetrica, enPeriodo, rangoMesRD } from '../utils/metricasNegocio';
-import { useState, useEffect, useMemo } from 'react';
+import {
+  diaCobroRD,
+  OrdenCobrosCruda,
+  proyectarCobrosCaja,
+} from '../utils/movimientosCobros';
+import {
+  ordenMetrica,
+  cerradasDelPeriodo,
+  identidadPersonal,
+  fechaCierreMetrica,
+  enPeriodo,
+  rangoMesRD,
+} from '../utils/metricasNegocio';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, Personal } from '../types';
 import { formatMoneda } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
-// SPRINT-149: cleanup imports legacy unused (BarChart3, isWithinInterval, format, parseISO, es)
-// detectados al stagear el archivo en el fix de operariaId. No afectan render.
-import { TrendingUp, Users, CheckCircle, XCircle, Clock, Calendar, RefreshCw, UserPlus, Award } from 'lucide-react';
+import {
+  TrendingUp,
+  Users,
+  CheckCircle,
+  XCircle,
+  Clock,
+  RefreshCw,
+  UserPlus,
+  Award,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { calcularQuincenaActual, listarUltimasQuincenas, rangoQuincena } from '../utils/comisiones';
+import {
+  calcularQuincenaActual,
+  listarUltimasQuincenas,
+  rangoQuincena,
+} from '../utils/comisiones';
 import { differenceInMinutes } from 'date-fns';
 
 export default function Rendimiento() {
   const { userProfile } = useApp();
-  const autorizado = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  const autorizado =
+    userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
   const [error, setError] = useState('');
   const [crudas, setCrudas] = useState<OrdenCobrosCruda[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,24 +60,45 @@ export default function Rendimiento() {
   const [personal, setPersonal] = useState<Personal[]>([]);
   const [filtroCoord, setFiltroCoord] = useState('');
   const [filtroFecha, setFiltroFecha] = useState<'hoy' | 'semana' | 'mes' | 'rango'>('mes');
-  const [fechaInicio, setFechaInicio] = useState(() => diaCobroRD(new Date()).slice(0, 7) + '-01');
+  const [fechaInicio, setFechaInicio] = useState(
+    () => diaCobroRD(new Date()).slice(0, 7) + '-01',
+  );
   const [fechaFin, setFechaFin] = useState(() => diaCobroRD(new Date()));
 
   useEffect(() => {
     if (!autorizado) return;
-    setLoading(true); setError('');
+    setLoading(true);
+    setError('');
     const loaded = new Set<string>();
-    const listo = (key: string) => { loaded.add(key); if (loaded.size === 2) setLoading(false); };
-    const fail = () => { setError('No se pudieron cargar todas las fuentes.'); setLoading(false); };
-    const unsub1 = onSnapshot(collection(db, 'ordenes_servicio'), snap => {
-      setOrdenes(snap.docs.map(d => ordenMetrica(d.id, d.data())));
-      setCrudas(snap.docs.map(d => ({ id: d.id, datos: d.data() })));
-      listo('ordenes');
-    }, fail);
-    const unsub2 = onSnapshot(collection(db, 'personal'), snap => {
-      setPersonal(snap.docs.map(d => ({ ...d.data(), id: d.id } as Personal))); listo('personal');
-    }, fail);
-    return () => { unsub1(); unsub2(); };
+    const listo = (key: string) => {
+      loaded.add(key);
+      if (loaded.size === 2) setLoading(false);
+    };
+    const fail = () => {
+      setError('No se pudieron cargar todas las fuentes.');
+      setLoading(false);
+    };
+    const unsub1 = onSnapshot(
+      collection(db, 'ordenes_servicio'),
+      (snap) => {
+        setOrdenes(snap.docs.map((d) => ordenMetrica(d.id, d.data())));
+        setCrudas(snap.docs.map((d) => ({ id: d.id, datos: d.data() })));
+        listo('ordenes');
+      },
+      fail,
+    );
+    const unsub2 = onSnapshot(
+      collection(db, 'personal'),
+      (snap) => {
+        setPersonal(snap.docs.map((d) => ({ ...d.data(), id: d.id } as Personal)));
+        listo('personal');
+      },
+      fail,
+    );
+    return () => {
+      unsub1();
+      unsub2();
+    };
   }, [autorizado]);
 
   const dateRange = useMemo(() => {
@@ -54,336 +111,882 @@ export default function Rendimiento() {
     if (filtroFecha === 'semana') return { start: semanaRD, end: now };
     if (filtroFecha === 'mes') return { start: rangoMesRD(hoyRD.slice(0, 7)).inicio, end: now };
     if (filtroFecha === 'rango' && fechaInicio && fechaFin) {
-      return { start: fechaFinanciera(fechaInicio) || new Date(NaN), end: new Date((fechaFinanciera(fechaFin)?.getTime() ?? NaN) + 86400000 - 1) };
+      return {
+        start: fechaFinanciera(fechaInicio) || new Date(NaN),
+        end: new Date((fechaFinanciera(fechaFin)?.getTime() ?? NaN) + 86400000 - 1),
+      };
     }
     return { start: rangoMesRD(hoyRD.slice(0, 7)).inicio, end: now };
   }, [filtroFecha, fechaInicio, fechaFin]);
 
   const ordenesFiltradas = useMemo(() => {
-    return ordenes.filter(o => {
+    return ordenes.filter((o) => {
       if (o.eliminada) return false;
       const inRange = o.createdAt >= dateRange.start && o.createdAt <= dateRange.end;
-      const matchCoord = !filtroCoord || identidadPersonal(o.operariaId || o.responsableId || o.creadoPor, personal)?.id === filtroCoord;
+      const matchCoord =
+        !filtroCoord ||
+        identidadPersonal(o.operariaId || o.responsableId || o.creadoPor, personal)?.id ===
+          filtroCoord;
       return inRange && matchCoord;
     });
   }, [ordenes, dateRange, filtroCoord, personal]);
 
   const coordinadores = useMemo(() => {
-    const secretarias = personal.filter(p => (p.rol === 'secretaria' || p.rol === 'operaria') && p.activo);
+    const secretarias = personal.filter(
+      (p) => (p.rol === 'secretaria' || p.rol === 'operaria') && p.activo,
+    );
     return secretarias;
   }, [personal]);
 
   const kpis = useMemo(() => {
     const total = ordenesFiltradas.length;
-    const confirmadas = ordenesFiltradas.filter(o => ['agendado', 'en_diagnostico', 'en_cotizacion', 'aprobado', 'trabajo_realizado', 'cerrado'].includes(o.fase)).length;
-    const canceladas = ordenesFiltradas.filter(o => o.fase === 'cancelado').length;
-    const reagendadas = ordenesFiltradas.filter(o => o.reagendada).length;
+    const confirmadas = ordenesFiltradas.filter((o) =>
+      [
+        'agendado',
+        'en_diagnostico',
+        'en_cotizacion',
+        'aprobado',
+        'trabajo_realizado',
+        'cerrado',
+      ].includes(o.fase),
+    ).length;
+    const canceladas = ordenesFiltradas.filter((o) => o.fase === 'cancelado').length;
+    const reagendadas = ordenesFiltradas.filter((o) => o.reagendada).length;
 
-    // New clients (unique clienteId in period)
-    const clienteIds = new Set(ordenesFiltradas.map(o => o.clienteId).filter(Boolean));
-    const clientesPrevios = new Set(ordenes.filter(o => o.createdAt < dateRange.start).map(o => o.clienteId).filter(Boolean));
-    const nuevosClientes = [...clienteIds].filter(id => !clientesPrevios.has(id)).length;
+    const clienteIds = new Set(ordenesFiltradas.map((o) => o.clienteId).filter(Boolean));
+    const clientesPrevios = new Set(
+      ordenes.filter((o) => o.createdAt < dateRange.start).map((o) => o.clienteId).filter(Boolean),
+    );
+    const nuevosClientes = [...clienteIds].filter((id) => !clientesPrevios.has(id)).length;
 
-    const tasaConfirmacion = total > 0 ? (confirmadas / total * 100) : 0;
+    const tasaConfirmacion = total > 0 ? (confirmadas / total) * 100 : 0;
 
-    // Avg response time
     const tiempos: number[] = [];
-    ordenesFiltradas.forEach(o => {
-      const lead = o.historialFases.find(h => h.fase === 'nuevo_lead');
-      const gestion = o.historialFases.find(h => h.fase === 'en_gestion');
-      if (lead && gestion) { const minutos = differenceInMinutes(gestion.timestamp, lead.timestamp); if (Number.isFinite(minutos) && minutos >= 0) tiempos.push(minutos); }
+    ordenesFiltradas.forEach((o) => {
+      const lead = o.historialFases.find((h) => h.fase === 'nuevo_lead');
+      const gestion = o.historialFases.find((h) => h.fase === 'en_gestion');
+      if (lead && gestion) {
+        const minutos = differenceInMinutes(gestion.timestamp, lead.timestamp);
+        if (Number.isFinite(minutos) && minutos >= 0) tiempos.push(minutos);
+      }
     });
-    const avgRespuesta = tiempos.length > 0 ? Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length) : 0;
+    const avgRespuesta =
+      tiempos.length > 0 ? Math.round(tiempos.reduce((a, b) => a + b, 0) / tiempos.length) : 0;
 
-    const completadasSemana = cerradasDelPeriodo(ordenes, personal, dateRange.start, dateRange.end, filtroCoord).length;
-    const completadasMes = cerradasDelPeriodo(ordenes, personal, dateRange.start, dateRange.end, filtroCoord).length;
+    const completadasSemana = cerradasDelPeriodo(
+      ordenes,
+      personal,
+      dateRange.start,
+      dateRange.end,
+      filtroCoord,
+    ).length;
+    const completadasMes = cerradasDelPeriodo(
+      ordenes,
+      personal,
+      dateRange.start,
+      dateRange.end,
+      filtroCoord,
+    ).length;
 
-    // By coordinator
-    const byCoord: Record<string, { nombre: string; confirmadas: number; canceladas: number; reagendadas: number; nuevosClientes: number; total: number }> = {};
-    coordinadores.forEach(c => {
-      byCoord[c.id] = { nombre: c.nombre, confirmadas: 0, canceladas: 0, reagendadas: 0, nuevosClientes: 0, total: 0 };
+    const byCoord: Record<
+      string,
+      {
+        nombre: string;
+        confirmadas: number;
+        canceladas: number;
+        reagendadas: number;
+        nuevosClientes: number;
+        total: number;
+      }
+    > = {};
+    coordinadores.forEach((c) => {
+      byCoord[c.id] = {
+        nombre: c.nombre,
+        confirmadas: 0,
+        canceladas: 0,
+        reagendadas: 0,
+        nuevosClientes: 0,
+        total: 0,
+      };
     });
-    ordenesFiltradas.forEach(o => {
-      const persona = identidadPersonal(o.operariaId || o.responsableId || o.creadoPor, personal);
+    ordenesFiltradas.forEach((o) => {
+      const persona = identidadPersonal(
+        o.operariaId || o.responsableId || o.creadoPor,
+        personal,
+      );
       const coord = persona?.id || 'sin-identidad';
-      if (!byCoord[coord]) byCoord[coord] = { nombre: persona?.nombre || 'Sin responsable identificable', confirmadas: 0, canceladas: 0, reagendadas: 0, nuevosClientes: 0, total: 0 };
+      if (!byCoord[coord])
+        byCoord[coord] = {
+          nombre: persona?.nombre || 'Sin responsable identificable',
+          confirmadas: 0,
+          canceladas: 0,
+          reagendadas: 0,
+          nuevosClientes: 0,
+          total: 0,
+        };
       byCoord[coord].total++;
-      if (['agendado', 'en_diagnostico', 'en_cotizacion', 'aprobado', 'trabajo_realizado', 'cerrado'].includes(o.fase)) byCoord[coord].confirmadas++;
+      if (
+        [
+          'agendado',
+          'en_diagnostico',
+          'en_cotizacion',
+          'aprobado',
+          'trabajo_realizado',
+          'cerrado',
+        ].includes(o.fase)
+      )
+        byCoord[coord].confirmadas++;
       if (o.fase === 'cancelado') byCoord[coord].canceladas++;
       if (o.reagendada) byCoord[coord].reagendadas++;
     });
 
-    Object.entries(byCoord).forEach(([id, stats]) => { stats.nuevosClientes = new Set(ordenesFiltradas.filter(o => identidadPersonal(o.operariaId || o.responsableId || o.creadoPor, personal)?.id === id && o.clienteId && !clientesPrevios.has(o.clienteId)).map(o => o.clienteId)).size; });
-
-    // By technician
-    const byTecnico: Record<string, { nombre: string; pendientes: number; enProceso: number; completados: number; total: number; montoFacturado: number }> = {};
-    const tecnicos = personal.filter(p => p.rol === 'tecnico');
-    tecnicos.forEach(t => {
-      // @safe-tecnicoid-id: agrupación canónica; todas las lecturas resuelven uid/id mediante identidadPersonal única.
-      byTecnico[t.id] = { nombre: t.nombre, pendientes: 0, enProceso: 0, completados: 0, total: 0, montoFacturado: 0 };
+    Object.entries(byCoord).forEach(([id, stats]) => {
+      stats.nuevosClientes = new Set(
+        ordenesFiltradas
+          .filter(
+            (o) =>
+              identidadPersonal(
+                o.operariaId || o.responsableId || o.creadoPor,
+                personal,
+              )?.id === id &&
+              o.clienteId &&
+              !clientesPrevios.has(o.clienteId),
+          )
+          .map((o) => o.clienteId),
+      ).size;
     });
-    ordenesFiltradas.forEach(o => {
+
+    const byTecnico: Record<
+      string,
+      {
+        nombre: string;
+        pendientes: number;
+        enProceso: number;
+        completados: number;
+        total: number;
+        montoFacturado: number;
+      }
+    > = {};
+    const tecnicos = personal.filter((p) => p.rol === 'tecnico');
+    tecnicos.forEach((t) => {
+      // @safe-tecnicoid-id: agrupación canónica; todas las lecturas resuelven uid/id mediante identidadPersonal única.
+      byTecnico[t.id] = {
+        nombre: t.nombre,
+        pendientes: 0,
+        enProceso: 0,
+        completados: 0,
+        total: 0,
+        montoFacturado: 0,
+      };
+    });
+    ordenesFiltradas.forEach((o) => {
       const id = identidadPersonal(o.tecnicoId, personal)?.id;
       if (!id || !byTecnico[id]) return;
       byTecnico[id].total++;
-      if (['nuevo_lead', 'en_gestion', 'aprobado', 'agendado'].includes(o.fase)) byTecnico[id].pendientes++;
+      if (['nuevo_lead', 'en_gestion', 'aprobado', 'agendado'].includes(o.fase))
+        byTecnico[id].pendientes++;
       if (['en_diagnostico', 'en_cotizacion'].includes(o.fase)) byTecnico[id].enProceso++;
       if (['trabajo_realizado', 'cerrado'].includes(o.fase)) byTecnico[id].completados++;
     });
-    const caja = proyectarCobrosCaja(crudas, undefined, Number.isFinite(dateRange.start.getTime()) ? diaCobroRD(dateRange.start) : '9999-01-01', Number.isFinite(dateRange.end.getTime()) ? diaCobroRD(dateRange.end) : '0001-01-01');
-    caja.movimientos.filter(m => m.confirmado).forEach(m => {
-      const orden = ordenes.find(o => o.id === m.ordenId);
-      if (!orden || (filtroCoord && identidadPersonal(orden.operariaId || orden.responsableId || orden.creadoPor, personal)?.id !== filtroCoord)) return;
-      const id = identidadPersonal(orden.tecnicoId, personal)?.id;
-      if (id && byTecnico[id]) byTecnico[id].montoFacturado += m.monto;
-    });
+    const caja = proyectarCobrosCaja(
+      crudas,
+      undefined,
+      Number.isFinite(dateRange.start.getTime())
+        ? diaCobroRD(dateRange.start)
+        : '9999-01-01',
+      Number.isFinite(dateRange.end.getTime())
+        ? diaCobroRD(dateRange.end)
+        : '0001-01-01',
+    );
+    caja.movimientos
+      .filter((m) => m.confirmado)
+      .forEach((m) => {
+        const orden = ordenes.find((o) => o.id === m.ordenId);
+        if (
+          !orden ||
+          (filtroCoord &&
+            identidadPersonal(
+              orden.operariaId || orden.responsableId || orden.creadoPor,
+              personal,
+            )?.id !== filtroCoord)
+        )
+          return;
+        const id = identidadPersonal(orden.tecnicoId, personal)?.id;
+        if (id && byTecnico[id]) byTecnico[id].montoFacturado += m.monto;
+      });
 
-    return { total, confirmadas, canceladas, reagendadas, nuevosClientes, tasaConfirmacion, avgRespuesta, completadasSemana, completadasMes, byCoord, byTecnico };
+    return {
+      total,
+      confirmadas,
+      canceladas,
+      reagendadas,
+      nuevosClientes,
+      tasaConfirmacion,
+      avgRespuesta,
+      completadasSemana,
+      completadasMes,
+      byCoord,
+      byTecnico,
+    };
   }, [ordenesFiltradas, ordenes, personal, crudas, coordinadores, dateRange, filtroCoord]);
 
-  if (!autorizado) return <p className="p-6">Acceso restringido a administración y coordinación.</p>;
-  if (error) return <p role="alert" className="p-6 text-red-700">{error}</p>;
-  if (!Number.isFinite(dateRange.start.getTime()) || !Number.isFinite(dateRange.end.getTime()) || dateRange.start > dateRange.end) return <div className="p-6"><p>Selecciona un rango válido.</p><button onClick={() => setFiltroFecha('mes')}>Volver al mes</button></div>;
+  if (!autorizado) {
+    return (
+      <div className="ms-bamboo p-4 md:p-6">
+        <div className="b-callout b-callout-warn">
+          Acceso restringido a administración y coordinación.
+        </div>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="ms-bamboo p-4 md:p-6">
+        <div className="b-callout b-callout-danger" role="alert">
+          {error}
+        </div>
+      </div>
+    );
+  }
+  if (
+    !Number.isFinite(dateRange.start.getTime()) ||
+    !Number.isFinite(dateRange.end.getTime()) ||
+    dateRange.start > dateRange.end
+  ) {
+    return (
+      <div className="ms-bamboo p-4 md:p-6">
+        <div className="b-callout b-callout-warn">
+          <p>Seleccioná un rango válido.</p>
+          <button
+            type="button"
+            className="b-btn is-primary"
+            style={{ marginTop: 8 }}
+            onClick={() => setFiltroFecha('mes')}
+          >
+            Volver al mes
+          </button>
+        </div>
+      </div>
+    );
+  }
   if (loading) return <LoadingSpinner fullPage text="Cargando rendimiento..." />;
 
+  const sinTecnico = ordenesFiltradas.filter((o) => !identidadPersonal(o.tecnicoId, personal))
+    .length;
+  const sinFecha = ordenes.filter((o) => !Number.isFinite(o.createdAt.getTime())).length;
+
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-primary">Rendimiento / KPIs</h1><p className="text-sm">Órdenes agrupadas por fecha de creación; cierres por su fecha registrada. Sin técnico identificable: {ordenesFiltradas.filter(o => !identidadPersonal(o.tecnicoId, personal)).length}. Sin fecha de creación: {ordenes.filter(o => !Number.isFinite(o.createdAt.getTime())).length}.</p>
+    <div className="ms-bamboo p-4 md:p-6">
+      <div className="b-stack">
+        <header className="b-page-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="b-page-icon" aria-hidden="true">
+              <TrendingUp size={22} />
+            </div>
+            <div>
+              <h1>Rendimiento · KPIs</h1>
+              <p className="b-page-sub">
+                Órdenes agrupadas por fecha de creación; cierres por su fecha registrada. Sin
+                técnico identificable: <strong>{sinTecnico}</strong>. Sin fecha de creación:{' '}
+                <strong>{sinFecha}</strong>.
+              </p>
+            </div>
+          </div>
+        </header>
 
-      {/* Filters */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-2">
-          <Calendar size={16} className="text-gray-400" />
-          <span className="text-sm text-gray-500">Período:</span>
-        </div>
-        {(['hoy', 'semana', 'mes'] as const).map(f => (
-          <button key={f} onClick={() => setFiltroFecha(f)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroFecha === f ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            {f === 'hoy' ? 'Hoy' : f === 'semana' ? 'Semana' : 'Mes'}
-          </button>
-        ))}
-        <button onClick={() => setFiltroFecha('rango')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filtroFecha === 'rango' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-          Rango
-        </button>
-        {filtroFecha === 'rango' && (
-          <>
-            <input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)}
-              className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs" />
-            <span className="text-gray-400">—</span>
-            <input type="date" value={fechaFin} onChange={e => setFechaFin(e.target.value)}
-              className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs" />
-          </>
-        )}
-        <div className="ml-auto">
-          <select value={filtroCoord} onChange={e => setFiltroCoord(e.target.value)}
-            className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white">
-            <option value="">Todos los coordinadores</option>
-            {coordinadores.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-          </select>
-        </div>
+        <section>
+          <h3 className="b-h3">Filtros</h3>
+          <div
+            style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}
+          >
+            {(['hoy', 'semana', 'mes', 'rango'] as const).map((f) => (
+              <button
+                key={f}
+                type="button"
+                className={`b-btn ${filtroFecha === f ? 'is-primary' : ''}`}
+                onClick={() => setFiltroFecha(f)}
+                style={{ minHeight: 38, padding: '8px 14px' }}
+              >
+                {f === 'hoy'
+                  ? 'Hoy'
+                  : f === 'semana'
+                  ? 'Semana'
+                  : f === 'mes'
+                  ? 'Mes'
+                  : 'Rango'}
+              </button>
+            ))}
+            {filtroFecha === 'rango' && (
+              <>
+                <input
+                  type="date"
+                  className="b-input"
+                  value={fechaInicio}
+                  onChange={(e) => setFechaInicio(e.target.value)}
+                  style={{ width: 'auto', minHeight: 38 }}
+                />
+                <span style={{ color: 'var(--b-muted)' }}>—</span>
+                <input
+                  type="date"
+                  className="b-input"
+                  value={fechaFin}
+                  onChange={(e) => setFechaFin(e.target.value)}
+                  style={{ width: 'auto', minHeight: 38 }}
+                />
+              </>
+            )}
+            <div style={{ marginLeft: 'auto' }}>
+              <select
+                className="b-input"
+                value={filtroCoord}
+                onChange={(e) => setFiltroCoord(e.target.value)}
+                style={{ width: 'auto', minHeight: 38 }}
+              >
+                <option value="">Todos los coordinadores</option>
+                {coordinadores.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section className="b-kpi-grid">
+          <KpiBamboo
+            tono="ok"
+            icon={<CheckCircle size={16} aria-hidden="true" />}
+            label="Confirmadas"
+            value={kpis.confirmadas}
+          />
+          <KpiBamboo
+            tono="danger"
+            icon={<XCircle size={16} aria-hidden="true" />}
+            label="Canceladas"
+            value={kpis.canceladas}
+          />
+          <KpiBamboo
+            tono="warn"
+            icon={<RefreshCw size={16} aria-hidden="true" />}
+            label="Reagendadas"
+            value={kpis.reagendadas}
+          />
+          <KpiBamboo
+            tono="info"
+            icon={<UserPlus size={16} aria-hidden="true" />}
+            label="Nuevos clientes"
+            value={kpis.nuevosClientes}
+          />
+          <KpiBamboo
+            tono="neutral"
+            icon={<Clock size={16} aria-hidden="true" />}
+            label="Resp. promedio"
+            value={`${kpis.avgRespuesta} min`}
+          />
+        </section>
+
+        <section className="b-panel" style={{ borderRadius: 'var(--b-r-md)', borderTop: '1px solid var(--b-line)' }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: 10,
+              flexWrap: 'wrap',
+              gap: 8,
+            }}
+          >
+            <h3 className="b-h3" style={{ margin: 0 }}>
+              Tasa de confirmación global
+            </h3>
+            <span
+              style={{
+                fontSize: 24,
+                fontWeight: 700,
+                color: 'var(--b-green)',
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              {kpis.tasaConfirmacion.toFixed(1)}%
+            </span>
+          </div>
+          <div
+            className="b-meter"
+            role="progressbar"
+            aria-valuenow={Math.round(kpis.tasaConfirmacion)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Tasa de confirmación global"
+            style={{ height: 12 }}
+          >
+            <span style={{ width: `${Math.min(kpis.tasaConfirmacion, 100)}%` }} />
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              marginTop: 8,
+              fontSize: 12,
+              color: 'var(--b-muted)',
+            }}
+          >
+            <span>Cerradas en el período: {kpis.completadasSemana}</span>
+            <span>Importes: cobros confirmados por fecha del pago</span>
+          </div>
+        </section>
+
+        <section className="b-panel" style={{ borderRadius: 'var(--b-r-md)', borderTop: '1px solid var(--b-line)' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}
+          >
+            <Users size={18} aria-hidden="true" style={{ color: 'var(--b-green)' }} />
+            <h3 className="b-h3" style={{ margin: 0 }}>
+              Rendimiento por coordinador
+            </h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {Object.entries(kpis.byCoord)
+              .filter(([, c]) => c.total > 0)
+              .map(([id, stats]) => {
+                const tasa = stats.total > 0 ? (stats.confirmadas / stats.total) * 100 : 0;
+                return (
+                  <div
+                    key={id}
+                    style={{
+                      background: 'var(--b-pista)',
+                      borderRadius: 'var(--b-r-md)',
+                      padding: 14,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        marginBottom: 10,
+                      }}
+                    >
+                      <strong style={{ fontSize: 15, color: 'var(--b-ink)' }}>
+                        {stats.nombre}
+                      </strong>
+                      <span className="b-help">{stats.total} órdenes</span>
+                    </div>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                        gap: 10,
+                        marginBottom: 10,
+                      }}
+                    >
+                      <MiniKpi value={stats.confirmadas} label="Confirmadas" tono="ok" />
+                      <MiniKpi value={stats.canceladas} label="Canceladas" tono="danger" />
+                      <MiniKpi value={stats.reagendadas} label="Reagendadas" tono="warn" />
+                      <MiniKpi value={stats.nuevosClientes} label="Nuevos" tono="info" />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span className="b-help" style={{ minWidth: 110 }}>
+                        Tasa confirmación
+                      </span>
+                      <div
+                        className="b-meter"
+                        role="progressbar"
+                        aria-valuenow={Math.round(tasa)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-label={`Tasa confirmación ${stats.nombre}`}
+                        style={{ flex: 1, height: 8 }}
+                      >
+                        <span style={{ width: `${Math.min(tasa, 100)}%` }} />
+                      </div>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: 'var(--b-green)',
+                          minWidth: 50,
+                          textAlign: 'right',
+                          fontVariantNumeric: 'tabular-nums',
+                        }}
+                      >
+                        {tasa.toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            {Object.values(kpis.byCoord).filter((c) => c.total > 0).length === 0 && (
+              <p className="b-help" style={{ textAlign: 'center', padding: 16 }}>
+                Sin datos para el período seleccionado.
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="b-panel" style={{ borderRadius: 'var(--b-r-md)', borderTop: '1px solid var(--b-line)' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}
+          >
+            <TrendingUp size={18} aria-hidden="true" style={{ color: 'var(--b-green)' }} />
+            <h3 className="b-h3" style={{ margin: 0 }}>
+              Rendimiento por técnico
+            </h3>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {Object.entries(kpis.byTecnico).map(([id, t]) => {
+              const pctCompletadas = t.total > 0 ? (t.completados / t.total) * 100 : 0;
+              return (
+                <div
+                  key={id}
+                  style={{
+                    background: 'var(--b-pista)',
+                    borderRadius: 'var(--b-r-md)',
+                    padding: 14,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <strong style={{ fontSize: 15, color: 'var(--b-ink)' }}>{t.nombre}</strong>
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        color: 'var(--b-green)',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {formatMoneda(t.montoFacturado)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                    <span className="b-chip b-chip-off">Pendientes: {t.pendientes}</span>
+                    <span className="b-chip b-chip-warn">En proceso: {t.enProceso}</span>
+                    <span className="b-chip b-chip-ok">Completados: {t.completados}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className="b-help" style={{ minWidth: 100 }}>
+                      % completadas
+                    </span>
+                    <div
+                      className="b-meter"
+                      role="progressbar"
+                      aria-valuenow={Math.round(pctCompletadas)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`% completadas ${t.nombre}`}
+                      style={{ flex: 1, height: 8 }}
+                    >
+                      <span style={{ width: `${pctCompletadas}%` }} />
+                    </div>
+                    <span
+                      style={{
+                        fontWeight: 700,
+                        color: 'var(--b-green)',
+                        minWidth: 50,
+                        textAlign: 'right',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {pctCompletadas.toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <DesempenoOperariasSection ordenes={ordenes} personal={personal} />
       </div>
-
-      {/* Global KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        <KpiCard title="Confirmadas" value={kpis.confirmadas} icon={<CheckCircle size={18} />} color="bg-green-500" />
-        <KpiCard title="Canceladas" value={kpis.canceladas} icon={<XCircle size={18} />} color="bg-red-500" />
-        <KpiCard title="Reagendadas" value={kpis.reagendadas} icon={<RefreshCw size={18} />} color="bg-yellow-500" />
-        <KpiCard title="Nuevos Clientes" value={kpis.nuevosClientes} icon={<UserPlus size={18} />} color="bg-purple-500" />
-        <KpiCard title="Resp. Promedio" value={`${kpis.avgRespuesta} min`} icon={<Clock size={18} />} color="bg-blue-500" />
-      </div>
-
-      {/* Tasa de confirmación global */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-900">Tasa de Confirmación Global</h2>
-          <span className="text-2xl font-bold text-primary">{kpis.tasaConfirmacion.toFixed(1)}%</span>
-        </div>
-        <div className="bg-gray-200 rounded-full h-4">
-          <div className="bg-primary h-4 rounded-full transition-all"
-            style={{ width: `${Math.min(kpis.tasaConfirmacion, 100)}%` }} />
-        </div>
-        <div className="flex justify-between mt-2 text-xs text-gray-500">
-          <span>Cerradas en el período: {kpis.completadasSemana}</span>
-          <span>Importes: cobros confirmados por fecha del pago</span>
-        </div>
-      </div>
-
-      {/* Rendimiento por Coordinador */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Users size={20} className="text-primary-medium" />
-          <h2 className="text-lg font-semibold text-gray-900">Rendimiento por Coordinador</h2>
-        </div>
-        <div className="space-y-4">
-          {Object.entries(kpis.byCoord).filter(([, c]) => c.total > 0).map(([id, stats]) => {
-            const tasa = stats.total > 0 ? (stats.confirmadas / stats.total * 100) : 0;
-            return (
-              <div key={id} className="bg-gray-50 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-semibold text-gray-900">{stats.nombre}</span>
-                  <span className="text-sm text-gray-500">{stats.total} órdenes</span>
-                </div>
-                <div className="grid grid-cols-4 gap-3 mb-3">
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-green-600">{stats.confirmadas}</p>
-                    <p className="text-[10px] text-gray-500">Confirmadas</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-red-600">{stats.canceladas}</p>
-                    <p className="text-[10px] text-gray-500">Canceladas</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-yellow-600">{stats.reagendadas}</p>
-                    <p className="text-[10px] text-gray-500">Reagendadas</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-lg font-bold text-purple-600">{stats.nuevosClientes}</p>
-                    <p className="text-[10px] text-gray-500">Nuevos</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 min-w-[100px]">Tasa confirmación</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-2.5">
-                    <div className="bg-primary-medium h-2.5 rounded-full" style={{ width: `${Math.min(tasa, 100)}%` }} />
-                  </div>
-                  <span className="text-sm font-bold text-primary min-w-[50px] text-right">{tasa.toFixed(0)}%</span>
-                </div>
-              </div>
-            );
-          })}
-          {Object.values(kpis.byCoord).filter(c => c.total > 0).length === 0 && (
-            <p className="text-center text-gray-400 py-4 text-sm">Sin datos para el período seleccionado</p>
-          )}
-        </div>
-      </div>
-
-      {/* Rendimiento por Técnico */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp size={20} className="text-primary-medium" />
-          <h2 className="text-lg font-semibold text-gray-900">Rendimiento por Técnico</h2>
-        </div>
-        <div className="space-y-4">
-          {Object.entries(kpis.byTecnico).map(([id, t]) => {
-            const pctCompletadas = t.total > 0 ? (t.completados / t.total * 100) : 0;
-            return (
-              <div key={id} className="bg-gray-50 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-gray-900">{t.nombre}</span>
-                  <span className="text-sm font-medium text-primary">{formatMoneda(t.montoFacturado)}</span>
-                </div>
-                <div className="flex gap-3 mb-2 text-xs">
-                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">Pendientes: {t.pendientes}</span>
-                  <span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded-full">En proceso: {t.enProceso}</span>
-                  <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full">Completados: {t.completados}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500 min-w-[80px]">% Completadas</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-2.5">
-                    <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${pctCompletadas}%` }} />
-                  </div>
-                  <span className="text-sm font-bold text-green-600 min-w-[50px] text-right">{pctCompletadas.toFixed(0)}%</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <DesempenoOperariasSection ordenes={ordenes} personal={personal} />
     </div>
   );
 }
 
+// ────────────────────────────────────────────────────────────────────────
+// KPIs auxiliares
+// ────────────────────────────────────────────────────────────────────────
+
+type TonoKpi = 'ok' | 'warn' | 'danger' | 'info' | 'neutral';
+
+function KpiBamboo({
+  tono,
+  icon,
+  label,
+  value,
+}: {
+  tono: TonoKpi;
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+}) {
+  const className =
+    tono === 'ok'
+      ? 'b-kpi b-kpi-ok'
+      : tono === 'warn'
+      ? 'b-kpi b-kpi-warn'
+      : tono === 'info'
+      ? 'b-kpi b-kpi-info'
+      : tono === 'danger'
+      ? 'b-kpi'
+      : 'b-kpi';
+  const colorAccento =
+    tono === 'danger'
+      ? 'var(--b-danger)'
+      : tono === 'warn'
+      ? 'var(--b-warning)'
+      : tono === 'info'
+      ? 'var(--b-info)'
+      : tono === 'ok'
+      ? 'var(--b-green)'
+      : 'var(--b-ink)';
+  return (
+    <div className={className}>
+      <span className="b-kpi-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: colorAccento }}>
+        {icon} {label}
+      </span>
+      <span className="b-kpi-valor" style={tono === 'danger' ? { color: 'var(--b-danger)' } : undefined}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function MiniKpi({
+  value,
+  label,
+  tono,
+}: {
+  value: number;
+  label: string;
+  tono: TonoKpi;
+}) {
+  const color =
+    tono === 'ok'
+      ? 'var(--b-green)'
+      : tono === 'danger'
+      ? 'var(--b-danger)'
+      : tono === 'warn'
+      ? 'var(--b-warning)'
+      : tono === 'info'
+      ? 'var(--b-info)'
+      : 'var(--b-ink)';
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <p style={{ fontSize: 18, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </p>
+      <p className="b-help">{label}</p>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Desempeño operarias — cálculo heredado (bono fijo RD$5.000 al 70%)
+// ────────────────────────────────────────────────────────────────────────
+
 const UMBRAL_BONO = 0.70;
 const BONO_MONTO = 5000;
 
-function DesempenoOperariasSection({ ordenes, personal }: { ordenes: OrdenServicio[]; personal: Personal[] }) {
+function DesempenoOperariasSection({
+  ordenes,
+  personal,
+}: {
+  ordenes: OrdenServicio[];
+  personal: Personal[];
+}) {
   const { userProfile } = useApp();
-  const esAdminOCoord = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
+  const esAdminOCoord =
+    userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
   const [quincena, setQuincena] = useState<string>(calcularQuincenaActual(new Date()));
   const quincenas = useMemo(() => listarUltimasQuincenas(12), []);
-  const operarias = useMemo(() => personal.filter(p => p.activo && (p.rol === 'operaria' || p.rol === 'coordinadora')), [personal]);
+  const operarias = useMemo(
+    () => personal.filter((p) => p.activo && (p.rol === 'operaria' || p.rol === 'coordinadora')),
+    [personal],
+  );
 
   const datos = useMemo(() => {
     const { inicio, fin } = rangoQuincena(quincena);
-    return operarias.map(op => {
-      // SPRINT-149 (P-006 variante operariaId): `o.operariaId` post-SPRINT-105
-      // persiste auth.uid; fallback a `op.id` para operarias pre-onboarding sin
-      // doc espejo en usuarios/{uid}.
-      const ordenesEnRango = ordenes.filter(o =>
-        identidadPersonal(o.operariaId, personal)?.id === op.id &&
-        !o.eliminada &&
-        ((o.fase === 'cerrado') || o.soloChequeo) &&
-        enPeriodo(fechaCierreMetrica(o), inicio, fin)
-      );
-      const chequeos = ordenesEnRango.filter(o => o.soloChequeo).length;
-      const completadas = ordenesEnRango.filter(o => o.fase === 'cerrado' && !o.soloChequeo).length;
-      const atendidas = chequeos + completadas;
-      const pct = atendidas > 0 ? completadas / atendidas : 0;
-      const bono = pct >= UMBRAL_BONO ? BONO_MONTO : 0;
-      return { operaria: op, atendidas, completadas, chequeos, pct, bono };
-    }).sort((a, b) => b.pct - a.pct);
+    return operarias
+      .map((op) => {
+        // SPRINT-149 (P-006 variante operariaId): `o.operariaId` post-SPRINT-105
+        // persiste auth.uid; fallback a `op.id` para operarias pre-onboarding sin
+        // doc espejo en usuarios/{uid}.
+        const ordenesEnRango = ordenes.filter(
+          (o) =>
+            identidadPersonal(o.operariaId, personal)?.id === op.id &&
+            !o.eliminada &&
+            (o.fase === 'cerrado' || o.soloChequeo) &&
+            enPeriodo(fechaCierreMetrica(o), inicio, fin),
+        );
+        const chequeos = ordenesEnRango.filter((o) => o.soloChequeo).length;
+        const completadas = ordenesEnRango.filter(
+          (o) => o.fase === 'cerrado' && !o.soloChequeo,
+        ).length;
+        const atendidas = chequeos + completadas;
+        const pct = atendidas > 0 ? completadas / atendidas : 0;
+        const bono = pct >= UMBRAL_BONO ? BONO_MONTO : 0;
+        return { operaria: op, atendidas, completadas, chequeos, pct, bono };
+      })
+      .sort((a, b) => b.pct - a.pct);
   }, [operarias, ordenes, quincena, personal]);
 
   if (!esAdminOCoord) return null;
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
-          <Award size={20} className="text-primary-medium" />
-          <h2 className="text-lg font-semibold text-gray-900">Desempeño de Operarias</h2>
+    <section className="b-panel" style={{ borderRadius: 'var(--b-r-md)', borderTop: '1px solid var(--b-line)' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 10,
+          marginBottom: 12,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Award size={18} aria-hidden="true" style={{ color: 'var(--b-green)' }} />
+          <h3 className="b-h3" style={{ margin: 0 }}>
+            Desempeño de operarias
+          </h3>
         </div>
-        <select value={quincena} onChange={e => setQuincena(e.target.value)}
-          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-medium">
-          {quincenas.map(q => <option key={q} value={q}>{q}</option>)}
+        <select
+          className="b-input"
+          value={quincena}
+          onChange={(e) => setQuincena(e.target.value)}
+          style={{ width: 'auto', minHeight: 38 }}
+        >
+          {quincenas.map((q) => (
+            <option key={q} value={q}>
+              {q}
+            </option>
+          ))}
         </select>
       </div>
-      <p className="text-xs text-gray-500">
-        Bono fijo de RD$ {BONO_MONTO.toLocaleString('es-DO')} si desempeño ≥ {(UMBRAL_BONO * 100).toFixed(0)}%
-        (órdenes completadas / órdenes atendidas; los chequeos cuentan como atendidas).
-      </p>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+
+      <div className="b-callout b-callout-warn" style={{ marginBottom: 14 }}>
+        <strong>Cálculo heredado · revisión pendiente.</strong> Hoy el bono se gatilla con un
+        desempeño ≥ {(UMBRAL_BONO * 100).toFixed(0)}% (órdenes completadas / órdenes atendidas; los
+        chequeos cuentan como atendidas) y un monto fijo de RD${BONO_MONTO.toLocaleString('es-DO')}.
+        La regla final acordada por Jorge (bono proporcional a ventas efectivamente cobradas de la
+        meta mensual del equipo, máximo RD$4.000 por persona, personal ve solo porcentaje) sigue en
+        planificación; no se activa en este lote.
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: 12,
+        }}
+      >
         {datos.length === 0 ? (
-          <p className="text-sm text-gray-400 col-span-full text-center py-6">Sin operarias activas</p>
-        ) : datos.map(d => (
-          <div key={d.operaria.id} className="border border-gray-100 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                style={{ backgroundColor: d.operaria.color || '#0f3460' }}>
-                {d.operaria.nombre.split(' ').map(n => n[0]).join('').slice(0, 2)}
+          <p className="b-help" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 16 }}>
+            Sin operarias activas.
+          </p>
+        ) : (
+          datos.map((d) => (
+            <div
+              key={d.operaria.id}
+              style={{
+                border: '1px solid var(--b-line)',
+                borderRadius: 'var(--b-r-md)',
+                padding: 14,
+                background: 'var(--b-paper)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div
+                  className="b-avatar"
+                  style={{ width: 36, height: 36, fontSize: 13 }}
+                >
+                  {d.operaria.nombre
+                    .split(' ')
+                    .map((n) => n[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase()}
+                </div>
+                <strong style={{ fontWeight: 600, color: 'var(--b-ink)' }}>
+                  {d.operaria.nombre}
+                </strong>
               </div>
-              <p className="text-sm font-semibold text-gray-900">{d.operaria.nombre}</p>
-            </div>
-            <div className="space-y-1 text-xs">
-              <div className="flex justify-between"><span className="text-gray-500">Atendidas</span><span className="font-semibold">{d.atendidas}</span></div>
-              <div className="flex justify-between"><span className="text-green-700">Completadas</span><span className="font-semibold text-green-700">{d.completadas}</span></div>
-              <div className="flex justify-between"><span className="text-amber-700">Solo chequeo</span><span className="font-semibold text-amber-700">{d.chequeos}</span></div>
-              <div className="flex justify-between border-t border-gray-100 pt-1 mt-1">
-                <span className="text-gray-700 font-medium">% desempeño</span>
-                <span className={`font-bold ${d.pct >= UMBRAL_BONO ? 'text-emerald-700' : 'text-gray-700'}`}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span className="b-help">Atendidas</span>
+                <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+                  {d.atendidas}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--b-green)' }}>Completadas</span>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color: 'var(--b-green)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {d.completadas}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                <span style={{ color: 'var(--b-warning)' }}>Solo chequeo</span>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color: 'var(--b-warning)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {d.chequeos}
+                </span>
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  borderTop: '1px solid var(--b-line)',
+                  paddingTop: 8,
+                }}
+              >
+                <span style={{ fontWeight: 600, color: 'var(--b-ink)' }}>% desempeño</span>
+                <span
+                  style={{
+                    fontWeight: 700,
+                    color: d.pct >= UMBRAL_BONO ? 'var(--b-green)' : 'var(--b-ink)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
                   {(d.pct * 100).toFixed(0)}%
                 </span>
               </div>
-              <div className={`mt-2 px-2 py-1.5 rounded-lg text-center text-sm font-bold ${d.bono > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-50 text-gray-400'}`}>
-                Bono: RD$ {d.bono.toLocaleString('es-DO')}
+              <div
+                style={{
+                  marginTop: 4,
+                  padding: '8px 10px',
+                  borderRadius: 'var(--b-r-sm)',
+                  textAlign: 'center',
+                  fontWeight: 700,
+                  fontSize: 15,
+                  background: d.bono > 0 ? 'var(--b-soft)' : 'var(--b-pista)',
+                  color: d.bono > 0 ? 'var(--b-green)' : 'var(--b-muted)',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                Bono: RD${d.bono.toLocaleString('es-DO')}
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
-    </div>
-  );
-}
-
-function KpiCard({ title, value, icon, color }: { title: string; value: string | number; icon: React.ReactNode; color: string }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-      <div className={`${color} text-white rounded-xl p-2 w-fit mb-2`}>{icon}</div>
-      <p className="text-xs text-gray-500 font-medium">{title}</p>
-      <p className="text-xl font-bold text-gray-900 mt-0.5">{value}</p>
-    </div>
+    </section>
   );
 }
