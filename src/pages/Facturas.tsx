@@ -1,3 +1,4 @@
+import { esConduceSinImpuestos } from '../utils/impuestosDocumento';
 import { completarConsumoConduce } from '../services/consumoConduce.service';
 import { fechaFinanciera } from '../utils/fechaFinanciera';
 import { useNavigate } from 'react-router-dom';
@@ -424,6 +425,7 @@ export default function Facturas() {
           </tr>
         </tbody>
       </table>
+      ${esConduceSinImpuestos(factura) ? '<p class="text-right">Documento sin impuestos.</p>' : ''}
       ${factura.notas ? `<div class="notas"><strong>Notas:</strong> ${escapeHtml(factura.notas)}</div>` : ''}
       <div class="footer">
         <p>Mister Service RD &middot; Santo Domingo, República Dominicana</p>
@@ -701,16 +703,16 @@ export default function Facturas() {
                               {typeof factura.subtotal === 'number' ? formatMoneda(factura.subtotal) : <span className="text-gray-400">— (sin desglose)</span>}
                             </div>
                             {typeof factura.subtotal === 'number' && (
-                              <div className="text-[10px] text-gray-500 mt-0.5">Base imponible</div>
+                              <div className="text-[10px] text-gray-500 mt-0.5">{esConduceSinImpuestos(factura) ? 'Total de trabajos · sin impuestos' : 'Base imponible'}</div>
                             )}
                           </div>
 
                           <div className="bg-white rounded-xl p-3 border border-gray-100">
-                            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">ITBIS (ref. interna)</div>
+                            <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">{esConduceSinImpuestos(factura) ? 'Impuestos' : 'ITBIS (ref. interna)'}</div>
                             <div className="text-sm font-bold text-orange-600">
-                              {typeof factura.itbisMonto === 'number' ? formatMoneda(factura.itbisMonto) : <span className="text-gray-400">—</span>}
+                              {esConduceSinImpuestos(factura) ? 'Sin impuestos' : typeof factura.itbisMonto === 'number' ? formatMoneda(factura.itbisMonto) : <span className="text-gray-400">—</span>}
                             </div>
-                            {typeof factura.itbisPorcentaje === 'number' && (
+                            {!esConduceSinImpuestos(factura) && typeof factura.itbisPorcentaje === 'number' && (
                               <div className="text-[10px] text-gray-500 mt-0.5">{factura.itbisPorcentaje}% · no fiscal</div>
                             )}
                           </div>

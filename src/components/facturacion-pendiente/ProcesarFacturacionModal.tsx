@@ -33,10 +33,9 @@ import { siguienteNumeroFactura } from '../../services/contadores.service';
 import { obtenerPagosDeOrden } from '../../services/ordenes.service';
 import { crearNotificacion } from '../../services/notificaciones.service';
 import {
-  desglosarTotalConITBIS,
   calcularCostoPiezasDeItems,
 } from '../../utils/comisiones';
-import { obtenerConfigFiscal } from '../../services/configFiscal.service';
+import { desgloseImpuestosDocumento } from '../../utils/impuestosDocumento';
 import { esAdminOCoord, puede } from '../../utils/permisos';
 import Modal from '../Modal';
 import BadgeSoloChequeo from '../shared/BadgeSoloChequeo';
@@ -515,12 +514,9 @@ export default function ProcesarFacturacionModal({
         return obj;
       });
 
-      // Leer tasa ITBIS actual (configurable)
-      const configFiscal = await obtenerConfigFiscal();
-      const itbisPct = configFiscal.itbisPorcentaje;
-
-      // Desglose fiscal (el total cobrado ya incluye ITBIS → desglosar)
-      const desglose = desglosarTotalConITBIS(totalItems, itbisPct);
+      // Este flujo emite Conduce de Garantía: desglose de trabajos y total sin impuestos.
+      // La tasa fiscal normal y los devengos históricos permanecen en sus propios flujos.
+      const desglose = desgloseImpuestosDocumento(totalItems, 'conduce_garantia');
       const costoPiezas = calcularCostoPiezasDeItems(itemsLimpios as unknown as ItemCotizacion[]);
       const gananciaNeta = Math.max(0, Math.round((desglose.subtotal - costoPiezas) * 100) / 100);
 

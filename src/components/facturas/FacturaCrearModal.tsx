@@ -1,3 +1,4 @@
+import { desgloseImpuestosDocumento } from '../../utils/impuestosDocumento';
 import { useMemo, useRef, useState } from 'react';
 import { addDoc, collection, doc, Timestamp, serverTimestamp } from 'firebase/firestore';
 import toast from 'react-hot-toast';
@@ -190,11 +191,15 @@ export default function FacturaCrearModal({
       const clienteTipoEnEmision: 'particular' | 'b2b' =
         form.cliente?.tipo === 'b2b' ? 'b2b' : 'particular';
 
+      const desglose = desgloseImpuestosDocumento(total, 'conduce_garantia');
       const docData: Record<string, unknown> = {
         numero,
         clienteNombre: clienteNombreFinal,
         items: form.items,
-        total,
+        total: desglose.total,
+        subtotal: desglose.subtotal,
+        itbisPorcentaje: desglose.itbisPorcentaje,
+        itbisMonto: desglose.itbis,
         estado: 'emitida' as EstadoFactura,
         fechaEmision: Timestamp.now(),
         createdAt: Timestamp.now(),
