@@ -4,7 +4,8 @@ import { useAvisosNativos } from './mobile/useAvisosNativos';
 import { perfilHabilitado, inicioPorRol } from './utils/accesoSesion';
 import { esAppNativa } from './mobile/camara';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { Toaster, ToastBar, toast as toastApi } from 'react-hot-toast';
+import { X } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from './firebase/config';
 import { useApp, AppProvider } from './context/AppContext';
@@ -376,24 +377,32 @@ export default function App() {
         <EntornoPruebas />
         <BannerNuevaVersion />
         {/*
-          Toaster · auditoría alertas 2026-10-08 Lote A, hallazgo 4:
+          Toaster · auditoría alertas 2026-10-08 Lote A + revisión Jorge 08/10:
           - Antes: duración global 3000ms para TODO (incluidos fallos de
             operación con efecto pendiente). Un error de guardado podía
             desaparecer antes de que el usuario lo leyera.
-          - Ahora: duración por severidad usando los tokens
-            `--alerta-toast-duracion-*-ms`:
+          - Ahora:
               · success → 3000ms (confirmación transitoria).
-              · info/loading → 4000ms.
-              · error → Infinity (persiste hasta que el usuario lo descarte
-                conscientemente). Los avisos de operación con efecto
-                pendiente deben quedarse hasta resolverse.
-          - Los íconos usan las variables semánticas de `tokens.css` para
-            unificar paleta — nada de literales #22c55e / #ef4444 ajenos
-            al sistema.
-          - El Toaster NO reemplaza la alerta inline persistente de
-            módulos financieros / nómina (Nomina.tsx:335-345); esos
-            seguirán mostrando bloqueos en-contexto. El toaster SÍ se
-            usa para notificar operaciones puntuales (crear/eliminar).
+              · error   → Infinity + botón "Cerrar aviso" accesible (abajo).
+                `duration: Infinity` por sí solo deja el aviso flotando sin
+                descarte — Jorge exigió un control manual explícito.
+              · loading → Infinity. Un loading NO se oculta a los 4s. El
+                llamante lo reemplaza con `avisoExito/Error` usando el
+                mismo `id` cuando la operación resuelve o falla. Ver
+                `src/utils/avisos.ts` para el patrón canónico.
+              · blank   → 4000ms (mensajes informativos cortos).
+          - Íconos usan tokens semánticos (`var(--ms-exito)` /
+            `var(--ms-peligro)` / `var(--ms-accion)`) — sin literales
+            #22c55e / #ef4444.
+          - El `children` del Toaster renderiza el ToastBar nativo con un
+            botón "Cerrar" que llama `toast.dismiss(id)`. Preserva animación
+            y estilo default sin reinventar el componente.
+          - IDs estables: cuando una operación se repite por reintento
+            automático, el llamante pasa `operacionId` para que el toast
+            se reemplace en vez de apilarse (helper en
+            `src/utils/avisos.ts`).
+          - El Toaster NO reemplaza las alertas inline persistentes de
+            Nómina / módulos financieros; esos siguen con `Alerta`.
         */}
         <Toaster
           position="top-right"
@@ -409,23 +418,51 @@ export default function App() {
               iconTheme: { primary: 'var(--ms-exito)', secondary: 'white' },
             },
             error: {
-              /*
-                Fallos de operación con efecto pendiente persisten hasta
-                descartar. Esto permite leer el motivo y decidir reintento
-                sin cerrar modales por accidente. El llamante puede
-                sobrescribir `duration` si sabe que la operación es
-                verdaderamente transitoria.
-              */
               duration: Infinity,
               iconTheme: { primary: 'var(--ms-peligro)', secondary: 'white' },
             },
             loading: {
-              duration: 4000,
+              duration: Infinity,
               iconTheme: { primary: 'var(--ms-accion)', secondary: 'white' },
             },
             blank: { duration: 4000 },
           }}
-        />
+        >
+          {(t) => (
+            <ToastBar toast={t}>
+              {({ icon, message }) => (
+                <>
+                  {icon}
+                  {message}
+                  {t.type !== 'loading' && (
+                    <button
+                      type="button"
+                      onClick={() => toastApi.dismiss(t.id)}
+                      aria-label="Cerrar aviso"
+                      title="Cerrar aviso"
+                      style={{
+                        marginLeft: 8,
+                        padding: 4,
+                        borderRadius: 4,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'transparent',
+                        border: 0,
+                        color: 'inherit',
+                        cursor: 'pointer',
+                        minWidth: 32,
+                        minHeight: 32,
+                      }}
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </button>
+                  )}
+                </>
+              )}
+            </ToastBar>
+          )}
+        </Toaster>
         <AppRoutes />
       </AppProvider>
     </BrowserRouter>

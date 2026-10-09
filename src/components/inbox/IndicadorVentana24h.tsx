@@ -11,10 +11,15 @@ import type { Timestamp } from 'firebase/firestore';
  *   - Mientras esté abierta, el negocio puede mandar `texto_libre`.
  *   - Cerrada → solo se permite mandar plantillas HSM aprobadas (re-engage).
  *
- * Colores:
- *   - verde (>2h restante) → "Ventana abierta — 15h restantes".
- *   - ámbar (<2h restante) → "Cierra en 1h 23min".
- *   - rojo (<30min o ya cerrada) → "Cierra en 12min" / "Ventana cerrada".
+ * Severidad (auditoría alertas 2026-10-08 hallazgo 6):
+ *   - abierta >2h restante → severidad `info` (verde): "Ventana abierta — 15h restantes".
+ *   - abierta <2h restante → severidad `atencion` (ámbar): "Cierra en 1h 23min".
+ *   - abierta <30min        → severidad `atencion` (ámbar fuerte): "Cierra en 12min".
+ *   - cerrada                → severidad `atencion` (ámbar): "Ventana cerrada · solo plantillas".
+ *     NO es "fallo"; es una restricción de Meta esperable. El aviso rojo
+ *     original lo leía como error de conexión, lo que confundía.
+ *   - Umbrales 30/120min preservados (no se cambian sin nueva aprobación
+ *     de Jorge; sólo se renombra la severidad semántica).
  *
  * El componente re-renderiza cada minuto para que el contador no se
  * congele (los Timestamp llegan del onSnapshot pero el "ahora" cambia).
@@ -55,24 +60,33 @@ export default function IndicadorVentana24h({ ventana24h }: Props) {
   const abierta = ventana24h.abierta && msRestantes > 0;
 
   if (!abierta) {
+    // Severidad `atencion` (ámbar), no `fallo`. La restricción Meta no es
+    // un error del sistema. El selector de plantillas (acción esperada)
+    // vive en `InboxConversacion.tsx` justo debajo; este indicador queda
+    // compacto en el header.
     return (
-      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-50 text-red-700 text-xs font-medium border border-red-200">
-        <AlertCircle size={12} />
+      <div
+        role="status"
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border bg-amber-50 text-amber-800 border-amber-200"
+      >
+        <AlertCircle size={12} aria-hidden="true" />
         Ventana cerrada · solo plantillas
       </div>
     );
   }
 
   const minRestantes = msRestantes / 60000;
-  let color: 'verde' | 'ambar' | 'rojo' = 'verde';
-  if (minRestantes < 30) color = 'rojo';
-  else if (minRestantes < 120) color = 'ambar';
+  // info (verde) por default; atencion (ámbar) <2h; atencion fuerte <30min.
+  // Los umbrales 30/120min NO cambian — no son nueva aprobación de Jorge.
+  let severidad: 'info' | 'atencion' | 'atencion-fuerte' = 'info';
+  if (minRestantes < 30) severidad = 'atencion-fuerte';
+  else if (minRestantes < 120) severidad = 'atencion';
 
   const clases = {
-    verde: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    ambar: 'bg-amber-50 text-amber-700 border-amber-200',
-    rojo: 'bg-red-50 text-red-700 border-red-200',
-  }[color];
+    info: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    atencion: 'bg-amber-50 text-amber-800 border-amber-200',
+    'atencion-fuerte': 'bg-amber-100 text-amber-900 border-amber-300',
+  }[severidad];
 
   return (
     <div

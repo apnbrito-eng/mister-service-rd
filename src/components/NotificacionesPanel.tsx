@@ -1,5 +1,4 @@
 import { equipoApi } from '../services/equipoApi';
-import toast from 'react-hot-toast';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, X, CheckCheck } from 'lucide-react';
@@ -9,6 +8,12 @@ import {
   suscribirNotificaciones, marcarLeida, marcarTodasLeidas,
 } from '../services/notificaciones.service';
 import { tiempoTranscurrido } from '../utils';
+// Lote B hallazgo 2+3 (auditoría alertas 2026-10-08):
+// - Antes: punto y badge en rojo sin discriminar gravedad; `marcarLeida` /
+//   `marcarTodasLeidas` fallaban silencioso (console.error).
+// - Ahora: azul para "no leído" (info), rojo reservado a error/bloqueo.
+//   Fallos de marcado disparan aviso persistente deduplicado por operacionId.
+import { avisoError } from '../utils/avisos';
 
 interface Props {
   theme?: 'light' | 'dark';
@@ -48,11 +53,30 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
 
   const handleClickNotif = async (n: Notificacion) => {
     if (!n.leida) {
-      try { await marcarLeida(n.id); } catch (err) { console.error(err); }
+      try {
+        await marcarLeida(n.id);
+      } catch (err) {
+        // Hallazgo 3: antes `console.error(err)` silencioso. Ahora aviso
+        // visible deduplicado para que el usuario sepa que la notificación
+        // NO quedó marcada como leída y pueda reintentar. Marcar leído NO
+        // acredita que la atención quedó resuelta — es un cambio de estado
+        // distinto, resuelto por el flujo del destino.
+        console.error('marcarLeida falló', err);
+        avisoError('No se pudo marcar la notificación como leída. Reintentá al abrir el aviso.', {
+          operacionId: `marcar-leida-${n.id}`,
+        });
+      }
     }
     setOpen(false);
     if (n.conversacionId && /^\d{7,16}$/.test(n.conversacionId)) {
-      try { const destino = await equipoApi<{ruta: string}>(`/api/crm/destino-aviso?id=${encodeURIComponent(n.id)}`); navigate(destino.ruta); } catch (e) { toast.error((e as Error).message); }
+      try {
+        const destino = await equipoApi<{ ruta: string }>(
+          `/api/crm/destino-aviso?id=${encodeURIComponent(n.id)}`,
+        );
+        navigate(destino.ruta);
+      } catch (e) {
+        avisoError((e as Error).message, { operacionId: `destino-aviso-${n.id}` });
+      }
     } else if (n.mantenimientoId && /^[\w-]{1,160}$/.test(n.mantenimientoId)) {
       navigate(`/admin/mantenimiento?id=${encodeURIComponent(n.mantenimientoId)}`);
     } else if (n.ordenId) {
@@ -62,7 +86,17 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
 
   const handleMarcarTodas = async () => {
     if (!currentUser?.uid) return;
-    try { await marcarTodasLeidas(currentUser.uid); } catch (err) { console.error(err); }
+    try {
+      await marcarTodasLeidas(currentUser.uid);
+    } catch (err) {
+      // Hallazgo 3: fallo visible y deduplicado. El estado real del snapshot
+      // no se modifica si falla la escritura; el usuario ve el badge seguir
+      // en rojo/azul y recibe el motivo.
+      console.error('marcarTodasLeidas falló', err);
+      avisoError('No se pudieron marcar todas como leídas. Reintentá o abrí cada aviso.', {
+        operacionId: 'marcar-todas-leidas',
+      });
+    }
   };
 
   const btnBase = theme === 'dark'
@@ -80,7 +114,16 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
       >
         <Bell size={18} />
         {noLeidas > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center">
+          // Hallazgo 2: antes rojo (reservado para error/bloqueo crítico).
+          // Ahora azul (`var(--ms-accion)`) para "no leído" como info.
+          // El rojo vuelve a aparecer sólo cuando una notificación propia
+          // reporte gravedad (campo que no existe hoy — queda documentado
+          // como punto de extensión para el Lote D).
+          <span
+            aria-label={`${noLeidas} notificaciones sin leer`}
+            className="absolute -top-0.5 -right-0.5 text-white text-[9px] font-bold rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center"
+            style={{ background: 'var(--ms-accion)' }}
+          >
             {noLeidas > 99 ? '99+' : noLeidas}
           </span>
         )}
@@ -93,7 +136,9 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
               <Bell size={16} className="text-primary" />
               <h3 className="font-semibold text-sm text-gray-800">Notificaciones</h3>
               {noLeidas > 0 && (
-                <span className="bg-red-100 text-red-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                // Hallazgo 2: `bg-red-100 text-red-700` → `bg-blue-50 text-blue-700`
+                // (info, no error).
+                <span className="bg-blue-50 text-blue-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
                   {noLeidas} nueva{noLeidas !== 1 ? 's' : ''}
                 </span>
               )}
@@ -137,7 +182,12 @@ export default function NotificacionesPanel({ theme = 'dark' }: Props) {
                       </p>
                     </div>
                     {!n.leida && (
-                      <span className="w-2 h-2 bg-red-500 rounded-full shrink-0 mt-1.5" />
+                      // Hallazgo 2: punto rojo→azul (info "no leído", no error).
+                      <span
+                        aria-hidden="true"
+                        className="w-2 h-2 rounded-full shrink-0 mt-1.5"
+                        style={{ background: 'var(--ms-accion)' }}
+                      />
                     )}
                   </div>
                 </button>

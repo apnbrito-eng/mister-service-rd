@@ -831,12 +831,21 @@ export default function InboxConversacion() {
             {conversacionActual?.bajaSolicitada && <div role="status" className="mb-3 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">El cliente solicitó dejar de recibir mensajes. El envío está bloqueado; revisa la solicitud y coordina por otro canal si necesita atención.</div>}
             {conversacionActual?.origenMarketing && <p className="mb-3 text-xs text-gray-500">Consulta desde anuncio de Meta: {conversacionActual.origenMarketing.anuncioId}</p>}
             {!ventanaAbierta && waId && (
-              <div className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-800 flex items-start gap-2">
-                <CheckCheck size={14} className="mt-0.5 flex-shrink-0" />
-                <div className="flex-1 flex items-start justify-between gap-3">
-                  <span>
-                    Ventana 24h cerrada. Para reabrir la conversación enviá una
-                    plantilla aprobada por Meta.
+              // Hallazgo 6 (auditoría alertas 2026-10-08): antes había dos
+              // avisos de "ventana cerrada" — este bloque + el chip del
+              // IndicadorVentana24h en el header. Ahora el chip del header
+              // comunica el estado y este bloque se mantiene SOLO como
+              // zona de acción (SelectorPlantillas), con copy mínima y
+              // severidad `atencion` (no fallo de conexión). Un único
+              // aviso con una única acción esperable.
+              <div
+                role="status"
+                className="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-xs text-amber-800 flex items-start gap-2"
+              >
+                <CheckCheck size={14} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+                <div className="flex-1 flex items-center justify-between gap-3 flex-wrap">
+                  <span className="font-medium">
+                    Reabrir con plantilla aprobada por Meta
                   </span>
                   <SelectorPlantillas waId={waId} />
                 </div>

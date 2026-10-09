@@ -15,6 +15,11 @@ import {
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+// Hallazgo 7 (auditoría alertas 2026-10-08): reemplazar `window.alert()`
+// nativo por aviso contextual del sistema. El alert nativo rompía el
+// lenguaje visual (fuente, botón, modal del navegador) y no era
+// accesible por el toaster con botón Cerrar.
+import { avisoError } from '../utils/avisos';
 
 type RangoFechas = { inicio: Date; fin: Date };
 
@@ -177,7 +182,9 @@ export default function Feedback() {
   // Helpers de WhatsApp
   function abrirWhatsAppRecontactarDetractor(orden: OrdenServicio) {
     if (!orden.clienteTelefono) {
-      alert('Esta orden no tiene teléfono del cliente');
+      avisoError('Esta orden no tiene teléfono del cliente. Agregalo desde la ficha del cliente para poder recontactarlo.', {
+        operacionId: `feedback-sin-telefono-${orden.id}`,
+      });
       return;
     }
     const base = configWeb?.feedbackNPS?.mensajeWhatsAppDetractor
@@ -193,7 +200,9 @@ export default function Feedback() {
 
   function abrirWhatsAppPromotor(orden: OrdenServicio) {
     if (!orden.clienteTelefono) {
-      alert('Esta orden no tiene teléfono del cliente');
+      avisoError('Esta orden no tiene teléfono del cliente. Agregalo desde la ficha del cliente para enviarle el enlace de Google Reviews.', {
+        operacionId: `feedback-sin-telefono-${orden.id}`,
+      });
       return;
     }
     const url = configWeb?.feedbackNPS?.googleReviewsUrl;
