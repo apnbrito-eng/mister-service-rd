@@ -11,6 +11,7 @@ import { useApp } from '../../context/AppContext';
 import {
   obtenerOCrearRecordatorio, marcarCompletado, marcarItemAvisado,
   actualizarItems, suscribirRecordatoriosDelDia, ventanaActiva,
+  avisoDentroDeVentana,
   obtenerDiaSiguienteLaboral,
 } from '../../services/recordatorios.service';
 import {
@@ -151,12 +152,22 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
   if (!rolRelevante || esDomingo || dismissed) return null;
 
   const estadoVentana = ventanaActiva(tipo, ahora);
+  // Decisión Jorge (09/10/2026): el banner del Dashboard dura 15 min desde
+  // el inicio de la ventana (9:00-9:15 / 11:00-11:15). Pasado ese tiempo
+  // SIN completar, se oculta aunque siga pendiente — el pendiente real
+  // permanece en Firestore y se ve en su módulo (listado de operarias /
+  // Agenda del día). Si YA se completó, mantenemos el estado "listo"
+  // visible por un rato (lógica existente de "Marcar hecho").
+  const dentroDeVentanaAviso = avisoDentroDeVentana(tipo, ahora);
 
   // Vista operaria ---------------------------------------------------
   if (rol === 'operaria') {
     if (!miRecordatorio) return null;
     const completado = miRecordatorio.completado;
     if (estadoVentana === 'antes' && !completado) return null;
+    // Fuera de la ventana de 15 min y aún pendiente → ocultar del Dashboard.
+    // El pendiente queda visible en su módulo (Agenda del día).
+    if (!dentroDeVentanaAviso && !completado) return null;
     if (completado) {
       return (
         <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
@@ -322,6 +333,16 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
   const operariasActivas = personal.filter(p => p.rol === 'operaria' && p.activo);
   if (operariasActivas.length === 0) return null;
   if (estadoVentana === 'antes') return null;
+  // Mismo criterio que vista operaria: ocultar tras 15 min si aún hay
+  // pendientes. El resumen "todas listas" (línea ~337 abajo) sigue
+  // mostrándose como feedback positivo mientras `estadoVentana === 'activa'`,
+  // porque esa variante no está sujeta a los 15 min (es confirmación de
+  // completitud, no aviso urgente).
+  const hayPendientesAhora = operariasActivas.some((op) => {
+    const rec = recordatorios.find((r) => r.operariaId === (op.uid || op.id));
+    return !rec?.completado;
+  });
+  if (!dentroDeVentanaAviso && hayPendientesAhora) return null;
 
   const porOperaria = operariasActivas.map(op => {
     // SPRINT-149 (P-006 variante operariaId): `r.operariaId` post-SPRINT-105

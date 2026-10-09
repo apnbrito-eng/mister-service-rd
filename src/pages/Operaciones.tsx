@@ -17,15 +17,15 @@
  *    es decisión de implementación para no duplicar métricas financieras.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Map as MapIcon, CalendarCheck } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Map as MapIcon, CalendarCheck, Tv } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { puede } from '../utils/permisos';
+import { puede, esAdminOCoord } from '../utils/permisos';
 import { useMapaDatos } from '../hooks/useMapaDatos';
 import { rangoAtajoRD, rangoRD, componentesRD, diaEsHoyRD, fechaEnRD } from '../utils/mapaFechas';
 import { equipoDeOperaria, type EquipoOperacion } from '../utils/equiposOperacion';
 import type { EstadoAbiertosTecnico } from '../hooks/useMapaDatos';
-import type { OrdenServicio, Personal } from '../types';
+import type { OrdenServicio, Personal, WhatsAppConversacion } from '../types';
 import {
   agregarAvisos,
   estadoActualTecnico,
@@ -40,6 +40,10 @@ import BarraEstadoHoy from '../components/operaciones/BarraEstadoHoy';
 import ListaAtencion from '../components/operaciones/ListaAtencion';
 import LineaTecnico from '../components/operaciones/LineaTecnico';
 import FichaTecnicoSheet from '../components/operaciones/FichaTecnicoSheet';
+import PrioridadDelDia, { type ModoVista } from '../components/operaciones/PrioridadDelDia';
+// Suscripción al mismo canal que usa el inbox general — reutilizamos la rule
+// `whatsapp_conversaciones` esStaffOficina sin crear otro módulo paralelo.
+import { suscribirConversaciones } from '../services/whatsappInbox.service';
 
 type EquipoFiltro = 'todos' | 'A' | 'B';
 type OrdenTecnicos = 'atencion' | 'avance' | 'nombre';
@@ -68,11 +72,26 @@ function combinarPendientes(persona: Personal, estados: Record<string, EstadoAbi
 export default function Operaciones() {
   const { userProfile } = useApp();
 
+  // Modo televisor: `?modo=tv` activa el layout grande sin controles para
+  // proyección en pantalla del taller. Reusamos la MISMA ruta `/admin/operaciones`
+  // — Jorge pidió no crear otra pantalla independiente.
+  const [searchParams] = useSearchParams();
+  const modoVista: ModoVista = searchParams.get('modo') === 'tv' ? 'tv' : 'normal';
+  const esTv = modoVista === 'tv';
+
   // Permisos → primitivos; derivamos el objeto para el hook con `useMemo` para que
   // su identidad solo cambie cuando cambian los permisos reales (fix revisión Codex #10).
   const ordenesVer = puede(userProfile, 'ordenesVer');
   const clientesVer = puede(userProfile, 'clientesVer');
   const personalVer = puede(userProfile, 'personalVer');
+  // Gate del canal de conversaciones (rule `whatsapp_conversaciones`
+  // esStaffOficina). Secretaria/operaria/admin/coord lo tienen; técnico y
+  // ayudante no suscriben para no gastar listener ni disparar permission-
+  // denied silencioso.
+  const puedeInbox =
+    userProfile?.rol === 'secretaria' ||
+    userProfile?.rol === 'operaria' ||
+    esAdminOCoord(userProfile);
   // El Centro no muestra GPS; el hook usa `gpsVer` como gate independiente. Lo
   // igualamos a `personalVer` (comportamiento del Mapa) solo para que el hook
   // acepte el shape; nunca activamos `activarGps()`.
@@ -92,10 +111,42 @@ export default function Operaciones() {
     return () => window.clearInterval(id);
   }, []);
 
+  // Conversaciones del inbox general — mismas rules que el inbox,
+  // reutilizamos `suscribirConversaciones`. No duplica conversación por
+  // cliente: la lista viene por `wa_id` único.
+  const [conversaciones, setConversaciones] = useState<WhatsAppConversacion[]>([]);
+  const [errorConversaciones, setErrorConversaciones] = useState<string | null>(null);
+  useEffect(() => {
+    if (!puedeInbox) {
+      setConversaciones([]);
+      setErrorConversaciones(null);
+      return;
+    }
+    // Máximo 100 conversaciones ordenadas por `ultimaActividad` desc —
+    // suficiente para "Prioridad del día" sin pagar un listener de 9000 docs.
+    // Si una conversación con último entrante del día cae fuera del top 100,
+    // volveremos a ella desde el inbox (no es dato financiero crítico).
+    const unsub = suscribirConversaciones(
+      (convs) => {
+        setConversaciones(convs);
+        setErrorConversaciones(null);
+      },
+      (err) => setErrorConversaciones(err.message),
+      100,
+    );
+    return () => unsub();
+  }, [puedeInbox]);
+
   const [diaSeleccionado, setDiaSeleccionado] = useState<Date>(() => {
     const r = rangoAtajoRD('hoy', new Date());
     return r.desde;
   });
+  // Modo TV: forzamos "hoy" cada minuto para que no quede fijo en un día pasado.
+  useEffect(() => {
+    if (!esTv) return;
+    const r = rangoAtajoRD('hoy', ahora);
+    if (!diaEsHoyRD(diaSeleccionado, ahora)) setDiaSeleccionado(r.desde);
+  }, [esTv, ahora, diaSeleccionado]);
   const [equipo, setEquipo] = useState<EquipoFiltro>('todos');
   const [ordenTecnicos, setOrdenTecnicos] = useState<OrdenTecnicos>('atencion');
   const [tecnicoAbiertoId, setTecnicoAbiertoId] = useState<string | null>(null);
@@ -299,67 +350,91 @@ export default function Operaciones() {
     : [];
 
   return (
-    <div className="min-h-screen bg-slate-100 pb-10">
-      {/* Header local — se envuelve en mobile */}
-      <header className="border-b border-slate-200 bg-white">
+    <div className={`min-h-screen pb-10 ${esTv ? 'bg-slate-900' : 'bg-slate-100'}`}>
+      {/* Header local — se envuelve en mobile; en TV queda minimal. */}
+      <header className={`border-b ${esTv ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'}`}>
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3">
           <div className="min-w-0 basis-full sm:basis-auto sm:flex-1">
-            <h1 className="text-lg font-semibold text-slate-900">Centro de operaciones</h1>
-            <p className="text-xs text-slate-500">
+            <h1 className={`font-semibold ${esTv ? 'text-2xl text-white' : 'text-lg text-slate-900'}`}>
+              Centro de operaciones{esTv ? ' · TV' : ''}
+            </h1>
+            <p className={`text-xs ${esTv ? 'text-slate-300' : 'text-slate-500'}`}>
               {diaHumano}
               {personalVer && datosConfiables ? ` · ${resumen.tecnicosActivos} técnico${resumen.tecnicosActivos === 1 ? '' : 's'} activos` : ''}
               {equipoFiltro ? ` · Equipo ${equipoFiltro}` : ''}
             </p>
           </div>
-          <span className="tabular-nums text-base font-medium text-slate-700" aria-label="Hora actual">
+          <span
+            className={`tabular-nums font-medium ${esTv ? 'text-2xl text-white' : 'text-base text-slate-700'}`}
+            aria-label="Hora actual"
+          >
             {reloj}
           </span>
-          <label className="flex items-center gap-2 text-xs text-slate-600">
-            <span>Día</span>
-            <input
-              type="date"
-              value={fechaAInput(diaSeleccionado)}
-              onChange={(e) => {
-                const nueva = fechaDesdeInput(e.target.value);
-                if (nueva) setDiaSeleccionado(nueva);
-              }}
-              className="min-h-[44px] rounded border border-slate-300 bg-white px-2 py-1 text-sm"
-              aria-label="Elegir día"
-            />
-          </label>
-          <div
-            role="group"
-            aria-label="Filtrar por equipo"
-            className="flex gap-1 rounded-md bg-slate-100 p-1 text-xs"
-          >
-            {(['todos', 'A', 'B'] as const).map((v) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => setEquipo(v)}
-                aria-pressed={equipo === v}
-                className={`min-h-[44px] rounded px-3 font-medium ${
-                  equipo === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
+          {!esTv && (
+            <>
+              <label className="flex items-center gap-2 text-xs text-slate-600">
+                <span>Día</span>
+                <input
+                  type="date"
+                  value={fechaAInput(diaSeleccionado)}
+                  onChange={(e) => {
+                    const nueva = fechaDesdeInput(e.target.value);
+                    if (nueva) setDiaSeleccionado(nueva);
+                  }}
+                  className="min-h-[44px] rounded border border-slate-300 bg-white px-2 py-1 text-sm"
+                  aria-label="Elegir día"
+                />
+              </label>
+              <div
+                role="group"
+                aria-label="Filtrar por equipo"
+                className="flex gap-1 rounded-md bg-slate-100 p-1 text-xs"
               >
-                {v === 'todos' ? 'Todos' : v === 'A' ? 'Equipo A · Wila' : 'Equipo B · Yohana'}
-              </button>
-            ))}
-          </div>
-          <nav aria-label="Vistas relacionadas" className="flex gap-2 text-xs">
+                {(['todos', 'A', 'B'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setEquipo(v)}
+                    aria-pressed={equipo === v}
+                    className={`min-h-[44px] rounded px-3 font-medium ${
+                      equipo === v ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {v === 'todos' ? 'Todos' : v === 'A' ? 'Equipo A · Wila' : 'Equipo B · Yohana'}
+                  </button>
+                ))}
+              </div>
+              <nav aria-label="Vistas relacionadas" className="flex gap-2 text-xs">
+                <Link
+                  to="/admin/mapa"
+                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
+                >
+                  <MapIcon size={14} aria-hidden /> Mapa
+                </Link>
+                <Link
+                  to="/admin/agenda-dia"
+                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
+                >
+                  <CalendarCheck size={14} aria-hidden /> Agenda del día
+                </Link>
+                <Link
+                  to="/admin/operaciones?modo=tv"
+                  className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
+                  title="Modo televisor del Centro"
+                >
+                  <Tv size={14} aria-hidden /> Modo TV
+                </Link>
+              </nav>
+            </>
+          )}
+          {esTv && (
             <Link
-              to="/admin/mapa"
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
+              to="/admin/operaciones"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-slate-600 bg-slate-700 px-3 py-2 text-slate-100 hover:bg-slate-600"
             >
-              <MapIcon size={14} aria-hidden /> Mapa
+              Salir de TV
             </Link>
-            <Link
-              to="/admin/agenda-dia"
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-700 hover:bg-slate-50"
-            >
-              <CalendarCheck size={14} aria-hidden /> Agenda del día
-            </Link>
-          </nav>
+          )}
         </div>
       </header>
 
@@ -391,6 +466,23 @@ export default function Operaciones() {
           <div data-testid="cargando-datos" className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-500">
             Cargando datos del día…
           </div>
+        )}
+
+        {/* Lote C — Prioridad del día dentro del Centro de operaciones.
+            Clientes de hoy / Atrasados activos / Esperando respuesta.
+            Enlaces a /admin/inbox/:waId?volverA=operaciones conservando
+            contexto. Dedup entre categorías: un mismo cliente aparece una
+            sola vez. En modo TV se agranda y oculta descripciones. */}
+        {ordenesConfiables && (
+          <PrioridadDelDia
+            modo={modoVista}
+            avisos={agrupacion.avisos}
+            ordenesDelDia={ordenesDelDia}
+            conversaciones={conversaciones}
+            ahora={ahora}
+            cargando={datos.cargandoOrdenes || datos.cargandoPersonal}
+            errorConversaciones={errorConversaciones}
+          />
         )}
 
         {datosConfiables && !datos.cargandoStandby && !datos.errorStandby ? (

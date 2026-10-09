@@ -42,6 +42,11 @@ export function ventanaActiva(
   return 'urgente';
 }
 
+// `avisoDentroDeVentana` vive en `../utils/avisoVentanaRuta.ts` (helper puro
+// sin dependencia Firebase para poder probarse con `node:test`). Lo
+// re-exportamos acá por conveniencia del call-site vigente.
+export { avisoDentroDeVentana } from '../utils/avisoVentanaRuta';
+
 function limpiar<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
 }
