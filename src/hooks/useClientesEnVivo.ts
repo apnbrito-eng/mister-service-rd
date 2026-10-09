@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cliente } from '../types';
@@ -27,13 +27,23 @@ export function useClientesEnVivo(): {
   /** IDs de clientes cuyo doc raw NO tenía `tipo` (legacy migración pendiente). */
   clientesSinTipoDefinido: Set<string>;
   loading: boolean;
+  error: string;
+  reintentar: () => void;
 } {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [clientesSinTipoDefinido, setClientesSinTipoDefinido] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
+  const [error, setError] = useState('');
+  const [intento, setIntento] = useState(0);
+  const reintentar = useCallback(() => setIntento(i => i + 1), []);
+
   useEffect(() => {
+    let activo = true;
+    setLoading(true);
+    setError('');
     const unsub = onSnapshot(collection(db, 'clientes'), (snap) => {
+      if (!activo) return;
       const sinTipo = new Set<string>();
       const lista = snap.docs
         // SPRINT-187 Bug A — filtrar soft-deleted del listado/UI. Los docs
@@ -56,9 +66,14 @@ export function useClientesEnVivo(): {
       setClientes(lista);
       setClientesSinTipoDefinido(sinTipo);
       setLoading(false);
+      setError('');
+    }, () => {
+      if (!activo) return;
+      setError('No se pudo actualizar la cartera de clientes. Vuelve a intentar.');
+      setLoading(false);
     });
-    return () => unsub();
-  }, []);
+    return () => { activo = false; unsub(); };
+  }, [intento]);
 
-  return { clientes, clientesSinTipoDefinido, loading };
+  return { clientes, clientesSinTipoDefinido, loading, error, reintentar };
 }

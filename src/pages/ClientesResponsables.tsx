@@ -1,4 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import CarterasClientes from "../components/clientes/CarterasClientes";
+import { useClientesEnVivo } from "../hooks/useClientesEnVivo";
+import { puede } from "../utils/permisos";
 import { equipoApi } from "../services/equipoApi";
 import { efectivoPendiente, type CrmPago } from "../utils/crm";
 import { faseLabel, formatMoneda } from "../utils";
@@ -23,6 +27,14 @@ type Fila = {
   traspaso?: { destinoNombre: string };
   pagos: CrmPago[];
 };
+function CarteraCanonica({ puedeTrasladar }: { puedeTrasladar: boolean }) {
+  const { clientes, loading, error, reintentar } = useClientesEnVivo();
+  const navigate = useNavigate();
+  return <div>
+    <p className="mb-3 text-sm text-slate-500">Clientes de cada equipo, tengan o no órdenes. Los responsables de las órdenes se consultan por separado.</p>
+    {error ? <div role="alert" className="rounded-xl bg-red-50 p-4 text-red-800"><p>{error}</p><button type="button" className="mt-3 min-h-11 rounded-xl border px-3" onClick={reintentar}>Reintentar</button></div> : loading ? <p role="status">Cargando clientes…</p> : <CarterasClientes clientes={clientes} puedeTrasladar={puedeTrasladar} abrir={cliente => navigate(`/admin/clientes?id=${encodeURIComponent(cliente.id)}`)} />}
+  </div>;
+}
 export default function ClientesResponsables() {
   const { userProfile } = useApp();
   const [items, setItems] = useState<Fila[]>([]),
@@ -34,7 +46,7 @@ export default function ClientesResponsables() {
   const [empleado, setEmpleado] = useState(""),
     [alcance, setAlcance] = useState("actual");
   const [seleccion, setSeleccion] = useState(""),
-    [vista, setVista] = useState("cartera");
+    [vista, setVista] = useState("clientes");
   const [tecnico, setTecnico] = useState("");
   const [operaria, setOperaria] = useState("");
   const [responsable, setResponsable] = useState("");
@@ -63,10 +75,11 @@ export default function ClientesResponsables() {
       if (version === peticion.current) setLoading(false);
     }
   }
+  function cancelarConsulta() { peticion.current++; }
   useEffect(() => {
-    if (permitido) void cargar();
-    return () => { peticion.current++; };
-  }, [permitido]);
+    if (permitido && vista !== "clientes") void cargar();
+    return cancelarConsulta;
+  }, [permitido, vista]);
   if (!["administrador", "coordinadora"].includes(userProfile?.rol || ""))
     return <p>Esta consulta corresponde a administración y coordinación.</p>;
   const tecnicos = new Map<string, string>();
@@ -127,14 +140,17 @@ export default function ClientesResponsables() {
         <header className="mb-4 flex items-start justify-between gap-3">
           <div><h1 className="text-xl font-bold sm:text-2xl">Clientes y responsables</h1>
             <p className="mt-1 text-sm text-slate-500">La cartera y las órdenes de cada cliente.</p></div>
-          <button className="min-h-11 shrink-0 rounded-xl border bg-white px-3 text-sm disabled:opacity-50" disabled={loading} onClick={() => void cargar()}>Actualizar</button>
+          {vista !== "clientes" && <button className="min-h-11 shrink-0 rounded-xl border bg-white px-3 text-sm disabled:opacity-50" disabled={loading} onClick={() => void cargar()}>Actualizar</button>}
         </header>
+        <select aria-label="Vista" className="mb-4 min-h-11 w-full rounded-xl border bg-white px-3 text-sm" value={vista} onChange={e => setVista(e.target.value)}>
+          <option value="clientes">Carteras de clientes A y B</option>
+          <option value="ordenes">Responsables y seguimiento de órdenes</option>
+          <option value="efectivo">Efectivo pendiente de entrega</option>
+        </select>
+        {vista === "clientes" ? (puede(userProfile, "clientesVer") ? <CarteraCanonica puedeTrasladar={puede(userProfile, "clientesModificar")} /> : <p role="alert">No tienes permiso para consultar la cartera de clientes.</p>) : <>
         <div className="mb-4 space-y-3">
           <input aria-label="Buscar cliente, empleado u orden" className="min-h-11 w-full rounded-xl border bg-white px-4" placeholder="Cliente, empleado, número o ID de orden…" value={filtro} onChange={(e) => setFiltro(e.target.value)} />
           <div className="flex gap-2">
-            <select aria-label="Vista" className="min-h-11 min-w-0 flex-1 rounded-xl border bg-white px-3 text-sm" value={vista} onChange={(e) => setVista(e.target.value)}>
-              <option value="cartera">Cartera y órdenes</option><option value="efectivo">Efectivo pendiente de entrega</option>
-            </select>
             <button aria-expanded={filtrosAbiertos} aria-controls="filtros-cartera" className="min-h-11 rounded-xl border bg-white px-3 text-sm" onClick={() => setFiltrosAbiertos(!filtrosAbiertos)}>Filtros{filtrosActivos ? ` (${filtrosActivos})` : ""}</button>
           </div>
           <div id="filtros-cartera" hidden={!filtrosAbiertos} className="rounded-xl border bg-slate-50 p-3">
@@ -180,6 +196,7 @@ export default function ClientesResponsables() {
         </div>
         {loading && <p role="status" className="py-4 text-center text-sm">Cargando órdenes…</p>}
         {cursor && <button disabled={loading} className="mt-4 min-h-11 w-full rounded-xl border bg-white px-4 disabled:opacity-50" onClick={() => void cargar(cursor)}>Cargar más órdenes</button>}
+        </>}
       </div>
       {seleccion && <section className="rounded-2xl border bg-white p-3 sm:p-5"><button className="mb-4 min-h-11 rounded-xl border px-3 text-sm" onClick={() => setSeleccion("")}>← Volver a clientes</button><GestionOrden key={seleccion} ordenId={seleccion} /></section>}
     </div>
