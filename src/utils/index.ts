@@ -707,6 +707,22 @@ export function parseCliente(id: string, raw: Record<string, unknown>): Cliente 
     eliminadoEn: parseFirestoreDate(raw.eliminadoEn) || undefined,
     eliminadoPor: (raw.eliminadoPor as string) || undefined,
     mergedaCon: (raw.mergedaCon as string) || undefined,
+    // Cartera A/B (SPRINT-DISENO-BAMBOO-LOTE-5 — plan integral §2, 2026-10-08).
+    // Rehidrata defensivamente: clientes previos a la migración o excluidos
+    // (eliminado/mergedaCon) quedan sin cartera. Valores inválidos caen a undefined
+    // para no reintroducir equipos falsos en consumidores que confían en el shape.
+    carteraEquipo:
+      raw.carteraEquipo === 'A' || raw.carteraEquipo === 'B'
+        ? (raw.carteraEquipo as 'A' | 'B')
+        : undefined,
+    carteraAsignadaEn: parseFirestoreDate(raw.carteraAsignadaEn) || undefined,
+    carteraAsignadaPor: (raw.carteraAsignadaPor as string) || undefined,
+    carteraOrigen:
+      raw.carteraOrigen === 'migracion' ||
+      raw.carteraOrigen === 'alta' ||
+      raw.carteraOrigen === 'traslado'
+        ? (raw.carteraOrigen as 'migracion' | 'alta' | 'traslado')
+        : undefined,
     createdAt: parseFirestoreDate(raw.createdAt) || new Date(),
     updatedAt: parseFirestoreDate(raw.updatedAt) || undefined,
   };

@@ -63,6 +63,29 @@ export interface DireccionCliente {
   referencia?: string;
 }
 
+// SPRINT-DISENO-BAMBOO-LOTE-5 (plan integral §2, 2026-10-08): cartera A/B.
+// Un cliente pertenece a `carteraEquipo` A o B. La asignación nace de la
+// migración mitad A/B o del alta nueva (alternancia atómica server-side).
+// El traslado A↔B pasa por endpoint autorizado con motivo + auditoría.
+// El historial detallado vive en subcolección `clientes/{id}/cartera_historial`
+// para evitar un array creciente en el doc raíz.
+export type CarteraEquipo = 'A' | 'B';
+export type CarteraOrigen = 'migracion' | 'alta' | 'traslado';
+
+/** Entry individual del historial de traslados de cartera (subcolección). */
+export interface CarteraHistorialEntry {
+  id: string;
+  /** `null` para la asignación inicial (migración o alta). */
+  anteriorEquipo: CarteraEquipo | null;
+  nuevoEquipo: CarteraEquipo;
+  actorUid: string;
+  actorNombre: string;
+  /** Motivo registrado (mín. 5 caracteres cuando origen = 'traslado'). */
+  motivo: string;
+  origen: CarteraOrigen;
+  timestamp: Timestamp | Date;
+}
+
 export interface Cliente {
   id: string;
   nombre: string;
@@ -158,6 +181,20 @@ export interface Cliente {
   eliminadoPor?: string;
   /** Id del cliente canónico al que se mergeó este registro duplicado. */
   mergedaCon?: string;
+
+  // ───────── Cartera A/B (plan integral §2, lote 5 — 2026-10-08) ─────────
+  // Opcional por retrocompat con docs previos a la migración mitad A/B.
+  // SOLO server-side modifica estos campos; `firestore.rules` prohíbe que el
+  // cliente escriba `carteraEquipo` directamente (se agregará como parte
+  // del despliegue de rules del lote 5). El historial completo de traslados
+  // vive en subcolección `clientes/{id}/cartera_historial`.
+  carteraEquipo?: CarteraEquipo;
+  /** Server timestamp de la última asignación/traslado. */
+  carteraAsignadaEn?: Timestamp | Date;
+  /** Auth uid del actor; identidad del servidor en migración/alta. */
+  carteraAsignadaPor?: string;
+  carteraOrigen?: CarteraOrigen;
+
   createdAt: Date;
   updatedAt?: Date;
 }
