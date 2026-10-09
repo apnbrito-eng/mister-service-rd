@@ -2,19 +2,19 @@ import React from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, expect, it, vi } from 'vitest';
-const datos = vi.hoisted(() => ({ perfil: { rol:'administrador', nombre:'Prueba' }, usuario: {uid:'qa-sidebar'}, valores: new Map<string,string>() }));
+const datos = vi.hoisted(() => ({ perfil: { rol:'administrador', nombre:'Prueba' }, usuario: {uid:'qa-sidebar'}, valores: new Map<string,string>(), chats: [] as Array<{callback:(c:Array<{noLeidos:number}>)=>void;cancelar:ReturnType<typeof vi.fn>}> }));
 vi.mock('../../src/context/AppContext',()=>({useApp:()=>({userProfile:{...datos.perfil},currentUser:datos.usuario})}));
 vi.mock('../../src/firebase/config',()=>({db:{},auth:{}}));
 vi.mock('firebase/auth',()=>({signOut:vi.fn()}));
 vi.mock('firebase/firestore',()=>({collection:vi.fn(),query:vi.fn(),where:vi.fn(),onSnapshot:()=>()=>{}}));
-vi.mock('../../src/services/whatsappInbox.service',()=>({suscribirConversaciones:()=>()=>{}}));
+vi.mock('../../src/services/whatsappInbox.service',()=>({suscribirConversaciones:(callback:(c:Array<{noLeidos:number}>)=>void)=>{const cancelar=vi.fn();datos.chats.push({callback,cancelar});return cancelar;}}));
 vi.mock('../../src/mobile/AvisosMoviles',()=>({default:()=>null}));
 vi.mock('../../src/mobile/notificaciones',()=>({desactivarNotificacionesMoviles:vi.fn()}));
 vi.mock('../../src/components/Logo',()=>({default:()=>null}));
 vi.mock('motion/react',async()=>{const React=await import('react');const crear=(tag:string)=>React.forwardRef<HTMLElement, Record<string, unknown>>((props,ref)=>{const {animate:_animate,whileTap:_whileTap,transition:_transition,initial:_initial,...rest}=props;return React.createElement(tag,{...rest,ref});});return {motion:{button:crear('button'),span:crear('span'),div:crear('div')},useReducedMotion:()=>true};});
 import Sidebar from '../../src/components/Sidebar';
 let tree:ReactTestRenderer;
-afterEach(()=>{if(tree)act(()=>tree.unmount());datos.valores.clear();datos.perfil.rol='administrador';vi.unstubAllGlobals();});
+afterEach(()=>{if(tree)act(()=>tree.unmount());datos.valores.clear();datos.chats=[];datos.usuario.uid='qa-sidebar';datos.perfil.rol='administrador';vi.unstubAllGlobals();});
 function abrir(collapsed=false){vi.stubGlobal('localStorage',{getItem:(k:string)=>datos.valores.get(k)||null,setItem:(k:string,v:string)=>datos.valores.set(k,v)});act(()=>{tree=create(React.createElement(MemoryRouter,{initialEntries:['/admin/clientes']},React.createElement(Sidebar,{collapsed,onToggle:()=>{}})));});}
 it('presenta destinos y permite plegar área actual aunque el proveedor recree el perfil en cada render',()=>{
  abrir();const links=tree.root.findAllByType('a');expect(links.some(n=>n.props.href==='/admin/ordenes')).toBe(true);expect(links.some(n=>n.props.href==='/admin/clientes')).toBe(true);
@@ -59,4 +59,19 @@ it('devuelve foco a cabecera antes de aplicar inert al panel cerrado',()=>{
  expect(foco).toHaveBeenCalledOnce();
  expect(inert).toHaveBeenCalledWith('inert',true);
  expect(foco.mock.invocationCallOrder[0]).toBeLessThan(inert.mock.invocationCallOrder[0]);
+});
+
+it('cambiar UID con el mismo rol reinicia badge y descarta callbacks de la sesión anterior',()=>{
+ abrir();const anterior=datos.chats.at(-1)!;
+ act(()=>anterior.callback([{noLeidos:1}]));
+ const descripciones=()=>tree.root.findAll(n=>typeof n.props['aria-label']==='string').map(n=>n.props['aria-label']);
+ expect(descripciones().some(t=>t.includes('1 conversaciones sin leer'))).toBe(true);
+ datos.usuario={uid:'qa-sidebar-otra'};
+ act(()=>tree.update(React.createElement(MemoryRouter,{initialEntries:['/admin/clientes']},React.createElement(Sidebar,{collapsed:false,onToggle:()=>{}}))));
+ expect(anterior.cancelar).toHaveBeenCalledOnce();
+ expect(descripciones().some(t=>t.includes('conversaciones sin leer: cargando'))).toBe(true);
+ act(()=>anterior.callback([{noLeidos:1},{noLeidos:1}]));
+ expect(descripciones().some(t=>t.includes('2 conversaciones sin leer'))).toBe(false);
+ act(()=>datos.chats.at(-1)!.callback([]));
+ expect(descripciones().some(t=>t.includes('0 conversaciones sin leer'))).toBe(true);
 });

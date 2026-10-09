@@ -90,13 +90,15 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
   const ordenesVisibles=puede(userProfile,'ordenesVer');
   const pagosVisibles=puede(userProfile,'pagosVerificar');
   const rolPerfil=userProfile?.rol;
+  const uidSesion=currentUser?.uid;
   const [estadosBadges,setEstadosBadges]=useState<Record<string,EstadoBadgeSidebar>>({});
   const estadoBadge=useCallback((claves:string[],estado:EstadoBadgeSidebar)=>setEstadosBadges(prev=>({...prev,...Object.fromEntries(claves.map(clave=>[clave,estado]))})),[]);
   useEffect(() => {
+    let activo=true;
     const unsubs:Array<()=>void>=[];
     const escuchar=(clave:string,q:import('firebase/firestore').Query,guardar:(snap:import('firebase/firestore').QuerySnapshot)=>void)=>{
       estadoBadge([clave],'cargando');
-      unsubs.push(onSnapshot(q,snap=>{guardar(snap);estadoBadge([clave],'disponible');},()=>estadoBadge([clave],'error')));
+      unsubs.push(onSnapshot(q,snap=>{if(!activo)return;guardar(snap);estadoBadge([clave],'disponible');},()=>{if(activo)estadoBadge([clave],'error');}));
     };
     // Mismos gates que los destinos visibles; no descargar contadores de módulos ocultos.
     if(ordenesVisibles){
@@ -106,8 +108,8 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
     }
     if(rolPerfil==='administrador')escuchar('solicitudesCount',query(collection(db,'solicitudes_servicio'),where('estado','==','pendiente')),snap=>setSolicitudesCount(snap.size));
     if(['administrador','coordinadora'].includes(rolPerfil||''))escuchar('facturacionPendienteCount',query(collection(db,'ordenes_servicio'),where('enviadaAFacturacion','==',true)),snap=>setFacturacionPendienteCount(snap.docs.filter(d=>!d.data().facturada && !d.data().eliminada).length));
-    return()=>unsubs.forEach(unsub=>unsub());
-  },[ordenesVisibles,rolPerfil,estadoBadge]);
+    return()=>{activo=false;unsubs.forEach(unsub=>unsub());};
+  },[ordenesVisibles,rolPerfil,uidSesion,estadoBadge]);
 
   // ─────────────────────────────────────────────────────────────────────
   // SPRINT-FIX-SIDEBAR-LISTENERS (2026-09-09) — auditoría hallazgo P-1.
@@ -138,6 +140,7 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
   // rechazada por rules (cazador P-012 no aplica).
   // ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
+    let activo=true;
     const rol = rolPerfil;
     const esAdminOCoord = rol === 'administrador' || rol === 'coordinadora';
     const puedeVerPagos = pagosVisibles;
@@ -152,6 +155,7 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
     const claves=[...(esAdminOCoord?['sugerenciasChequeoCount','reprogramacionesCount']:[]),...(puedeVerPagos?['pagosPendientesCount']:[])];
     estadoBadge(claves,'cargando');
     const unsub = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
+      if(!activo)return;
       let sugerencias = 0;
       let reprogramaciones = 0;
       let pagosPendientes = 0;
@@ -197,10 +201,10 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
       setReprogramacionesCount(esAdminOCoord ? reprogramaciones : 0);
       setPagosPendientesCount(puedeVerPagos ? pagosPendientes : 0);
       estadoBadge(claves,'disponible');
-    },()=>estadoBadge(claves,'error'));
+    },()=>{if(activo)estadoBadge(claves,'error');});
 
-    return () => unsub();
-  }, [rolPerfil,pagosVisibles,estadoBadge]);
+    return () => {activo=false;unsub();};
+  }, [rolPerfil,pagosVisibles,uidSesion,estadoBadge]);
 
   // SPRINT-INBOX-2 (2026-05-20): badge de mensajes WhatsApp sin leer.
   // Gateamos por rol staff oficina (D6=C); técnico/ayudante no llegan
@@ -209,6 +213,7 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
   // a esStaffOficina(); el gate cliente evita listener inútil para
   // roles que no van a ver el ítem.
   useEffect(() => {
+    let activo=true;
     const rol = rolPerfil;
     if (
       rol !== 'administrador' &&
@@ -220,9 +225,9 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
       return;
     }
     estadoBadge(['whatsappInboxCount'],'cargando');
-    const unsub = suscribirConversaciones(conversaciones=>{setWhatsappInboxCount(conversaciones.filter(c=>c.noLeidos>0).length);estadoBadge(['whatsappInboxCount'],'disponible');},()=>estadoBadge(['whatsappInboxCount'],'error'));
-    return () => unsub();
-  }, [rolPerfil,estadoBadge]);
+    const unsub = suscribirConversaciones(conversaciones=>{if(!activo)return;setWhatsappInboxCount(conversaciones.filter(c=>c.noLeidos>0).length);estadoBadge(['whatsappInboxCount'],'disponible');},()=>{if(activo)estadoBadge(['whatsappInboxCount'],'error');});
+    return () => {activo=false;unsub();};
+  }, [rolPerfil,uidSesion,estadoBadge]);
 
   const handleLogout = async () => {
     try { await desactivarNotificacionesMoviles(); } catch { /* El cierre de sesión continúa incluso sin conexión. */ }
