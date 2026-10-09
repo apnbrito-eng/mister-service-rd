@@ -67,3 +67,177 @@
   --ms-espacio-8: 32px;
   --ms-espacio-12: 48px;
 }
+
+/*
+ * ────────────────────────────────────────────────────────────────────────
+ *  Catálogo semántico de SEVERIDAD (auditoría alertas 2026-10-08, Lote A).
+ * ────────────────────────────────────────────────────────────────────────
+ *
+ * Tokens compartidos para avisos inline, toast, badges y chips.
+ * Severidades independientes de la rampa de progreso de orden (--ms-paso-*);
+ * NO usar el verde BambooHR (--b-green) como "éxito" por inferencia.
+ *
+ * Reglas (plan integral §alertas, hallazgo 5 de la auditoría):
+ *  - Texto + ícono SIEMPRE acompañan al color. No se transmite estado solo
+ *    por color.
+ *  - Variantes `fondo-soft` con texto oscuro cumplen contraste AA
+ *    (texto ≥ 4.5:1; texto grande ≥ 3:1).
+ *  - Si el estado requiere acción (fallo persistente, bloqueo), el
+ *    componente usa `role="alert"`; info/éxito usan `aria-live="polite"`.
+ *  - No parpadeo ni sonido automático.
+ *
+ * Severidades definidas:
+ *  - `exito`    → operación confirmada sin pendiente.
+ *  - `atencion` → aviso con acción esperada; no bloqueante.
+ *  - `fallo`    → operación falló o bloqueo crítico; requiere resolver.
+ *  - `info`     → progreso / contexto; sin acción obligatoria.
+ *  - `neutro`   → estado inactivo / no disponible / cero real.
+ *
+ * Reutiliza los semánticos base (--ms-exito/advertencia/peligro/accion)
+ * para no duplicar paleta.
+ */
+:root {
+  /* Éxito — confirmación persistida */
+  --alerta-exito-texto: #0e5c2d;
+  --alerta-exito-fondo: #e8f4ec;
+  --alerta-exito-borde: #bcdbc7;
+  --alerta-exito-icono: var(--ms-exito);
+
+  /* Atención — acción esperada, no bloqueante */
+  --alerta-atencion-texto: #7a3a07;
+  --alerta-atencion-fondo: #fef3c7;
+  --alerta-atencion-borde: #f5d79b;
+  --alerta-atencion-icono: var(--ms-advertencia);
+
+  /* Fallo — operación falló o bloqueo crítico */
+  --alerta-fallo-texto: #861717;
+  --alerta-fallo-fondo: #fdecec;
+  --alerta-fallo-borde: #f2c6c6;
+  --alerta-fallo-icono: var(--ms-peligro);
+
+  /* Info — progreso / contexto */
+  --alerta-info-texto: var(--ms-accion);
+  --alerta-info-fondo: var(--ms-accion-50);
+  --alerta-info-borde: #c2d3ea;
+  --alerta-info-icono: var(--ms-accion);
+
+  /* Neutro — estado inactivo, cero real, no disponible */
+  --alerta-neutro-texto: #374151;
+  --alerta-neutro-fondo: #f3f4f6;
+  --alerta-neutro-borde: #d1d5db;
+  --alerta-neutro-icono: #6b7280;
+
+  /* Toaster — fallos persisten hasta cerrar manualmente */
+  --alerta-toast-duracion-exito-ms: 3000;
+  --alerta-toast-duracion-info-ms: 4000;
+  --alerta-toast-duracion-atencion-ms: 6000;
+}
+
+/* ------------------------------------------------------------------------
+ *  Clases .alerta-* para avisos inline reusables en cualquier scope
+ *  (fuera o dentro de .ms-bamboo). El componente React `Alerta.tsx`
+ *  consume estas clases.
+ * ---------------------------------------------------------------------- */
+.alerta {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.alerta-icono {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.alerta-contenido {
+  flex: 1;
+  min-width: 0;
+}
+
+.alerta-contenido > strong {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.alerta-acciones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.alerta-acciones button,
+.alerta-acciones a {
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.alerta-acciones button:focus-visible,
+.alerta-acciones a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.alerta-exito {
+  color: var(--alerta-exito-texto);
+  background: var(--alerta-exito-fondo);
+  border-color: var(--alerta-exito-borde);
+}
+.alerta-exito .alerta-icono { color: var(--alerta-exito-icono); }
+
+.alerta-atencion {
+  color: var(--alerta-atencion-texto);
+  background: var(--alerta-atencion-fondo);
+  border-color: var(--alerta-atencion-borde);
+}
+.alerta-atencion .alerta-icono { color: var(--alerta-atencion-icono); }
+
+.alerta-fallo {
+  color: var(--alerta-fallo-texto);
+  background: var(--alerta-fallo-fondo);
+  border-color: var(--alerta-fallo-borde);
+}
+.alerta-fallo .alerta-icono { color: var(--alerta-fallo-icono); }
+
+.alerta-info {
+  color: var(--alerta-info-texto);
+  background: var(--alerta-info-fondo);
+  border-color: var(--alerta-info-borde);
+}
+.alerta-info .alerta-icono { color: var(--alerta-info-icono); }
+
+.alerta-neutro {
+  color: var(--alerta-neutro-texto);
+  background: var(--alerta-neutro-fondo);
+  border-color: var(--alerta-neutro-borde);
+}
+.alerta-neutro .alerta-icono { color: var(--alerta-neutro-icono); }
+
+@media (prefers-contrast: more) {
+  .alerta { border-width: 2px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .alerta { transition: none; }
+}
+

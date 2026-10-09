@@ -375,6 +375,26 @@ export default function App() {
       <AppProvider>
         <EntornoPruebas />
         <BannerNuevaVersion />
+        {/*
+          Toaster · auditoría alertas 2026-10-08 Lote A, hallazgo 4:
+          - Antes: duración global 3000ms para TODO (incluidos fallos de
+            operación con efecto pendiente). Un error de guardado podía
+            desaparecer antes de que el usuario lo leyera.
+          - Ahora: duración por severidad usando los tokens
+            `--alerta-toast-duracion-*-ms`:
+              · success → 3000ms (confirmación transitoria).
+              · info/loading → 4000ms.
+              · error → Infinity (persiste hasta que el usuario lo descarte
+                conscientemente). Los avisos de operación con efecto
+                pendiente deben quedarse hasta resolverse.
+          - Los íconos usan las variables semánticas de `tokens.css` para
+            unificar paleta — nada de literales #22c55e / #ef4444 ajenos
+            al sistema.
+          - El Toaster NO reemplaza la alerta inline persistente de
+            módulos financieros / nómina (Nomina.tsx:335-345); esos
+            seguirán mostrando bloqueos en-contexto. El toaster SÍ se
+            usa para notificar operaciones puntuales (crear/eliminar).
+        */}
         <Toaster
           position="top-right"
           containerStyle={{
@@ -383,10 +403,27 @@ export default function App() {
             right: 'calc(env(safe-area-inset-right, 0px) + 12px)',
           }}
           toastOptions={{
-            duration: 3000,
             style: { borderRadius: '12px', padding: '12px 16px', fontSize: '14px' },
-            success: { iconTheme: { primary: '#22c55e', secondary: 'white' } },
-            error: { iconTheme: { primary: '#ef4444', secondary: 'white' } },
+            success: {
+              duration: 3000,
+              iconTheme: { primary: 'var(--ms-exito)', secondary: 'white' },
+            },
+            error: {
+              /*
+                Fallos de operación con efecto pendiente persisten hasta
+                descartar. Esto permite leer el motivo y decidir reintento
+                sin cerrar modales por accidente. El llamante puede
+                sobrescribir `duration` si sabe que la operación es
+                verdaderamente transitoria.
+              */
+              duration: Infinity,
+              iconTheme: { primary: 'var(--ms-peligro)', secondary: 'white' },
+            },
+            loading: {
+              duration: 4000,
+              iconTheme: { primary: 'var(--ms-accion)', secondary: 'white' },
+            },
+            blank: { duration: 4000 },
           }}
         />
         <AppRoutes />

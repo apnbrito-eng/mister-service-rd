@@ -13,12 +13,14 @@ import SugerenciaIA from '../components/inbox/SugerenciaIA';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
+  AlertCircle,
   ArrowLeft,
-  Send,
-  Search,
-  MessageSquare,
   CheckCheck,
+  Clock,
+  MessageSquare,
   MoreHorizontal,
+  Search,
+  Send,
   UserRound,
 } from 'lucide-react';
 import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
@@ -763,7 +765,65 @@ export default function InboxConversacion() {
                 />
               ))
             )}
-            {pendientes.filter(p => !mensajes.some(m => m._direccion === 'saliente' && m.tempId === p.id)).map(p => <div key={p.id} className="flex justify-end"><div className="max-w-[85%] rounded-2xl bg-emerald-50 p-3 text-sm"><p className="whitespace-pre-wrap break-words">{p.texto}</p><p role="status" className="text-xs text-gray-500 mt-1">{p.error ? 'No enviado: ' + p.error : '◷ Pendiente de envío'} · {new Date(p.fecha).toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' })}</p>{p.error && <button className="underline min-h-11" onClick={() => { setTexto(p.texto); if (currentUser) descartarPendiente(currentUser.uid, p.id); }}>Volver a editar</button>}</div></div>)}
+            {/*
+              Auditoría alertas 2026-10-08 Lote B · hallazgo 1 corregido:
+              antes TODO pendiente (incluido fallo con `p.error`) se pintaba
+              `bg-emerald-50`, lo que leía como "enviado OK" aunque el texto
+              dijera "No enviado". Ahora:
+                · Pendiente de envío → fondo neutro gris con ícono reloj.
+                · Fallo (`p.error`) → fondo rojo pálido (clase .alerta-fallo),
+                  ícono alerta, motivo visible y acción "Volver a editar".
+                · Éxito NO se señala con color de burbuja (regla de Jorge:
+                  éxito solo por marca de entregado del mensaje real).
+            */}
+            {pendientes
+              .filter((p) => !mensajes.some((m) => m._direccion === 'saliente' && m.tempId === p.id))
+              .map((p) => {
+                const esFallo = !!p.error;
+                const hora = new Date(p.fecha).toLocaleTimeString('es-DO', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+                const claseBurbuja = esFallo
+                  ? 'bg-red-50 text-red-900 border border-red-200'
+                  : 'bg-slate-100 text-slate-700 border border-slate-200';
+                return (
+                  <div key={p.id} className="flex justify-end">
+                    <div className={`max-w-[85%] rounded-2xl p-3 text-sm ${claseBurbuja}`}>
+                      <p className="whitespace-pre-wrap break-words text-slate-900">{p.texto}</p>
+                      <p
+                        {...(esFallo ? { role: 'alert' } : { role: 'status' as const })}
+                        className={`text-xs mt-1 flex items-center gap-1 ${esFallo ? 'text-red-800 font-semibold' : 'text-slate-600'}`}
+                      >
+                        {esFallo ? (
+                          <>
+                            <AlertCircle size={12} aria-hidden="true" />
+                            <span>No enviado: {p.error}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Clock size={12} aria-hidden="true" />
+                            <span>Pendiente de envío</span>
+                          </>
+                        )}
+                        <span className="text-slate-500">· {hora}</span>
+                      </p>
+                      {esFallo && (
+                        <button
+                          type="button"
+                          className="mt-2 inline-flex items-center gap-1 min-h-11 text-xs font-semibold text-red-800 underline"
+                          onClick={() => {
+                            setTexto(p.texto);
+                            if (currentUser) descartarPendiente(currentUser.uid, p.id);
+                          }}
+                        >
+                          Volver a editar
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
 
           {/* Composer */}
