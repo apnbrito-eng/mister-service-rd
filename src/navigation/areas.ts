@@ -85,10 +85,11 @@ const pagosPendientesCount = counts.pagosPendientesCount ?? 0;
       { to: '/admin/reporte-avanzado', icon: BarChart3, label: 'Reporte avanzado', show: esAdminOCoord },
     ] } },
     { kind: 'section', section: { id: 'v2_equipo', label: 'Equipo', icon: UserCog, defaultExpanded: false, items: [
-      // SPRINT-DISENO-BAMBOO (2026-10-07): Personal + Usuarios & Permisos
-      // unificados en una sola página con ficha BambooHR. `/admin/usuarios`
-      // redirige acá para preservar bookmarks.
-      { to: '/admin/personal', icon: UserCog, label: 'Personal y permisos', show: p('personalVer') || esAdminOCoord },
+      // SPRINT-DISENO-BAMBOO-LOTE-4 (plan integral §1, revisión Codex 2026-10-08):
+      // módulo Personal gateado por rol (admin/coord). `personalVer` sigue
+      // existiendo como permiso de LECTURAS operativas (Mapa, Centro de
+      // operaciones) para secretaria/operaria, no abre la entrada al módulo.
+      { to: '/admin/personal', icon: UserCog, label: 'Personal y permisos', show: esAdminOCoord },
       { to: '/admin/ponches', icon: ClipboardCheck, label: 'Reporte de Ponches', show: esAdminOCoord },
       { to: '/admin/nomina', icon: Wallet, label: 'Nómina', show: esAdminOCoord },
       { to: '/admin/comisiones', icon: DollarSign, label: 'Comisiones', show: esAdminOCoord },

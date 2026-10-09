@@ -291,7 +291,11 @@ function AppRoutes() {
         <Route path="reporte-avanzado" element={<RolRoute roles={['administrador', 'coordinadora']}><ReporteAvanzado /></RolRoute>} />
         <Route path="mantenimiento" element={<Mantenimiento />} />
         <Route path="gastos" element={<PermisoRoute permiso="gastosVer"><Gastos /></PermisoRoute>} />
-        <Route path="personal" element={<PermisoRoute permiso="personalVer"><Personal /></PermisoRoute>} />
+        {/* SPRINT-DISENO-BAMBOO-LOTE-4 (plan integral §1, revisión Codex 2026-10-08):
+            el módulo Personal se cierra por rol (admin/coord). El permiso
+            `personalVer` queda como gate de LECTURAS operativas (Mapa, Centro
+            de operaciones) para secretaria/operaria, no como entrada al módulo. */}
+        <Route path="personal" element={<RolRoute roles={['administrador', 'coordinadora']}><Personal /></RolRoute>} />
         {/* Legacy — Usuarios y Permisos ahora es una pestaña dentro de Personal. */}
         <Route path="usuarios" element={<Navigate to="/admin/personal" replace />} />
         <Route path="web" element={<RolRoute roles={['administrador']}><ConfiguracionWeb /></RolRoute>} />

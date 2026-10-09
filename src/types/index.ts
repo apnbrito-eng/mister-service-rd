@@ -1546,25 +1546,66 @@ export const PERMISOS_DEFAULT_COORDINADORA: PermisosSistema = {
   personalEliminar: false,
 };
 
+// SPRINT-DISENO-BAMBOO-LOTE-4 (plan integral §1, 2026-10-08, revisión Codex):
+// Base restringida y COMPARTIDA para secretaria/operaria conforme a las
+// restricciones aprobadas de contabilidad y privacidad.
+//
+// Permitidos por defecto (plan §1): atención y clientes (ver/crear/editar
+// clientes, citas, órdenes), servicios (órdenes incluida modificar fuera de
+// grupo + cotizaciones ver/crear/editar), pagos de cierre normal (registrar,
+// enviar a facturación) y centro de operaciones. Los módulos del sidebar
+// correspondientes (empresas aliadas, citas por confirmar, solicitudes,
+// calendario, mapa de operaciones, reprogramaciones, sugerencias de chequeo,
+// pendientes de piezas, taller, mantenimiento, calendarios públicos) ya se
+// gatean por `ordenesVer`/`clientesVer` o por rol staff-oficina.
+//
+// `personalVer=true` se mantiene porque `Mapa.tsx` y `Operaciones.tsx` lo usan
+// como gate de LECTURAS operativas (capa GPS / vista por técnico del Centro
+// de operaciones), ambos aprobados por Jorge. La ENTRADA al módulo
+// `/admin/personal` se cierra desde App.tsx y navigation/areas.ts con
+// `RolRoute admin/coord`, no desde este permiso, para evitar crear uno nuevo.
+//
+// Explícitamente NO default (ajustes por revisión Codex 08/10/2026):
+// - `cotizacionesAprobarPrecio` → coordinación/admin (precio alta).
+// - `facturasVer`, `facturasCrear/Modificar/Eliminar/Cerrar` → contabilidad.
+// - `rendimientoVer` → montos del equipo. "Mi rendimiento" (porcentaje puro)
+//   se construirá en lote futuro con filtrado server-side.
+// - `personalCrear/Modificar/Eliminar` → módulo Personal cerrado por rol.
+// - `ordenesEliminar` (anular) + `ordenesVerEliminadas` (historial).
+// - `gastosVer/Crear/Eliminar`, `bancosGestionar`, `avancesGestionar`.
+// - `cierreDiaEjecutar`, `pagosVerificar`.
+// - `clientesEliminar`, `clientesReactivacionGestionar` (marketing).
+// - `configuracionVer/Modificar`.
+//
+// IA del rol tecnico/ayudante está bloqueada en la ficha; para secretaria/
+// operaria queda en `false` por defecto hasta que Jorge autorice usuario por
+// usuario. Overrides individuales (`permisosPersonalizados=true`) se conservan
+// — su `permisosSistema` guardado NO se sobrescribe.
+//
+// Decisión en `docs/entregas/CLAUDE-PLAN-INTEGRAL-2026-10-08.md` §1 y mensaje
+// de Jorge al revisar `edb01aa`.
 export const PERMISOS_DEFAULT_OPERARIA: PermisosSistema = {
   ...TODO_FALSE,
-  ordenesVer: true, ordenesCrear: true, ordenesModificar: true, ordenesModificarFueraGrupo: true,
-  cotizacionesVer: true, cotizacionesCrear: true, cotizacionesModificar: true, cotizacionesAprobarPrecio: true,
-  clientesVer: true, clientesCrear: true, clientesModificar: true,
+  // Servicios: órdenes y cotizaciones del flujo diario (sin anular ni aprobar precio).
+  ordenesVer: true,
+  ordenesCrear: true,
+  ordenesModificar: true,
+  ordenesModificarFueraGrupo: true,
+  cotizacionesVer: true,
+  cotizacionesCrear: true,
+  cotizacionesModificar: true,
+  // Cartera activa: ver/crear/editar clientes (sin eliminar).
+  clientesVer: true,
+  clientesCrear: true,
+  clientesModificar: true,
+  // Lecturas operativas de personal (Mapa de operaciones + Centro de operaciones).
+  // El módulo /admin/personal queda cerrado por rol en App.tsx.
   personalVer: true,
-  rendimientoVer: true,
-  pagosRegistrar: true, ordenesEnviarAFacturacion: true,
-  facturasVer: true,
+  // Pagos de cierre normal de orden (NO verificar) y envío a conduce.
+  pagosRegistrar: true,
+  ordenesEnviarAFacturacion: true,
 };
 
-// SPRINT-DISENO-BAMBOO-LOTE-4 (plan integral §1, 2026-10-08): Jorge alineó los
-// defaults de secretaria con los de operaria para que ambas abran el rol con
-// el mismo conjunto base — ventas, servicios, cartera activa, rendimiento,
-// facturas (ver), envío a facturación — y los ajustes finos vayan por
-// `permisosPersonalizados` individuales. Sin cambio en las secretarias que ya
-// personalizaron permisos (su override vigente queda intacto por
-// `permisosPersonalizados=true`). Decisión en
-// `docs/entregas/CLAUDE-PLAN-INTEGRAL-2026-10-08.md`.
 export const PERMISOS_DEFAULT_SECRETARIA: PermisosSistema = {
   ...PERMISOS_DEFAULT_OPERARIA,
 };
