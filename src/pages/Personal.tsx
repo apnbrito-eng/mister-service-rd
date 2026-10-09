@@ -1768,6 +1768,32 @@ function TabCuenta({
 
         {form.permisosPersonalizados && (
           <div style={{ display: 'grid', gap: 16 }}>
+            {/*
+              SPRINT-DISENO-BAMBOO-LOTE-4 (plan integral §1): botón explícito
+              "Restaurar base del rol" dentro de la edición personalizada.
+              Antes el único camino para volver a defaults era desmarcar
+              "Personalizar", lo que ocultaba la matriz y obligaba a reactivar
+              para seguir ajustando. Ahora el admin puede refrescar la matriz
+              desde los defaults vigentes del rol y seguir ajustando casillas
+              individuales. No se escribe hasta Guardar.
+            */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="b-btn is-ghost"
+                onClick={() =>
+                  setForm((f) => ({
+                    ...f,
+                    permisosSistema: permisosDefaultDeRol(persona.rol),
+                  }))
+                }
+                disabled={readonly}
+                style={{ minHeight: 36, padding: '6px 12px', fontSize: 13 }}
+                title={`Reinicia la matriz a los defaults de ${ROL_LABELS[persona.rol]} sin salir del modo personalizado`}
+              >
+                Restaurar base del rol
+              </button>
+            </div>
             {permisosGrupos.map((g) => (
               <div key={g.titulo}>
                 <p

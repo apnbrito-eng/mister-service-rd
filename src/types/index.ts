@@ -1557,12 +1557,16 @@ export const PERMISOS_DEFAULT_OPERARIA: PermisosSistema = {
   facturasVer: true,
 };
 
+// SPRINT-DISENO-BAMBOO-LOTE-4 (plan integral §1, 2026-10-08): Jorge alineó los
+// defaults de secretaria con los de operaria para que ambas abran el rol con
+// el mismo conjunto base — ventas, servicios, cartera activa, rendimiento,
+// facturas (ver), envío a facturación — y los ajustes finos vayan por
+// `permisosPersonalizados` individuales. Sin cambio en las secretarias que ya
+// personalizaron permisos (su override vigente queda intacto por
+// `permisosPersonalizados=true`). Decisión en
+// `docs/entregas/CLAUDE-PLAN-INTEGRAL-2026-10-08.md`.
 export const PERMISOS_DEFAULT_SECRETARIA: PermisosSistema = {
-  ...TODO_FALSE,
-  ordenesVer: true, ordenesCrear: true, ordenesModificar: true,
-  clientesVer: true, clientesCrear: true, clientesModificar: true,
-  personalVer: true,
-  pagosRegistrar: true,
+  ...PERMISOS_DEFAULT_OPERARIA,
 };
 
 export const PERMISOS_DEFAULT_TECNICO_SISTEMA: PermisosSistema = {
