@@ -1,3 +1,4 @@
+import { perfilCanonicoIAValido, type PerfilToolsIA } from '../_lib/permisosToolsIA.js';
 import { registrarTemaPregunta, seleccionarReferencias } from '../_lib/memoriaIA.js';
 import { costeSonnet46 } from '../_lib/costeIA.js';
 import { INSTRUCCIONES_ASISTENTE, contextoPantallaIA } from '../_lib/asistenteInstrucciones.js';
@@ -24,7 +25,6 @@ import { toolsParaRol, ejecutarTool, contextoFechaRD, tieneAccesoAsistenteIA, ty
  * tool_use/tool_result internos tampoco se guardan — solo user/assistant texto.
  */
 
-type Rol = 'administrador' | 'coordinadora' | 'operaria' | 'secretaria' | 'tecnico' | 'ayudante';
 
 interface Mensaje {
   role: 'user' | 'assistant';
@@ -121,10 +121,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const auth = getAdminAuth();
     let decoded;
     try {
-      decoded = await auth.verifyIdToken(idToken);
+      decoded = await auth.verifyIdToken(idToken, true);
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
-      if (code === 'auth/id-token-expired' || code === 'auth/argument-error') {
+      if (['auth/id-token-expired', 'auth/argument-error', 'auth/id-token-revoked', 'auth/user-disabled'].includes(code || '')) {
         return res.status(401).json({ error: 'Token de sesión inválido o expirado. Vuelve a iniciar sesión.' });
       }
       throw err;
@@ -133,37 +133,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const uid = decoded.uid;
     const userEmail = (decoded.email || '').toLowerCase();
 
-    // 5. Cargar perfil: usuarios/{uid} → fallback personal where email == userEmail
+    // Canonical UID identity only; email fallback cannot restore a blocked profile.
     const db = getAdminFirestore();
-    let perfil: { rol?: Rol; iaHabilitada?: boolean; nombre?: string } | null = null;
-
     const usuarioSnap = await db.collection('usuarios').doc(uid).get();
-    if (usuarioSnap.exists) {
-      const data = usuarioSnap.data() as { rol?: Rol; iaHabilitada?: boolean; nombre?: string };
-      if (data && (data.rol !== undefined || data.iaHabilitada !== undefined)) {
-        perfil = data;
-      }
-    }
-
-    if (!perfil && userEmail) {
-      const byEmail = await db
-        .collection('personal')
-        .where('email', '==', userEmail)
-        .limit(1)
-        .get();
-      if (!byEmail.empty) {
-        const data = byEmail.docs[0].data() as { rol?: Rol; iaHabilitada?: boolean; nombre?: string };
-        perfil = data;
-      }
-    }
-
-    if (!perfil) {
-      return res.status(403).json({ error: 'No se encontró tu perfil en el sistema. Contacta al administrador.' });
+    const perfil = (usuarioSnap.exists ? usuarioSnap.data() : null) as PerfilToolsIA | null;
+    if (!perfilCanonicoIAValido(perfil)) {
+      return res.status(403).json({ error: 'Tu perfil no tiene acceso al Asistente IA.' });
     }
 
     // 6. Validar iaHabilitada (undefined se trata como default por rol — usuarios
     // existentes pre-Sprint 1 no tienen el campo seteado).
-    if (!tieneAccesoAsistenteIA(perfil)) {
+    if (!perfil || !tieneAccesoAsistenteIA(perfil)) {
       return res.status(403).json({ error: 'Tu usuario no tiene el Asistente IA habilitado. Pedí acceso al administrador.' });
     }
 
@@ -265,7 +245,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fechas exactas para llamar las tools. Nunca asumas otra fecha — siempre estos valores de arriba.`;
 
     const rolTool = rol as RolTool; // ya descartamos tecnico/ayudante
-    const toolsDisponibles = toolsParaRol(rolTool);
+    const toolsDisponibles = toolsParaRol(rolTool, perfil);
     const anthropicTools = toolsDisponibles.map((t) => ({
       name: t.name,
       description: t.description,
@@ -357,7 +337,7 @@ Cuando el usuario diga 'hoy', 'esta semana', 'esta quincena', etc., usa estas fe
 
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
       for (const block of toolUseBlocks) {
-        const resultado = await ejecutarTool(block.name, block.input, { rol: rolTool, uid });
+        const resultado = await ejecutarTool(block.name, block.input, { rol: rolTool, uid, perfil });
         toolResults.push({
           type: 'tool_result',
           tool_use_id: block.id,

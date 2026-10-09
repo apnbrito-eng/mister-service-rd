@@ -1,3 +1,4 @@
+import { permiteToolIA, type PerfilToolsIA } from './permisosToolsIA.js';
 import { seleccionarOrdenVigente } from './ordenVigente.js';
 import { getAdminFirestore } from './firebaseAdmin.js';
 import type { Firestore, Query, DocumentData, Timestamp as AdminTimestamp } from 'firebase-admin/firestore';
@@ -36,7 +37,7 @@ export interface ToolDef {
     required?: string[];
   };
   rolesPermitidos: Rol[];
-  ejecutar: (input: any, contexto: { rol: Rol; uid: string }) => Promise<unknown>;
+  ejecutar: (input: any, contexto: { rol: Rol; uid: string; perfil?: PerfilToolsIA }) => Promise<unknown>;
 }
 
 // ---------------------------------------------------------------------------
@@ -508,7 +509,7 @@ function aplicarFiltrosPost(
   });
 }
 
-export function mapearOrdenResumen(data: DocumentData, rol: Rol): Record<string, unknown> {
+export function mapearOrdenResumen(data: DocumentData, rol: Rol, puedeFinanzas = true): Record<string, unknown> {
   const fechaCita = toDate(data.fechaCita);
   const historial = Array.isArray(data.historialFases) ? data.historialFases : [];
   const eventos = historial.filter(h => h && typeof h.fase === 'string').slice(-8).map(h => ({
@@ -524,13 +525,13 @@ export function mapearOrdenResumen(data: DocumentData, rol: Rol): Record<string,
     fechaCita: fechaCita ? formatFechaRD(fechaCita) : null,
     hora: fechaCita ? formatHoraRD(fechaCita) : null,
     tecnicoNombre: data.tecnicoNombre || '',
-    ...(['administrador', 'coordinadora'].includes(rol)
+    ...(puedeFinanzas && ['administrador', 'coordinadora'].includes(rol)
       ? { montoAprobado: typeof data.precioAprobado === 'number' ? data.precioAprobado : null } : {}),
     evidenciaSeguimiento: {
       eventosRegistrados: eventos,
       historialRecortado: historial.length > 8,
       alcance: 'Solo eventos de fase registrados. No confirma contacto, visita ni incumplimiento. Una fecha pasada exige verificación; no prueba abandono.',
-      ...(rol === 'administrador' && typeof data.notas === 'string'
+      ...(puedeFinanzas && rol === 'administrador' && typeof data.notas === 'string'
         ? { notaRegistrada: data.notas.slice(0, 800), notaRecortada: data.notas.length > 800 } : {}),
     },
   };
@@ -604,7 +605,7 @@ const TOOL_QUERY_ORDENES: ToolDef = {
     },
   },
   rolesPermitidos: ['administrador', 'coordinadora', 'operaria', 'secretaria'],
-  ejecutar: async (input: QueryOrdenesInput, { rol }) => {
+  ejecutar: async (input: QueryOrdenesInput, { rol, perfil }) => {
     const db = getAdminFirestore();
     const { query, postFiltros } = construirQueryOrdenes(db, input || {}, rol);
     const limite = Math.min(Math.max(typeof input?.limite === 'number' ? input.limite : 20, 1), 50);
@@ -612,7 +613,7 @@ const TOOL_QUERY_ORDENES: ToolDef = {
     const snap = await query.limit(limite * 3).get();
     const todos = snap.docs.map((d) => ({ id: d.id, data: d.data() }));
     const filtrados = aplicarFiltrosPost(todos, rol, postFiltros);
-    const resultado = filtrados.slice(0, limite).map(({ data }) => mapearOrdenResumen(data, rol));
+    const resultado = filtrados.slice(0, limite).map(({ data }) => mapearOrdenResumen(data, rol, permiteToolIA('query_facturacion', rol, perfil)));
     return { ordenes: resultado, cantidad: resultado.length, filtroFase: input?.fase || null, resultadosParciales: snap.size >= limite * 3 || filtrados.length > limite, alcance: 'La cantidad corresponde a esta consulta, no a todas las órdenes. El resumen incluye eventos de fase, pero no verifica visitas o contactos.' };
   },
 };
@@ -661,7 +662,7 @@ const TOOL_GET_ORDEN: ToolDef = {
     required: ['numero'],
   },
   rolesPermitidos: ['administrador', 'coordinadora', 'operaria', 'secretaria'],
-  ejecutar: async (input: { numero: string }, { rol }) => {
+  ejecutar: async (input: { numero: string }, { rol, perfil }) => {
     if (!input?.numero || typeof input.numero !== 'string') {
       throw new Error("Falta 'numero' (string)");
     }
@@ -678,7 +679,7 @@ const TOOL_GET_ORDEN: ToolDef = {
     if (data.eliminada === true) {
       return { encontrada: false, numero: input.numero, razon: 'orden eliminada' };
     }
-    const base = rol === 'secretaria' || rol === 'operaria' ? proyectarOrdenAtencion(data) : data;
+    const base = !['administrador', 'coordinadora'].includes(rol) || !permiteToolIA('query_facturacion', rol, perfil) ? proyectarOrdenAtencion(data) : data;
     const serializado = serializarTimestamps(base) as DocumentData;
     return { encontrada: true, ...serializado, id: doc.id };
   },
@@ -2054,20 +2055,21 @@ export const TOOLS: ToolDef[] = [
   TOOL_QUERY_PONCHES,
 ];
 
-export function toolsParaRol(rol: Rol): ToolDef[] {
-  return TOOLS.filter((t) => t.rolesPermitidos.includes(rol));
+export function toolsParaRol(rol: Rol, perfil?: PerfilToolsIA): ToolDef[] {
+  return TOOLS.filter((t) => t.rolesPermitidos.includes(rol) && permiteToolIA(t.name, rol, perfil));
 }
 
 export async function ejecutarTool(
   nombre: string,
   input: unknown,
-  contexto: { rol: Rol; uid: string },
+  contexto: { rol: Rol; uid: string; perfil?: PerfilToolsIA },
 ): Promise<{ ok: true; result: unknown } | { ok: false; error: string }> {
   const tool = TOOLS.find((t) => t.name === nombre);
   if (!tool) return { ok: false, error: `Tool '${nombre}' no existe` };
   if (!tool.rolesPermitidos.includes(contexto.rol)) {
     return { ok: false, error: `Tu rol (${contexto.rol}) no tiene permiso para usar '${nombre}'` };
   }
+  if (!permiteToolIA(nombre, contexto.rol, contexto.perfil)) return { ok: false, error: 'No tienes permiso para consultar estos datos.' };
   try {
     const result = await tool.ejecutar(input as any, contexto);
     return { ok: true, result };
