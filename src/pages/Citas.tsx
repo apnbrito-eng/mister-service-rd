@@ -1,3 +1,4 @@
+import BotonChatCliente from '../components/shared/BotonChatCliente';
 import { cargarGoogleMaps } from '../utils/cargarGoogleMaps';
 import { useAtencion } from '../context/AtencionContext';
 import { mismoTelefono } from '../navigation/clienteSeleccionado';
@@ -6,7 +7,7 @@ import { collection, onSnapshot, addDoc, deleteDoc, doc, updateDoc, Timestamp, g
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase/config';
 import { CitaPorConfirmar, OrdenServicio } from '../types';
-import { tiempoTranscurrido, whatsappLink, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, formatMoneda, labelTipoMotor } from '../utils';
+import { tiempoTranscurrido, HORARIOS, HORARIOS_LABEL, parseOrden, formatFechaCorta, formatMoneda, labelTipoMotor } from '../utils';
 import { parseCitaPorConfirmar } from '../utils/parseCitaPorConfirmar';
 import { useTiposEquipo } from '../hooks/useTiposEquipo';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -625,14 +626,7 @@ export default function Citas() {
                     </p>
                   </div>
                   <div className="flex items-center flex-wrap gap-2 shrink-0">
-                    <a
-                      href={whatsappLink(cita.telefono)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"
-                    >
-                      <WhatsAppIcon filled={false} className="text-white" size={14} /> WhatsApp
-                    </a>
+                    <BotonChatCliente telefono={cita.telefono} nombre={cita.clienteNombre} className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-xs font-medium transition-colors"><WhatsAppIcon filled={false} className="text-white" size={14} /> WhatsApp empresa</BotonChatCliente>
                     <button
                       onClick={() => {
                         setSelectedCita(cita);

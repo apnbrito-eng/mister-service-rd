@@ -7,12 +7,15 @@ type FakeRef = { __path: string; __collection: string; id: string };
 type Op = { path: string; data: Record<string, unknown>; op: 'set' | 'update' };
 
 const mock = vi.hoisted(() => ({
+  asignar: vi.fn(),
   docs: {} as Record<string, Record<string, unknown> | undefined>,
   writes: [] as Op[],
   // Fuerza que el read DENTRO de la tx vea un estado distinto (race).
   txOverrides: {} as Record<string, Record<string, unknown> | undefined>,
   siguienteNumero: 'OS-0999',
 }));
+
+vi.mock('../../src/services/carteraClientes.service', () => ({ completarCarteraAlta: mock.asignar }));
 
 vi.mock('../../src/firebase/config', () => ({ db: {}, storage: {} }));
 vi.mock('../../src/services/contadores.service', () => ({
@@ -70,6 +73,7 @@ vi.mock('firebase/firestore', () => {
 import { convertirAOrden, type ClienteConversion } from '../../src/services/solicitudes.service';
 
 function reset() {
+  mock.asignar.mockReset().mockResolvedValue(undefined);
   mock.docs = {};
   mock.writes = [];
   mock.txOverrides = {};
@@ -330,4 +334,20 @@ describe('convertirAOrden — crear cliente (tipo: crear)', () => {
     expect(clienteWrites).toHaveLength(1);
     expect(clienteWrites[0].op).toBe('set');
   });
+});
+
+describe('convertirAOrden — recuperación de cartera', () => {
+ beforeEach(() => reset());
+ it('fallo servidor de cartera no duplica orden al reintentar la misma conversión', async () => {
+  seedSolicitud('s1', { estado: 'pendiente' });
+  const conv: ClienteConversion = {tipo:'crear',telefonoNormalizado:'8095550001',telefonoOriginal:'8095550001',nombre:'Ana'};
+  mock.asignar.mockRejectedValueOnce(new Error('Cartera pendiente'));
+  await expect(convertirAOrden('s1', {clienteNombre:'Ana'}, conv)).rejects.toThrow('Cartera pendiente');
+  const idCreado = mock.docs['solicitudes_servicio/s1']?.ordenId;
+  expect(idCreado).toBeTruthy();
+  expect(await convertirAOrden('s1', {clienteNombre:'Ana'}, conv)).toBe(idCreado);
+  expect(mock.asignar).toHaveBeenNthCalledWith(1,'8095550001');
+  expect(mock.asignar).toHaveBeenNthCalledWith(2,'8095550001');
+  expect(mock.writes.filter(w => w.path.startsWith('ordenes_servicio/'))).toHaveLength(1);
+ });
 });

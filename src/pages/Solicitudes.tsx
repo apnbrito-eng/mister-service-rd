@@ -1,3 +1,4 @@
+import { useChatClienteEmpresa } from '../hooks/useChatClienteEmpresa';
 import { useAtencion } from '../context/AtencionContext';
 import { mismoTelefono } from '../navigation/clienteSeleccionado';
 import { useState, useMemo, useCallback, useRef } from 'react';
@@ -68,15 +69,9 @@ function timeAgo(date: Date): string {
   return date.toLocaleDateString('es-DO', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function formatPhoneForWhatsApp(phone: string): string {
-  const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('1') && digits.length === 11) return digits;
-  if (digits.length === 10) return `1${digits}`;
-  return digits;
-}
-
 export default function Solicitudes() {
   const { seleccion } = useAtencion();
+  const { puedeAbrir, abriendo, abrirChat } = useChatClienteEmpresa();
   const { solicitudes, loading } = useSolicitudes();
   const { empresas, loading: loadingEmpresas } = useEmpresas();
   const { userProfile, currentUser } = useApp();
@@ -512,11 +507,10 @@ export default function Solicitudes() {
     }
   };
 
-  const handleWhatsApp = () => {
+  const handleWhatsApp = async () => {
     if (!selectedSolicitud) return;
-    const { telefono: telInferido } = resumirSolicitudDatos(selectedSolicitud.datos);
-    const phone = formatPhoneForWhatsApp(String(selectedSolicitud.datos.telefono || telInferido || ''));
-    window.open(`https://wa.me/${phone}`, '_blank');
+    const { telefono: telInferido, nombre } = resumirSolicitudDatos(selectedSolicitud.datos);
+    await abrirChat({ telefono: String(selectedSolicitud.datos.telefono || telInferido || ''), nombre });
   };
 
   const getArchivoForCampo = (campoId: string) => {
@@ -845,11 +839,13 @@ export default function Solicitudes() {
                   )}
 
                 <button
-                  onClick={handleWhatsApp}
+                  onClick={() => void handleWhatsApp()}
+                  disabled={!puedeAbrir || abriendo}
+                  title={!puedeAbrir ? "El inbox empresarial requiere un rol de oficina autorizado." : "Abrir conversación completa"}
                   className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-colors font-medium text-sm"
                 >
                   <WhatsAppIcon filled={false} className="text-white" size={16} />
-                  WhatsApp
+                  {abriendo ? 'Abriendo…' : 'WhatsApp empresa'}
                 </button>
 
                 {puedeEliminar && (

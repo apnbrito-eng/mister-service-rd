@@ -1,3 +1,4 @@
+import { useBorradorConversacion } from '../hooks/useBorradorConversacion';
 import {motion} from 'motion/react';
 import {useMovimientoReducido} from '../hooks/useMovimientoReducido';
 import {obtenerTransicionMovimiento,DESPLAZAMIENTO_PANEL} from '../utils/motion';
@@ -132,7 +133,7 @@ export default function InboxConversacion() {
       if (data?.wa_id === waId) setMensajeEnlace({ ...data, id: snap.id, wamid: snap.id, _direccion: 'entrante' } as MensajeRender);
     });
   }, [waId, location.hash]);
-  const [texto, setTexto] = useState('');
+  const { texto, setTexto } = useBorradorConversacion(waId, location.state, location.key);
   const [escribiendo, setEscribiendo] = useState(false);
   const hayBorrador = texto.trim().length > 0;
   useEffect(() => {

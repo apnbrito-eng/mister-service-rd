@@ -1,3 +1,4 @@
+import { useChatClienteEmpresa } from '../hooks/useChatClienteEmpresa';
 /**
  * Mapa.tsx — módulo Mapa de operaciones. Orquesta datos (`useMapaDatos`),
  * vistas (mapa/lista/semana/mes), fichas y acciones. Punto único de
@@ -164,6 +165,7 @@ function mezclaAntiguedad(puntos: readonly PuntoCliente[], clientesPorId: Map<st
 }
 
 export default function Mapa({ fixture, modoDemo, calendariosDemo }: Props) {
+  const { abrirChat } = useChatClienteEmpresa();
   const { userProfile } = useApp();
   const navigate = useNavigate();
 
@@ -692,8 +694,9 @@ export default function Mapa({ fixture, modoDemo, calendariosDemo }: Props) {
     ];
     const pieza = standbyIndex.get(orden.id)?.map(s => s.piezaFaltante).filter(Boolean).join(', ');
     if (pieza) partes.push(`Repuesto en gestión: ${pieza}.`);
-    abrirCompositor(orden.clienteTelefono, partes.join(' '));
-  }, [standbyIndex, abrirCompositor]);
+    if (modoDemo) { toast('Demostración: el borrador no abre conversaciones.'); return; }
+    void abrirChat({ telefono: orden.clienteTelefono, nombre: orden.clienteNombre, clienteId: orden.clienteId }, partes.join(' '));
+  }, [standbyIndex, abrirChat, modoDemo]);
 
   const enviarRutaTecnico = useCallback((tecnicoId: string, dia: Date) => {
     const tecnico = personalPorIdCanon.get(tecnicoId);

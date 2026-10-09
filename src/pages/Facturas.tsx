@@ -1,3 +1,4 @@
+import { useChatClienteEmpresa } from '../hooks/useChatClienteEmpresa';
 import { esConduceSinImpuestos } from '../utils/impuestosDocumento';
 import { completarConsumoConduce } from '../services/consumoConduce.service';
 import { fechaFinanciera } from '../utils/fechaFinanciera';
@@ -9,7 +10,7 @@ import { db } from '../firebase/config';
 import { Factura, EstadoFactura, OrdenServicio, Personal, ServicioPrecio, PiezaInventario } from '../types';
 import { formatMoneda, formatFechaCorta, parseOrden, parseFactura, parseServicioPrecio, parsePiezaInventario, escapeHtml } from '../utils';
 import { METODO_PAGO_LABELS, METODO_PAGO_COLORS } from '../utils/factura';
-import { abrirWhatsApp, mensajeConduceGarantia } from '../utils/whatsapp';
+import { mensajeConduceGarantia } from '../utils/whatsapp';
 import { useClientesEnVivo } from '../hooks/useClientesEnVivo';
 import { eliminarComisionesDeFactura } from '../utils/comisiones';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -41,6 +42,7 @@ const ESTADO_LABELS: Record<EstadoFactura, string> = {
 };
 
 export default function Facturas() {
+  const {abrirChat,puedeAbrir,abriendo}=useChatClienteEmpresa();
   const navigate = useNavigate();
   const [cobrosCrudos, setCobrosCrudos] = useState<OrdenCobrosCruda[]>([]);
   const { userProfile, currentUser } = useApp();
@@ -646,12 +648,13 @@ export default function Facturas() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              abrirWhatsApp(factura.clienteTelefono || '', mensajeConduceGarantia(factura));
+                              void abrirChat({telefono:factura.clienteTelefono,nombre:factura.clienteNombre,clienteId:factura.clienteId},mensajeConduceGarantia(factura));
                             }}
-                            title="Enviar conduce y link de garantía por WhatsApp"
+                            disabled={!puedeAbrir || abriendo}
+                            title={puedeAbrir ? "Abrir WhatsApp empresarial con borrador del conduce" : "Tu rol no tiene acceso al inbox empresarial"}
                             className="flex items-center gap-1 px-2 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium hover:bg-emerald-100 transition-colors"
                           >
-                            WhatsApp
+                            WhatsApp empresarial
                           </button>
                         )}
                         {factura.garantia?.estado === 'vigente' && puedeMarcarGarantia && (

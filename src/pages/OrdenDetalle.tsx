@@ -10,7 +10,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { collection, doc, onSnapshot, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio, FaseOrden, MetodoPago, StandbyPieza } from '../types';
-import { formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, whatsappLink, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente, calcularExpiracionTokenPortal } from '../utils';
+import { formatFecha, tiempoTranscurrido, faseBgColor, formatTelefono, estadoSimpleLabel, estadoSimpleColor, parseOrden, crearRegistroAuditoria, formatMoneda, tieneStandby, obtenerUltimaSugerenciaSoloChequeo, obtenerSugerenciaSoloChequeoPendiente, calcularExpiracionTokenPortal } from '../utils';
 import { METODO_PAGO_LABELS } from '../utils/factura';
 import ModalSugerirSoloChequeo from '../components/cierre/ModalSugerirSoloChequeo';
 import BannerEstadoSugerenciaSoloChequeo from '../components/cierre/BannerEstadoSugerenciaSoloChequeo';
@@ -39,7 +39,7 @@ import RegistrarPagoModal from '../components/ordenes/RegistrarPagoModal';
 import EnviarFacturacionButton from '../components/ordenes/EnviarFacturacionButton';
 import { XCircle, Banknote, ArrowRightLeft, CreditCard, Plus, DollarSign, Camera } from 'lucide-react';
 import { generarTrackingToken } from '../services/gps.service';
-import { whatsappUrl } from '../utils/whatsapp';
+import BotonChatCliente from '../components/shared/BotonChatCliente';
 import { coordsFromLatLng, googleMapsViewUrl } from '../utils/maps';
 import BotonComoLlegar from '../components/shared/BotonComoLlegar';
 import { buscarChequeoVigentePorCliente, obtenerPagosDeOrden } from '../services/ordenes.service';
@@ -687,11 +687,10 @@ export default function OrdenDetalle() {
                 <div className="flex items-center gap-3">
                   <Phone size={14} className="text-gray-400" />
                   <span className="text-sm">{formatTelefono(orden.clienteTelefono)}</span>
-                  <a href={whatsappLink(orden.clienteTelefono, `Hola ${orden.clienteNombre}, le contactamos de Mister Service RD sobre su ${orden.equipoTipo}.`)}
-                    target="_blank" rel="noreferrer"
+                  <BotonChatCliente telefono={orden.clienteTelefono} nombre={orden.clienteNombre} clienteId={orden.clienteId} mensaje={`Hola ${orden.clienteNombre}, le contactamos de Mister Service RD sobre su ${orden.equipoTipo}.`}
                     className="flex items-center gap-1 bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded-lg text-xs transition-colors">
                     <WhatsAppIcon filled={false} className="text-white" size={12} /> WhatsApp
-                  </a>
+                  </BotonChatCliente>
                 </div>
               )}
               {orden.clienteDireccion && !orden.clienteDireccion.startsWith('http') && (
@@ -1654,11 +1653,10 @@ export default function OrdenDetalle() {
                   </button>
                   {orden.clienteTelefono && (
                     // @safe-emoji: mensaje a cliente vía WhatsApp — los emojis dan calidez en el canal del cliente
-                    <a href={whatsappUrl(orden.clienteTelefono, `Hola ${orden.clienteNombre} 👋\nSu técnico ${orden.tecnicoNombre || ''} está en camino.\nPuede seguir su ubicación en tiempo real aquí:\n📍 ${orden.trackingGPS.enlace}\n- Mister Service RD`)}
-                      target="_blank" rel="noreferrer"
+                    <BotonChatCliente telefono={orden.clienteTelefono} nombre={orden.clienteNombre} clienteId={orden.clienteId} mensaje={`Hola ${orden.clienteNombre} 👋\nSu técnico ${orden.tecnicoNombre || ''} está en camino.\nPuede seguir su ubicación en tiempo real aquí:\n📍 ${orden.trackingGPS.enlace}\n- Mister Service RD`}
                       className="flex-1 flex items-center justify-center gap-1 bg-green-500 hover:bg-green-600 text-white px-2 py-2 rounded-lg text-xs font-medium">
                       <WhatsAppIcon filled={false} className="text-white" size={12} /> WhatsApp
-                    </a>
+                    </BotonChatCliente>
                   )}
                 </div>
                 <button onClick={handleDesactivarGPS} disabled={gpsSaving}
@@ -1683,11 +1681,10 @@ export default function OrdenDetalle() {
           </div>
 
           {orden.clienteTelefono && (
-            <a href={whatsappLink(orden.clienteTelefono, `Hola ${orden.clienteNombre}, le contactamos de Mister Service RD sobre su ${orden.equipoTipo}.`)}
-              target="_blank" rel="noreferrer"
+            <BotonChatCliente telefono={orden.clienteTelefono} nombre={orden.clienteNombre} clienteId={orden.clienteId} mensaje={`Hola ${orden.clienteNombre}, le contactamos de Mister Service RD sobre su ${orden.equipoTipo}.`}
               className="block w-full bg-green-500 hover:bg-green-600 text-white py-2.5 rounded-xl text-sm font-medium text-center transition-colors">
               Contactar por WhatsApp
-            </a>
+            </BotonChatCliente>
           )}
         </div>
       </div>

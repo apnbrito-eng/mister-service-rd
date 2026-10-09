@@ -1,3 +1,4 @@
+import { useChatClienteEmpresa } from '../../hooks/useChatClienteEmpresa';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection,
@@ -28,7 +29,7 @@ import {
 } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { crearRegistroAuditoria, formatMonedaPrecisa, parseCliente } from '../../utils';
-import { abrirWhatsApp, mensajeConduceGarantia } from '../../utils/whatsapp';
+import { mensajeConduceGarantia } from '../../utils/whatsapp';
 import { siguienteNumeroFactura } from '../../services/contadores.service';
 import { obtenerPagosDeOrden } from '../../services/ordenes.service';
 import { crearNotificacion } from '../../services/notificaciones.service';
@@ -123,6 +124,7 @@ export default function ProcesarFacturacionModal({
   personalActivo,
   onClose,
 }: ModalProps) {
+  const {abrirChat,puedeAbrir,abriendo}=useChatClienteEmpresa();
   const { currentUser } = useApp();
   const [paso, setPaso] = useState<1 | 2>(1);
   const [items, setItems] = useState<ItemCotizacion[]>([]);
@@ -985,17 +987,16 @@ export default function ProcesarFacturacionModal({
                   Conduce {numero} generado
                 </div>
                 <div className="text-xs text-gray-500">
-                  Enviá el conduce y link de garantía al cliente.
+                  Abrí la conversación para revisar el borrador del conduce.
                 </div>
               </div>
-              <button
+              <button disabled={!puedeAbrir || abriendo} title={puedeAbrir ? 'Abrir chat empresarial con borrador' : 'Tu rol no tiene acceso al inbox empresarial'}
                 onClick={() => {
-                  abrirWhatsApp(telefono, mensajeConduceGarantia(facturaParaMensaje));
-                  toast.dismiss(t.id);
+                  void abrirChat({telefono,nombre:facturaParaMensaje.clienteNombre,clienteId:facturaParaMensaje.clienteId},mensajeConduceGarantia(facturaParaMensaje)).then(abierto=>{if(abierto)toast.dismiss(t.id);});
                 }}
                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold"
               >
-                Enviar por WhatsApp
+                Abrir WhatsApp empresarial
               </button>
               <button
                 onClick={() => toast.dismiss(t.id)}

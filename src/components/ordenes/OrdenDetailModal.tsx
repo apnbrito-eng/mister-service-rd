@@ -12,11 +12,11 @@ import { es } from 'date-fns/locale';
 import { OrdenServicio, Usuario, StandbyPieza } from '../../types';
 import WhatsAppIcon from '../icons/WhatsAppIcon';
 import {
-  formatFecha, formatMoneda, formatTelefono, whatsappLink,
+  formatFecha, formatMoneda, formatTelefono,
   estadoSimpleLabel, estadoSimpleColor, tiempoTranscurrido, tieneStandby,
   labelTipoMotor,
 } from '../../utils';
-import { whatsappUrl } from '../../utils/whatsapp';
+import BotonChatCliente from '../shared/BotonChatCliente';
 import { coordsFromLatLng, googleMapsViewUrl } from '../../utils/maps';
 import BotonComoLlegar from '../shared/BotonComoLlegar';
 import FotoEquipoDisplay from '../shared/FotoEquipoDisplay';
@@ -223,17 +223,12 @@ export default function OrdenDetailModal({
               </a>
             )}
             {orden.clienteTelefono && (
-              <a
-                href={whatsappUrl(
-                  orden.clienteTelefono,
-                  `Hola ${orden.clienteNombre?.trim().split(/\s+/)[0] || ''}, te escribo de Mister Service por tu orden ${orden.numero || ''}. ¿Cuándo podríamos coordinar la visita?`,
-                )}
-                target="_blank"
-                rel="noopener noreferrer"
+              <BotonChatCliente telefono={orden.clienteTelefono} nombre={orden.clienteNombre} clienteId={orden.clienteId}
+                mensaje={`Hola ${orden.clienteNombre?.trim().split(/\s+/)[0] || ''}, te escribo de Mister Service por tu orden ${orden.numero || ''}. ¿Cuándo podríamos coordinar la visita?`}
                 className="text-xs px-3 py-1.5 rounded bg-green-600 hover:bg-green-700 text-white font-medium inline-flex items-center gap-1"
               >
                 <WhatsAppIcon filled={false} className="text-white" size={12} /> WhatsApp
-              </a>
+              </BotonChatCliente>
             )}
             {puedeModificar && (
               <button
@@ -538,15 +533,12 @@ export default function OrdenDetailModal({
                 <Phone size={14} className="text-gray-400" />
                 {formatTelefono(orden.clienteTelefono)}
               </span>
-              <a
-                href={whatsappLink(orden.clienteTelefono)}
-                target="_blank"
-                rel="noopener noreferrer"
+              <BotonChatCliente telefono={orden.clienteTelefono} nombre={orden.clienteNombre} clienteId={orden.clienteId}
                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded-lg transition-colors"
               >
                 <WhatsAppIcon filled={false} className="text-white" size={12} />
                 WhatsApp
-              </a>
+              </BotonChatCliente>
             </div>
           )}
           {/* Portal del Cliente: visible sólo cuando la orden tiene token

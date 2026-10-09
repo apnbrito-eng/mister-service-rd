@@ -5,7 +5,7 @@ import { useMovimientoReducido } from '../hooks/useMovimientoReducido';
 import { obtenerTransicionMovimiento, DESPLAZAMIENTO_PANEL } from '../utils/motion';
 import CarterasClientes from '../components/clientes/CarterasClientes';
 import EditarUbicacionCliente from '../components/clientes/EditarUbicacionCliente';
-import { numeroWhatsAppCliente, resolverChatCliente } from '../utils/resolverChatCliente';
+import BotonChatCliente from '../components/shared/BotonChatCliente';
 import { useAtencion } from '../context/AtencionContext';
 import { useState, useEffect, useMemo, useRef, lazy, Suspense, useDeferredValue } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -14,7 +14,6 @@ import { db } from '../firebase/config';
 import { Cliente, OrdenServicio, ZONAS_RD } from '../types';
 import { formatFechaCorta, formatMoneda, formatTelefono, parseCliente } from '../utils';
 import { buscarOCrearCliente, buscarClientePorTelefono, normalizarTelefono } from '../services/clientes.service';
-import { whatsappUrl } from '../utils/whatsapp';
 import { coordsFromLatLng, googleMapsViewUrl } from '../utils/maps';
 import { inferirZona, zonaColor } from '../utils/zonas';
 import {
@@ -44,7 +43,6 @@ export default function Clientes() {
   const [vistaMovil, setVistaMovil] = useState(() => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(max-width: 1023px)').matches);
   useEffect(() => { if (typeof window === 'undefined' || !window.matchMedia) return; const media = window.matchMedia('(max-width: 1023px)'); const cambiar = () => setVistaMovil(media.matches); media.addEventListener('change', cambiar); return () => media.removeEventListener('change', cambiar); }, []);
   const [editarUbicacion, setEditarUbicacion] = useState(false);
-  const [abriendoChat, setAbriendoChat] = useState(false);
   const botonClienteRef = useRef<HTMLButtonElement | null>(null);
   const { seleccionar } = useAtencion();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -60,16 +58,6 @@ export default function Clientes() {
   const puedeVerReactivacion = puede(userProfile, 'clientesReactivacionGestionar');
 
   const puedeInbox = !!userProfile && ['administrador', 'coordinadora', 'secretaria', 'operaria'].includes(userProfile.rol);
-  async function abrirChatEmpresa(cliente: Cliente) {
-    if (abriendoChat || !puedeInbox) return;
-    setAbriendoChat(true);
-    try {
-      const waId = await resolverChatCliente(cliente);
-      seleccionar({ clienteId: cliente.id, telefono: cliente.telefono, nombre: cliente.nombre, waId });
-      navigate(`/admin/inbox/${encodeURIComponent(waId)}?clienteId=${encodeURIComponent(cliente.id)}`);
-    } catch (error) { toast.error(error instanceof Error ? error.message : 'No se pudo abrir la conversación.'); }
-    finally { setAbriendoChat(false); }
-  }
 
   const [loading, setLoading] = useState(true);
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -543,19 +531,7 @@ export default function Clientes() {
                       </p>
                     </div>
                   </button>
-                  {c.telefono && (
-                    <a
-                      href={numeroWhatsAppCliente(c.telefono) ? whatsappUrl(c.telefono, `Hola ${primerNombre}, te escribimos de Mister Service RD.`) : undefined}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={e => { e.stopPropagation(); if (!numeroWhatsAppCliente(c.telefono)) { e.preventDefault(); toast.error('El teléfono no es compatible con este canal. Revisa el número.'); } }}
-                      title={`Enviar WhatsApp a ${c.nombre}`}
-                      aria-label={`Enviar WhatsApp a ${c.nombre}`}
-                      className="flex items-center justify-center min-w-11 min-h-11 mr-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex-shrink-0"
-                    >
-                      <MessageCircle size={15} />
-                    </a>
-                  )}
+                  {c.telefono && <div onClick={e => e.stopPropagation()}><BotonChatCliente telefono={c.telefono} nombre={c.nombre} clienteId={c.id} mensaje={`Hola ${primerNombre}, te escribimos de Mister Service RD.`} className="flex items-center justify-center min-w-11 min-h-11 mr-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors flex-shrink-0"><MessageCircle size={15} /></BotonChatCliente></div>}
                   <div className="mr-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
                     <BotonComoLlegar ubicacion={coordsFromLatLng(c.lat, c.lng)} size="sm" />
                   </div>
@@ -581,21 +557,7 @@ export default function Clientes() {
                 <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
                   <h2 className="text-xl font-bold text-gray-900">{selectedCliente.nombre}</h2>
                   <div className="flex flex-wrap items-center gap-2">
-                    {selectedCliente.telefono && (
-                      <a
-                        href={numeroWhatsAppCliente(selectedCliente.telefono) ? whatsappUrl(
-                          selectedCliente.telefono,
-                          `Hola ${selectedCliente.nombre.trim().split(/\s+/)[0] || ''}, te escribimos de Mister Service RD.`,
-                        ) : undefined}
-                        onClick={e => { if (!numeroWhatsAppCliente(selectedCliente.telefono)) { e.preventDefault(); toast.error('El teléfono no es compatible con este canal. Revisa el número.'); } }}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white"
-                      >
-                        <MessageCircle size={13} /> WhatsApp externo
-                      </a>
-                    )}
-                    {puedeInbox && <button type="button" disabled={abriendoChat} onClick={() => abrirChatEmpresa(selectedCliente)} className="min-h-11 px-3 rounded-lg border text-sm">WhatsApp empresa</button>}
+                    {selectedCliente.telefono && <BotonChatCliente telefono={selectedCliente.telefono} nombre={selectedCliente.nombre} clienteId={selectedCliente.id} mensaje={`Hola ${selectedCliente.nombre.trim().split(/\s+/)[0] || ''}, te escribimos de Mister Service RD.`} className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white"><MessageCircle size={13} /> WhatsApp empresa</BotonChatCliente>}
                     {puedeModificar && <button type="button" onClick={() => setEditarUbicacion(true)} className="min-h-11 px-3 rounded-lg border text-sm">Cambiar ubicación</button>}
                     {puedeModificar && (
                       <button

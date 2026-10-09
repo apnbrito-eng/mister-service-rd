@@ -1,3 +1,5 @@
+import BotonChatCliente from '../components/shared/BotonChatCliente';
+import { useChatClienteEmpresa } from '../hooks/useChatClienteEmpresa';
 import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -19,7 +21,6 @@ import {
   obtenerPropuestaReprogramacionPendiente,
   parseFirestoreDate,
   tiempoTranscurrido,
-  whatsappLink,
 } from '../utils';
 import { SLOTS_HORARIOS, MAX_DIAS_FUTURO } from '../utils/agenda';
 import type { OrdenServicio, PropuestaReprogramacion } from '../types';
@@ -54,20 +55,9 @@ function toIsoDateLocal(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-/**
- * Construye el link de WhatsApp al cliente con mensaje pre-llenado según
- * la acción que tomó el admin.
- */
-function whatsappClienteUrl(
-  telefono: string | undefined,
-  mensaje: string,
-): string | null {
-  if (!telefono || telefono.length === 0) return null;
-  return whatsappLink(telefono, mensaje);
-}
-
 export default function Reprogramaciones() {
   const { userProfile, currentUser } = useApp();
+  const { abrirChat } = useChatClienteEmpresa();
   const [loading, setLoading] = useState(true);
   const [ordenes, setOrdenes] = useState<OrdenServicio[]>([]);
   const [trabajando, setTrabajando] = useState<string | null>(null);
@@ -134,10 +124,7 @@ export default function Reprogramaciones() {
       const mensaje =
         `Hola ${confirmandoAprobar.orden.clienteNombre}, confirmado, ` +
         `te esperamos el ${fechaTxt}. - Mister Service RD`;
-      const wUrl = whatsappClienteUrl(confirmandoAprobar.orden.clienteTelefono, mensaje);
-      if (wUrl) {
-        window.open(wUrl, '_blank', 'noopener,noreferrer');
-      }
+      await abrirChat({ telefono: confirmandoAprobar.orden.clienteTelefono, nombre: confirmandoAprobar.orden.clienteNombre, clienteId: confirmandoAprobar.orden.clienteId }, mensaje);
 
       toast.success('Propuesta aprobada — fecha de la cita actualizada');
       cerrarAprobar();
@@ -185,12 +172,9 @@ export default function Reprogramaciones() {
         `Hola ${rechazandoItem.orden.clienteNombre}, no podemos reagendar para esa fecha. ` +
         `Motivo: ${notaRechazo.trim()}. ¿Te sirve otra fecha? ` +
         `Avísanos por aquí. - Mister Service RD`;
-      const wUrl = whatsappClienteUrl(rechazandoItem.orden.clienteTelefono, mensaje);
-      if (wUrl) {
-        window.open(wUrl, '_blank', 'noopener,noreferrer');
-      }
+      await abrirChat({ telefono: rechazandoItem.orden.clienteTelefono, nombre: rechazandoItem.orden.clienteNombre, clienteId: rechazandoItem.orden.clienteId }, mensaje);
 
-      toast.success('Propuesta rechazada — el cliente fue contactado');
+      toast.success('Propuesta rechazada. No se envió ningún mensaje automáticamente.');
       cerrarRechazo();
     } catch (err) {
       console.error(err);
@@ -257,12 +241,9 @@ export default function Reprogramaciones() {
         `Hola ${contraproponiendoItem.orden.clienteNombre}, no podemos en la fecha que pediste. ` +
         `Te proponemos ${fechaTxt}. Confirmá por aquí o desde el portal: ${linkPortal}. ` +
         `- Mister Service RD`;
-      const wUrl = whatsappClienteUrl(contraproponiendoItem.orden.clienteTelefono, mensaje);
-      if (wUrl) {
-        window.open(wUrl, '_blank', 'noopener,noreferrer');
-      }
+      await abrirChat({ telefono: contraproponiendoItem.orden.clienteTelefono, nombre: contraproponiendoItem.orden.clienteNombre, clienteId: contraproponiendoItem.orden.clienteId }, mensaje);
 
-      toast.success('Contrapropuesta enviada — esperando respuesta del cliente');
+      toast.success('Contrapropuesta registrada. No se envió ningún mensaje automáticamente.');
       cerrarContrapropuesta();
     } catch (err) {
       console.error(err);
@@ -312,10 +293,7 @@ export default function Reprogramaciones() {
             const fechaActual = toDateSafe(item.propuesta.fechaActualOrden);
             const fechaNueva = toDateSafe(item.propuesta.fechaNuevaPropuesta);
             const enProgreso = trabajando === item.propuesta.id;
-            const wUrl = whatsappClienteUrl(
-              item.orden.clienteTelefono,
-              `Hola ${item.orden.clienteNombre}, sobre tu pedido de reprogramación de la orden ${item.orden.numero || item.orden.id}:`,
-            );
+
 
             return (
               <div
@@ -406,24 +384,7 @@ export default function Reprogramaciones() {
                   >
                     <XCircle size={14} /> Rechazar
                   </button>
-                  {wUrl ? (
-                    <a
-                      href={wUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium"
-                      title="WhatsApp directo al cliente"
-                    >
-                      <WhatsAppIcon filled={false} className="text-gray-700" size={14} />
-                    </a>
-                  ) : (
-                    <span
-                      className="flex items-center justify-center gap-1.5 bg-gray-50 text-gray-400 px-4 py-2 rounded-lg text-sm font-medium cursor-not-allowed"
-                      title="El cliente no tiene teléfono registrado"
-                    >
-                      <WhatsAppIcon filled={false} className="text-gray-400" size={14} />
-                    </span>
-                  )}
+                  <BotonChatCliente telefono={item.orden.clienteTelefono} nombre={item.orden.clienteNombre} clienteId={item.orden.clienteId} mensaje={`Hola ${item.orden.clienteNombre}, sobre tu pedido de reprogramación de la orden ${item.orden.numero || item.orden.id}:`} className="flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium"><WhatsAppIcon filled={false} className="text-gray-700" size={14} /> WhatsApp empresa</BotonChatCliente>
                 </div>
               </div>
             );
@@ -454,8 +415,8 @@ export default function Reprogramaciones() {
                     {formatFechaDiaCompleto(toDateSafe(confirmandoAprobar.propuesta.fechaNuevaPropuesta))}
                   </p>
                   <p className="mt-2 text-[11px] opacity-80">
-                    Al aceptar, te abriremos WhatsApp con un mensaje de confirmación
-                    pre-armado para enviarle al cliente.
+                    Al aceptar, abriremos la conversación empresarial con un borrador de confirmación.
+                    Debes revisar y enviar el mensaje desde allí.
                   </p>
                 </div>
               </div>
@@ -476,7 +437,7 @@ export default function Reprogramaciones() {
               disabled={!!trabajando}
               className="px-5 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
             >
-              {trabajando ? 'Procesando...' : 'Confirmar y enviar WhatsApp'}
+              {trabajando ? 'Procesando...' : 'Confirmar y abrir conversación'}
             </button>
           </div>
         </div>
@@ -500,7 +461,7 @@ export default function Reprogramaciones() {
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-900 flex items-start gap-2">
             <AlertCircle size={14} className="mt-0.5 shrink-0" />
             <div>
-              <p className="font-semibold">El motivo se enviará al cliente por WhatsApp.</p>
+              <p className="font-semibold">El motivo se prepara como borrador en la conversación empresarial.</p>
               <p className="mt-1">
                 La cita queda con la fecha original. El cliente puede proponer otra fecha
                 si lo necesita.

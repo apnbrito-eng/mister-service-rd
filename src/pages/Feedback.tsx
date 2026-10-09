@@ -1,3 +1,4 @@
+import { useChatClienteEmpresa } from '../hooks/useChatClienteEmpresa';
 import { Link } from 'react-router-dom';
 import { Personal } from '../types';
 import { OrdenCobrosCruda, diaCobroRD } from '../utils/movimientosCobros';
@@ -6,7 +7,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { OrdenServicio } from '../types';
-import { formatFechaCorta, whatsappLink } from '../utils';
+import { formatFechaCorta } from '../utils';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { useApp } from '../context/AppContext';
 import { useConfigWeb } from '../hooks/useConfigWeb';
@@ -44,6 +45,7 @@ function fechaDeFeedback(orden: OrdenServicio): Date | null {
 
 export default function Feedback() {
   const { userProfile } = useApp();
+  const { abrirChat } = useChatClienteEmpresa();
   const { config: configWeb } = useConfigWeb();
   const autorizado = userProfile?.rol === 'administrador' || userProfile?.rol === 'coordinadora';
   const [error, setError] = useState('');
@@ -180,7 +182,7 @@ export default function Feedback() {
   }, [ordenesConFeedback]);
 
   // Helpers de WhatsApp
-  function abrirWhatsAppRecontactarDetractor(orden: OrdenServicio) {
+  async function abrirWhatsAppRecontactarDetractor(orden: OrdenServicio) {
     if (!orden.clienteTelefono) {
       avisoError('Esta orden no tiene teléfono del cliente. Agregalo desde la ficha del cliente para poder recontactarlo.', {
         operacionId: `feedback-sin-telefono-${orden.id}`,
@@ -195,10 +197,10 @@ export default function Feedback() {
       orden.numero ? `Sobre la orden ${orden.numero}.` : '',
       '¿Puedes darnos unos minutos para escucharte?',
     ].filter(Boolean);
-    window.open(whatsappLink(orden.clienteTelefono, partes.join(' ')), '_blank');
+    await abrirChat({ telefono: orden.clienteTelefono, nombre: orden.clienteNombre, clienteId: orden.clienteId }, partes.join(' '));
   }
 
-  function abrirWhatsAppPromotor(orden: OrdenServicio) {
+  async function abrirWhatsAppPromotor(orden: OrdenServicio) {
     if (!orden.clienteTelefono) {
       avisoError('Esta orden no tiene teléfono del cliente. Agregalo desde la ficha del cliente para enviarle el enlace de Google Reviews.', {
         operacionId: `feedback-sin-telefono-${orden.id}`,
@@ -212,7 +214,7 @@ export default function Feedback() {
       'Si tienes 30 segundos, ¿nos dejarías una reseña en Google? Significa muchísimo para nosotros.',
       url ? url : '',
     ].filter(Boolean);
-    window.open(whatsappLink(orden.clienteTelefono, partes.join(' ')), '_blank');
+    await abrirChat({ telefono: orden.clienteTelefono, nombre: orden.clienteNombre, clienteId: orden.clienteId }, partes.join(' '));
   }
 
   const calidad = calidadServicio(crudas, rango.inicio, rango.fin);
@@ -451,7 +453,7 @@ export default function Feedback() {
                             disabled={!o.clienteTelefono}
                             className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold"
                           >
-                            <Star size={12} /> Reenviar link Google
+                            <Star size={12} /> Preparar enlace Google
                           </button>
                         </td>
                       </tr>

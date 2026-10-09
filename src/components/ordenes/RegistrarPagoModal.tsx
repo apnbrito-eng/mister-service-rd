@@ -1,3 +1,4 @@
+import BotonChatCliente from '../shared/BotonChatCliente';
 import { equipoApi } from '../../services/equipoApi';
 import GestionOrden from '../crm/GestionOrden';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -10,7 +11,7 @@ import { obtenerPagosDeOrden } from '../../services/ordenes.service';
 import { crearNotificacion } from '../../services/notificaciones.service';
 import { crearRegistroAuditoria } from '../../utils';
 import { puede } from '../../utils/permisos';
-import { mensajeDatosCuentaBancaria, whatsappUrl } from '../../utils/whatsapp';
+import { mensajeDatosCuentaBancaria } from '../../utils/whatsapp';
 import Modal from '../Modal';
 import toast from 'react-hot-toast';
 import { Banknote, ArrowRightLeft, CreditCard, Trash2, Copy } from 'lucide-react';
@@ -462,7 +463,6 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
                         monto: Number(monto) || undefined,
                       });
                       const tel = orden?.clienteTelefono || '';
-                      const wa = tel ? whatsappUrl(tel, mensaje) : '';
                       const handleCopiar = async () => {
                         try {
                           await navigator.clipboard.writeText(mensaje);
@@ -481,15 +481,12 @@ export default function RegistrarPagoModal({ isOpen, onClose, orden, userProfile
                           {banco.rnc && <div>RNC {banco.rnc}</div>}
                           {banco.cedula && <div>Cédula {banco.cedula}</div>}
                           <div className="flex flex-wrap gap-2 pt-2">
-                            {wa && (
-                              <a
-                                href={wa}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                            {tel && (
+                              <BotonChatCliente telefono={tel} nombre={orden?.clienteNombre} clienteId={orden?.clienteId} mensaje={mensaje}
                                 className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-lg text-xs font-semibold"
                               >
                                 <WhatsAppIcon filled={false} className="text-white" size={12} /> Compartir por WhatsApp
-                              </a>
+                              </BotonChatCliente>
                             )}
                             <button
                               type="button"
