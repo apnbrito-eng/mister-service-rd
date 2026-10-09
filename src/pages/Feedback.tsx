@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Personal } from '../types';
 import { OrdenCobrosCruda, diaCobroRD } from '../utils/movimientosCobros';
-import { ordenMetrica, rangoMesRD, periodoValido, fechaCierreMetrica, enPeriodo, calidadServicio, identidadPersonal } from '../utils/metricasNegocio';
+import { ordenMetrica, rangoMesRD, periodoValido, fechaCierreMetrica, enPeriodo, calidadServicio } from '../utils/metricasNegocio';
 import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/config';
@@ -216,12 +216,16 @@ export default function Feedback() {
   }
 
   const calidad = calidadServicio(crudas, rango.inicio, rango.fin);
-  const agrupacion = (campo: 'tecnicoId' | 'responsableId') => {
+  const agrupacion = (seccion: 'atencion' | 'tecnico') => {
     const grupos = new Map<string, { nombre: string; cantidad: number; suma: number }>();
-    calidad.evaluaciones.forEach(e => {
-      const p = identidadPersonal(e[campo], personal); const id = p?.id || 'sin-identidad';
-      const actual = grupos.get(id) || { nombre: p?.nombre || 'Sin identidad verificable', cantidad: 0, suma: 0 };
-      actual.cantidad++; actual.suma += Object.values(e.categorias).reduce((s, n) => s + n, 0) / 4; grupos.set(id, actual);
+    calidad[seccion].evaluaciones.forEach(e => {
+      const candidatos = e.participanteUid ? personal.filter(p => p.uid === e.participanteUid) : [];
+      const p = candidatos.length === 1 ? candidatos[0] : undefined;
+      const id = p?.id || 'sin-atribucion';
+      const actual = grupos.get(id) || { nombre: p?.nombre || 'Sin atribución verificable', cantidad: 0, suma: 0 };
+      const puntuaciones = Object.values(e.categorias);
+      actual.cantidad++; actual.suma += puntuaciones.reduce((s, n) => s + n, 0) / puntuaciones.length;
+      grupos.set(id, actual);
     });
     return [...grupos.entries()];
   };
@@ -236,12 +240,11 @@ export default function Feedback() {
   return (
     <div className="p-4 md:p-6 space-y-6 max-w-[1600px] mx-auto">
       <section className="bg-white rounded-xl border p-4 space-y-3">
-        <h2 className="font-semibold">Evaluación del servicio: {calidad.evaluaciones.length} respuestas</h2>
-        <p className="text-sm">Escala de 1 a 5. Agrupamos por técnico y responsable de la orden; estas preguntas califican el servicio completo, no individualmente a la operaria.</p>
-        <div className="flex flex-wrap gap-4">{calidad.promedios.map(c => <span key={c.categoria}>{c.categoria}: {c.promedio === null ? 'Sin respuestas' : `${c.promedio.toFixed(1)} / 5`}</span>)}</div>
-        {(['tecnicoId', 'responsableId'] as const).map(campo => <div key={campo}><h3 className="font-medium">{campo === 'tecnicoId' ? 'Órdenes por técnico' : 'Órdenes por responsable de atención'}</h3>{agrupacion(campo).map(([id, g]) => <p key={id}>{g.nombre}: {g.cantidad} respuestas · {(g.suma / g.cantidad).toFixed(1)} / 5</p>)}</div>)}
-        <p className="text-sm">Evaluaciones sin fecha válida: {calidad.incidencias}. La tasa de respuesta usa las órdenes cerradas en el mes y sus respuestas recibidas.</p>
-        <details><summary>Ver órdenes y comentarios</summary>{calidad.evaluaciones.map(e => <div key={e.ordenId} className="py-2 border-b"><Link className="text-primary underline" to={`/admin/ordenes/${encodeURIComponent(e.ordenId)}`}>{e.numero}</Link><p>{e.comentario || 'Sin comentario'}</p></div>)}</details>
+        <h2 className="font-semibold">Evaluación del servicio: {calidad.respuestas} respuestas</h2>
+        <p className="text-sm">Escala de 1 a 5. Atención al cliente y servicio técnico se evalúan por separado. Las respuestas históricas generales permanecen aparte y no se atribuyen a un rol.</p>
+        <div className="grid gap-4 md:grid-cols-2">{(['atencion', 'tecnico'] as const).map(seccion => <section key={seccion} className="rounded-xl border p-4 space-y-2"><h3 className="font-medium">{seccion === 'atencion' ? 'Atención al cliente' : 'Servicio técnico'} · {calidad[seccion].evaluaciones.length} evaluaciones</h3><div className="flex flex-wrap gap-3">{calidad[seccion].promedios.map(c => <span key={c.categoria}>{c.categoria}: {c.promedio === null ? 'Sin respuestas' : `${c.promedio.toFixed(1)} / 5`}</span>)}</div>{agrupacion(seccion).map(([id, g]) => <p key={id}>{g.nombre}: {g.cantidad} respuestas · {(g.suma / g.cantidad).toFixed(1)} / 5</p>)}<details><summary>Ver órdenes y comentarios</summary>{calidad[seccion].evaluaciones.map(e => <div key={e.ordenId} className="py-2 border-b"><Link className="text-primary underline" to={`/admin/ordenes/${encodeURIComponent(e.ordenId)}`}>{e.numero}</Link><p>{e.comentario || 'Sin comentario'}</p></div>)}</details></section>)}</div>
+        <details><summary>Evaluaciones históricas generales · {calidad.evaluaciones.length}</summary><p className="text-sm">Estas respuestas califican el servicio completo y no distinguen atención del técnico.</p><div className="flex flex-wrap gap-4">{calidad.promedios.map(c => <span key={c.categoria}>{c.categoria}: {c.promedio === null ? 'Sin respuestas' : `${c.promedio.toFixed(1)} / 5`}</span>)}</div>{calidad.evaluaciones.map(e => <div key={e.ordenId} className="py-2 border-b"><Link className="text-primary underline" to={`/admin/ordenes/${encodeURIComponent(e.ordenId)}`}>{e.numero}</Link><p>{e.comentario || 'Sin comentario'}</p></div>)}</details>
+        <p className="text-sm">Evaluaciones con fecha o estructura inválida: {calidad.incidencias}. Una sección omitida no cuenta como cero. Estos indicadores no cambian bonos, nómina ni NPS.</p>
       </section>
       {/* Header */}
       <div className="flex items-start justify-between gap-3 flex-wrap">

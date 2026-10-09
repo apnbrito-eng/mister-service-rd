@@ -40,14 +40,56 @@ export function resumenNegocio(raw: OrdenCobrosCruda[], gastos: { fecha?: unknow
   const gastosValidos = gastos.filter(g => enPeriodo(g.fecha, inicio, fin) && typeof g.monto === 'number' && Number.isFinite(g.monto) && g.monto > 0);
   return { ...caja, gastos: gastosValidos.reduce((s, g) => s + (g.monto as number), 0), incidenciasGastos: gastos.filter(g => !fechaFinanciera(g.fecha) || typeof g.monto !== 'number' || !Number.isFinite(g.monto) || g.monto <= 0).length };
 }
+type EvaluacionCalidad = { ordenId: string; numero: string; comentario: string; categorias: Record<string, number>; participanteUid: string | null };
+function objetoCalidad(valor: unknown): Record<string, unknown> | null {
+  return valor && typeof valor === 'object' && !Array.isArray(valor) ? valor as Record<string, unknown> : null;
+}
+function categoriasCalidad(valor: unknown, claves: readonly string[]): Record<string, number> | null {
+  const objeto = objetoCalidad(valor);
+  if (!objeto || !claves.every(c => typeof objeto[c] === 'number' && Number.isInteger(objeto[c]) && Number(objeto[c]) >= 1 && Number(objeto[c]) <= 5)) return null;
+  return Object.fromEntries(claves.map(c => [c, Number(objeto[c])]));
+}
+function promediosCalidad(evaluaciones: { categorias: Record<string, number> }[], claves: readonly string[]) {
+  return claves.map(c => ({ categoria: c, promedio: evaluaciones.length ? evaluaciones.reduce((s, e) => s + e.categorias[c], 0) / evaluaciones.length : null }));
+}
 export function calidadServicio(raw: OrdenCobrosCruda[], inicio: Date, fin: Date) {
   const categorias = ['puntualidad', 'trato', 'claridad', 'calidad'] as const;
-  const evaluaciones = raw.flatMap(o => {
-    const e = o.datos.evaluacionServicio as { fecha?: unknown; categorias?: Record<string, unknown>; comentario?: string } | undefined;
-    if (o.datos.eliminada || !e || !enPeriodo(e.fecha, inicio, fin) || !categorias.every(c => typeof e.categorias?.[c] === 'number' && Number.isInteger(e.categorias[c]) && Number(e.categorias[c]) >= 1 && Number(e.categorias[c]) <= 5)) return [];
-    return [{ ordenId: o.id, numero: String(o.datos.numero || o.id), tecnicoId: o.datos.tecnicoId, responsableId: o.datos.operariaId || o.datos.responsableId, comentario: e.comentario || '', categorias: Object.fromEntries(categorias.map(c => [c, Number(e.categorias![c])])) }];
-  });
-  return { evaluaciones, promedios: categorias.map(c => ({ categoria: c, promedio: evaluaciones.length ? evaluaciones.reduce((s, e) => s + e.categorias[c], 0) / evaluaciones.length : null })), incidencias: raw.filter(o => !!o.datos.evaluacionServicio && !fechaFinanciera((o.datos.evaluacionServicio as { fecha?: unknown }).fecha)).length };
+  const categoriasAtencion = ['puntualidad', 'trato', 'claridad'] as const;
+  const atencion: EvaluacionCalidad[] = [];
+  const tecnico: EvaluacionCalidad[] = [];
+  const evaluaciones: Array<EvaluacionCalidad & { tecnicoId: unknown; responsableId: unknown }> = [];
+  const ordenesRespuesta = new Set<string>();
+  let incidencias = 0;
+  for (const o of raw) {
+    const e = objetoCalidad(o.datos.evaluacionServicio);
+    if (!e || o.datos.eliminada || o.datos.eliminado) continue;
+    if (!fechaFinanciera(e.fecha)) { incidencias++; continue; }
+    if (!enPeriodo(e.fecha, inicio, fin)) continue;
+    const comun = { ordenId: o.id, numero: String(o.datos.numero || o.id), comentario: typeof e.comentario === 'string' ? e.comentario : '' };
+    if (e.version === 2) {
+      const participantes = objetoCalidad(e.participantes);
+      const valoresAtencion = categoriasCalidad(e.atencion, categoriasAtencion);
+      const valoresTecnico = categoriasCalidad(e.tecnico, categorias);
+      if (valoresAtencion) {
+        const uid = participantes?.atribucionAtencionConfiable === true && typeof participantes.atencionUid === 'string' && participantes.atencionUid.trim() ? participantes.atencionUid : null;
+        atencion.push({ ...comun, categorias: valoresAtencion, participanteUid: uid });
+      }
+      if (valoresTecnico) {
+        const uid = participantes?.atribucionTecnicoConfiable === true && typeof participantes.tecnicoUid === 'string' && participantes.tecnicoUid.trim() ? participantes.tecnicoUid : null;
+        tecnico.push({ ...comun, categorias: valoresTecnico, participanteUid: uid });
+      }
+      if (valoresAtencion || valoresTecnico) ordenesRespuesta.add(o.id);
+      if ((!valoresAtencion && !valoresTecnico) || (e.atencion != null && !valoresAtencion) || (e.tecnico != null && !valoresTecnico)) incidencias++;
+    } else {
+      if (e.version !== undefined && e.version !== 1) { incidencias++; continue; }
+      const valores = categoriasCalidad(e.categorias, categorias);
+      if (!valores) { incidencias++; continue; }
+      // Legacy: la encuesta evalúa el servicio completo, nunca un rol individual.
+      evaluaciones.push({ ...comun, categorias: valores, participanteUid: null, tecnicoId: o.datos.tecnicoId, responsableId: o.datos.operariaId || o.datos.responsableId });
+      ordenesRespuesta.add(o.id);
+    }
+  }
+  return { evaluaciones, promedios: promediosCalidad(evaluaciones, categorias), atencion: { evaluaciones: atencion, promedios: promediosCalidad(atencion, categoriasAtencion) }, tecnico: { evaluaciones: tecnico, promedios: promediosCalidad(tecnico, categorias) }, respuestas: ordenesRespuesta.size, incidencias };
 }
 
 export function periodoValido(inicio: Date, fin: Date): boolean {

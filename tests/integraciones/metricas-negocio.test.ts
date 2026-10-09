@@ -72,3 +72,36 @@ it('prefiere creador explícito al nombre legacy sin resolver identidades ambigu
   expect(creadorIdentificable(ordenMetrica('vacio', {}), personal)).toBeUndefined();
   expect(creadorIdentificable(ordenMetrica('desconocido', { creadoPorId: 'desconocido', creadoPor: 'u1' }), personal)).toBeUndefined();
 });
+
+it('separa evaluación v2 de atención y técnico y no mezcla respuestas legacy', () => {
+  const resultado = calidadServicio([
+    { id: 'v2', datos: { tecnicoId: 'otro', operariaId: 'otra', evaluacionServicio: { version: 2, fecha: '2026-09-03', atencion: { puntualidad: 1, trato: 2, claridad: 3 }, tecnico: { puntualidad: 5, trato: 4, claridad: 3, calidad: 2 }, participantes: { atencionUid: 'u1', tecnicoUid: 'u2', atribucionAtencionConfiable: true, atribucionTecnicoConfiable: true } } } },
+    { id: 'v1', datos: { evaluacionServicio: { fecha: '2026-09-03', categorias: { puntualidad: 4, trato: 4, claridad: 4, calidad: 4 } } } },
+  ], rango.inicio, rango.fin);
+  expect(resultado.respuestas).toBe(2);
+  expect(resultado.atencion.promedios.map(p => p.promedio)).toEqual([1, 2, 3]);
+  expect(resultado.tecnico.promedios.map(p => p.promedio)).toEqual([5, 4, 3, 2]);
+  expect(resultado.promedios.map(p => p.promedio)).toEqual([4, 4, 4, 4]);
+  expect(resultado.atencion.evaluaciones[0].participanteUid).toBe('u1');
+  expect(resultado.tecnico.evaluaciones[0].participanteUid).toBe('u2');
+  expect(resultado.evaluaciones[0].participanteUid).toBeNull();
+});
+
+it('sección omitida no es cero y atribución no confiable queda sin identidad', () => {
+  const resultado = calidadServicio([{ id: 'una', datos: { tecnicoId: 'u2', evaluacionServicio: { version: 2, fecha: '2026-09-03', atencion: null, tecnico: { puntualidad: 5, trato: 5, claridad: 5, calidad: 5 }, participantes: { tecnicoUid: 'u2', atribucionTecnicoConfiable: false } } } }], rango.inicio, rango.fin);
+  expect(resultado.respuestas).toBe(1);
+  expect(resultado.atencion.evaluaciones).toHaveLength(0);
+  expect(resultado.atencion.promedios.every(p => p.promedio === null)).toBe(true);
+  expect(resultado.tecnico.evaluaciones[0].participanteUid).toBeNull();
+});
+
+it('evalúa fecha propia y excluye datos eliminados o puntuaciones incompletas', () => {
+  const evaluacionServicio = { version: 2, fecha: '2026-09-03', atencion: { puntualidad: 3, trato: 4 }, tecnico: null };
+  const resultado = calidadServicio([
+    { id: 'incompleta', datos: { evaluacionServicio } },
+    { id: 'eliminada', datos: { eliminado: true, evaluacionServicio: { ...evaluacionServicio, atencion: { puntualidad: 3, trato: 4, claridad: 5 } } } },
+    { id: 'fuera', datos: { evaluacionServicio: { ...evaluacionServicio, fecha: '2026-10-03' } } },
+  ], rango.inicio, rango.fin);
+  expect(resultado.respuestas).toBe(0);
+  expect(resultado.incidencias).toBe(1);
+});

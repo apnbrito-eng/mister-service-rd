@@ -1,4 +1,4 @@
-import { validarEvaluacion } from '../_lib/evaluacionServicio.js';
+import { validarEvaluacion, validarEvaluacionV2, extraerParticipantes, candidatosParticipantes } from '../_lib/evaluacionServicio.js';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminFirestore, exigirAppCheck } from '../_lib/firebaseAdmin.js';
@@ -107,11 +107,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  // Nueva evaluación versionada. No convierte estrellas en NPS histórico.
+  // Evaluación versionada. v2 (actual): atención/técnico separados + participantes
+  // capturados del doc (NO del cliente). v1 (compat): un bloque de 4 categorías.
+  // No convierte estrellas en NPS histórico.
   if (req.method === 'POST' && req.body?.evaluacion !== undefined) {
-    const evaluacion = validarEvaluacion(req.body.evaluacion);
+    const raw = req.body.evaluacion as unknown;
+    const esV2 =
+      !!raw &&
+      typeof raw === 'object' &&
+      !Array.isArray(raw) &&
+      (
+        Object.prototype.hasOwnProperty.call(raw, 'atencion') ||
+        Object.prototype.hasOwnProperty.call(raw, 'tecnico')
+      );
+    const evaluacionV2 = esV2 ? validarEvaluacionV2(raw) : null;
+    const evaluacionV1 = esV2 ? null : validarEvaluacion(raw);
     const comentario = req.body.comentario;
-    if (!evaluacion || (comentario !== undefined && (typeof comentario !== 'string' || comentario.length > 500))) {
+    const comentarioInvalido =
+      comentario !== undefined &&
+      (typeof comentario !== 'string' || comentario.length > 500);
+    if ((!evaluacionV2 && !evaluacionV1) || comentarioInvalido) {
       return res.status(400).json({ error: 'evaluacion_invalida' });
     }
     try {
@@ -123,11 +138,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!data || (data.tokenPortalCliente !== token && data.trackingGPS?.token !== token)) return 'orden_no_encontrada';
         if (data.fase !== 'cerrado') return 'orden_no_cerrada';
         if (data.evaluacionServicio || data.feedback) return 'feedback_ya_enviado';
-        tx.update(ordenDoc.ref, { evaluacionServicio: {
-          version: 1, escala: 5, categorias: evaluacion,
-          comentario: typeof comentario === 'string' ? comentario.trim() : '',
+        const comentarioLimpio =
+          typeof comentario === 'string' ? comentario.trim() : '';
+        // Participantes se derivan DEL DOC, no del body — invariante del sprint
+        // Portal Cliente 2026-10-09: no aceptar atribución suministrada por cliente.
+        const candidatos = candidatosParticipantes(data);
+        const ids = [...new Set([candidatos.tecnicoUid, candidatos.atencionUid].filter((id): id is string => !!id && !id.includes('/')))];
+        // Todas las lecturas preceden al update: un docId legacy no se promueve a UID.
+        const usuarios = await Promise.all(ids.map(id => tx.get(db.collection('usuarios').doc(id))));
+        const verificados = new Set(usuarios.filter(usuario => usuario.exists).map(usuario => usuario.id));
+        const participantes = extraerParticipantes(data, verificados);
+        const base: Record<string, unknown> = {
+          escala: 5,
           fecha: FieldValue.serverTimestamp(),
-        } });
+          comentario: comentarioLimpio,
+          participantes,
+        };
+        if (evaluacionV2) {
+          base.version = 2;
+          base.atencion = evaluacionV2.atencion;
+          base.tecnico = evaluacionV2.tecnico;
+        } else if (evaluacionV1) {
+          base.version = 1;
+          base.categorias = evaluacionV1;
+        }
+        // Strip undefined defensivo (Firestore rechaza undefined). `null`
+        // se preserva adrede: significa "cliente omitió esta sección" o
+        // "atribución explícitamente no fiable".
+        const limpio = Object.fromEntries(
+          Object.entries(base).filter(([, v]) => v !== undefined),
+        );
+        tx.update(ordenDoc.ref, { evaluacionServicio: limpio });
         return 'ok';
       });
       if (result !== 'ok') return res.status(result === 'feedback_ya_enviado' ? 409 : result === 'orden_no_encontrada' ? 404 : 400).json({ error: result });
