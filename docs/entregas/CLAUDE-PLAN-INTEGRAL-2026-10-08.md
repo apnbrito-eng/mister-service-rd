@@ -46,6 +46,40 @@ Revisar pendientes históricos contra código (no declararlos abiertos solo por 
 C1/C2 de nómina/pagos constan corregidos en rectificación del cerebro: probar regresión, no reimplementar a ciegas.
 Apple Developer solicitudNJ8KM95HKR en revisión; tarea externa, no bloquea web/Android ni equivale a iOS publicado.
 
+## 5bis. Catálogo semántico de alertas (addendum 08/10/2026 noche)
+
+Incorporado desde `docs/entregas/AUDITORIA-ALERTAS-2026-10-08.md` (Codex). Antes de corregir cada fallo individual, se unifica el lenguaje visual de severidad en toda la app.
+
+### Lote A — Catálogo (ENTREGADO en `3c71f47`)
+- 5 severidades: **exito**, **atencion**, **fallo**, **info**, **neutro** — independientes de la rampa de progreso de orden (`--ms-paso-*`).
+- Tokens `--alerta-<severidad>-{fondo,texto,borde,icono}` en `src/styles/tokens.css`, con contraste AA.
+- Componente `src/components/alertas/Alerta.tsx` con texto+ícono siempre juntos, `role="alert"` para fallos, `role="status" aria-live="polite"` para info/éxito. Nunca `assertive` automático.
+- Toaster con duración por severidad (success 3000ms, info/blank 4000ms, error `Infinity`); íconos usan tokens semánticos.
+- NO se usa verde BambooHR (`--b-green`) como "éxito" por inferencia.
+
+### Lote B — Fallos individuales (en progreso)
+| # | Hallazgo | Estado |
+|---|---|---|
+| 1 | InboxConversacion.tsx:766 pinta fallo con bg-emerald-50 | ✅ ENTREGADO en `3c71f47` |
+| 2 | NotificacionesPanel.tsx:83,96,140 usa rojo sin discriminar gravedad | ⏳ Pendiente |
+| 3 | NotificacionesPanel.tsx:51,65 fallo marcarLeida silencioso | ⏳ Pendiente |
+| 4 | App.tsx:385-389 Toaster duración global 3000ms | ✅ Parcial en `3c71f47` (duración por severidad; errores persisten) |
+| 5 | Colores semánticos repartidos (tokens/chipEstado/bamboo/toaster) | ✅ Base unificada en `3c71f47`; migración incremental de consumidores por módulo |
+| 6 | IndicadorVentana24h vs InboxConversacion 771-775 avisos duplicados | ⏳ Pendiente |
+| 7 | Feedback.tsx:180,196 usa alert() nativo | ⏳ Pendiente |
+| 8 | chipEstado garantía siempre rojo | 🟦 Requiere decisión de Jorge; chip de garantía se preserva como está hasta OK para separar etiqueta de tipo de alerta urgente |
+
+### Lote C — Prioridad de chats en Centro de operaciones (ver §6).
+
+### Lote D — Extender catálogo a agenda/citas/órdenes/piezas/taller/mantenimiento/finanzas.
+Cada aviso con disparador, severidad, dueño, fecha origen, acción, condición de resolución, deduplicación, permisos. Inventariar rutas restantes por módulo antes de declarar cobertura.
+
+### Decisiones NO automatizadas (requieren OK de Jorge)
+- Minutos para prioridad/alarma en respuesta a clientes, cita no confirmada y retraso.
+- Qué eventos escalan a rojo.
+- Excepciones de garantía (chip rojo vigente).
+- Sonidos opcionales; destinatarios/coberturas.
+
 ## 6. Vistas de prioridad en el Centro de operaciones (addendum 08/10/2026 pm)
 
 Decisión expresa de Jorge tras revisar `a07506c`: **integrar DENTRO del Centro de operaciones existente**, de forma discreta, tres vistas de prioridad reutilizando sus tarjetas y filtros actuales. **NO crear otro módulo** ni formulario-aislado para responder un mensaje.
