@@ -232,7 +232,7 @@ export default function MapaClientes({
 
   const grupos = useMemo(() => {
     if (!vistaMapa || puntosClientes.length === 0) return [];
-    return agruparEnPantalla(puntosClientes, vistaMapa.limites, vistaMapa.zoom);
+    return agruparEnPantalla(puntosClientes, vistaMapa.limites, vistaMapa.zoom, { zoomSueltos: Infinity });
   }, [puntosClientes, vistaMapa]);
 
   const marcadoresMapa = useMemo<MarcadorMapa[]>(() => {
