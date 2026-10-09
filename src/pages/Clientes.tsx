@@ -215,7 +215,7 @@ export default function Clientes() {
 
   /** Subset con coords válidas — los que efectivamente se renderizan en el mapa. */
   const clientesConCoords = useMemo(
-    () => clientesFiltrados.filter(tieneCoord),
+    () => clientesFiltrados.filter(c => tieneCoord(c) || (c.direcciones ?? []).some(tieneCoord)),
     [clientesFiltrados],
   );
 
