@@ -1,3 +1,4 @@
+import { normalizarCodigoEmpleado } from '../utils/codigoEmpleado';
 /**
  * Capa de servicio para la ficha única de Personal (lote PERSONAL-PENDIENTES
  * 2026-10-09). Centraliza el partido público / privado y los helpers que
@@ -20,7 +21,7 @@
  *
  * Autor: Claude Code (worktree codex/personal-pendientes).
  */
-import { doc, writeBatch, type DocumentReference } from 'firebase/firestore';
+import { deleteField, doc, writeBatch, type DocumentReference } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import type { Personal } from '../types';
 
@@ -41,6 +42,7 @@ import type { Personal } from '../types';
  * consumidores en un sprint propio — fuera del scope de este lote.
  */
 export const CAMPOS_FICHA_PRIVADOS = [
+  'codigoEmpleado',
   'cedula',
   'telefonoFlota',
   'whatsapp',
@@ -72,7 +74,9 @@ export async function guardarFichaPersonal(
   const publico: Record<string, unknown> = {};
   const privado: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(datos)) {
-    (esCampoFichaPrivado(k) ? privado : publico)[k] = v;
+    // El formulario convierte vacío en deleteField; no modificar ese sentinel.
+    const valor = k === 'codigoEmpleado' && typeof v === 'string' ? normalizarCodigoEmpleado(v) ?? deleteField() : v;
+    (esCampoFichaPrivado(k) ? privado : publico)[k] = valor;
   }
   const batch = writeBatch(db);
   if (Object.keys(privado).length) batch.set(doc(db, 'personal_privado', referencia.id), privado, { merge: true });

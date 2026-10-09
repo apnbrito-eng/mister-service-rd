@@ -1670,6 +1670,8 @@ export const PERMISOS_DEFAULT_AYUDANTE: PermisosSistema = { ...TODO_FALSE };
 
 export interface Personal {
   id: string;
+  /** Código administrativo opcional; independiente de UID y usuario de acceso. */
+  codigoEmpleado?: string;
   nombre: string;
   rol: Rol;
   telefono?: string;

@@ -212,7 +212,7 @@ export default function TabReactivacion({
       });
       setCampanaCreadaId(id);
       setModalLinksOpen(true);
-      toast.success(`Campaña creada — ${clientesSeleccionadosDeCampana.length} clientes.`);
+      toast.success(`Audiencia preparada — ${clientesSeleccionadosDeCampana.length} clientes. No se enviaron mensajes.`);
     } catch (err) {
       const e = err as { code?: string; message?: string; stack?: string };
       console.error('[crearCampana] error completo:', err);
@@ -228,8 +228,7 @@ export default function TabReactivacion({
   const handleCloseModal = () => {
     setModalLinksOpen(false);
     setCampanaCreadaId(null);
-    // Re-set la selección a vacío (los marcados como enviados ya
-    // aparecerán con cooldown la próxima vez).
+    // Cerrar la audiencia no cambia el estado de envío ni el cooldown.
     setSeleccionados(new Set());
   };
 
@@ -320,11 +319,11 @@ export default function TabReactivacion({
               <Send size={14} />
               {creando
                 ? 'Creando campaña...'
-                : `Generar links WhatsApp (${clientesSeleccionadosDeCampana.length})`}
+                : `Preparar audiencia (${clientesSeleccionadosDeCampana.length})`}
             </button>
             <p className="text-[11px] text-gray-500 mt-2 leading-snug">
-              Se generan links manuales — no hay envío automático. Marcá cada
-              cliente como enviado al abrirle WhatsApp.
+              Prepara la audiencia y abre el historial completo en el WhatsApp empresarial.
+              No se envían mensajes ni se marca al cliente como contactado.
             </p>
           </div>
         </div>
@@ -337,7 +336,6 @@ export default function TabReactivacion({
           campanaId={campanaCreadaId}
           plantilla={plantillaActiva}
           clientes={clientesSeleccionadosDeCampana}
-          agente={{ id: currentUser.uid, nombre: userProfile.nombre }}
         />
       )}
     </div>

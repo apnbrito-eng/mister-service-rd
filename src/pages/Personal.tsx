@@ -1,3 +1,4 @@
+import { normalizarCodigoEmpleado } from '../utils/codigoEmpleado';
 /**
  * Rediseño visual BambooHR — Lote 1 (2026-10-07) +
  *   lote PERSONAL-PENDIENTES (2026-10-09, Claude Code, worktree
@@ -428,6 +429,7 @@ function ListaEquipos({
                 <AvatarBamboo persona={p} />
                 <div className="b-persona-main">
                   <strong>{p.nombre}</strong>
+                  {p.codigoEmpleado && <span>Código: {p.codigoEmpleado}</span>}
                   <span>
                     {ROL_LABELS[p.rol]}
                     {a?.usuario ? ` · ${a.usuario}` : ''}
@@ -559,6 +561,7 @@ function FichaUnificada({
         <AvatarBamboo persona={persona} size="lg" />
         <div className="b-profile-main">
           <h2>{persona.nombre}</h2>
+          <p>Código de empleado: {persona.codigoEmpleado || 'Sin asignar'}</p>
           <p>
             {ROL_LABELS[persona.rol]} · {equipoLabel}
             {acceso?.usuario ? ` · usuario ${acceso.usuario}` : ''}
@@ -686,6 +689,7 @@ function useFichaForm<T>(persona: Personal, mapear: (p: Personal) => T) {
 
 function TabDatos({ persona, esAdminCoord }: { persona: Personal; esAdminCoord: boolean }) {
   const [form, setForm] = useFichaForm(persona, (p) => ({
+    codigoEmpleado: p.codigoEmpleado ?? '',
     cedula: p.cedula ?? '',
     telefono: p.telefono ?? '',
     telefonoFlota: p.telefonoFlota ?? '',
@@ -716,6 +720,7 @@ function TabDatos({ persona, esAdminCoord }: { persona: Personal; esAdminCoord: 
       await guardarFichaPersonal(
         doc(db, 'personal', persona.id),
         limpiarActualizacion({
+          codigoEmpleado: normalizarCodigoEmpleado(form.codigoEmpleado),
           cedula: form.cedula.trim() || undefined,
           telefono: form.telefono.trim() || undefined,
           telefonoFlota: form.telefonoFlota.trim() || undefined,
@@ -729,8 +734,9 @@ function TabDatos({ persona, esAdminCoord }: { persona: Personal; esAdminCoord: 
       setEstado({ guardando: false, mensaje: 'Guardado.' });
     } catch (err) {
       console.error('TabDatos guardar:', err);
-      toast.error('No se pudieron guardar los datos.');
-      setEstado({ guardando: false, mensaje: 'Error al guardar.' });
+      const mensaje = err instanceof Error ? err.message : 'No se pudieron guardar los datos.';
+      toast.error(mensaje);
+      setEstado({ guardando: false, mensaje });
     }
   }
 
@@ -740,6 +746,13 @@ function TabDatos({ persona, esAdminCoord }: { persona: Personal; esAdminCoord: 
     <form onSubmit={guardar}>
       <h3 className="b-h3">Identidad y contacto</h3>
       <div className="b-fields">
+        <Campo etiqueta="Código de empleado · opcional">
+          <input className="b-input" value={form.codigoEmpleado}
+            onChange={(e) => setForm({ ...form, codigoEmpleado: e.target.value })}
+            placeholder="Ej.: EMP-001" disabled={readonly} maxLength={30}
+            aria-describedby="codigo-empleado-ayuda" />
+          <small id="codigo-empleado-ayuda">Código administrativo manual. No cambia el usuario de acceso ni la cédula.</small>
+        </Campo>
         <Campo etiqueta="Cédula o identificación">
           <input
             className="b-input"
