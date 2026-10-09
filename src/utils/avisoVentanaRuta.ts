@@ -12,17 +12,18 @@
  * unitarias con `node:test` NO carguen Firebase (que requiere Vite env).
  */
 import type { TipoRecordatorio } from '../types';
+import { componentesRD } from './mapaFechas';
 
 const DURACION_AVISO_MS = 15 * 60 * 1000;
 
 /**
- * Minuto cero (inclusivo) hasta minuto 15 (exclusivo) de la ventana.
+ * Ventana de trabajo completa y 15 minutos posteriores al vencimiento.
  * Ventanas duras — ampliar requiere nueva aprobación de Jorge.
  */
 export function avisoDentroDeVentana(tipo: TipoRecordatorio, ahora: Date): boolean {
   const horaInicio = tipo === 'ruta_manana' ? 9 : 11;
-  const inicioHoy = new Date(ahora);
-  inicioHoy.setHours(horaInicio, 0, 0, 0);
-  const ms = ahora.getTime() - inicioHoy.getTime();
-  return ms >= 0 && ms < DURACION_AVISO_MS;
+  const { hora, minuto } = componentesRD(ahora);
+  const ms = ((hora - horaInicio) * 60 + minuto) * 60_000
+    + ahora.getUTCSeconds() * 1000 + ahora.getUTCMilliseconds();
+  return ms >= 0 && ms < 60 * 60 * 1000 + DURACION_AVISO_MS;
 }

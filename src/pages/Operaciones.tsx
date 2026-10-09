@@ -16,7 +16,7 @@
  *  - Sin referencia al Dashboard financiero como «omisión por regla Jorge» —
  *    es decisión de implementación para no duplicar métricas financieras.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Map as MapIcon, CalendarCheck, Tv } from 'lucide-react';
 import { useApp } from '../context/AppContext';
@@ -40,6 +40,8 @@ import BarraEstadoHoy from '../components/operaciones/BarraEstadoHoy';
 import ListaAtencion from '../components/operaciones/ListaAtencion';
 import LineaTecnico from '../components/operaciones/LineaTecnico';
 import FichaTecnicoSheet from '../components/operaciones/FichaTecnicoSheet';
+import LoteHorariosManana from '../components/rutas/LoteHorariosManana';
+import RecordatorioBanner from '../components/recordatorios/RecordatorioBanner';
 import PrioridadDelDia, { type ModoVista } from '../components/operaciones/PrioridadDelDia';
 // Suscripción al mismo canal que usa el inbox general — reutilizamos la rule
 // `whatsapp_conversaciones` esStaffOficina sin crear otro módulo paralelo.
@@ -122,24 +124,29 @@ export default function Operaciones() {
       setErrorConversaciones(null);
       return;
     }
-    // Máximo 100 conversaciones ordenadas por `ultimaActividad` desc —
-    // suficiente para "Prioridad del día" sin pagar un listener de 9000 docs.
-    // Si una conversación con último entrante del día cae fuera del top 100,
-    // volveremos a ella desde el inbox (no es dato financiero crítico).
+    // Sin truncar: un cliente del día puede quedar fuera de los 100 recientes.
+    // Conserva el fallback de actividad para conversaciones históricas.
     const unsub = suscribirConversaciones(
       (convs) => {
         setConversaciones(convs);
         setErrorConversaciones(null);
       },
       (err) => setErrorConversaciones(err.message),
-      100,
     );
     return () => unsub();
   }, [puedeInbox]);
 
+  const contextoKey = `operaciones-contexto:${userProfile?.id || 'sin-perfil'}`;
+  const [contextoGuardado] = useState(() => {
+    if (searchParams.get('restaurar') !== '1') return null;
+    try { return JSON.parse(sessionStorage.getItem(contextoKey) || 'null') as {
+      fecha?: string; equipo?: EquipoFiltro; orden?: OrdenTecnicos; scroll?: number;
+    } | null; } catch { return null; }
+  });
+  const scrollRestaurado = useRef(false);
   const [diaSeleccionado, setDiaSeleccionado] = useState<Date>(() => {
-    const r = rangoAtajoRD('hoy', new Date());
-    return r.desde;
+    const guardada = contextoGuardado?.fecha ? fechaDesdeInput(contextoGuardado.fecha) : null;
+    return guardada || rangoAtajoRD('hoy', new Date()).desde;
   });
   // Modo TV: forzamos "hoy" cada minuto para que no quede fijo en un día pasado.
   useEffect(() => {
@@ -147,8 +154,8 @@ export default function Operaciones() {
     const r = rangoAtajoRD('hoy', ahora);
     if (!diaEsHoyRD(diaSeleccionado, ahora)) setDiaSeleccionado(r.desde);
   }, [esTv, ahora, diaSeleccionado]);
-  const [equipo, setEquipo] = useState<EquipoFiltro>('todos');
-  const [ordenTecnicos, setOrdenTecnicos] = useState<OrdenTecnicos>('atencion');
+  const [equipo, setEquipo] = useState<EquipoFiltro>(contextoGuardado?.equipo && ['todos', 'A', 'B'].includes(contextoGuardado.equipo) ? contextoGuardado.equipo : 'todos');
+  const [ordenTecnicos, setOrdenTecnicos] = useState<OrdenTecnicos>(contextoGuardado?.orden && ['atencion', 'avance', 'nombre'].includes(contextoGuardado.orden) ? contextoGuardado.orden : 'atencion');
   const [tecnicoAbiertoId, setTecnicoAbiertoId] = useState<string | null>(null);
 
   const rango = useMemo(() => rangoRD(diaSeleccionado, diaSeleccionado), [diaSeleccionado]);
@@ -169,6 +176,29 @@ export default function Operaciones() {
   );
 
   const datos = useMapaDatos(rangoHook, permisos, null);
+  useEffect(() => {
+    const main = document.querySelector<HTMLElement>('.service-main');
+    if (!main) return;
+    const guardar = () => {
+      // La carga inicial no debe borrar el scroll que aún se va a restaurar.
+      if (contextoGuardado && !scrollRestaurado.current) return;
+      try { sessionStorage.setItem(contextoKey, JSON.stringify({
+        fecha: fechaAInput(diaSeleccionado), equipo, orden: ordenTecnicos, scroll: main.scrollTop,
+      })); } catch { /* almacenamiento deshabilitado: navegación sigue disponible */ }
+    };
+    guardar();
+    main.addEventListener('scroll', guardar, { passive: true });
+    return () => main.removeEventListener('scroll', guardar);
+  }, [contextoKey, contextoGuardado, diaSeleccionado, equipo, ordenTecnicos]);
+  useEffect(() => {
+    if (!contextoGuardado || scrollRestaurado.current || datos.cargandoOrdenes) return;
+    const frame = requestAnimationFrame(() => {
+      const main = document.querySelector<HTMLElement>('.service-main');
+      if (main) main.scrollTop = contextoGuardado.scroll || 0;
+      scrollRestaurado.current = true;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [contextoGuardado, datos.cargandoOrdenes]);
   const piezasAbiertas = useMemo(() => datos.standby.filter(p => p.estado !== 'llego'), [datos.standby]);
   const idsConPiezas = useMemo(() => new Set(piezasAbiertas.map(p => p.ordenId)), [piezasAbiertas]);
   const conEspera = useCallback((o: OrdenServicio) => idsConPiezas.has(o.id) ? { ...o, enStandby: true } : o, [idsConPiezas]);
@@ -439,6 +469,15 @@ export default function Operaciones() {
       </header>
 
       <main className="mx-auto grid max-w-7xl gap-4 px-4 pt-4">
+        {!esTv && puedeInbox && <details className="rounded-xl border border-slate-200 bg-white">
+          <summary className="cursor-pointer px-4 py-3 font-semibold text-slate-900">Planificación del siguiente día laboral</summary>
+          <div className="grid gap-3 p-4 pt-0">
+            <RecordatorioBanner tipo="ruta_manana" mantenerPendiente tickSeed={Math.floor(ahora.getTime() / 60000)} />
+            <RecordatorioBanner tipo="horarios_clientes" mantenerPendiente tickSeed={Math.floor(ahora.getTime() / 60000)} />
+            <LoteHorariosManana />
+          </div>
+        </details>}
+
         {rangoInvalido && (
           <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
             Día inválido. Elige una fecha válida en el calendario.

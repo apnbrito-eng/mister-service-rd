@@ -1,3 +1,4 @@
+import { completarCarteraAlta } from './carteraClientes.service';
 import { collection, query, where, getDocs, doc, setDoc, updateDoc, getDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cliente, CitaPorConfirmar, DireccionCliente } from '../types';
@@ -123,6 +124,7 @@ export async function buscarOCrearCliente(
   // Buscar existente
   const existente = await buscarClientePorTelefono(telefono);
   if (existente) {
+    if (!existente.data.carteraEquipo) await completarCarteraAlta(existente.id);
     // Actualizar datos que vengan nuevos (sin sobreescribir vacíos)
     const updates: Record<string, unknown> = { updatedAt: Timestamp.now() };
     if (datos.nombre) updates.nombre = datos.nombre;
@@ -171,7 +173,8 @@ export async function buscarOCrearCliente(
   const payloadLimpio = Object.fromEntries(
     Object.entries(payload).filter(([, v]) => v !== undefined),
   );
-  await setDoc(doc(db, 'clientes', clienteId), payloadLimpio);
+  await setDoc(doc(db, 'clientes', clienteId), payloadLimpio, { merge: true });
+  await completarCarteraAlta(clienteId);
   return clienteId;
 }
 
@@ -314,6 +317,7 @@ export async function crearOActualizarClienteDesdeCita(
   const existente = await buscarClientePorTelefono(cita.telefono);
 
   if (existente) {
+    if (!existente.data.carteraEquipo) await completarCarteraAlta(existente.id);
     // Cliente ya existe. Solo agregamos dirección si:
     //   1. La cita trae dirección no vacía.
     //   2. No coincide con la dirección principal del cliente.
@@ -407,7 +411,8 @@ export async function crearOActualizarClienteDesdeCita(
     Object.entries(payload).filter(([, v]) => v !== undefined),
   );
 
-  await setDoc(doc(db, 'clientes', clienteId), payloadLimpio);
+  await setDoc(doc(db, 'clientes', clienteId), payloadLimpio, { merge: true });
+  await completarCarteraAlta(clienteId);
   return { clienteId, creado: true, direccionAgregada: false };
 }
 

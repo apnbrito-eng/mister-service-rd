@@ -1,3 +1,4 @@
+import { registrarRespuestaHorario } from '../_lib/respuestaCitaHorario.js';
 import { prepararRepartoCanal } from '../_lib/equiposAtencion.js';
 import { prepararEntradaBot } from '../_lib/botServicioStore.js';
 import { prepararReparto } from '../_lib/repartoChats.js';
@@ -554,6 +555,10 @@ async function handleEvento(req: VercelRequest, res: VercelResponse): Promise<vo
   for (const msg of messages) {
     try {
       const { creado } = await persistirMensajeEntrante(db, msg);
+      const respuestaBoton = msg.contenido?.buttonPayload;
+      if (typeof respuestaBoton === 'string' && respuestaBoton.startsWith('cita:')) {
+        await registrarRespuestaHorario(db, respuestaBoton, msg.wa_id, msg.wamid);
+      }
       if (creado) mensajesNuevos++;
       else mensajesDuplicados++;
     } catch (err) {

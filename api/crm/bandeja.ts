@@ -14,6 +14,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       !["administrador", "coordinadora", "secretaria", "operaria"].includes(rol)
     )
       throw new ErrorAcceso(403, "Bandeja de oficina.");
+    if (req.query.equipo === "1") {
+      const control = (await db.collection('gestion_accesos').doc(uid).get()).data();
+      return res.json({ equipo: control?.equipo === 'A' || control?.equipo === 'B' ? control.equipo : null });
+    }
     if (req.query.conteos === "1") return res.json({ conteos: await obtenerConteosBandeja(db, uid) });
     const filtro = String(req.query.filtro || "todas");
     const cursor = req.query.cursor;
@@ -31,6 +35,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     else if (filtro === "pendientes") {
       origen = "atencion";
       q = db.collection("crm_atencion").where("pendiente", "==", true);
+    } else if (filtro === "cartera_a" || filtro === "cartera_b") {
+      origen = "cartera_equipo";
+      q = db.collection("clientes").where("carteraEquipo", "==", filtro === "cartera_a" ? "A" : "B");
     } else if (filtro === "cartera") {
       origen = "cartera";
       q = db.collection("crm_clientes").where("responsableId", "==", uid);
@@ -60,7 +67,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const coleccion =
         origen === "atencion"
           ? "crm_atencion"
-          : origen === "cartera"
+          : origen === "cartera_equipo"
+            ? "clientes"
+            : origen === "cartera"
             ? "crm_clientes"
             : origen === "ordenes"
               ? "ordenes_servicio"
@@ -93,6 +102,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               )
               .get()
           ).docs;
+    if (origen === "cartera_equipo") {
+      const clientes = page.docs.filter(d => !d.data().eliminado && !d.data().mergedaCon);
+      const telefonos = [...new Set(clientes.map(d => normalizarWaIdRd(String(d.data().telefonoNormalizado || d.data().telefono || ""))).filter((t): t is string => !!t))];
+      const porId = clientes.length ? (await db.collection("whatsapp_conversaciones").where("clienteId", "in", clientes.map(d => d.id)).get()).docs : [];
+      const porTelefono = telefonos.length ? await db.getAll(...telefonos.map(t => db.collection("whatsapp_conversaciones").doc(t))) : [];
+      docs = [...new Map([...porId, ...porTelefono].filter(d => d.exists).map(d => [d.id, d])).values()];
+    }
     if (origen === "ordenes") {
       const ordenes = filtro === "mis_ordenes" ? await ordenesDelResponsable(db, page.docs, uid) : page.docs;
       const telefonos = [

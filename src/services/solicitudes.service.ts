@@ -1,3 +1,4 @@
+import { completarCarteraAlta } from './carteraClientes.service';
 import { obtenerAppCheckToken } from '../lib/appCheck';
 import {
   collection, updateDoc, deleteDoc, getDoc, getDocs, doc,
@@ -198,7 +199,10 @@ export async function convertirAOrden(
   const existente = await getDoc(solicitudRef);
   if (!existente.exists()) throw new Error('La solicitud ya no existe.');
   const dataExistente = existente.data();
-  if (dataExistente.ordenId) return dataExistente.ordenId as string;
+  if (dataExistente.ordenId) {
+    if (clienteConversion?.tipo === 'crear') await completarCarteraAlta(clienteConversion.telefonoNormalizado);
+    return dataExistente.ordenId as string;
+  }
   if (dataExistente.estado === 'rechazada' || dataExistente.estado === 'convertida') {
     throw new Error(
       `La solicitud no puede convertirse (estado actual: ${dataExistente.estado}).`,
@@ -222,11 +226,14 @@ export async function convertirAOrden(
     }
   }
 
+  // Para clientes existentes, completar cartera antes de convertir.
+  if (clienteConversion?.tipo === 'existente') await completarCarteraAlta(clienteConversion.clienteId);
+
   // El contador conserva su servicio central. Un intento concurrente puede reservar
   // un número sin usar; nunca se reutiliza ni se crea una segunda orden.
   const numero = await siguienteNumeroOrden();
   const ordenRef = doc(collection(db, 'ordenes_servicio'));
-  return runTransaction(db, async tx => {
+  const ordenIdResultado = await runTransaction(db, async tx => {
     const solicitud = await tx.get(solicitudRef);
     if (!solicitud.exists()) throw new Error('La solicitud ya no existe.');
     const data = solicitud.data();
@@ -319,6 +326,8 @@ export async function convertirAOrden(
     tx.update(solicitudRef, { estado: 'convertida', ordenId: ordenRef.id, updatedAt: serverTimestamp() });
     return ordenRef.id;
   });
+  if (clienteConversion?.tipo === 'crear') await completarCarteraAlta(clienteConversion.telefonoNormalizado);
+  return ordenIdResultado;
 }
 
 export async function subirArchivoSolicitud(file: Blob, formularioId: string, campoId: string): Promise<string> {

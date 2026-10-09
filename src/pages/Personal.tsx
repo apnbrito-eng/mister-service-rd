@@ -1,17 +1,28 @@
 /**
- * Rediseño visual BambooHR — Lote 1 (2026-10-07).
+ * Rediseño visual BambooHR — Lote 1 (2026-10-07) +
+ *   lote PERSONAL-PENDIENTES (2026-10-09, Claude Code, worktree
+ *   `codex/personal-pendientes`).
  *
  * Página unificada Personal + Usuarios + Permisos. Reemplaza las antiguas
- * `PersonalPage.tsx` y `GestionUsuarios.tsx`. Toda la escritura sobre `personal/{id}`
- * usa `updateDoc` directo (mismo contrato que antes); la gestión de acceso
- * (usuario, equipo, clave, bloqueo, supervisora, recuperación) sigue pasando por
- * el endpoint autorizado `/api/admin/accesos`. El cambio de email de acceso usa
+ * `PersonalPage.tsx` y `GestionUsuarios.tsx`. Toda la escritura sobre
+ * `personal/{id}` + `personal_privado/{id}` pasa por `guardarFichaPersonal`
+ * (ver `src/services/personal.service.ts`), que divide público vs privado
+ * según `CAMPOS_FICHA_PRIVADOS`. La gestión de acceso (usuario, equipo,
+ * clave, bloqueo, supervisora, recuperación) sigue pasando por el endpoint
+ * autorizado `/api/admin/accesos`. El cambio de email de acceso usa
  * `/api/admin/cambiar-correo`.
  *
  * No introduce reglas financieras nuevas: `sueldoBase`, `nivel` y
  * `comisionPorcentaje` ya existían en Personal y en `nomina.service.ts`. El bono
  * por meta mensual queda documentado como "pendiente de activación" porque Jorge
  * aún no cerró las reglas (devoluciones, cambios de meta durante el mes, etc.).
+ *
+ * Lote PERSONAL-PENDIENTES: refactor de helpers a `personal.service.ts`,
+ * gate fail-closed al cargar `personal_privado` (evita borrar privados con un
+ * form stale), modo lectura condicionado del correo de recuperación cuando
+ * el snapshot privado falla, y mensajes claros sobre la deuda de carga
+ * privada de fotos (cédula/licencia). No se tocan tipos, rules ni Centro
+ * de operaciones.
  *
  * Autor: Claude Code.
  */
@@ -20,7 +31,6 @@ import {
   collection,
   onSnapshot,
   addDoc,
-  updateDoc,
   setDoc,
   doc,
   query,
@@ -35,7 +45,6 @@ import toast from 'react-hot-toast';
 import { useSearchParams, Link } from 'react-router-dom';
 import {
   ArrowLeft,
-  Camera,
   Check,
   Eye,
   EyeOff,
@@ -55,11 +64,21 @@ import type { Personal, Rol, PermisosSistema } from '../types';
 import { permisosDefaultDeRol, puede, esAdminOCoord } from '../utils/permisos';
 import { ROL_LABELS, ROL_SELECT_ORDEN, ROLES_CON_COMISION, comisionDefaultPorNivel } from '../utils/personal';
 import { useApp } from '../context/AppContext';
+import PersonalDocumentosPrivados from '../components/personal/PersonalDocumentosPrivados';
 import AltaPersonalBamboo from '../components/personal/AltaPersonalBamboo';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { detectarCoordenadasURL } from '../utils/direccion';
 import { limpiarActualizacion } from '../utils/actualizacionPersonal';
 import { equipoApi } from '../services/equipoApi';
+import {
+  guardarFichaPersonal,
+  urlAbrirMapa,
+  telefonoLink,
+  whatsappLink,
+  emailLink,
+  omitirUndefined,
+  PERSONAL_PRIVADO_COL,
+} from '../services/personal.service';
 import { sugerirUsuario } from '../../api/_lib/accesosUsuarios';
 
 // ────────────────────────────────────────────────────────────────────────
@@ -124,70 +143,13 @@ function equipoDePersona(p: Personal, acceso?: PersonaAcceso | null): EquipoFilt
   return 'Sin equipo';
 }
 
-function urlAbrirMapa(ubi: Personal['ubicacionCasa']): string | null {
-  if (!ubi) return null;
-  if (typeof ubi.lat === 'number' && typeof ubi.lng === 'number' && Number.isFinite(ubi.lat) && Number.isFinite(ubi.lng) && Math.abs(ubi.lat) <= 90 && Math.abs(ubi.lng) <= 180) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${ubi.lat},${ubi.lng}`)}`;
-  }
-  if (ubi.enlace && /^https?:\/\//.test(ubi.enlace)) {
-    // Sólo abrimos enlaces de Maps/goo.gl; nunca abrimos directamente wa.me ni otros.
-    try {
-      const u = new URL(ubi.enlace);
-      const host = u.hostname.toLowerCase();
-      const esMaps =
-        (u.protocol === 'https:' && ['google.com', 'www.google.com', 'google.com.do', 'www.google.com.do'].includes(host) && u.pathname.startsWith('/maps')) ||
-        host === 'maps.google.com' ||
-        host === 'maps.app.goo.gl' ||
-        (u.protocol === 'https:' && host === 'goo.gl' && u.pathname.startsWith('/maps'));
-      if (u.protocol === 'https:' && esMaps) return ubi.enlace;
-    } catch {
-      /* enlace inválido */
-    }
-  }
-  return null;
-}
-
-function telefonoLink(numero?: string): string | null {
-  if (!numero) return null;
-  const limpio = numero.replace(/\D/g, '');
-  if (!limpio) return null;
-  return `tel:${limpio}`;
-}
-
-function whatsappLink(numero?: string): string | null {
-  if (!numero) return null;
-  const limpio = numero.replace(/\D/g, '');
-  if (!limpio) return null;
-  // Normalización RD: anteponer 1 si tiene 10 dígitos y no empieza con 1.
-  const rd = limpio.length === 10 ? `1${limpio}` : limpio;
-  return `https://wa.me/${rd}`;
-}
-
-function emailLink(email?: string): string | null {
-  if (!email) return null;
-  const limpio = email.trim();
-  if (!limpio || !limpio.includes('@')) return null;
-  return `mailto:${limpio}`;
-}
-
-// Limpia campos undefined antes de escribir en Firestore.
-function limpiarUndefined<T extends object>(obj: T): T {
-  const copia: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined) copia[k] = v;
-  }
-  return copia as T;
-}
-
 // ────────────────────────────────────────────────────────────────────────
 // Componente raíz
-const CAMPOS_PRIVADOS = new Set(['cedula', 'telefonoFlota', 'whatsapp', 'emailContacto', 'correoRecuperacion', 'direccion', 'ubicacionCasa', 'fechaIngreso', 'fotoUrl', 'licenciaNumero', 'licenciaVencimiento', 'referenciasPersonales', 'contactosEmergencia']);
-async function actualizarFicha(referencia: ReturnType<typeof doc>, datos: Record<string, unknown>) {
-  const publico = Object.fromEntries(Object.entries(datos).filter(([k]) => !CAMPOS_PRIVADOS.has(k)));
-  const privado = Object.fromEntries(Object.entries(datos).filter(([k]) => CAMPOS_PRIVADOS.has(k)));
-  if (Object.keys(privado).length) await setDoc(doc(db, 'personal_privado', referencia.id), privado, { merge: true });
-  if (Object.keys(publico).length) await updateDoc(referencia, publico);
-}
+//
+// `actualizarFicha` quedó centralizado en `src/services/personal.service.ts`
+// (`guardarFichaPersonal`): divide público vs privado y escribe
+// `personal/{id}` + `personal_privado/{id}` con el mismo contrato que antes.
+// ────────────────────────────────────────────────────────────────────────
 
 // ────────────────────────────────────────────────────────────────────────
 
@@ -198,13 +160,39 @@ export default function PersonalUnificado() {
   const esAdminCoord = esAdminOCoord(userProfile);
 
   const [personalBase, setPersonal] = useState<Personal[]>([]);
-  const [datosPrivados, setDatosPrivados] = useState<Record<string, Partial<Personal>>>({});
-  const personal = useMemo(() => personalBase.map(p => ({ ...p, ...(datosPrivados[p.id] ?? {}) })), [personalBase, datosPrivados]);
+  // null = aún no se intentó cargar; {} = cargó vacío o rol sin permiso.
+  // Distinguir "aún no cargó" de "cargó vacío" es crítico: si inicializamos
+  // la ficha antes de que llegue el snapshot de `personal_privado`, el form
+  // arranca con cedula/direccion/etc. en '' y al guardar los convierte en
+  // `deleteField()` — borrando datos reales. Fix 2026-10-09.
+  const [datosPrivados, setDatosPrivados] = useState<Record<string, Partial<Personal>> | null>(null);
+  const [privadosError, setPrivadosError] = useState<string>('');
+  const privadosListos = !esAdminCoord || datosPrivados !== null;
+  const personal = useMemo(
+    () => personalBase.map(p => ({ ...p, ...(datosPrivados?.[p.id] ?? {}) })),
+    [personalBase, datosPrivados],
+  );
   useEffect(() => {
-    if (!esAdminCoord) { setDatosPrivados({}); return; }
-    return onSnapshot(collection(db, 'personal_privado'), snap => {
-      setDatosPrivados(Object.fromEntries(snap.docs.map(d => [d.id, d.data()])));
-    }, () => { setDatosPrivados({}); toast.error('No se pudieron cargar los datos privados del personal.'); });
+    if (!esAdminCoord) {
+      setDatosPrivados({});
+      setPrivadosError('');
+      return;
+    }
+    setDatosPrivados(null);
+    setPrivadosError('');
+    return onSnapshot(
+      collection(db, PERSONAL_PRIVADO_COL),
+      snap => {
+        setDatosPrivados(Object.fromEntries(snap.docs.map(d => [d.id, d.data()])));
+      },
+      () => {
+        setDatosPrivados({});
+        setPrivadosError(
+          'No se pudieron cargar los datos privados del personal. La ficha queda en modo lectura hasta reintentar.',
+        );
+        toast.error('No se pudieron cargar los datos privados del personal.');
+      },
+    );
   }, [esAdminCoord]);
   const [acceso, setAcceso] = useState<DatosAcceso | null>(null);
   const [accesoError, setAccesoError] = useState<string>('');
@@ -346,6 +334,12 @@ export default function PersonalUnificado() {
             </div>
           )}
 
+          {privadosError && (
+            <div className="b-callout b-callout-warn" role="alert" style={{ marginBottom: 12 }}>
+              {privadosError}
+            </div>
+          )}
+
           {!personaSel && esAdminCoord && <AltaPersonalBamboo onCreado={id => { seleccionar(id); void refrescarAcceso(); }} />}
           {!personaSel ? (
             <ListaEquipos
@@ -354,6 +348,12 @@ export default function PersonalUnificado() {
               equipoFiltro={equipoFiltro}
               onSeleccionar={seleccionar}
             />
+          ) : !privadosListos ? (
+            // Fail-closed: no renderizamos la ficha hasta que llegue el primer
+            // snapshot de `personal_privado`. Sin este gate, un admin que abra
+            // la ficha antes del snapshot inicializa el form con cedula/direccion/
+            // etc. en '' y al guardar los convierte en `deleteField()`.
+            <LoadingSpinner text="Cargando datos privados…" />
           ) : (
             <FichaUnificada
               persona={personaSel}
@@ -366,6 +366,7 @@ export default function PersonalUnificado() {
               esAdmin={esAdmin}
               esAdminCoord={esAdminCoord}
               currentUserUid={currentUser?.uid}
+              privadosDisponibles={esAdminCoord && !privadosError}
             />
           )}
         </main>
@@ -515,6 +516,7 @@ function FichaUnificada({
   esAdmin,
   esAdminCoord,
   currentUserUid,
+  privadosDisponibles,
 }: {
   persona: Personal;
   acceso: PersonaAcceso | null;
@@ -526,6 +528,12 @@ function FichaUnificada({
   esAdmin: boolean;
   esAdminCoord: boolean;
   currentUserUid?: string;
+  /**
+   * `true` cuando esAdminCoord y el snapshot de `personal_privado` cargó sin
+   * error. Cuando es `false`, los tabs que escriben campos privados pasan a
+   * modo lectura para no borrar datos reales con un form stale/vacío.
+   */
+  privadosDisponibles: boolean;
 }) {
   const tabs: Array<{ id: TabId; label: string }> = [
     { id: 'datos', label: 'Datos personales' },
@@ -615,13 +623,22 @@ function FichaUnificada({
         id={`panel-${tab}`}
         aria-labelledby={`tab-${tab}`}
       >
-        {tab === 'datos' && <TabDatos persona={persona} esAdminCoord={esAdminCoord} />}
+        {/*
+          `puedeEditarFicha` incluye el gate de `privadosDisponibles`: si la
+          suscripción a `personal_privado` falló, los tabs que tocan campos
+          privados caen a modo lectura para no sobrescribir con '' valores
+          reales que el admin no ve en este render. Los tabs que no tocan
+          campos privados (TabNomina) conservan `esAdminCoord` directo.
+        */}
+        {tab === 'datos' && (
+          <TabDatos persona={persona} esAdminCoord={esAdminCoord && privadosDisponibles} />
+        )}
         {tab === 'trabajo' && (
           <TabTrabajo
             persona={persona}
             acceso={acceso}
             personal={personal}
-            esAdminCoord={esAdminCoord}
+            esAdminCoord={esAdminCoord && privadosDisponibles}
             onRefrescarAcceso={onRefrescarAcceso}
           />
         )}
@@ -633,11 +650,16 @@ function FichaUnificada({
             onRefrescarAcceso={onRefrescarAcceso}
             esAdmin={esAdmin}
             esAdminCoord={esAdminCoord}
+            privadosDisponibles={privadosDisponibles}
             currentUserUid={currentUserUid}
           />
         )}
-        {tab === 'documentos' && <TabDocumentos persona={persona} esAdminCoord={esAdminCoord} />}
-        {tab === 'referencias' && <TabReferencias persona={persona} esAdminCoord={esAdminCoord} />}
+        {tab === 'documentos' && (
+          <TabDocumentos persona={persona} esAdminCoord={esAdminCoord && privadosDisponibles} />
+        )}
+        {tab === 'referencias' && (
+          <TabReferencias persona={persona} esAdminCoord={esAdminCoord && privadosDisponibles} />
+        )}
       </section>
     </>
   );
@@ -685,13 +707,13 @@ function TabDatos({ persona, esAdminCoord }: { persona: Personal; esAdminCoord: 
     try {
       if (enlaceInvalido) throw new Error('Pega una ubicación válida de Google Maps.');
       const ubicacion = form.ubicacionEnlace.trim()
-        ? limpiarUndefined({
+        ? omitirUndefined({
             enlace: form.ubicacionEnlace.trim(),
             lat: coords?.lat,
             lng: coords?.lng,
           })
         : null;
-      await actualizarFicha(
+      await guardarFichaPersonal(
         doc(db, 'personal', persona.id),
         limpiarActualizacion({
           cedula: form.cedula.trim() || undefined,
@@ -884,7 +906,7 @@ function TabTrabajo({
       const rolCambio = form.rol !== persona.rol;
       // 1. Guardar en personal/{id}
       const operariaNombre = operariasDisponibles.find((o) => o.id === form.operariaId)?.nombre;
-      await actualizarFicha(
+      await guardarFichaPersonal(
         doc(db, 'personal', persona.id),
         limpiarActualizacion({
           rol: form.rol,
@@ -1053,7 +1075,7 @@ function TabNomina({ persona, esAdminCoord }: { persona: Personal; esAdminCoord:
     if (!esAdminCoord) return;
     setEstado({ guardando: true, mensaje: '' });
     try {
-      await actualizarFicha(
+      await guardarFichaPersonal(
         doc(db, 'personal', persona.id),
         limpiarActualizacion({
           sueldoBase: Number(form.sueldoBase),
@@ -1241,6 +1263,7 @@ function TabCuenta({
   onRefrescarAcceso,
   esAdmin,
   esAdminCoord,
+  privadosDisponibles,
   currentUserUid,
 }: {
   persona: Personal;
@@ -1248,6 +1271,12 @@ function TabCuenta({
   onRefrescarAcceso: () => Promise<void>;
   esAdmin: boolean;
   esAdminCoord: boolean;
+  /**
+   * Si es false, el input de `correoRecuperacion` queda en lectura y no se
+   * envía en el save: su valor en el form podría estar stale ('' en lugar
+   * del valor real) y vaciarlo convertiría el campo en `deleteField()`.
+   */
+  privadosDisponibles: boolean;
   currentUserUid?: string;
 }) {
   const [form, setForm] = useFichaForm(persona, (p) => ({
@@ -1284,15 +1313,21 @@ function TabCuenta({
     if (!esAdminCoord) return;
     setEstado({ guardando: true, mensaje: '' });
     try {
-      const data: Record<string, unknown> = limpiarActualizacion({
-        correoRecuperacion: form.correoRecuperacion.trim() || undefined,
+      // Si el snapshot privado no está disponible, el input de
+      // `correoRecuperacion` no refleja el valor real: omitirlo del payload
+      // evita que `limpiarActualizacion` lo convierta en `deleteField()`.
+      const payloadBase: Record<string, unknown> = {
         permisosPersonalizados: form.permisosPersonalizados,
         iaHabilitada: form.iaHabilitada === true,
-      });
+      };
+      if (privadosDisponibles) {
+        payloadBase.correoRecuperacion = form.correoRecuperacion.trim() || undefined;
+      }
+      const data: Record<string, unknown> = limpiarActualizacion(payloadBase);
       if (form.permisosPersonalizados) {
         data.permisosSistema = form.permisosSistema;
       }
-      await actualizarFicha(doc(db, 'personal', persona.id), data);
+      await guardarFichaPersonal(doc(db, 'personal', persona.id), data);
       if (persona.uid && persona.uid !== 'existing') {
         try {
           const sync: Record<string, unknown> = { iaHabilitada: form.iaHabilitada === true };
@@ -1436,7 +1471,7 @@ function TabCuenta({
       } finally {
         await deleteApp(secondaryApp);
       }
-      await actualizarFicha(doc(db, 'personal', persona.id), { uid: cred.user.uid });
+      await guardarFichaPersonal(doc(db, 'personal', persona.id), { uid: cred.user.uid });
       toast.success(`Acceso creado para ${persona.nombre}`);
       await onRefrescarAcceso();
       setClaveNueva('');
@@ -1613,8 +1648,14 @@ function TabCuenta({
             value={form.correoRecuperacion}
             onChange={(e) => setForm({ ...form, correoRecuperacion: e.target.value })}
             placeholder="Correo autorizado para recuperación"
-            disabled={readonly}
+            disabled={readonly || !privadosDisponibles}
           />
+          {!privadosDisponibles && (
+            <p className="b-help" style={{ color: '#b45309' }}>
+              Datos privados no disponibles en esta sesión; el correo de recuperación queda en modo
+              lectura hasta reintentar.
+            </p>
+          )}
           {acceso?.rol === 'administrador' || (acceso?.rol === 'coordinadora' && acceso?.supervisora) ? (
             <button
               type="button"
@@ -1859,7 +1900,6 @@ function TabCuenta({
 
 function TabDocumentos({ persona, esAdminCoord }: { persona: Personal; esAdminCoord: boolean }) {
   const [form, setForm] = useFichaForm(persona, (p) => ({
-    fotoUrl: p.fotoUrl ?? '',
     licenciaNumero: p.licenciaNumero ?? '',
     licenciaVencimiento: p.licenciaVencimiento ?? '',
   }));
@@ -1870,10 +1910,9 @@ function TabDocumentos({ persona, esAdminCoord }: { persona: Personal; esAdminCo
     if (!esAdminCoord) return;
     setEstado({ guardando: true, mensaje: '' });
     try {
-      await actualizarFicha(
+      await guardarFichaPersonal(
         doc(db, 'personal', persona.id),
         limpiarActualizacion({
-          fotoUrl: form.fotoUrl.trim() || undefined,
           licenciaNumero: form.licenciaNumero.trim() || undefined,
           licenciaVencimiento: form.licenciaVencimiento || undefined,
         }),
@@ -1891,31 +1930,8 @@ function TabDocumentos({ persona, esAdminCoord }: { persona: Personal; esAdminCo
 
   return (
     <form onSubmit={guardar}>
-      <h3 className="b-h3">Fotos y documentos</h3>
-      <div className="b-callout b-callout-info" style={{ marginBottom: 16 }}>
-        La <strong>carga directa</strong> de archivos a Firebase Storage queda para el siguiente
-        lote (requiere subir reglas de Storage y permisos por rol). Mientras tanto podés pegar la
-        URL pública de un archivo ya subido manualmente a Storage o a otro almacenamiento
-        autorizado. Los metadatos de licencia (número y vencimiento) sí persisten.
-      </div>
-
-      <div className="b-fields">
-        <Campo etiqueta="URL de foto del empleado" ancho="completo">
-          <input
-            className="b-input"
-            value={form.fotoUrl}
-            onChange={(e) => setForm({ ...form, fotoUrl: e.target.value })}
-            placeholder="https://…"
-            disabled={readonly}
-          />
-          <p className="b-help">
-            Si pegás una URL válida, se muestra como avatar del empleado. Si no, se usan las
-            iniciales del nombre.
-          </p>
-        </Campo>
-        <SlotDocumento titulo="Foto de cédula · frente" />
-        <SlotDocumento titulo="Foto de cédula · reverso" />
-        <SlotDocumento titulo="Licencia de conducir · si tiene" />
+      {esAdminCoord ? <PersonalDocumentosPrivados personalId={persona.id} /> : <p className="b-help">Documentos reservados a administración y coordinación autorizadas.</p>}
+      <div className="b-fields" style={{ marginTop: 20 }}>
         <Campo etiqueta="Número de licencia">
           <input
             className="b-input"
@@ -1939,19 +1955,6 @@ function TabDocumentos({ persona, esAdminCoord }: { persona: Personal; esAdminCo
 
       <FooterGuardar estado={estado} readonly={readonly} />
     </form>
-  );
-}
-
-function SlotDocumento({ titulo }: { titulo: string }) {
-  return (
-    <div className="b-field">
-      <label className="b-field-label">{titulo}</label>
-      <div className="b-doc-slot">
-        <Camera size={20} aria-hidden="true" />
-        <strong>Carga pendiente</strong>
-        <span>Disponible cuando se habilite Storage con permisos de documentos privados.</span>
-      </div>
-    </div>
   );
 }
 
@@ -2003,20 +2006,20 @@ function TabReferencias({ persona, esAdminCoord }: { persona: Personal; esAdminC
     setEstado({ guardando: true, mensaje: '' });
     try {
       const refsLimpias = refs.map((r) =>
-        limpiarUndefined({
+        omitirUndefined({
           nombre: r.nombre.trim() || undefined,
           relacion: r.relacion.trim() || undefined,
           telefono: r.telefono.trim() || undefined,
         }),
       );
       const emergenciasLimpias = emergencias.map((c) =>
-        limpiarUndefined({
+        omitirUndefined({
           nombre: c.nombre.trim() || undefined,
           parentesco: c.parentesco.trim() || undefined,
           telefono: c.telefono.trim() || undefined,
         }),
       );
-      await actualizarFicha(doc(db, 'personal', persona.id), {
+      await guardarFichaPersonal(doc(db, 'personal', persona.id), {
         referenciasPersonales: refsLimpias,
         contactosEmergencia: emergenciasLimpias,
       });

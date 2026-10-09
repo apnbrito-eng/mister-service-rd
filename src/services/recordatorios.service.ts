@@ -1,3 +1,4 @@
+import { componentesRD } from '../utils/mapaFechas';
 import {
   collection, doc, getDoc, getDocs, onSnapshot, query, runTransaction,
   setDoc, updateDoc, where, Timestamp,
@@ -28,18 +29,10 @@ export function ventanaActiva(
   tipo: TipoRecordatorio,
   ahora: Date,
 ): 'antes' | 'activa' | 'urgente' {
-  const hora = ahora.getHours();
-  const min = ahora.getMinutes();
-  if (tipo === 'ruta_manana') {
-    if (hora < 9) return 'antes';
-    // Activa: 9:00 inclusive hasta 10:00 inclusive (10:00:00)
-    if (hora === 9 || (hora === 10 && min === 0)) return 'activa';
-    return 'urgente';
-  }
-  // horarios_clientes: 11:00 - 12:00
-  if (hora < 11) return 'antes';
-  if (hora === 11 || (hora === 12 && min === 0)) return 'activa';
-  return 'urgente';
+  const { hora } = componentesRD(ahora);
+  const inicio = tipo === 'ruta_manana' ? 9 : 11;
+  if (hora < inicio) return 'antes';
+  return hora < inicio + 1 ? 'activa' : 'urgente';
 }
 
 // `avisoDentroDeVentana` vive en `../utils/avisoVentanaRuta.ts` (helper puro

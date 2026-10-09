@@ -228,6 +228,7 @@ export interface PlantillaMarketing {
  * la campaña no se re-evalúa cuando cambia la base de clientes.
  */
 export interface FiltrosCampanaMarketing {
+  carteraEquipo?: CarteraEquipo;
   zonas?: string[];
   rangoUltimoServicio?: string;
   tipo?: 'particular' | 'b2b';

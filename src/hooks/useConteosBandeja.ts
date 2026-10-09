@@ -1,6 +1,6 @@
 import {useEffect,useState} from 'react';
 import {equipoApi} from '../services/equipoApi';
-export interface ConteosBandeja {no_leidos:number;cartera:number;mias:number;hoy:number;mis_ordenes:number;pendientes:number;}
+export interface ConteosBandeja {cartera_a:number;cartera_b:number;no_leidos:number;cartera:number;mias:number;hoy:number;mis_ordenes:number;pendientes:number;}
 export function useConteosBandeja(uid?:string){
  const [estado,setEstado]=useState<{uid?:string;conteos?:ConteosBandeja;error:boolean}>({error:false});
  useEffect(()=>{

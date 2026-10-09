@@ -431,7 +431,7 @@ service cloud.firestore {
       }
       allow read: if esStaff();
 
-      allow create: if esStaffOficina() && !request.resource.data.keys().hasAny(['efectivoAceptaciones','efectivoEntregas','flujoEfectivo','salidaTecnico','visitaCancelada']) && request.resource.data.get('presupuestoEstado','') == '';
+      allow create: if esStaffOficina() && !request.resource.data.keys().hasAny(['franjaLlegada','horarioAvisoVersion','respuestaHorario','solicitudHorario','efectivoAceptaciones','efectivoEntregas','flujoEfectivo','salidaTecnico','visitaCancelada']) && request.resource.data.get('presupuestoEstado','') == '';
 
       // Update: oficina total; técnico/ayudante solo si es la orden
       // que tienen asignada.
@@ -459,7 +459,7 @@ service cloud.firestore {
       //     oficina: ahora requiere flujo sugerencia → aprobación.
       // La oficina (esStaffOficina) corto-circuita TODA la rama y no
       // tiene ninguna de estas restricciones.
-      allow update: if !request.resource.data.diff(resource.data).affectedKeys().hasAny(['efectivoAceptaciones','efectivoEntregas','flujoEfectivo','salidaTecnico','visitaCancelada']) && (!(resource.data.get('flujoEfectivo','') == 'confirmacion_tecnico' || resource.data.get('efectivoAceptaciones',{}).size() > 0 || resource.data.get('efectivoEntregas',{}).size() > 0) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagos'])) && presupuestoOrdenValido() && confirmacionChequeoValida() && (resource.data.get('crmGestion', false) != true || request.resource.data.get('facturada', false) != true || resource.data.get('facturada', false) == true || revisionCrmVigente(docId, resource.data)) && (resource.data.get('crmGestion', false) != true || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagos', 'montoPagado', 'montoReportado', 'crmGestion'])) &&
+      allow update: if !request.resource.data.diff(resource.data).affectedKeys().hasAny(['franjaLlegada','horarioAvisoVersion','respuestaHorario','solicitudHorario']) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['efectivoAceptaciones','efectivoEntregas','flujoEfectivo','salidaTecnico','visitaCancelada']) && (!(resource.data.get('flujoEfectivo','') == 'confirmacion_tecnico' || resource.data.get('efectivoAceptaciones',{}).size() > 0 || resource.data.get('efectivoEntregas',{}).size() > 0) || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagos'])) && presupuestoOrdenValido() && confirmacionChequeoValida() && (resource.data.get('crmGestion', false) != true || request.resource.data.get('facturada', false) != true || resource.data.get('facturada', false) == true || revisionCrmVigente(docId, resource.data)) && (resource.data.get('crmGestion', false) != true || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['pagos', 'montoPagado', 'montoReportado', 'crmGestion'])) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['propuestaCrmRevision', 'propuestaCrmAprobada']) &&
         (resource.data.get('propuestaCrmRevision', null) == null || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['estadoAprobacion', 'precioAprobado', 'precioFinal', 'aprobadoPor', 'fechaAprobacion'])) && (esStaffOficina() ||
         (
@@ -497,9 +497,18 @@ service cloud.firestore {
     // Clientes
     match /clientes/{docId} {
       allow read: if esStaff();
-      allow create, update: if esStaffOficina();
+      allow create: if esStaffOficina() && !request.resource.data.keys().hasAny(['carteraEquipo','carteraAsignadaEn','carteraAsignadaPor','carteraOrigen']);
+      allow update: if esStaffOficina() && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['carteraEquipo','carteraAsignadaEn','carteraAsignadaPor','carteraOrigen']);
       allow delete: if esAdminOCoord();
+      match /cartera_historial/{eventoId} {
+        allow read: if esStaffOficina();
+        allow write: if false;
+      }
     }
+
+    // Registros de citas y respuestas: solo endpoints autenticados/webhook validado.
+    match /citas_horarios_envios/{id} { allow read: if esStaffOficina(); allow write: if false; }
+    match /citas_horarios_respuestas/{id} { allow read: if esStaffOficina(); allow write: if false; }
 
     // Personal (empleados)
     // Domicilios, identificación y referencias nunca se entregan al listado de staff.
@@ -702,7 +711,8 @@ service cloud.firestore {
       allow write: if esStaff() &&
         docId != 'whatsapp_envio' &&
         docId != 'whatsapp_numeros' &&
-        docId != 'whatsapp_respuestas_rapidas';
+        docId != 'whatsapp_respuestas_rapidas' &&
+        docId != 'reparto_carteras';
     }
 
     // Configuración del selector de número de envío WhatsApp (SPRINT-WA-

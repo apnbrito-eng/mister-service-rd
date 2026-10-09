@@ -164,11 +164,12 @@ function tarjetasClientesHoy(
 
 function tarjetasEsperandoRespuesta(
   conversaciones: WhatsAppConversacion[],
+  ahora: Date,
 ): TarjetaPrioridad[] {
   const out: TarjetaPrioridad[] = [];
   for (const c of conversaciones) {
     if (c.bajaSolicitada) continue;
-    if ((c.ocultoGlobalHastaMs ?? 0) > 0) continue;
+    if ((c.ocultoGlobalHastaMs ?? 0) > ahora.getTime()) continue;
     const entrante = toDateSeguro(c.ultimoMensajeEntrante?.timestamp);
     const saliente = toDateSeguro(c.ultimoMensajeSaliente?.timestamp);
     if (!entrante) continue;
@@ -351,8 +352,13 @@ export default function PrioridadDelDia({
   const { hoy, atraso, espera } = useMemo(() => {
     const atrasoBase = tarjetasDeAtrasos(avisos, ordenesDelDia);
     const hoyBase = tarjetasClientesHoy(ordenesDelDia, ahora);
-    const esperaBase = tarjetasEsperandoRespuesta(conversaciones);
-    return dedupEntreVistas(hoyBase, atrasoBase, esperaBase);
+    const porCliente = new Map(conversaciones.filter(c => c.clienteId).map(c => [c.clienteId, c]));
+    const enlazar = (tarjetas: TarjetaPrioridad[]) => tarjetas.map(t => {
+      const conversacion = t.clienteId ? porCliente.get(t.clienteId) : undefined;
+      return conversacion ? { ...t, waId: conversacion.wa_id } : t;
+    });
+    const esperaBase = tarjetasEsperandoRespuesta(conversaciones, ahora);
+    return dedupEntreVistas(enlazar(hoyBase), enlazar(atrasoBase), esperaBase);
   }, [avisos, ordenesDelDia, conversaciones, ahora]);
 
   const grande = modo === 'tv';

@@ -6,6 +6,7 @@ import { Cliente } from '../types';
  * "todos" / arreglo vacío / "indiferente" no aplica restricción.
  */
 export interface FiltrosClientes {
+  carteraEquipo?: 'A' | 'B';
   /** Multi-select. Vacío = todas las zonas. */
   zonas: string[];
   /** Rango de tiempo desde el último servicio registrado. */
@@ -88,7 +89,8 @@ export function equiposPresentesEnBase(clientes: Cliente[]): string[] {
 
 /** Aplica todos los filtros (AND) sobre un cliente individual. */
 export function aplicaFiltros(c: Cliente, f: FiltrosClientes): boolean {
-  if (c.eliminado === true) return false;
+  if (c.eliminado === true || c.mergedaCon) return false;
+  if (f.carteraEquipo && c.carteraEquipo !== f.carteraEquipo) return false;
   // Zona
   if (f.zonas.length > 0) {
     if (!c.zona || !f.zonas.includes(c.zona)) return false;

@@ -101,6 +101,11 @@ export default function FiltrosSidebarClientes({
         </button>
       </div>
 
+      <label className="block text-sm font-medium">Cartera responsable
+        <select className="input w-full mt-1" value={filtros.carteraEquipo || ''} onChange={e => onChange({ ...filtros, carteraEquipo: e.target.value === 'A' || e.target.value === 'B' ? e.target.value : undefined })}>
+          <option value="">Todos los clientes</option><option value="A">Equipo A</option><option value="B">Equipo B</option>
+        </select>
+      </label>
       {/* Zona */}
       <div>
         <p className="text-xs font-semibold text-gray-700 mb-2">Zona</p>

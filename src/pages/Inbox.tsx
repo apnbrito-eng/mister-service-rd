@@ -24,7 +24,7 @@ import EmptyState from '../components/EmptyState';
 
 /** Bandeja paginada por API; búsqueda local sobre las páginas cargadas. */
 
-type FiltroChip = 'todas' | 'no_leidos' | 'mias' | 'cartera' | 'hoy' | 'mis_ordenes' | 'pendientes';
+type FiltroChip = 'cartera_a' | 'cartera_b' | 'todas' | 'no_leidos' | 'mias' | 'cartera' | 'hoy' | 'mis_ordenes' | 'pendientes';
 
 /**
  * Una conversación está "sin responder" si:
@@ -112,6 +112,15 @@ export default function Inbox() {
   const [errorCarga, setErrorCarga] = useState('');
   const [filtro, setFiltro] = useState<FiltroChip>('todas');
   const [busqueda, setBusqueda] = useState('');
+  const filtroElegido = useRef(false);
+  useEffect(() => {
+    if (!currentUser?.uid || !userProfile || !['secretaria', 'operaria'].includes(userProfile.rol)) return;
+    let vigente = true;
+    void equipoApi<{ equipo: 'A' | 'B' | null }>('/api/crm/bandeja?equipo=1').then(data => {
+      if (vigente && !filtroElegido.current && data.equipo) setFiltro(data.equipo === 'A' ? 'cartera_a' : 'cartera_b');
+    }).catch(() => { /* Si no hay equipo verificable, mantener Todos. */ });
+    return () => { vigente = false; };
+  }, [currentUser?.uid, userProfile]);
 
   const [limiteEnVivo, setLimiteEnVivo] = useState(25);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -120,9 +129,14 @@ export default function Inbox() {
     const llamada = ++ciclo.current;
     setLoading(true); setErrorCarga('');
     try {
-      const data = await equipoApi<{ items: Record<string, any>[]; cursor: string | null }>(`/api/crm/bandeja?filtro=${filtro}${pagina ? `&cursor=${encodeURIComponent(pagina)}` : ''}`);
+      const data = await equipoApi<{ items: Array<Record<string, unknown> & { id: string; ultimoMensajeEntrante?: Record<string, unknown>; ultimoMensajeSaliente?: Record<string, unknown> }>; cursor: string | null }>(`/api/crm/bandeja?filtro=${filtro}${pagina ? `&cursor=${encodeURIComponent(pagina)}` : ''}`);
       if (llamada !== ciclo.current) return;
-      const fecha = (t: any) => t && typeof (t._seconds ?? t.seconds) === 'number' ? new Date((t._seconds ?? t.seconds) * 1000) : t;
+      const fecha = (t: unknown) => {
+        if (!t || typeof t !== 'object') return t;
+        const valor = t as { _seconds?: unknown; seconds?: unknown };
+        const segundos = valor._seconds ?? valor.seconds;
+        return typeof segundos === 'number' ? new Date(segundos * 1000) : t;
+      };
       const items = data.items.map(d => parsearConversacion(d.id, { ...d, ultimaActividad: fecha(d.ultimaActividad), updatedAt: fecha(d.updatedAt),
         ultimoMensajeEntrante: d.ultimoMensajeEntrante ? { ...d.ultimoMensajeEntrante, timestamp: fecha(d.ultimoMensajeEntrante.timestamp) } : undefined,
         ultimoMensajeSaliente: d.ultimoMensajeSaliente ? { ...d.ultimoMensajeSaliente, timestamp: fecha(d.ultimoMensajeSaliente.timestamp) } : undefined,
@@ -136,6 +150,8 @@ export default function Inbox() {
     setConversaciones([]); setCursor(null); setLoading(true);
     if (filtro === 'todas') return;
     void cargar();
+    // Se incrementa la generación actual para invalidar también paginaciones iniciadas después del montaje.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     return () => { ciclo.current++; };
   }, [cargar, filtro]);
   useEffect(() => {
@@ -192,8 +208,9 @@ export default function Inbox() {
       </div>
 
       <div className="flex gap-2 mb-3 overflow-x-auto pb-2" aria-label="Buzones de atención">
-        {([['todas', 'Todos'], ['mias', 'Atiendo yo'], ['mis_ordenes', 'Mis órdenes del día'], ['cartera', 'Mi cartera'], ['hoy', 'Órdenes del día'], ['no_leidos', 'No leídos'], ['pendientes', 'Pendientes']] as const).map(([valor, label]) => <button key={valor} type="button" aria-pressed={filtro === valor} onClick={() => setFiltro(valor)} className={`min-h-[44px] shrink-0 rounded-full border px-4 text-sm ${filtro === valor ? 'bg-brand-600 text-white' : 'bg-white text-gray-700'}`}>{label}{<span aria-label={`${conteos?.[valor === 'todas' ? 'no_leidos' : valor] ?? 'Sin datos'} ${(valor === 'hoy' || valor === 'mis_ordenes') ? 'órdenes programadas hoy' : 'conversaciones sin leer'}`} className="ml-2 inline-flex min-w-5 justify-center rounded-full bg-black/10 px-1.5 text-xs font-semibold">{conteos?.[valor === 'todas' ? 'no_leidos' : valor] ?? '—'}</span>}</button>)}
+        {([['todas', 'Todos'], ['cartera_a', 'Cartera A'], ['cartera_b', 'Cartera B'], ['mias', 'Atiendo yo'], ['mis_ordenes', 'Mis órdenes del día'], ['cartera', 'Mi cartera'], ['hoy', 'Órdenes del día'], ['no_leidos', 'No leídos'], ['pendientes', 'Pendientes']] as const).map(([valor, label]) => <button key={valor} type="button" aria-pressed={filtro === valor} onClick={() => { filtroElegido.current = true; setFiltro(valor); }} className={`min-h-[44px] shrink-0 rounded-full border px-4 text-sm ${filtro === valor ? 'bg-brand-600 text-white' : 'bg-white text-gray-700'}`}>{label}{<span aria-label={`${conteos?.[valor === 'todas' ? 'no_leidos' : valor] ?? 'Sin datos'} ${(valor === 'hoy' || valor === 'mis_ordenes') ? 'órdenes programadas hoy' : 'conversaciones sin leer'}`} className="ml-2 inline-flex min-w-5 justify-center rounded-full bg-black/10 px-1.5 text-xs font-semibold">{conteos?.[valor === 'todas' ? 'no_leidos' : valor] ?? '—'}</span>}</button>)}
       </div>
+      {(filtro === 'cartera_a' || filtro === 'cartera_b') && <p className="mb-3 text-xs text-gray-500">Cartera del cliente, independiente del técnico y de quién atiende el chat. Cargar más recorre todos los clientes del equipo.</p>}
       <p className="mb-3 text-xs text-gray-500">{errorConteos ? "No se pudieron actualizar los contadores. Se reintentará automáticamente." : "Contadores: conversaciones sin leer. Órdenes del día: todas las activas de hoy. Mis órdenes del día: las que están bajo tu responsabilidad. Se actualizan cada 15 segundos."}</p>
       <div className="flex justify-between gap-2 text-xs text-gray-500 mb-3"><span>{conversaciones.length} chats cargados · búsqueda en esta lista</span><span>{filtro === 'todas' ? 'Actualización en tiempo real' : <button className="underline min-h-[44px]" disabled={loading} onClick={() => void cargar()}>Actualizar</button>}</span></div>
       {filtro === 'pendientes' && <p className="text-xs text-gray-500 mb-3">Atenciones marcadas como pendientes. Los chats antiguos sin seguimiento siguen disponibles en Todos y No leídos.</p>}

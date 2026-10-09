@@ -5,8 +5,8 @@ import { db } from '../../firebase/config';
 import {
   OrdenServicio, Personal, RecordatorioDiario, TipoRecordatorio, ItemAviso,
 } from '../../types';
+import { normalizarTelefono } from '../../services/clientes.service';
 import { parseOrden, formatHora } from '../../utils';
-import { whatsappUrl } from '../../utils/whatsapp';
 import { useApp } from '../../context/AppContext';
 import {
   obtenerOCrearRecordatorio, marcarCompletado, marcarItemAvisado,
@@ -25,6 +25,8 @@ import ModalAccionRecordatorio from './ModalAccionRecordatorio';
 
 interface Props {
   tipo: TipoRecordatorio;
+  /** Centro conserva la tarea pendiente cuando expira la alerta del Resumen. */
+  mantenerPendiente?: boolean;
   /** Se incrementa externamente cada 60s para forzar re-evaluación de ventana. */
   tickSeed?: number;
 }
@@ -33,7 +35,7 @@ function formatFechaLarga(d: Date): string {
   return format(d, "EEEE dd 'de' MMMM", { locale: es });
 }
 
-export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
+export default function RecordatorioBanner({ tipo, tickSeed = 0, mantenerPendiente = false }: Props) {
   // SPRINT-149: `currentUser` necesario para comparar contra `operariaId` que
   // post-SPRINT-105 persiste auth.uid (no docId).
   const { userProfile, currentUser } = useApp();
@@ -53,7 +55,14 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
   const ahora = useMemo(() => new Date(), [tickSeed]); // eslint-disable-line react-hooks/exhaustive-deps
   const esDomingo = ahora.getDay() === 0;
   const diaManana = useMemo(() => obtenerDiaSiguienteLaboral(ahora), [ahora]);
-  const rolRelevante = rol === 'operaria' || rol === 'coordinadora' || rol === 'administrador';
+  const esAtencion = rol === 'operaria' || rol === 'secretaria';
+  const miPersonal = personal.find(p => !!currentUser?.uid && p.uid === currentUser.uid);
+  const responsable = rol === 'secretaria'
+    ? personal.find(p => p.rol === 'operaria' && p.activo &&
+      (p.uid === miPersonal?.operariaId || p.id === miPersonal?.operariaId))
+    : miPersonal;
+  const responsableId = rol === 'secretaria' ? responsable?.uid : currentUser?.uid;
+  const rolRelevante = esAtencion || rol === 'coordinadora' || rol === 'administrador';
 
   // Subscribe a órdenes y personal para construir items (solo si hace falta)
   useEffect(() => {
@@ -80,15 +89,14 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
   // Calcular items de la operaria para tipo horarios_clientes
   const itemsParaMiRecordatorio = useMemo((): ItemAviso[] => {
     if (tipo !== 'horarios_clientes') return [];
-    if (rol !== 'operaria' || !userProfile) return [];
+    if (!esAtencion || !userProfile || !responsableId) return [];
     // SPRINT-149 (P-006 variante operariaId): `o.operariaId` post-SPRINT-105
-    // persiste auth.uid. Comparar contra `currentUser?.uid` con fallback
-    // a `userProfile.id` para operarias legacy pre-onboarding.
+    // persiste auth.uid; docId solo se acepta como referencia legacy de lectura.
     const ordenesManana = ordenes.filter(o =>
       !o.eliminada &&
       !['cerrado', 'cancelado'].includes(o.fase) &&
       o.fechaCita && isSameDay(o.fechaCita, diaManana) &&
-      o.operariaId === (currentUser?.uid || userProfile.id),
+      (o.operariaId === responsableId || o.operariaId === responsable?.id),
     );
     return ordenesManana.map(o => ({
       ordenId: o.id,
@@ -98,23 +106,23 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
       horaEstimada: o.fechaCita ? formatHora(o.fechaCita) : undefined,
       avisado: false,
     }));
-  }, [tipo, rol, userProfile, currentUser, ordenes, diaManana]);
+  }, [tipo, esAtencion, userProfile, responsableId, responsable?.id, ordenes, diaManana]);
 
   // Crear / sincronizar recordatorio para operaria actual
   useEffect(() => {
     if (!rolRelevante || esDomingo) return;
-    if (rol !== 'operaria' || !userProfile) {
+    if (!esAtencion || !userProfile || !responsableId) {
       setMiRecordatorio(null);
       return;
     }
     let cancelled = false;
     // SPRINT-149 (P-006 variante operariaId): persistir auth.uid (no docId)
     // en `operariaId` del recordatorio para alinear con `o.operariaId` que
-    // post-SPRINT-105 persiste auth.uid. Fallback `userProfile.id` legacy.
-    const operariaIdAuth = currentUser?.uid || userProfile.id;
+    // post-SPRINT-105 persiste auth.uid. Sin UID no se escribe.
+    const operariaIdAuth = responsableId;
     obtenerOCrearRecordatorio(
       operariaIdAuth,
-      userProfile.nombre,
+      responsable?.nombre || userProfile.nombre,
       tipo,
       itemsParaMiRecordatorio,
     ).then(rec => {
@@ -137,37 +145,34 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
       }
     }).catch(console.error);
     return () => { cancelled = true; };
-  }, [rolRelevante, esDomingo, rol, userProfile, currentUser, tipo, itemsParaMiRecordatorio]);
+  }, [rolRelevante, esDomingo, esAtencion, userProfile, responsableId, responsable?.nombre, tipo, itemsParaMiRecordatorio]);
 
   // Reflejar updates live del miRecordatorio desde la suscripción consolidada
   useEffect(() => {
-    if (rol !== 'operaria' || !userProfile) return;
+    if (!esAtencion || !userProfile || !responsableId) return;
     // SPRINT-149 (P-006 variante operariaId): `r.operariaId` post-SPRINT-105
     // persiste auth.uid (escrito desde recordatorios.service.ts cuando crea/actualiza).
     // Fallback a `userProfile.id` para operarias legacy.
-    const match = recordatorios.find(r => r.operariaId === (currentUser?.uid || userProfile.id));
+    const match = recordatorios.find(r => r.operariaId === responsableId);
     if (match) setMiRecordatorio(match);
-  }, [recordatorios, rol, userProfile, currentUser]);
+  }, [recordatorios, esAtencion, userProfile, responsableId]);
 
   if (!rolRelevante || esDomingo || dismissed) return null;
 
   const estadoVentana = ventanaActiva(tipo, ahora);
-  // Decisión Jorge (09/10/2026): el banner del Dashboard dura 15 min desde
-  // el inicio de la ventana (9:00-9:15 / 11:00-11:15). Pasado ese tiempo
-  // SIN completar, se oculta aunque siga pendiente — el pendiente real
-  // permanece en Firestore y se ve en su módulo (listado de operarias /
-  // Agenda del día). Si YA se completó, mantenemos el estado "listo"
-  // visible por un rato (lógica existente de "Marcar hecho").
+  // Resumen conserva 9–10 / 11–12 y urgencia 15 min después del cierre.
+  // Centro mantiene la tarea accesible hasta completarla.
   const dentroDeVentanaAviso = avisoDentroDeVentana(tipo, ahora);
 
   // Vista operaria ---------------------------------------------------
-  if (rol === 'operaria') {
+  if (esAtencion) {
+    if (rol === 'secretaria' && !responsableId && mantenerPendiente) return <p role="status" className="text-sm text-amber-800">Asigna a la secretaria una operaria responsable para compartir la planificación de su equipo.</p>;
     if (!miRecordatorio) return null;
     const completado = miRecordatorio.completado;
     if (estadoVentana === 'antes' && !completado) return null;
-    // Fuera de la ventana de 15 min y aún pendiente → ocultar del Dashboard.
+    // Pasados 15 min desde el vencimiento → ocultar solo del Dashboard.
     // El pendiente queda visible en su módulo (Agenda del día).
-    if (!dentroDeVentanaAviso && !completado) return null;
+    if (!mantenerPendiente && !dentroDeVentanaAviso && !completado) return null;
     if (completado) {
       return (
         <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
@@ -252,7 +257,7 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
             <p className={`text-xs mt-1 ${urgente ? 'text-red-800' : 'text-blue-800'}`}>
               {tipo === 'ruta_manana'
                 ? 'Entra al mapa y coordina cómo van a moverse tus técnicos mañana. Cada pin se puede arrastrar para reasignar.'
-                : 'Llama o escribe por WhatsApp a cada cliente informando la hora aproximada.'}
+                : 'Prepara los horarios y revisa el lote antes de enviarlo por WhatsApp empresarial.'}
             </p>
             {tipo === 'horarios_clientes' && itemsActuales.length > 0 && (
               <p className="text-[11px] text-gray-700 mt-1.5">
@@ -294,8 +299,6 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
         {tipo === 'horarios_clientes' && expandido && itemsActuales.length > 0 && (
           <div className="mt-3 space-y-1.5 bg-white rounded-lg border border-gray-200 p-2">
             {itemsActuales.map(it => {
-              const fechaTexto = format(diaManana, 'dd/MM/yyyy');
-              const mensaje = `Hola ${it.clienteNombre}, le recordamos que su cita está programada para el ${fechaTexto}${it.horaEstimada ? ` aproximadamente a las ${it.horaEstimada}` : ''}. Confirmamos? — Mister Service RD`;
               return (
                 <div key={it.ordenId} className="flex items-center gap-2 text-xs py-1">
                   <input
@@ -311,9 +314,7 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
                   </span>
                   {it.clienteTelefono && (
                     <a
-                      href={whatsappUrl(it.clienteTelefono, mensaje)}
-                      target="_blank"
-                      rel="noreferrer"
+                      href={`/admin/inbox/${`1${normalizarTelefono(it.clienteTelefono)}`}`}
                       className="text-green-600 hover:text-green-700 inline-flex items-center gap-1"
                       title="Abrir WhatsApp"
                     >
@@ -333,16 +334,12 @@ export default function RecordatorioBanner({ tipo, tickSeed = 0 }: Props) {
   const operariasActivas = personal.filter(p => p.rol === 'operaria' && p.activo);
   if (operariasActivas.length === 0) return null;
   if (estadoVentana === 'antes') return null;
-  // Mismo criterio que vista operaria: ocultar tras 15 min si aún hay
-  // pendientes. El resumen "todas listas" (línea ~337 abajo) sigue
-  // mostrándose como feedback positivo mientras `estadoVentana === 'activa'`,
-  // porque esa variante no está sujeta a los 15 min (es confirmación de
-  // completitud, no aviso urgente).
+  // En Centro el pendiente sigue visible; en Resumen expira la alerta.
   const hayPendientesAhora = operariasActivas.some((op) => {
     const rec = recordatorios.find((r) => r.operariaId === (op.uid || op.id));
     return !rec?.completado;
   });
-  if (!dentroDeVentanaAviso && hayPendientesAhora) return null;
+  if (!mantenerPendiente && !dentroDeVentanaAviso && hayPendientesAhora) return null;
 
   const porOperaria = operariasActivas.map(op => {
     // SPRINT-149 (P-006 variante operariaId): `r.operariaId` post-SPRINT-105

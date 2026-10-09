@@ -1,3 +1,4 @@
+import { esEnvioHorarioInterno } from '../_lib/envioHorarioInterno.js';
 import { prepararPausaBot } from '../_lib/botServicioStore.js';
 import { exigirRutaChat } from '../_lib/rutaChatOrden.js';
 import { accesoOrdenTecnico } from '../_lib/accesoOrdenTecnico.js';
@@ -181,6 +182,7 @@ interface PlantillaInput {
    * Debe ser string de length 1-256.
    */
   buttonUrlVariable?: string;
+  quickReplyPayloads?: string[];
 }
 
 interface MediaInput {
@@ -224,6 +226,7 @@ interface PayloadMeta {
           index: '0';
           parameters: Array<{ type: 'text'; text: string }>;
         }
+      | { type: 'button'; sub_type: 'quick_reply'; index: string; parameters: Array<{ type: 'payload'; payload: string }> }
     >;
   };
   image?: { link: string; caption?: string };
@@ -311,10 +314,9 @@ function construirPayloadMeta(input: {
         ? input.plantilla.headerImageUrl
         : DEFAULT_HEADER_IMAGE_URL;
     const componentes: NonNullable<PayloadMeta['template']>['components'] = [];
-    componentes.push({
-      type: 'header',
-      parameters: [{ type: 'image', image: { link: headerUrl } }],
-    });
+    if (input.plantilla.nombre !== 'confirmar_visita_manana_v1') {
+      componentes.push({ type: 'header', parameters: [{ type: 'image', image: { link: headerUrl } }] });
+    }
     if (input.plantilla.variables.length > 0) {
       componentes.push({
         type: 'body',
@@ -337,6 +339,9 @@ function construirPayloadMeta(input: {
         parameters: [{ type: 'text', text: btnVar }],
       });
     }
+    input.plantilla.quickReplyPayloads?.forEach((payload, index) => {
+      componentes.push({ type: 'button', sub_type: 'quick_reply', index: String(index), parameters: [{ type: 'payload', payload }] });
+    });
     const tpl: PayloadMeta['template'] = {
       name: input.plantilla.nombre,
       language: { code: input.plantilla.idioma },
@@ -754,12 +759,21 @@ export default async function handler(
         p.buttonUrlVariable.length <= 256
           ? p.buttonUrlVariable
           : undefined;
+      if (p.nombre === 'confirmar_visita_manana_v1' && !esEnvioHorarioInterno(req)) { res.status(403).json({error:'Usa el lote de horarios para enviar esta plantilla.'}); return; }
+      let quickReplyPayloads: string[] | undefined;
+      if (p.quickReplyPayloads !== undefined) {
+        if (p.nombre !== 'confirmar_visita_manana_v1' || !Array.isArray(p.quickReplyPayloads) || p.quickReplyPayloads.length !== 3 || p.quickReplyPayloads.some(v => typeof v !== 'string' || v.length < 1 || v.length > 256)) {
+          res.status(400).json({ error: 'botones-invalidos' }); return;
+        }
+        quickReplyPayloads = p.quickReplyPayloads as string[];
+      }
       plantilla = {
         nombre: p.nombre,
         idioma: p.idioma,
         variables,
         headerImageUrl,
         buttonUrlVariable,
+        quickReplyPayloads,
       };
     }
   }

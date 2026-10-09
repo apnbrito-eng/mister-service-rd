@@ -45,6 +45,7 @@ interface Props {
  */
 function snapshotFiltros(f: FiltrosClientes): FiltrosCampanaMarketing {
   const out: FiltrosCampanaMarketing = {};
+  if (f.carteraEquipo) out.carteraEquipo = f.carteraEquipo;
   if (f.zonas.length) out.zonas = [...f.zonas];
   if (f.ultimoServicio !== 'todos') out.rangoUltimoServicio = f.ultimoServicio;
   if (f.tipo !== 'todos') out.tipo = f.tipo;

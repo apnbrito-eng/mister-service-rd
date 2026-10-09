@@ -1,3 +1,4 @@
+import { normalizarTelefono } from './clientes.service';
 import {
   collection,
   doc,
@@ -202,6 +203,9 @@ export async function crearCampana(args: CrearCampanaArgs): Promise<string> {
     overrideCooldownMotivo,
   } = args;
 
+  const telefonos = clientes.map(c => normalizarTelefono(c.telefono));
+  if (telefonos.some(t => !t)) throw new Error('La audiencia contiene teléfonos inválidos. Corrige la selección antes de crear la campaña.');
+  if (new Set(telefonos).size !== telefonos.length) throw new Error('La audiencia contiene clientes con el mismo teléfono. Revisa los duplicados antes de crear la campaña.');
   const ahora = Timestamp.now();
   const clientesContactados: ClienteEnCampana[] = clientes.map((c) => ({
     clienteId: c.id,

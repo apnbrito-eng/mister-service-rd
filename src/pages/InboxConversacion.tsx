@@ -609,7 +609,7 @@ export default function InboxConversacion() {
           <div className="p-3 border-b border-gray-200 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => navigate('/admin/inbox')}
+              onClick={() => navigate(new URLSearchParams(window.location.search).get('volverA') === 'operaciones' ? '/admin/operaciones?restaurar=1' : '/admin/inbox')}
               className="p-1 rounded hover:bg-gray-100 text-gray-500"
               title="Volver a inbox"
             >
@@ -718,7 +718,7 @@ export default function InboxConversacion() {
             encarga del layout. En móvil ambos paneles persisten superpuestos durante la transición; en web conservan sus columnas. */}
         <motion.main {...(!pantallaAmplia&&vistaCompacta==='gestion'?{inert:''}:{})} aria-hidden={!pantallaAmplia&&vistaCompacta==='gestion'} style={{pointerEvents:pantallaAmplia||vistaCompacta!=='gestion'?'auto':'none'}} initial={false} animate={{opacity:pantallaAmplia||vistaCompacta!=='gestion'?1:0,x:reducido||pantallaAmplia||vistaCompacta!=='gestion'?0:-DESPLAZAMIENTO_PANEL}} transition={obtenerTransicionMovimiento(reducido)} className={`${showCreateModal ? 'hidden md:flex' : 'flex'} flex-1 flex-col min-w-0 min-h-0 bg-gray-50`}>
           <header className="shrink-0 bg-white border-b border-gray-200 flex items-center gap-1 px-2 py-1">
-            <button type="button" onClick={() => navigate('/admin/inbox')} className="min-h-11 min-w-11 flex items-center justify-center text-gray-600" aria-label="Volver a conversaciones"><ArrowLeft size={22} /></button>
+            <button type="button" onClick={() => navigate(new URLSearchParams(window.location.search).get('volverA') === 'operaciones' ? '/admin/operaciones?restaurar=1' : '/admin/inbox')} className="min-h-11 min-w-11 flex items-center justify-center text-gray-600" aria-label="Volver a conversaciones"><ArrowLeft size={22} /></button>
             <button type="button" onClick={() => setVistaCompacta('gestion')} className="flex items-center gap-2 min-h-11 min-w-0 flex-1 text-left" aria-label="Ver cliente, expediente y órdenes">
               <span className="rounded-full bg-slate-100 p-2 shrink-0"><UserRound size={20} /></span>
               <span className="min-w-0"><span className="block font-semibold text-gray-900 truncate">{(clienteFicha && clienteFicha.waId===waId?clienteFicha.cliente.nombre:'') || (waId && nombresClientes[waId]) || (conversacionActual ? formatTelRD(conversacionActual.wa_id) : waId)}</span><span className="block text-xs text-gray-500">{waId && (nombresClientes[waId] || clienteFicha?.waId===waId) && <span className="block">{formatTelRD(waId)}</span>}Cliente y órdenes · {ventanaAbierta ? 'Disponible para responder' : 'Requiere plantilla'}</span></span>

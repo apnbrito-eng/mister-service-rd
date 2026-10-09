@@ -1,3 +1,4 @@
+import { completarCarteraAlta } from '../services/carteraClientes.service';
 import { finalizarConfirmacionCita } from '../utils/finalizarConfirmacionCita';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -779,6 +780,7 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
         }
         const existente = await buscarClientePorTelefono(form.clienteTelefono);
         if (existente) {
+          if (!existente.data.carteraEquipo) await completarCarteraAlta(existente.id);
           clienteId = existente.id;
           clienteTelefonoFinal = existente.data.telefono || form.clienteTelefono;
           toast.success(`Cliente ya existía: ${existente.data.nombre}. Usando registro existente.`);
@@ -795,7 +797,8 @@ export function useOrdenCreateForm(opts: UseOrdenCreateFormOptions = {}): UseOrd
           if (form.clienteReferencia) clienteData.referenciaDireccion = form.clienteReferencia;
           if (form.clienteLat !== undefined) clienteData.lat = form.clienteLat;
           if (form.clienteLng !== undefined) clienteData.lng = form.clienteLng;
-          await setDoc(doc(db, 'clientes', telNorm), clienteData);
+          await setDoc(doc(db, 'clientes', telNorm), clienteData, { merge: true });
+          await completarCarteraAlta(telNorm);
           clienteId = telNorm;
           clienteCreadoFlag = true;
           // Reflejar en cache local para UI

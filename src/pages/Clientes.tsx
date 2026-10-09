@@ -3,12 +3,13 @@ import { cargarGoogleMaps } from '../utils/cargarGoogleMaps';
 import { motion } from 'motion/react';
 import { useMovimientoReducido } from '../hooks/useMovimientoReducido';
 import { obtenerTransicionMovimiento, DESPLAZAMIENTO_PANEL } from '../utils/motion';
+import CarterasClientes from '../components/clientes/CarterasClientes';
 import EditarUbicacionCliente from '../components/clientes/EditarUbicacionCliente';
 import { numeroWhatsAppCliente, resolverChatCliente } from '../utils/resolverChatCliente';
 import { useAtencion } from '../context/AtencionContext';
 import { useState, useEffect, useMemo, useRef, lazy, Suspense, useDeferredValue } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { collection, onSnapshot, updateDoc, doc, Timestamp, query, orderBy, getDocs, where } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, Timestamp, query, getDocs, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { Cliente, OrdenServicio, ZONAS_RD } from '../types';
 import { formatFechaCorta, formatMoneda, formatTelefono, parseCliente } from '../utils';
@@ -86,7 +87,7 @@ export default function Clientes() {
   const [geocoding, setGeocoding] = useState(false);
 
   // Tab "Lista" (default) | "Mapa" | "Reactivación"
-  const [tab, setTab] = useState<'lista' | 'mapa' | 'reactivacion'>('lista');
+  const [tab, setTab] = useState<'lista' | 'mapa' | 'reactivacion' | 'carteras'>('lista');
   // Filtros aplicados al tab Mapa
   const [filtros, setFiltros] = useState<FiltrosClientes>(FILTROS_DEFAULT);
   // Drawer mobile de filtros (lg breakpoint)
@@ -139,11 +140,12 @@ export default function Clientes() {
 
   useEffect(() => {
     const unsub = onSnapshot(
-      query(collection(db, 'clientes'), orderBy('createdAt', 'desc')),
+      collection(db, 'clientes'),
       (snap) => {
         // parseCliente normaliza legacyMetricas / tipo / origen para uso
         // consistente en filtros del mapa.
-        setClientes(snap.docs.map(d => parseCliente(d.id, d.data() as Record<string, unknown>)));
+        // No orderBy servidor: excluye clientes importados sin createdAt.
+        setClientes(snap.docs.map(d => parseCliente(d.id, d.data() as Record<string, unknown>)).sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0)));
         setLoading(false);
       }
     );
@@ -457,6 +459,7 @@ export default function Clientes() {
         <div className="flex items-center justify-between gap-2">
           <nav aria-label="Vistas de clientes" className="clients-tabs">
             <button type="button" aria-pressed={tab === 'lista'} onClick={() => setTab('lista')}><List size={16} /> Lista</button>
+            <button type="button" aria-pressed={tab === 'carteras'} onClick={() => setTab('carteras')}><User size={16} /> Carteras A/B</button>
             {puedeVerMapa && <button type="button" aria-pressed={tab === 'mapa'} onClick={() => setTab('mapa')}><MapIcon size={16} /> Mapa</button>}
             {puedeVerReactivacion && <button type="button" aria-pressed={tab === 'reactivacion'} onClick={() => setTab('reactivacion')}><Sparkles size={16} /> Reactivación</button>}
           </nav>
@@ -464,6 +467,7 @@ export default function Clientes() {
         </div>
       </header>
       <Suspense fallback={<div role="status" className="p-4 text-gray-600">Cargando vista de clientes…</div>}>
+      {tab === 'carteras' && <CarterasClientes clientes={clientes} puedeTrasladar={puedeModificar && puedeInbox} abrir={cliente => { setSelectedCliente(cliente); setDetalleVisible(true); setTab('lista'); seleccionar({ clienteId: cliente.id, telefono: cliente.telefono, nombre: cliente.nombre }); }} />}
       {tab === 'mapa' && puedeVerMapa && (
         <div className="grid grid-cols-1 lg:flex gap-6 lg:flex-row">
           <FiltrosSidebarClientes
