@@ -1,3 +1,4 @@
+import { useConteosSidebar } from '../hooks/useConteosSidebar';
 import { badgesParaRuta, type EstadoBadgeSidebar } from '../navigation/badgesSidebar';
 import { useMovimientoReducido } from '../hooks/useMovimientoReducido';
 import AvisosMoviles from '../mobile/AvisosMoviles';
@@ -235,7 +236,8 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
     navigate('/login');
   };
 
-  const counts={standbyCount, ordenesStandbyCount, citasCount, solicitudesCount, facturacionPendienteCount, sugerenciasChequeoCount, reprogramacionesCount, whatsappInboxCount, pagosPendientesCount};
+  const totalesSidebar=useConteosSidebar(currentUser?.uid,userProfile);
+  const counts={...totalesSidebar.counts,standbyCount, ordenesStandbyCount, citasCount, solicitudesCount, facturacionPendienteCount, sugerenciasChequeoCount, reprogramacionesCount, whatsappInboxCount, pagosPendientesCount};
   const estructura = obtenerAreas(userProfile,counts);
 
   // Clases compartidas del NavLink
@@ -248,7 +250,7 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
 
   // Render de un item (usado tanto colapsado como expandido dentro de secciones)
   const renderItem = (item: SidebarItem, opts?: { tabDisabled?: boolean; indent?: boolean }) => {
-    const badges=badgesParaRuta(item.to,counts,estadosBadges);
+    const badges=badgesParaRuta(item.to,counts,{...estadosBadges,...totalesSidebar.estados}).filter(badge=>!['clientes','empresasAliadas','ordenes','agendaDia','operacionesDia'].includes(badge.clave)||(['administrador','coordinadora'].includes(rolPerfil||'')&&(badge.clave==='clientes'?puede(userProfile,'clientesVer'):true)));
     const descripcion=badges.map(b=>b.descripcion).join(', ');
     return (
     <NavLink

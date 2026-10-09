@@ -1,5 +1,11 @@
 export type EstadoBadgeSidebar='cargando'|'disponible'|'error';
 const BADGES:Record<string,{clave:string;unidad:string}[]>={
+ '/admin/clientes':[{clave:'clientes',unidad:'clientes activos'}],
+ '/admin/clientes-responsables':[{clave:'clientes',unidad:'clientes activos'}],
+ '/admin/empresas-aliadas':[{clave:'empresasAliadas',unidad:'empresas aliadas activas'}],
+ '/admin/ordenes':[{clave:'ordenes',unidad:'órdenes no eliminadas'}],
+ '/admin/agenda-dia':[{clave:'agendaDia',unidad:'órdenes agendadas hoy'}],
+ '/admin/operaciones':[{clave:'operacionesDia',unidad:'órdenes abiertas del día'}],
  '/admin/inbox':[{clave:'whatsappInboxCount',unidad:'conversaciones sin leer'}],
  '/admin/citas':[{clave:'citasCount',unidad:'citas por confirmar'}],
  '/admin/solicitudes':[{clave:'solicitudesCount',unidad:'solicitudes pendientes'}],

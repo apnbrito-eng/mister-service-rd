@@ -15,7 +15,7 @@ export async function iniciarRuntimeMovil() {
     const method = (init?.method || 'GET').toUpperCase();
     const headers: Record<string, string> = {};
     new Headers(init?.headers).forEach((value, key) => { headers[key] = value; });
-    const requiereAppCheck = new Set(['/api/movil/estado', '/api/movil/chat']).has(input.split('?')[0]);
+    const requiereAppCheck = new Set(['/api/movil/estado', '/api/movil/chat', '/api/sidebar/conteos']).has(input.split('?')[0]);
     if (requiereAppCheck) {
       const { token } = await FirebaseAppCheck.getToken({ forceRefresh: false });
       if (!token) throw new Error('No se pudo verificar la app móvil.');

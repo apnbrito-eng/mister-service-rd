@@ -13,5 +13,5 @@ test('standby conserva unidades independientes sin suma ficticia',()=>{
 test('pagos e inbox anuncian unidad real y módulos sin fuente no inventan badge',()=>{
  assert.equal(badgesParaRuta('/admin/pagos-pendientes',{pagosPendientesCount:2},{pagosPendientesCount:'disponible'})[0].descripcion,'2 órdenes con pagos sin verificar');
  assert.equal(badgesParaRuta('/admin/inbox',{whatsappInboxCount:2},{whatsappInboxCount:'disponible'})[0].descripcion,'2 conversaciones sin leer');
- assert.deepEqual(badgesParaRuta('/admin/clientes',{},{}),[]);
+ assert.deepEqual(badgesParaRuta('/admin/sin-fuente',{},{}),[]);
 });
