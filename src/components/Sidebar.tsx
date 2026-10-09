@@ -1,3 +1,4 @@
+import { badgesParaRuta, type EstadoBadgeSidebar } from '../navigation/badgesSidebar';
 import { useMovimientoReducido } from '../hooks/useMovimientoReducido';
 import AvisosMoviles from '../mobile/AvisosMoviles';
 import { desactivarNotificacionesMoviles } from '../mobile/notificaciones';
@@ -14,7 +15,7 @@ import { motion } from 'motion/react';
 import { obtenerTransicionMovimiento, ESCALA_PRESION, DESPLAZAMIENTO_PANEL } from '../utils/motion';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { suscribirContadorSinLeer } from '../services/whatsappInbox.service';
+import { suscribirConversaciones } from '../services/whatsappInbox.service';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -86,33 +87,27 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
   // rol — el permiso ya es defaults admin/coord=true, resto=false.
   const [pagosPendientesCount, setPagosPendientesCount] = useState(0);
 
+  const ordenesVisibles=puede(userProfile,'ordenesVer');
+  const pagosVisibles=puede(userProfile,'pagosVerificar');
+  const rolPerfil=userProfile?.rol;
+  const [estadosBadges,setEstadosBadges]=useState<Record<string,EstadoBadgeSidebar>>({});
+  const estadoBadge=useCallback((claves:string[],estado:EstadoBadgeSidebar)=>setEstadosBadges(prev=>({...prev,...Object.fromEntries(claves.map(clave=>[clave,estado]))})),[]);
   useEffect(() => {
-    const q1 = query(collection(db, 'standby_piezas'), where('estado', '!=', 'llego'));
-    const unsub1 = onSnapshot(q1, (snap) => setStandbyCount(snap.size));
-
-    const q1b = query(collection(db, 'ordenes_servicio'), where('enStandby', '==', true));
-    const unsub1b = onSnapshot(q1b, (snap) => {
-      // Filtrar eliminadas en cliente para evitar índice compuesto
-      const count = snap.docs.filter(d => !d.data().eliminada).length;
-      setOrdenesStandbyCount(count);
-    });
-
-    const unsub2 = onSnapshot(collection(db, 'citas_por_confirmar'), (snap) => setCitasCount(snap.size));
-
-    const q3 = query(collection(db, 'solicitudes_servicio'), where('estado', '==', 'pendiente'));
-    const unsub3 = onSnapshot(q3, (snap) => setSolicitudesCount(snap.size));
-
-    const q4 = query(collection(db, 'ordenes_servicio'), where('enviadaAFacturacion', '==', true));
-    const unsub4 = onSnapshot(q4, (snap) => {
-      const count = snap.docs.filter(d => {
-        const data = d.data();
-        return !data.facturada && !data.eliminada;
-      }).length;
-      setFacturacionPendienteCount(count);
-    });
-
-    return () => { unsub1(); unsub1b(); unsub2(); unsub3(); unsub4(); };
-  }, []);
+    const unsubs:Array<()=>void>=[];
+    const escuchar=(clave:string,q:import('firebase/firestore').Query,guardar:(snap:import('firebase/firestore').QuerySnapshot)=>void)=>{
+      estadoBadge([clave],'cargando');
+      unsubs.push(onSnapshot(q,snap=>{guardar(snap);estadoBadge([clave],'disponible');},()=>estadoBadge([clave],'error')));
+    };
+    // Mismos gates que los destinos visibles; no descargar contadores de módulos ocultos.
+    if(ordenesVisibles){
+      escuchar('standbyCount',query(collection(db,'standby_piezas'),where('estado','!=','llego')),snap=>setStandbyCount(snap.size));
+      escuchar('ordenesStandbyCount',query(collection(db,'ordenes_servicio'),where('enStandby','==',true)),snap=>setOrdenesStandbyCount(snap.docs.filter(d=>!d.data().eliminada).length));
+      escuchar('citasCount',query(collection(db,'citas_por_confirmar')),snap=>setCitasCount(snap.size));
+    }
+    if(rolPerfil==='administrador')escuchar('solicitudesCount',query(collection(db,'solicitudes_servicio'),where('estado','==','pendiente')),snap=>setSolicitudesCount(snap.size));
+    if(['administrador','coordinadora'].includes(rolPerfil||''))escuchar('facturacionPendienteCount',query(collection(db,'ordenes_servicio'),where('enviadaAFacturacion','==',true)),snap=>setFacturacionPendienteCount(snap.docs.filter(d=>!d.data().facturada && !d.data().eliminada).length));
+    return()=>unsubs.forEach(unsub=>unsub());
+  },[ordenesVisibles,rolPerfil,estadoBadge]);
 
   // ─────────────────────────────────────────────────────────────────────
   // SPRINT-FIX-SIDEBAR-LISTENERS (2026-09-09) — auditoría hallazgo P-1.
@@ -143,9 +138,9 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
   // rechazada por rules (cazador P-012 no aplica).
   // ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const rol = userProfile?.rol;
+    const rol = rolPerfil;
     const esAdminOCoord = rol === 'administrador' || rol === 'coordinadora';
-    const puedeVerPagos = puede(userProfile, 'pagosVerificar');
+    const puedeVerPagos = pagosVisibles;
 
     if (!esAdminOCoord && !puedeVerPagos) {
       setSugerenciasChequeoCount(0);
@@ -154,6 +149,8 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
       return;
     }
 
+    const claves=[...(esAdminOCoord?['sugerenciasChequeoCount','reprogramacionesCount']:[]),...(puedeVerPagos?['pagosPendientesCount']:[])];
+    estadoBadge(claves,'cargando');
     const unsub = onSnapshot(collection(db, 'ordenes_servicio'), (snap) => {
       let sugerencias = 0;
       let reprogramaciones = 0;
@@ -199,10 +196,11 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
       setSugerenciasChequeoCount(esAdminOCoord ? sugerencias : 0);
       setReprogramacionesCount(esAdminOCoord ? reprogramaciones : 0);
       setPagosPendientesCount(puedeVerPagos ? pagosPendientes : 0);
-    });
+      estadoBadge(claves,'disponible');
+    },()=>estadoBadge(claves,'error'));
 
     return () => unsub();
-  }, [userProfile]);
+  }, [rolPerfil,pagosVisibles,estadoBadge]);
 
   // SPRINT-INBOX-2 (2026-05-20): badge de mensajes WhatsApp sin leer.
   // Gateamos por rol staff oficina (D6=C); técnico/ayudante no llegan
@@ -211,7 +209,7 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
   // a esStaffOficina(); el gate cliente evita listener inútil para
   // roles que no van a ver el ítem.
   useEffect(() => {
-    const rol = userProfile?.rol;
+    const rol = rolPerfil;
     if (
       rol !== 'administrador' &&
       rol !== 'coordinadora' &&
@@ -221,9 +219,10 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
       setWhatsappInboxCount(0);
       return;
     }
-    const unsub = suscribirContadorSinLeer(setWhatsappInboxCount);
+    estadoBadge(['whatsappInboxCount'],'cargando');
+    const unsub = suscribirConversaciones(conversaciones=>{setWhatsappInboxCount(conversaciones.filter(c=>c.noLeidos>0).length);estadoBadge(['whatsappInboxCount'],'disponible');},()=>estadoBadge(['whatsappInboxCount'],'error'));
     return () => unsub();
-  }, [userProfile?.rol]);
+  }, [rolPerfil,estadoBadge]);
 
   const handleLogout = async () => {
     try { await desactivarNotificacionesMoviles(); } catch { /* El cierre de sesión continúa incluso sin conexión. */ }
@@ -231,7 +230,8 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
     navigate('/login');
   };
 
-  const estructura = obtenerAreas(userProfile, {standbyCount, ordenesStandbyCount, citasCount, solicitudesCount, facturacionPendienteCount, sugerenciasChequeoCount, reprogramacionesCount, whatsappInboxCount, pagosPendientesCount});
+  const counts={standbyCount, ordenesStandbyCount, citasCount, solicitudesCount, facturacionPendienteCount, sugerenciasChequeoCount, reprogramacionesCount, whatsappInboxCount, pagosPendientesCount};
+  const estructura = obtenerAreas(userProfile,counts);
 
   // Clases compartidas del NavLink
   const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -242,11 +242,14 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
     }`;
 
   // Render de un item (usado tanto colapsado como expandido dentro de secciones)
-  const renderItem = (item: SidebarItem, opts?: { tabDisabled?: boolean; indent?: boolean }) => (
+  const renderItem = (item: SidebarItem, opts?: { tabDisabled?: boolean; indent?: boolean }) => {
+    const badges=badgesParaRuta(item.to,counts,estadosBadges);
+    const descripcion=badges.map(b=>b.descripcion).join(', ');
+    return (
     <NavLink
       key={item.to}
       to={item.to}
-      aria-label={item.badge !== undefined && item.badge > 0 ? `${item.label}, ${item.badge} avisos` : item.label}
+      aria-label={descripcion?`${item.label}, ${descripcion}`:item.label}
       title={collapsed ? item.label : undefined}
       onClick={onNavigate}
       tabIndex={opts?.tabDisabled ? -1 : undefined}
@@ -258,18 +261,10 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
       {!collapsed && (
         <>
           <span className="truncate">{item.label}</span>
-          {item.badge !== undefined && item.badge > 0 && (
-            <span aria-label={`${item.badge} avisos en ${item.label}`} className="ml-auto bg-primary/10 text-primary text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
-              {item.badge}
-            </span>
-          )}
+          {badges.length>0 && <span className="ml-auto inline-flex gap-1">{badges.map(b=><span key={b.clave} aria-label={b.descripcion} title={b.descripcion} className="bg-primary/10 text-primary text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">{badges.length>1?`${b.clave==='standbyCount'?'P':'O'}: `:''}{b.texto}</span>)}</span>}
         </>
       )}
-      {collapsed && item.badge !== undefined && item.badge > 0 && (
-        <span aria-label={`${item.badge} avisos en ${item.label}`} className="absolute top-1 right-1 bg-primary/10 text-primary text-xs rounded-full w-4 h-4 flex items-center justify-center">
-          {item.badge > 9 ? '9+' : item.badge}
-        </span>
-      )}
+      {collapsed && badges.length>0 && <span aria-label={descripcion} title={descripcion} className="absolute top-0 right-0 inline-flex gap-0.5 bg-white text-primary text-[9px] rounded px-0.5">{badges.map(b=><span key={b.clave}>{badges.length>1?`${b.clave==='standbyCount'?'P':'O'}:`:''}{b.texto}</span>)}</span>}
       {/* Tooltip for collapsed */}
       {collapsed && (
         <div className="absolute left-full ml-2 bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
@@ -278,6 +273,7 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
       )}
     </NavLink>
   );
+  };
 
   return (
     <aside
@@ -320,7 +316,7 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
           if (!items.length) return null;
           // Todos los destinos visibles inicialmente; cambiar de ruta abre su sección.
           const abierta = !!busqueda || expansion[node.section.id] !== false;
-          const badge = items.reduce((sum, item) => sum + (item.badge ?? 0), 0);
+          // No sumar piezas, órdenes y conversaciones como si fueran una misma unidad.
           if (collapsed) return <div key={node.section.id}>{items.map(item => renderItem(item))}</div>;
           const panelId = `${navId}-${node.section.id}`;
           return <section key={node.section.id}>
@@ -330,7 +326,6 @@ export default function Sidebar({ collapsed, onToggle, onNavigate }: SidebarProp
               onClick={() => alternarSeccion(node.section.id, abierta)}>
               <node.section.icon size={18} className="shrink-0" />
               <span className="flex-1 truncate">{node.section.label}</span>
-              {badge > 0 && <span aria-label={`${badge} avisos en ${node.section.label}`} className="bg-primary/10 text-primary text-xs rounded-full px-1.5">{badge}</span>}
               <motion.span animate={{ rotate: abierta ? 0 : -90 }} transition={obtenerTransicionMovimiento(reducido)} style={{ transition: 'none' }}><ChevronDown size={16}/></motion.span>
             </motion.button>
             <PanelSeccion id={panelId} abierto={abierta} reducido={reducido}>{items.map(item => renderItem(item, { indent: true }))}</PanelSeccion>

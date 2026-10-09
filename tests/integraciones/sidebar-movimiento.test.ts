@@ -7,7 +7,7 @@ vi.mock('../../src/context/AppContext',()=>({useApp:()=>({userProfile:{...datos.
 vi.mock('../../src/firebase/config',()=>({db:{},auth:{}}));
 vi.mock('firebase/auth',()=>({signOut:vi.fn()}));
 vi.mock('firebase/firestore',()=>({collection:vi.fn(),query:vi.fn(),where:vi.fn(),onSnapshot:()=>()=>{}}));
-vi.mock('../../src/services/whatsappInbox.service',()=>({suscribirContadorSinLeer:()=>()=>{}}));
+vi.mock('../../src/services/whatsappInbox.service',()=>({suscribirConversaciones:()=>()=>{}}));
 vi.mock('../../src/mobile/AvisosMoviles',()=>({default:()=>null}));
 vi.mock('../../src/mobile/notificaciones',()=>({desactivarNotificacionesMoviles:vi.fn()}));
 vi.mock('../../src/components/Logo',()=>({default:()=>null}));
