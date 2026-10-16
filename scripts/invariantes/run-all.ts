@@ -6,9 +6,17 @@
  *   npm run check:regression -- --verbose
  *   npm run check:regression -- --ci      (output JSON, no colores)
  *
+ * Contextos (excluyentes; ver `politica-publicacion.ts`):
+ *   (sin flag)        estricto de siempre.
+ *   --local-commit    pre-commit. Prohibido con CI/VERCEL o --ci.
+ *   --verification    CI de GitHub y pre-push. Mismatch demostrado de
+ *                     P-005/P-013 → WARN con evidencia; lo demás estricto.
+ *   --publication     build de Vercel. P-005/P-013 deben estar sincronizados.
+ *
  * Exit codes:
  *   0 — todos los cazadores pasaron (o sólo warns).
  *   1 — al menos un cazador falló.
+ *   2 — combinación de flags inválida o error inesperado.
  *
  * NOTA — P-008 NO está acá por diseño:
  *   `scripts/invariantes/check-notis-legacy-data-shape.ts` escanea DATOS LIVE
@@ -22,8 +30,14 @@ import { check as checkUserprofileId } from './check-userprofile-id-misuse.js';
 import { check as checkRulesImmutability } from './check-rules-immutability.js';
 import { check as checkCrossCollectionTx } from './check-cross-collection-tx.js';
 import { check as checkAltaEmpleadoDobleDoc } from './check-alta-empleado-doble-doc.js';
-import { check as checkRulesPendientesDeploy } from './check-rules-pendientes-deploy.js';
-import { check as checkStorageRulesPendientesDeploy } from './check-storage-rules-pendientes-deploy.js';
+import path from 'node:path';
+import {
+  SPEC_FIRESTORE,
+  SPEC_STORAGE,
+  inspeccionarRulesDeploy,
+  resultadoRulesDeploy,
+} from './estado-rules-deploy.js';
+import { resolverModo, aplicarPolitica, type EstadoInspeccionado } from './politica-publicacion.js';
 import { check as checkTecnicoidPersonalIdMisuse } from './check-tecnicoid-personal-id-misuse.js';
 import { check as checkCrearnotificacionUseridShape } from './check-crearnotificacion-userid-shape.js';
 import { check as checkParserCamposFaltantes } from './check-parser-campos-faltantes.js';
@@ -52,13 +66,30 @@ const c = (color: keyof typeof COLOR, s: string) =>
   CI ? s : `${COLOR[color]}${s}${COLOR.reset}`;
 
 async function main() {
+  const resolucion = resolverModo(argv, process.env);
+  if (!resolucion.ok) {
+    console.error(`[run-all] ${resolucion.error}`);
+    process.exit(2);
+  }
+  const modo = resolucion.modo;
+
+  // P-005 y P-013: una sola lectura de rules + lock por corrida. El mismo
+  // estado alimenta el resultado y la política (sin segunda lectura).
+  const root = path.resolve(process.cwd());
+  const estados: EstadoInspeccionado[] = [];
+  const checkRulesDeploy = (spec: typeof SPEC_FIRESTORE) => async () => {
+    const estado = await inspeccionarRulesDeploy(root, spec);
+    estados.push({ spec, estado });
+    return resultadoRulesDeploy(estado, spec);
+  };
+
   const checks = [
     checkUserprofileId,
     checkRulesImmutability,
     checkCrossCollectionTx,
     checkAltaEmpleadoDobleDoc,
-    checkRulesPendientesDeploy,
-    checkStorageRulesPendientesDeploy,
+    checkRulesDeploy(SPEC_FIRESTORE),
+    checkRulesDeploy(SPEC_STORAGE),
     checkTecnicoidPersonalIdMisuse,
     checkCrearnotificacionUseridShape,
     checkParserCamposFaltantes,
@@ -84,15 +115,19 @@ async function main() {
   ];
 
   const t0 = Date.now();
-  const results = await Promise.all(checks.map((fn) => fn()));
+  const results = aplicarPolitica(
+    modo,
+    await Promise.all(checks.map((fn) => fn())),
+    estados,
+  );
   const elapsed = Date.now() - t0;
 
   if (CI) {
-    console.log(JSON.stringify({ results, elapsedMs: elapsed }, null, 2));
+    console.log(JSON.stringify({ modo, results, elapsedMs: elapsed }, null, 2));
     process.exit(results.some((r) => r.status === 'fail') ? 1 : 0);
   }
 
-  console.log(c('bold', `\n=== Cazadores anti-regresión (${elapsed}ms) ===\n`));
+  console.log(c('bold', `\n=== Cazadores anti-regresión [${modo}] (${elapsed}ms) ===\n`));
 
   let failCount = 0;
   let warnCount = 0;
@@ -154,9 +189,9 @@ async function main() {
       c('red', `✗ ${failCount} cazador(es) fallaron, ${totalHits} hit(s) total.`),
     );
     console.log(
-      c('dim', `\nEl pre-commit hook bloqueó este commit. Para bypassear ` +
-        `(SÓLO si el hit es un falso positivo legítimo), usá:\n   git commit --no-verify\n\n` +
-        `Y agregá el archivo a la allowlist del cazador en el siguiente commit.`),
+      c('dim', `\nControl [${modo}] bloqueado. Si el hit es un falso positivo legítimo, ` +
+        `agregá el archivo a la allowlist documentada del cazador. Un mismatch de ` +
+        `reglas no se resuelve regenerando el lock: deployá con el comando indicado.`),
     );
     process.exit(1);
   }

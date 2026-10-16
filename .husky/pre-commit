@@ -6,8 +6,10 @@ npx tsc --noEmit || { echo "[ABORT] typecheck src"; exit 1; }
 # WhatsApp, endpoint IA) se commitean sin ninguna verificacion estatica.
 echo "[hook] typecheck (api + scripts)..."
 npx tsc -p tsconfig.api.json || { echo "[ABORT] typecheck api"; exit 1; }
-echo "[hook] cazadores..."
-npm run check:regression --silent || { echo "[ABORT] regression"; exit 1; }
+echo "[hook] cazadores (contexto --local-commit)..."
+# Guardar local no es desplegar: un mismatch demostrado de P-005/P-013 queda
+# como WARN visible. Push y build de publicacion siguen siendo estrictos.
+npm run check:regression --silent -- --local-commit || { echo "[ABORT] regression"; exit 1; }
 STAGED=$(git diff --cached --name-only --diff-filter=ACMR | grep -E "\.(ts|tsx)$" || true)
 if [ -n "$STAGED" ]; then
   echo "[hook] lint staged..."

@@ -28,118 +28,45 @@
  * 3. Si los hashes difieren → FAIL.
  * 4. Si el lock no existe → WARN (cold start, primer setup).
  *
- * Recuperación:
- *   npm run deploy:rules   # corre firebase deploy + actualiza el lock
+ * Recuperación (única vía válida):
+ *   1. Con autorización explícita de Jorge (cambios a rules requieren su OK),
+ *      desplegar de verdad: `npm run deploy:rules` (corre firebase deploy y,
+ *      solo si el deploy termina bien, actualiza el lock).
+ *   2. Verificar que las rules activas en el proyecto
+ *      `mister-service-app-cloude` coinciden con `firestore.rules` del repo
+ *      (Firebase Console en modo lectura o salida del deploy) y que el
+ *      cazador vuelve a PASS.
  *
- * Allowlist: NO HAY. Si el cazador grita y el commit no toca rules, es
- * porque alguien hizo deploy fuera de banda y olvidó actualizar el lock —
- * ejecutar `npx tsx scripts/invariantes/marcar-rules-deployadas.ts` para
- * sincronizar.
+ * Allowlist: NO HAY.
  *
- * Bypass de emergencia (NO recomendado, deja deuda):
- *   git commit --no-verify
+ * Nunca editar ni regenerar `firestore.rules.deployed.lock` para silenciar
+ * este cazador. El lock es evidencia de un deploy real; si se reescribe sin
+ * deploy, el control afirma una sincronía que no existe y se repite el
+ * incidente de SPRINT-103/106. Si el cazador grita y el commit no toca rules,
+ * no se asume que "alguien deployó fuera de banda": se trata como pendiente
+ * hasta comprobar el estado de producción y, si hace falta, redeployar por la
+ * vía de arriba.
+ *
+ * Historia: versiones anteriores de este encabezado recomendaban sincronizar
+ * con `npx tsx scripts/invariantes/marcar-rules-deployadas.ts` sin deploy y
+ * ofrecían `git commit --no-verify` como bypass. Ambas recomendaciones se
+ * retiraron (2026-10-15) porque permitían saltarse el control sin resolver la
+ * desincronía.
  */
-import { promises as fs } from 'node:fs';
-import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { InvariantResult, InvariantHit } from './types.js';
+import type { InvariantResult } from './types.js';
+import {
+  SPEC_FIRESTORE,
+  inspeccionarRulesDeploy,
+  resultadoRulesDeploy,
+} from './estado-rules-deploy.js';
 
-const PATTERN_ID = 'P-005';
-const PATTERN_NAME = 'firestore.rules modificado pero no deployado a producción';
-const ROOT = path.resolve(process.cwd());
-const RULES_FILE = path.join(ROOT, 'firestore.rules');
-const LOCK_FILE = path.join(ROOT, 'firestore.rules.deployed.lock');
-
-function parseLockHash(lockBody: string): string | null {
-  const match = lockBody.match(/^sha256:\s*([0-9a-f]{64})\s*$/m);
-  return match ? match[1] : null;
-}
-
+// Lógica compartida con P-013 en `estado-rules-deploy.ts`. `run-all.ts` no
+// llama a este `check()`: inspecciona una sola vez y reutiliza el estado para
+// aplicar la política de contexto (`politica-publicacion.ts`).
 export async function check(): Promise<InvariantResult> {
-  let rulesContent: string;
-  try {
-    rulesContent = await fs.readFile(RULES_FILE, 'utf8');
-  } catch {
-    // No hay firestore.rules en el repo — no aplica este cazador.
-    return {
-      patternId: PATTERN_ID,
-      patternName: PATTERN_NAME,
-      status: 'pass',
-      hits: [],
-      notes: ['No hay firestore.rules en el repo — patrón N/A.'],
-    };
-  }
-
-  const currentHash = createHash('sha256').update(rulesContent).digest('hex');
-
-  let lockBody: string | null = null;
-  try {
-    lockBody = await fs.readFile(LOCK_FILE, 'utf8');
-  } catch {
-    lockBody = null;
-  }
-
-  if (lockBody === null) {
-    return {
-      patternId: PATTERN_ID,
-      patternName: PATTERN_NAME,
-      status: 'warn',
-      hits: [],
-      notes: [
-        `firestore.rules.deployed.lock NO existe.`,
-        `Ejecutá \`npm run deploy:rules\` para crear el lock con el hash deployado.`,
-        `Hash actual de firestore.rules: ${currentHash.slice(0, 12)}...`,
-      ],
-    };
-  }
-
-  const deployedHash = parseLockHash(lockBody);
-  if (deployedHash === null) {
-    return {
-      patternId: PATTERN_ID,
-      patternName: PATTERN_NAME,
-      status: 'warn',
-      hits: [],
-      notes: [
-        `firestore.rules.deployed.lock existe pero no tiene hash parseable.`,
-        `Re-ejecutá \`npm run deploy:rules\` para regenerarlo.`,
-      ],
-    };
-  }
-
-  if (currentHash === deployedHash) {
-    return {
-      patternId: PATTERN_ID,
-      patternName: PATTERN_NAME,
-      status: 'pass',
-      hits: [],
-      notes: [`firestore.rules sincronizado con producción (${deployedHash.slice(0, 12)}...).`],
-    };
-  }
-
-  // Hashes difieren → diff pendiente de deploy.
-  const hit: InvariantHit = {
-    file: 'firestore.rules',
-    line: 1,
-    snippet: `firestore.rules cambió desde el último deploy`,
-    explanation:
-      `El SHA-256 de firestore.rules en el repo es ${currentHash.slice(0, 12)}... pero ` +
-      `el último deploy registrado fue ${deployedHash.slice(0, 12)}... ` +
-      `Resultado: tu código nuevo puede chocar con las rules viejas en producción y ` +
-      `causar permission-denied silencioso (vector P-005, antiprecedente SPRINT-103/106). ` +
-      `Recuperación: \`npm run deploy:rules\` (deploya a Firebase + actualiza el lock).`,
-  };
-
-  return {
-    patternId: PATTERN_ID,
-    patternName: PATTERN_NAME,
-    status: 'fail',
-    hits: [hit],
-    notes: [
-      `Hash repo:     ${currentHash}`,
-      `Hash deployed: ${deployedHash}`,
-    ],
-  };
+  const estado = await inspeccionarRulesDeploy(path.resolve(process.cwd()), SPEC_FIRESTORE);
+  return resultadoRulesDeploy(estado, SPEC_FIRESTORE);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
