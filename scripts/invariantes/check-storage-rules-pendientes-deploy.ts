@@ -32,118 +32,39 @@
  * 5. Si `storage.rules` no existe → PASS (cazador N/A; aplica solo a repos
  *    que ya versionan rules de Storage).
  *
- * Recuperación:
- *   npm run deploy:storage-rules   # corre firebase deploy + actualiza el lock
+ * Recuperación (única vía válida):
+ *   1. Con autorización explícita de Jorge, desplegar de verdad:
+ *      `npm run deploy:storage-rules` (corre firebase deploy y, solo si el
+ *      deploy termina bien, actualiza el lock).
+ *   2. Verificar que las rules de Storage activas en producción coinciden con
+ *      `storage.rules` del repo y que el cazador vuelve a PASS.
  *
- * Allowlist: NO HAY. Si el cazador grita y el commit no toca storage.rules,
- * es porque alguien hizo deploy fuera de banda y olvidó actualizar el lock —
- * ejecutar `npx tsx scripts/invariantes/marcar-storage-rules-deployadas.ts`
- * para sincronizar.
+ * Allowlist: NO HAY.
  *
- * Bypass de emergencia (NO recomendado, deja deuda):
- *   git commit --no-verify
+ * Nunca editar ni regenerar `storage.rules.deployed.lock` para silenciar este
+ * cazador: el lock es evidencia de un deploy real. Si el cazador grita y el
+ * commit no toca storage.rules, se trata como pendiente hasta comprobar el
+ * estado de producción y, si hace falta, redeployar por la vía de arriba.
+ *
+ * Historia: versiones anteriores de este encabezado ofrecían
+ * `git commit --no-verify` como bypass de emergencia y sugerían sincronizar el
+ * lock con `marcar-storage-rules-deployadas.ts` sin deploy. Se retiraron
+ * (2026-10-15) porque saltaban el control sin resolver la desincronía.
  */
-import { promises as fs } from 'node:fs';
-import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { InvariantResult, InvariantHit } from './types.js';
+import type { InvariantResult } from './types.js';
+import {
+  SPEC_STORAGE,
+  inspeccionarRulesDeploy,
+  resultadoRulesDeploy,
+} from './estado-rules-deploy.js';
 
-const PATTERN_ID = 'P-013';
-const PATTERN_NAME = 'storage.rules modificado pero no deployado a producción';
-const ROOT = path.resolve(process.cwd());
-const RULES_FILE = path.join(ROOT, 'storage.rules');
-const LOCK_FILE = path.join(ROOT, 'storage.rules.deployed.lock');
-
-function parseLockHash(lockBody: string): string | null {
-  const match = lockBody.match(/^sha256:\s*([0-9a-f]{64})\s*$/m);
-  return match ? match[1] : null;
-}
-
+// Lógica compartida con P-005 en `estado-rules-deploy.ts`. `run-all.ts` no
+// llama a este `check()`: inspecciona una sola vez y reutiliza el estado para
+// aplicar la política de contexto (`politica-publicacion.ts`).
 export async function check(): Promise<InvariantResult> {
-  let rulesContent: string;
-  try {
-    rulesContent = await fs.readFile(RULES_FILE, 'utf8');
-  } catch {
-    // No hay storage.rules en el repo — no aplica este cazador.
-    return {
-      patternId: PATTERN_ID,
-      patternName: PATTERN_NAME,
-      status: 'pass',
-      hits: [],
-      notes: ['No hay storage.rules en el repo — patrón N/A.'],
-    };
-  }
-
-  const currentHash = createHash('sha256').update(rulesContent).digest('hex');
-
-  let lockBody: string | null = null;
-  try {
-    lockBody = await fs.readFile(LOCK_FILE, 'utf8');
-  } catch {
-    lockBody = null;
-  }
-
-  if (lockBody === null) {
-    return {
-      patternId: PATTERN_ID,
-      patternName: PATTERN_NAME,
-      status: 'warn',
-      hits: [],
-      notes: [
-        `storage.rules.deployed.lock NO existe.`,
-        `Ejecutá \`npm run deploy:storage-rules\` para crear el lock con el hash deployado.`,
-        `Hash actual de storage.rules: ${currentHash.slice(0, 12)}...`,
-      ],
-    };
-  }
-
-  const deployedHash = parseLockHash(lockBody);
-  if (deployedHash === null) {
-    return {
-      patternId: PATTERN_ID,
-      patternName: PATTERN_NAME,
-      status: 'warn',
-      hits: [],
-      notes: [
-        `storage.rules.deployed.lock existe pero no tiene hash parseable.`,
-        `Re-ejecutá \`npm run deploy:storage-rules\` para regenerarlo.`,
-      ],
-    };
-  }
-
-  if (currentHash === deployedHash) {
-    return {
-      patternId: PATTERN_ID,
-      patternName: PATTERN_NAME,
-      status: 'pass',
-      hits: [],
-      notes: [`storage.rules sincronizado con producción (${deployedHash.slice(0, 12)}...).`],
-    };
-  }
-
-  // Hashes difieren → diff pendiente de deploy.
-  const hit: InvariantHit = {
-    file: 'storage.rules',
-    line: 1,
-    snippet: `storage.rules cambió desde el último deploy`,
-    explanation:
-      `El SHA-256 de storage.rules en el repo es ${currentHash.slice(0, 12)}... pero ` +
-      `el último deploy registrado fue ${deployedHash.slice(0, 12)}... ` +
-      `Resultado: tu código nuevo puede chocar con las rules viejas en producción y ` +
-      `causar storage/unauthorized silencioso (vector P-013, espejo de P-005). ` +
-      `Recuperación: \`npm run deploy:storage-rules\` (deploya a Firebase + actualiza el lock).`,
-  };
-
-  return {
-    patternId: PATTERN_ID,
-    patternName: PATTERN_NAME,
-    status: 'fail',
-    hits: [hit],
-    notes: [
-      `Hash repo:     ${currentHash}`,
-      `Hash deployed: ${deployedHash}`,
-    ],
-  };
+  const estado = await inspeccionarRulesDeploy(path.resolve(process.cwd()), SPEC_STORAGE);
+  return resultadoRulesDeploy(estado, SPEC_STORAGE);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -1,0 +1,56 @@
+# Verificacion sin secretos. NO despliega, NO publica, NO lee .env.
+# La publicacion estricta (P-005/P-013 sincronizados) ocurre en el build de
+# Vercel via `vercel.json` -> `npm run check:publication && npm run build`.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificacion:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24.14.1
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Typecheck src
+        run: node_modules/.bin/tsc --noEmit -p tsconfig.json
+
+      - name: Typecheck api + scripts
+        run: npm run typecheck:api
+
+      - name: Cazadores (contexto --verification)
+        run: npm run check:verification:ci
+
+      - name: Lint archivos versionados
+        run: |
+          git ls-files -z -- '*.ts' '*.tsx' '*.js' '*.mjs' '*.cjs' \
+            | xargs -0 -r node_modules/.bin/eslint --no-warn-ignored --report-unused-disable-directives
+
+      - name: Tests unitarios
+        run: node --import tsx --test tests/unit/*.test.ts
+
+      - name: Build (solo verificacion, sin artefactos)
+        run: node_modules/.bin/vite build

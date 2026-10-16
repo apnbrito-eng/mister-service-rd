@@ -14,6 +14,8 @@
     "deploy:indexes": "npx firebase deploy --only firestore:indexes",
     "check:regression": "tsx scripts/invariantes/run-all.ts",
     "check:regression:ci": "tsx scripts/invariantes/run-all.ts --ci",
+    "check:verification:ci": "tsx scripts/invariantes/run-all.ts --ci --verification",
+    "check:publication": "tsx scripts/invariantes/run-all.ts --publication",
     "audit:notis-legacy": "tsx scripts/invariantes/check-notis-legacy-data-shape.ts",
     "audit:schema-drift": "tsx scripts/auditoria/schema-drift.ts",
     "metricas": "tsx scripts/metricas-mejora-continua.ts",

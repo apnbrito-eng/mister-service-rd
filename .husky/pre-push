@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# Subir codigo a GitHub NO publica: el release estricto lo hace el build de
+# Vercel con `npm run check:publication`. Aca corre el contexto de
+# verificacion, el mismo que el workflow de CI.
+echo "[hook] cazadores (contexto --verification)..."
+npx tsx scripts/invariantes/run-all.ts --verification || { echo "[ABORT] verification"; exit 1; }
+echo "[hook] OK"
