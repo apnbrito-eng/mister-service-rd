@@ -5,7 +5,8 @@
   ],
   "git": {
     "deploymentEnabled": {
-      "claude/ci-main-20261015": false
+      "claude/ci-main-20261015": false,
+      "main": false
     }
   }
 }

@@ -240,8 +240,9 @@ test('config: scripts, vercel.json y workflow de CI', async () => {
   };
   assert.equal(vercel.buildCommand, 'npm run check:publication && npm run build');
   assert.deepEqual(vercel.rewrites, [{ source: '/((?!api/).*)', destination: '/index.html' }]);
-  // La rama de CI no despliega en Vercel; ninguna entrada (ni wildcard) la vuelve a habilitar.
-  assert.deepEqual(vercel.git?.deploymentEnabled, { 'claude/ci-main-20261015': false });
+  // Ni la rama de CI ni main despliegan en Vercel (main, temporalmente, hasta su conciliación);
+  // ninguna entrada (ni wildcard) las vuelve a habilitar.
+  assert.deepEqual(vercel.git?.deploymentEnabled, { 'claude/ci-main-20261015': false, main: false });
   assert.ok(!Object.values(vercel.git?.deploymentEnabled ?? {}).includes(true));
 
   const ci = await leer('.github/workflows/ci.yml');

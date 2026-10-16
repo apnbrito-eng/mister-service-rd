@@ -15,10 +15,10 @@
 | `scripts/invariantes/check-rules-pendientes-deploy.ts`, `check-storage-rules-pendientes-deploy.ts` | Usan el módulo compartido. `check()` se mantiene exportado. Encabezados: se conserva la historia del defecto; se retiraron la sugerencia de regenerar el lock sin deploy y el bypass `git commit --no-verify`. La recuperación documentada es deploy real autorizado + verificación. Solo comentarios; sin cambio de lógica. |
 | `scripts/invariantes/run-all.ts` | Resuelve el contexto antes de correr nada (exit 2 si es inválido), inspecciona P-005/P-013 una sola vez y aplica la política. Se conservan los otros 22 cazadores, en el mismo orden. Ya no recomienda `--no-verify`. |
 | `package.json` | Scripts `check:verification:ci` y `check:publication`. No se tocaron dependencias ni `package-lock.json`. |
-| `vercel.json` | `buildCommand: npm run check:publication && npm run build`. Rewrites intactos. Además deshabilita el deploy automático de Vercel **solo** para la rama `claude/ci-main-20261015`; el resto de ramas (incluida `main`) mantiene su comportamiento de deploy sin cambios. |
+| `vercel.json` | `buildCommand: npm run check:publication && npm run build`. Rewrites intactos. `git.deploymentEnabled` es exactamente `{"claude/ci-main-20261015": false, "main": false}`: deshabilita el deploy automático de Vercel para la rama de CI y, **temporalmente**, para `main` (ver "Transición de main"). Las demás ramas no cambian de comportamiento. |
 | `.husky/pre-commit` | Cazadores con `--local-commit`. |
 | `.husky/pre-push` | Nuevo. Cazadores con `--verification`. |
-| `tests/unit/controlPublicacion.test.ts` | Nuevo. Incluye una prueba que revisa la configuración de `vercel.json` (deploy automático deshabilitado solo para esta rama). No se ha ejecutado: no se afirma que pase; queda para Codex. `tests/unit/timelineUnificado.test.ts` sin cambios. |
+| `tests/unit/controlPublicacion.test.ts` | Nuevo. Incluye una prueba que revisa la configuración de `vercel.json`: espera exactamente ambas ramas (`claude/ci-main-20261015` y `main`) en `false` y sigue rechazando cualquier `true`, incluido un wildcard. Las pruebas funcionales de la política no cambiaron. No se ha ejecutado: no se afirma que pase; queda para Codex. `tests/unit/timelineUnificado.test.ts` sin cambios. |
 
 ## Pasos del workflow
 
@@ -47,6 +47,20 @@ No usa `npm test` ni omite tests. No define variables `VITE_*`: según la inspec
 
 **TOCTOU:** `run-all` lee rules y lock una sola vez por archivo, y ese mismo estado se usa para el resultado y para la política. Queda una ventana entre que el runner lee los archivos y que Vercel construye; dentro de un mismo build eso no es un vector práctico.
 
+## Transición de main (bloqueo deliberado y temporal)
+
+Codex detectó que mergear esta rama a un `main` desactualizado podía disparar un deploy automático de Vercel y publicar la app vieja. Jorge autorizó instalar el CI y el candado **sin publicar la aplicación**. Por eso:
+
+- Con `"main": false`, el CI y el candado se pueden instalar en `main` sin que Vercel publique la versión vieja de la app.
+- El bloqueo de `main` es **deliberado y temporal**. `main` queda sin deploy automático hasta que se cumplan tres cosas: (1) conciliar `main`, (2) verificar el release y (3) que Jorge lo apruebe.
+- Este cambio no autoriza ningún deploy.
+- **Fase 3** debe decidir cómo se publica de forma controlada (por ejemplo, activando Deployment Checks de Vercel o con promoción manual) **antes** de quitar `"main": false`. Quitar el `false` sin ese mecanismo vuelve al riesgo original.
+
+Estado, sin suposiciones:
+
+- `main` **no** está conciliado.
+- La configuración en vivo del proyecto de Vercel **no** fue inspeccionada. No se sabe si el dashboard tiene overrides (Build Command, Ignored Build Step u otros) que cambien el efecto de `vercel.json`.
+
 ## Lo que esto NO hace
 
 - No crea protección de rama en GitHub ni required checks: hay que configurarlos aparte. Hasta entonces, un push a `main` con CI en rojo no queda bloqueado en el remoto.
@@ -68,4 +82,4 @@ En esta sesión no se ejecutó ningún comando: no hubo Bash, red, commits ni pu
 7. Pruebas manuales negativas: modificar una copia de `firestore.rules` → verification WARN y publication FAIL; quitar el lock → verification FAIL.
 8. `vite build` sin variables `VITE_*`.
 9. Que el workflow corra en GitHub y que las actions se resuelvan por SHA.
-10. Que la prueba unitaria de `controlPublicacion.test.ts` sobre `vercel.json` pase, y confirmar en Vercel que el deploy automático queda deshabilitado solo para `claude/ci-main-20261015` y que las demás ramas siguen igual.
+10. Que la prueba unitaria de `controlPublicacion.test.ts` sobre `vercel.json` pase, y confirmar en Vercel que el deploy automático queda deshabilitado para `claude/ci-main-20261015` y `main`, y que las demás ramas siguen igual.
